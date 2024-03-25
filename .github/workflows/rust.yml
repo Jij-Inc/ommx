@@ -28,7 +28,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps
+          args: --no-deps --manifest-path=rust/Cargo.toml
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -52,7 +52,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
+          args: --manifest-path=rust/Cargo.toml --all -- --check
 
   clippy:
     defaults:
@@ -76,7 +76,7 @@ jobs:
       - name: Check with clippy
         uses: actions-rs/clippy-check@v1
         with:
-          args: --all-features -- -D warnings
+          args: --all-features -- -D warnings --manifest-path=rust/Cargo.toml
           token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
@@ -102,11 +102,9 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --manifest-path=rust/Cargo.toml
 
   protogen:
-    defaults:
-      run:
-        working-directory: ./rust
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -130,4 +128,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: run
-          args: --bin=protogen
+          args: --bin=protogen --manifest-path=rust/Cargo.toml
