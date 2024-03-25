@@ -1,14 +1,5 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
+//! Open Mathematics prograMming eXchange (OMMX)
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+mod ommx;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use ommx::*;
