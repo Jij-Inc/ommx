@@ -76,7 +76,7 @@ jobs:
       - name: Check with clippy
         uses: actions-rs/clippy-check@v1
         with:
-          args: --all-features -- -D warnings --manifest-path=rust/Cargo.toml
+          args: --manifest-path=rust/Cargo.toml --all-features -- -D warnings
           token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
