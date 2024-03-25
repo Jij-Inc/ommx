@@ -1,4 +1,6 @@
-/// Decison variable which mathematical programming solver will optimize
+/// Decison variable which mathematical programming solver will optimize.
+/// It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
+/// It may have its name and subscripts which are used to identify in modeling tools.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DecisionVariable {
@@ -8,26 +10,26 @@ pub struct DecisionVariable {
     /// Kind of the decision variable
     #[prost(enumeration = "decision_variable::Kind", tag = "2")]
     pub kind: i32,
-    /// Name of the decision variable
-    #[prost(string, optional, tag = "3")]
-    pub name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(uint64, repeated, tag = "4")]
-    pub subscripts: ::prost::alloc::vec::Vec<u64>,
+    /// This is optional since the name and subscripts does not exist in general mathematical programming situation
+    #[prost(message, optional, tag = "3")]
+    pub description: ::core::option::Option<decision_variable::Description>,
 }
 /// Nested message and enum types in `DecisionVariable`.
 pub mod decision_variable {
+    /// Human readable description of the decision variable.
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Description {
+        /// Name of the decision variable.
+        #[prost(string, tag = "1")]
+        pub name: ::prost::alloc::string::String,
+        /// The subscripts of a deicision variable which is defined as multi-dimensional array.
+        /// Empty list means that the decision variable is scalar
+        #[prost(uint64, repeated, tag = "2")]
+        pub subscripts: ::prost::alloc::vec::Vec<u64>,
+    }
     /// Kind of the decision variable
-    #[derive(
-        Clone,
-        Copy,
-        Debug,
-        PartialEq,
-        Eq,
-        Hash,
-        PartialOrd,
-        Ord,
-        ::prost::Enumeration
-    )]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum Kind {
         Binary = 0,
