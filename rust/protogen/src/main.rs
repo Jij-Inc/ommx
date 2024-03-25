@@ -37,5 +37,10 @@ fn main() -> Result<()> {
 
     let mut cfg = Config::new();
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
+
+    std::process::Command::new("rustfmt")
+        .arg(out.join("ommx.rs"))
+        .status()?;
+
     Ok(())
 }
