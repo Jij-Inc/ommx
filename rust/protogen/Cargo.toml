@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.81"
+colored = "2.1.0"
 prost-build = "0.12.3"
