@@ -129,3 +129,7 @@ jobs:
         with:
           command: run
           args: --bin=protogen --manifest-path=rust/Cargo.toml
+
+      - name: Check updated
+        run: |
+          git diff --exit-code
