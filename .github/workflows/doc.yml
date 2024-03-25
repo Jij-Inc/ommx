@@ -1,10 +1,10 @@
-name: GitHub Pages
+name: Documents
 
 on:
   push:
     branches:
       - main
-  pull_request: # FIXME
+  pull_request:
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -55,6 +55,7 @@ jobs:
           retention-days: 30
 
   deploy:
+    if: github.ref == 'refs/heads/main'
     needs: [protobuf]
     environment:
       name: github-pages
