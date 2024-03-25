@@ -2,9 +2,9 @@ syntax = "proto3";
 
 package ommx;
 
-// Decison variable which mathematical programming solver will optimize.enum
-// Decision variables must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
-// Decision variables may have its name and subscripts which are used to identify in modeling tools.
+// Decison variable which mathematical programming solver will optimize.
+// It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
+// It may have its name and subscripts which are used to identify in modeling tools.
 message DecisionVariable {
     // Kind of the decision variable
     enum Kind {
