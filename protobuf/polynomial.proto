@@ -2,12 +2,13 @@ syntax = "proto3";
 
 package ommx;
 
-// A monomial in the polynomial.
+// A monomial in a multivariate polynomial.
 message Monomial {
-    repeated uint64 indices = 1;
+    repeated uint64 ids = 1;
     fixed64 coefficient = 2;
 }
 
+// Multi­variate polynomial
 message Polynomial {
     repeated Monomial terms = 1;
 }
