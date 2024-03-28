@@ -6,9 +6,6 @@ on:
 
 jobs:
   format:
-    defaults:
-      run:
-        working-directory: ./rust
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,9 +25,6 @@ jobs:
           args: --manifest-path=rust/Cargo.toml --all -- --check
 
   clippy:
-    defaults:
-      run:
-        working-directory: ./rust
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -53,9 +47,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
-    defaults:
-      run:
-        working-directory: ./rust
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
