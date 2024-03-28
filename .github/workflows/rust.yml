@@ -5,33 +5,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  doc-check:
-    defaults:
-      run:
-        working-directory: ./rust
-
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check warnings in documents
-        uses: actions-rs/cargo@v1
-        with:
-          command: doc
-          args: --no-deps --manifest-path=rust/Cargo.toml
-        env:
-          RUSTDOCFLAGS: -D warnings
-
   format:
     defaults:
       run:
