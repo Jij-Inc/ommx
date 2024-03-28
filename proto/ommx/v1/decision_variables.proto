@@ -6,29 +6,29 @@ package ommx.v1;
 // It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 // It may have its name and subscripts which are used to identify in modeling tools.
 message DecisionVariable {
-    // Unique identifier of the decision variable.
-    uint64 id = 1;
+  // Unique identifier of the decision variable.
+  uint64 id = 1;
 
-    // Kind of the decision variable
-    enum Kind {
-        KIND_UNSPECIFIED = 0;
-        KIND_BINARY = 1;
-        KIND_INTEGER = 2;
-        KIND_REAL = 3;
-    }
+  // Kind of the decision variable
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_BINARY = 1;
+    KIND_INTEGER = 2;
+    KIND_REAL = 3;
+  }
 
-    // Kind of the decision variable
-    Kind kind = 2;
+  // Kind of the decision variable
+  Kind kind = 2;
 
-    // Human readable description of the decision variable.
-    message Description {
-        // Name of the decision variable.
-        string name = 1;
-        // The subscripts of a deicision variable which is defined as multi-dimensional array.
-        // Empty list means that the decision variable is scalar
-        repeated uint64 subscripts = 2;
-    }
+  // Human readable description of the decision variable.
+  message Description {
+    // Name of the decision variable.
+    string name = 1;
+    // The subscripts of a deicision variable which is defined as multi-dimensional array.
+    // Empty list means that the decision variable is scalar
+    repeated uint64 subscripts = 2;
+  }
 
-    // This is optional since the name and subscripts does not exist in general mathematical programming situation
-    optional Description description = 3;
+  // This is optional since the name and subscripts does not exist in general mathematical programming situation
+  optional Description description = 3;
 }
