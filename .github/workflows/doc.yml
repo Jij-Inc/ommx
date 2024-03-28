@@ -47,26 +47,78 @@ jobs:
           mkdir -p ./doc
           protoc --proto_path=./protobuf --doc_out=./doc --doc_opt=html,protobuf.html protobuf/*.proto
 
-      - name: Upload html
+      - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
           name: doc-protobuf
           path: ./doc
           retention-days: 30
 
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check warnings in documents
+        uses: actions-rs/cargo@v1
+        with:
+          command: doc
+          args: --no-deps --manifest-path=rust/Cargo.toml
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Upload HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-rust
+          path: ./rust/target/doc
+          retention-days: 30
+
+  package:
+    needs: [protobuf, rust]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download HTML of protobuf
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-protobuf
+          path: ./doc
+
+      - name: Download HTML of rust
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-rust
+          path: ./doc/rust
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: doc
+          path: doc
+
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: [protobuf]
+    needs: package
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Download html
+      - name: Download HTML
         uses: actions/download-artifact@v4
         with:
-          pattern: doc-*
-          merge-multiple: true
+          name: doc
+          path: .
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
@@ -74,7 +126,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
           path: "."
 
       - name: Deploy to GitHub Pages
