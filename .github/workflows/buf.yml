@@ -18,6 +18,8 @@ jobs:
         with:
           github_token: ${{ github.token }}
       - uses: bufbuild/buf-lint-action@v1
+        with:
+          input: proto
 
   breaking:
     runs-on: ubuntu-latest
@@ -32,3 +34,4 @@ jobs:
         with:
           # The 'main' branch of the GitHub repository that defines the module.
           against: "https://github.com/${GITHUB_REPOSITORY}.git#branch=main"
+          input: proto
