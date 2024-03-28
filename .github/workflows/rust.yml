@@ -11,40 +11,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
           components: rustfmt
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --manifest-path=rust/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path=rust/Cargo.toml --all -- --check
 
   clippy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
           components: clippy
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Check with clippy
-        uses: actions-rs/clippy-check@v1
+      - uses: giraffate/clippy-action@v1
         with:
-          args: --manifest-path=rust/Cargo.toml --all-features -- -D warnings
-          token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: "github-pr-review"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     runs-on: ubuntu-latest
@@ -52,21 +36,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          components: clippy
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --manifest-path=rust/Cargo.toml
+        run: cargo test --manifest-path=rust/Cargo.toml
 
   protogen:
     runs-on: ubuntu-latest
@@ -74,11 +50,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
+          components: rustfmt
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
@@ -90,10 +64,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Regenerate Rust codes from proto files
-        uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin=protogen --manifest-path=rust/Cargo.toml
+        run: cargo run --bin=protogen --manifest-path=rust/Cargo.toml
 
       - name: Check updated
         run: |
