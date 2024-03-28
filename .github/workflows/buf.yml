@@ -20,3 +20,16 @@ jobs:
       - uses: bufbuild/buf-lint-action@v1
         with:
           input: proto
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+      - name: Setup Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Check formatted
+        run: buf format -d --exit-code
+        working-directory: proto
