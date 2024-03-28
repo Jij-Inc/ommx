@@ -25,27 +25,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup protobuf compiler
-        uses: arduino/setup-protoc@v1
-        with:
-          version: 3.20.1
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ">=1.17"
-
-      - name: Print go version
-        run: go version
-
-      - name: Setup protoc-gen-doc plugin
-        run: |
-          go install github.com/pseudomuto/protoc-gen-doc/cmd/protoc-gen-doc@latest
+      - uses: bufbuild/buf-setup-action@v1
 
       - name: Generate API docs
-        run: |
-          mkdir -p ./doc
-          protoc --proto_path=./protobuf --doc_out=./doc --doc_opt=html,protobuf.html protobuf/*.proto
+        run: buf generate
+        working-directory: proto
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
