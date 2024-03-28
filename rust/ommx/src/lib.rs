@@ -1,5 +1,9 @@
 //! Open Mathematics prograMming eXchange (OMMX)
 
-mod ommx;
+pub(crate) mod ommx {
+    pub(crate) mod v1 {
+        include!("ommx.v1.rs");
+    }
+}
 
-pub use ommx::*;
+pub use ommx::v1::*;

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/polynomial.proto";
+
+// Real-valued multivariate function used for objective function and constraints.
+message Function {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_CONSTANT = 1;
+    KIND_LINEAR = 2;
+    KIND_QUADRATIC = 3;
+    KIND_POLYNOMIAL = 4;
+  }
+
+  Kind kind = 1;
+  optional double constant = 2;
+  // optional Linear linear = 3;
+  // optional Quadratic quadratic = 4;
+  optional Polynomial polynomial = 5;
+}

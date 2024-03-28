@@ -4,7 +4,7 @@
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DecisionVariable {
-    /// Unique identifier of the decision variable
+    /// Unique identifier of the decision variable.
     #[prost(uint64, tag = "1")]
     pub id: u64,
     /// Kind of the decision variable
@@ -32,9 +32,10 @@ pub mod decision_variable {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum Kind {
-        Binary = 0,
-        Integer = 1,
-        Real = 2,
+        Unspecified = 0,
+        Binary = 1,
+        Integer = 2,
+        Real = 3,
     }
     impl Kind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -43,17 +44,19 @@ pub mod decision_variable {
         /// (if the ProtoBuf definition does not change) and safe for programmatic use.
         pub fn as_str_name(&self) -> &'static str {
             match self {
-                Kind::Binary => "Binary",
-                Kind::Integer => "Integer",
-                Kind::Real => "Real",
+                Kind::Unspecified => "KIND_UNSPECIFIED",
+                Kind::Binary => "KIND_BINARY",
+                Kind::Integer => "KIND_INTEGER",
+                Kind::Real => "KIND_REAL",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
         pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
             match value {
-                "Binary" => Some(Self::Binary),
-                "Integer" => Some(Self::Integer),
-                "Real" => Some(Self::Real),
+                "KIND_UNSPECIFIED" => Some(Self::Unspecified),
+                "KIND_BINARY" => Some(Self::Binary),
+                "KIND_INTEGER" => Some(Self::Integer),
+                "KIND_REAL" => Some(Self::Real),
                 _ => None,
             }
         }
@@ -74,4 +77,55 @@ pub struct Monomial {
 pub struct Polynomial {
     #[prost(message, repeated, tag = "1")]
     pub terms: ::prost::alloc::vec::Vec<Monomial>,
+}
+/// Real-valued multivariate function used for objective function and constraints.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Function {
+    #[prost(enumeration = "function::Kind", tag = "1")]
+    pub kind: i32,
+    #[prost(double, optional, tag = "2")]
+    pub constant: ::core::option::Option<f64>,
+    /// optional Linear linear = 3;
+    /// optional Quadratic quadratic = 4;
+    #[prost(message, optional, tag = "5")]
+    pub polynomial: ::core::option::Option<Polynomial>,
+}
+/// Nested message and enum types in `Function`.
+pub mod function {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+    #[repr(i32)]
+    pub enum Kind {
+        Unspecified = 0,
+        Constant = 1,
+        Linear = 2,
+        Quadratic = 3,
+        Polynomial = 4,
+    }
+    impl Kind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Kind::Unspecified => "KIND_UNSPECIFIED",
+                Kind::Constant => "KIND_CONSTANT",
+                Kind::Linear => "KIND_LINEAR",
+                Kind::Quadratic => "KIND_QUADRATIC",
+                Kind::Polynomial => "KIND_POLYNOMIAL",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "KIND_UNSPECIFIED" => Some(Self::Unspecified),
+                "KIND_CONSTANT" => Some(Self::Constant),
+                "KIND_LINEAR" => Some(Self::Linear),
+                "KIND_QUADRATIC" => Some(Self::Quadratic),
+                "KIND_POLYNOMIAL" => Some(Self::Polynomial),
+                _ => None,
+            }
+        }
+    }
 }

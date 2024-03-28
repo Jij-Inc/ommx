@@ -1,0 +1,7 @@
+version: v1
+managed:
+  enabled: true
+plugins:
+  - plugin: buf.build/community/pseudomuto-doc:v1.5.1
+    out: ../doc
+    opt: html,protobuf.html

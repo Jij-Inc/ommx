@@ -1,18 +1,16 @@
 use anyhow::Result;
 use colored::Colorize;
+use glob::glob;
 use prost_build::Config;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 fn main() -> Result<()> {
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
     let repo_root = manifest_root.join("../..").canonicalize()?;
-    let proto_root = repo_root.join("protobuf");
+    let proto_root = repo_root.join("proto");
 
-    let protos = fs::read_dir(&proto_root)?
-        .map(|entry| -> Result<PathBuf> { Ok(entry?.path()) })
+    let protos = glob(&format!("{}/**/*.proto", proto_root.display()))?
+        .map(|entry| -> Result<PathBuf> { Ok(entry?) })
         .collect::<Result<Vec<_>>>()?;
 
     eprintln!(
@@ -29,17 +27,16 @@ fn main() -> Result<()> {
     }
 
     let out = repo_root.join("rust/ommx/src");
-    eprintln!(
-        "{:>12} {}",
-        "Writing".bold().cyan(),
-        out.join("ommx.rs").display()
-    );
+    // FIXME: Get from prost
+    let filename = "ommx.v1.rs";
+    let out_file = out.join(&filename);
+    eprintln!("{:>12} {}", "Writing".bold().cyan(), out_file.display());
 
     let mut cfg = Config::new();
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
     std::process::Command::new("rustfmt")
-        .arg(out.join("ommx.rs"))
+        .arg(out_file)
         .status()?;
 
     Ok(())
