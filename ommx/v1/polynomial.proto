@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ommx;
+package ommx.v1;
 
 // A monomial in a multivariate polynomial.
 message Monomial {
