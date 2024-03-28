@@ -101,10 +101,11 @@ jobs:
           path: ./doc/rust
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: doc
           path: doc
+          retention-days: 30
 
   deploy:
     if: github.ref == 'refs/heads/main'
