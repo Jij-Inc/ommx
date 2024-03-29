@@ -2,19 +2,19 @@ syntax = "proto3";
 
 package ommx.v1;
 
-import "ommx/v1/function.proto";
 import "ommx/v1/constraint.proto";
+import "ommx/v1/function.proto";
 
 message Instance {
-    message Description {
-        optional string name = 1;
-        optional string description = 2;
-        repeated string authors = 3;
-        // The application or library name that created this message.
-        optional string created_by = 4;
-    }
-    Description description = 1;
+  message Description {
+    optional string name = 1;
+    optional string description = 2;
+    repeated string authors = 3;
+    // The application or library name that created this message.
+    optional string created_by = 4;
+  }
+  Description description = 1;
 
-    Function objective = 2;
-    repeated Constraint constraints = 3;
+  Function objective = 2;
+  repeated Constraint constraints = 3;
 }
