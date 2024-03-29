@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/function.proto";
+
+message Constraint {
+  uint64 id = 1;
+
+  enum Equality {
+    EQUALITY_UNSPECIFIED = 0;
+    EQUALITY_EQUAL_TO_ZERO = 1;
+    EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
+  }
+  Equality equality = 2;
+
+  Function function = 3;
+
+  message Description {
+    string name = 1;
+    repeated uint64 forall = 2;
+  }
+  optional Description description = 4;
+}

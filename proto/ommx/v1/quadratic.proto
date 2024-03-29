@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/linear.proto";
+import "ommx/v1/sparse_matrix.proto";
+
+// Quadratic function as a sparse matrix and linear sparse vector.
+message Quadratic {
+  SparseMatrix quadradic = 1;
+  optional Linear linear = 2;
+}

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+// COO format of sparse matrix. The components must have same size.
+message SparseMatrix {
+  repeated uint64 rows = 1;
+  repeated uint64 columns = 2;
+  repeated double values = 3;
+}
