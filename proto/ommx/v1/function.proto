@@ -8,17 +8,14 @@ import "ommx/v1/quadratic.proto";
 
 // Real-valued multivariate function used for objective function and constraints.
 message Function {
-  enum Kind {
-    KIND_UNSPECIFIED = 0;
-    KIND_CONSTANT = 1;
-    KIND_LINEAR = 2;
-    KIND_QUADRATIC = 3;
-    KIND_POLYNOMIAL = 4;
+  oneof function {
+    // Constant function like `f(x_1, x_2) = 2`
+    double constant = 1;
+    // Linear function like `f(x_1, x_2) = 2 x_1 + 3 x_2`
+    Linear linear = 2;
+    // Quadratic function like `f(x_1, x_2) = 4 x_1 x_2 + 5 x_2`
+    Quadratic quadratic = 3;
+    // Polynomial like `f(x_1, x_2) = 4 x_1^2 + 5 x_2^3 + 6 x_1 x_2^2 + 7 x_2^2 + 8 x_1 x_2 + 9 x_1 + 10 x_2 + 11`
+    Polynomial polynomial = 4;
   }
-
-  Kind kind = 1;
-  optional double constant = 2;
-  optional Linear linear = 3;
-  optional Quadratic quadratic = 4;
-  optional Polynomial polynomial = 5;
 }
