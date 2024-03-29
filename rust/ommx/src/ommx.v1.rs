@@ -193,3 +193,29 @@ pub mod decision_variable {
         }
     }
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Instance {
+    #[prost(message, optional, tag = "1")]
+    pub description: ::core::option::Option<instance::Description>,
+    #[prost(message, optional, tag = "2")]
+    pub objective: ::core::option::Option<Function>,
+    #[prost(message, repeated, tag = "3")]
+    pub constraints: ::prost::alloc::vec::Vec<Constraint>,
+}
+/// Nested message and enum types in `Instance`.
+pub mod instance {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Description {
+        #[prost(string, optional, tag = "1")]
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(string, optional, tag = "2")]
+        pub description: ::core::option::Option<::prost::alloc::string::String>,
+        #[prost(string, repeated, tag = "3")]
+        pub authors: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+        /// The application or library name that created this message.
+        #[prost(string, optional, tag = "4")]
+        pub created_by: ::core::option::Option<::prost::alloc::string::String>,
+    }
+}
