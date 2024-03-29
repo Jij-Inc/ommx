@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package ommx.v1;
 
+import "ommx/v1/linear.proto";
 import "ommx/v1/polynomial.proto";
+import "ommx/v1/quadratic.proto";
 
 // Real-valued multivariate function used for objective function and constraints.
 message Function {
@@ -16,7 +18,7 @@ message Function {
 
   Kind kind = 1;
   optional double constant = 2;
-  // optional Linear linear = 3;
-  // optional Quadratic quadratic = 4;
+  optional Linear linear = 3;
+  optional Quadratic quadratic = 4;
   optional Polynomial polynomial = 5;
 }

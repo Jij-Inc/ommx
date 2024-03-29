@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+message Linear {
+  message Term {
+    uint64 id = 1;
+    double coefficient = 2;
+  }
+  repeated Term terms = 1;
+}

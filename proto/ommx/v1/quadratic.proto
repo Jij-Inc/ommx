@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/linear.proto";
+
+// COO format of sparse matrix. The components must have same size.
+message SparseMatrix {
+  repeated uint64 rows = 1;
+  repeated uint64 columns = 2;
+  repeated double values = 3;
+}
+
+// Quadratic function as a sparse matrix and linear sparse vector.
+message Quadratic {
+  SparseMatrix quadradic = 1;
+  optional Linear linear = 2;
+}
