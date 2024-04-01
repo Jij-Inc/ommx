@@ -4,8 +4,8 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 
 # API Reference
 
-- [Protobuf](https://sturdy-enigma-gqlonvg.pages.github.io/protobuf.html)
-- [Rust](https://sturdy-enigma-gqlonvg.pages.github.io/rust/ommx/index.html)
+- [Protobuf](https://jij-inc.github.io/ommx/protobuf.html)
+- [Rust](https://jij-inc.github.io/ommx/rust/ommx/index.html)
 
 # License
 © 2024 Jij Inc.
