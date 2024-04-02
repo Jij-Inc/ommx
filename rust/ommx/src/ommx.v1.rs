@@ -129,24 +129,36 @@ pub mod constraint {
         }
     }
 }
+/// Upper and lower bound of the decision variable.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Bound {
+    /// Lower bound of the decision variable.
+    #[prost(double, tag = "1")]
+    pub lower: f64,
+    /// Upper bound of the decision variable.
+    #[prost(double, tag = "2")]
+    pub upper: f64,
+}
 /// Decison variable which mathematical programming solver will optimize.
 /// It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 /// It may have its name and subscripts which are used to identify in modeling tools.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DecisionVariable {
-    /// Unique identifier of the decision variable.
-    #[prost(uint64, tag = "1")]
-    pub id: u64,
+pub struct DecisionVariableAttribute {
     /// Kind of the decision variable
-    #[prost(enumeration = "decision_variable::Kind", tag = "2")]
+    #[prost(enumeration = "decision_variable_attribute::Kind", tag = "1")]
     pub kind: i32,
+    /// Bound of the decision variable
+    /// If the bound is not specified, the decision variable is considered as unbounded.
+    #[prost(message, optional, tag = "2")]
+    pub bound: ::core::option::Option<Bound>,
     /// This is optional since the name and subscripts does not exist in general mathematical programming situation
     #[prost(message, optional, tag = "3")]
-    pub description: ::core::option::Option<decision_variable::Description>,
+    pub description: ::core::option::Option<decision_variable_attribute::Description>,
 }
-/// Nested message and enum types in `DecisionVariable`.
-pub mod decision_variable {
+/// Nested message and enum types in `DecisionVariableAttribute`.
+pub mod decision_variable_attribute {
     /// Human readable description of the decision variable.
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -202,6 +214,13 @@ pub struct Instance {
     pub objective: ::core::option::Option<Function>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<Constraint>,
+    /// A map of decision variable IDs to its attributes.
+    ///
+    /// - This must constain every decision variables used in the objective and constraints.
+    /// - This can contains a decision variable that is not used in the objective or constraints.
+    /// - IDs are not required to be sequential.
+    #[prost(map = "uint64, message", tag = "4")]
+    pub decision_variables: ::std::collections::HashMap<u64, DecisionVariableAttribute>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {

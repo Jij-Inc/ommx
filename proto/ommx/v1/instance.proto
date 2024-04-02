@@ -4,6 +4,7 @@ package ommx.v1;
 
 import "ommx/v1/constraint.proto";
 import "ommx/v1/function.proto";
+import "ommx/v1/decision_variables.proto";
 
 message Instance {
   message Description {
@@ -17,4 +18,11 @@ message Instance {
 
   Function objective = 2;
   repeated Constraint constraints = 3;
+
+  // A map of decision variable IDs to its attributes.
+  //
+  // - This must constain every decision variables used in the objective and constraints.
+  // - This can contains a decision variable that is not used in the objective or constraints.
+  // - IDs are not required to be sequential.
+  map<uint64, DecisionVariableAttribute> decision_variables = 4;
 }

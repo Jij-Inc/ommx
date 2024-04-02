@@ -2,13 +2,18 @@ syntax = "proto3";
 
 package ommx.v1;
 
+// Upper and lower bound of the decision variable.
+message Bound {
+  // Lower bound of the decision variable.
+  double lower = 1;
+  // Upper bound of the decision variable.
+  double upper = 2;
+}
+
 // Decison variable which mathematical programming solver will optimize.
 // It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 // It may have its name and subscripts which are used to identify in modeling tools.
-message DecisionVariable {
-  // Unique identifier of the decision variable.
-  uint64 id = 1;
-
+message DecisionVariableAttribute {
   // Kind of the decision variable
   enum Kind {
     KIND_UNSPECIFIED = 0;
@@ -18,7 +23,11 @@ message DecisionVariable {
   }
 
   // Kind of the decision variable
-  Kind kind = 2;
+  Kind kind = 1;
+
+  // Bound of the decision variable
+  // If the bound is not specified, the decision variable is considered as unbounded.
+  optional Bound bound = 2;
 
   // Human readable description of the decision variable.
   message Description {
