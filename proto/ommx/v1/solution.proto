@@ -2,7 +2,6 @@ syntax = "proto3";
 
 package ommx.v1;
 
-
 // A value per decision variable of the solution obtained by the solver.
 message VariableValue {
   repeated uint64 ids = 1;
