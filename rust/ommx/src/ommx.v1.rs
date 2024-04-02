@@ -219,3 +219,27 @@ pub mod instance {
         pub created_by: ::core::option::Option<::prost::alloc::string::String>,
     }
 }
+/// A value per decision variable of the solution obtained by the solver.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct VariableValue {
+    #[prost(uint64, repeated, tag = "1")]
+    pub ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(fixed64, tag = "2")]
+    pub value: u64,
+}
+/// A solution obtained by the solver.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Solution {
+    #[prost(message, repeated, tag = "1")]
+    pub vars: ::prost::alloc::vec::Vec<VariableValue>,
+}
+/// List of solutions obtained by the solver.
+/// This message is for supporting solvers that return multiple solutions.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SolutionList {
+    #[prost(message, repeated, tag = "1")]
+    pub solutions: ::prost::alloc::vec::Vec<Solution>,
+}
