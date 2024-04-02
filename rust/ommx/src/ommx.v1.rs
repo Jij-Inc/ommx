@@ -238,3 +238,18 @@ pub mod instance {
         pub created_by: ::core::option::Option<::prost::alloc::string::String>,
     }
 }
+/// A solution obtained by the solver.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Solution {
+    #[prost(map = "uint64, double", tag = "1")]
+    pub entries: ::std::collections::HashMap<u64, f64>,
+}
+/// List of solutions obtained by the solver.
+/// This message is for supporting solvers that return multiple solutions.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SolutionList {
+    #[prost(message, repeated, tag = "1")]
+    pub solutions: ::prost::alloc::vec::Vec<Solution>,
+}

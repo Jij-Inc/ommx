@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+// A solution obtained by the solver.
+message Solution {
+  map<uint64, double> entries = 1;
+}
+
+// List of solutions obtained by the solver.
+// This message is for supporting solvers that return multiple solutions.
+message SolutionList {
+  repeated Solution solutions = 1;
+}
