@@ -3,8 +3,8 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
-import "ommx/v1/function.proto";
 import "ommx/v1/decision_variables.proto";
+import "ommx/v1/function.proto";
 
 message Instance {
   message Description {
