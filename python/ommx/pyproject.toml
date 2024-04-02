@@ -1,0 +1,24 @@
+[project]
+name = "ommx"
+version = "0.0.1"
+description = "Open Mathematical prograMming eXchange (OMMX)"
+authors = [
+    { name="Jij Inc.", email="info@j-ij.com" },
+]
+readme = "../../README.md"
+requires-python = ">=3.9"  # TODO: protobufで生成したコードが要求するPythonバージョンを確認すること
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
+
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
