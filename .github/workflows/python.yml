@@ -20,6 +20,9 @@ jobs:
           version: 3.20.1
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check protoc version
+        run: protoc --version
+
       - name: Setup buf
         uses: bufbuild/buf-setup-action@v1
         with:
