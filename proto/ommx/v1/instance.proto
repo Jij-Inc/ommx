@@ -16,13 +16,26 @@ message Instance {
   }
   Description description = 1;
 
-  Function objective = 2;
-  repeated Constraint constraints = 3;
-
   // A map of decision variable IDs to its attributes.
   //
   // - This must constain every decision variables used in the objective and constraints.
   // - This can contains a decision variable that is not used in the objective or constraints.
   // - IDs are not required to be sequential.
-  map<uint64, DecisionVariableAttribute> decision_variables = 4;
+  map<uint64, DecisionVariableAttribute> decision_variables = 2;
+
+  Function objective = 3;
+
+  // Constraints of the optimization problem with their IDs.
+  //
+  // - Constraint IDs are managed separately from decision variable IDs.
+  //   We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+  //   and constraint `x == 0` with constraint ID `1`.
+  // - IDs are not required to be sequential.
+  // - IDs must be unique with other types of constraints.
+  map<uint64, Constraint> constraints = 4;
+
+  // Other types of constraints will be appended here
+  //
+  // TODO: Add semi-definite constraints to represent SDP
+  // map<uint64, SemiDefiniteConstraint> semi_definite_constraints = ?;
 }

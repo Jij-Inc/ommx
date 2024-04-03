@@ -212,17 +212,24 @@ pub mod decision_variable_attribute {
 pub struct Instance {
     #[prost(message, optional, tag = "1")]
     pub description: ::core::option::Option<instance::Description>,
-    #[prost(message, optional, tag = "2")]
-    pub objective: ::core::option::Option<Function>,
-    #[prost(message, repeated, tag = "3")]
-    pub constraints: ::prost::alloc::vec::Vec<Constraint>,
     /// A map of decision variable IDs to its attributes.
     ///
     /// - This must constain every decision variables used in the objective and constraints.
     /// - This can contains a decision variable that is not used in the objective or constraints.
     /// - IDs are not required to be sequential.
-    #[prost(map = "uint64, message", tag = "4")]
+    #[prost(map = "uint64, message", tag = "2")]
     pub decision_variables: ::std::collections::HashMap<u64, DecisionVariableAttribute>,
+    #[prost(message, optional, tag = "3")]
+    pub objective: ::core::option::Option<Function>,
+    /// Constraints of the optimization problem with their IDs.
+    ///
+    /// - Constraint IDs are managed separately from decision variable IDs.
+    ///    We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+    ///    and constraint `x == 0` with constraint ID `1`.
+    /// - IDs are not required to be sequential.
+    /// - IDs must be unique with other types of constraints.
+    #[prost(map = "uint64, message", tag = "4")]
+    pub constraints: ::std::collections::HashMap<u64, Constraint>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
