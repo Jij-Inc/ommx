@@ -20,9 +20,11 @@ jobs:
           github_token: ${{ github.token }}
     
       - name: Regenerate Python codes from proto files
-        run: buf generate
+        run: |
+          cd proto
+          buf generate
 
       - name: Check updated
         run: |
-          cd proto
+          cd ..
           git diff --exit-code
