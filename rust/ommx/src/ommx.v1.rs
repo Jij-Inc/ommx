@@ -37,11 +37,15 @@ pub struct Polynomial {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SparseMatrix {
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, tag = "1")]
+    pub num_rows: u64,
+    #[prost(uint64, tag = "2")]
+    pub num_columns: u64,
+    #[prost(uint64, repeated, tag = "3")]
     pub rows: ::prost::alloc::vec::Vec<u64>,
-    #[prost(uint64, repeated, tag = "2")]
+    #[prost(uint64, repeated, tag = "4")]
     pub columns: ::prost::alloc::vec::Vec<u64>,
-    #[prost(double, repeated, tag = "3")]
+    #[prost(double, repeated, tag = "5")]
     pub values: ::prost::alloc::vec::Vec<f64>,
 }
 /// Quadratic function as a sparse matrix and linear sparse vector.

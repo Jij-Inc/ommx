@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let out = repo_root.join("rust/ommx/src");
     // FIXME: Get from prost
     let filename = "ommx.v1.rs";
-    let out_file = out.join(&filename);
+    let out_file = out.join(filename);
     eprintln!("{:>12} {}", "Writing".bold().cyan(), out_file.display());
 
     let mut cfg = Config::new();

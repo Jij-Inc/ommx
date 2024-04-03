@@ -4,7 +4,9 @@ package ommx.v1;
 
 // COO format of sparse matrix. The components must have same size.
 message SparseMatrix {
-  repeated uint64 rows = 1;
-  repeated uint64 columns = 2;
-  repeated double values = 3;
+  uint64 num_rows = 1;
+  uint64 num_columns = 2;
+  repeated uint64 rows = 3;
+  repeated uint64 columns = 4;
+  repeated double values = 5;
 }
