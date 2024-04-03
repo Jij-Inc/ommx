@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4   # TODO: checkout@v2と@v4の違いは何？
+        uses: actions/checkout@v2
 
       - name: Setup Buf
         uses: bufbuild/buf-setup-action@v1
