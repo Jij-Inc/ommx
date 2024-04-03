@@ -1,0 +1,26 @@
+name: Python
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  protogen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4   # TODO: checkout@v2と@v4の違いは何？
+
+      - name: Setup Buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+    
+      - name: Regenerate Python codes from proto files
+        run: buf generate
+
+      - name: Check updated
+        run: git diff --exit-code
