@@ -23,4 +23,6 @@ jobs:
         run: buf generate
 
       - name: Check updated
-        run: git diff --exit-code
+        run: |
+          cd proto
+          git diff --exit-code
