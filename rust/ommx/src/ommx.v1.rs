@@ -3,6 +3,8 @@
 pub struct Linear {
     #[prost(message, repeated, tag = "1")]
     pub terms: ::prost::alloc::vec::Vec<linear::Term>,
+    #[prost(double, tag = "2")]
+    pub constant: f64,
 }
 /// Nested message and enum types in `Linear`.
 pub mod linear {
