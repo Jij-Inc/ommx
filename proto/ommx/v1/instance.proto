@@ -3,6 +3,7 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
+import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
 
 message Instance {
@@ -15,6 +16,19 @@ message Instance {
   }
   Description description = 1;
 
-  Function objective = 2;
-  repeated Constraint constraints = 3;
+  // Decision variables used in this instance
+  //
+  // - This must constain every decision variables used in the objective and constraints.
+  // - This can contains a decision variable that is not used in the objective or constraints.
+  repeated DecisionVariable decision_variables = 2;
+
+  Function objective = 3;
+
+  // Constraints of the optimization problem
+  repeated Constraint constraints = 4;
+
+  // Other types of constraints will be appended here
+  //
+  // TODO: Add semi-definite constraints to represent SDP
+  // repeated SemiDefiniteConstraint semi_definite_constraints = ?;
 }

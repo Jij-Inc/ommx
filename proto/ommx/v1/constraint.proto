@@ -5,6 +5,13 @@ package ommx.v1;
 import "ommx/v1/function.proto";
 
 message Constraint {
+  // Constraint ID
+  //
+  // - Constraint IDs are managed separately from decision variable IDs.
+  //   We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+  //   and constraint `x == 0` with constraint ID `1`.
+  // - IDs are not required to be sequential.
+  // - IDs must be unique with other types of constraints.
   uint64 id = 1;
 
   enum Equality {
@@ -18,7 +25,7 @@ message Constraint {
 
   message Description {
     string name = 1;
-    repeated uint64 forall = 2;
+    repeated int64 forall = 2;
   }
   optional Description description = 4;
 }

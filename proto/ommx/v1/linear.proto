@@ -8,4 +8,5 @@ message Linear {
     double coefficient = 2;
   }
   repeated Term terms = 1;
+  double constant = 2;
 }

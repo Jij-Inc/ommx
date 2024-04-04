@@ -2,11 +2,21 @@ syntax = "proto3";
 
 package ommx.v1;
 
+// Upper and lower bound of the decision variable.
+message Bound {
+  // Lower bound of the decision variable.
+  double lower = 1;
+  // Upper bound of the decision variable.
+  double upper = 2;
+}
+
 // Decison variable which mathematical programming solver will optimize.
 // It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 // It may have its name and subscripts which are used to identify in modeling tools.
 message DecisionVariable {
-  // Unique identifier of the decision variable.
+  // Decision variable ID.
+  //
+  // - IDs are not required to be sequential.
   uint64 id = 1;
 
   // Kind of the decision variable
@@ -14,11 +24,19 @@ message DecisionVariable {
     KIND_UNSPECIFIED = 0;
     KIND_BINARY = 1;
     KIND_INTEGER = 2;
-    KIND_REAL = 3;
+    KIND_CONTINUOUS = 3;
+    // Semi-integer decision variable is a decision variable that can take only integer values in the given range or zero.
+    KIND_SEMI_INTEGER = 4;
+    // Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero.
+    KIND_SEMI_CONTINUOUS = 5;
   }
 
   // Kind of the decision variable
   Kind kind = 2;
+
+  // Bound of the decision variable
+  // If the bound is not specified, the decision variable is considered as unbounded.
+  optional Bound bound = 3;
 
   // Human readable description of the decision variable.
   message Description {
@@ -30,5 +48,5 @@ message DecisionVariable {
   }
 
   // This is optional since the name and subscripts does not exist in general mathematical programming situation
-  optional Description description = 3;
+  optional Description description = 4;
 }

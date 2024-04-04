@@ -3,10 +3,15 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/linear.proto";
-import "ommx/v1/sparse_matrix.proto";
 
-// Quadratic function as a sparse matrix and linear sparse vector.
+// Quadratic function as a COO-style sparse matrix and linear sparse vector.
+//
+// COOrdinate format, also known as triplet format, is a way to represent sparse matrices as a list of non-zero elements.
+// It consists of three lists: the row indices, the column indices, and the values of the non-zero elements.
 message Quadratic {
-  SparseMatrix quadradic = 1;
-  optional Linear linear = 2;
+  repeated uint64 rows = 1;
+  repeated uint64 columns = 2;
+  repeated double values = 3;
+
+  optional Linear linear = 4;
 }
