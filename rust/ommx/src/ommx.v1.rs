@@ -33,28 +33,20 @@ pub struct Polynomial {
     #[prost(message, repeated, tag = "1")]
     pub terms: ::prost::alloc::vec::Vec<Monomial>,
 }
-/// COO format of sparse matrix. The components must have same size.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SparseMatrix {
-    #[prost(uint64, tag = "1")]
-    pub num_rows: u64,
-    #[prost(uint64, tag = "2")]
-    pub num_columns: u64,
-    #[prost(uint64, repeated, tag = "3")]
-    pub rows: ::prost::alloc::vec::Vec<u64>,
-    #[prost(uint64, repeated, tag = "4")]
-    pub columns: ::prost::alloc::vec::Vec<u64>,
-    #[prost(double, repeated, tag = "5")]
-    pub values: ::prost::alloc::vec::Vec<f64>,
-}
-/// Quadratic function as a sparse matrix and linear sparse vector.
+/// Quadratic function as a COO-style sparse matrix and linear sparse vector.
+///
+/// COOrdinate format, also known as triplet format, is a way to represent sparse matrices as a list of non-zero elements.
+/// It consists of three lists: the row indices, the column indices, and the values of the non-zero elements.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Quadratic {
-    #[prost(message, optional, tag = "1")]
-    pub quadradic: ::core::option::Option<SparseMatrix>,
-    #[prost(message, optional, tag = "2")]
+    #[prost(uint64, repeated, tag = "1")]
+    pub rows: ::prost::alloc::vec::Vec<u64>,
+    #[prost(uint64, repeated, tag = "2")]
+    pub columns: ::prost::alloc::vec::Vec<u64>,
+    #[prost(double, repeated, tag = "3")]
+    pub values: ::prost::alloc::vec::Vec<f64>,
+    #[prost(message, optional, tag = "4")]
     pub linear: ::core::option::Option<Linear>,
 }
 /// Real-valued multivariate function used for objective function and constraints.
