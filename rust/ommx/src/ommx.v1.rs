@@ -23,8 +23,8 @@ pub mod linear {
 pub struct Monomial {
     #[prost(uint64, repeated, tag = "1")]
     pub ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(fixed64, tag = "2")]
-    pub coefficient: u64,
+    #[prost(double, tag = "2")]
+    pub coefficient: f64,
 }
 /// Multi­variate polynomial
 #[allow(clippy::derive_partial_eq_without_eq)]

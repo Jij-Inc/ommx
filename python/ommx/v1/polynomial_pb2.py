@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18ommx/v1/polynomial.proto\x12\x07ommx.v1\">\n\x08Monomial\x12\x10\n\x03ids\x18\x01 \x03(\x04R\x03ids\x12 \n\x0b\x63oefficient\x18\x02 \x01(\x06R\x0b\x63oefficient\"5\n\nPolynomial\x12\'\n\x05terms\x18\x01 \x03(\x0b\x32\x11.ommx.v1.MonomialR\x05termsB[\n\x0b\x63om.ommx.v1B\x0fPolynomialProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18ommx/v1/polynomial.proto\x12\x07ommx.v1\">\n\x08Monomial\x12\x10\n\x03ids\x18\x01 \x03(\x04R\x03ids\x12 \n\x0b\x63oefficient\x18\x02 \x01(\x01R\x0b\x63oefficient\"5\n\nPolynomial\x12\'\n\x05terms\x18\x01 \x03(\x0b\x32\x11.ommx.v1.MonomialR\x05termsB[\n\x0b\x63om.ommx.v1B\x0fPolynomialProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
