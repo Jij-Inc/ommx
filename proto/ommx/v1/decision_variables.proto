@@ -13,7 +13,12 @@ message Bound {
 // Decison variable which mathematical programming solver will optimize.
 // It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
 // It may have its name and subscripts which are used to identify in modeling tools.
-message DecisionVariableAttribute {
+message DecisionVariable {
+  // Decision variable ID.
+  //
+  // - IDs are not required to be sequential.
+  uint64 id = 1;
+
   // Kind of the decision variable
   enum Kind {
     KIND_UNSPECIFIED = 0;
@@ -23,11 +28,11 @@ message DecisionVariableAttribute {
   }
 
   // Kind of the decision variable
-  Kind kind = 1;
+  Kind kind = 2;
 
   // Bound of the decision variable
   // If the bound is not specified, the decision variable is considered as unbounded.
-  optional Bound bound = 2;
+  optional Bound bound = 3;
 
   // Human readable description of the decision variable.
   message Description {
@@ -39,5 +44,5 @@ message DecisionVariableAttribute {
   }
 
   // This is optional since the name and subscripts does not exist in general mathematical programming situation
-  optional Description description = 3;
+  optional Description description = 4;
 }
