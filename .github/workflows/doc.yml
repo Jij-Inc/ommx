@@ -30,7 +30,7 @@ jobs:
           github_token: ${{ github.token }}
 
       - name: Generate API docs
-        run: buf generate
+        run: buf generate --template buf.gen.docs.yaml
         working-directory: proto
 
       - name: Upload HTML
