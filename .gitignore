@@ -4,6 +4,7 @@ target/
 # Python
 build/
 .venv
+.pytest_cache/*
 __pycache__/
 *.egg-info/
 
