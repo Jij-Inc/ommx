@@ -1,6 +1,6 @@
 //! Open Mathematics prograMming eXchange (OMMX)
 
-use prost::Message;
+pub use prost::Message;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
