@@ -196,7 +196,7 @@ pub mod decision_variable {
         Unspecified = 0,
         Binary = 1,
         Integer = 2,
-        Real = 3,
+        Continuous = 3,
     }
     impl Kind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -208,7 +208,7 @@ pub mod decision_variable {
                 Kind::Unspecified => "KIND_UNSPECIFIED",
                 Kind::Binary => "KIND_BINARY",
                 Kind::Integer => "KIND_INTEGER",
-                Kind::Real => "KIND_REAL",
+                Kind::Continuous => "KIND_CONTINUOUS",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -217,7 +217,7 @@ pub mod decision_variable {
                 "KIND_UNSPECIFIED" => Some(Self::Unspecified),
                 "KIND_BINARY" => Some(Self::Binary),
                 "KIND_INTEGER" => Some(Self::Integer),
-                "KIND_REAL" => Some(Self::Real),
+                "KIND_CONTINUOUS" => Some(Self::Continuous),
                 _ => None,
             }
         }

@@ -24,7 +24,7 @@ message DecisionVariable {
     KIND_UNSPECIFIED = 0;
     KIND_BINARY = 1;
     KIND_INTEGER = 2;
-    KIND_REAL = 3;
+    KIND_CONTINUOUS = 3;
   }
 
   // Kind of the decision variable
