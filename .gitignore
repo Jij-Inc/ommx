@@ -2,8 +2,9 @@
 target/
 
 # Python
-.venv
 build/
+.venv
+__pycache__/
 *.egg-info/
 
 # Document HTML

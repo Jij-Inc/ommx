@@ -1,0 +1,10 @@
+def test_import():
+    import ommx.v1.constraint_pb2
+    import ommx.v1.decision_variables_pb2
+    import ommx.v1.function_pb2
+    import ommx.v1.instance_pb2
+    import ommx.v1.linear_pb2
+    import ommx.v1.polynomial_pb2
+    import ommx.v1.quadratic_pb2
+    import ommx.v1.solution_pb2
+    import ommx.v1.sparse_matrix_pb2
