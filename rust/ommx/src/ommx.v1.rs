@@ -197,6 +197,10 @@ pub mod decision_variable {
         Binary = 1,
         Integer = 2,
         Continuous = 3,
+        /// Semi-integer decision variable is a decision variable that can take only integer values in the given range or zero.
+        SemiInteger = 4,
+        /// Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero.
+        SemiContinuous = 5,
     }
     impl Kind {
         /// String value of the enum field names used in the ProtoBuf definition.
@@ -209,6 +213,8 @@ pub mod decision_variable {
                 Kind::Binary => "KIND_BINARY",
                 Kind::Integer => "KIND_INTEGER",
                 Kind::Continuous => "KIND_CONTINUOUS",
+                Kind::SemiInteger => "KIND_SEMI_INTEGER",
+                Kind::SemiContinuous => "KIND_SEMI_CONTINUOUS",
             }
         }
         /// Creates an enum from field names used in the ProtoBuf definition.
@@ -218,6 +224,8 @@ pub mod decision_variable {
                 "KIND_BINARY" => Some(Self::Binary),
                 "KIND_INTEGER" => Some(Self::Integer),
                 "KIND_CONTINUOUS" => Some(Self::Continuous),
+                "KIND_SEMI_INTEGER" => Some(Self::SemiInteger),
+                "KIND_SEMI_CONTINUOUS" => Some(Self::SemiContinuous),
                 _ => None,
             }
         }

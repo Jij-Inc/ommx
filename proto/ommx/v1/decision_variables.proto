@@ -25,6 +25,10 @@ message DecisionVariable {
     KIND_BINARY = 1;
     KIND_INTEGER = 2;
     KIND_CONTINUOUS = 3;
+    // Semi-integer decision variable is a decision variable that can take only integer values in the given range or zero.
+    KIND_SEMI_INTEGER = 4;
+    // Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero.
+    KIND_SEMI_CONTINUOUS = 5;
   }
 
   // Kind of the decision variable
