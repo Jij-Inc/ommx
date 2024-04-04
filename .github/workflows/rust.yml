@@ -63,7 +63,7 @@ jobs:
       - name: Setup protobuf compiler
         uses: arduino/setup-protoc@v3
         with:
-          version: 26.1
+          version: '26.1'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Regenerate Rust codes from proto files

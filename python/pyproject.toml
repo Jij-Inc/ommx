@@ -23,7 +23,7 @@ dependencies = [
 
 
 [project.optional-dependencies]
-test = ["pytest"]
+dev = ["pytest"]
 
 
 [project.urls]
