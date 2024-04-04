@@ -2,6 +2,9 @@ name: Publish OMMX on PyPI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release_python
 
 jobs:
   build_wheels:
@@ -98,15 +101,15 @@ jobs:
           path: ./wheelhouse/*.whl
           retention-days: 30
   
-  upload_pypi:
-    needs: [build_wheels]
-    if: ${{ github.event_name != 'workflow_dispatch' }}
-    name: Publish to PyPI
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          pattern: WHEEL-*
-          merge-multiple: true
+  # upload_pypi:
+  #   needs: [build_wheels]
+  #   if: ${{ github.event_name != 'workflow_dispatch' }}
+  #   name: Publish to PyPI
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: dist
+  #         pattern: WHEEL-*
+  #         merge-multiple: true
