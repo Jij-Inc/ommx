@@ -71,6 +71,9 @@ jobs:
         with:
           python-version: '3.8'
 
+      - name: Change Working Directory
+        run: cd python
+
       - name: Setup QEMU
         if: ${{ runner.os == 'Linux'  && matrix.arch == 'aarch64'}}
         uses: docker/setup-qemu-action@v3
