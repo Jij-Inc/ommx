@@ -17,7 +17,7 @@ jobs:
       - name: Setup protobuf compiler
         uses: arduino/setup-protoc@v3
         with:
-          version: '26.1'
+          version: "26.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup buf
@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
 
