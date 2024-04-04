@@ -86,6 +86,13 @@ pub mod function {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Constraint {
+    /// Constraint ID
+    ///
+    /// - Constraint IDs are managed separately from decision variable IDs.
+    ///    We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+    ///    and constraint `x == 0` with constraint ID `1`.
+    /// - IDs are not required to be sequential.
+    /// - IDs must be unique with other types of constraints.
     #[prost(uint64, tag = "1")]
     pub id: u64,
     #[prost(enumeration = "constraint::Equality", tag = "2")]
@@ -151,20 +158,25 @@ pub struct Bound {
 /// It may have its name and subscripts which are used to identify in modeling tools.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DecisionVariableAttribute {
+pub struct DecisionVariable {
+    /// Decision variable ID.
+    ///
+    /// - IDs are not required to be sequential.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
     /// Kind of the decision variable
-    #[prost(enumeration = "decision_variable_attribute::Kind", tag = "1")]
+    #[prost(enumeration = "decision_variable::Kind", tag = "2")]
     pub kind: i32,
     /// Bound of the decision variable
     /// If the bound is not specified, the decision variable is considered as unbounded.
-    #[prost(message, optional, tag = "2")]
+    #[prost(message, optional, tag = "3")]
     pub bound: ::core::option::Option<Bound>,
     /// This is optional since the name and subscripts does not exist in general mathematical programming situation
-    #[prost(message, optional, tag = "3")]
-    pub description: ::core::option::Option<decision_variable_attribute::Description>,
+    #[prost(message, optional, tag = "4")]
+    pub description: ::core::option::Option<decision_variable::Description>,
 }
-/// Nested message and enum types in `DecisionVariableAttribute`.
-pub mod decision_variable_attribute {
+/// Nested message and enum types in `DecisionVariable`.
+pub mod decision_variable {
     /// Human readable description of the decision variable.
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -216,24 +228,17 @@ pub mod decision_variable_attribute {
 pub struct Instance {
     #[prost(message, optional, tag = "1")]
     pub description: ::core::option::Option<instance::Description>,
-    /// A map of decision variable IDs to its attributes.
+    /// Decision variables used in this instance
     ///
     /// - This must constain every decision variables used in the objective and constraints.
     /// - This can contains a decision variable that is not used in the objective or constraints.
-    /// - IDs are not required to be sequential.
-    #[prost(map = "uint64, message", tag = "2")]
-    pub decision_variables: ::std::collections::HashMap<u64, DecisionVariableAttribute>,
+    #[prost(message, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, optional, tag = "3")]
     pub objective: ::core::option::Option<Function>,
-    /// Constraints of the optimization problem with their IDs.
-    ///
-    /// - Constraint IDs are managed separately from decision variable IDs.
-    ///    We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
-    ///    and constraint `x == 0` with constraint ID `1`.
-    /// - IDs are not required to be sequential.
-    /// - IDs must be unique with other types of constraints.
-    #[prost(map = "uint64, message", tag = "4")]
-    pub constraints: ::std::collections::HashMap<u64, Constraint>,
+    /// Constraints of the optimization problem
+    #[prost(message, repeated, tag = "4")]
+    pub constraints: ::prost::alloc::vec::Vec<Constraint>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
