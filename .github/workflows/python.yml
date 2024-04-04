@@ -26,7 +26,7 @@ jobs:
           github_token: ${{ github.token }}
     
       - name: Regenerate python codes from proto files
-        run: buf generate
+        run: buf generate --template buf.gen.python.yaml
         working-directory: proto
 
       - name: Check updated
