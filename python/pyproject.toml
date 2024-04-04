@@ -5,7 +5,7 @@ description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [
     { name="Jij Inc.", email="info@j-ij.com" },
 ]
-readme = "../../README.md"
+readme = "../README.md"
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -27,3 +27,4 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
