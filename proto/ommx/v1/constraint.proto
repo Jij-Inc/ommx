@@ -25,7 +25,7 @@ message Constraint {
 
   message Description {
     string name = 1;
-    repeated uint64 forall = 2;
+    repeated int64 forall = 2;
   }
   optional Description description = 4;
 }

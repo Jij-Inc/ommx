@@ -109,8 +109,8 @@ pub mod constraint {
     pub struct Description {
         #[prost(string, tag = "1")]
         pub name: ::prost::alloc::string::String,
-        #[prost(uint64, repeated, tag = "2")]
-        pub forall: ::prost::alloc::vec::Vec<u64>,
+        #[prost(int64, repeated, tag = "2")]
+        pub forall: ::prost::alloc::vec::Vec<i64>,
     }
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
