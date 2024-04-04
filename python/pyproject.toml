@@ -22,6 +22,10 @@ dependencies = [
 ]
 
 
+[project.optional-dependencies]
+test = ["pytest"]
+
+
 [project.urls]
 Homepage = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
