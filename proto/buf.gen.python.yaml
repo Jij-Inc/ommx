@@ -1,0 +1,6 @@
+version: v1
+managed:
+  enabled: true
+plugins:
+  - name: python
+    out: ../python
