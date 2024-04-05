@@ -62,7 +62,7 @@ jobs:
           source .venv/bin/activate
           python -m pip install 'python/[dev]'
 
-      - name: Check lint and Run tests
+      - name: Lint and Run tests
         run: |
           source .venv/bin/activate
           python -m mypy python/ommx
