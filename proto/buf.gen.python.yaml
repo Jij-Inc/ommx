@@ -4,3 +4,7 @@ managed:
 plugins:
   - name: python
     out: ../python
+
+  - plugin: protoc-gen-mypy
+    out: ../python
+    path: ./.venv/bin/protoc-gen-mypy
