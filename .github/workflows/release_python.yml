@@ -2,9 +2,6 @@ name: Publish OMMX on PyPI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - release_python
 
 jobs:
   build:
@@ -42,8 +39,5 @@ jobs:
           name: package
           path: ./dist
       
-      - name: Debug
-        run: |
-          ls -la
-          ls -la ./dist
-          ls -la ./dist/*
+      - name: Upload to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
