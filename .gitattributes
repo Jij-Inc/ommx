@@ -1,2 +1,2 @@
 rust/ommx/src/ommx.v1.rs linguist-generated=true
-python/ommx/* linguist-generated=true
+python/ommx/**/* linguist-generated=true

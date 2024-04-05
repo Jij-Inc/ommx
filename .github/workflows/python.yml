@@ -32,8 +32,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
           python -m pip install "python/[dev]"
     
       - name: Regenerate python codes from proto files
@@ -58,13 +56,13 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
           python -m pip install 'python/[dev]'
 
-      - name: Lint and Run tests
+      - name: Run tests
         run: |
-          source .venv/bin/activate
+          python -m pytest
+
+      - name: Lint
+        run: |
           python -m mypy python/ommx
           python -m pyright python/ommx
-          python -m pytest
