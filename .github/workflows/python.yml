@@ -31,7 +31,10 @@ jobs:
           python-version: "3.8"
 
       - name: Install mypy-protobuff
-        run: python -m pip install mypy-protobuf
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install mypy-protobuf
     
       - name: Regenerate python codes from proto files
         run: buf generate --template buf.gen.python.yaml
