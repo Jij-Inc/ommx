@@ -1,4 +1,6 @@
 # OMMX
+[![PyPI - Version](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/)
+[![Crates.io Version](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx)
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
