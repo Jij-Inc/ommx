@@ -1,6 +1,9 @@
 name: Publish OMMX on PyPI
 
 on:
+  push:
+    tags:
+      - python-*
   workflow_dispatch:
 
 jobs:
