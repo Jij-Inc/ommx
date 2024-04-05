@@ -31,3 +31,19 @@ jobs:
           path: ./dist/
           retention-days: 30
 
+  publish:
+    name: Publish Python Package
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: ./dist
+      
+      - name: Debug
+        run: |
+          ls -la
+          ls -la ./dist
+          ls -la ./dist/*
