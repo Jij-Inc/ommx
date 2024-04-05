@@ -23,7 +23,13 @@ dependencies = [
 
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = [
+    "mypy>=0.910",
+    "mypy-protobuf",
+    "pyright",
+    "pytest",
+    "types-protobuf>=0.1.14",
+]
 
 
 [project.urls]

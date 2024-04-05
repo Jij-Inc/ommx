@@ -24,6 +24,15 @@ jobs:
         uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ github.token }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install "python/[dev]"
     
       - name: Regenerate python codes from proto files
         run: buf generate --template buf.gen.python.yaml
@@ -49,6 +58,28 @@ jobs:
         run: |
           python -m pip install 'python/[dev]'
 
-      - name: Run Tests
+      - name: Run tests
         run: |
           python -m pytest
+
+  lint-python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install 'python/[dev]'
+
+      - name: Lint
+        run: |
+          python -m mypy python/ommx
+          python -m pyright python/ommx

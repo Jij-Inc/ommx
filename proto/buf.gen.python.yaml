@@ -4,3 +4,6 @@ managed:
 plugins:
   - name: python
     out: ../python
+
+  - plugin: mypy
+    out: ../python
