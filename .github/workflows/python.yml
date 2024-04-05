@@ -43,13 +43,7 @@ jobs:
       - name: Check updated
         run: git diff --exit-code
 
-      - name: Check lint
-        run: |
-          source .venv/bin/activate
-          python -m mypy python/ommx
-          python -m pyright python/ommx
-
-  test-python:
+  check-python:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -64,8 +58,13 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install 'python/[dev]'
 
-      - name: Run Tests
+      - name: Check lint and Run tests
         run: |
+          source .venv/bin/activate
+          python -m mypy python/ommx
+          python -m pyright python/ommx
           python -m pytest
