@@ -30,11 +30,12 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: Install mypy-protobuff
+      - name: Install dependencies
         run: |
           python -m venv .venv
           source .venv/bin/activate
           python -m pip install "python/[dev]"
+          which python
     
       - name: Regenerate python codes from proto files
         run: buf generate --template buf.gen.python.yaml
@@ -45,6 +46,8 @@ jobs:
 
       - name: Check lint
         run: |
+          which python
+          pip list
           python -m mypy python/ommx
           python -m pyright python/ommx
 
