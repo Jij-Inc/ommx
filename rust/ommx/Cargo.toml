@@ -11,4 +11,6 @@ keywords      = ["optimization", "ommx"]
 categories    = ["data-structures", "mathematics", "science"]
 
 [dependencies]
+ocipkg = "0.2.8"
 prost = "0.12.3"
+serde = { version = "1.0.197", features = ["derive"] }
