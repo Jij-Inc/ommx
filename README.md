@@ -10,6 +10,8 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 - [Rust](https://jij-inc.github.io/ommx/rust/ommx/index.html)
 - [Python](https://jij-inc.github.io/ommx/python/index.html)
 
+See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
+
 # Compatibility
 
 This project manages several versions as follows:
