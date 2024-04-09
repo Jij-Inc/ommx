@@ -7,14 +7,12 @@ Welcome to ommx's documentation!
 ================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 6
    :caption: Contents:
 
 
-
-Indices and tables
+Indices
 ==================
 
 * :ref:`genindex`
 * :ref:`modindex`
-* :ref:`search`
