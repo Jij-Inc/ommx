@@ -14,6 +14,7 @@ README for Developers of OMMX
   - Managed by `cargo`, see its configuration in [`Cargo.toml`](./rust/Cargo.toml)
 
 ## Python package
+[![PyPI - Version](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/)
 
 ### First of all
 ```shell
@@ -33,7 +34,14 @@ buf generate --template buf.gen.python.yaml
 sphinx-build -b html ./python/docs/source ./python/docs/build
 ```
 
+### How to release to PyPI
+
+1. Update version in `python/pyproject.toml`
+  - This process will be automated
+2. Push Git tag with `python-x.y.z`, then the GitHub Actions will release to PyPI
+
 ## Rust crate
+[![Crates.io Version](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx)
 
 ### How to generate Rust codes
 
