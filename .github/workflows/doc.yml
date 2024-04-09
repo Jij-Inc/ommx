@@ -83,7 +83,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install -r ./python/docs/requirements.txt
+          python -m pip install "python/[dev]"
       
       - name: Build Python documentation
         run: |

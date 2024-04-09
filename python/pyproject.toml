@@ -28,6 +28,10 @@ dev = [
     "mypy-protobuf",
     "pyright",
     "pytest",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "sphinx_fontawesome",
+    "sphinx-autoapi",
     "types-protobuf>=0.1.14",
 ]
 
