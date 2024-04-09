@@ -17,14 +17,12 @@ This project manages several versions as follows:
 ## Protocol buffers schema
 
 - OMMX defines a protocol buffers schema with version like `v1`, `v2`, etc. `v1` schema has a namesapce `ommx.v1`.
-- Schemas in `ommx.v1` will be compatible after [`1.0.0` release](https://github.com/Jij-Inc/ommx/milestone/3). Note that the schema can be changed incompatible way until this release.
-- `v2` schema with namespace `ommx.v2` will start developing if we need to change the schema in incompatible way after `1.0.0` release. Compatible changes will be made in `v1` schema also after `1.0.0` release. We never create namespaces like `ommx.v1_1`.
+- Schemas in `ommx.v1` will be compatible after [ommx.v1 schema release](https://github.com/Jij-Inc/ommx/milestone/3). Note that the schema can be changed incompatible way until this release.
+- `v2` schema with namespace `ommx.v2` will start developing if we need to change the schema in incompatible way after `ommx.v1` release. Compatible changes will be made in `v1` schema also after its release. We never create namespaces like `ommx.v1_1`.
 
-## `ommx` Rust crate
-TBW
-
-## `ommx` Python package
-TBW
+## Language specific bindings
+This project consists of main protobuf schema and language specific bindings.
+Their versions are managed independently, and adopts semantic versioning.
 
 # License
 © 2024 Jij Inc.
