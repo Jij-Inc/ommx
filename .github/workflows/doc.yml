@@ -70,8 +70,34 @@ jobs:
           path: ./rust/target/doc
           retention-days: 30
 
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      
+      - name: Install dependencies
+        run: |
+          pip install -r ./python/docs/requirements.txt
+      
+      - name: Build Python documentation
+        run: |
+          sphinx-build -b html ./python/docs/source ./python/docs/build
+
+      - name: Upload HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-python
+          path: ./python/docs/build
+          retention-days: 30
+
   package:
-    needs: [protobuf, rust]
+    needs: [protobuf, rust, python]
     runs-on: ubuntu-latest
     steps:
       - name: Download HTML of protobuf
@@ -85,6 +111,12 @@ jobs:
         with:
           name: doc-rust
           path: ./doc/rust
+
+      - name: Download HTML of python
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-python
+          path: ./doc/python
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
