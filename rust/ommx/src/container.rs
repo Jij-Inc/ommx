@@ -1,2 +1,0 @@
-//! Manage messages as container
-//!
