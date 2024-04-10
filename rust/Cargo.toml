@@ -2,6 +2,6 @@
 resolver = "2"
 members = [
     "ommx",
-    "ommxctl",
+    "ommx-cli",
     "protogen",
 ]
