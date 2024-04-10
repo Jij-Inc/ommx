@@ -666,7 +666,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ommx-cli"
+name = "ommxctl"
 version = "0.1.0"
 dependencies = [
  "clap",
