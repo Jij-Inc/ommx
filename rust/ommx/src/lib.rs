@@ -1,6 +1,19 @@
 //! Open Mathematics prograMming eXchange (OMMX)
+//!
+//! Message as a container
+//! -----------------------
+//! OMMX defines a protobuf schema. Then the [`v1::Instance`] and [`v1::Solution`] are serialized as protobuf messages,
+//! i.e. a byte stream satisfying the schema.
+//! This is enough for in process communication, but not enough for out of process communication.
+//! For storing message on local disk or sharing with other applications via cloud storage,
+//! OMMX also defines a metadata for each message, such as who and when this message was created by which application, and so on,
+//! and treats the pair of metadata and message as a container.
+//! - [`container`] module provides the API to manage these containers on local filesystem, and push/pull to container registry.
+//! - [`archive`] module provides the API to store these containers as OCI archive
+//!
 
 pub mod archive;
+pub mod container;
 pub mod error;
 pub use prost::Message;
 
