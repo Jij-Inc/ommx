@@ -1,0 +1,14 @@
+changelog:
+  categories:
+    - title: Protobuf update
+      labels:
+        - proto
+    - title: Python binding update
+      labels:
+        - python
+    - title: Rust binding update
+      labels:
+        - rust
+    - title: Others
+      labels:
+        - "*"
