@@ -696,6 +696,7 @@ dependencies = [
  "ocipkg 0.3.0",
  "prost",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
