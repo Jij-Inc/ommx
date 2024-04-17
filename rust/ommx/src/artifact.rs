@@ -2,7 +2,8 @@
 //!
 
 use crate::{error::*, v1};
-use ocipkg::ImageName;
+use ocipkg::{oci_spec::image::DescriptorBuilder, ImageName};
+use prost::Message;
 use serde::*;
 
 /// The version of OMMX schema of the message stored in the artifact
@@ -32,8 +33,14 @@ pub trait ArtifactMessage: Sized {
 
 impl ArtifactMessage for v1::Instance {
     fn save(&self, image_name: &ImageName) -> Result<()> {
-        dbg!(image_name);
-        todo!()
+        let blob = self.encode_to_vec();
+        let mut artifact = ocipkg::image::LocalArtifactBuilder::new(image_name.clone())?;
+        let descriptor = DescriptorBuilder::default()
+            .media_type("application/vnd.ommx.v1.instance+protobuf")
+            .build()?; // size and digest are set by `add_blob`
+        artifact.add_blob(descriptor, &blob)?;
+        artifact.finish()?;
+        Ok(())
     }
 
     fn load(image_name: &ImageName) -> Result<Self> {
