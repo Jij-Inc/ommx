@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n ommx/v1/decision_variables.proto\x12\x07ommx.v1\"3\n\x05\x42ound\x12\x14\n\x05lower\x18\x01 \x01(\x01R\x05lower\x12\x14\n\x05upper\x18\x02 \x01(\x01R\x05upper\"\xb4\x03\n\x10\x44\x65\x63isionVariable\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12\x32\n\x04kind\x18\x02 \x01(\x0e\x32\x1e.ommx.v1.DecisionVariable.KindR\x04kind\x12)\n\x05\x62ound\x18\x03 \x01(\x0b\x32\x0e.ommx.v1.BoundH\x00R\x05\x62ound\x88\x01\x01\x12L\n\x0b\x64\x65scription\x18\x04 \x01(\x0b\x32%.ommx.v1.DecisionVariable.DescriptionH\x01R\x0b\x64\x65scription\x88\x01\x01\x1a\x41\n\x0b\x44\x65scription\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n\nsubscripts\x18\x02 \x03(\x04R\nsubscripts\"\x85\x01\n\x04Kind\x12\x14\n\x10KIND_UNSPECIFIED\x10\x00\x12\x0f\n\x0bKIND_BINARY\x10\x01\x12\x10\n\x0cKIND_INTEGER\x10\x02\x12\x13\n\x0fKIND_CONTINUOUS\x10\x03\x12\x15\n\x11KIND_SEMI_INTEGER\x10\x04\x12\x18\n\x14KIND_SEMI_CONTINUOUS\x10\x05\x42\x08\n\x06_boundB\x0e\n\x0c_descriptionBb\n\x0b\x63om.ommx.v1B\x16\x44\x65\x63isionVariablesProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n ommx/v1/decision_variables.proto\x12\x07ommx.v1\"Q\n\x05\x42ound\x12\x19\n\x05lower\x18\x01 \x01(\x01H\x00R\x05lower\x88\x01\x01\x12\x19\n\x05upper\x18\x02 \x01(\x01H\x01R\x05upper\x88\x01\x01\x42\x08\n\x06_lowerB\x08\n\x06_upper\"\xa5\x03\n\x10\x44\x65\x63isionVariable\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12\x32\n\x04kind\x18\x02 \x01(\x0e\x32\x1e.ommx.v1.DecisionVariable.KindR\x04kind\x12$\n\x05\x62ound\x18\x03 \x01(\x0b\x32\x0e.ommx.v1.BoundR\x05\x62ound\x12L\n\x0b\x64\x65scription\x18\x04 \x01(\x0b\x32%.ommx.v1.DecisionVariable.DescriptionH\x00R\x0b\x64\x65scription\x88\x01\x01\x1a\x41\n\x0b\x44\x65scription\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n\nsubscripts\x18\x02 \x03(\x04R\nsubscripts\"\x85\x01\n\x04Kind\x12\x14\n\x10KIND_UNSPECIFIED\x10\x00\x12\x0f\n\x0bKIND_BINARY\x10\x01\x12\x10\n\x0cKIND_INTEGER\x10\x02\x12\x13\n\x0fKIND_CONTINUOUS\x10\x03\x12\x15\n\x11KIND_SEMI_INTEGER\x10\x04\x12\x18\n\x14KIND_SEMI_CONTINUOUS\x10\x05\x42\x0e\n\x0c_descriptionBb\n\x0b\x63om.ommx.v1B\x16\x44\x65\x63isionVariablesProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -23,11 +23,11 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\013com.ommx.v1B\026DecisionVariablesProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1'
   _globals['_BOUND']._serialized_start=45
-  _globals['_BOUND']._serialized_end=96
-  _globals['_DECISIONVARIABLE']._serialized_start=99
-  _globals['_DECISIONVARIABLE']._serialized_end=535
-  _globals['_DECISIONVARIABLE_DESCRIPTION']._serialized_start=308
-  _globals['_DECISIONVARIABLE_DESCRIPTION']._serialized_end=373
-  _globals['_DECISIONVARIABLE_KIND']._serialized_start=376
-  _globals['_DECISIONVARIABLE_KIND']._serialized_end=509
+  _globals['_BOUND']._serialized_end=126
+  _globals['_DECISIONVARIABLE']._serialized_start=129
+  _globals['_DECISIONVARIABLE']._serialized_end=550
+  _globals['_DECISIONVARIABLE_DESCRIPTION']._serialized_start=333
+  _globals['_DECISIONVARIABLE_DESCRIPTION']._serialized_end=398
+  _globals['_DECISIONVARIABLE_KIND']._serialized_start=401
+  _globals['_DECISIONVARIABLE_KIND']._serialized_end=534
 # @@protoc_insertion_point(module_scope)
