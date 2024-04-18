@@ -12,7 +12,7 @@
 
 pub mod artifact;
 pub mod error;
-pub mod testing;
+pub mod random;
 pub use prost::Message;
 
 mod convert;

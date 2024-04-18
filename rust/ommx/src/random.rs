@@ -1,4 +1,4 @@
-//! Testing with OMMX
+//! Randomly generate OMMX components for benchmarking and testing
 
 use crate::v1::{self, constraint::Equality, linear::Term, Constraint};
 use rand::Rng;

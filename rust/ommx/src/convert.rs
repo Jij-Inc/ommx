@@ -1,25 +1,25 @@
+//! Additional trait implementations for generated codes
+
 use crate::v1::{function, Function, Linear, Quadratic};
 
-impl Into<Function> for function::Function {
-    fn into(self) -> Function {
-        Function {
-            function: Some(self),
+impl From<function::Function> for Function {
+    fn from(f: function::Function) -> Self {
+        Self { function: Some(f) }
+    }
+}
+
+impl From<Linear> for Function {
+    fn from(linear: Linear) -> Self {
+        Self {
+            function: Some(function::Function::Linear(linear)),
         }
     }
 }
 
-impl Into<Function> for Linear {
-    fn into(self) -> Function {
-        Function {
-            function: Some(function::Function::Linear(self)),
-        }
-    }
-}
-
-impl Into<Function> for Quadratic {
-    fn into(self) -> Function {
-        Function {
-            function: Some(function::Function::Quadratic(self)),
+impl From<Quadratic> for Function {
+    fn from(q: Quadratic) -> Self {
+        Self {
+            function: Some(function::Function::Quadratic(q)),
         }
     }
 }
