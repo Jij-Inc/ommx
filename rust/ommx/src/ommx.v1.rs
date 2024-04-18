@@ -140,11 +140,11 @@ pub mod constraint {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Bound {
     /// Lower bound of the decision variable.
-    #[prost(double, tag = "1")]
-    pub lower: f64,
+    #[prost(double, optional, tag = "1")]
+    pub lower: ::core::option::Option<f64>,
     /// Upper bound of the decision variable.
-    #[prost(double, tag = "2")]
-    pub upper: f64,
+    #[prost(double, optional, tag = "2")]
+    pub upper: ::core::option::Option<f64>,
 }
 /// Decison variable which mathematical programming solver will optimize.
 /// It must have its kind, i.e. binary, integer, real or others and unique identifier of 64-bit integer.
