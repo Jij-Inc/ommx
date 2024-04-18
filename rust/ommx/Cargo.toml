@@ -13,5 +13,6 @@ categories    = ["data-structures", "mathematics", "science"]
 [dependencies]
 ocipkg = { git = "https://github.com/termoshtt/ocipkg", branch = "oci-artifact" }
 prost = "0.12.3"
+rand = "0.8.5"
 serde = { version = "1.0.197", features = ["derive"] }
 thiserror = "1.0.58"

@@ -12,7 +12,10 @@
 
 pub mod artifact;
 pub mod error;
+pub mod testing;
 pub use prost::Message;
+
+mod convert;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
