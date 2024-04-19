@@ -18,15 +18,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "ommx >= 0.1.0",
+    "ommx >= 0.1.0, < 0.2.0",
+    "mip",
 ]
 
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
     "mypy",
+    "numpy",
     "pyright",
+    "pytest",
 ]
 
 

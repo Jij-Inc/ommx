@@ -1,0 +1,2 @@
+class OMMXPythonMIPAdapterError(Exception):
+    pass

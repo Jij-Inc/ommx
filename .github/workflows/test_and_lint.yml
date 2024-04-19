@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          python -m pytest
+          python -m pytest --doctest-modules -vv
 
   lint:
     runs-on: ubuntu-latest
@@ -50,5 +50,4 @@ jobs:
 
       - name: Lint
         run: |
-          python -m mypy ./ommx_python_mip_adapter
           python -m pyright ./ommx_python_mip_adapter
