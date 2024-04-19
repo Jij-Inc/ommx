@@ -16,20 +16,27 @@ class LPTestDataType(enum.Enum):
 
 
 class LPTestGenerator:
-    """
-    The class generates a test instance as follows:
-
-    Objective function: 0
-    Constraints: A @ x = b    (A: regular matrix, b: constant vector)
-
-    So the generated instance has a unique solution `x`.
-    """
     INT_LOWER_BOUND = -100
     INT_UPPER_BOUND = 100
     FLOAT_LOWER_BOUND = -100.0
     FLOAT_UPPER_BOUND = 100.0
 
     def __init__(self, n: int, data_type: LPTestDataType):
+        """
+        The class generates a test instance as follows:
+
+        Objective function: 0
+        Constraints: A @ x = b    (A: regular matrix, b: constant vector)
+
+        So the generated instance has a unique solution `x`.
+
+        Args:
+            n (int): The size of the matrix and the vectors.
+            data_type (LPTestDataType): The data type of the matrix and the vectors.
+        
+        Raises:
+            ValueError: If `n` is not a positive integer or `data_type` is not LPTestDataType.
+        """
         if n <= 0:
             raise ValueError("`n` must be a positive integer.")
         if data_type not in LPTestDataType:
@@ -80,6 +87,16 @@ class LPTestGenerator:
 
 
     def get_instance(self) -> bytes:
+        """
+        Get an instance of a linear programming problem with a unique solution.
+
+        Examples:
+            >>> from ommx.v1.instance_pb2 import Instance
+            >>> from ommx.v1._test_generator import LPTestDataType, LPTestGenerator
+            >>> generator = LPTestGenerator(3, LPTestDataType.INT)
+            >>> ommx_instance_byte = generator.get_instance()
+            >>> ommx_instance = Instance().ParseFromString(ommx_instance_byte)
+        """
         # define decision variables
         if self._data_type == LPTestDataType.INT:
             decision_variables = [
@@ -133,6 +150,16 @@ class LPTestGenerator:
 
 
     def get_solution(self) -> bytes:
+        """
+        Get the solution of the generated instance.
+
+        Examples:
+            >>> from ommx.v1.solution_pb2 import SolutionList
+            >>> from ommx.v1._test_generator import LPTestDataType, LPTestGenerator
+            >>> generator = LPTestGenerator(3, LPTestDataType.INT)
+            >>> ommx_solution_byte = generator.get_solution()
+            >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
+        """
         solution = Solution(
             entries={i: value for i, value in enumerate(self._x)}
         )

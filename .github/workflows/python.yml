@@ -60,7 +60,7 @@ jobs:
 
       - name: Run tests
         run: |
-          python -m pytest
+          python -m pytest -vv --doctest-modules
 
   lint-python:
     runs-on: ubuntu-latest
