@@ -81,5 +81,4 @@ jobs:
 
       - name: Lint
         run: |
-          python -m mypy python/ommx
           python -m pyright python/ommx
