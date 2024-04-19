@@ -38,3 +38,7 @@ at your option.
 
 # Contribution
 TBW
+
+# Acknowledgement
+
+This work was performed for Council for Science, Technology and Innovation (CSTI), Cross-ministerialStrategic Innovation Promotion Program (SIP), “Promoting the application of advanced quantum technologyplatforms to social issues”(Funding agency : QST).
