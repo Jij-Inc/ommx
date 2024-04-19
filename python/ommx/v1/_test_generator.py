@@ -15,7 +15,7 @@ class LPTestDataType(enum.Enum):
     FLOAT = enum.auto()
 
 
-class LPTestGenerater:
+class LPTestGenerator:
     """
     The class generates a test instance as follows:
 
