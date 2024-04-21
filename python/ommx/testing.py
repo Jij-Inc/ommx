@@ -10,18 +10,18 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import Solution, SolutionList
 
 
-class LPTestDataType(enum.Enum):
+class DataType(enum.Enum):
     INT = enum.auto()
     FLOAT = enum.auto()
 
 
-class LPTestGenerator:
+class SingleFeasibleLPGenerator:
     INT_LOWER_BOUND = -100
     INT_UPPER_BOUND = 100
     FLOAT_LOWER_BOUND = -100.0
     FLOAT_UPPER_BOUND = 100.0
 
-    def __init__(self, n: int, data_type: LPTestDataType):
+    def __init__(self, n: int, data_type: DataType):
         """
         The class generates a test instance as follows:
 
@@ -32,15 +32,15 @@ class LPTestGenerator:
 
         Args:
             n (int): The size of the matrix and the vectors.
-            data_type (LPTestDataType): The data type of the matrix and the vectors.
+            data_type (DataType): The data type of the matrix and the vectors.
         
         Raises:
-            ValueError: If `n` is not a positive integer or `data_type` is not LPTestDataType.
+            ValueError: If `n` is not a positive integer or `data_type` is not DataType.
         """
         if n <= 0:
             raise ValueError("`n` must be a positive integer.")
-        if data_type not in LPTestDataType:
-            raise ValueError("`data_type` must be LPTestDataType.")
+        if data_type not in DataType:
+            raise ValueError("`data_type` must be DataType.")
         
         self._A = self._generate_random_reguler_matrix(n, data_type)
         self._x = self._generate_random_solution(n, data_type)
@@ -51,10 +51,10 @@ class LPTestGenerator:
     def _generate_random_reguler_matrix(
         self,
         n: int,
-        data_type: LPTestDataType,
+        data_type: DataType,
     ) -> np.ndarray:
         while True:
-            if data_type == LPTestDataType.INT:
+            if data_type == DataType.INT:
                 matrix = np.random.randint(
                     low=self.INT_LOWER_BOUND,
                     high=self.INT_UPPER_BOUND,
@@ -70,9 +70,9 @@ class LPTestGenerator:
     def _generate_random_solution(
         self,
         n: int,
-        data_type: LPTestDataType,
+        data_type: DataType,
     ) -> np.ndarray:
-        if data_type == LPTestDataType.INT:
+        if data_type == DataType.INT:
             return np.random.randint(
                 low=self.INT_LOWER_BOUND,
                 high=self.INT_UPPER_BOUND,
@@ -86,19 +86,19 @@ class LPTestGenerator:
             )
 
 
-    def get_instance(self) -> bytes:
+    def get_v1_instance(self) -> bytes:
         """
         Get an instance of a linear programming problem with a unique solution.
 
         Examples:
+            >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
             >>> from ommx.v1.instance_pb2 import Instance
-            >>> from ommx.v1._test_generator import LPTestDataType, LPTestGenerator
-            >>> generator = LPTestGenerator(3, LPTestDataType.INT)
-            >>> ommx_instance_byte = generator.get_instance()
+            >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+            >>> ommx_instance_byte = generator.get_v1_instance()
             >>> ommx_instance = Instance().ParseFromString(ommx_instance_byte)
         """
         # define decision variables
-        if self._data_type == LPTestDataType.INT:
+        if self._data_type == DataType.INT:
             decision_variables = [
                 DecisionVariable(
                     id=i,
@@ -149,15 +149,15 @@ class LPTestGenerator:
         ).SerializeToString()
 
 
-    def get_solution(self) -> bytes:
+    def get_v1_solution(self) -> bytes:
         """
         Get the solution of the generated instance.
 
         Examples:
+            >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
             >>> from ommx.v1.solution_pb2 import SolutionList
-            >>> from ommx.v1._test_generator import LPTestDataType, LPTestGenerator
-            >>> generator = LPTestGenerator(3, LPTestDataType.INT)
-            >>> ommx_solution_byte = generator.get_solution()
+            >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+            >>> ommx_solution_byte = generator.get_v1_solution()
             >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
         """
         solution = Solution(
