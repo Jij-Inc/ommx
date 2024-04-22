@@ -6,24 +6,23 @@ from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import SolutionList
+from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 import ommx_python_mip_adapter as adapter
-
-from tests.generater import LPTestGenerater, LPTestDataType
 
 
 @pytest.mark.parametrize(
     "generater",
     [
-        LPTestGenerater(10, LPTestDataType.INT),
-        LPTestGenerater(10, LPTestDataType.FLOAT),
+        SingleFeasibleLPGenerator(10, DataType.INT),
+        SingleFeasibleLPGenerator(10, DataType.FLOAT),
     ]
 )
 def test_integration_lp(generater):
     # Objective function: 0
     # Constraints:
     #     A @ x = b    (A: regular matrix, b: constant vector)
-    ommx_instance_bytes = generater.get_instance()
+    ommx_instance_bytes = generater.get_v1_instance()
 
     model = adapter.instance_to_model(ommx_instance_bytes)
     model.optimize()
@@ -31,7 +30,7 @@ def test_integration_lp(generater):
 
     ommx_solution_obj = SolutionList.FromString(ommx_solution)
     expected_solution_obj = SolutionList.FromString(
-        generater.get_solution()
+        generater.get_v1_solution()
     )
 
     # Check the number of solutions

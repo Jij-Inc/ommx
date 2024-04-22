@@ -51,3 +51,25 @@ jobs:
       - name: Lint
         run: |
           python -m pyright ./ommx_python_mip_adapter
+
+  markdown-code-runner:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install ".[dev]"
+
+      - name: Lint
+        run: |
+          markdown-code-runner --verbose README.md

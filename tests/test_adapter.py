@@ -7,12 +7,11 @@ from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
+from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 import ommx_python_mip_adapter as adapter
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
-from tests.generater import LPTestGenerater, LPTestDataType
-
 
 def test_error_invalid_instance():
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
@@ -138,8 +137,8 @@ def test_error_not_optimized_model():
 
 
 def test_error_invalid_ommx_instance_bytes():
-    generator = LPTestGenerater(10, LPTestDataType.INT)
-    ommx_instance_bytes = generator.get_instance()
+    generator = SingleFeasibleLPGenerator(10, DataType.INT)
+    ommx_instance_bytes = generator.get_v1_instance()
     model = adapter.instance_to_model(ommx_instance_bytes)
     model.optimize()
 
