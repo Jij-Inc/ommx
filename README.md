@@ -66,3 +66,7 @@ ommx_solutions_bytes = adapter.model_to_solution(
 
 print(SolutionList.FromString(ommx_solutions_bytes))
 ```
+
+Reference
+==============
+- [OMMX-Python-MIP-Adapter API Reference](https://jij-inc.github.io/ommx-python-mip-adapter/index.html)
