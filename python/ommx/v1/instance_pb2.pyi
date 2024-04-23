@@ -86,6 +86,11 @@ class Instance(google.protobuf.message.Message):
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
+    """The sense of this problem, i.e. minimize the objective or maximize it.
+
+    Design decision note:
+    - This is a required field. Most mathematical modeling tools allow for an empty sense and default to minimization. Alternatively, some tools do not create such a field and represent maximization problems by negating the objective function. This project prefers explicit descriptions over implicit ones to avoid such ambiguity and to make it unnecessary for developers to look up the reference for the treatment of omitted cases.
+    """
     @property
     def description(self) -> global___Instance.Description: ...
     @property

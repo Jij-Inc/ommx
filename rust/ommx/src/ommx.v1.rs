@@ -240,6 +240,11 @@ pub struct Instance {
     /// Constraints of the optimization problem
     #[prost(message, repeated, tag = "4")]
     pub constraints: ::prost::alloc::vec::Vec<Constraint>,
+    /// The sense of this problem, i.e. minimize the objective or maximize it.
+    ///
+    /// Design decision note:
+    /// - This is a required field. Most mathematical modeling tools allow for an empty sense and default to minimization. Alternatively, some tools do not create such a field and represent maximization problems by negating the objective function. This project prefers explicit descriptions over implicit ones to avoid such ambiguity and to make it unnecessary for developers to look up the reference for the treatment of omitted cases.
+    ///
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,
 }
