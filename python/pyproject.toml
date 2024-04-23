@@ -1,6 +1,6 @@
 [project]
 name = "ommx"
-version = "0.1.2"
+version = "0.2.0"
 description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [
     { name="Jij Inc.", email="info@j-ij.com" },
