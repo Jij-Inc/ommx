@@ -240,6 +240,8 @@ pub struct Instance {
     /// Constraints of the optimization problem
     #[prost(message, repeated, tag = "4")]
     pub constraints: ::prost::alloc::vec::Vec<Constraint>,
+    #[prost(enumeration = "instance::Sense", tag = "5")]
+    pub sense: i32,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -255,6 +257,36 @@ pub mod instance {
         /// The application or library name that created this message.
         #[prost(string, optional, tag = "4")]
         pub created_by: ::core::option::Option<::prost::alloc::string::String>,
+    }
+    /// The sense of this instance
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+    #[repr(i32)]
+    pub enum Sense {
+        Unspecified = 0,
+        Minimize = 1,
+        Maximize = 2,
+    }
+    impl Sense {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Sense::Unspecified => "SENSE_UNSPECIFIED",
+                Sense::Minimize => "SENSE_MINIMIZE",
+                Sense::Maximize => "SENSE_MAXIMIZE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "SENSE_UNSPECIFIED" => Some(Self::Unspecified),
+                "SENSE_MINIMIZE" => Some(Self::Minimize),
+                "SENSE_MAXIMIZE" => Some(Self::Maximize),
+                _ => None,
+            }
+        }
     }
 }
 /// A solution obtained by the solver.

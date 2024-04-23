@@ -7,17 +7,47 @@ import builtins
 import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
+import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
+import sys
 import typing
+
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
+else:
+    import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class Instance(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    class _Sense:
+        ValueType = typing.NewType("ValueType", builtins.int)
+        V: typing_extensions.TypeAlias = ValueType
+
+    class _SenseEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[Instance._Sense.ValueType], builtins.type):
+        DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+        SENSE_UNSPECIFIED: Instance._Sense.ValueType  # 0
+        SENSE_MINIMIZE: Instance._Sense.ValueType  # 1
+        SENSE_MAXIMIZE: Instance._Sense.ValueType  # 2
+
+    class Sense(_Sense, metaclass=_SenseEnumTypeWrapper):
+        """Other types of constraints will be appended here
+
+        TODO: Add semi-definite constraints to represent SDP
+        repeated SemiDefiniteConstraint semi_definite_constraints = ?;
+
+        The sense of this instance
+        """
+
+    SENSE_UNSPECIFIED: Instance.Sense.ValueType  # 0
+    SENSE_MINIMIZE: Instance.Sense.ValueType  # 1
+    SENSE_MAXIMIZE: Instance.Sense.ValueType  # 2
 
     @typing.final
     class Description(google.protobuf.message.Message):
@@ -54,6 +84,8 @@ class Instance(google.protobuf.message.Message):
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
+    SENSE_FIELD_NUMBER: builtins.int
+    sense: global___Instance.Sense.ValueType
     @property
     def description(self) -> global___Instance.Description: ...
     @property
@@ -77,8 +109,9 @@ class Instance(google.protobuf.message.Message):
         decision_variables: collections.abc.Iterable[ommx.v1.decision_variables_pb2.DecisionVariable] | None = ...,
         objective: ommx.v1.function_pb2.Function | None = ...,
         constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint] | None = ...,
+        sense: global___Instance.Sense.ValueType = ...,
     ) -> None: ...
     def HasField(self, field_name: typing.Literal["description", b"description", "objective", b"objective"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["constraints", b"constraints", "decision_variables", b"decision_variables", "description", b"description", "objective", b"objective"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["constraints", b"constraints", "decision_variables", b"decision_variables", "description", b"description", "objective", b"objective", "sense", b"sense"]) -> None: ...
 
 global___Instance = Instance

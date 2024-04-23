@@ -31,4 +31,13 @@ message Instance {
   //
   // TODO: Add semi-definite constraints to represent SDP
   // repeated SemiDefiniteConstraint semi_definite_constraints = ?;
+
+  // The sense of this instance
+  enum Sense {
+    SENSE_UNSPECIFIED = 0;
+    SENSE_MINIMIZE = 1;
+    SENSE_MAXIMIZE = 2;
+  }
+
+  Sense sense = 5;
 }
