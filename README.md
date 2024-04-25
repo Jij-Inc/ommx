@@ -8,19 +8,31 @@ Python-MIP as a solver in OMMX toolchain
 -----------------------------------------
 ```mermaid
 sequenceDiagram
-    participant O as Other OMMX toolchain
+    participant U as User
     participant A as Adapter
     participant P as Python-MIP
-    O->>A: ommx::Instance and Parameters for Python-MIP;
-    A->>P: Translate into Python-MIP input
+    U->>A: ommx.v1.Instance
+    A->>U: Python-MIP model
+    U->>P: Python-MIP model and Parameters for Python-MIP;
     P->>P: Solve with CBC, Gurobi, or other solvers
-    P->>A: Solution
-    A->>O: ommx:Solution
+    P->>U: Optimized model
+    U->>A: Optimized model and ommx.v1.Instance
+    A->>U: ommx:SolutionList
 ```
 
 Python-MIP as a user interface to create OMMX instance
 -------------------------------------------------------
-TBW
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Adapter
+    participant O as Other OMMX toolchain
+    U->>A: Python-MIP model
+    A->>U: ommx.v1.Instance
+    U->>O: ommx.v1.Instance and Parameters for other solver
+    O->>O: Solve the instance with other solver using other adapter
+    O->>U: ommx.v1.Solution
+```
 
 Usage
 ======
@@ -65,6 +77,22 @@ ommx_solutions_bytes = adapter.model_to_solution(
 )
 
 print(SolutionList.FromString(ommx_solutions_bytes))
+```
+You can get `ommx.v1.Instance` from a Python-MIP model as the following:
+```python markdown-code-runner
+import mip
+import ommx_python_mip_adapter as adapter
+from ommx.v1.instance_pb2 import Instance
+
+model = mip.Model()
+x1=model.add_var(name="1", var_type=mip.INTEGER, lb=0, ub=5)
+x2=model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
+model.objective = - x1 - 2 * x2
+model.add_constr(x1 + x2 - 6 <= 0)
+
+ommx_instance_bytes = adapter.model_to_instance(model)
+
+print(Instance.FromString(ommx_instance_bytes))
 ```
 
 Reference
