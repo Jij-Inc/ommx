@@ -56,12 +56,11 @@ jobs:
 
       - name: Install Dependencies and Test
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install '.[dev]'
-          python -m maturin develop
+          python -m pip install 'python/[dev]'
+      
+      - name: Run Test
+        run: |
           python -m pytest -vv --doctest-modules
-        working-directory: python
 
   lint-python:
     runs-on: ubuntu-latest
@@ -76,11 +75,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Dependencies and Lint
+      - name: Install Dependencies
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install '.[dev]'
-          python -m maturin develop
+          python -m pip install 'python/[dev]'
           python -m pyright python/ommx
-        working-directory: python
+
+      - name: Lint
+        run: |
+          python -m pyright python/python/ommx

@@ -31,7 +31,6 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
-    "maturin>=1.5, <2.0",
     "mypy>=0.910",
     "mypy-protobuf",
     "pyright",
@@ -48,5 +47,6 @@ Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [tool.maturin]
+module-name = "ommx._ommx_rust"
 python-source = "python"
 features = ["pyo3/extension-module"]
