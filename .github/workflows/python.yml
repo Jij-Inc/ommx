@@ -56,9 +56,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install '.[dev]'
-          python -m maturin develop
-        working-directory: python
+          python -m pip install 'python/[dev]'
 
       - name: Run tests
         run: |
@@ -79,8 +77,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install '.[dev]'
-          python -m maturin develop
+          python -m pip install 'python/[dev]'
         working-directory: python
 
       - name: Lint
