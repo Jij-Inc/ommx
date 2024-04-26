@@ -3,10 +3,10 @@ changelog:
     - title: Protobuf update
       labels:
         - proto
-    - title: Python binding update
+    - title: Python SDK update
       labels:
         - python
-    - title: Rust binding update
+    - title: Rust SDK update
       labels:
         - rust
     - title: Others
