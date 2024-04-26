@@ -56,6 +56,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          python -m pip maturin develop
           python -m pip install 'python/[dev]'
 
       - name: Run tests
