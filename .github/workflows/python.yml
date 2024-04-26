@@ -54,12 +54,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Dependencies
+      - name: Install Dependencies and Test
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install 'python/[dev]'
-
-      - name: Run tests
-        run: |
+          python -m maturin develop
           python -m pytest -vv --doctest-modules
 
   lint-python:
@@ -75,10 +75,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Dependencies
+      - name: Install Dependencies and Lint
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install 'python/[dev]'
-
-      - name: Lint
-        run: |
+          python -m maturin develop
           python -m pyright python/python/ommx
