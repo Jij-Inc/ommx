@@ -31,6 +31,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [
+    "maturin>=1.5, <2.0",
     "mypy>=0.910",
     "mypy-protobuf",
     "pyright",
