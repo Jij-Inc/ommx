@@ -48,7 +48,7 @@ html_static_path = ['_static']
 # -- AutoAPI settings --------------------------------------------------------
 # https://sphinx-autoapi.readthedocs.io/en/latest/reference/config.html#event-autoapi-skip-member
 
-autoapi_dirs = ['../../ommx']
+autoapi_dirs = ['../../python/ommx']
 autoapi_options = [
     'members',
     'undoc-members',
