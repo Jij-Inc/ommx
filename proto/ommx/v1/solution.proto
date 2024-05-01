@@ -4,6 +4,8 @@ package ommx.v1;
 
 // A solution obtained by the solver.
 message Solution {
+  // This is not a sparse array, but a map from indices to values.
+  // You must store every zero elements
   map<uint64, double> entries = 1;
 }
 
