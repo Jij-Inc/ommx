@@ -423,12 +423,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs_extra"
-version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,6 +587,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 
 [[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
 name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -665,23 +665,24 @@ dependencies = [
 [[package]]
 name = "ocipkg"
 version = "0.3.0"
-source = "git+https://github.com/termoshtt/ocipkg?branch=oci-artifact#b52736fa6af4b4fc259458b3826831f17fc15257"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "560f0985cb67cdb6c126f73dfd9d5f707da3a2f3afc8e90bab72592a3ae0b705"
 dependencies = [
+ "anyhow",
  "base16ct",
  "base64",
  "chrono",
  "directories",
  "flate2",
- "fs_extra",
  "lazy_static",
  "log",
+ "maplit",
  "oci-spec",
  "regex",
  "serde",
  "serde_json",
  "sha2",
  "tar",
- "thiserror",
  "toml",
  "ureq",
  "url",

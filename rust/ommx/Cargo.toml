@@ -11,7 +11,7 @@ keywords      = ["optimization", "ommx"]
 categories    = ["data-structures", "mathematics", "science"]
 
 [dependencies]
-ocipkg = { git = "https://github.com/termoshtt/ocipkg", branch = "oci-artifact" }
+ocipkg = "0.3.0"
 prost = "0.12.3"
 rand = "0.8.5"
 serde = { version = "1.0.197", features = ["derive"] }
