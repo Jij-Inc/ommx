@@ -423,6 +423,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -657,10 +663,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "ocipkg"
+version = "0.3.0"
+source = "git+https://github.com/termoshtt/ocipkg?branch=oci-artifact#b52736fa6af4b4fc259458b3826831f17fc15257"
+dependencies = [
+ "base16ct",
+ "base64",
+ "chrono",
+ "directories",
+ "flate2",
+ "fs_extra",
+ "lazy_static",
+ "log",
+ "oci-spec",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "thiserror",
+ "toml",
+ "ureq",
+ "url",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "ommx"
 version = "0.2.0"
 dependencies = [
- "ocipkg",
+ "ocipkg 0.3.0",
  "prost",
  "serde",
 ]
@@ -671,7 +704,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "log",
- "ocipkg",
+ "ocipkg 0.2.9",
  "ommx",
 ]
 
