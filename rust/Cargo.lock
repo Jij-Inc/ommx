@@ -664,9 +664,9 @@ dependencies = [
 
 [[package]]
 name = "ocipkg"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "560f0985cb67cdb6c126f73dfd9d5f707da3a2f3afc8e90bab72592a3ae0b705"
+checksum = "12335107b81d0e3dd6ec36e4422aa2ba5fbd166a37308d3c1c50a8c8a6842052"
 dependencies = [
  "anyhow",
  "base16ct",
@@ -695,7 +695,7 @@ name = "ommx"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "ocipkg 0.3.0",
+ "ocipkg 0.3.1",
  "prost",
  "rand",
  "serde",
