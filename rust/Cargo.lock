@@ -694,6 +694,7 @@ dependencies = [
 name = "ommx"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "ocipkg 0.3.0",
  "prost",
  "rand",

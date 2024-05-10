@@ -2,11 +2,7 @@
 //!
 
 use crate::{error::*, v1};
-use ocipkg::{
-    oci_spec::image::{DescriptorBuilder, MediaType},
-    ImageName,
-};
-use prost::Message;
+use ocipkg::ImageName;
 use std::path::Path;
 
 pub trait ArtifactMessage: Sized {
@@ -17,17 +13,7 @@ pub trait ArtifactMessage: Sized {
 
 impl ArtifactMessage for v1::Instance {
     fn save(&self, image_name: &ImageName) -> Result<()> {
-        let blob = self.encode_to_vec();
-        let mut artifact = ocipkg::image::LocalArtifactBuilder::new(image_name.clone())?;
-        let descriptor = DescriptorBuilder::default()
-            .media_type("application/vnd.ommx.v1.instance+protobuf")
-            .build()?; // size and digest are set by `add_blob`
-        artifact.add_blob(descriptor, &blob)?;
-        artifact.set_artifact_type(MediaType::Other(
-            "application/vnd.ommx.v1.artifact".to_string(),
-        ))?;
-        artifact.finish()?;
-        Ok(())
+        todo!()
     }
 
     fn save_as_archive(&self, path: &Path) -> Result<()> {

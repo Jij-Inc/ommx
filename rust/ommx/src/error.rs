@@ -4,7 +4,7 @@ pub enum Error {
     UnknownVersion { actual: u32 },
 
     #[error(transparent)]
-    Ocipkg(#[from] ocipkg::error::Error),
+    Ocipkg(#[from] anyhow::Error),
 
     #[error(transparent)]
     OciSpec(#[from] ocipkg::oci_spec::OciSpecError),
