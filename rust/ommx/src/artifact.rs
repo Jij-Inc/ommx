@@ -1,28 +1,26 @@
 //! Manage messages as container
 //!
 
-use crate::{error::*, v1};
-use ocipkg::ImageName;
-use std::path::Path;
+mod media_type;
+pub use media_type::*;
 
-pub trait ArtifactMessage: Sized {
-    fn save(&self, image_name: &ImageName) -> Result<()>;
-    fn save_as_archive(&self, path: &Path) -> Result<()>;
-    fn load(image_name: &ImageName) -> Result<Self>;
+use ocipkg::image::{Image, OciArtifact};
+use std::ops::{Deref, DerefMut};
+
+/// OCI Artifact of artifact type [`application/vnd.ommx.v1.artifact`][v1_artifact]
+pub struct Artifact<Base: Image> {
+    base: OciArtifact<Base>,
 }
 
-impl ArtifactMessage for v1::Instance {
-    fn save(&self, image_name: &ImageName) -> Result<()> {
-        todo!()
+impl<Base: Image> Deref for Artifact<Base> {
+    type Target = OciArtifact<Base>;
+    fn deref(&self) -> &Self::Target {
+        &self.base
     }
+}
 
-    fn save_as_archive(&self, path: &Path) -> Result<()> {
-        dbg!(path);
-        todo!()
-    }
-
-    fn load(image_name: &ImageName) -> Result<Self> {
-        dbg!(image_name);
-        todo!()
+impl<Base: Image> DerefMut for Artifact<Base> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.base
     }
 }
