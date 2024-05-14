@@ -12,6 +12,7 @@ categories    = ["data-structures", "mathematics", "science"]
 
 [dependencies]
 anyhow = "1.0.83"
+directories = "5.0.1"
 ocipkg = "0.3.3"
 prost = "0.12.3"
 rand = "0.8.5"
