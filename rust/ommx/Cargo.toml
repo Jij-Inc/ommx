@@ -12,3 +12,4 @@ categories    = ["data-structures", "mathematics", "science"]
 
 [dependencies]
 prost = "0.12.3"
+rand = "0.8.5"
