@@ -14,7 +14,7 @@ pub mod artifact;
 pub mod error;
 pub mod random;
 pub use prost::Message;
-
+mod arbitrary;
 mod convert;
 
 /// Module created from `ommx.v1` proto files
