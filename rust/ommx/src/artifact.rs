@@ -4,11 +4,16 @@
 mod media_type;
 pub use media_type::*;
 
-use anyhow::{bail, Context, Result};
-use ocipkg::image::{Image, ImageBuilder, OciArchiveBuilder, OciArtifact, OciArtifactBuilder};
+use anyhow::{Context, Result};
+use ocipkg::{
+    image::{
+        Image, ImageBuilder, OciArchiveBuilder, OciArtifact, OciArtifactBuilder, OciDirBuilder,
+    },
+    ImageName,
+};
 use std::{
     ops::{Deref, DerefMut},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 /// Root directory for OMMX artifacts
@@ -39,11 +44,31 @@ impl<Base: Image> DerefMut for Artifact<Base> {
 pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
 
 impl Builder<OciArchiveBuilder> {
-    pub fn new_archive_unnamed(path: &Path) -> Result<Self> {
-        if path.exists() {
-            bail!("File already exists: {}", path.display());
-        }
-        todo!()
+    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
+        let archive = OciArchiveBuilder::new_unnamed(path)?;
+        Ok(Self(OciArtifactBuilder::new(
+            archive,
+            media_type::v1_artifact(),
+        )?))
+    }
+
+    pub fn new_archive(path: PathBuf, image_name: ImageName) -> Result<Self> {
+        let archive = OciArchiveBuilder::new(path, image_name)?;
+        Ok(Self(OciArtifactBuilder::new(
+            archive,
+            media_type::v1_artifact(),
+        )?))
+    }
+}
+
+impl Builder<OciDirBuilder> {
+    pub fn new(image_name: ImageName) -> Result<Self> {
+        let dir = data_dir()?.join(image_name.as_path());
+        let layout = OciDirBuilder::new(dir, image_name)?;
+        Ok(Self(OciArtifactBuilder::new(
+            layout,
+            media_type::v1_artifact(),
+        )?))
     }
 }
 
