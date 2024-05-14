@@ -700,6 +700,7 @@ dependencies = [
  "prost",
  "rand",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
