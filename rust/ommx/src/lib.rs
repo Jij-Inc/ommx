@@ -7,5 +7,6 @@ pub mod v1 {
     include!("ommx.v1.rs");
 }
 
+mod arbitrary;
 mod convert;
-pub mod testing;
+pub mod random;
