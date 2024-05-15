@@ -1,6 +1,6 @@
 OMMX adaptor for Python-MIP
 ============================
-![PyPI - Version](https://img.shields.io/pypi/v/ommx-python-mip-adapter)
+[![PyPI - Version](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/)
 
 This package provides an adaptor for the [Python-MIP](https://www.python-mip.com/) from/to [OMMX](https://github.com/Jij-Inc/ommx)
 
