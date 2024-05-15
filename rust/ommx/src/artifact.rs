@@ -32,7 +32,7 @@ pub fn data_dir() -> Result<PathBuf> {
         .to_path_buf())
 }
 
-/// OCI Artifact of artifact type [`application/org.ommx.v1.artifact`][v1_artifact]
+/// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][v1_artifact]
 pub struct Artifact<Base: Image>(OciArtifact<Base>);
 
 impl<Base: Image> Deref for Artifact<Base> {
