@@ -2,6 +2,7 @@ use anyhow::Result;
 use ocipkg::Digest;
 use std::collections::HashMap;
 
+/// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct InstanceAnnotations {}
@@ -19,14 +20,15 @@ impl TryFrom<HashMap<String, String>> for InstanceAnnotations {
     }
 }
 
+/// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_type::v1_solution]
 #[non_exhaustive]
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SolutionAnnotations {
-    /// A reference to the instance of the solution
+    /// A reference to the instance of the solution stored with the key `org.ommx.v1.solution.instance`
     pub instance: Option<Digest>,
-    /// A reference to the solver information which generated the solution
+    /// A reference to the solver information which generated the solution stored with the key `org.ommx.v1.solution.solver`
     pub solver: Option<Digest>,
-    /// JSON encoded parameters used to generate the solution
+    /// JSON encoded parameters used to generate the solution stored with the key `org.ommx.v1.solution.parameters`
     pub parameters: Option<String>,
 }
 
