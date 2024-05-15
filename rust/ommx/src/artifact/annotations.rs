@@ -1,3 +1,4 @@
+use anyhow::Result;
 use ocipkg::Digest;
 use std::collections::HashMap;
 
@@ -8,6 +9,13 @@ pub struct InstanceAnnotations {}
 impl From<InstanceAnnotations> for HashMap<String, String> {
     fn from(_: InstanceAnnotations) -> Self {
         HashMap::new()
+    }
+}
+
+impl TryFrom<HashMap<String, String>> for InstanceAnnotations {
+    type Error = anyhow::Error;
+    fn try_from(_: HashMap<String, String>) -> Result<Self> {
+        Ok(Self {})
     }
 }
 
@@ -41,5 +49,22 @@ impl From<SolutionAnnotations> for HashMap<String, String> {
             out.insert("org.ommx.v1.solution.parameters".to_string(), parameters);
         }
         out
+    }
+}
+
+impl TryFrom<HashMap<String, String>> for SolutionAnnotations {
+    type Error = anyhow::Error;
+    fn try_from(mut map: HashMap<String, String>) -> Result<Self> {
+        Ok(Self {
+            instance: map
+                .remove("org.ommx.v1.solution.instance")
+                .map(|s| Digest::new(&s))
+                .transpose()?,
+            solver: map
+                .remove("org.ommx.v1.solution.solver")
+                .map(|s| Digest::new(&s))
+                .transpose()?,
+            parameters: map.remove("org.ommx.v1.solution.parameters"),
+        })
     }
 }
