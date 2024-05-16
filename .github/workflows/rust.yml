@@ -19,7 +19,7 @@ jobs:
           components: rustfmt
 
       - name: Run cargo fmt
-        run: cargo fmt --manifest-path=rust/Cargo.toml --all -- --check
+        run: cargo fmt --all -- --check
 
   clippy:
     runs-on: ubuntu-latest
@@ -45,7 +45,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run tests
-        run: cargo test --manifest-path=rust/Cargo.toml
+        run: cargo test
 
   protogen:
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Regenerate Rust codes from proto files
-        run: cargo run --bin=protogen --manifest-path=rust/Cargo.toml
+        run: cargo run --bin=protogen
 
       - name: Check updated
         run: |
