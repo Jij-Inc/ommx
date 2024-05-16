@@ -5,6 +5,7 @@ use crate::{
 use anyhow::{bail, ensure, Result};
 use ocipkg::{
     image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    oci_spec::image::Descriptor,
     Digest, ImageName,
 };
 use prost::Message;
@@ -104,36 +105,26 @@ impl<Base: Image> Artifact<Base> {
         bail!("Instance of digest {} not found", digest)
     }
 
-    pub fn get_solutions(&mut self) -> Result<Vec<(v1::Solution, SolutionAnnotations)>> {
+    pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::Solution)>> {
         let mut out = Vec::new();
         for (desc, blob) in self.0.get_layers()? {
             if desc.media_type() != &media_type::v1_solution() {
                 continue;
             }
             let solution = v1::Solution::decode(blob.as_slice())?;
-            let annotations = if let Some(annotations) = desc.annotations() {
-                SolutionAnnotations::try_from(annotations.clone())?
-            } else {
-                SolutionAnnotations::default()
-            };
-            out.push((solution, annotations));
+            out.push((desc, solution));
         }
         Ok(out)
     }
 
-    pub fn get_instances(&mut self) -> Result<Vec<(v1::Instance, InstanceAnnotations)>> {
+    pub fn get_instances(&mut self) -> Result<Vec<(Descriptor, v1::Instance)>> {
         let mut out = Vec::new();
         for (desc, blob) in self.0.get_layers()? {
             if desc.media_type() != &media_type::v1_instance() {
                 continue;
             }
             let instance = v1::Instance::decode(blob.as_slice())?;
-            let annotations = if let Some(annotations) = desc.annotations() {
-                InstanceAnnotations::try_from(annotations.clone())?
-            } else {
-                InstanceAnnotations::default()
-            };
-            out.push((instance, annotations));
+            out.push((desc, instance));
         }
         Ok(out)
     }

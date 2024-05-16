@@ -1,3 +1,6 @@
+# OMMX Artifact
+*.ommx
+
 # Rust
 target/
 

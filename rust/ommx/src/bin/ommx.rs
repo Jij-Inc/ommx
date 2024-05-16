@@ -1,62 +1,47 @@
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ocipkg::ImageName;
-use std::path::Path;
+use ocipkg::image::Image;
+use ommx::artifact::Artifact;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    verbose: u8,
-
     #[command(subcommand)]
-    command: Option<Commands>,
+    command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     Inspect {
         /// Container image name or the path of OCI archive
-        image_name_or_path: String,
+        path: PathBuf,
     },
 }
 
-fn inspect(image_name_or_path: &str) {
-    let path: &Path = image_name_or_path.as_ref();
-    if path.exists() {
-        log::debug!("Regarded as a filesystem path: {}", path.display());
-        if !path.is_file() {
-            panic!("Not a file: {}", path.display());
-        }
-
-        dbg!(path);
-
-        return;
+fn inspect(path: &Path) -> Result<()> {
+    let mut artifact = Artifact::from_oci_archive(&path)?;
+    let name = artifact
+        .get_name()
+        .map(|name| name.to_string())
+        .unwrap_or("unnamed".to_string());
+    println!("[artifact: {name}]");
+    for (desc, _instance) in artifact.get_instances()? {
+        println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
     }
-    if path.is_file() {
-        dbg!("It is a file");
-        return;
+    for (desc, _solution) in artifact.get_solutions()? {
+        println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
     }
-    if let Ok(image) = ImageName::parse(image_name_or_path) {
-        dbg!(image);
-        return;
-    };
-    panic!("Not an image name or valid path: {}", image_name_or_path);
+    Ok(())
 }
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.verbose {
-        0 => println!("Verbose level is WARN"),
-        1 => println!("Verbose level is INFO"),
-        2 => println!("Verbose level is DEBUG"),
-        _ => panic!("Too many verbose flags. Don't be crazy."),
-    }
-
     match &cli.command {
-        Some(Commands::Inspect { image_name_or_path }) => {
-            inspect(image_name_or_path);
+        Commands::Inspect { path } => {
+            inspect(&path)?;
         }
-        None => {}
     }
+    Ok(())
 }
