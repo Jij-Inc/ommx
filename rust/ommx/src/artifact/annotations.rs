@@ -1,5 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use derive_more::{Deref, From, Into};
 use ocipkg::Digest;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
@@ -21,52 +23,63 @@ impl TryFrom<HashMap<String, String>> for InstanceAnnotations {
 }
 
 /// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_type::v1_solution]
-#[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct SolutionAnnotations {
-    /// A reference to the instance of the solution stored with the key `org.ommx.v1.solution.instance`
-    pub instance: Option<Digest>,
-    /// A reference to the solver information which generated the solution stored with the key `org.ommx.v1.solution.solver`
-    pub solver: Option<Digest>,
-    /// JSON encoded parameters used to generate the solution stored with the key `org.ommx.v1.solution.parameters`
-    pub parameters: Option<String>,
-}
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
+pub struct SolutionAnnotations(HashMap<String, String>);
 
-impl From<SolutionAnnotations> for HashMap<String, String> {
-    fn from(annotations: SolutionAnnotations) -> Self {
-        let mut out = HashMap::new();
-        if let Some(instance) = annotations.instance {
-            out.insert(
-                "org.ommx.v1.solution.instance".to_string(),
-                instance.to_string(),
-            );
-        }
-        if let Some(solver) = annotations.solver {
-            out.insert(
-                "org.ommx.v1.solution.solver".to_string(),
-                solver.to_string(),
-            );
-        }
-        if let Some(parameters) = annotations.parameters {
-            out.insert("org.ommx.v1.solution.parameters".to_string(), parameters);
-        }
-        out
+impl SolutionAnnotations {
+    /// Set the value of [Self::instance]
+    pub fn set_instance(&mut self, digest: Digest) {
+        self.0.insert(
+            "org.ommx.v1.solution.instance".to_string(),
+            digest.to_string(),
+        );
     }
-}
 
-impl TryFrom<HashMap<String, String>> for SolutionAnnotations {
-    type Error = anyhow::Error;
-    fn try_from(mut map: HashMap<String, String>) -> Result<Self> {
-        Ok(Self {
-            instance: map
-                .remove("org.ommx.v1.solution.instance")
-                .map(|s| Digest::new(&s))
-                .transpose()?,
-            solver: map
-                .remove("org.ommx.v1.solution.solver")
-                .map(|s| Digest::new(&s))
-                .transpose()?,
-            parameters: map.remove("org.ommx.v1.solution.parameters"),
-        })
+    /// A reference to the instance of the solution stored with the key `org.ommx.v1.solution.instance`
+    pub fn instance(&self) -> Result<Digest> {
+        let digest = self.0.get("org.ommx.v1.solution.instance").context(
+            "Annotation does not have the entry with the key `org.ommx.v1.solution.instance`",
+        )?;
+        Ok(Digest::new(digest)?)
+    }
+
+    /// Set the value of [Self::solver]
+    pub fn set_solver(&mut self, digest: Digest) {
+        self.0.insert(
+            "org.ommx.v1.solution.solver".to_string(),
+            digest.to_string(),
+        );
+    }
+
+    /// A reference to the solver information which generated the solution stored with the key `org.ommx.v1.solution.solver`
+    pub fn solver(&self) -> Result<Digest> {
+        let digest = self.0.get("org.ommx.v1.solution.solver").context(
+            "Annotation does not have the entry with the key `org.ommx.v1.solution.solver`",
+        )?;
+        Ok(Digest::new(digest)?)
+    }
+
+    /// Set the value of [Self::parameters]
+    pub fn set_parameters(&mut self, parameters: impl Serialize) -> Result<()> {
+        self.0.insert(
+            "org.ommx.v1.solution.parameters".to_string(),
+            serde_json::to_string(&parameters)?,
+        );
+        Ok(())
+    }
+
+    /// Solver parameters used to generate the solution as a JSON with the key `org.ommx.v1.solution.parameters`
+    pub fn parameters<'s: 'de, 'de, P: Deserialize<'de>>(&'s self) -> Result<P> {
+        Ok(serde_json::from_str(
+            self.0.get("org.ommx.v1.solution.parameters").context(
+                "Annotation does not have the entry with the key `org.ommx.v1.solution.parameters`",
+            )?,
+        )?)
+    }
+
+    /// Set other annotations. The key may not start with `org.ommx.v1.solution`, but must start with other valid prefix.
+    pub fn set_other(&mut self, key: String, value: String) {
+        // TODO check key
+        self.0.insert(key, value);
     }
 }
