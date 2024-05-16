@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
 use derive_more::{Deref, From, Into};
-use ocipkg::Digest;
+use ocipkg::{oci_spec::image::Descriptor, Digest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -11,6 +11,10 @@ use std::collections::HashMap;
 pub struct InstanceAnnotations(HashMap<String, String>);
 
 impl InstanceAnnotations {
+    pub fn from_descriptor(desc: &Descriptor) -> Self {
+        Self(desc.annotations().as_ref().cloned().unwrap_or_default())
+    }
+
     /// Set other annotations. The key may not start with `org.ommx.v1.`, but must a valid reverse domain name.
     pub fn set_other(&mut self, key: String, value: String) {
         // TODO check key
@@ -34,6 +38,10 @@ impl InstanceAnnotations {
 pub struct SolutionAnnotations(HashMap<String, String>);
 
 impl SolutionAnnotations {
+    pub fn from_descriptor(desc: &Descriptor) -> Self {
+        Self(desc.annotations().as_ref().cloned().unwrap_or_default())
+    }
+
     pub fn set_start(&mut self, start: DateTime<Local>) {
         self.0
             .insert("org.ommx.v1.solution.start".to_string(), start.to_rfc3339());

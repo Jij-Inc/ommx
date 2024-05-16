@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use ocipkg::image::Image;
-use ommx::artifact::Artifact;
+use ommx::artifact::{Artifact, InstanceAnnotations, SolutionAnnotations};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -28,9 +28,17 @@ fn inspect(path: &Path) -> Result<()> {
     println!("[artifact: {name}]");
     for (desc, _instance) in artifact.get_instances()? {
         println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
+        let annotations = InstanceAnnotations::from_descriptor(&desc);
+        for (key, value) in annotations.iter() {
+            println!("   - {}: {}", key, value);
+        }
     }
     for (desc, _solution) in artifact.get_solutions()? {
         println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
+        let annotations = SolutionAnnotations::from_descriptor(&desc);
+        for (key, value) in annotations.iter() {
+            println!("   - {}: {}", key, value);
+        }
     }
     Ok(())
 }
