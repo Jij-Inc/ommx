@@ -678,33 +678,6 @@ dependencies = [
 
 [[package]]
 name = "ocipkg"
-version = "0.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bb3293021f06540803301af45e7ab81693d50e89a7398a3420bdab139e7ba5e"
-dependencies = [
- "base16ct",
- "base64",
- "chrono",
- "directories",
- "flate2",
- "lazy_static",
- "log",
- "oci-spec",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "thiserror",
- "toml",
- "ureq",
- "url",
- "uuid",
- "walkdir",
-]
-
-[[package]]
-name = "ocipkg"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "625f43cb260c6c846ce712a389894a2f373989a12156f798f75561262e3554c5"
@@ -737,9 +710,11 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "clap",
  "derive_more",
  "directories",
- "ocipkg 0.3.3",
+ "log",
+ "ocipkg",
  "proptest",
  "prost",
  "rand",
@@ -747,16 +722,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "ommxctl"
-version = "0.1.0"
-dependencies = [
- "clap",
- "log",
- "ocipkg 0.2.9",
- "ommx",
 ]
 
 [[package]]

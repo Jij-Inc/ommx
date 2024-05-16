@@ -13,8 +13,10 @@ categories    = ["data-structures", "mathematics", "science"]
 [dependencies]
 anyhow = "1.0.83"
 chrono = "0.4.38"
+clap = { version = "4.5.4", features = ["derive"] }
 derive_more = "0.99.17"
 directories = "5.0.1"
+log = "0.4.21"
 ocipkg = "0.3.3"
 proptest = "1.4.0"
 prost = "0.12.3"
