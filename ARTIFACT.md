@@ -10,10 +10,15 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
       - TBA
 - `layers` consists of the following blobs:
     - `application/org.ommx.v1.solution` blob with the following annotations:
-        - `org.ommx.v1.solution.instance`: digest of the instance blob
-        - `org.ommx.v1.solution.solver`: digest of the solver blob
-        - `org.ommx.v1.solution.parameters`: JSON string of the solver parameters
+        - `org.ommx.v1.solution.instance`: The digest of the corresponding instance of the solution
+        - `org.ommx.v1.solution.solver`: The digest of the solver information which generated the solution
+        - `org.ommx.v1.solution.parameters`: Solver parameters used to generate the solution as a JSON
+        - `org.ommx.v1.solution.start`: The start time of the solution as a RFC3339 string
+        - `org.ommx.v1.solution.end`: The end time of the solution as a RFC3339 string
     - `application/org.ommx.v1.instance` blob with the following annotations:
         - TBA
 - Annotations in manifest:
   - TBA
+
+Note that other annotations listed above are also allowed.
+The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name as specified by OCI specification.

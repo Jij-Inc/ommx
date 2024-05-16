@@ -6,10 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
-///
-/// Annotations
-/// ------------
-/// To be added
 #[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
 pub struct InstanceAnnotations(HashMap<String, String>);
 
@@ -26,17 +22,6 @@ impl InstanceAnnotations {
 }
 
 /// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_type::v1_solution]
-///
-/// Annotations
-/// ------------
-/// - `org.ommx.v1.solution.instance`: The digest of the corresponding instance of the solution
-/// - `org.ommx.v1.solution.solver`: The digest of the solver information which generated the solution
-/// - `org.ommx.v1.solution.parameters`: Solver parameters used to generate the solution as a JSON
-/// - `org.ommx.v1.solution.start`: The start time of the solution as a RFC3339 string
-/// - `org.ommx.v1.solution.end`: The end time of the solution as a RFC3339 string
-///
-/// In addition, other annotations are allowed. The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name.
-///
 #[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
 pub struct SolutionAnnotations(HashMap<String, String>);
 
