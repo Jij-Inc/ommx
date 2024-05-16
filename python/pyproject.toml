@@ -48,5 +48,4 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [tool.maturin]
 module-name = "ommx._ommx_rust"
-python-source = "python"
 features = ["pyo3/extension-module"]
