@@ -27,7 +27,6 @@ dependencies = [
     "numpy>=1.23.0, <2.0.0",
     "protobuf>=5.26.1, <6.0.0",
 ]
-dynamic = ["version"]
 
 [project.optional-dependencies]
 dev = [

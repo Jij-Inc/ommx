@@ -3,6 +3,13 @@
 version = 3
 
 [[package]]
+name = "_ommx_rust"
+version = "0.2.1"
+dependencies = [
+ "pyo3",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -55,13 +62,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "ommx"
-version = "0.2.0"
-dependencies = [
- "pyo3",
 ]
 
 [[package]]
