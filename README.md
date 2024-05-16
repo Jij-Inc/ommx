@@ -22,8 +22,8 @@ This project manages several versions as follows:
 - Schemas in `ommx.v1` will be compatible after [ommx.v1 schema release](https://github.com/Jij-Inc/ommx/milestone/3). Note that the schema can be changed incompatible way until this release.
 - `v2` schema with namespace `ommx.v2` will start developing if we need to change the schema in incompatible way after `ommx.v1` release. Compatible changes will be made in `v1` schema also after its release. We never create namespaces like `ommx.v1_1`.
 
-## Language specific bindings
-This project consists of main protobuf schema and language specific bindings.
+## Language specific SDK
+This project consists of main protobuf schema and language specific SDK.
 Their versions are managed independently, and adopts semantic versioning.
 
 # License

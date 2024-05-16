@@ -1,4 +1,7 @@
-/target
+# OMMX Artifact
+*.ommx
+
+# Rust
 target/
 
 # Byte-compiled / optimized / DLL files
