@@ -6,19 +6,14 @@ use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
 #[non_exhaustive]
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct InstanceAnnotations {}
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
+pub struct InstanceAnnotations(HashMap<String, String>);
 
-impl From<InstanceAnnotations> for HashMap<String, String> {
-    fn from(_: InstanceAnnotations) -> Self {
-        HashMap::new()
-    }
-}
-
-impl TryFrom<HashMap<String, String>> for InstanceAnnotations {
-    type Error = anyhow::Error;
-    fn try_from(_: HashMap<String, String>) -> Result<Self> {
-        Ok(Self {})
+impl InstanceAnnotations {
+    /// Set other annotations. The key may not start with `org.ommx.v1.`, but must a valid reverse domain name.
+    pub fn set_other(&mut self, key: String, value: String) {
+        // TODO check key
+        self.0.insert(key, value);
     }
 }
 
@@ -77,7 +72,7 @@ impl SolutionAnnotations {
         )?)
     }
 
-    /// Set other annotations. The key may not start with `org.ommx.v1.solution`, but must start with other valid prefix.
+    /// Set other annotations. The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name.
     pub fn set_other(&mut self, key: String, value: String) {
         // TODO check key
         self.0.insert(key, value);
