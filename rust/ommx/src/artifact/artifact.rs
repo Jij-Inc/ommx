@@ -2,13 +2,16 @@ use crate::{
     artifact::{media_type, Config, InstanceAnnotations, SolutionAnnotations},
     v1,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use ocipkg::{
-    image::{Image, OciArtifact},
-    Digest,
+    image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    Digest, ImageName,
 };
 use prost::Message;
-use std::ops::{Deref, DerefMut};
+use std::{
+    ops::{Deref, DerefMut},
+    path::Path,
+};
 
 /// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][v1_artifact]
 pub struct Artifact<Base: Image>(OciArtifact<Base>);
@@ -26,9 +29,36 @@ impl<Base: Image> DerefMut for Artifact<Base> {
     }
 }
 
+impl Artifact<OciArchive> {
+    pub fn from_oci_archive(path: &Path) -> Result<Self> {
+        let artifact = OciArtifact::from_oci_archive(path)?;
+        Self::new(artifact)
+    }
+}
+
+impl Artifact<OciDir> {
+    pub fn from_oci_dir(path: &Path) -> Result<Self> {
+        let artifact = OciArtifact::from_oci_dir(path)?;
+        Self::new(artifact)
+    }
+}
+
+impl Artifact<Remote> {
+    pub fn from_remote(image_name: ImageName) -> Result<Self> {
+        let artifact = OciArtifact::from_remote(image_name)?;
+        Self::new(artifact)
+    }
+}
+
 impl<Base: Image> Artifact<Base> {
-    pub(crate) fn new(artifact: OciArtifact<Base>) -> Self {
-        Self(artifact)
+    pub fn new(mut artifact: OciArtifact<Base>) -> Result<Self> {
+        let ty = artifact.artifact_type()?;
+        ensure!(
+            ty == media_type::v1_artifact(),
+            "Not an OMMX Artifact: {}",
+            ty
+        );
+        Ok(Self(artifact))
     }
 
     pub fn get_config(&mut self) -> Result<Config> {
