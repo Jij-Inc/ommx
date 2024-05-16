@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
-#[non_exhaustive]
+///
+/// Annotations
+/// ------------
+/// To be added
 #[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
 pub struct InstanceAnnotations(HashMap<String, String>);
 
