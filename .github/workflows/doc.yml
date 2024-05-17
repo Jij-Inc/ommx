@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: doc-rust
-          path: ./rust/target/doc
+          path: ./target/doc
           retention-days: 30
 
   python:
