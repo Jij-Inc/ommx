@@ -1,11 +1,14 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
 [project]
 name = "ommx"
-version = "0.2.0"
 description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [
     { name="Jij Inc.", email="info@j-ij.com" },
 ]
-readme = "README.md"
+# readme = "README.md" # TODO: Resolve an error when pip install
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -14,6 +17,9 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
     "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
 ]
@@ -21,7 +27,6 @@ dependencies = [
     "numpy>=1.23.0, <2.0.0",
     "protobuf>=5.26.1, <6.0.0",
 ]
-
 
 [project.optional-dependencies]
 dev = [
@@ -36,12 +41,10 @@ dev = [
     "types-protobuf>=0.1.14",
 ]
 
-
 [project.urls]
-Homepage = "https://github.com/Jij-Inc/ommx"
+Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
 
-
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.maturin]
+module-name = "ommx._ommx_rust"
+features = ["pyo3/extension-module"]

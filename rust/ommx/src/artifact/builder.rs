@@ -1,5 +1,5 @@
 use crate::{
-    artifact::{data_dir, media_type, Artifact, Config, InstanceAnnotations, SolutionAnnotations},
+    artifact::{data_dir, media_types, Artifact, Config, InstanceAnnotations, SolutionAnnotations},
     v1,
 };
 use anyhow::Result;
@@ -18,7 +18,7 @@ impl Builder<OciArchiveBuilder> {
         let archive = OciArchiveBuilder::new_unnamed(path)?;
         Ok(Self(OciArtifactBuilder::new(
             archive,
-            media_type::v1_artifact(),
+            media_types::v1_artifact(),
         )?))
     }
 
@@ -26,7 +26,7 @@ impl Builder<OciArchiveBuilder> {
         let archive = OciArchiveBuilder::new(path, image_name)?;
         Ok(Self(OciArtifactBuilder::new(
             archive,
-            media_type::v1_artifact(),
+            media_types::v1_artifact(),
         )?))
     }
 }
@@ -37,7 +37,7 @@ impl Builder<OciDirBuilder> {
         let layout = OciDirBuilder::new(dir, image_name)?;
         Ok(Self(OciArtifactBuilder::new(
             layout,
-            media_type::v1_artifact(),
+            media_types::v1_artifact(),
         )?))
     }
 }
@@ -50,7 +50,7 @@ impl<Base: ImageBuilder> Builder<Base> {
     ) -> Result<Self> {
         let blob = instance.encode_to_vec();
         self.0
-            .add_layer(media_type::v1_instance(), &blob, annotations.into())?;
+            .add_layer(media_types::v1_instance(), &blob, annotations.into())?;
         Ok(self)
     }
 
@@ -61,18 +61,18 @@ impl<Base: ImageBuilder> Builder<Base> {
     ) -> Result<Self> {
         let blob = solution.encode_to_vec();
         self.0
-            .add_layer(media_type::v1_solution(), &blob, annotations.into())?;
+            .add_layer(media_types::v1_solution(), &blob, annotations.into())?;
         Ok(self)
     }
 
     pub fn add_config(mut self, config: Config) -> Result<Self> {
         let blob = serde_json::to_string_pretty(&config)?;
         self.0
-            .add_config(media_type::v1_config(), blob.as_bytes(), HashMap::new())?;
+            .add_config(media_types::v1_config(), blob.as_bytes(), HashMap::new())?;
         Ok(self)
     }
 
     pub fn build(self) -> Result<Artifact<Base::Image>> {
-        Ok(Artifact::new(self.0.build()?)?)
+        Artifact::new(self.0.build()?)
     }
 }

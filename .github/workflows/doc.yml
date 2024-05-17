@@ -59,7 +59,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: doc
-          args: --no-deps --manifest-path=rust/Cargo.toml
+          args: --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: doc-rust
-          path: ./rust/target/doc
+          path: ./target/doc
           retention-days: 30
 
   python:
@@ -80,11 +80,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-      
+
       - name: Install dependencies
         run: |
           python -m pip install "python/[dev]"
-      
+
       - name: Build Python documentation
         run: |
           sphinx-build -b html ./python/docs/source ./python/docs/build

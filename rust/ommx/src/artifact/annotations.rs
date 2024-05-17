@@ -5,7 +5,7 @@ use ocipkg::{oci_spec::image::Descriptor, Digest};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_type::v1_instance]
+/// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_types::v1_instance]
 #[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
 pub struct InstanceAnnotations(HashMap<String, String>);
 
@@ -21,7 +21,7 @@ impl InstanceAnnotations {
     }
 }
 
-/// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_type::v1_solution]
+/// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_types::v1_solution]
 #[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
 pub struct SolutionAnnotations(HashMap<String, String>);
 
@@ -67,7 +67,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.instance").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.instance`",
         )?;
-        Ok(Digest::new(digest)?)
+        Digest::new(digest)
     }
 
     /// Set `org.ommx.v1.solution.solver`
@@ -83,7 +83,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.solver").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.solver`",
         )?;
-        Ok(Digest::new(digest)?)
+        Digest::new(digest)
     }
 
     /// Set `org.ommx.v1.solution.parameters`

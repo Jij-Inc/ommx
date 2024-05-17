@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install "python/[dev]"
-    
+
       - name: Regenerate python codes from proto files
         run: buf generate --template buf.gen.python.yaml
         working-directory: proto
@@ -56,9 +56,9 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install 'python/[dev]'
+          python -m pip install -v -e 'python/[dev]'
 
-      - name: Run tests
+      - name: Run Test
         run: |
           python -m pytest -vv --doctest-modules
 
@@ -77,8 +77,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          python -m pip install 'python/[dev]'
+          python -m pip install -v -e 'python/[dev]'
 
       - name: Lint
         run: |
-          python -m pyright python/ommx
+          python -m pyright python

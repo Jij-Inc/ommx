@@ -1,0 +1,16 @@
+[package]
+name = "_ommx_rust"
+version = "0.2.1"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies.ommx]
+path = "../rust/ommx"
+
+[dependencies]
+anyhow.workspace = true
+ocipkg.workspace = true
+pyo3.workspace = true
+
