@@ -15,7 +15,7 @@ use std::{
     path::Path,
 };
 
-/// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_type::v1_artifact]
+/// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_types::v1_artifact]
 pub struct Artifact<Base: Image>(OciArtifact<Base>);
 
 impl<Base: Image> Deref for Artifact<Base> {
