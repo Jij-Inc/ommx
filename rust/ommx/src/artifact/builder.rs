@@ -73,6 +73,6 @@ impl<Base: ImageBuilder> Builder<Base> {
     }
 
     pub fn build(self) -> Result<Artifact<Base::Image>> {
-        Ok(Artifact::new(self.0.build()?)?)
+        Artifact::new(self.0.build()?)
     }
 }

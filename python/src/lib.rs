@@ -6,16 +6,12 @@ use std::{collections::HashMap, path::PathBuf};
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
-pub struct Artifact(ommx::artifact::Artifact<OciArchive>);
-
-#[pyclass]
-#[pyo3(module = "ommx._ommx_rust")]
 pub struct InstanceDescriptor(Descriptor);
 
 #[pymethods]
 impl InstanceDescriptor {
     pub fn digest(&self) -> &str {
-        &self.0.digest()
+        self.0.digest()
     }
 
     pub fn size(&self) -> i64 {
@@ -30,6 +26,10 @@ impl InstanceDescriptor {
         }
     }
 }
+
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct Artifact(ommx::artifact::Artifact<OciArchive>);
 
 #[pymethods]
 impl Artifact {

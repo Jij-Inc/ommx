@@ -67,7 +67,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.instance").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.instance`",
         )?;
-        Ok(Digest::new(digest)?)
+        Digest::new(digest)
     }
 
     /// Set `org.ommx.v1.solution.solver`
@@ -83,7 +83,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.solver").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.solver`",
         )?;
-        Ok(Digest::new(digest)?)
+        Digest::new(digest)
     }
 
     /// Set `org.ommx.v1.solution.parameters`

@@ -20,21 +20,21 @@ enum Commands {
 }
 
 fn inspect(path: &Path) -> Result<()> {
-    let mut artifact = Artifact::from_oci_archive(&path)?;
+    let mut artifact = Artifact::from_oci_archive(path)?;
     let name = artifact
         .get_name()
         .map(|name| name.to_string())
         .unwrap_or("unnamed".to_string());
     println!("[artifact: {name}]");
     for (desc, _instance) in artifact.get_instances()? {
-        println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
+        println!(" - {} ({})", desc.media_type(), desc.digest());
         let annotations = InstanceAnnotations::from_descriptor(&desc);
         for (key, value) in annotations.iter() {
             println!("   - {}: {}", key, value);
         }
     }
     for (desc, _solution) in artifact.get_solutions()? {
-        println!(" - {} ({})", desc.media_type(), desc.digest().to_string());
+        println!(" - {} ({})", desc.media_type(), desc.digest());
         let annotations = SolutionAnnotations::from_descriptor(&desc);
         for (key, value) in annotations.iter() {
             println!("   - {}: {}", key, value);
@@ -48,7 +48,7 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Inspect { path } => {
-            inspect(&path)?;
+            inspect(path)?;
         }
     }
     Ok(())
