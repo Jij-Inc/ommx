@@ -32,6 +32,7 @@ jobs:
         with:
           reporter: "github-pr-review"
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          clippy_flags: -- -Dwarnings
 
   test:
     runs-on: ubuntu-latest
