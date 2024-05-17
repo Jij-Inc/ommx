@@ -1,9 +1,10 @@
 use crate::{
-    artifact::{media_type, Config, InstanceAnnotations, SolutionAnnotations},
+    artifact::{media_types, Config, InstanceAnnotations, SolutionAnnotations},
     v1,
 };
 use anyhow::{bail, ensure, Result};
 use ocipkg::{
+    distribution::MediaType,
     image::{Image, OciArchive, OciArtifact, OciDir, Remote},
     oci_spec::image::Descriptor,
     Digest, ImageName,
@@ -55,7 +56,7 @@ impl<Base: Image> Artifact<Base> {
     pub fn new(mut artifact: OciArtifact<Base>) -> Result<Self> {
         let ty = artifact.artifact_type()?;
         ensure!(
-            ty == media_type::v1_artifact(),
+            ty == media_types::v1_artifact(),
             "Not an OMMX Artifact: {}",
             ty
         );
@@ -68,9 +69,19 @@ impl<Base: Image> Artifact<Base> {
         Ok(config)
     }
 
+    pub fn get_layer_descriptors(&mut self, media_type: &MediaType) -> Result<Vec<Descriptor>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest
+            .layers()
+            .iter()
+            .filter(|desc| desc.media_type() == media_type)
+            .cloned()
+            .collect())
+    }
+
     pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::Solution, SolutionAnnotations)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_type::v1_solution()
+            if desc.media_type() != &media_types::v1_solution()
                 || desc.digest() != &digest.to_string()
             {
                 continue;
@@ -89,7 +100,7 @@ impl<Base: Image> Artifact<Base> {
 
     pub fn get_instance(&mut self, digest: &Digest) -> Result<(v1::Instance, InstanceAnnotations)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_type::v1_instance()
+            if desc.media_type() != &media_types::v1_instance()
                 || desc.digest() != &digest.to_string()
             {
                 continue;
@@ -108,7 +119,7 @@ impl<Base: Image> Artifact<Base> {
     pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::Solution)>> {
         let mut out = Vec::new();
         for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_type::v1_solution() {
+            if desc.media_type() != &media_types::v1_solution() {
                 continue;
             }
             let solution = v1::Solution::decode(blob.as_slice())?;
@@ -120,7 +131,7 @@ impl<Base: Image> Artifact<Base> {
     pub fn get_instances(&mut self) -> Result<Vec<(Descriptor, v1::Instance)>> {
         let mut out = Vec::new();
         for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_type::v1_instance() {
+            if desc.media_type() != &media_types::v1_instance() {
                 continue;
             }
             let instance = v1::Instance::decode(blob.as_slice())?;

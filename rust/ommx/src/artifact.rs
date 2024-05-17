@@ -5,12 +5,11 @@ mod annotations;
 mod artifact;
 mod builder;
 mod config;
-mod media_type;
+pub mod media_types;
 pub use annotations::*;
 pub use artifact::*;
 pub use builder::*;
 pub use config::*;
-pub use media_type::*;
 
 use anyhow::{Context, Result};
 use std::path::PathBuf;
