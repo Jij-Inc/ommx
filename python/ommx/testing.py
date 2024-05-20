@@ -2,12 +2,12 @@ import enum
 
 import numpy as np
 
-from ommx.v1.constraint_pb2 import Constraint
+from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import Solution, SolutionList
+from ommx.v1.solution_pb2 import RawSolution
 
 
 class DataType(enum.Enum):
@@ -129,7 +129,7 @@ class SingleFeasibleLPGenerator:
 
             constraint = Constraint(
                 id=i,
-                equality=Constraint.Equality.EQUALITY_EQUAL_TO_ZERO,
+                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                 function=Function(constant=-self._b[i], linear=linear),
             )
             constraints.append(constraint)
@@ -141,7 +141,7 @@ class SingleFeasibleLPGenerator:
             constraints=constraints,
         )
 
-    def get_v1_solution(self) -> Solution:
+    def get_v1_solution(self) -> RawSolution:
         """
         Get the solution of the generated instance.
 
@@ -150,4 +150,4 @@ class SingleFeasibleLPGenerator:
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
             >>> ommx_solution = generator.get_v1_solution()
         """
-        return Solution(entries={i: value for i, value in enumerate(self._x)})
+        return RawSolution(entries={i: value for i, value in enumerate(self._x)})

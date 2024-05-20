@@ -44,7 +44,9 @@ jobs:
           ruff format python/
 
       - name: Check updated
-        run: git diff --exit-code
+        run: |
+          git add -N python/ommx/  # To check newly generated files
+          git diff --exit-code
 
   test-python:
     runs-on: ubuntu-latest
