@@ -22,14 +22,20 @@ class Monomial(google.protobuf.message.Message):
     COEFFICIENT_FIELD_NUMBER: builtins.int
     coefficient: builtins.float
     @property
-    def ids(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+    def ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.int
+    ]: ...
     def __init__(
         self,
         *,
         ids: collections.abc.Iterable[builtins.int] | None = ...,
         coefficient: builtins.float = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["coefficient", b"coefficient", "ids", b"ids"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["coefficient", b"coefficient", "ids", b"ids"]
+    ) -> None: ...
 
 global___Monomial = Monomial
 
@@ -41,7 +47,11 @@ class Polynomial(google.protobuf.message.Message):
 
     TERMS_FIELD_NUMBER: builtins.int
     @property
-    def terms(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Monomial]: ...
+    def terms(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___Monomial
+    ]: ...
     def __init__(
         self,
         *,

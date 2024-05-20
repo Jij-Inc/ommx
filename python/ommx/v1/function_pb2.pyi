@@ -45,8 +45,38 @@ class Function(google.protobuf.message.Message):
         quadratic: ommx.v1.quadratic_pb2.Quadratic | None = ...,
         polynomial: ommx.v1.polynomial_pb2.Polynomial | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["constant", b"constant", "function", b"function", "linear", b"linear", "polynomial", b"polynomial", "quadratic", b"quadratic"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["constant", b"constant", "function", b"function", "linear", b"linear", "polynomial", b"polynomial", "quadratic", b"quadratic"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["function", b"function"]) -> typing.Literal["constant", "linear", "quadratic", "polynomial"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "constant",
+            b"constant",
+            "function",
+            b"function",
+            "linear",
+            b"linear",
+            "polynomial",
+            b"polynomial",
+            "quadratic",
+            b"quadratic",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constant",
+            b"constant",
+            "function",
+            b"function",
+            "linear",
+            b"linear",
+            "polynomial",
+            b"polynomial",
+            "quadratic",
+            b"quadratic",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["function", b"function"]
+    ) -> typing.Literal["constant", "linear", "quadratic", "polynomial"] | None: ...
 
 global___Function = Function
