@@ -1,7 +1,8 @@
 use crate::v1::{
-    function::Function as FunctionEnum, Function, Linear, Polynomial, Quadratic, Solution,
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Function, Linear, Polynomial,
+    Quadratic, Solution,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 /// Evaluate with the given solution.
 pub trait Evaluate {
@@ -26,7 +27,15 @@ impl Evaluate for Function {
 impl Evaluate for Linear {
     type Output = f64;
     fn evaluate(&self, solution: &Solution) -> Result<f64> {
-        todo!()
+        let mut sum = 0.0;
+        for LinearTerm { id, coefficient } in &self.terms {
+            let s = solution
+                .entries
+                .get(&id)
+                .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            sum += coefficient * s;
+        }
+        Ok(sum)
     }
 }
 
