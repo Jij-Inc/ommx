@@ -30,19 +30,27 @@ class Linear(google.protobuf.message.Message):
             id: builtins.int = ...,
             coefficient: builtins.float = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["coefficient", b"coefficient", "id", b"id"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["coefficient", b"coefficient", "id", b"id"]
+        ) -> None: ...
 
     TERMS_FIELD_NUMBER: builtins.int
     CONSTANT_FIELD_NUMBER: builtins.int
     constant: builtins.float
     @property
-    def terms(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Linear.Term]: ...
+    def terms(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___Linear.Term
+    ]: ...
     def __init__(
         self,
         *,
         terms: collections.abc.Iterable[global___Linear.Term] | None = ...,
         constant: builtins.float = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["constant", b"constant", "terms", b"terms"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["constant", b"constant", "terms", b"terms"]
+    ) -> None: ...
 
 global___Linear = Linear

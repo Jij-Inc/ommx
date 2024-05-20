@@ -30,14 +30,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=0.910",
     "mypy-protobuf",
+    "mypy>=0.910",
     "pyright",
     "pytest",
+    "ruff >= 0.4.4, < 0.5.0",
     "sphinx",
-    "sphinx_rtd_theme",
-    "sphinx_fontawesome",
     "sphinx-autoapi",
+    "sphinx_fontawesome",
+    "sphinx_rtd_theme",
     "types-protobuf>=0.1.14",
 ]
 

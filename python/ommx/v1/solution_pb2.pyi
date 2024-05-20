@@ -13,7 +13,7 @@ import typing
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
-class Solution(google.protobuf.message.Message):
+class RawSolution(google.protobuf.message.Message):
     """A solution obtained by the solver."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -32,7 +32,9 @@ class Solution(google.protobuf.message.Message):
             key: builtins.int = ...,
             value: builtins.float = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     ENTRIES_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
@@ -42,7 +44,9 @@ class Solution(google.protobuf.message.Message):
     optimal: builtins.bool
     """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
-    def entries(self) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.float]:
+    def entries(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.float]:
         """The value of the solution for each variable ID."""
 
     def __init__(
@@ -52,28 +56,48 @@ class Solution(google.protobuf.message.Message):
         feasible: builtins.bool = ...,
         optimal: builtins.bool | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_optimal", b"_optimal", "optimal", b"optimal"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_optimal", b"_optimal", "entries", b"entries", "feasible", b"feasible", "optimal", b"optimal"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_optimal", b"_optimal"]) -> typing.Literal["optimal"] | None: ...
+    def HasField(
+        self, field_name: typing.Literal["_optimal", b"_optimal", "optimal", b"optimal"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_optimal",
+            b"_optimal",
+            "entries",
+            b"entries",
+            "feasible",
+            b"feasible",
+            "optimal",
+            b"optimal",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_optimal", b"_optimal"]
+    ) -> typing.Literal["optimal"] | None: ...
 
-global___Solution = Solution
+global___RawSolution = RawSolution
 
 @typing.final
-class SolutionList(google.protobuf.message.Message):
-    """List of solutions obtained by the solver.
-    This message is for supporting solvers that return multiple solutions.
-    """
+class RawSolutionList(google.protobuf.message.Message):
+    """List of solutions obtained by the solver."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     SOLUTIONS_FIELD_NUMBER: builtins.int
     @property
-    def solutions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Solution]: ...
+    def solutions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___RawSolution
+    ]: ...
     def __init__(
         self,
         *,
-        solutions: collections.abc.Iterable[global___Solution] | None = ...,
+        solutions: collections.abc.Iterable[global___RawSolution] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["solutions", b"solutions"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["solutions", b"solutions"]
+    ) -> None: ...
 
-global___SolutionList = SolutionList
+global___RawSolutionList = RawSolutionList

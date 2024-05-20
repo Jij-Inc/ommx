@@ -29,7 +29,9 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         equality: ommx.v1.constraint_pb2.Equality.ValueType = ...,
         value: builtins.float = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["equality", b"equality", "value", b"value"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["equality", b"equality", "value", b"value"]
+    ) -> None: ...
 
 global___EvaluatedConstraint = EvaluatedConstraint
 
@@ -54,20 +56,34 @@ class Evaluation(google.protobuf.message.Message):
             key: builtins.int = ...,
             value: global___EvaluatedConstraint | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["value", b"value"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        def HasField(
+            self, field_name: typing.Literal["value", b"value"]
+        ) -> builtins.bool: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     OBJECTIVE_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     objective: builtins.float
     @property
-    def constraints(self) -> google.protobuf.internal.containers.MessageMap[builtins.int, global___EvaluatedConstraint]: ...
+    def constraints(
+        self,
+    ) -> google.protobuf.internal.containers.MessageMap[
+        builtins.int, global___EvaluatedConstraint
+    ]: ...
     def __init__(
         self,
         *,
         objective: builtins.float = ...,
-        constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint] | None = ...,
+        constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint]
+        | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["constraints", b"constraints", "objective", b"objective"]) -> None: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constraints", b"constraints", "objective", b"objective"
+        ],
+    ) -> None: ...
 
 global___Evaluation = Evaluation

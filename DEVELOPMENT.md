@@ -27,6 +27,7 @@ pip install "python/[dev]"
 ```shell
 cd proto
 buf generate --template buf.gen.python.yaml
+ruff format ../python
 ```
 
 ### How to generate documents for python package

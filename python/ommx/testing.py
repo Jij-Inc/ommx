@@ -33,7 +33,7 @@ class SingleFeasibleLPGenerator:
         Args:
             n (int): The size of the matrix and the vectors.
             data_type (DataType): The data type of the matrix and the vectors.
-        
+
         Raises:
             ValueError: If `n` is not a positive integer or `data_type` is not DataType.
         """
@@ -41,13 +41,12 @@ class SingleFeasibleLPGenerator:
             raise ValueError("`n` must be a positive integer.")
         if data_type not in DataType:
             raise ValueError("`data_type` must be DataType.")
-        
+
         self._A = self._generate_random_reguler_matrix(n, data_type)
         self._x = self._generate_random_solution(n, data_type)
         self._b = self._A @ self._x
         self._data_type = data_type
 
-        
     def _generate_random_reguler_matrix(
         self,
         n: int,
@@ -66,7 +65,6 @@ class SingleFeasibleLPGenerator:
             if np.linalg.det(matrix) != 0:
                 return matrix
 
-            
     def _generate_random_solution(
         self,
         n: int,
@@ -80,11 +78,8 @@ class SingleFeasibleLPGenerator:
             )
         else:
             return np.random.uniform(
-                low=self.FLOAT_LOWER_BOUND,
-                high=self.FLOAT_UPPER_BOUND,
-                size=n
+                low=self.FLOAT_LOWER_BOUND, high=self.FLOAT_UPPER_BOUND, size=n
             )
-
 
     def get_v1_instance(self) -> bytes:
         """
@@ -106,7 +101,7 @@ class SingleFeasibleLPGenerator:
                     bound=Bound(
                         lower=self.INT_LOWER_BOUND,
                         upper=self.INT_UPPER_BOUND,
-                    )
+                    ),
                 )
                 for i in range(len(self._x))
             ]
@@ -116,9 +111,9 @@ class SingleFeasibleLPGenerator:
                     id=i,
                     kind=DecisionVariable.Kind.KIND_CONTINUOUS,
                     bound=Bound(
-                        lower= self.FLOAT_LOWER_BOUND,
-                        upper= self.FLOAT_UPPER_BOUND,
-                    )
+                        lower=self.FLOAT_LOWER_BOUND,
+                        upper=self.FLOAT_UPPER_BOUND,
+                    ),
                 )
                 for i in range(len(self._x))
             ]
@@ -133,7 +128,7 @@ class SingleFeasibleLPGenerator:
                 ],
                 constant=-self._b[i],
             )
-            
+
             constraint = Constraint(
                 id=i,
                 equality=Equality.EQUALITY_EQUAL_TO_ZERO,
@@ -148,7 +143,6 @@ class SingleFeasibleLPGenerator:
             constraints=constraints,
         ).SerializeToString()
 
-
     def get_v1_solution(self) -> bytes:
         """
         Get the solution of the generated instance.
@@ -160,7 +154,5 @@ class SingleFeasibleLPGenerator:
             >>> ommx_solution_byte = generator.get_v1_solution()
             >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
         """
-        solution = Solution(
-            entries={i: value for i, value in enumerate(self._x)}
-        )
+        solution = Solution(entries={i: value for i, value in enumerate(self._x)})
         return SolutionList(solutions=[solution]).SerializeToString()
