@@ -88,7 +88,7 @@ pub struct Constraint {
     /// - IDs must be unique with other types of constraints.
     #[prost(uint64, tag = "1")]
     pub id: u64,
-    #[prost(enumeration = "constraint::Equality", tag = "2")]
+    #[prost(enumeration = "Equality", tag = "2")]
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<Function>,
@@ -105,33 +105,34 @@ pub mod constraint {
         #[prost(int64, repeated, tag = "2")]
         pub forall: ::prost::alloc::vec::Vec<i64>,
     }
-    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
-    #[repr(i32)]
-    pub enum Equality {
-        Unspecified = 0,
-        EqualToZero = 1,
-        LessThanOrEqualToZero = 2,
-    }
-    impl Equality {
-        /// String value of the enum field names used in the ProtoBuf definition.
-        ///
-        /// The values are not transformed in any way and thus are considered stable
-        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
-        pub fn as_str_name(&self) -> &'static str {
-            match self {
-                Equality::Unspecified => "EQUALITY_UNSPECIFIED",
-                Equality::EqualToZero => "EQUALITY_EQUAL_TO_ZERO",
-                Equality::LessThanOrEqualToZero => "EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO",
-            }
+}
+/// Equality of a constraint.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Equality {
+    Unspecified = 0,
+    EqualToZero = 1,
+    LessThanOrEqualToZero = 2,
+}
+impl Equality {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Equality::Unspecified => "EQUALITY_UNSPECIFIED",
+            Equality::EqualToZero => "EQUALITY_EQUAL_TO_ZERO",
+            Equality::LessThanOrEqualToZero => "EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO",
         }
-        /// Creates an enum from field names used in the ProtoBuf definition.
-        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
-            match value {
-                "EQUALITY_UNSPECIFIED" => Some(Self::Unspecified),
-                "EQUALITY_EQUAL_TO_ZERO" => Some(Self::EqualToZero),
-                "EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO" => Some(Self::LessThanOrEqualToZero),
-                _ => None,
-            }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "EQUALITY_UNSPECIFIED" => Some(Self::Unspecified),
+            "EQUALITY_EQUAL_TO_ZERO" => Some(Self::EqualToZero),
+            "EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO" => Some(Self::LessThanOrEqualToZero),
+            _ => None,
         }
     }
 }
@@ -224,6 +225,24 @@ pub mod decision_variable {
         }
     }
 }
+/// Evaluated constraint with its equality
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EvaluatedConstraint {
+    #[prost(enumeration = "Equality", tag = "1")]
+    pub equality: i32,
+    #[prost(double, tag = "2")]
+    pub value: f64,
+}
+/// Evaluated objective and constraints of a solution.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Evaluation {
+    #[prost(double, tag = "3")]
+    pub objective: f64,
+    #[prost(map = "uint64, message", tag = "4")]
+    pub constraints: ::std::collections::HashMap<u64, EvaluatedConstraint>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Instance {
@@ -298,8 +317,15 @@ pub mod instance {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Solution {
+    /// The value of the solution for each variable ID.
     #[prost(map = "uint64, double", tag = "1")]
     pub entries: ::std::collections::HashMap<u64, f64>,
+    /// Whether the solution is feasible, i.e. all constraints are satisfied or not.
+    #[prost(bool, tag = "2")]
+    pub feasible: bool,
+    /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
+    #[prost(bool, optional, tag = "3")]
+    pub optimal: ::core::option::Option<bool>,
 }
 /// List of solutions obtained by the solver.
 /// This message is for supporting solvers that return multiple solutions.

@@ -1,6 +1,6 @@
 //! Randomly generate OMMX components for benchmarking and testing
 
-use crate::v1::{self, constraint::Equality, linear::Term, Constraint};
+use crate::v1::{self, linear::Term, Constraint, Equality};
 use rand::Rng;
 
 /// Create a random linear programming (LP) instance in a form of `min c^T x` subject to `Ax = b` and `x >= 0` with continuous variables `x`.
