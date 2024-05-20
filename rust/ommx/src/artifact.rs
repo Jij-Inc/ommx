@@ -96,7 +96,10 @@ impl<Base: Image> Artifact<Base> {
             .collect())
     }
 
-    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::RawSolution, SolutionAnnotations)> {
+    pub fn get_solution(
+        &mut self,
+        digest: &Digest,
+    ) -> Result<(v1::RawSolution, SolutionAnnotations)> {
         for (desc, blob) in self.0.get_layers()? {
             if desc.media_type() != &media_types::v1_solution()
                 || desc.digest() != &digest.to_string()

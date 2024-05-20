@@ -31,7 +31,7 @@ impl Evaluate for Linear {
         for LinearTerm { id, coefficient } in &self.terms {
             let s = solution
                 .entries
-                .get(&id)
+                .get(id)
                 .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
             sum += coefficient * s;
         }
@@ -41,14 +41,14 @@ impl Evaluate for Linear {
 
 impl Evaluate for Quadratic {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, _solution: &RawSolution) -> Result<f64> {
         todo!()
     }
 }
 
 impl Evaluate for Polynomial {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, _solution: &RawSolution) -> Result<f64> {
         todo!()
     }
 }
