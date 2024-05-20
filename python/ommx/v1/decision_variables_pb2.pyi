@@ -37,7 +37,9 @@ class Bound(google.protobuf.message.Message):
         lower: builtins.float = ...,
         upper: builtins.float = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["lower", b"lower", "upper", b"upper"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["lower", b"lower", "upper", b"upper"]
+    ) -> None: ...
 
 global___Bound = Bound
 
@@ -54,7 +56,12 @@ class DecisionVariable(google.protobuf.message.Message):
         ValueType = typing.NewType("ValueType", builtins.int)
         V: typing_extensions.TypeAlias = ValueType
 
-    class _KindEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[DecisionVariable._Kind.ValueType], builtins.type):
+    class _KindEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            DecisionVariable._Kind.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         KIND_UNSPECIFIED: DecisionVariable._Kind.ValueType  # 0
         KIND_BINARY: DecisionVariable._Kind.ValueType  # 1
@@ -88,7 +95,11 @@ class DecisionVariable(google.protobuf.message.Message):
         name: builtins.str
         """Name of the decision variable."""
         @property
-        def subscripts(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        def subscripts(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+            builtins.int
+        ]:
             """The subscripts of a deicision variable which is defined as multi-dimensional array.
             Empty list means that the decision variable is scalar
             """
@@ -99,7 +110,10 @@ class DecisionVariable(google.protobuf.message.Message):
             name: builtins.str = ...,
             subscripts: collections.abc.Iterable[builtins.int] | None = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name", "subscripts", b"subscripts"]) -> None: ...
+        def ClearField(
+            self,
+            field_name: typing.Literal["name", b"name", "subscripts", b"subscripts"],
+        ) -> None: ...
 
     ID_FIELD_NUMBER: builtins.int
     KIND_FIELD_NUMBER: builtins.int
@@ -130,11 +144,43 @@ class DecisionVariable(google.protobuf.message.Message):
         bound: global___Bound | None = ...,
         description: global___DecisionVariable.Description | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_bound", b"_bound", "_description", b"_description", "bound", b"bound", "description", b"description"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_bound", b"_bound", "_description", b"_description", "bound", b"bound", "description", b"description", "id", b"id", "kind", b"kind"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_bound",
+            b"_bound",
+            "_description",
+            b"_description",
+            "bound",
+            b"bound",
+            "description",
+            b"description",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_bound",
+            b"_bound",
+            "_description",
+            b"_description",
+            "bound",
+            b"bound",
+            "description",
+            b"description",
+            "id",
+            b"id",
+            "kind",
+            b"kind",
+        ],
+    ) -> None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_bound", b"_bound"]) -> typing.Literal["bound"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_bound", b"_bound"]
+    ) -> typing.Literal["bound"] | None: ...
     @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
 
 global___DecisionVariable = DecisionVariable

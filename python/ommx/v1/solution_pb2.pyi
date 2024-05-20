@@ -32,11 +32,17 @@ class Solution(google.protobuf.message.Message):
             key: builtins.int = ...,
             value: builtins.float = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     ENTRIES_FIELD_NUMBER: builtins.int
     @property
-    def entries(self) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.float]: ...
+    def entries(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[
+        builtins.int, builtins.float
+    ]: ...
     def __init__(
         self,
         *,
@@ -56,12 +62,18 @@ class SolutionList(google.protobuf.message.Message):
 
     SOLUTIONS_FIELD_NUMBER: builtins.int
     @property
-    def solutions(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Solution]: ...
+    def solutions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___Solution
+    ]: ...
     def __init__(
         self,
         *,
         solutions: collections.abc.Iterable[global___Solution] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["solutions", b"solutions"]) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["solutions", b"solutions"]
+    ) -> None: ...
 
 global___SolutionList = SolutionList

@@ -30,7 +30,12 @@ class Instance(google.protobuf.message.Message):
         ValueType = typing.NewType("ValueType", builtins.int)
         V: typing_extensions.TypeAlias = ValueType
 
-    class _SenseEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[Instance._Sense.ValueType], builtins.type):
+    class _SenseEnumTypeWrapper(
+        google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[
+            Instance._Sense.ValueType
+        ],
+        builtins.type,
+    ):
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         SENSE_UNSPECIFIED: Instance._Sense.ValueType  # 0
         SENSE_MINIMIZE: Instance._Sense.ValueType  # 1
@@ -62,7 +67,11 @@ class Instance(google.protobuf.message.Message):
         created_by: builtins.str
         """The application or library name that created this message."""
         @property
-        def authors(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]: ...
+        def authors(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+            builtins.str
+        ]: ...
         def __init__(
             self,
             *,
@@ -71,14 +80,54 @@ class Instance(google.protobuf.message.Message):
             authors: collections.abc.Iterable[builtins.str] | None = ...,
             created_by: builtins.str | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["_created_by", b"_created_by", "_description", b"_description", "_name", b"_name", "created_by", b"created_by", "description", b"description", "name", b"name"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["_created_by", b"_created_by", "_description", b"_description", "_name", b"_name", "authors", b"authors", "created_by", b"created_by", "description", b"description", "name", b"name"]) -> None: ...
+        def HasField(
+            self,
+            field_name: typing.Literal[
+                "_created_by",
+                b"_created_by",
+                "_description",
+                b"_description",
+                "_name",
+                b"_name",
+                "created_by",
+                b"created_by",
+                "description",
+                b"description",
+                "name",
+                b"name",
+            ],
+        ) -> builtins.bool: ...
+        def ClearField(
+            self,
+            field_name: typing.Literal[
+                "_created_by",
+                b"_created_by",
+                "_description",
+                b"_description",
+                "_name",
+                b"_name",
+                "authors",
+                b"authors",
+                "created_by",
+                b"created_by",
+                "description",
+                b"description",
+                "name",
+                b"name",
+            ],
+        ) -> None: ...
         @typing.overload
-        def WhichOneof(self, oneof_group: typing.Literal["_created_by", b"_created_by"]) -> typing.Literal["created_by"] | None: ...
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_created_by", b"_created_by"]
+        ) -> typing.Literal["created_by"] | None: ...
         @typing.overload
-        def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_description", b"_description"]
+        ) -> typing.Literal["description"] | None: ...
         @typing.overload
-        def WhichOneof(self, oneof_group: typing.Literal["_name", b"_name"]) -> typing.Literal["name"] | None: ...
+        def WhichOneof(
+            self, oneof_group: typing.Literal["_name", b"_name"]
+        ) -> typing.Literal["name"] | None: ...
 
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
@@ -94,7 +143,11 @@ class Instance(google.protobuf.message.Message):
     @property
     def description(self) -> global___Instance.Description: ...
     @property
-    def decision_variables(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[ommx.v1.decision_variables_pb2.DecisionVariable]:
+    def decision_variables(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.decision_variables_pb2.DecisionVariable
+    ]:
         """Decision variables used in this instance
 
         - This must constain every decision variables used in the objective and constraints.
@@ -104,19 +157,46 @@ class Instance(google.protobuf.message.Message):
     @property
     def objective(self) -> ommx.v1.function_pb2.Function: ...
     @property
-    def constraints(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[ommx.v1.constraint_pb2.Constraint]:
+    def constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.constraint_pb2.Constraint
+    ]:
         """Constraints of the optimization problem"""
 
     def __init__(
         self,
         *,
         description: global___Instance.Description | None = ...,
-        decision_variables: collections.abc.Iterable[ommx.v1.decision_variables_pb2.DecisionVariable] | None = ...,
+        decision_variables: collections.abc.Iterable[
+            ommx.v1.decision_variables_pb2.DecisionVariable
+        ]
+        | None = ...,
         objective: ommx.v1.function_pb2.Function | None = ...,
-        constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint] | None = ...,
+        constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint]
+        | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["description", b"description", "objective", b"objective"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["constraints", b"constraints", "decision_variables", b"decision_variables", "description", b"description", "objective", b"objective", "sense", b"sense"]) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "description", b"description", "objective", b"objective"
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constraints",
+            b"constraints",
+            "decision_variables",
+            b"decision_variables",
+            "description",
+            b"description",
+            "objective",
+            b"objective",
+            "sense",
+            b"sense",
+        ],
+    ) -> None: ...
 
 global___Instance = Instance
