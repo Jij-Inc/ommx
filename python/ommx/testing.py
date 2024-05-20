@@ -7,7 +7,7 @@ from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import Solution, SolutionList
+from ommx.v1.solution_pb2 import RawSolution
 
 
 class DataType(enum.Enum):
@@ -81,7 +81,7 @@ class SingleFeasibleLPGenerator:
                 low=self.FLOAT_LOWER_BOUND, high=self.FLOAT_UPPER_BOUND, size=n
             )
 
-    def get_v1_instance(self) -> bytes:
+    def get_v1_instance(self) -> Instance:
         """
         Get an instance of a linear programming problem with a unique solution.
 
@@ -89,8 +89,7 @@ class SingleFeasibleLPGenerator:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
             >>> from ommx.v1.instance_pb2 import Instance
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_instance_byte = generator.get_v1_instance()
-            >>> ommx_instance = Instance().ParseFromString(ommx_instance_byte)
+            >>> ommx_instance = generator.get_v1_instance()
         """
         # define decision variables
         if self._data_type == DataType.INT:
@@ -141,18 +140,15 @@ class SingleFeasibleLPGenerator:
             decision_variables=decision_variables,
             objective=Function(constant=0),
             constraints=constraints,
-        ).SerializeToString()
+        )
 
-    def get_v1_solution(self) -> bytes:
+    def get_v1_solution(self) -> RawSolution:
         """
         Get the solution of the generated instance.
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.solution_pb2 import SolutionList
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_solution_byte = generator.get_v1_solution()
-            >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
+            >>> ommx_solution = generator.get_v1_solution()
         """
-        solution = Solution(entries={i: value for i, value in enumerate(self._x)})
-        return SolutionList(solutions=[solution]).SerializeToString()
+        return RawSolution(entries={i: value for i, value in enumerate(self._x)})
