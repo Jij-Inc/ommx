@@ -4,7 +4,12 @@ package ommx.v1;
 
 // A solution obtained by the solver.
 message Solution {
+  // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
+  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
+  bool feasible = 2;
+  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
+  optional bool optimal = 3;
 }
 
 // List of solutions obtained by the solver.
