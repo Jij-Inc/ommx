@@ -2,7 +2,7 @@ import enum
 
 import numpy as np
 
-from ommx.v1.constraint_pb2 import Constraint
+from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
@@ -136,7 +136,7 @@ class SingleFeasibleLPGenerator:
             
             constraint = Constraint(
                 id=i,
-                equality=Constraint.Equality.EQUALITY_EQUAL_TO_ZERO,
+                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                 function=Function(constant=-self._b[i], linear=linear),
             )
             constraints.append(constraint)

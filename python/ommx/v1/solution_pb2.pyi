@@ -35,14 +35,26 @@ class Solution(google.protobuf.message.Message):
         def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
 
     ENTRIES_FIELD_NUMBER: builtins.int
+    FEASIBLE_FIELD_NUMBER: builtins.int
+    OPTIMAL_FIELD_NUMBER: builtins.int
+    feasible: builtins.bool
+    """Whether the solution is feasible, i.e. all constraints are satisfied or not."""
+    optimal: builtins.bool
+    """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
-    def entries(self) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.float]: ...
+    def entries(self) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.float]:
+        """The value of the solution for each variable ID."""
+
     def __init__(
         self,
         *,
         entries: collections.abc.Mapping[builtins.int, builtins.float] | None = ...,
+        feasible: builtins.bool = ...,
+        optimal: builtins.bool | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
+    def HasField(self, field_name: typing.Literal["_optimal", b"_optimal", "optimal", b"optimal"]) -> builtins.bool: ...
+    def ClearField(self, field_name: typing.Literal["_optimal", b"_optimal", "entries", b"entries", "feasible", b"feasible", "optimal", b"optimal"]) -> None: ...
+    def WhichOneof(self, oneof_group: typing.Literal["_optimal", b"_optimal"]) -> typing.Literal["optimal"] | None: ...
 
 global___Solution = Solution
 
