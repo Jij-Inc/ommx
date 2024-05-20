@@ -8,6 +8,7 @@ import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
+import ommx.v1.constraint_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
@@ -80,7 +81,7 @@ global___RawSolution = RawSolution
 
 @typing.final
 class RawSolutionList(google.protobuf.message.Message):
-    """List of solutions obtained by the solver."""
+    """List of RawSolution"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -101,3 +102,114 @@ class RawSolutionList(google.protobuf.message.Message):
     ) -> None: ...
 
 global___RawSolutionList = RawSolutionList
+
+@typing.final
+class EvaluatedConstraint(google.protobuf.message.Message):
+    """Evaluated constraint with its equality"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    EQUALITY_FIELD_NUMBER: builtins.int
+    VALUE_FIELD_NUMBER: builtins.int
+    equality: ommx.v1.constraint_pb2.Equality.ValueType
+    value: builtins.float
+    def __init__(
+        self,
+        *,
+        equality: ommx.v1.constraint_pb2.Equality.ValueType = ...,
+        value: builtins.float = ...,
+    ) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["equality", b"equality", "value", b"value"]
+    ) -> None: ...
+
+global___EvaluatedConstraint = EvaluatedConstraint
+
+@typing.final
+class Solution(google.protobuf.message.Message):
+    """Solution with evaluated objective and constraints"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class ConstraintsEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        @property
+        def value(self) -> global___EvaluatedConstraint: ...
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: global___EvaluatedConstraint | None = ...,
+        ) -> None: ...
+        def HasField(
+            self, field_name: typing.Literal["value", b"value"]
+        ) -> builtins.bool: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    RAW_SOLUTION_FIELD_NUMBER: builtins.int
+    OBJECTIVE_FIELD_NUMBER: builtins.int
+    CONSTRAINTS_FIELD_NUMBER: builtins.int
+    objective: builtins.float
+    @property
+    def raw_solution(self) -> global___RawSolution: ...
+    @property
+    def constraints(
+        self,
+    ) -> google.protobuf.internal.containers.MessageMap[
+        builtins.int, global___EvaluatedConstraint
+    ]: ...
+    def __init__(
+        self,
+        *,
+        raw_solution: global___RawSolution | None = ...,
+        objective: builtins.float = ...,
+        constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint]
+        | None = ...,
+    ) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["raw_solution", b"raw_solution"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constraints",
+            b"constraints",
+            "objective",
+            b"objective",
+            "raw_solution",
+            b"raw_solution",
+        ],
+    ) -> None: ...
+
+global___Solution = Solution
+
+@typing.final
+class SolutionList(google.protobuf.message.Message):
+    """List of Solution"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    SOLUTIONS_FIELD_NUMBER: builtins.int
+    @property
+    def solutions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___Solution
+    ]: ...
+    def __init__(
+        self,
+        *,
+        solutions: collections.abc.Iterable[global___Solution] | None = ...,
+    ) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["solutions", b"solutions"]
+    ) -> None: ...
+
+global___SolutionList = SolutionList
