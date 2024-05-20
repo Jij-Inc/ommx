@@ -225,24 +225,6 @@ pub mod decision_variable {
         }
     }
 }
-/// Evaluated constraint with its equality
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EvaluatedConstraint {
-    #[prost(enumeration = "Equality", tag = "1")]
-    pub equality: i32,
-    #[prost(double, tag = "2")]
-    pub value: f64,
-}
-/// Evaluated objective and constraints of a solution.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Evaluation {
-    #[prost(double, tag = "3")]
-    pub objective: f64,
-    #[prost(map = "uint64, message", tag = "4")]
-    pub constraints: ::std::collections::HashMap<u64, EvaluatedConstraint>,
-}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Instance {
@@ -316,7 +298,7 @@ pub mod instance {
 /// A solution obtained by the solver.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Solution {
+pub struct RawSolution {
     /// The value of the solution for each variable ID.
     #[prost(map = "uint64, double", tag = "1")]
     pub entries: ::std::collections::HashMap<u64, f64>,
@@ -327,8 +309,34 @@ pub struct Solution {
     #[prost(bool, optional, tag = "3")]
     pub optimal: ::core::option::Option<bool>,
 }
-/// List of solutions obtained by the solver.
-/// This message is for supporting solvers that return multiple solutions.
+/// List of RawSolution
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RawSolutionList {
+    #[prost(message, repeated, tag = "1")]
+    pub solutions: ::prost::alloc::vec::Vec<RawSolution>,
+}
+/// Evaluated constraint with its equality
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EvaluatedConstraint {
+    #[prost(enumeration = "Equality", tag = "1")]
+    pub equality: i32,
+    #[prost(double, tag = "2")]
+    pub value: f64,
+}
+/// Solution with evaluated objective and constraints
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Solution {
+    #[prost(message, optional, tag = "1")]
+    pub raw_solution: ::core::option::Option<RawSolution>,
+    #[prost(double, tag = "2")]
+    pub objective: f64,
+    #[prost(map = "uint64, message", tag = "3")]
+    pub constraints: ::std::collections::HashMap<u64, EvaluatedConstraint>,
+}
+/// List of Solution
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SolutionList {
