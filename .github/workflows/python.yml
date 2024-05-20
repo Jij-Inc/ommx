@@ -35,11 +35,18 @@ jobs:
           python -m pip install "python/[dev]"
 
       - name: Regenerate python codes from proto files
-        run: buf generate --template buf.gen.python.yaml
+        run: |
+          buf generate --template buf.gen.python.yaml
         working-directory: proto
 
+      - name: Format generated codes
+        run: |
+          ruff format python/
+
       - name: Check updated
-        run: git diff --exit-code
+        run: |
+          git add -N python/ommx/  # To check newly generated files
+          git diff --exit-code
 
   test-python:
     runs-on: ubuntu-latest

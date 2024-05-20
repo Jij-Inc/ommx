@@ -3,6 +3,7 @@
 # source: ommx/v1/solution.proto
 # Protobuf Python Version: 5.26.1
 """Generated protocol buffer code."""
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
@@ -12,22 +13,37 @@ from google.protobuf.internal import builder as _builder
 _sym_db = _symbol_database.Default()
 
 
+from ommx.v1 import constraint_pb2 as ommx_dot_v1_dot_constraint__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16ommx/v1/solution.proto\x12\x07ommx.v1\"\x80\x01\n\x08Solution\x12\x38\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1e.ommx.v1.Solution.EntriesEntryR\x07\x65ntries\x1a:\n\x0c\x45ntriesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01\"?\n\x0cSolutionList\x12/\n\tsolutions\x18\x01 \x03(\x0b\x32\x11.ommx.v1.SolutionR\tsolutionsBY\n\x0b\x63om.ommx.v1B\rSolutionProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
+    b'\n\x16ommx/v1/solution.proto\x12\x07ommx.v1\x1a\x18ommx/v1/constraint.proto"\xcd\x01\n\x0bRawSolution\x12;\n\x07\x65ntries\x18\x01 \x03(\x0b\x32!.ommx.v1.RawSolution.EntriesEntryR\x07\x65ntries\x12\x1a\n\x08\x66\x65\x61sible\x18\x02 \x01(\x08R\x08\x66\x65\x61sible\x12\x1d\n\x07optimal\x18\x03 \x01(\x08H\x00R\x07optimal\x88\x01\x01\x1a:\n\x0c\x45ntriesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01\x42\n\n\x08_optimal"E\n\x0fRawSolutionList\x12\x32\n\tsolutions\x18\x01 \x03(\x0b\x32\x14.ommx.v1.RawSolutionR\tsolutions"Z\n\x13\x45valuatedConstraint\x12-\n\x08\x65quality\x18\x01 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value"\x85\x02\n\x08Solution\x12\x37\n\x0craw_solution\x18\x01 \x01(\x0b\x32\x14.ommx.v1.RawSolutionR\x0brawSolution\x12\x1c\n\tobjective\x18\x02 \x01(\x01R\tobjective\x12\x44\n\x0b\x63onstraints\x18\x03 \x03(\x0b\x32".ommx.v1.Solution.ConstraintsEntryR\x0b\x63onstraints\x1a\\\n\x10\x43onstraintsEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x32\n\x05value\x18\x02 \x01(\x0b\x32\x1c.ommx.v1.EvaluatedConstraintR\x05value:\x02\x38\x01"?\n\x0cSolutionList\x12/\n\tsolutions\x18\x01 \x03(\x0b\x32\x11.ommx.v1.SolutionR\tsolutionsBY\n\x0b\x63om.ommx.v1B\rSolutionProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
+)
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'ommx.v1.solution_pb2', _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "ommx.v1.solution_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-  _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'\n\013com.ommx.v1B\rSolutionProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1'
-  _globals['_SOLUTION_ENTRIESENTRY']._loaded_options = None
-  _globals['_SOLUTION_ENTRIESENTRY']._serialized_options = b'8\001'
-  _globals['_SOLUTION']._serialized_start=36
-  _globals['_SOLUTION']._serialized_end=164
-  _globals['_SOLUTION_ENTRIESENTRY']._serialized_start=106
-  _globals['_SOLUTION_ENTRIESENTRY']._serialized_end=164
-  _globals['_SOLUTIONLIST']._serialized_start=166
-  _globals['_SOLUTIONLIST']._serialized_end=229
+    _globals["DESCRIPTOR"]._loaded_options = None
+    _globals[
+        "DESCRIPTOR"
+    ]._serialized_options = b"\n\013com.ommx.v1B\rSolutionProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1"
+    _globals["_RAWSOLUTION_ENTRIESENTRY"]._loaded_options = None
+    _globals["_RAWSOLUTION_ENTRIESENTRY"]._serialized_options = b"8\001"
+    _globals["_SOLUTION_CONSTRAINTSENTRY"]._loaded_options = None
+    _globals["_SOLUTION_CONSTRAINTSENTRY"]._serialized_options = b"8\001"
+    _globals["_RAWSOLUTION"]._serialized_start = 62
+    _globals["_RAWSOLUTION"]._serialized_end = 267
+    _globals["_RAWSOLUTION_ENTRIESENTRY"]._serialized_start = 197
+    _globals["_RAWSOLUTION_ENTRIESENTRY"]._serialized_end = 255
+    _globals["_RAWSOLUTIONLIST"]._serialized_start = 269
+    _globals["_RAWSOLUTIONLIST"]._serialized_end = 338
+    _globals["_EVALUATEDCONSTRAINT"]._serialized_start = 340
+    _globals["_EVALUATEDCONSTRAINT"]._serialized_end = 430
+    _globals["_SOLUTION"]._serialized_start = 433
+    _globals["_SOLUTION"]._serialized_end = 694
+    _globals["_SOLUTION_CONSTRAINTSENTRY"]._serialized_start = 602
+    _globals["_SOLUTION_CONSTRAINTSENTRY"]._serialized_end = 694
+    _globals["_SOLUTIONLIST"]._serialized_start = 696
+    _globals["_SOLUTIONLIST"]._serialized_end = 759
 # @@protoc_insertion_point(module_scope)

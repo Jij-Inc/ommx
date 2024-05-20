@@ -28,11 +28,23 @@ class Quadratic(google.protobuf.message.Message):
     VALUES_FIELD_NUMBER: builtins.int
     LINEAR_FIELD_NUMBER: builtins.int
     @property
-    def rows(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+    def rows(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.int
+    ]: ...
     @property
-    def columns(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+    def columns(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.int
+    ]: ...
     @property
-    def values(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.float]: ...
+    def values(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+        builtins.float
+    ]: ...
     @property
     def linear(self) -> ommx.v1.linear_pb2.Linear: ...
     def __init__(
@@ -43,8 +55,26 @@ class Quadratic(google.protobuf.message.Message):
         values: collections.abc.Iterable[builtins.float] | None = ...,
         linear: ommx.v1.linear_pb2.Linear | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_linear", b"_linear", "linear", b"linear"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_linear", b"_linear", "columns", b"columns", "linear", b"linear", "rows", b"rows", "values", b"values"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_linear", b"_linear"]) -> typing.Literal["linear"] | None: ...
+    def HasField(
+        self, field_name: typing.Literal["_linear", b"_linear", "linear", b"linear"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_linear",
+            b"_linear",
+            "columns",
+            b"columns",
+            "linear",
+            b"linear",
+            "rows",
+            b"rows",
+            "values",
+            b"values",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_linear", b"_linear"]
+    ) -> typing.Literal["linear"] | None: ...
 
 global___Quadratic = Quadratic

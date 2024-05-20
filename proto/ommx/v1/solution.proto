@@ -2,13 +2,37 @@ syntax = "proto3";
 
 package ommx.v1;
 
+import "ommx/v1/constraint.proto";
+
 // A solution obtained by the solver.
-message Solution {
+message RawSolution {
+  // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
+  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
+  bool feasible = 2;
+  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
+  optional bool optimal = 3;
 }
 
-// List of solutions obtained by the solver.
-// This message is for supporting solvers that return multiple solutions.
+// List of RawSolution
+message RawSolutionList {
+  repeated RawSolution solutions = 1;
+}
+
+// Evaluated constraint with its equality
+message EvaluatedConstraint {
+  Equality equality = 1;
+  double value = 2;
+}
+
+// Solution with evaluated objective and constraints
+message Solution {
+  RawSolution raw_solution = 1;
+  double objective = 2;
+  map<uint64, EvaluatedConstraint> constraints = 3;
+}
+
+// List of Solution
 message SolutionList {
   repeated Solution solutions = 1;
 }

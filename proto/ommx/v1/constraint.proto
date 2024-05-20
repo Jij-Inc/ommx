@@ -4,6 +4,13 @@ package ommx.v1;
 
 import "ommx/v1/function.proto";
 
+// Equality of a constraint.
+enum Equality {
+  EQUALITY_UNSPECIFIED = 0;
+  EQUALITY_EQUAL_TO_ZERO = 1;
+  EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
+}
+
 message Constraint {
   // Constraint ID
   //
@@ -14,11 +21,6 @@ message Constraint {
   // - IDs must be unique with other types of constraints.
   uint64 id = 1;
 
-  enum Equality {
-    EQUALITY_UNSPECIFIED = 0;
-    EQUALITY_EQUAL_TO_ZERO = 1;
-    EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
-  }
   Equality equality = 2;
 
   Function function = 3;

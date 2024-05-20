@@ -20,24 +20,30 @@ else:
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
+class _Equality:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _EqualityEnumTypeWrapper(
+    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Equality.ValueType],
+    builtins.type,
+):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    EQUALITY_UNSPECIFIED: _Equality.ValueType  # 0
+    EQUALITY_EQUAL_TO_ZERO: _Equality.ValueType  # 1
+    EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: _Equality.ValueType  # 2
+
+class Equality(_Equality, metaclass=_EqualityEnumTypeWrapper):
+    """Equality of a constraint."""
+
+EQUALITY_UNSPECIFIED: Equality.ValueType  # 0
+EQUALITY_EQUAL_TO_ZERO: Equality.ValueType  # 1
+EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: Equality.ValueType  # 2
+global___Equality = Equality
+
 @typing.final
 class Constraint(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    class _Equality:
-        ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
-
-    class _EqualityEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[Constraint._Equality.ValueType], builtins.type):
-        DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
-        EQUALITY_UNSPECIFIED: Constraint._Equality.ValueType  # 0
-        EQUALITY_EQUAL_TO_ZERO: Constraint._Equality.ValueType  # 1
-        EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: Constraint._Equality.ValueType  # 2
-
-    class Equality(_Equality, metaclass=_EqualityEnumTypeWrapper): ...
-    EQUALITY_UNSPECIFIED: Constraint.Equality.ValueType  # 0
-    EQUALITY_EQUAL_TO_ZERO: Constraint.Equality.ValueType  # 1
-    EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: Constraint.Equality.ValueType  # 2
 
     @typing.final
     class Description(google.protobuf.message.Message):
@@ -47,14 +53,20 @@ class Constraint(google.protobuf.message.Message):
         FORALL_FIELD_NUMBER: builtins.int
         name: builtins.str
         @property
-        def forall(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]: ...
+        def forall(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+            builtins.int
+        ]: ...
         def __init__(
             self,
             *,
             name: builtins.str = ...,
             forall: collections.abc.Iterable[builtins.int] | None = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["forall", b"forall", "name", b"name"]) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["forall", b"forall", "name", b"name"]
+        ) -> None: ...
 
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
@@ -69,7 +81,7 @@ class Constraint(google.protobuf.message.Message):
     - IDs are not required to be sequential.
     - IDs must be unique with other types of constraints.
     """
-    equality: global___Constraint.Equality.ValueType
+    equality: global___Equality.ValueType
     @property
     def function(self) -> ommx.v1.function_pb2.Function: ...
     @property
@@ -78,12 +90,38 @@ class Constraint(google.protobuf.message.Message):
         self,
         *,
         id: builtins.int = ...,
-        equality: global___Constraint.Equality.ValueType = ...,
+        equality: global___Equality.ValueType = ...,
         function: ommx.v1.function_pb2.Function | None = ...,
         description: global___Constraint.Description | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_description", b"_description", "description", b"description", "function", b"function"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_description", b"_description", "description", b"description", "equality", b"equality", "function", b"function", "id", b"id"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_description", b"_description"]) -> typing.Literal["description"] | None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "description",
+            b"description",
+            "function",
+            b"function",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "description",
+            b"description",
+            "equality",
+            b"equality",
+            "function",
+            b"function",
+            "id",
+            b"id",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
 
 global___Constraint = Constraint

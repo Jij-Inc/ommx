@@ -2,12 +2,12 @@ import enum
 
 import numpy as np
 
-from ommx.v1.constraint_pb2 import Constraint
+from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import Solution, SolutionList
+from ommx.v1.solution_pb2 import RawSolution
 
 
 class DataType(enum.Enum):
@@ -33,7 +33,7 @@ class SingleFeasibleLPGenerator:
         Args:
             n (int): The size of the matrix and the vectors.
             data_type (DataType): The data type of the matrix and the vectors.
-        
+
         Raises:
             ValueError: If `n` is not a positive integer or `data_type` is not DataType.
         """
@@ -41,13 +41,12 @@ class SingleFeasibleLPGenerator:
             raise ValueError("`n` must be a positive integer.")
         if data_type not in DataType:
             raise ValueError("`data_type` must be DataType.")
-        
+
         self._A = self._generate_random_reguler_matrix(n, data_type)
         self._x = self._generate_random_solution(n, data_type)
         self._b = self._A @ self._x
         self._data_type = data_type
 
-        
     def _generate_random_reguler_matrix(
         self,
         n: int,
@@ -66,7 +65,6 @@ class SingleFeasibleLPGenerator:
             if np.linalg.det(matrix) != 0:
                 return matrix
 
-            
     def _generate_random_solution(
         self,
         n: int,
@@ -80,22 +78,17 @@ class SingleFeasibleLPGenerator:
             )
         else:
             return np.random.uniform(
-                low=self.FLOAT_LOWER_BOUND,
-                high=self.FLOAT_UPPER_BOUND,
-                size=n
+                low=self.FLOAT_LOWER_BOUND, high=self.FLOAT_UPPER_BOUND, size=n
             )
 
-
-    def get_v1_instance(self) -> bytes:
+    def get_v1_instance(self) -> Instance:
         """
         Get an instance of a linear programming problem with a unique solution.
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.instance_pb2 import Instance
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_instance_byte = generator.get_v1_instance()
-            >>> ommx_instance = Instance().ParseFromString(ommx_instance_byte)
+            >>> ommx_instance = generator.get_v1_instance()
         """
         # define decision variables
         if self._data_type == DataType.INT:
@@ -106,7 +99,7 @@ class SingleFeasibleLPGenerator:
                     bound=Bound(
                         lower=self.INT_LOWER_BOUND,
                         upper=self.INT_UPPER_BOUND,
-                    )
+                    ),
                 )
                 for i in range(len(self._x))
             ]
@@ -116,9 +109,9 @@ class SingleFeasibleLPGenerator:
                     id=i,
                     kind=DecisionVariable.Kind.KIND_CONTINUOUS,
                     bound=Bound(
-                        lower= self.FLOAT_LOWER_BOUND,
-                        upper= self.FLOAT_UPPER_BOUND,
-                    )
+                        lower=self.FLOAT_LOWER_BOUND,
+                        upper=self.FLOAT_UPPER_BOUND,
+                    ),
                 )
                 for i in range(len(self._x))
             ]
@@ -133,10 +126,10 @@ class SingleFeasibleLPGenerator:
                 ],
                 constant=-self._b[i],
             )
-            
+
             constraint = Constraint(
                 id=i,
-                equality=Constraint.Equality.EQUALITY_EQUAL_TO_ZERO,
+                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                 function=Function(constant=-self._b[i], linear=linear),
             )
             constraints.append(constraint)
@@ -146,21 +139,15 @@ class SingleFeasibleLPGenerator:
             decision_variables=decision_variables,
             objective=Function(constant=0),
             constraints=constraints,
-        ).SerializeToString()
+        )
 
-
-    def get_v1_solution(self) -> bytes:
+    def get_v1_solution(self) -> RawSolution:
         """
         Get the solution of the generated instance.
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.solution_pb2 import SolutionList
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_solution_byte = generator.get_v1_solution()
-            >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
+            >>> ommx_solution = generator.get_v1_solution()
         """
-        solution = Solution(
-            entries={i: value for i, value in enumerate(self._x)}
-        )
-        return SolutionList(solutions=[solution]).SerializeToString()
+        return RawSolution(entries={i: value for i, value in enumerate(self._x)})
