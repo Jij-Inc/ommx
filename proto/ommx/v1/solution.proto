@@ -3,7 +3,7 @@ syntax = "proto3";
 package ommx.v1;
 
 // A solution obtained by the solver.
-message Solution {
+message RawSolution {
   // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
   // Whether the solution is feasible, i.e. all constraints are satisfied or not.
@@ -13,7 +13,6 @@ message Solution {
 }
 
 // List of solutions obtained by the solver.
-// This message is for supporting solvers that return multiple solutions.
-message SolutionList {
-  repeated Solution solutions = 1;
+message RawSolutionList {
+  repeated RawSolution solutions = 1;
 }
