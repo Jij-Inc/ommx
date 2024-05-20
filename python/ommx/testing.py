@@ -81,7 +81,7 @@ class SingleFeasibleLPGenerator:
                 low=self.FLOAT_LOWER_BOUND, high=self.FLOAT_UPPER_BOUND, size=n
             )
 
-    def get_v1_instance(self) -> bytes:
+    def get_v1_instance(self) -> Instance:
         """
         Get an instance of a linear programming problem with a unique solution.
 
@@ -141,9 +141,9 @@ class SingleFeasibleLPGenerator:
             decision_variables=decision_variables,
             objective=Function(constant=0),
             constraints=constraints,
-        ).SerializeToString()
+        )
 
-    def get_v1_solution(self) -> bytes:
+    def get_v1_solution(self) -> Solution:
         """
         Get the solution of the generated instance.
 
@@ -154,5 +154,4 @@ class SingleFeasibleLPGenerator:
             >>> ommx_solution_byte = generator.get_v1_solution()
             >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
         """
-        solution = Solution(entries={i: value for i, value in enumerate(self._x)})
-        return SolutionList(solutions=[solution]).SerializeToString()
+        return Solution(entries={i: value for i, value in enumerate(self._x)})
