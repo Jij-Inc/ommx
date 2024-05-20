@@ -87,10 +87,8 @@ class SingleFeasibleLPGenerator:
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.instance_pb2 import Instance
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_instance_byte = generator.get_v1_instance()
-            >>> ommx_instance = Instance().ParseFromString(ommx_instance_byte)
+            >>> ommx_instance = generator.get_v1_instance()
         """
         # define decision variables
         if self._data_type == DataType.INT:
@@ -149,9 +147,7 @@ class SingleFeasibleLPGenerator:
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.solution_pb2 import SolutionList
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_solution_byte = generator.get_v1_solution()
-            >>> ommx_solution = SolutionList().ParseFromString(ommx_solution_byte)
+            >>> ommx_solution = generator.get_v1_solution()
         """
         return Solution(entries={i: value for i, value in enumerate(self._x)})
