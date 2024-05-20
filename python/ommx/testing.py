@@ -87,7 +87,6 @@ class SingleFeasibleLPGenerator:
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
-            >>> from ommx.v1.instance_pb2 import Instance
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
             >>> ommx_instance = generator.get_v1_instance()
         """
