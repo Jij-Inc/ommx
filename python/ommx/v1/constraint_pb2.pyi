@@ -157,17 +157,25 @@ global___Constraint = Constraint
 
 @typing.final
 class EvaluatedConstraint(google.protobuf.message.Message):
-    """Evaluated constraint"""
+    """A constraint evaluated with a state"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
     EVALUATED_VALUE_FIELD_NUMBER: builtins.int
+    USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
     id: builtins.int
     equality: global___Equality.ValueType
     evaluated_value: builtins.float
+    """The value of function for the state"""
+    @property
+    def used_decision_variable_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """IDs of decision variables used to evalute this constraint"""
+
     @property
     def description(self) -> global___ConstraintDescription: ...
     def __init__(
@@ -176,6 +184,7 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         id: builtins.int = ...,
         equality: global___Equality.ValueType = ...,
         evaluated_value: builtins.float = ...,
+        used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
         description: global___ConstraintDescription | None = ...,
     ) -> None: ...
     def HasField(
@@ -197,6 +206,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"evaluated_value",
             "id",
             b"id",
+            "used_decision_variable_ids",
+            b"used_decision_variable_ids",
         ],
     ) -> None: ...
     def WhichOneof(

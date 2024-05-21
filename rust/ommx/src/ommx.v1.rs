@@ -112,7 +112,7 @@ pub struct Constraint {
     #[prost(message, optional, tag = "4")]
     pub description: ::core::option::Option<ConstraintDescription>,
 }
-/// Evaluated constraint
+/// A constraint evaluated with a state
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluatedConstraint {
@@ -120,9 +120,13 @@ pub struct EvaluatedConstraint {
     pub id: u64,
     #[prost(enumeration = "Equality", tag = "2")]
     pub equality: i32,
+    /// The value of function for the state
     #[prost(double, tag = "3")]
     pub evaluated_value: f64,
-    #[prost(message, optional, tag = "4")]
+    /// IDs of decision variables used to evalute this constraint
+    #[prost(uint64, repeated, tag = "4")]
+    pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(message, optional, tag = "5")]
     pub description: ::core::option::Option<ConstraintDescription>,
 }
 /// Equality of a constraint.

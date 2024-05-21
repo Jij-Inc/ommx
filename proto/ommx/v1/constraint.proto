@@ -41,13 +41,17 @@ message Constraint {
   optional ConstraintDescription description = 4;
 }
 
-// Evaluated constraint
+// A constraint evaluated with a state
 message EvaluatedConstraint {
   uint64 id = 1;
 
   Equality equality = 2;
 
+  // The value of function for the state
   double evaluated_value = 3;
 
-  optional ConstraintDescription description = 4;
+  // IDs of decision variables used to evalute this constraint
+  repeated uint64 used_decision_variable_ids = 4;
+
+  optional ConstraintDescription description = 5;
 }
