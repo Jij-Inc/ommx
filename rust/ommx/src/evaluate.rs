@@ -5,6 +5,27 @@ use crate::v1::{
 use anyhow::{bail, Context, Result};
 
 /// Evaluate with a [RawSolution]
+///
+/// Examples
+/// ---------
+/// ```rust
+/// # fn main() -> anyhow::Result<()> {
+/// use ommx::{Evaluate, v1::{Linear, RawSolution}};
+/// use maplit::hashmap;
+///
+/// let raw: RawSolution = hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0 }.into();
+/// // x1 + 2*x2 + 3
+/// let linear = Linear::new(
+///     hashmap! {
+///         1 => 1.0,
+///         2 => 2.0,
+///     }
+///     .into_iter(),
+///     3.0,
+/// );
+/// assert_eq!(linear.evaluate(&raw)?, 1.0 * 1.0 + 2.0 * 2.0 + 3.0);
+/// # Ok(()) }
+/// ```
 pub trait Evaluate {
     type Output;
     fn evaluate(&self, solution: &RawSolution) -> Result<Self::Output>;

@@ -18,6 +18,7 @@ derive_more.workspace = true
 directories.workspace = true
 itertools.workspace = true
 log.workspace = true
+maplit.workspace = true
 ocipkg.workspace = true
 proptest.workspace = true
 prost.workspace = true

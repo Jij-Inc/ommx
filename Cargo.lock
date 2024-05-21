@@ -765,6 +765,7 @@ dependencies = [
  "directories",
  "itertools 0.13.0",
  "log",
+ "maplit",
  "ocipkg",
  "proptest",
  "prost",
