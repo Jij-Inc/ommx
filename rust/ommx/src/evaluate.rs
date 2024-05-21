@@ -1,6 +1,6 @@
 use crate::v1::{
-    function::Function as FunctionEnum, linear::Term as LinearTerm, Function, Linear, Polynomial,
-    Quadratic, State,
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint,
+    EvaluatedConstraint, Function, Linear, Polynomial, Quadratic, State,
 };
 use anyhow::{bail, Context, Result};
 
@@ -100,5 +100,23 @@ impl Evaluate for Polynomial {
             sum += v;
         }
         Ok(sum)
+    }
+}
+
+impl Evaluate for Constraint {
+    type Output = EvaluatedConstraint;
+
+    fn evaluate(&self, solution: &State) -> Result<Self::Output> {
+        let evaluated_value = self
+            .function
+            .as_ref()
+            .context("Function is not set")?
+            .evaluate(solution)?;
+        Ok(EvaluatedConstraint {
+            id: self.id,
+            equality: self.equality,
+            evaluated_value,
+            description: self.description.clone(),
+        })
     }
 }
