@@ -42,31 +42,60 @@ EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: Equality.ValueType  # 2
 global___Equality = Equality
 
 @typing.final
-class Constraint(google.protobuf.message.Message):
+class ConstraintDescription(google.protobuf.message.Message):
+    """Additional infomations of the constraint for human-readable output
+
+    Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+    then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+    The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
+    and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+    """
+
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class Description(google.protobuf.message.Message):
+    class ParametersEntry(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        FORALL_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        @property
-        def forall(
-            self,
-        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-            builtins.int
-        ]: ...
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            forall: collections.abc.Iterable[builtins.int] | None = ...,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
         ) -> None: ...
         def ClearField(
-            self, field_name: typing.Literal["forall", b"forall", "name", b"name"]
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
+
+    NAME_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    name: builtins.str
+    """Name of the constraint"""
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Parameters of the constraint."""
+
+    def __init__(
+        self,
+        *,
+        name: builtins.str = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+    ) -> None: ...
+    def ClearField(
+        self, field_name: typing.Literal["name", b"name", "parameters", b"parameters"]
+    ) -> None: ...
+
+global___ConstraintDescription = ConstraintDescription
+
+@typing.final
+class Constraint(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
@@ -85,14 +114,14 @@ class Constraint(google.protobuf.message.Message):
     @property
     def function(self) -> ommx.v1.function_pb2.Function: ...
     @property
-    def description(self) -> global___Constraint.Description: ...
+    def description(self) -> global___ConstraintDescription: ...
     def __init__(
         self,
         *,
         id: builtins.int = ...,
         equality: global___Equality.ValueType = ...,
         function: ommx.v1.function_pb2.Function | None = ...,
-        description: global___Constraint.Description | None = ...,
+        description: global___ConstraintDescription | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -125,3 +154,53 @@ class Constraint(google.protobuf.message.Message):
     ) -> typing.Literal["description"] | None: ...
 
 global___Constraint = Constraint
+
+@typing.final
+class EvaluatedConstraint(google.protobuf.message.Message):
+    """Evaluated constraint"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ID_FIELD_NUMBER: builtins.int
+    EQUALITY_FIELD_NUMBER: builtins.int
+    EVALUATED_VALUE_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    equality: global___Equality.ValueType
+    evaluated_value: builtins.float
+    @property
+    def description(self) -> global___ConstraintDescription: ...
+    def __init__(
+        self,
+        *,
+        id: builtins.int = ...,
+        equality: global___Equality.ValueType = ...,
+        evaluated_value: builtins.float = ...,
+        description: global___ConstraintDescription | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_description", b"_description", "description", b"description"
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "description",
+            b"description",
+            "equality",
+            b"equality",
+            "evaluated_value",
+            b"evaluated_value",
+            "id",
+            b"id",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
+
+global___EvaluatedConstraint = EvaluatedConstraint

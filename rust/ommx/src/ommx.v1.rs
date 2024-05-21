@@ -76,6 +76,23 @@ pub mod function {
         Polynomial(super::Polynomial),
     }
 }
+/// Additional infomations of the constraint for human-readable output
+///
+/// Consider for example a problem constains a series of constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+/// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+/// The `name` field of this message is intended to be a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
+/// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConstraintDescription {
+    /// Name of the constraint
+    #[prost(string, tag = "1")]
+    pub name: ::prost::alloc::string::String,
+    /// Parameters of the constraint.
+    #[prost(map = "string, string", tag = "2")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Constraint {
@@ -93,18 +110,20 @@ pub struct Constraint {
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<Function>,
     #[prost(message, optional, tag = "4")]
-    pub description: ::core::option::Option<constraint::Description>,
+    pub description: ::core::option::Option<ConstraintDescription>,
 }
-/// Nested message and enum types in `Constraint`.
-pub mod constraint {
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Description {
-        #[prost(string, tag = "1")]
-        pub name: ::prost::alloc::string::String,
-        #[prost(int64, repeated, tag = "2")]
-        pub forall: ::prost::alloc::vec::Vec<i64>,
-    }
+/// Evaluated constraint
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EvaluatedConstraint {
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(enumeration = "Equality", tag = "2")]
+    pub equality: i32,
+    #[prost(double, tag = "3")]
+    pub evaluated_value: f64,
+    #[prost(message, optional, tag = "4")]
+    pub description: ::core::option::Option<ConstraintDescription>,
 }
 /// Equality of a constraint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -178,10 +197,17 @@ pub mod decision_variable {
         /// Name of the decision variable.
         #[prost(string, tag = "1")]
         pub name: ::prost::alloc::string::String,
-        /// The subscripts of a deicision variable which is defined as multi-dimensional array.
-        /// Empty list means that the decision variable is scalar
-        #[prost(uint64, repeated, tag = "2")]
-        pub subscripts: ::prost::alloc::vec::Vec<u64>,
+        /// The parameters for parameterized decision variables
+        ///
+        /// This field is intended to use for multidimensional variables like x\[i, j\] where `i` and `j` are integer parameter.
+        /// `DecisionVariable` message represents a single decision variable like `x\[1, 3\]`,
+        /// and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
+        /// The value of the parameter is string because the parameter may not be integer.
+        #[prost(map = "string, string", tag = "2")]
+        pub parameters: ::std::collections::HashMap<
+            ::prost::alloc::string::String,
+            ::prost::alloc::string::String,
+        >,
     }
     /// Kind of the decision variable
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -310,15 +336,6 @@ pub struct RawSolutionList {
     #[prost(message, repeated, tag = "1")]
     pub solutions: ::prost::alloc::vec::Vec<RawSolution>,
 }
-/// Evaluated constraint with its equality
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EvaluatedConstraint {
-    #[prost(enumeration = "Equality", tag = "1")]
-    pub equality: i32,
-    #[prost(double, tag = "2")]
-    pub value: f64,
-}
 /// Solution with evaluated objective and constraints
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -327,13 +344,15 @@ pub struct Solution {
     pub raw_solution: ::core::option::Option<RawSolution>,
     #[prost(double, tag = "2")]
     pub objective: f64,
-    #[prost(map = "uint64, message", tag = "3")]
-    pub constraints: ::std::collections::HashMap<u64, EvaluatedConstraint>,
+    #[prost(message, repeated, tag = "3")]
+    pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
+    #[prost(message, repeated, tag = "4")]
+    pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
     /// Whether the solution is feasible, i.e. all constraints are satisfied or not.
-    #[prost(bool, tag = "4")]
+    #[prost(bool, tag = "5")]
     pub feasible: bool,
     /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-    #[prost(bool, optional, tag = "5")]
+    #[prost(bool, optional, tag = "6")]
     pub optimal: ::core::option::Option<bool>,
 }
 /// List of Solution

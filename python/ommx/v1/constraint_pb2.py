@@ -17,7 +17,7 @@ from ommx.v1 import function_pb2 as ommx_dot_v1_dot_function__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b"\n\x18ommx/v1/constraint.proto\x12\x07ommx.v1\x1a\x16ommx/v1/function.proto\"\x8d\x02\n\nConstraint\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12-\n\x08\x65quality\x18\x02 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12-\n\x08\x66unction\x18\x03 \x01(\x0b\x32\x11.ommx.v1.FunctionR\x08\x66unction\x12\x46\n\x0b\x64\x65scription\x18\x04 \x01(\x0b\x32\x1f.ommx.v1.Constraint.DescriptionH\x00R\x0b\x64\x65scription\x88\x01\x01\x1a\x39\n\x0b\x44\x65scription\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n\x06\x66orall\x18\x02 \x03(\x03R\x06\x66orallB\x0e\n\x0c_description*i\n\x08\x45quality\x12\x18\n\x14\x45QUALITY_UNSPECIFIED\x10\x00\x12\x1a\n\x16\x45QUALITY_EQUAL_TO_ZERO\x10\x01\x12'\n#EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO\x10\x02\x42[\n\x0b\x63om.ommx.v1B\x0f\x43onstraintProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3"
+    b'\n\x18ommx/v1/constraint.proto\x12\x07ommx.v1\x1a\x16ommx/v1/function.proto"\xba\x01\n\x15\x43onstraintDescription\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12N\n\nparameters\x18\x02 \x03(\x0b\x32..ommx.v1.ConstraintDescription.ParametersEntryR\nparameters\x1a=\n\x0fParametersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01"\xd1\x01\n\nConstraint\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12-\n\x08\x65quality\x18\x02 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12-\n\x08\x66unction\x18\x03 \x01(\x0b\x32\x11.ommx.v1.FunctionR\x08\x66unction\x12\x45\n\x0b\x64\x65scription\x18\x04 \x01(\x0b\x32\x1e.ommx.v1.ConstraintDescriptionH\x00R\x0b\x64\x65scription\x88\x01\x01\x42\x0e\n\x0c_description"\xd4\x01\n\x13\x45valuatedConstraint\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12-\n\x08\x65quality\x18\x02 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12\'\n\x0f\x65valuated_value\x18\x03 \x01(\x01R\x0e\x65valuatedValue\x12\x45\n\x0b\x64\x65scription\x18\x04 \x01(\x0b\x32\x1e.ommx.v1.ConstraintDescriptionH\x00R\x0b\x64\x65scription\x88\x01\x01\x42\x0e\n\x0c_description*i\n\x08\x45quality\x12\x18\n\x14\x45QUALITY_UNSPECIFIED\x10\x00\x12\x1a\n\x16\x45QUALITY_EQUAL_TO_ZERO\x10\x01\x12\'\n#EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO\x10\x02\x42[\n\x0b\x63om.ommx.v1B\x0f\x43onstraintProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
 )
 
 _globals = globals()
@@ -28,10 +28,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
     _globals[
         "DESCRIPTOR"
     ]._serialized_options = b"\n\013com.ommx.v1B\017ConstraintProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1"
-    _globals["_EQUALITY"]._serialized_start = 333
-    _globals["_EQUALITY"]._serialized_end = 438
-    _globals["_CONSTRAINT"]._serialized_start = 62
-    _globals["_CONSTRAINT"]._serialized_end = 331
-    _globals["_CONSTRAINT_DESCRIPTION"]._serialized_start = 258
-    _globals["_CONSTRAINT_DESCRIPTION"]._serialized_end = 315
+    _globals["_CONSTRAINTDESCRIPTION_PARAMETERSENTRY"]._loaded_options = None
+    _globals["_CONSTRAINTDESCRIPTION_PARAMETERSENTRY"]._serialized_options = b"8\001"
+    _globals["_EQUALITY"]._serialized_start = 677
+    _globals["_EQUALITY"]._serialized_end = 782
+    _globals["_CONSTRAINTDESCRIPTION"]._serialized_start = 62
+    _globals["_CONSTRAINTDESCRIPTION"]._serialized_end = 248
+    _globals["_CONSTRAINTDESCRIPTION_PARAMETERSENTRY"]._serialized_start = 187
+    _globals["_CONSTRAINTDESCRIPTION_PARAMETERSENTRY"]._serialized_end = 248
+    _globals["_CONSTRAINT"]._serialized_start = 251
+    _globals["_CONSTRAINT"]._serialized_end = 460
+    _globals["_EVALUATEDCONSTRAINT"]._serialized_start = 463
+    _globals["_EVALUATEDCONSTRAINT"]._serialized_end = 675
 # @@protoc_insertion_point(module_scope)
