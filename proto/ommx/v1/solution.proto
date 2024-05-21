@@ -6,19 +6,14 @@ import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 
 // Pure solution state without any evaluation, even the feasiblity of the solution.
-message RawSolution {
+message State {
   // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
 }
 
-// List of RawSolution
-message RawSolutionList {
-  repeated RawSolution solutions = 1;
-}
-
 // Solution with evaluated objective and constraints
 message Solution {
-  RawSolution raw_solution = 1;
+  State state = 1;
   double objective = 2;
 
   repeated DecisionVariable decision_variables = 3;
@@ -29,9 +24,4 @@ message Solution {
 
   // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
   optional bool optimal = 6;
-}
-
-// List of Solution
-message SolutionList {
-  repeated Solution solutions = 1;
 }
