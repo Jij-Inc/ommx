@@ -1,6 +1,6 @@
 use crate::v1::{
-    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint,
-    EvaluatedConstraint, Function, Linear, Polynomial, Quadratic, State,
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
+    EvaluatedConstraint, Function, Instance, Linear, Polynomial, Quadratic, Solution, State,
 };
 use anyhow::{bail, Context, Result};
 
@@ -117,6 +117,49 @@ impl Evaluate for Constraint {
             equality: self.equality,
             evaluated_value,
             description: self.description.clone(),
+        })
+    }
+}
+
+impl Evaluate for Instance {
+    type Output = Solution;
+
+    fn evaluate(&self, state: &State) -> Result<Self::Output> {
+        let evaluated_constraints = self
+            .constraints
+            .iter()
+            .map(|c| c.evaluate(state))
+            .collect::<Result<Vec<_>>>()?;
+        let mut feasible = true;
+        for c in &evaluated_constraints {
+            if c.equality == Equality::EqualToZero as i32 {
+                // FIXME: Add a way to specify the tolerance
+                if c.evaluated_value.abs() > 1e-6 {
+                    feasible = false;
+                    break;
+                }
+            } else if c.equality == Equality::LessThanOrEqualToZero as i32 {
+                if c.evaluated_value > 0.0 {
+                    feasible = false;
+                    break;
+                }
+            } else {
+                bail!("Unsupported equality: {:?}", c.equality);
+            }
+        }
+
+        let objective = self
+            .objective
+            .as_ref()
+            .context("Objective is not set")?
+            .evaluate(state)?;
+        Ok(Solution {
+            decision_variables: self.decision_variables.clone(),
+            state: Some(state.clone()),
+            evaluated_constraints,
+            feasible,
+            objective,
+            optimal: None,
         })
     }
 }
