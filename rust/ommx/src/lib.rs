@@ -16,7 +16,6 @@ pub use prost::Message;
 mod arbitrary;
 mod convert;
 mod evaluate;
-mod linear;
 
 pub use evaluate::Evaluate;
 
