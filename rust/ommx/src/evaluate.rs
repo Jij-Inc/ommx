@@ -1,19 +1,19 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Function, Linear, Polynomial,
-    Quadratic, RawSolution,
+    Quadratic, State,
 };
 use anyhow::{bail, Context, Result};
 
-/// Evaluate with a [RawSolution]
+/// Evaluate with a [State]
 ///
 /// Examples
 /// ---------
 /// ```rust
 /// # fn main() -> anyhow::Result<()> {
-/// use ommx::{Evaluate, v1::{Linear, RawSolution}};
+/// use ommx::{Evaluate, v1::{Linear, State}};
 /// use maplit::hashmap;
 ///
-/// let raw: RawSolution = hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0 }.into();
+/// let raw: State = hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0 }.into();
 /// // x1 + 2*x2 + 3
 /// let linear = Linear::new(
 ///     hashmap! {
@@ -28,12 +28,12 @@ use anyhow::{bail, Context, Result};
 /// ```
 pub trait Evaluate {
     type Output;
-    fn evaluate(&self, solution: &RawSolution) -> Result<Self::Output>;
+    fn evaluate(&self, solution: &State) -> Result<Self::Output>;
 }
 
 impl Evaluate for Function {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, solution: &State) -> Result<f64> {
         let out = match &self.function {
             Some(FunctionEnum::Constant(c)) => *c,
             Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution)?,
@@ -47,7 +47,7 @@ impl Evaluate for Function {
 
 impl Evaluate for Linear {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, solution: &State) -> Result<f64> {
         let mut sum = self.constant;
         for LinearTerm { id, coefficient } in &self.terms {
             let s = solution
@@ -62,7 +62,7 @@ impl Evaluate for Linear {
 
 impl Evaluate for Quadratic {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, solution: &State) -> Result<f64> {
         let mut sum = if let Some(linear) = &self.linear {
             linear.evaluate(solution)?
         } else {
@@ -87,7 +87,7 @@ impl Evaluate for Quadratic {
 
 impl Evaluate for Polynomial {
     type Output = f64;
-    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+    fn evaluate(&self, solution: &State) -> Result<f64> {
         let mut sum = 0.0;
         for term in &self.terms {
             let mut v = term.coefficient;

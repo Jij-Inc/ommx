@@ -1,6 +1,6 @@
 //! Additional trait implementations for generated codes
 
-use crate::v1::{function, linear::Term, Function, Linear, Quadratic, RawSolution};
+use crate::v1::{function, linear::Term, Function, Linear, Quadratic, State};
 use std::collections::HashMap;
 
 impl From<function::Function> for Function {
@@ -25,7 +25,7 @@ impl From<Quadratic> for Function {
     }
 }
 
-impl From<HashMap<u64, f64>> for RawSolution {
+impl From<HashMap<u64, f64>> for State {
     fn from(entries: HashMap<u64, f64>) -> Self {
         Self { entries }
     }
