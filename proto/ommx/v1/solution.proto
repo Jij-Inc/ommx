@@ -15,19 +15,22 @@ message RawSolutionList {
   repeated RawSolution solutions = 1;
 }
 
-// Evaluated constraint with its equality
-message EvaluatedConstraint {
-  Equality equality = 1;
-  double value = 2;
-}
-
 // Solution with evaluated objective and constraints
 message Solution {
   RawSolution raw_solution = 1;
   double objective = 2;
+
+  // Evaluated constraint with its equality
+  message EvaluatedConstraint {
+    Constraint.Equality equality = 1;
+    double value = 2;
+    optional Constraint.Description description = 3;
+  }
   map<uint64, EvaluatedConstraint> constraints = 3;
+
   // Whether the solution is feasible, i.e. all constraints are satisfied or not.
   bool feasible = 4;
+
   // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
   optional bool optimal = 5;
 }
