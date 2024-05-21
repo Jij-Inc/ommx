@@ -3,36 +3,25 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
+import "ommx/v1/decision_variables.proto";
 
 // Pure solution state without any evaluation, even the feasiblity of the solution.
-message RawSolution {
+message State {
   // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
 }
 
-// List of RawSolution
-message RawSolutionList {
-  repeated RawSolution solutions = 1;
-}
-
-// Evaluated constraint with its equality
-message EvaluatedConstraint {
-  Equality equality = 1;
-  double value = 2;
-}
-
 // Solution with evaluated objective and constraints
 message Solution {
-  RawSolution raw_solution = 1;
+  State state = 1;
   double objective = 2;
-  map<uint64, EvaluatedConstraint> constraints = 3;
-  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
-  bool feasible = 4;
-  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-  optional bool optimal = 5;
-}
 
-// List of Solution
-message SolutionList {
-  repeated Solution solutions = 1;
+  repeated DecisionVariable decision_variables = 3;
+  repeated EvaluatedConstraint evaluated_constraints = 4;
+
+  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
+  bool feasible = 5;
+
+  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
+  optional bool optimal = 6;
 }

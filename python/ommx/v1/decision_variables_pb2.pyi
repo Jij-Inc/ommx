@@ -90,29 +90,50 @@ class DecisionVariable(google.protobuf.message.Message):
 
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+        @typing.final
+        class ParametersEntry(google.protobuf.message.Message):
+            DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+            KEY_FIELD_NUMBER: builtins.int
+            VALUE_FIELD_NUMBER: builtins.int
+            key: builtins.str
+            value: builtins.str
+            def __init__(
+                self,
+                *,
+                key: builtins.str = ...,
+                value: builtins.str = ...,
+            ) -> None: ...
+            def ClearField(
+                self, field_name: typing.Literal["key", b"key", "value", b"value"]
+            ) -> None: ...
+
         NAME_FIELD_NUMBER: builtins.int
-        SUBSCRIPTS_FIELD_NUMBER: builtins.int
+        PARAMETERS_FIELD_NUMBER: builtins.int
         name: builtins.str
         """Name of the decision variable."""
         @property
-        def subscripts(
+        def parameters(
             self,
-        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-            builtins.int
-        ]:
-            """The subscripts of a deicision variable which is defined as multi-dimensional array.
-            Empty list means that the decision variable is scalar
+        ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+            """The parameters for parameterized decision variables
+
+            This field is intended to use for multidimensional variables like x[i, j] where `i` and `j` are integer parameter.
+            `DecisionVariable` message represents a single decision variable like `x[1, 3]`,
+            and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
+            The value of the parameter is string because the parameter may not be integer.
             """
 
         def __init__(
             self,
             *,
             name: builtins.str = ...,
-            subscripts: collections.abc.Iterable[builtins.int] | None = ...,
+            parameters: collections.abc.Mapping[builtins.str, builtins.str]
+            | None = ...,
         ) -> None: ...
         def ClearField(
             self,
-            field_name: typing.Literal["name", b"name", "subscripts", b"subscripts"],
+            field_name: typing.Literal["name", b"name", "parameters", b"parameters"],
         ) -> None: ...
 
     ID_FIELD_NUMBER: builtins.int

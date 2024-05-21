@@ -9,12 +9,13 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
 import ommx.v1.constraint_pb2
+import ommx.v1.decision_variables_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
-class RawSolution(google.protobuf.message.Message):
+class State(google.protobuf.message.Message):
     """Pure solution state without any evaluation, even the feasiblity of the solution."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -51,53 +52,7 @@ class RawSolution(google.protobuf.message.Message):
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
-global___RawSolution = RawSolution
-
-@typing.final
-class RawSolutionList(google.protobuf.message.Message):
-    """List of RawSolution"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    SOLUTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def solutions(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___RawSolution
-    ]: ...
-    def __init__(
-        self,
-        *,
-        solutions: collections.abc.Iterable[global___RawSolution] | None = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["solutions", b"solutions"]
-    ) -> None: ...
-
-global___RawSolutionList = RawSolutionList
-
-@typing.final
-class EvaluatedConstraint(google.protobuf.message.Message):
-    """Evaluated constraint with its equality"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    EQUALITY_FIELD_NUMBER: builtins.int
-    VALUE_FIELD_NUMBER: builtins.int
-    equality: ommx.v1.constraint_pb2.Equality.ValueType
-    value: builtins.float
-    def __init__(
-        self,
-        *,
-        equality: ommx.v1.constraint_pb2.Equality.ValueType = ...,
-        value: builtins.float = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["equality", b"equality", "value", b"value"]
-    ) -> None: ...
-
-global___EvaluatedConstraint = EvaluatedConstraint
+global___State = State
 
 @typing.final
 class Solution(google.protobuf.message.Message):
@@ -105,31 +60,10 @@ class Solution(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    @typing.final
-    class ConstraintsEntry(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        KEY_FIELD_NUMBER: builtins.int
-        VALUE_FIELD_NUMBER: builtins.int
-        key: builtins.int
-        @property
-        def value(self) -> global___EvaluatedConstraint: ...
-        def __init__(
-            self,
-            *,
-            key: builtins.int = ...,
-            value: global___EvaluatedConstraint | None = ...,
-        ) -> None: ...
-        def HasField(
-            self, field_name: typing.Literal["value", b"value"]
-        ) -> builtins.bool: ...
-        def ClearField(
-            self, field_name: typing.Literal["key", b"key", "value", b"value"]
-        ) -> None: ...
-
-    RAW_SOLUTION_FIELD_NUMBER: builtins.int
+    STATE_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
-    CONSTRAINTS_FIELD_NUMBER: builtins.int
+    DECISION_VARIABLES_FIELD_NUMBER: builtins.int
+    EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     OPTIMAL_FIELD_NUMBER: builtins.int
     objective: builtins.float
@@ -138,19 +72,31 @@ class Solution(google.protobuf.message.Message):
     optimal: builtins.bool
     """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
-    def raw_solution(self) -> global___RawSolution: ...
+    def state(self) -> global___State: ...
     @property
-    def constraints(
+    def decision_variables(
         self,
-    ) -> google.protobuf.internal.containers.MessageMap[
-        builtins.int, global___EvaluatedConstraint
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.decision_variables_pb2.DecisionVariable
+    ]: ...
+    @property
+    def evaluated_constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.constraint_pb2.EvaluatedConstraint
     ]: ...
     def __init__(
         self,
         *,
-        raw_solution: global___RawSolution | None = ...,
+        state: global___State | None = ...,
         objective: builtins.float = ...,
-        constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint]
+        decision_variables: collections.abc.Iterable[
+            ommx.v1.decision_variables_pb2.DecisionVariable
+        ]
+        | None = ...,
+        evaluated_constraints: collections.abc.Iterable[
+            ommx.v1.constraint_pb2.EvaluatedConstraint
+        ]
         | None = ...,
         feasible: builtins.bool = ...,
         optimal: builtins.bool | None = ...,
@@ -158,12 +104,7 @@ class Solution(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing.Literal[
-            "_optimal",
-            b"_optimal",
-            "optimal",
-            b"optimal",
-            "raw_solution",
-            b"raw_solution",
+            "_optimal", b"_optimal", "optimal", b"optimal", "state", b"state"
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -171,16 +112,18 @@ class Solution(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_optimal",
             b"_optimal",
-            "constraints",
-            b"constraints",
+            "decision_variables",
+            b"decision_variables",
+            "evaluated_constraints",
+            b"evaluated_constraints",
             "feasible",
             b"feasible",
             "objective",
             b"objective",
             "optimal",
             b"optimal",
-            "raw_solution",
-            b"raw_solution",
+            "state",
+            b"state",
         ],
     ) -> None: ...
     def WhichOneof(
@@ -188,27 +131,3 @@ class Solution(google.protobuf.message.Message):
     ) -> typing.Literal["optimal"] | None: ...
 
 global___Solution = Solution
-
-@typing.final
-class SolutionList(google.protobuf.message.Message):
-    """List of Solution"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    SOLUTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def solutions(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___Solution
-    ]: ...
-    def __init__(
-        self,
-        *,
-        solutions: collections.abc.Iterable[global___Solution] | None = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["solutions", b"solutions"]
-    ) -> None: ...
-
-global___SolutionList = SolutionList

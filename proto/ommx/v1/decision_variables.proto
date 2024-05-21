@@ -42,9 +42,14 @@ message DecisionVariable {
   message Description {
     // Name of the decision variable.
     string name = 1;
-    // The subscripts of a deicision variable which is defined as multi-dimensional array.
-    // Empty list means that the decision variable is scalar
-    repeated uint64 subscripts = 2;
+
+    // The parameters for parameterized decision variables
+    //
+    // This field is intended to use for multidimensional variables like x[i, j] where `i` and `j` are integer parameter.
+    // `DecisionVariable` message represents a single decision variable like `x[1, 3]`,
+    // and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
+    // The value of the parameter is string because the parameter may not be integer.
+    map<string, string> parameters = 2;
   }
 
   // This is optional since the name and subscripts does not exist in general mathematical programming situation
