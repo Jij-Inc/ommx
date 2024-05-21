@@ -66,7 +66,18 @@ impl Evaluate for Quadratic {
 
 impl Evaluate for Polynomial {
     type Output = f64;
-    fn evaluate(&self, _solution: &RawSolution) -> Result<f64> {
-        todo!()
+    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+        let mut sum = 0.0;
+        for term in &self.terms {
+            let mut v = term.coefficient;
+            for id in &term.ids {
+                v *= solution
+                    .entries
+                    .get(id)
+                    .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            }
+            sum += v;
+        }
+        Ok(sum)
     }
 }
