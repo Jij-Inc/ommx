@@ -15,9 +15,9 @@ pub mod random;
 pub use prost::Message;
 mod arbitrary;
 mod convert;
-mod evaluation;
+mod evaluate;
 
-pub use evaluation::Evaluate;
+pub use evaluate::Evaluate;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
