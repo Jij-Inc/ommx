@@ -27,7 +27,7 @@ impl Evaluate for Function {
 impl Evaluate for Linear {
     type Output = f64;
     fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
-        let mut sum = 0.0;
+        let mut sum = self.constant;
         for LinearTerm { id, coefficient } in &self.terms {
             let s = solution
                 .entries
@@ -41,8 +41,26 @@ impl Evaluate for Linear {
 
 impl Evaluate for Quadratic {
     type Output = f64;
-    fn evaluate(&self, _solution: &RawSolution) -> Result<f64> {
-        todo!()
+    fn evaluate(&self, solution: &RawSolution) -> Result<f64> {
+        let mut sum = if let Some(linear) = &self.linear {
+            linear.evaluate(solution)?
+        } else {
+            0.0
+        };
+        for (i, j, value) in
+            itertools::multizip((self.rows.iter(), self.columns.iter(), self.values.iter()))
+        {
+            let u = solution
+                .entries
+                .get(i)
+                .with_context(|| format!("Variable id ({i}) is not found in the solution"))?;
+            let v = solution
+                .entries
+                .get(j)
+                .with_context(|| format!("Variable id ({j}) is not found in the solution"))?;
+            sum += value * u * v;
+        }
+        Ok(sum)
     }
 }
 
