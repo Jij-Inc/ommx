@@ -295,19 +295,13 @@ pub mod instance {
         }
     }
 }
-/// A solution obtained by the solver.
+/// Pure solution state without any evaluation, even the feasiblity of the solution.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RawSolution {
     /// The value of the solution for each variable ID.
     #[prost(map = "uint64, double", tag = "1")]
     pub entries: ::std::collections::HashMap<u64, f64>,
-    /// Whether the solution is feasible, i.e. all constraints are satisfied or not.
-    #[prost(bool, tag = "2")]
-    pub feasible: bool,
-    /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-    #[prost(bool, optional, tag = "3")]
-    pub optimal: ::core::option::Option<bool>,
 }
 /// List of RawSolution
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -335,6 +329,12 @@ pub struct Solution {
     pub objective: f64,
     #[prost(map = "uint64, message", tag = "3")]
     pub constraints: ::std::collections::HashMap<u64, EvaluatedConstraint>,
+    /// Whether the solution is feasible, i.e. all constraints are satisfied or not.
+    #[prost(bool, tag = "4")]
+    pub feasible: bool,
+    /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
+    #[prost(bool, optional, tag = "5")]
+    pub optimal: ::core::option::Option<bool>,
 }
 /// List of Solution
 #[allow(clippy::derive_partial_eq_without_eq)]
