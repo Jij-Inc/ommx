@@ -324,24 +324,17 @@ pub mod instance {
 /// Pure solution state without any evaluation, even the feasiblity of the solution.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RawSolution {
+pub struct State {
     /// The value of the solution for each variable ID.
     #[prost(map = "uint64, double", tag = "1")]
     pub entries: ::std::collections::HashMap<u64, f64>,
-}
-/// List of RawSolution
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RawSolutionList {
-    #[prost(message, repeated, tag = "1")]
-    pub solutions: ::prost::alloc::vec::Vec<RawSolution>,
 }
 /// Solution with evaluated objective and constraints
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Solution {
     #[prost(message, optional, tag = "1")]
-    pub raw_solution: ::core::option::Option<RawSolution>,
+    pub state: ::core::option::Option<State>,
     #[prost(double, tag = "2")]
     pub objective: f64,
     #[prost(message, repeated, tag = "3")]
@@ -354,11 +347,4 @@ pub struct Solution {
     /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
     #[prost(bool, optional, tag = "6")]
     pub optimal: ::core::option::Option<bool>,
-}
-/// List of Solution
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SolutionList {
-    #[prost(message, repeated, tag = "1")]
-    pub solutions: ::prost::alloc::vec::Vec<Solution>,
 }

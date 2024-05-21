@@ -15,7 +15,7 @@ import typing
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
-class RawSolution(google.protobuf.message.Message):
+class State(google.protobuf.message.Message):
     """Pure solution state without any evaluation, even the feasiblity of the solution."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -52,31 +52,7 @@ class RawSolution(google.protobuf.message.Message):
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
-global___RawSolution = RawSolution
-
-@typing.final
-class RawSolutionList(google.protobuf.message.Message):
-    """List of RawSolution"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    SOLUTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def solutions(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___RawSolution
-    ]: ...
-    def __init__(
-        self,
-        *,
-        solutions: collections.abc.Iterable[global___RawSolution] | None = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["solutions", b"solutions"]
-    ) -> None: ...
-
-global___RawSolutionList = RawSolutionList
+global___State = State
 
 @typing.final
 class Solution(google.protobuf.message.Message):
@@ -84,7 +60,7 @@ class Solution(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    RAW_SOLUTION_FIELD_NUMBER: builtins.int
+    STATE_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
@@ -96,7 +72,7 @@ class Solution(google.protobuf.message.Message):
     optimal: builtins.bool
     """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
-    def raw_solution(self) -> global___RawSolution: ...
+    def state(self) -> global___State: ...
     @property
     def decision_variables(
         self,
@@ -112,7 +88,7 @@ class Solution(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        raw_solution: global___RawSolution | None = ...,
+        state: global___State | None = ...,
         objective: builtins.float = ...,
         decision_variables: collections.abc.Iterable[
             ommx.v1.decision_variables_pb2.DecisionVariable
@@ -128,12 +104,7 @@ class Solution(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing.Literal[
-            "_optimal",
-            b"_optimal",
-            "optimal",
-            b"optimal",
-            "raw_solution",
-            b"raw_solution",
+            "_optimal", b"_optimal", "optimal", b"optimal", "state", b"state"
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -151,8 +122,8 @@ class Solution(google.protobuf.message.Message):
             b"objective",
             "optimal",
             b"optimal",
-            "raw_solution",
-            b"raw_solution",
+            "state",
+            b"state",
         ],
     ) -> None: ...
     def WhichOneof(
@@ -160,27 +131,3 @@ class Solution(google.protobuf.message.Message):
     ) -> typing.Literal["optimal"] | None: ...
 
 global___Solution = Solution
-
-@typing.final
-class SolutionList(google.protobuf.message.Message):
-    """List of Solution"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    SOLUTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def solutions(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___Solution
-    ]: ...
-    def __init__(
-        self,
-        *,
-        solutions: collections.abc.Iterable[global___Solution] | None = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["solutions", b"solutions"]
-    ) -> None: ...
-
-global___SolutionList = SolutionList

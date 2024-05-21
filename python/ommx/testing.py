@@ -7,7 +7,7 @@ from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import RawSolution
+from ommx.v1.solution_pb2 import State
 
 
 class DataType(enum.Enum):
@@ -141,7 +141,7 @@ class SingleFeasibleLPGenerator:
             constraints=constraints,
         )
 
-    def get_v1_solution(self) -> RawSolution:
+    def get_v1_solution(self) -> State:
         """
         Get the solution of the generated instance.
 
@@ -150,4 +150,4 @@ class SingleFeasibleLPGenerator:
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
             >>> ommx_solution = generator.get_v1_solution()
         """
-        return RawSolution(entries={i: value for i, value in enumerate(self._x)})
+        return State(entries={i: value for i, value in enumerate(self._x)})
