@@ -96,14 +96,14 @@ impl<Base: Image> Artifact<Base> {
             .collect())
     }
 
-    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::Solution, SolutionAnnotations)> {
+    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::State, SolutionAnnotations)> {
         for (desc, blob) in self.0.get_layers()? {
             if desc.media_type() != &media_types::v1_solution()
                 || desc.digest() != &digest.to_string()
             {
                 continue;
             }
-            let solution = v1::Solution::decode(blob.as_slice())?;
+            let solution = v1::State::decode(blob.as_slice())?;
             let annotations = if let Some(annotations) = desc.annotations() {
                 annotations.clone().into()
             } else {
@@ -133,13 +133,13 @@ impl<Base: Image> Artifact<Base> {
         bail!("Instance of digest {} not found", digest)
     }
 
-    pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::Solution)>> {
+    pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::State)>> {
         let mut out = Vec::new();
         for (desc, blob) in self.0.get_layers()? {
             if desc.media_type() != &media_types::v1_solution() {
                 continue;
             }
-            let solution = v1::Solution::decode(blob.as_slice())?;
+            let solution = v1::State::decode(blob.as_slice())?;
             out.push((desc, solution));
         }
         Ok(out)

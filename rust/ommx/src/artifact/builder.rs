@@ -56,7 +56,7 @@ impl<Base: ImageBuilder> Builder<Base> {
 
     pub fn add_solution(
         mut self,
-        solution: v1::Solution,
+        solution: v1::State,
         annotations: SolutionAnnotations,
     ) -> Result<Self> {
         let blob = solution.encode_to_vec();
