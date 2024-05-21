@@ -15,7 +15,7 @@ DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class RawSolution(google.protobuf.message.Message):
-    """A solution obtained by the solver."""
+    """Pure solution state without any evaluation, even the feasiblity of the solution."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -38,12 +38,6 @@ class RawSolution(google.protobuf.message.Message):
         ) -> None: ...
 
     ENTRIES_FIELD_NUMBER: builtins.int
-    FEASIBLE_FIELD_NUMBER: builtins.int
-    OPTIMAL_FIELD_NUMBER: builtins.int
-    feasible: builtins.bool
-    """Whether the solution is feasible, i.e. all constraints are satisfied or not."""
-    optimal: builtins.bool
-    """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
     def entries(
         self,
@@ -54,28 +48,8 @@ class RawSolution(google.protobuf.message.Message):
         self,
         *,
         entries: collections.abc.Mapping[builtins.int, builtins.float] | None = ...,
-        feasible: builtins.bool = ...,
-        optimal: builtins.bool | None = ...,
     ) -> None: ...
-    def HasField(
-        self, field_name: typing.Literal["_optimal", b"_optimal", "optimal", b"optimal"]
-    ) -> builtins.bool: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "_optimal",
-            b"_optimal",
-            "entries",
-            b"entries",
-            "feasible",
-            b"feasible",
-            "optimal",
-            b"optimal",
-        ],
-    ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["_optimal", b"_optimal"]
-    ) -> typing.Literal["optimal"] | None: ...
+    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
 global___RawSolution = RawSolution
 
@@ -156,7 +130,13 @@ class Solution(google.protobuf.message.Message):
     RAW_SOLUTION_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
+    FEASIBLE_FIELD_NUMBER: builtins.int
+    OPTIMAL_FIELD_NUMBER: builtins.int
     objective: builtins.float
+    feasible: builtins.bool
+    """Whether the solution is feasible, i.e. all constraints are satisfied or not."""
+    optimal: builtins.bool
+    """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
     @property
     def raw_solution(self) -> global___RawSolution: ...
     @property
@@ -172,21 +152,40 @@ class Solution(google.protobuf.message.Message):
         objective: builtins.float = ...,
         constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint]
         | None = ...,
+        feasible: builtins.bool = ...,
+        optimal: builtins.bool | None = ...,
     ) -> None: ...
     def HasField(
-        self, field_name: typing.Literal["raw_solution", b"raw_solution"]
+        self,
+        field_name: typing.Literal[
+            "_optimal",
+            b"_optimal",
+            "optimal",
+            b"optimal",
+            "raw_solution",
+            b"raw_solution",
+        ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
+            "_optimal",
+            b"_optimal",
             "constraints",
             b"constraints",
+            "feasible",
+            b"feasible",
             "objective",
             b"objective",
+            "optimal",
+            b"optimal",
             "raw_solution",
             b"raw_solution",
         ],
     ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_optimal", b"_optimal"]
+    ) -> typing.Literal["optimal"] | None: ...
 
 global___Solution = Solution
 
