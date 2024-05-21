@@ -11,22 +11,25 @@ use std::collections::BTreeSet;
 /// ---------
 /// ```rust
 /// # fn main() -> anyhow::Result<()> {
-/// use ommx::{Evaluate, v1::{Linear, State}};
-/// use maplit::hashmap;
+/// use ommx::{Evaluate, v1::{Linear, linear::Term, State}};
+/// use maplit::{hashmap, btreeset};
 ///
 /// let raw: State = hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0 }.into();
+///
 /// // x1 + 2*x2 + 3
-/// let linear = Linear::new(
-///     hashmap! {
-///         1 => 1.0,
-///         2 => 2.0,
-///     }
-///     .into_iter(),
-///     3.0,
-/// );
+/// let linear = Linear {
+///     terms: vec![
+///         Term { id: 1, coefficient: 1.0 },
+///         Term { id: 2, coefficient: 2.0 }
+///     ],
+///     constant: 3.0,
+/// };
+///
 /// let (value, used_ids) = linear.evaluate(&raw)?;
 /// assert_eq!(value, 1.0 * 1.0 + 2.0 * 2.0 + 3.0);
-/// assert_eq!(used_ids, vec![1, 2].into_iter().collect());
+///
+/// // x1 and x2 are used, x3 is not used
+/// assert_eq!(used_ids, btreeset!{ 1, 2 });
 /// # Ok(()) }
 /// ```
 pub trait Evaluate {
