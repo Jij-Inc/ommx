@@ -4,6 +4,26 @@ package ommx.v1;
 
 import "ommx/v1/function.proto";
 
+// Equality of a constraint.
+enum Equality {
+  EQUALITY_UNSPECIFIED = 0;
+  EQUALITY_EQUAL_TO_ZERO = 1;
+  EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
+}
+
+// Additional infomations of the constraint for human-readable output
+//
+// Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+// The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
+// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+message ConstraintDescription {
+  // Name of the constraint
+  string name = 1;
+  // Parameters of the constraint.
+  map<string, string> parameters = 2;
+}
+
 message Constraint {
   // Constraint ID
   //
@@ -14,27 +34,20 @@ message Constraint {
   // - IDs must be unique with other types of constraints.
   uint64 id = 1;
 
-  // Equality of a constraint.
-  enum Equality {
-    EQUALITY_UNSPECIFIED = 0;
-    EQUALITY_EQUAL_TO_ZERO = 1;
-    EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
-  }
   Equality equality = 2;
 
   Function function = 3;
 
-  // Additional infomations of the constraint for human-readable output
-  //
-  // Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-  // then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-  // The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-  // and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
-  message Description {
-    // Name of the constraint
-    string name = 1;
-    // Parameters of the constraint.
-    map<string, string> parameters = 2;
-  }
-  optional Description description = 4;
+  optional ConstraintDescription description = 4;
+}
+
+// Evaluated constraint
+message EvaluatedConstraint {
+  uint64 id = 1;
+
+  Equality equality = 2;
+
+  double evaluated_value = 3;
+
+  optional ConstraintDescription description = 4;
 }
