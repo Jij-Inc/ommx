@@ -9,6 +9,7 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
 import ommx.v1.constraint_pb2
+import ommx.v1.decision_variables_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
@@ -78,58 +79,15 @@ class RawSolutionList(google.protobuf.message.Message):
 global___RawSolutionList = RawSolutionList
 
 @typing.final
-class EvaluatedConstraint(google.protobuf.message.Message):
-    """Evaluated constraint with its equality"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    EQUALITY_FIELD_NUMBER: builtins.int
-    VALUE_FIELD_NUMBER: builtins.int
-    equality: ommx.v1.constraint_pb2.Equality.ValueType
-    value: builtins.float
-    def __init__(
-        self,
-        *,
-        equality: ommx.v1.constraint_pb2.Equality.ValueType = ...,
-        value: builtins.float = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["equality", b"equality", "value", b"value"]
-    ) -> None: ...
-
-global___EvaluatedConstraint = EvaluatedConstraint
-
-@typing.final
 class Solution(google.protobuf.message.Message):
     """Solution with evaluated objective and constraints"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    @typing.final
-    class ConstraintsEntry(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        KEY_FIELD_NUMBER: builtins.int
-        VALUE_FIELD_NUMBER: builtins.int
-        key: builtins.int
-        @property
-        def value(self) -> global___EvaluatedConstraint: ...
-        def __init__(
-            self,
-            *,
-            key: builtins.int = ...,
-            value: global___EvaluatedConstraint | None = ...,
-        ) -> None: ...
-        def HasField(
-            self, field_name: typing.Literal["value", b"value"]
-        ) -> builtins.bool: ...
-        def ClearField(
-            self, field_name: typing.Literal["key", b"key", "value", b"value"]
-        ) -> None: ...
-
     RAW_SOLUTION_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
-    CONSTRAINTS_FIELD_NUMBER: builtins.int
+    DECISION_VARIABLES_FIELD_NUMBER: builtins.int
+    EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     OPTIMAL_FIELD_NUMBER: builtins.int
     objective: builtins.float
@@ -140,17 +98,29 @@ class Solution(google.protobuf.message.Message):
     @property
     def raw_solution(self) -> global___RawSolution: ...
     @property
-    def constraints(
+    def decision_variables(
         self,
-    ) -> google.protobuf.internal.containers.MessageMap[
-        builtins.int, global___EvaluatedConstraint
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.decision_variables_pb2.DecisionVariable
+    ]: ...
+    @property
+    def evaluated_constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.constraint_pb2.EvaluatedConstraint
     ]: ...
     def __init__(
         self,
         *,
         raw_solution: global___RawSolution | None = ...,
         objective: builtins.float = ...,
-        constraints: collections.abc.Mapping[builtins.int, global___EvaluatedConstraint]
+        decision_variables: collections.abc.Iterable[
+            ommx.v1.decision_variables_pb2.DecisionVariable
+        ]
+        | None = ...,
+        evaluated_constraints: collections.abc.Iterable[
+            ommx.v1.constraint_pb2.EvaluatedConstraint
+        ]
         | None = ...,
         feasible: builtins.bool = ...,
         optimal: builtins.bool | None = ...,
@@ -171,8 +141,10 @@ class Solution(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_optimal",
             b"_optimal",
-            "constraints",
-            b"constraints",
+            "decision_variables",
+            b"decision_variables",
+            "evaluated_constraints",
+            b"evaluated_constraints",
             "feasible",
             b"feasible",
             "objective",
