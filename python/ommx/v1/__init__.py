@@ -38,6 +38,24 @@ def decision_variables(obj: Instance | Solution) -> DataFrame:
     return concat([df, parameters], axis=1)
 
 
+def constraints(solution: Solution) -> DataFrame:
+    evaluation = solution.evaluated_constraints
+    parameters = DataFrame(dict(v.description.parameters) for v in evaluation)
+    parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
+    df = DataFrame(
+        {
+            "id": v.id,
+            "equality": v.equality,
+            "value": v.evaluated_value,
+            "used_ids": v.used_decision_variable_ids,
+            "name": v.description.name,
+        }
+        for v in evaluation
+    )
+    df.columns = MultiIndex.from_product([df.columns, [""]])
+    return concat([df, parameters], axis=1)
+
+
 @overload
 def evaluate(
     obj: Function | Linear | Quadratic | Polynomial, state: State
