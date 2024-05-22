@@ -29,6 +29,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies
         run: |
@@ -41,7 +47,7 @@ jobs:
 
       - name: Format generated codes
         run: |
-          ruff format python/
+          ruff format $(find python -type f -regex ".*_pb2.pyi*")
 
       - name: Check updated
         run: |
@@ -60,6 +66,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Dependencies
         run: |
@@ -81,6 +93,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Dependencies
         run: |
@@ -89,3 +107,27 @@ jobs:
       - name: Lint
         run: |
           python -m pyright python
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Dependencies
+        run: |
+          pip install -v -e 'python/[dev]'
+
+      - name: Format
+        run: |
+          ruff format --check python
