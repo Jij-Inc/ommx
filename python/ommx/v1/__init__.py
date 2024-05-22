@@ -39,6 +39,29 @@ def evaluate(
 ) -> tuple[float | EvaluatedConstraint | Solution, set[int]]:
     """
     Evaluate an object with the given state.
+
+    Examples
+    ---------
+
+    - Ready an instance and a state using :class:`ommx.testing.SingleFeasibleLPGenerator`:
+
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+        >>> state = generator.get_v1_solution()
+
+    - Evaluate the objective function of the type :class:`function_pb2.Function` into a float value:
+
+        >>> from ommx.v1 import evaluate
+        >>> value, used_ids = evaluate(instance.objective, state)
+        >>> assert isinstance(value, float)
+
+    - Evaluate the entire :class:`instance_pb2.Instance` into a :class:`solution_pb2.Solution` object:
+
+        >>> from ommx.v1 import Solution
+        >>> solution, used_ids = evaluate(instance, state)
+        >>> assert isinstance(solution, Solution)
+
     """
     obj_bytes = obj.SerializeToString()
     state_bytes = state.SerializeToString()
@@ -52,8 +75,12 @@ def evaluate(
         return evaluate_function(obj_bytes, state_bytes)
     if isinstance(obj, Constraint):
         out, used_ids = evaluate_constraint(obj_bytes, state_bytes)
-        return EvaluatedConstraint().ParseFromString(out), used_ids
+        decoded = EvaluatedConstraint()
+        decoded.ParseFromString(out)
+        return decoded, used_ids
     if isinstance(obj, Instance):
         out, used_ids = evaluate_instance(obj_bytes, state_bytes)
-        return Solution().ParseFromString(out), used_ids
+        decoded = Solution()
+        decoded.ParseFromString(out)
+        return decoded, used_ids
     raise NotImplementedError(f"Evaluation for {type(obj)} is not implemented yet")
