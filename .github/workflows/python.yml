@@ -152,6 +152,6 @@ jobs:
         run: |
           pip install -v -e 'python/[dev]'
 
-      - name: Format
+      - name: Run notebooks
         run: |
           jupyter nbconvert --to notebook --execute notebooks/*.ipynb

@@ -32,6 +32,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "jupyterlab",
+    "matplotlib",
     "mypy-protobuf",
     "mypy>=0.910",
     "networkx",
