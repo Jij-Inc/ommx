@@ -31,8 +31,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "jupyterlab",
     "mypy-protobuf",
     "mypy>=0.910",
+    "networkx",
     "pyright",
     "pytest",
     "ruff >= 0.4.4, < 0.5.0",
