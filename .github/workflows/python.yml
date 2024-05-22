@@ -41,7 +41,7 @@ jobs:
 
       - name: Format generated codes
         run: |
-          ruff format python/
+          ruff format python/**/*_pb2.{py,pyi}
 
       - name: Check updated
         run: |
