@@ -29,6 +29,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
+          cache: "pip"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -65,6 +66,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -91,6 +93,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: "pip"
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -114,6 +117,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
+          cache: "pip"
 
       - uses: dtolnay/rust-toolchain@stable
 
