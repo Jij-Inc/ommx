@@ -131,3 +131,27 @@ jobs:
       - name: Format
         run: |
           ruff format --check python
+
+  notebook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Dependencies
+        run: |
+          pip install -v -e 'python/[dev]'
+
+      - name: Run notebooks
+        run: |
+          jupyter nbconvert --to notebook --execute notebooks/*.ipynb

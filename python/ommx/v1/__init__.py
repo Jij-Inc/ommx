@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import overload
+from pandas import DataFrame, concat, MultiIndex
 
 from .function_pb2 import Function
 from .solution_pb2 import State, Solution
@@ -17,6 +18,42 @@ from .._ommx_rust import (
     evaluate_constraint,
     evaluate_instance,
 )
+
+
+def decision_variables(obj: Instance | Solution) -> DataFrame:
+    decision_variables = obj.decision_variables
+    parameters = DataFrame(dict(v.description.parameters) for v in decision_variables)
+    parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
+    df = DataFrame(
+        {
+            "id": v.id,
+            "kind": v.kind,
+            "lower": v.bound.lower,
+            "upper": v.bound.upper,
+            "name": v.description.name,
+        }
+        for v in decision_variables
+    )
+    df.columns = MultiIndex.from_product([df.columns, [""]])
+    return concat([df, parameters], axis=1).set_index("id")
+
+
+def constraints(solution: Solution) -> DataFrame:
+    evaluation = solution.evaluated_constraints
+    parameters = DataFrame(dict(v.description.parameters) for v in evaluation)
+    parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
+    df = DataFrame(
+        {
+            "id": v.id,
+            "equality": v.equality,
+            "value": v.evaluated_value,
+            "used_ids": v.used_decision_variable_ids,
+            "name": v.description.name,
+        }
+        for v in evaluation
+    )
+    df.columns = MultiIndex.from_product([df.columns, [""]])
+    return concat([df, parameters], axis=1).set_index("id")
 
 
 @overload

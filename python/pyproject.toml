@@ -25,13 +25,17 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.23.0, <2.0.0",
+    "pandas>=2.0.0, <3.0.0",
     "protobuf>=5.26.1, <6.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "jupyterlab",
+    "matplotlib",
     "mypy-protobuf",
     "mypy>=0.910",
+    "networkx",
     "pyright",
     "pytest",
     "ruff >= 0.4.4, < 0.5.0",
