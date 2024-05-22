@@ -41,7 +41,7 @@ jobs:
 
       - name: Format generated codes
         run: |
-          ruff format python/**/*_pb2.{py,pyi}
+          ruff format $(find python -type f -regex ".*_pb2.pyi*")
 
       - name: Check updated
         run: |
