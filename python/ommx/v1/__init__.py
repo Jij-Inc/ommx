@@ -35,7 +35,7 @@ def decision_variables(obj: Instance | Solution) -> DataFrame:
         for v in decision_variables
     )
     df.columns = MultiIndex.from_product([df.columns, [""]])
-    return concat([df, parameters], axis=1)
+    return concat([df, parameters], axis=1).set_index("id")
 
 
 def constraints(solution: Solution) -> DataFrame:
@@ -53,7 +53,7 @@ def constraints(solution: Solution) -> DataFrame:
         for v in evaluation
     )
     df.columns = MultiIndex.from_product([df.columns, [""]])
-    return concat([df, parameters], axis=1)
+    return concat([df, parameters], axis=1).set_index("id")
 
 
 @overload
