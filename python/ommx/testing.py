@@ -141,13 +141,13 @@ class SingleFeasibleLPGenerator:
             constraints=constraints,
         )
 
-    def get_v1_solution(self) -> State:
+    def get_v1_state(self) -> State:
         """
-        Get the solution of the generated instance.
+        Get the solution state of the generated instance.
 
         Examples:
             >>> from ommx.testing import DataType, SingleFeasibleLPGenerator
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
-            >>> ommx_solution = generator.get_v1_solution()
+            >>> ommx_state = generator.get_v1_state()
         """
         return State(entries={i: value for i, value in enumerate(self._x)})

@@ -48,7 +48,7 @@ def evaluate(
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
-        >>> state = generator.get_v1_solution()
+        >>> state = generator.get_v1_state()
 
     - Evaluate the objective function of the type :class:`function_pb2.Function` into a float value:
 
