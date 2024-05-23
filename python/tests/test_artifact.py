@@ -1,9 +1,11 @@
 import ommx._ommx_rust
 from pathlib import Path
 
+DATA_ROOT = Path(__file__).parent.parent.parent / "data"
+
 
 def test_from_oci_archive():
-    path = Path(__file__).parent / "data" / "random_lp_instance.ommx"
+    path = DATA_ROOT / "random_lp_instance.ommx"
     artifact = ommx._ommx_rust.Artifact.from_oci_archive(str(path))
     assert len(artifact.instance_descriptors) == 1
 
