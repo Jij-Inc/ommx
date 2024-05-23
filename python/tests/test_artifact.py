@@ -15,4 +15,5 @@ def test_from_oci_archive():
         == "sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2"
     )
     assert desc.size == 639
-    assert desc.annotations == {}
+    assert desc.annotations['org.ommx.v1.instance.title'] == "random_lp"
+    assert 'org.ommx.v1.instance.created' in desc.annotations
