@@ -12,6 +12,10 @@ fn main() -> Result<()> {
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
     let repo_root = manifest_root.join("../..").canonicalize()?;
     let data_root = repo_root.join("data");
+    if !data_root.exists() {
+        println!("{:>12} {}", "Created".blue().bold(), data_root.display());
+        std::fs::create_dir(&data_root)?;
+    }
 
     let out = data_root.join("random_lp_instance.ommx");
     if out.exists() {
