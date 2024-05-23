@@ -27,3 +27,6 @@ rand_xoshiro.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+colored.workspace = true

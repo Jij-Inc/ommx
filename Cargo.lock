@@ -761,6 +761,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
+ "colored",
  "derive_more",
  "directories",
  "itertools 0.13.0",
