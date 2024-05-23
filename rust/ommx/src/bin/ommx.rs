@@ -1,7 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use ocipkg::image::Image;
-use ommx::artifact::{Artifact, InstanceAnnotations, SolutionAnnotations};
+use colored::Colorize;
+use ocipkg::{image::Image, oci_spec::image::Descriptor};
+use ommx::artifact::Artifact;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -19,26 +20,29 @@ enum Commands {
     },
 }
 
+fn show_desc(desc: &Descriptor) {
+    println!(" - {}: {}", "Blob".blue().bold(), desc.digest());
+    println!("   {}: {}", "Type".blue().bold(), desc.media_type());
+    if let Some(annotations) = desc.annotations() {
+        println!("   {}:", "Annotations".blue().bold());
+        for (key, value) in annotations.iter() {
+            println!("     {}: {}", key.bold(), value);
+        }
+    }
+}
+
 fn inspect(path: &Path) -> Result<()> {
     let mut artifact = Artifact::from_oci_archive(path)?;
     let name = artifact
         .get_name()
         .map(|name| name.to_string())
         .unwrap_or("unnamed".to_string());
-    println!("[artifact: {name}]");
+    println!("{}", format!("[{name}]").bold());
     for (desc, _instance) in artifact.get_instances()? {
-        println!(" - {} ({})", desc.media_type(), desc.digest());
-        let annotations = InstanceAnnotations::from_descriptor(&desc);
-        for (key, value) in annotations.iter() {
-            println!("   - {}: {}", key, value);
-        }
+        show_desc(&desc);
     }
     for (desc, _solution) in artifact.get_solutions()? {
-        println!(" - {} ({})", desc.media_type(), desc.digest());
-        let annotations = SolutionAnnotations::from_descriptor(&desc);
-        for (key, value) in annotations.iter() {
-            println!("   - {}: {}", key, value);
-        }
+        show_desc(&desc);
     }
     Ok(())
 }

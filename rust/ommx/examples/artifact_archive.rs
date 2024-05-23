@@ -1,7 +1,10 @@
 use anyhow::{Context, Result};
 use colored::Colorize;
 use ocipkg::ImageName;
-use ommx::{artifact::Builder, random::random_lp};
+use ommx::{
+    artifact::{Builder, InstanceAnnotations},
+    random::random_lp,
+};
 use rand::SeedableRng;
 use std::path::Path;
 
@@ -34,8 +37,12 @@ fn main() -> Result<()> {
     ))?;
 
     println!("{:>12} {}", "New Artifact".blue().bold(), image_name);
+    let mut annotations = InstanceAnnotations::default();
+    annotations.set_title("random_lp".to_string());
+    annotations.set_created(chrono::Local::now());
+
     let _artifact = Builder::new_archive(out.clone(), image_name)?
-        .add_instance(lp, Default::default())?
+        .add_instance(lp, annotations)?
         .build()?;
     println!("{:>12} {}", "Saved".green().bold(), out.display());
     Ok(())
