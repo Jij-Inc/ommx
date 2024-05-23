@@ -1,8 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::Colorize;
+use ocipkg::ImageName;
 use ommx::{artifact::Builder, random::random_lp};
 use rand::SeedableRng;
 use std::path::Path;
+
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
 
 fn main() -> Result<()> {
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
@@ -22,9 +27,16 @@ fn main() -> Result<()> {
         println!("{:>12} {}", "Removing".red().bold(), out.display());
         std::fs::remove_file(&out)?;
     }
-    println!("{:>12} {}", "New Artifact".blue().bold(), out.display());
-    let _artifact = Builder::new_archive_unnamed(out)?
+
+    let image_name = ImageName::parse(&format!(
+        "ghcr.io/Jij-Inc/ommx/random_lp_instance:{}",
+        built_info::GIT_COMMIT_HASH.context("Cannot get commit hash of Git")?
+    ))?;
+
+    println!("{:>12} {}", "New Artifact".blue().bold(), image_name);
+    let _artifact = Builder::new_archive(out.clone(), image_name)?
         .add_instance(lp, Default::default())?
         .build()?;
+    println!("{:>12} {}", "Saved".green().bold(), out.display());
     Ok(())
 }

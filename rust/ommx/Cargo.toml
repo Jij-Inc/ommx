@@ -30,3 +30,6 @@ thiserror.workspace = true
 
 [dev-dependencies]
 colored.workspace = true
+
+[build-dependencies]
+built.workspace = true
