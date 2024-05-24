@@ -37,13 +37,36 @@ jobs:
         with:
           name: ommx-executable
           path: .
-      - name: Run inspect
+      - name: Make executable
         run: |
           chmod +x ./ommx
 
       - name: Run inspect
         run: |
           ./ommx inspect ./data/random_lp_instance.ommx
+
+  load:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Make executable
+        run: |
+          chmod +x ./ommx
+
+      - name: Load image
+        run: |
+          ./ommx load ./data/random_lp_instance.ommx
+
+      - name: List images
+        run: |
+          test $(./ommx list) = "ghcr.io/jij-inc/ommx/random_lp_instance:ebf0fe2"
 
   push:
     runs-on: ubuntu-22.04
