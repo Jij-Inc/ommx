@@ -32,6 +32,10 @@ pub fn data_dir() -> Result<PathBuf> {
         .to_path_buf())
 }
 
+pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
+    Ok(data_dir()?.join(image_name.as_path()))
+}
+
 /// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_types::v1_artifact]
 pub struct Artifact<Base: Image>(OciArtifact<Base>);
 
