@@ -33,7 +33,7 @@ fn main() -> Result<()> {
 
     let image_name = ImageName::parse(&format!(
         "ghcr.io/Jij-Inc/ommx/random_lp_instance:{}",
-        built_info::GIT_COMMIT_HASH.context("Cannot get commit hash of Git")?
+        built_info::GIT_COMMIT_HASH_SHORT.context("Cannot get commit hash of Git")?
     ))?;
 
     println!("{:>12} {}", "New Artifact".blue().bold(), image_name);
