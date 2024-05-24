@@ -6,9 +6,14 @@ use ocipkg::{image::Image, oci_spec::image::Descriptor, ImageName};
 use ommx::artifact::{image_dir, Artifact};
 use std::path::{Path, PathBuf};
 
+mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 enum Command {
+    Version,
     Login {
         /// Registry URL, e.g. https://ghcr.io/v2/Jij-Inc/ommx
         registry: String,
@@ -86,6 +91,17 @@ fn inspect<Base: Image>(mut artifact: Artifact<Base>) -> Result<()> {
 fn main() -> Result<()> {
     let command = Command::parse();
     match &command {
+        Command::Version => {
+            println!(
+                "{:>12} {}",
+                "Version".blue().bold(),
+                built_info::PKG_VERSION,
+            );
+            println!("{:>12} {}", "Target".blue().bold(), built_info::TARGET,);
+            if let Some(hash) = built_info::GIT_COMMIT_HASH {
+                println!("{:>12} {}", "Git Commit".blue().bold(), hash);
+            }
+        }
         Command::Login {
             registry,
             username,
