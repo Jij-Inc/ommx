@@ -36,7 +36,9 @@ jobs:
           name: ommx-executable
           path: .
       - name: Run inspect
-        run: ./ommx inspect ./data/random_lp_instance.ommx
+        run: |
+          chmod +x ./ommx
+          ./ommx inspect ./data/random_lp_instance.ommx
 
   push:
     runs-on: ubuntu-22.04
