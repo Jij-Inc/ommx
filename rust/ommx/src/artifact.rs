@@ -13,7 +13,7 @@ use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
     distribution::MediaType,
-    image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    image::{Image, OciArchive, OciArtifact, OciDir, Remote, RemoteBuilder},
     oci_spec::image::Descriptor,
     Digest, ImageName,
 };
@@ -57,12 +57,24 @@ impl Artifact<OciArchive> {
         let artifact = OciArtifact::from_oci_archive(path)?;
         Self::new(artifact)
     }
+
+    pub fn push(&mut self) -> Result<()> {
+        let name = self.get_name()?;
+        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(())
+    }
 }
 
 impl Artifact<OciDir> {
     pub fn from_oci_dir(path: &Path) -> Result<Self> {
         let artifact = OciArtifact::from_oci_dir(path)?;
         Self::new(artifact)
+    }
+
+    pub fn push(&mut self) -> Result<()> {
+        let name = self.get_name()?;
+        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(())
     }
 }
 

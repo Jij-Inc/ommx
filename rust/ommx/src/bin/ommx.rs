@@ -23,6 +23,10 @@ enum Command {
         /// Container image name or the path of OCI archive
         image_name_or_path: String,
     },
+    Push {
+        /// Container image name or the path of OCI archive
+        image_name_or_path: String,
+    },
 }
 
 enum ImageNameOrPath {
@@ -117,6 +121,27 @@ fn main() -> Result<()> {
                 ImageNameOrPath::Remote(name) => {
                     let artifact = Artifact::from_remote(name)?;
                     inspect(artifact)?;
+                }
+            }
+        }
+
+        Command::Push { image_name_or_path } => {
+            match ImageNameOrPath::parse(&image_name_or_path)? {
+                ImageNameOrPath::OciDir(path) => {
+                    let mut artifact = Artifact::from_oci_dir(&path)?;
+                    artifact.push()?;
+                }
+                ImageNameOrPath::OciArchive(path) => {
+                    let mut artifact = Artifact::from_oci_archive(&path)?;
+                    artifact.push()?;
+                }
+                ImageNameOrPath::Local(name) => {
+                    let image_dir = image_dir(&name)?;
+                    let mut artifact = Artifact::from_oci_dir(&image_dir)?;
+                    artifact.push()?;
+                }
+                ImageNameOrPath::Remote(name) => {
+                    bail!("Image not found in local: {}", name)
                 }
             }
         }
