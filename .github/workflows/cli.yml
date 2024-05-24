@@ -1,0 +1,33 @@
+name: ommx CLI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  push:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: --path=rust/ommx -f
+      - name: Add path
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Login to GitHub Container Registry
+        run: ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
+
+      - name: Build image
+        run: cargo run --release --example artifact_archive
+
+      - name: Push image to ghcr.io
+        run: ommx inspect ./data/random_lp_instance.ommx
