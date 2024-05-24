@@ -39,6 +39,36 @@ pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
     Ok(data_dir()?.join(image_name.as_path()))
 }
 
+fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut images = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if path.join("oci-layout").exists() {
+                images.push(path);
+            } else {
+                let mut sub_images = gather_oci_dirs(&path)?;
+                images.append(&mut sub_images)
+            }
+        }
+    }
+    Ok(images)
+}
+
+pub fn get_images() -> Result<Vec<ImageName>> {
+    let root = data_dir()?;
+    let dirs = gather_oci_dirs(&root)?;
+    dirs.into_iter()
+        .map(|dir| {
+            let relative = dir
+                .strip_prefix(&root)
+                .context("Failed to get relative path")?;
+            ImageName::from_path(relative)
+        })
+        .collect()
+}
+
 /// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_types::v1_artifact]
 pub struct Artifact<Base: Image>(OciArtifact<Base>);
 

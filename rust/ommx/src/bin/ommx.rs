@@ -60,6 +60,9 @@ enum Command {
         output: PathBuf,
     },
 
+    /// List the images in the local registry
+    List,
+
     /// Get the directory where the image is stored
     ImageDirectory {
         /// Container image name
@@ -187,6 +190,12 @@ fn main() -> Result<()> {
             let name = ImageName::parse(image_name)?;
             let path = image_dir(&name)?;
             println!("{}", path.display());
+        }
+
+        Command::List => {
+            for image_name in ommx::artifact::get_images()? {
+                println!("{}", image_name);
+            }
         }
     }
     Ok(())
