@@ -82,12 +82,12 @@ impl ImageNameOrPath {
 
     fn get_manifest(&self) -> Result<ImageManifest> {
         let manifest = match self {
-            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(&path)?.get_manifest()?,
+            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(path)?.get_manifest()?,
             ImageNameOrPath::OciArchive(path) => {
-                Artifact::from_oci_archive(&path)?.get_manifest()?
+                Artifact::from_oci_archive(path)?.get_manifest()?
             }
             ImageNameOrPath::Local(name) => {
-                let image_dir = image_dir(&name)?;
+                let image_dir = image_dir(name)?;
                 Artifact::from_oci_dir(&image_dir)?.get_manifest()?
             }
             ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
