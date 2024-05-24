@@ -91,7 +91,7 @@ fn main() -> Result<()> {
             username,
             password,
         } => {
-            let url = url::Url::parse(&registry)?;
+            let url = url::Url::parse(registry)?;
             let octet = STANDARD.encode(format!("{}:{}", username, password,));
             let mut new_auth = ocipkg::distribution::StoredAuth::default();
             new_auth.insert(url.domain().unwrap(), octet);
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
         }
 
         Command::Inspect { image_name_or_path } => {
-            match ImageNameOrPath::parse(&image_name_or_path)? {
+            match ImageNameOrPath::parse(image_name_or_path)? {
                 ImageNameOrPath::OciDir(path) => {
                     let artifact = Artifact::from_oci_dir(&path)?;
                     inspect(artifact)?;
@@ -126,7 +126,7 @@ fn main() -> Result<()> {
         }
 
         Command::Push { image_name_or_path } => {
-            match ImageNameOrPath::parse(&image_name_or_path)? {
+            match ImageNameOrPath::parse(image_name_or_path)? {
                 ImageNameOrPath::OciDir(path) => {
                     let mut artifact = Artifact::from_oci_dir(&path)?;
                     artifact.push()?;
