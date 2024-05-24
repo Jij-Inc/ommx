@@ -31,6 +31,8 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
+
+      # Download `ommx` executable
       - uses: actions/download-artifact@v2
         with:
           name: ommx-executable
@@ -38,28 +40,55 @@ jobs:
       - name: Run inspect
         run: |
           chmod +x ./ommx
+
+      - name: Run inspect
+        run: |
           ./ommx inspect ./data/random_lp_instance.ommx
 
   push:
     runs-on: ubuntu-22.04
+    needs: build
     steps:
       - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Run inspect
+        run: |
+          chmod +x ./ommx
+
+      # Create a new image tagged with the current commit hash
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
-
-      - uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: --path=rust/ommx -f
-      - name: Add path
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Login to GitHub Container Registry
-        run: ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
-
       - name: Build image
         run: cargo run --release --example artifact_archive
 
+      # Login to GitHub Container Registry and push the image
+      - name: Login to GitHub Container Registry
+        run: ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
       - name: Push image to ghcr.io
         run: ommx push ./data/random_lp_instance.ommx
+
+  pull:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Run inspect
+        run: |
+          chmod +x ./ommx
+
+      # Pull an image from GitHub Container Registry
+      - name: Run pull
+        run: |
+          ./ommx pull ghcr.io/jij-inc/ommx/random_lp_instance:31db37b5984c96319267e0e475185d33376ae39e
