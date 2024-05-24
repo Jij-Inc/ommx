@@ -26,7 +26,8 @@ enum Command {
 }
 
 enum ImageNameOrPath {
-    ImageName(ImageName),
+    Local(ImageName),
+    Remote(ImageName),
     OciArchive(PathBuf),
     OciDir(PathBuf),
 }
@@ -41,7 +42,12 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            return Ok(Self::ImageName(name));
+            let path = image_dir(&name)?;
+            if path.exists() {
+                return Ok(Self::Local(name));
+            } else {
+                return Ok(Self::Remote(name));
+            }
         }
         bail!("Invalid input: {}", input)
     }
@@ -103,15 +109,14 @@ fn main() -> Result<()> {
                     let artifact = Artifact::from_oci_archive(&path)?;
                     inspect(artifact)?;
                 }
-                ImageNameOrPath::ImageName(name) => {
+                ImageNameOrPath::Local(name) => {
                     let image_dir = image_dir(&name)?;
-                    if image_dir.exists() {
-                        let artifact = Artifact::from_oci_dir(&image_dir)?;
-                        inspect(artifact)?;
-                    } else {
-                        let artifact = Artifact::from_remote(name)?;
-                        inspect(artifact)?;
-                    }
+                    let artifact = Artifact::from_oci_dir(&image_dir)?;
+                    inspect(artifact)?;
+                }
+                ImageNameOrPath::Remote(name) => {
+                    let artifact = Artifact::from_remote(name)?;
+                    inspect(artifact)?;
                 }
             }
         }
