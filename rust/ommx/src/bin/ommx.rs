@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{image::Image, oci_spec::image::Descriptor, ImageName};
@@ -8,6 +9,16 @@ use std::path::{Path, PathBuf};
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 enum Command {
+    Login {
+        /// Registry URL, e.g. https://ghcr.io/v2/Jij-Inc/ommx
+        registry: String,
+        /// Username
+        #[clap(short, long)]
+        username: String,
+        /// Password
+        #[clap(short, long)]
+        password: String,
+    },
     Inspect {
         /// Container image name or the path of OCI archive
         image_name_or_path: String,
@@ -65,6 +76,23 @@ fn inspect<Base: Image>(mut artifact: Artifact<Base>) -> Result<()> {
 fn main() -> Result<()> {
     let command = Command::parse();
     match &command {
+        Command::Login {
+            registry,
+            username,
+            password,
+        } => {
+            let url = url::Url::parse(&registry)?;
+            let octet = STANDARD.encode(format!("{}:{}", username, password,));
+            let mut new_auth = ocipkg::distribution::StoredAuth::default();
+            new_auth.insert(url.domain().unwrap(), octet);
+            let _token = new_auth.get_token(&url)?;
+            println!("Login succeed");
+
+            let mut auth = ocipkg::distribution::StoredAuth::load()?;
+            auth.append(new_auth)?;
+            auth.save()?;
+        }
+
         Command::Inspect { image_name_or_path } => {
             match ImageNameOrPath::parse(&image_name_or_path)? {
                 ImageNameOrPath::OciDir(path) => {

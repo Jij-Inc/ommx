@@ -819,6 +819,7 @@ name = "ommx"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "base64",
  "built",
  "chrono",
  "clap",
@@ -836,6 +837,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "url",
 ]
 
 [[package]]
