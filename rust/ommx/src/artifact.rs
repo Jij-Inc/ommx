@@ -41,7 +41,7 @@ pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
 
 fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut images = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
+    for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
