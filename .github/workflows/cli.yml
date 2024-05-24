@@ -28,6 +28,7 @@ jobs:
 
   inspect:
     runs-on: ubuntu-22.04
+    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v2
