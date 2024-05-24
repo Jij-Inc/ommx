@@ -32,6 +32,10 @@ enum Command {
         /// Container image name or the path of OCI archive
         image_name_or_path: String,
     },
+    Pull {
+        /// Container image name in remote registry
+        image_name: String,
+    },
 }
 
 enum ImageNameOrPath {
@@ -159,6 +163,12 @@ fn main() -> Result<()> {
                 bail!("Image not found in local: {}", name)
             }
         },
+
+        Command::Pull { image_name } => {
+            let name = ImageName::parse(image_name)?;
+            let mut artifact = Artifact::from_remote(name)?;
+            artifact.pull()?;
+        }
     }
     Ok(())
 }
