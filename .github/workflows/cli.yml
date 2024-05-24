@@ -30,4 +30,4 @@ jobs:
         run: cargo run --release --example artifact_archive
 
       - name: Push image to ghcr.io
-        run: ommx inspect ./data/random_lp_instance.ommx
+        run: ommx push ./data/random_lp_instance.ommx
