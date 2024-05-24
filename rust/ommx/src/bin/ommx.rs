@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use clap::Parser;
 use colored::Colorize;
-use ocipkg::{image::Image, oci_spec::image::Descriptor, ImageName};
+use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{image_dir, Artifact};
 use std::path::{Path, PathBuf};
 
@@ -13,7 +13,10 @@ mod built_info {
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 enum Command {
+    /// Show the version
     Version,
+
+    /// Login to the remote registry
     Login {
         /// Registry URL, e.g. https://ghcr.io/v2/Jij-Inc/ommx
         registry: String,
@@ -24,16 +27,28 @@ enum Command {
         #[clap(short, long)]
         password: String,
     },
+
+    /// Show the image manifest as JSON
     Inspect {
         /// Container image name or the path of OCI archive
         image_name_or_path: String,
     },
+
+    /// Push the image to remote registry
     Push {
         /// Container image name or the path of OCI archive
         image_name_or_path: String,
     },
+
+    /// Pull the image from remote registry
     Pull {
         /// Container image name in remote registry
+        image_name: String,
+    },
+
+    /// Get the directory where the image is stored
+    ImageDirectory {
+        /// Container image name
         image_name: String,
     },
 }
@@ -64,32 +79,21 @@ impl ImageNameOrPath {
         }
         bail!("Invalid input: {}", input)
     }
-}
 
-fn show_desc(desc: &Descriptor) {
-    println!(" - {}: {}", "Blob".blue().bold(), desc.digest());
-    println!("   {}: {}", "Type".blue().bold(), desc.media_type());
-    if let Some(annotations) = desc.annotations() {
-        println!("   {}:", "Annotations".blue().bold());
-        for (key, value) in annotations.iter() {
-            println!("     {}: {}", key.bold(), value);
-        }
+    fn get_manifest(&self) -> Result<ImageManifest> {
+        let manifest = match self {
+            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(&path)?.get_manifest()?,
+            ImageNameOrPath::OciArchive(path) => {
+                Artifact::from_oci_archive(&path)?.get_manifest()?
+            }
+            ImageNameOrPath::Local(name) => {
+                let image_dir = image_dir(&name)?;
+                Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+            }
+            ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
+        };
+        Ok(manifest)
     }
-}
-
-fn inspect<Base: Image>(mut artifact: Artifact<Base>) -> Result<()> {
-    let name = artifact
-        .get_name()
-        .map(|name| name.to_string())
-        .unwrap_or("unnamed".to_string());
-    println!("{}", format!("[{name}]").bold());
-    for (desc, _instance) in artifact.get_instances()? {
-        show_desc(&desc);
-    }
-    for (desc, _solution) in artifact.get_solutions()? {
-        show_desc(&desc);
-    }
-    Ok(())
 }
 
 fn main() -> Result<()> {
@@ -124,25 +128,8 @@ fn main() -> Result<()> {
         }
 
         Command::Inspect { image_name_or_path } => {
-            match ImageNameOrPath::parse(image_name_or_path)? {
-                ImageNameOrPath::OciDir(path) => {
-                    let artifact = Artifact::from_oci_dir(&path)?;
-                    inspect(artifact)?;
-                }
-                ImageNameOrPath::OciArchive(path) => {
-                    let artifact = Artifact::from_oci_archive(&path)?;
-                    inspect(artifact)?;
-                }
-                ImageNameOrPath::Local(name) => {
-                    let image_dir = image_dir(&name)?;
-                    let artifact = Artifact::from_oci_dir(&image_dir)?;
-                    inspect(artifact)?;
-                }
-                ImageNameOrPath::Remote(name) => {
-                    let artifact = Artifact::from_remote(name)?;
-                    inspect(artifact)?;
-                }
-            }
+            let manifest = ImageNameOrPath::parse(image_name_or_path)?.get_manifest()?;
+            println!("{}", serde_json::to_string_pretty(&manifest)?);
         }
 
         Command::Push { image_name_or_path } => match ImageNameOrPath::parse(image_name_or_path)? {
@@ -168,6 +155,12 @@ fn main() -> Result<()> {
             let name = ImageName::parse(image_name)?;
             let mut artifact = Artifact::from_remote(name)?;
             artifact.pull()?;
+        }
+
+        Command::ImageDirectory { image_name } => {
+            let name = ImageName::parse(image_name)?;
+            let path = image_dir(&name)?;
+            println!("{}", path.display());
         }
     }
     Ok(())
