@@ -36,7 +36,7 @@ enum Command {
 
     /// Push the image to remote registry
     Push {
-        /// Container image name or the path of OCI archive
+        /// Path of OCI archive or the container image name stored in local registry
         image_name_or_path: String,
     },
 
@@ -44,6 +44,20 @@ enum Command {
     Pull {
         /// Container image name in remote registry
         image_name: String,
+    },
+
+    /// Load OCI archive into the local registry
+    Load {
+        /// Path of OCI archive or OCI directory
+        path: PathBuf,
+    },
+
+    /// Save the image in the local registry to an OCI archive
+    Save {
+        /// Container image name
+        image_name: String,
+        /// Output file name of OCI archive
+        output: PathBuf,
     },
 
     /// Get the directory where the image is stored
@@ -155,6 +169,18 @@ fn main() -> Result<()> {
             let name = ImageName::parse(image_name)?;
             let mut artifact = Artifact::from_remote(name)?;
             artifact.pull()?;
+        }
+
+        Command::Save { image_name, output } => {
+            let name = ImageName::parse(image_name)?;
+            let image_dir = image_dir(&name)?;
+            let mut artifact = Artifact::from_oci_dir(&image_dir)?;
+            artifact.save(output)?;
+        }
+
+        Command::Load { path } => {
+            let mut artifact = Artifact::from_oci_archive(path)?;
+            artifact.load()?;
         }
 
         Command::ImageDirectory { image_name } => {

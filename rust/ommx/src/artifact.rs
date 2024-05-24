@@ -13,7 +13,10 @@ use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
     distribution::MediaType,
-    image::{Image, OciArchive, OciArtifact, OciDir, OciDirBuilder, Remote, RemoteBuilder},
+    image::{
+        Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
+        RemoteBuilder,
+    },
     oci_spec::image::Descriptor,
     Digest, ImageName,
 };
@@ -64,6 +67,18 @@ impl Artifact<OciArchive> {
         ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
         Ok(())
     }
+
+    pub fn load(&mut self) -> Result<()> {
+        let image_name = self.get_name()?;
+        let path = image_dir(&image_name)?;
+        if path.exists() {
+            log::trace!("Already exists in locally: {}", path.display());
+            return Ok(());
+        }
+        log::info!("Loading: {}", image_name);
+        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        Ok(())
+    }
 }
 
 impl Artifact<OciDir> {
@@ -76,6 +91,19 @@ impl Artifact<OciDir> {
         let name = self.get_name()?;
         log::info!("Pushing: {}", name);
         ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(())
+    }
+
+    pub fn save(&mut self, output: &Path) -> Result<()> {
+        if output.exists() {
+            bail!("Output file already exists: {}", output.display());
+        }
+        let builder = if let Ok(name) = self.get_name() {
+            OciArchiveBuilder::new(output.to_path_buf(), name)?
+        } else {
+            OciArchiveBuilder::new_unnamed(output.to_path_buf())?
+        };
+        ocipkg::image::copy(self.0.deref_mut(), builder)?;
         Ok(())
     }
 }
