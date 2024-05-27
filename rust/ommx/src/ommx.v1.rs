@@ -37,7 +37,22 @@ pub struct Polynomial {
 /// Quadratic function as a COO-style sparse matrix and linear sparse vector.
 ///
 /// COOrdinate format, also known as triplet format, is a way to represent sparse matrices as a list of non-zero elements.
-/// It consists of three lists: the row indices, the column indices, and the values of the non-zero elements.
+/// It consists of three lists: the row indices, the column indices, and the values of the non-zero elements with following constraints:
+///
+/// - Entries and coordinates sorted by row, then column.
+/// - There are no duplicate entries (i.e. duplicate (i,j) locations)
+/// - Data arrays MAY have explicit zeros.
+///
+/// Note that this matrix is not assured to be symmetric nor upper triangular.
+/// For example, a quadratic function `x1^2 + x2^2 + 2x1*x2` can be represented as:
+///
+/// - `{ rows: \[0, 0, 1\], columns: \[0, 1, 1\], values: \[1, 2, 1\] }`, i.e. an upper triangular matrix `\[[1, 2\], \[0, 1\]`
+/// - `{ rows: \[0, 0, 1, 1\], columns: \[0, 1, 0, 1\], values: \[1, 1, 1, 1\] }`, i.e. a symmetric matrix `\[[1, 1\], \[1, 1]\]`
+///
+/// or even a non-symmetric, non-trianglar matrix as `x1^2 + 3x1*x2 - x2*x1 + x2^2`:
+///
+/// - `{ rows: \[0, 0, 1, 1\], columns: \[0, 1, 0, 1\], values: \[1, 3, -1, 1\] }`, i.e. a non-symmetric matrix `\[[1, 3\], \[-1, 1]\]`
+///
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Quadratic {
