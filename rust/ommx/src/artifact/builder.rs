@@ -8,10 +8,27 @@ use ocipkg::{
     ImageName,
 };
 use prost::Message;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    path::PathBuf,
+};
 
 /// Build [Artifact]
 pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
+
+impl<Base: ImageBuilder> Deref for Builder<Base> {
+    type Target = OciArtifactBuilder<Base>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<Base: ImageBuilder> DerefMut for Builder<Base> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl Builder<OciArchiveBuilder> {
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
@@ -44,32 +61,32 @@ impl Builder<OciDirBuilder> {
 
 impl<Base: ImageBuilder> Builder<Base> {
     pub fn add_instance(
-        mut self,
+        &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         let blob = instance.encode_to_vec();
         self.0
             .add_layer(media_types::v1_instance(), &blob, annotations.into())?;
-        Ok(self)
+        Ok(())
     }
 
     pub fn add_solution(
-        mut self,
+        &mut self,
         solution: v1::State,
         annotations: SolutionAnnotations,
-    ) -> Result<Self> {
+    ) -> Result<()> {
         let blob = solution.encode_to_vec();
         self.0
             .add_layer(media_types::v1_solution(), &blob, annotations.into())?;
-        Ok(self)
+        Ok(())
     }
 
-    pub fn add_config(mut self, config: Config) -> Result<Self> {
+    pub fn add_config(&mut self, config: Config) -> Result<()> {
         let blob = serde_json::to_string_pretty(&config)?;
         self.0
             .add_config(media_types::v1_config(), blob.as_bytes(), HashMap::new())?;
-        Ok(self)
+        Ok(())
     }
 
     pub fn build(self) -> Result<Artifact<Base::Image>> {

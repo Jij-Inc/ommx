@@ -1,0 +1,119 @@
+name: ommx CLI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ommx-executable
+          path: target/release/ommx
+
+  inspect:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Make executable
+        run: |
+          chmod +x ./ommx
+
+      - name: Run inspect
+        run: |
+          ./ommx inspect ./data/random_lp_instance.ommx
+
+  load:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Make executable
+        run: |
+          chmod +x ./ommx
+
+      - name: Load image
+        run: |
+          ./ommx load ./data/random_lp_instance.ommx
+
+      - name: List loaded images
+        run: |
+          OUTPUT=$(./ommx list)
+          echo $OUTPUT
+          [[ $OUTPUT =~ ghcr.io/jij-inc/ommx/random_lp_instance: ]]
+
+  push:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Run inspect
+        run: |
+          chmod +x ./ommx
+
+      # Create a new image tagged with the current commit hash
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Build image
+        run: cargo run --release --example artifact_archive
+
+      # Login to GitHub Container Registry and push the image
+      - name: Login to GitHub Container Registry
+        run: ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
+      - name: Push image to ghcr.io
+        run: ommx push ./data/random_lp_instance.ommx
+
+  pull:
+    runs-on: ubuntu-22.04
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      # Download `ommx` executable
+      - uses: actions/download-artifact@v2
+        with:
+          name: ommx-executable
+          path: .
+      - name: Run inspect
+        run: |
+          chmod +x ./ommx
+
+      # Pull an image from GitHub Container Registry
+      - name: Run pull
+        run: |
+          ./ommx pull ghcr.io/jij-inc/ommx/random_lp_instance:31db37b5984c96319267e0e475185d33376ae39e

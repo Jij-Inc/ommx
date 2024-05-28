@@ -13,7 +13,10 @@ use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
     distribution::MediaType,
-    image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    image::{
+        Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
+        RemoteBuilder,
+    },
     oci_spec::image::Descriptor,
     Digest, ImageName,
 };
@@ -30,6 +33,40 @@ pub fn data_dir() -> Result<PathBuf> {
         .context("Failed to get project directories")?
         .data_dir()
         .to_path_buf())
+}
+
+pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
+    Ok(data_dir()?.join(image_name.as_path()))
+}
+
+fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut images = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if path.join("oci-layout").exists() {
+                images.push(path);
+            } else {
+                let mut sub_images = gather_oci_dirs(&path)?;
+                images.append(&mut sub_images)
+            }
+        }
+    }
+    Ok(images)
+}
+
+pub fn get_images() -> Result<Vec<ImageName>> {
+    let root = data_dir()?;
+    let dirs = gather_oci_dirs(&root)?;
+    dirs.into_iter()
+        .map(|dir| {
+            let relative = dir
+                .strip_prefix(&root)
+                .context("Failed to get relative path")?;
+            ImageName::from_path(relative)
+        })
+        .collect()
 }
 
 /// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_types::v1_artifact]
@@ -53,6 +90,25 @@ impl Artifact<OciArchive> {
         let artifact = OciArtifact::from_oci_archive(path)?;
         Self::new(artifact)
     }
+
+    pub fn push(&mut self) -> Result<()> {
+        let name = self.get_name()?;
+        log::info!("Pushing: {}", name);
+        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(())
+    }
+
+    pub fn load(&mut self) -> Result<()> {
+        let image_name = self.get_name()?;
+        let path = image_dir(&image_name)?;
+        if path.exists() {
+            log::trace!("Already exists in locally: {}", path.display());
+            return Ok(());
+        }
+        log::info!("Loading: {}", image_name);
+        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        Ok(())
+    }
 }
 
 impl Artifact<OciDir> {
@@ -60,12 +116,44 @@ impl Artifact<OciDir> {
         let artifact = OciArtifact::from_oci_dir(path)?;
         Self::new(artifact)
     }
+
+    pub fn push(&mut self) -> Result<()> {
+        let name = self.get_name()?;
+        log::info!("Pushing: {}", name);
+        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(())
+    }
+
+    pub fn save(&mut self, output: &Path) -> Result<()> {
+        if output.exists() {
+            bail!("Output file already exists: {}", output.display());
+        }
+        let builder = if let Ok(name) = self.get_name() {
+            OciArchiveBuilder::new(output.to_path_buf(), name)?
+        } else {
+            OciArchiveBuilder::new_unnamed(output.to_path_buf())?
+        };
+        ocipkg::image::copy(self.0.deref_mut(), builder)?;
+        Ok(())
+    }
 }
 
 impl Artifact<Remote> {
     pub fn from_remote(image_name: ImageName) -> Result<Self> {
         let artifact = OciArtifact::from_remote(image_name)?;
         Self::new(artifact)
+    }
+
+    pub fn pull(&mut self) -> Result<()> {
+        let image_name = self.get_name()?;
+        let path = image_dir(&image_name)?;
+        if path.exists() {
+            log::trace!("Already exists in locally: {}", path.display());
+            return Ok(());
+        }
+        log::info!("Pulling: {}", image_name);
+        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        Ok(())
     }
 }
 
@@ -155,28 +243,5 @@ impl<Base: Image> Artifact<Base> {
             out.push((desc, instance));
         }
         Ok(out)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::random::random_lp;
-    use rand::SeedableRng;
-    use std::path::Path;
-
-    #[test]
-    fn save_random_lp_as_archive() -> Result<()> {
-        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
-        let lp = random_lp(&mut rng, 5, 7);
-        let root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
-        let out = root.join("random_lp.ommx");
-        if out.exists() {
-            std::fs::remove_file(&out)?;
-        }
-        let _artifact = Builder::new_archive_unnamed(out)?
-            .add_instance(lp, Default::default())?
-            .build()?;
-        Ok(())
     }
 }

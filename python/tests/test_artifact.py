@@ -1,9 +1,11 @@
 import ommx._ommx_rust
 from pathlib import Path
 
+DATA_ROOT = Path(__file__).parent.parent.parent / "data"
+
 
 def test_from_oci_archive():
-    path = Path(__file__).parent / "data" / "random_lp_instance.ommx"
+    path = DATA_ROOT / "random_lp_instance.ommx"
     artifact = ommx._ommx_rust.Artifact.from_oci_archive(str(path))
     assert len(artifact.instance_descriptors) == 1
 
@@ -13,4 +15,5 @@ def test_from_oci_archive():
         == "sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2"
     )
     assert desc.size == 639
-    assert desc.annotations == {}
+    assert desc.annotations["org.ommx.v1.instance.title"] == "random_lp"
+    assert "org.ommx.v1.instance.created" in desc.annotations
