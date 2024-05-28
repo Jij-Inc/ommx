@@ -1,5 +1,4 @@
 use anyhow::{bail, Result};
-use base64::{engine::general_purpose::STANDARD, Engine};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
@@ -22,10 +21,10 @@ enum Command {
         registry: String,
         /// Username
         #[clap(short, long)]
-        username: String,
+        username: Option<String>,
         /// Password
         #[clap(short, long)]
-        password: String,
+        password: Option<String>,
     },
 
     /// Show the image manifest as JSON
@@ -133,14 +132,19 @@ fn main() -> Result<()> {
             password,
         } => {
             let url = url::Url::parse(registry)?;
-            let octet = STANDARD.encode(format!("{}:{}", username, password,));
-            let mut new_auth = ocipkg::distribution::StoredAuth::default();
-            new_auth.insert(url.domain().unwrap(), octet);
-            let _token = new_auth.get_token(&url)?;
+            let mut auth = ocipkg::distribution::StoredAuth::load_all()?;
+            match (username, password) {
+                (Some(username), Some(password)) => {
+                    auth.add(url.domain().unwrap(), username, password);
+                }
+                (None, None) => {}
+                _ => {
+                    bail!("--username and --password must be provided at the same time");
+                }
+            }
+            let _token = auth.get_token(&url)?;
             println!("Login succeed");
 
-            let mut auth = ocipkg::distribution::StoredAuth::load()?;
-            auth.append(new_auth)?;
             auth.save()?;
         }
 
