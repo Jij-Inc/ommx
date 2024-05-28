@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
-use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
+use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{image_dir, Artifact};
 use std::path::{Path, PathBuf};
 

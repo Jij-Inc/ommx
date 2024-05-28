@@ -17,7 +17,7 @@ use ocipkg::{
         Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
         RemoteBuilder,
     },
-    oci_spec::image::Descriptor,
+    oci_spec::image::{Descriptor, ImageManifest},
     Digest, ImageName,
 };
 use prost::Message;
@@ -158,14 +158,22 @@ impl Artifact<Remote> {
 }
 
 impl<Base: Image> Artifact<Base> {
-    pub fn new(mut artifact: OciArtifact<Base>) -> Result<Self> {
-        let ty = artifact.artifact_type()?;
+    pub fn new(artifact: OciArtifact<Base>) -> Result<Self> {
+        Ok(Self(artifact))
+    }
+
+    pub fn get_manifest(&mut self) -> Result<ImageManifest> {
+        let manifest = self.0.get_manifest()?;
+        let ty = manifest
+            .artifact_type()
+            .as_ref()
+            .context("Not an OMMX Artifact")?;
         ensure!(
-            ty == media_types::v1_artifact(),
+            *ty == media_types::v1_artifact(),
             "Not an OMMX Artifact: {}",
             ty
         );
-        Ok(Self(artifact))
+        Ok(manifest)
     }
 
     pub fn get_config(&mut self) -> Result<Config> {
