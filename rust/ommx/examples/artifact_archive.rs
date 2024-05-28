@@ -7,6 +7,7 @@ use ommx::{
 };
 use rand::SeedableRng;
 use std::path::Path;
+use url::Url;
 
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
@@ -32,7 +33,7 @@ fn main() -> Result<()> {
     }
 
     let image_name = ImageName::parse(&format!(
-        "ghcr.io/Jij-Inc/ommx/random_lp_instance:{}",
+        "ghcr.io/jij-inc/ommx/random_lp_instance:{}",
         built_info::GIT_COMMIT_HASH_SHORT.context("Cannot get commit hash of Git")?
     ))?;
 
@@ -41,9 +42,11 @@ fn main() -> Result<()> {
     annotations.set_title("random_lp".to_string());
     annotations.set_created(chrono::Local::now());
 
-    let _artifact = Builder::new_archive(out.clone(), image_name)?
-        .add_instance(lp, annotations)?
-        .build()?;
+    let mut builder = Builder::new_archive(out.clone(), image_name)?;
+    builder.add_instance(lp, annotations)?;
+    builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
+    builder.add_description("Test artifact created by examples/artifact_archive.rs".to_string());
+    let _artifact = builder.build()?;
     println!("{:>12} {}", "Saved".green().bold(), out.display());
     Ok(())
 }
