@@ -124,7 +124,7 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::artifact::Artifact;
+//!   use ommx::artifact::{Artifact, media_types};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:testing")?;
