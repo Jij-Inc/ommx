@@ -94,9 +94,9 @@ jobs:
 
       # Login to GitHub Container Registry and push the image
       - name: Login to GitHub Container Registry
-        run: ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
+        run: ./ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
       - name: Push image to ghcr.io
-        run: ommx push ./data/random_lp_instance.ommx
+        run: ./ommx push ./data/random_lp_instance.ommx
 
   pull:
     runs-on: ubuntu-22.04
