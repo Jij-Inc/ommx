@@ -90,7 +90,7 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
       - name: Build image
-        run: cargo run --release --example artifact_archive
+        run: cargo run --release --example create_artifact
 
       # Login to GitHub Container Registry and push the image
       - name: Login to GitHub Container Registry

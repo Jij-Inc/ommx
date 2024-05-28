@@ -50,7 +50,7 @@ fn main() -> Result<()> {
     let mut builder = Builder::new_archive(out.clone(), image_name)?;
     builder.add_instance(lp, annotations)?;
     builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
-    builder.add_description("Test artifact created by examples/artifact_archive.rs".to_string());
+    builder.add_description("Test artifact created by examples/create_artifact.rs".to_string());
     let _artifact = builder.build()?;
     println!("{:>12} {}", "Saved".green().bold(), out.display());
     Ok(())
