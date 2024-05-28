@@ -119,8 +119,28 @@
 //!   artifact.push()?;
 //!   # Ok(()) }
 //!   ```
+//!
+//! - Pull an artifact from remote registry, and load the instance message
+//!
+//!   ```no_run
+//!   use ocipkg::ImageName;
+//!   use ommx::artifact::Artifact;
+//!
+//!   # fn main() -> anyhow::Result<()> {
+//!   let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:testing")?;
+//!
+//!   // Pull the artifact from remote registry
+//!   let mut remote = Artifact::from_remote(image_name)?;
+//!   let mut local = remote.pull()?;
+//!
+//!   // Load the instance message from the artifact
+//!   for instance in local.get_instances()? {
+//!       dbg!(instance);
+//!   }
+//!   # Ok(()) }
+//!   ```
+//!
 
-/// Re-export of `ocipkg` crate for better compatibility
 pub use ocipkg;
 
 pub mod artifact;
