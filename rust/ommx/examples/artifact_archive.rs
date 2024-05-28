@@ -14,6 +14,11 @@ pub mod built_info {
 }
 
 fn main() -> Result<()> {
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
+
     let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
     let lp = random_lp(&mut rng, 5, 7);
 

@@ -133,9 +133,9 @@
 //!   let mut remote = Artifact::from_remote(image_name)?;
 //!   let mut local = remote.pull()?;
 //!
-//!   // Load the instance message from the artifact
-//!   for instance in local.get_instances()? {
-//!       dbg!(instance);
+//!   // List the digest of instances
+//!   for desc in local.get_layer_descriptors(&media_types::v1_instance())? {
+//!       println!("{}", desc.digest());
 //!   }
 //!   # Ok(()) }
 //!   ```

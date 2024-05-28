@@ -113,6 +113,11 @@ impl ImageNameOrPath {
 }
 
 fn main() -> Result<()> {
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
+
     let command = Command::parse();
     match &command {
         Command::Version => {
