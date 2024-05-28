@@ -1,8 +1,8 @@
 //! Rust SDK for OMMX (Open Mathematics prograMming eXchange)
 //!
-//! Messages defined by protobuf schema
-//! ------------------------------------
-//! OMMX defines several messages, and their Rust bindings are in the [`v1`] module.
+//! OMMX Messages
+//! --------------
+//! OMMX defines several messages in protobuf schema, and their Rust bindings are in the [`v1`] module.
 //!
 //! ### Examples
 //!
@@ -56,13 +56,72 @@
 //!
 //! OMMX Artifact
 //! --------------
-//! OMMX defines a protobuf schema. Then the [`v1::Instance`] and [`v1::Solution`] are serialized as protobuf messages,
-//! i.e. a byte stream satisfying the schema.
-//! This is enough for in process communication, but not enough for out of process communication.
-//! For storing message on local disk or sharing with other applications via cloud storage,
-//! OMMX also defines a metadata for each message, such as who and when this message was created by which application, and so on,
-//! and treats the pair of metadata and message as OCI Artifact.
+//! OMMX Artifact is an OCI Artifact, i.e. a container image with arbitrary content, storing the OMMX Messages.
+//! It is useful for storing messages on local disk or sharing with others via container registry.
 //!
+//! ### Examples
+//!
+//! - Create an artifact as a file with an instance created by [`random::random_lp`]
+//!
+//!   ```no_run
+//!   use ocipkg::ImageName;
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_lp};
+//!   use rand::SeedableRng;
+//!
+//!   # fn main() -> anyhow::Result<()> {
+//!   // Create random LP instance to be saved into an artifact
+//!   let lp = random_lp(&mut rand::thread_rng(), 5, 7);
+//!
+//!   // Builder for creating an artifact as a file (e.g. `random_lp_instance.ommx`)
+//!   let mut builder = Builder::new_archive_unnamed("random_lp_instance.ommx".into())?;
+//!
+//!   // Add the instance with annotations
+//!   let mut annotations = InstanceAnnotations::default();
+//!   annotations.set_title("random_lp".to_string());
+//!   annotations.set_created(chrono::Local::now());
+//!   builder.add_instance(lp, annotations)?;
+//!
+//!   // Build the artifact
+//!   let _artifact = builder.build()?;
+//!   # Ok(()) }
+//!   ```
+//!
+//! - Create an artifact on local registry, and then push it to remote registry (e.g. GitHub Container Registry)
+//!
+//!   ```no_run
+//!   use ocipkg::ImageName;
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_lp};
+//!   use rand::SeedableRng;
+//!
+//!   # fn main() -> anyhow::Result<()> {
+//!   // Create random LP instance to be saved into an artifact
+//!   let lp = random_lp(&mut rand::thread_rng(), 5, 7);
+//!
+//!   // Builder for creating an artifact in local registry
+//!   let mut builder = Builder::new(
+//!       ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:testing")?
+//!   )?;
+//!
+//!   // Add annotations for the artifact
+//!   builder.add_source(&url::Url::parse("https://github.com/Jij-Inc/ommx")?);
+//!   builder.add_description("Test artifact".to_string());
+//!
+//!   // Add the instance with annotations
+//!   let mut annotations = InstanceAnnotations::default();
+//!   annotations.set_title("random_lp".to_string());
+//!   annotations.set_created(chrono::Local::now());
+//!   builder.add_instance(lp, annotations)?;
+//!
+//!   // Build the artifact
+//!   let mut artifact = builder.build()?;
+//!
+//!   // Push the artifact to remote registry
+//!   artifact.push()?;
+//!   # Ok(()) }
+//!   ```
+
+/// Re-export of `ocipkg` crate for better compatibility
+pub use ocipkg;
 
 pub mod artifact;
 pub mod random;
