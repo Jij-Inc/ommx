@@ -66,9 +66,9 @@ jobs:
 
       - name: List loaded images
         run: |
-          OUTPUT=$(./ommx list | tr -d '\n')
+          OUTPUT=$(./ommx list)
           echo $OUTPUT
-          [ "$OUTPUT" = "ghcr.io/jij-inc/ommx/random_lp_instance:5d43859" ]
+          [[ $OUTPUT =~ ghcr.io/jij-inc/ommx/random_lp_instance: ]]
 
   push:
     runs-on: ubuntu-22.04
