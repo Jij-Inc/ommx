@@ -1,7 +1,15 @@
+# This is a crate built as a sub Python package `ommx._ommx_rust`
+
 [package]
 name = "_ommx_rust"
-version = "0.2.1"
-edition = "2021"
+
+# The version of Python package `ommx` is determined in `pyproject.toml`. This version is only for build-time information.
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# This crate itself is not released to crates.io.
+publish = false
 
 [lib]
 crate-type = ["cdylib"]
@@ -13,4 +21,3 @@ path = "../rust/ommx"
 anyhow.workspace = true
 ocipkg.workspace = true
 pyo3.workspace = true
-
