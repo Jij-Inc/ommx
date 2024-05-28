@@ -13,13 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: cargo login with CARGO_REGISTRY_TOKEN
-        run: |
-          cargo login
-
       - name: cargo publish
         run: |
           cargo publish -p ommx
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   next_version:
     runs-on: ubuntu-latest
