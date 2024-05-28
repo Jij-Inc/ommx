@@ -17,7 +17,7 @@ use ocipkg::{
         Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
         RemoteBuilder,
     },
-    oci_spec::image::Descriptor,
+    oci_spec::image::{Descriptor, ImageManifest},
     Digest, ImageName,
 };
 use prost::Message;
@@ -91,11 +91,11 @@ impl Artifact<OciArchive> {
         Self::new(artifact)
     }
 
-    pub fn push(&mut self) -> Result<()> {
+    pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {}", name);
-        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
-        Ok(())
+        let out = ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(Artifact(OciArtifact::new(out)))
     }
 
     pub fn load(&mut self) -> Result<()> {
@@ -117,11 +117,11 @@ impl Artifact<OciDir> {
         Self::new(artifact)
     }
 
-    pub fn push(&mut self) -> Result<()> {
+    pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {}", name);
-        ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
-        Ok(())
+        let out = ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        Ok(Artifact(OciArtifact::new(out)))
     }
 
     pub fn save(&mut self, output: &Path) -> Result<()> {
@@ -144,28 +144,36 @@ impl Artifact<Remote> {
         Self::new(artifact)
     }
 
-    pub fn pull(&mut self) -> Result<()> {
+    pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
         let path = image_dir(&image_name)?;
         if path.exists() {
             log::trace!("Already exists in locally: {}", path.display());
-            return Ok(());
+            return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
         log::info!("Pulling: {}", image_name);
-        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
-        Ok(())
+        let out = ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
+        Ok(Artifact(OciArtifact::new(out)))
     }
 }
 
 impl<Base: Image> Artifact<Base> {
-    pub fn new(mut artifact: OciArtifact<Base>) -> Result<Self> {
-        let ty = artifact.artifact_type()?;
+    pub fn new(artifact: OciArtifact<Base>) -> Result<Self> {
+        Ok(Self(artifact))
+    }
+
+    pub fn get_manifest(&mut self) -> Result<ImageManifest> {
+        let manifest = self.0.get_manifest()?;
+        let ty = manifest
+            .artifact_type()
+            .as_ref()
+            .context("Not an OMMX Artifact")?;
         ensure!(
-            ty == media_types::v1_artifact(),
+            *ty == media_types::v1_artifact(),
             "Not an OMMX Artifact: {}",
             ty
         );
-        Ok(Self(artifact))
+        Ok(manifest)
     }
 
     pub fn get_config(&mut self) -> Result<Config> {

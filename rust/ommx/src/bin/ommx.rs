@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
-use ocipkg::{image::Image, oci_spec::image::ImageManifest, ImageName};
+use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{image_dir, Artifact};
 use std::path::{Path, PathBuf};
 
@@ -113,6 +113,11 @@ impl ImageNameOrPath {
 }
 
 fn main() -> Result<()> {
+    env_logger::Builder::new()
+        .filter_level(log::LevelFilter::Info)
+        .parse_default_env()
+        .init();
+
     let command = Command::parse();
     match &command {
         Command::Version => {
