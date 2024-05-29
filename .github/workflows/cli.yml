@@ -21,7 +21,7 @@ jobs:
           command: build
           args: --release
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: ommx-executable
           path: target/release/ommx
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Download `ommx` executable
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: ommx-executable
           path: .
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Download `ommx` executable
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: ommx-executable
           path: .
@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Download `ommx` executable
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: ommx-executable
           path: .
@@ -105,7 +105,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Download `ommx` executable
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v4
         with:
           name: ommx-executable
           path: .
