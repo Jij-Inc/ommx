@@ -1,6 +1,8 @@
 mod artifact;
+mod descriptor;
 mod evaluate;
 pub use artifact::*;
+pub use descriptor::*;
 pub use evaluate::*;
 
 use pyo3::prelude::*;
