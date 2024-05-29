@@ -25,6 +25,11 @@ impl Descriptor {
     }
 
     #[getter]
+    pub fn media_type(&self) -> String {
+        self.0.media_type().to_string()
+    }
+
+    #[getter]
     pub fn annotations(&self) -> HashMap<String, String> {
         if let Some(annotations) = self.0.annotations() {
             annotations.clone()
