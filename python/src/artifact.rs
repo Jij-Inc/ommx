@@ -42,6 +42,7 @@ impl ArtifactArchive {
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
+#[derive(From, Deref)]
 pub struct ArtifactDir(Artifact<OciDir>);
 
 #[pymethods]

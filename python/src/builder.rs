@@ -1,10 +1,13 @@
 use anyhow::{bail, Result};
-use ocipkg::{image::OciArchiveBuilder, ImageName};
+use ocipkg::{
+    image::{OciArchiveBuilder, OciDirBuilder},
+    ImageName,
+};
 use ommx::artifact::Builder;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::{ArtifactArchive, PyDescriptor};
+use crate::{ArtifactArchive, ArtifactDir, PyDescriptor};
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
@@ -52,6 +55,52 @@ impl ArtifactArchiveBuilder {
         if let Some(builder) = self.0.take() {
             let artifact = builder.build()?;
             Ok(ArtifactArchive::from(artifact))
+        } else {
+            bail!("Already built artifact")
+        }
+    }
+}
+
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct ArtifactDirBuilder(Option<Builder<OciDirBuilder>>);
+
+#[pymethods]
+impl ArtifactDirBuilder {
+    #[staticmethod]
+    pub fn new(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let builder = Builder::new(image_name)?;
+        Ok(Self(Some(builder)))
+    }
+
+    pub fn add_layer(
+        &mut self,
+        media_type: &str,
+        blob: Bound<PyBytes>,
+        annotations: HashMap<String, String>,
+    ) -> Result<PyDescriptor> {
+        if let Some(builder) = self.0.as_mut() {
+            let desc = builder.add_layer(media_type.into(), blob.as_bytes(), annotations)?;
+            return Ok(PyDescriptor::from(desc));
+        } else {
+            bail!("Already built artifact")
+        }
+    }
+
+    pub fn add_annotation(&mut self, key: &str, value: &str) -> Result<()> {
+        if let Some(builder) = self.0.as_mut() {
+            builder.add_annotation(key.into(), value.into());
+            Ok(())
+        } else {
+            bail!("Already built artifact")
+        }
+    }
+
+    pub fn build(&mut self) -> Result<ArtifactDir> {
+        if let Some(builder) = self.0.take() {
+            let artifact = builder.build()?;
+            Ok(ArtifactDir::from(artifact))
         } else {
             bail!("Already built artifact")
         }
