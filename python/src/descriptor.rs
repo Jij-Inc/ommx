@@ -1,4 +1,5 @@
 use anyhow::Result;
+use derive_more::{Deref, From};
 use ocipkg::oci_spec::image::Descriptor;
 use pyo3::{prelude::*, types::PyDict};
 use std::collections::HashMap;
@@ -6,13 +7,8 @@ use std::collections::HashMap;
 /// Descriptor of blob in artifact
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Descriptor")]
+#[derive(Debug, Clone, PartialEq, From, Deref)]
 pub struct PyDescriptor(Descriptor);
-
-impl From<Descriptor> for PyDescriptor {
-    fn from(descriptor: Descriptor) -> Self {
-        Self(descriptor)
-    }
-}
 
 #[pymethods]
 impl PyDescriptor {

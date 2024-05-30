@@ -1,5 +1,6 @@
 use crate::PyDescriptor;
 use anyhow::Result;
+use derive_more::{Deref, From};
 use ocipkg::{
     image::{Image, OciArchive, OciDir},
     Digest, ImageName,
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
+#[derive(From, Deref)]
 pub struct ArtifactArchive(Artifact<OciArchive>);
 
 #[pymethods]

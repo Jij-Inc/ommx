@@ -7,6 +7,7 @@ name = "_ommx_rust"
 version = "0.3.1"
 dependencies = [
  "anyhow",
+ "derive_more",
  "ocipkg",
  "ommx",
  "pyo3",
