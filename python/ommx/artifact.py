@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._ommx_rust import ArtifactArchive, ArtifactDir, Descriptor
+from ._ommx_rust import ArtifactArchive, ArtifactDir, Descriptor, ArtifactArchiveBuilder, ArtifactDirBuilder
 from .v1 import Instance, Solution
 
 
@@ -108,3 +108,30 @@ class Artifact:
         solution = Solution()
         solution.ParseFromString(blob)
         return solution
+
+
+@dataclass(frozen=True)
+class ArtifactBuilder:
+    _base: ArtifactArchiveBuilder | ArtifactDirBuilder
+
+    @staticmethod
+    def new_archive_unnamed(path: str | Path) -> ArtifactBuilder:
+        if isinstance(path, str):
+            path = Path(path)
+        return ArtifactBuilder(ArtifactArchiveBuilder.new_unnamed(str(path)))
+
+    @staticmethod
+    def new_archive(path: str | Path, image_name: str) -> ArtifactBuilder:
+        if isinstance(path, str):
+            path = Path(path)
+        return ArtifactBuilder(ArtifactArchiveBuilder.new(str(path), image_name))
+
+    @staticmethod
+    def new(image_name: str) -> ArtifactBuilder:
+        return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
+
+    def add_layer(self, media_type: str, blob: bytes, annotations: dict[str, str] = {}) -> Descriptor:
+        return self._base.add_layer(media_type, blob, annotations)
+
+    def build(self) -> Artifact:
+        return Artifact(self._base.build())

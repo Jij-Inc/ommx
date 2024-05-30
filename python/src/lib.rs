@@ -14,6 +14,8 @@ use pyo3::prelude::*;
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<ArtifactArchive>()?;
     m.add_class::<ArtifactDir>()?;
+    m.add_class::<ArtifactArchiveBuilder>()?;
+    m.add_class::<ArtifactDirBuilder>()?;
     m.add_class::<PyDescriptor>()?;
     m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_linear, m)?)?;
