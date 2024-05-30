@@ -79,7 +79,7 @@ class Artifact:
         """
         Get the layer object corresponding to the descriptor
 
-        This is dynamically dispatched based on the `descriptor.media_type`.
+        This is dynamically dispatched based on the :attr:`Descriptor.media_type`.
         """
         if descriptor.media_type == "application/org.ommx.v1.instance":
             return self.get_instance(descriptor)
