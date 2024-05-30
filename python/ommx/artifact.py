@@ -59,6 +59,10 @@ class Artifact:
         return Artifact(base)
 
     @property
+    def annotations(self) -> dict[str, str]:
+        return self._base.annotations
+
+    @property
     def layers(self) -> list[Descriptor]:
         return self._base.layers
 
@@ -140,6 +144,9 @@ class ArtifactBuilder:
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
     ) -> Descriptor:
         return self._base.add_layer(media_type, blob, annotations)
+
+    def add_annotation(self, key: str, value: str):
+        self._base.add_annotation(key, value)
 
     def build(self) -> Artifact:
         return Artifact(self._base.build())

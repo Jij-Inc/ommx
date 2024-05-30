@@ -7,7 +7,7 @@ use ocipkg::{
 };
 use ommx::artifact::{image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
@@ -20,6 +20,12 @@ impl ArtifactArchive {
     pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
         let artifact = Artifact::from_oci_archive(&path)?;
         Ok(Self(artifact))
+    }
+
+    #[getter]
+    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
+        let manifest = self.0.get_manifest()?;
+        Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
     }
 
     #[getter]
@@ -62,6 +68,12 @@ impl ArtifactDir {
     pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
         let artifact = Artifact::from_oci_dir(&path)?;
         Ok(Self(artifact))
+    }
+
+    #[getter]
+    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
+        let manifest = self.0.get_manifest()?;
+        Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
     }
 
     #[getter]
