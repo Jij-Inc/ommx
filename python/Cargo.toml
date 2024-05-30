@@ -21,3 +21,5 @@ path = "../rust/ommx"
 anyhow.workspace = true
 ocipkg.workspace = true
 pyo3.workspace = true
+serde-pyobject = "0.3.0"
+serde_json.workspace = true

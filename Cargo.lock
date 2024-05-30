@@ -10,6 +10,8 @@ dependencies = [
  "ocipkg",
  "ommx",
  "pyo3",
+ "serde-pyobject",
+ "serde_json",
 ]
 
 [[package]]
@@ -1365,6 +1367,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-pyobject"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70ffe7ea77d8eba5774068d55b00a4a3a7c6f9fa9b97dd8e3bc8750cc8503fee"
+dependencies = [
+ "pyo3",
+ "serde",
 ]
 
 [[package]]
