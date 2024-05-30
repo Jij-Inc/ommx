@@ -36,7 +36,7 @@ impl ArtifactArchiveBuilder {
     ) -> Result<PyDescriptor> {
         if let Some(builder) = self.0.as_mut() {
             let desc = builder.add_layer(media_type.into(), blob.as_bytes(), annotations)?;
-            return Ok(PyDescriptor::from(desc));
+            Ok(PyDescriptor::from(desc))
         } else {
             bail!("Already built artifact")
         }
@@ -82,7 +82,7 @@ impl ArtifactDirBuilder {
     ) -> Result<PyDescriptor> {
         if let Some(builder) = self.0.as_mut() {
             let desc = builder.add_layer(media_type.into(), blob.as_bytes(), annotations)?;
-            return Ok(PyDescriptor::from(desc));
+            Ok(PyDescriptor::from(desc))
         } else {
             bail!("Already built artifact")
         }
