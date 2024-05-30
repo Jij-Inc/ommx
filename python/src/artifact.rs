@@ -2,20 +2,21 @@ use crate::PyDescriptor;
 use anyhow::Result;
 use ocipkg::{
     image::{Image, OciArchive, OciDir},
-    Digest,
+    Digest, ImageName,
 };
+use ommx::artifact::{image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
 use std::path::PathBuf;
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
-pub struct ArtifactArchive(ommx::artifact::Artifact<OciArchive>);
+pub struct ArtifactArchive(Artifact<OciArchive>);
 
 #[pymethods]
 impl ArtifactArchive {
     #[staticmethod]
     pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
-        let artifact = ommx::artifact::Artifact::from_oci_archive(&path)?;
+        let artifact = Artifact::from_oci_archive(&path)?;
         Ok(Self(artifact))
     }
 
@@ -39,13 +40,24 @@ impl ArtifactArchive {
 
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
-pub struct ArtifactDir(ommx::artifact::Artifact<OciDir>);
+pub struct ArtifactDir(Artifact<OciDir>);
 
 #[pymethods]
 impl ArtifactDir {
     #[staticmethod]
+    pub fn from_image_name(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let local_path = image_dir(&image_name)?;
+        if local_path.exists() {
+            return Ok(Self(Artifact::from_oci_dir(&local_path)?));
+        }
+        let mut remote = Artifact::from_remote(image_name)?;
+        Ok(Self(remote.pull()?))
+    }
+
+    #[staticmethod]
     pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
-        let artifact = ommx::artifact::Artifact::from_oci_dir(&path)?;
+        let artifact = Artifact::from_oci_dir(&path)?;
         Ok(Self(artifact))
     }
 

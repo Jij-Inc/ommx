@@ -7,6 +7,29 @@ from pathlib import Path
 class Artifact:
     """
     Reader class for OMMX Artifacts.
+
+    Examples
+    --------
+
+    Load an artifact stored as a single file:
+
+    ```python
+    >>> from ommx.artifact import Artifact
+    >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
+    >>> for layer in artifact.layers:
+    ...     print(layer.digest)
+    sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
+
+    ```
+
+    Load from image name
+
+    ```python
+    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+    >>> for layer in artifact.layers:
+    ...     print(layer.digest)
+    sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
+
     """
 
     _base: ArtifactArchive | ArtifactDir
@@ -23,13 +46,13 @@ class Artifact:
             path = Path(path)
 
         if path.is_file():
-            _base = ArtifactArchive.from_oci_archive(str(path))
+            base = ArtifactArchive.from_oci_archive(str(path))
         elif path.is_dir():
-            _base = ArtifactDir.from_oci_dir(str(path))
+            base = ArtifactDir.from_oci_dir(str(path))
         else:
             raise ValueError("Path must be a file or a directory")
 
-        return Artifact(_base)
+        return Artifact(base)
 
     @staticmethod
     def load(image_name: str) -> Artifact:
@@ -38,7 +61,8 @@ class Artifact:
 
         If the image is not found in local registry, it will try to pull from remote registry.
         """
-        raise NotImplementedError
+        base = ArtifactDir.from_image_name(image_name)
+        return Artifact(base)
 
     @property
     def layers(self) -> list[Descriptor]:
