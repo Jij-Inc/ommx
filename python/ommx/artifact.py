@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ._ommx_rust import ArtifactArchive, ArtifactDir, Descriptor, ArtifactArchiveBuilder, ArtifactDirBuilder
+from ._ommx_rust import (
+    ArtifactArchive,
+    ArtifactDir,
+    Descriptor,
+    ArtifactArchiveBuilder,
+    ArtifactDirBuilder,
+)
 from .v1 import Instance, Solution
 
 
@@ -130,7 +136,9 @@ class ArtifactBuilder:
     def new(image_name: str) -> ArtifactBuilder:
         return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
 
-    def add_layer(self, media_type: str, blob: bytes, annotations: dict[str, str] = {}) -> Descriptor:
+    def add_layer(
+        self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
+    ) -> Descriptor:
         return self._base.add_layer(media_type, blob, annotations)
 
     def build(self) -> Artifact:
