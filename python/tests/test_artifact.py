@@ -6,7 +6,7 @@ DATA_ROOT = Path(__file__).parent.parent.parent / "data"
 
 def test_from_oci_archive():
     path = DATA_ROOT / "random_lp_instance.ommx"
-    artifact = ommx._ommx_rust.Artifact.from_oci_archive(str(path))
+    artifact = ommx._ommx_rust.ArtifactArchive.from_oci_archive(str(path))
     assert len(artifact.instance_descriptors) == 1
 
     desc = artifact.instance_descriptors[0]
