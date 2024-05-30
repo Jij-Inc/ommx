@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from ._ommx_rust import ArtifactArchive, ArtifactDir, Descriptor
+from dataclasses import dataclass
 from pathlib import Path
+
+from ._ommx_rust import ArtifactArchive, ArtifactDir, Descriptor
 from .v1 import Instance, Solution
 
 
+@dataclass
 class Artifact:
     """
     Reader class for OMMX Artifacts.
     """
 
     _base: ArtifactArchive | ArtifactDir
-
-    def __init__(self, base: ArtifactArchive | ArtifactDir):
-        self._base = base
 
     @staticmethod
     def load_archive(path: str | Path) -> Artifact:
