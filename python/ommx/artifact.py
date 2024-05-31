@@ -113,15 +113,11 @@ class Artifact:
 
         """
         blob = self.get_blob(descriptor)
-        instance = Instance()
-        instance.ParseFromString(blob)
-        return instance
+        return Instance.from_bytes(blob)
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         blob = self.get_blob(descriptor)
-        solution = Solution()
-        solution.ParseFromString(blob)
-        return solution
+        return Solution.from_bytes(blob)
 
 
 @dataclass(frozen=True)
@@ -207,7 +203,7 @@ class ArtifactBuilder:
         """
         Add an instance to the artifact with annotations
         """
-        blob = instance.SerializeToString()
+        blob = instance.to_bytes()
         return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
 
     def add_layer(
