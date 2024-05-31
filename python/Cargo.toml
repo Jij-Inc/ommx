@@ -22,5 +22,5 @@ anyhow.workspace = true
 derive_more.workspace = true
 ocipkg.workspace = true
 pyo3.workspace = true
-serde-pyobject = "0.3.0"
+serde-pyobject.workspace = true
 serde_json.workspace = true
