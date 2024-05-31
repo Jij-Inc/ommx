@@ -2,10 +2,11 @@ import enum
 
 import numpy as np
 
+from ommx.v1 import Instance
 from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
-from ommx.v1.instance_pb2 import Instance
+from ommx.v1.instance_pb2 import Instance as _Instance
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 
@@ -134,12 +135,12 @@ class SingleFeasibleLPGenerator:
             )
             constraints.append(constraint)
 
-        return Instance(
-            description=Instance.Description(name="LPTest"),
+        return Instance(_Instance(
+            description=_Instance.Description(name="LPTest"),
             decision_variables=decision_variables,
             objective=Function(constant=0),
             constraints=constraints,
-        )
+        ))
 
     def get_v1_state(self) -> State:
         """
