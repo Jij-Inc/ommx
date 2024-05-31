@@ -75,8 +75,7 @@ impl Polynomial {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.terms
             .iter()
-            .map(|term| term.ids.iter())
-            .flatten()
+            .flat_map(|term| term.ids.iter())
             .cloned()
             .collect()
     }
