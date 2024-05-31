@@ -14,6 +14,31 @@ impl InstanceAnnotations {
         Self(desc.annotations().as_ref().cloned().unwrap_or_default())
     }
 
+    pub fn set_title(&mut self, title: String) {
+        self.0
+            .insert("org.ommx.v1.instance.title".to_string(), title);
+    }
+
+    pub fn title(&self) -> Result<&String> {
+        self.0
+            .get("org.ommx.v1.instance.title")
+            .context("Annotation does not have the entry with the key `org.ommx.v1.instance.title`")
+    }
+
+    pub fn set_created(&mut self, created: DateTime<Local>) {
+        self.0.insert(
+            "org.ommx.v1.instance.created".to_string(),
+            created.to_rfc3339(),
+        );
+    }
+
+    pub fn created(&self) -> Result<DateTime<Local>> {
+        let created = self.0.get("org.ommx.v1.instance.created").context(
+            "Annotation does not have the entry with the key `org.ommx.v1.instance.created`",
+        )?;
+        Ok(DateTime::parse_from_rfc3339(created)?.with_timezone(&Local))
+    }
+
     /// Set other annotations. The key may not start with `org.ommx.v1.`, but must a valid reverse domain name.
     pub fn set_other(&mut self, key: String, value: String) {
         // TODO check key

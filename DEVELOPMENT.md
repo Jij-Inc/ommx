@@ -47,6 +47,10 @@ sphinx-build -b html ./python/docs/source ./python/docs/build
 ### How to generate Rust codes
 
 ```shell
-cd rust
 cargo run --bin protogen
 ```
+
+### How to release to crates.io
+
+1. Push a new Git tag named `rust-x.y.z`, then the GitHub Actions will release to crates.io
+2. Create a GitHub release.

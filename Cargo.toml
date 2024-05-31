@@ -6,24 +6,34 @@ members = [
     "python",
 ]
 
+[workspace.package]
+version = "0.3.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
 [workspace.dependencies]
 anyhow = "1.0.81"
+base64 = "0.22.1"
+built = { version = "0.7.3", features = ["git2"] }
 chrono = "0.4.38"
 clap = { version = "4.5.4", features = ["derive"] }
 colored = "2.1.0"
 derive_more = "0.99.17"
 directories = "5.0.1"
+env_logger = "0.11.3"
 glob = "0.3.1"
 itertools = "0.13.0"
 log = "0.4.21"
 maplit = "1.0.2"
-ocipkg = "0.3.3"
+ocipkg = "0.3.5"
 proptest = "1.4.0"
-prost = "0.12.3"
-prost-build = "0.12.3"
+prost = "0.12.6"
+prost-build = "0.12.6"
 pyo3 = { version = "0.21.2", features = ["anyhow"] }
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 serde = { version = "1.0.197", features = ["derive"] }
+serde-pyobject = "0.3.0"
 serde_json = "1.0.117"
-thiserror = "1.0.58"
+thiserror = "1.0.61"
+url = "2.5.0"
