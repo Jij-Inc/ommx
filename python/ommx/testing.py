@@ -135,12 +135,14 @@ class SingleFeasibleLPGenerator:
             )
             constraints.append(constraint)
 
-        return Instance(_Instance(
-            description=_Instance.Description(name="LPTest"),
-            decision_variables=decision_variables,
-            objective=Function(constant=0),
-            constraints=constraints,
-        ))
+        return Instance(
+            _Instance(
+                description=_Instance.Description(name="LPTest"),
+                decision_variables=decision_variables,
+                objective=Function(constant=0),
+                constraints=constraints,
+            )
+        )
 
     def get_v1_state(self) -> State:
         """
