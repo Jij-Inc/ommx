@@ -12,6 +12,7 @@ from ._ommx_rust import (
 )
 from .v1 import Instance, Solution
 
+
 @dataclass
 class Artifact:
     """
@@ -200,7 +201,9 @@ class ArtifactBuilder:
         """
         return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
 
-    def add_instance(self, instance: Instance, annotations: dict[str, str] = {}) -> Descriptor:
+    def add_instance(
+        self, instance: Instance, annotations: dict[str, str] = {}
+    ) -> Descriptor:
         """
         Add an instance to the artifact with annotations
         """
