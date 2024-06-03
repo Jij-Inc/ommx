@@ -60,6 +60,12 @@ class Artifact:
         base = ArtifactDir.from_image_name(image_name)
         return Artifact(base)
 
+    def push(self):
+        """
+        Push the artifact to remote registry
+        """
+        self._base.push()
+
     @property
     def annotations(self) -> dict[str, str]:
         return self._base.annotations

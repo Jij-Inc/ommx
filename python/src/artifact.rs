@@ -44,6 +44,13 @@ impl ArtifactArchive {
         let blob = self.0.get_blob(&digest)?;
         Ok(PyBytes::new_bound(py, blob.as_ref()))
     }
+
+    pub fn push(&mut self) -> Result<()> {
+        // Do not expose Artifact<Remote> to Python API for simplicity.
+        // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
+        let _remote = self.0.push()?;
+        Ok(())
+    }
 }
 
 #[pyclass]
@@ -91,5 +98,12 @@ impl ArtifactDir {
         let digest = Digest::new(digest)?;
         let blob = self.0.get_blob(&digest)?;
         Ok(PyBytes::new_bound(py, blob.as_ref()))
+    }
+
+    pub fn push(&mut self) -> Result<()> {
+        // Do not expose Artifact<Remote> to Python API for simplicity.
+        // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
+        let _remote = self.0.push()?;
+        Ok(())
     }
 }
