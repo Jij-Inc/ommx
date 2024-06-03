@@ -23,5 +23,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
+    m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
     Ok(())
 }

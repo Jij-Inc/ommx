@@ -43,3 +43,9 @@ macro_rules! define_evaluate_object {
 
 define_evaluate_object!(Constraint, evaluate_constraint);
 define_evaluate_object!(Instance, evaluate_instance);
+
+#[pyfunction]
+pub fn used_decision_variable_ids(function: &Bound<PyBytes>) -> BTreeSet<u64> {
+    let function = Function::decode(function.as_bytes()).unwrap();
+    function.used_decision_variable_ids()
+}
