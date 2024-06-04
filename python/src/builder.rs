@@ -74,6 +74,12 @@ impl ArtifactDirBuilder {
         Ok(Self(Some(builder)))
     }
 
+    #[staticmethod]
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        let builder = Builder::for_github(org, repo, name, tag)?;
+        Ok(Self(Some(builder)))
+    }
+
     pub fn add_layer(
         &mut self,
         media_type: &str,

@@ -13,6 +13,7 @@ use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
+use url::Url;
 
 /// Build [Artifact]
 pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
@@ -56,6 +57,23 @@ impl Builder<OciDirBuilder> {
             layout,
             media_types::v1_artifact(),
         )?))
+    }
+
+    /// Create a new artifact builder for a GitHub container registry image
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        let image_name = ImageName::parse(&format!(
+            "ghcr.io/{}/{}/{}:{}",
+            org.to_lowercase(),
+            repo.to_lowercase(),
+            name.to_lowercase(),
+            tag
+        ))?;
+        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
+
+        let mut builder = Self::new(image_name)?;
+        builder.add_source(&source);
+
+        Ok(builder)
     }
 }
 
