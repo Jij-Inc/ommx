@@ -23,6 +23,11 @@ impl ArtifactArchive {
     }
 
     #[getter]
+    pub fn image_name(&mut self) -> Option<String> {
+        self.0.get_name().map(|name| name.to_string()).ok()
+    }
+
+    #[getter]
     pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
         let manifest = self.0.get_manifest()?;
         Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
@@ -75,6 +80,11 @@ impl ArtifactDir {
     pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
         let artifact = Artifact::from_oci_dir(&path)?;
         Ok(Self(artifact))
+    }
+
+    #[getter]
+    pub fn image_name(&mut self) -> Option<String> {
+        self.0.get_name().map(|name| name.to_string()).ok()
     }
 
     #[getter]
