@@ -31,7 +31,7 @@ class Artifact:
         ghcr.io/jij-inc/ommx/random_lp_instance:...
         >>> for layer in artifact.layers:
         ...     print(layer.digest)
-        sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
+        sha256:...
 
         """
         if isinstance(path, str):
@@ -55,7 +55,7 @@ class Artifact:
 
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
         >>> print(artifact.image_name)
-        ghcr.io/jij-inc/ommx/random_lp_instance:...
+        ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
         >>> for layer in artifact.layers:
         ...    print(layer.digest)
         sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
@@ -76,6 +76,16 @@ class Artifact:
 
     @property
     def annotations(self) -> dict[str, str]:
+        """
+        Annotations in the artifact manifest
+
+        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+        >>> print(artifact.annotations['org.opencontainers.image.source'])
+        https://github.com/Jij-Inc/ommx
+        >>> print(artifact.annotations['org.opencontainers.image.description'])
+        Test artifact created by examples/artifact_archive.rs
+
+        """
         return self._base.annotations
 
     @property
