@@ -30,6 +30,7 @@ proptest = "1.4.0"
 prost = "0.12.6"
 prost-build = "0.12.6"
 pyo3 = { version = "0.21.2", features = ["anyhow"] }
+pyo3-log = "0.10.0"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 serde = { version = "1.0.197", features = ["derive"] }
