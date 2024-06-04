@@ -203,6 +203,26 @@ class ArtifactBuilder:
         """
         return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
 
+    @staticmethod
+    def for_github(org: str, repo: str, name: str, tag: str) -> ArtifactBuilder:
+        """
+        Create a new artifact in local registry with GitHub Container Registry image name
+
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+
+        >>> import uuid  # To generate a unique name for testing
+        >>> builder = ArtifactBuilder.for_github(
+        ...    "Jij-Inc", "ommx", "single_feasible_lp", str(uuid.uuid4())
+        ... )
+        >>> builder.add_instance(instance)
+        <ommx._ommx_rust.Descriptor object at 0x...>
+        >>> builder.build()
+        Artifact(_base=<ommx._ommx_rust.ArtifactDir object at 0x...>)
+        """
+        return ArtifactBuilder(ArtifactDirBuilder.for_github(org, repo, name, tag))
+
     def add_instance(
         self, instance: Instance, annotations: dict[str, str] = {}
     ) -> Descriptor:
