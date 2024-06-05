@@ -58,16 +58,15 @@ fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
 
 fn auth_from_env() -> Result<(String, String, String)> {
     // OMMX_AUTH_* is checked first
-    match (
+    if let (Ok(domain), Ok(username), Ok(password)) = (
         env::var("OMMX_AUTH_DOMAIN"),
         env::var("OMMX_AUTH_USERNAME"),
         env::var("OMMX_AUTH_PASSWORD"),
     ) {
-        (Ok(domain), Ok(username), Ok(password)) => {
-            log::info!("Detect OMMX_AUTH_DOMAIN, OMMX_AUTH_USERNAME, OMMX_AUTH_PASSWORD for authentication.");
-            return Ok((domain, username, password));
-        }
-        _ => {}
+        log::info!(
+            "Detect OMMX_AUTH_DOMAIN, OMMX_AUTH_USERNAME, OMMX_AUTH_PASSWORD for authentication."
+        );
+        return Ok((domain, username, password));
     }
 
     // Then check running on GitHub Actions
