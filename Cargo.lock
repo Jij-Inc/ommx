@@ -827,9 +827,9 @@ dependencies = [
 
 [[package]]
 name = "ocipkg"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3c01a1438f5cde9aef8dc9c0932df07f53343ce35b201d1e42d2f72c730d959"
+checksum = "ec233906b13af7bc96a645cbcf0dddb9fdb6d746d649b63fd55b769d08e92a5a"
 dependencies = [
  "anyhow",
  "base16ct",
