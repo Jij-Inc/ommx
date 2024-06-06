@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
@@ -311,6 +312,24 @@ class ArtifactBuilder:
         if instance.title:
             annotations["org.ommx.v1.instance.title"] = instance.title
         return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
+
+    def add_solution(self, solution: Solution) -> Descriptor:
+        """
+        Add a solution to the artifact with annotations
+        """
+        blob = solution.to_bytes()
+        annotations = solution.annotations.copy()
+        if solution.instance:
+            annotations["org.ommx.v1.solution.instance"] = solution.instance
+        if solution.solver:
+            annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
+        if solution.parameters:
+            annotations["org.ommx.v1.solution.parameters"] = json.dumps(solution.parameters)
+        if solution.start:
+            annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
+        if solution.end:
+            annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
+        return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}

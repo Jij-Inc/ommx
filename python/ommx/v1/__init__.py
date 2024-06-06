@@ -87,6 +87,38 @@ class Solution:
     raw: _Solution
     """The raw protobuf message."""
 
+    instance: Optional[str] = None
+    """
+    The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
+
+    This ``Solution`` is the solution of the mathematical programming problem described by the instance.
+    """
+
+    solver: Optional[object] = None
+    """
+    The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact.
+    """
+
+    parameters: Optional[object] = None
+    """
+    The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact.
+    """
+
+    start: Optional[datetime] = None
+    """
+    When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact.
+    """
+
+    end: Optional[datetime] = None
+    """
+    When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact.
+    """
+
+    annotations: dict[str, str] = field(default_factory=dict)
+    """
+    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
+    """
+
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
         raw = _Solution()
