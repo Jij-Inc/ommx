@@ -95,6 +95,10 @@ jobs:
       # Push image to GitHub Container Registry
       - name: Push image to ghcr.io
         run: ./ommx push ./data/random_lp_instance.ommx
+        env:
+          OMMX_AUTH_DOMAIN: ghcr.io
+          OMMX_AUTH_USERNAME: ${{ github.actor }}
+          OMMX_AUTH_PASSWORD: ${{ github.token }}
 
   pull:
     runs-on: ubuntu-22.04
