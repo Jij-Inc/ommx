@@ -162,7 +162,9 @@ class Artifact:
         if "org.ommx.v1.solution.instance" in descriptor.annotations:
             solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
         if "org.ommx.v1.solution.solver" in descriptor.annotations:
-            solution.solver = json.loads(descriptor.annotations["org.ommx.v1.solution.solver"])
+            solution.solver = json.loads(
+                descriptor.annotations["org.ommx.v1.solution.solver"]
+            )
         if "org.ommx.v1.solution.parameters" in descriptor.annotations:
             solution.parameters = json.loads(
                 descriptor.annotations["org.ommx.v1.solution.parameters"]
@@ -172,7 +174,9 @@ class Artifact:
                 descriptor.annotations["org.ommx.v1.solution.start"]
             )
         if "org.ommx.v1.solution.end" in descriptor.annotations:
-            solution.end = datetime.fromisoformat(descriptor.annotations["org.ommx.v1.solution.end"])
+            solution.end = datetime.fromisoformat(
+                descriptor.annotations["org.ommx.v1.solution.end"]
+            )
         return solution
 
 
@@ -339,7 +343,9 @@ class ArtifactBuilder:
         if solution.solver:
             annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
         if solution.parameters:
-            annotations["org.ommx.v1.solution.parameters"] = json.dumps(solution.parameters)
+            annotations["org.ommx.v1.solution.parameters"] = json.dumps(
+                solution.parameters
+            )
         if solution.start:
             annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
         if solution.end:
