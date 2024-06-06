@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Solution as _Solution
@@ -20,9 +20,8 @@ class Instance:
     """The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."""
     created: Optional[datetime] = None
     """The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."""
-    annotations: dict[str, str] = {}
+    annotations: dict[str, str] = field(default_factory=dict)
     """Arbitrary annotations also stored in OMMX artifact."""
-
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:

@@ -284,7 +284,7 @@ class ArtifactBuilder:
         """
         return ArtifactBuilder(ArtifactDirBuilder.for_github(org, repo, name, tag))
 
-    def add_instance( self, instance: Instance) -> Descriptor:
+    def add_instance(self, instance: Instance) -> Descriptor:
         """
         Add an instance to the artifact with annotations
         """
