@@ -15,13 +15,28 @@ from .._ommx_rust import evaluate_instance, used_decision_variable_ids
 
 @dataclass
 class Instance:
+    """
+    Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
+
+    Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+    These annotations are loaded from annotations while reading from OMMX artifact.
+    """
+
     raw: _Instance
+    """The raw protobuf message."""
+
     title: Optional[str] = None
-    """The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."""
+    """
+    The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
+    """
     created: Optional[datetime] = None
-    """The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."""
+    """
+    The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
+    """
     annotations: dict[str, str] = field(default_factory=dict)
-    """Arbitrary annotations also stored in OMMX artifact."""
+    """
+    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
+    """
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
@@ -63,7 +78,14 @@ class Instance:
 
 @dataclass
 class Solution:
+    """
+    Idiomatic wrapper of ``ommx.v1.Solution`` protobuf message.
+
+    This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+    """
+
     raw: _Solution
+    """The raw protobuf message."""
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
