@@ -21,7 +21,7 @@ use ocipkg::{
     Digest, ImageName,
 };
 use prost::Message;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
@@ -54,6 +54,20 @@ fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
         }
     }
     Ok(images)
+}
+
+fn auth_from_env() -> Result<(String, String, String)> {
+    if let (Ok(domain), Ok(username), Ok(password)) = (
+        env::var("OMMX_BASIC_AUTH_DOMAIN"),
+        env::var("OMMX_BASIC_AUTH_USERNAME"),
+        env::var("OMMX_BASIC_AUTH_PASSWORD"),
+    ) {
+        log::info!(
+            "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
+        );
+        return Ok((domain, username, password));
+    }
+    bail!("No authentication information found in environment variables");
 }
 
 pub fn get_images() -> Result<Vec<ImageName>> {
@@ -94,7 +108,11 @@ impl Artifact<OciArchive> {
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {}", name);
-        let out = ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        let mut remote = RemoteBuilder::new(name)?;
+        if let Ok((domain, username, password)) = auth_from_env() {
+            remote.add_basic_auth(&domain, &username, &password);
+        }
+        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
         Ok(Artifact(OciArtifact::new(out)))
     }
 
@@ -120,7 +138,11 @@ impl Artifact<OciDir> {
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {}", name);
-        let out = ocipkg::image::copy(self.0.deref_mut(), RemoteBuilder::new(name)?)?;
+        let mut remote = RemoteBuilder::new(name)?;
+        if let Ok((domain, username, password)) = auth_from_env() {
+            remote.add_basic_auth(&domain, &username, &password);
+        }
+        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
         Ok(Artifact(OciArtifact::new(out)))
     }
 
@@ -152,6 +174,9 @@ impl Artifact<Remote> {
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
         log::info!("Pulling: {}", image_name);
+        if let Ok((domain, username, password)) = auth_from_env() {
+            self.0.add_basic_auth(&domain, &username, &password);
+        }
         let out = ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(Artifact(OciArtifact::new(out)))
     }

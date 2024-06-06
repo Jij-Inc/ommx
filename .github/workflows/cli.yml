@@ -92,11 +92,13 @@ jobs:
       - name: Build image
         run: cargo run --release --example create_artifact
 
-      # Login to GitHub Container Registry and push the image
-      - name: Login to GitHub Container Registry
-        run: ./ommx login -u ${{ github.repository_owner }} -p ${{ github.token }} https://ghcr.io
+      # Push image to GitHub Container Registry
       - name: Push image to ghcr.io
         run: ./ommx push ./data/random_lp_instance.ommx
+        env:
+          OMMX_BASIC_AUTH_DOMAIN: ghcr.io
+          OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
+          OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
 
   pull:
     runs-on: ubuntu-22.04
