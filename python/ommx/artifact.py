@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime
+from dateutil import parser
 
 from ._ommx_rust import (
     ArtifactArchive,
@@ -149,7 +150,7 @@ class Artifact:
         instance = Instance.from_bytes(blob)
         annotations = descriptor.annotations
         if "org.ommx.v1.instance.created" in annotations:
-            instance.created = datetime.fromisoformat(
+            instance.created = parser.isoparse(
                 annotations["org.ommx.v1.instance.created"]
             )
         if "org.ommx.v1.instance.title" in annotations:
@@ -170,11 +171,11 @@ class Artifact:
                 descriptor.annotations["org.ommx.v1.solution.parameters"]
             )
         if "org.ommx.v1.solution.start" in descriptor.annotations:
-            solution.start = datetime.fromisoformat(
+            solution.start = parser.isoparse(
                 descriptor.annotations["org.ommx.v1.solution.start"]
             )
         if "org.ommx.v1.solution.end" in descriptor.annotations:
-            solution.end = datetime.fromisoformat(
+            solution.end = parser.isoparse(
                 descriptor.annotations["org.ommx.v1.solution.end"]
             )
         return solution
