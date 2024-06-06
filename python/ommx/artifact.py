@@ -158,7 +158,22 @@ class Artifact:
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         blob = self.get_blob(descriptor)
-        return Solution.from_bytes(blob)
+        solution = Solution.from_bytes(blob)
+        if "org.ommx.v1.solution.instance" in descriptor.annotations:
+            solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
+        if "org.ommx.v1.solution.solver" in descriptor.annotations:
+            solution.solver = json.loads(descriptor.annotations["org.ommx.v1.solution.solver"])
+        if "org.ommx.v1.solution.parameters" in descriptor.annotations:
+            solution.parameters = json.loads(
+                descriptor.annotations["org.ommx.v1.solution.parameters"]
+            )
+        if "org.ommx.v1.solution.start" in descriptor.annotations:
+            solution.start = datetime.fromisoformat(
+                descriptor.annotations["org.ommx.v1.solution.start"]
+            )
+        if "org.ommx.v1.solution.end" in descriptor.annotations:
+            solution.end = datetime.fromisoformat(descriptor.annotations["org.ommx.v1.solution.end"])
+        return solution
 
 
 @dataclass(frozen=True)
