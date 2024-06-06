@@ -1,4 +1,6 @@
 from __future__ import annotations
+from typing import Optional
+from datetime import datetime
 from dataclasses import dataclass
 from pandas import DataFrame, concat, MultiIndex
 
@@ -14,6 +16,13 @@ from .._ommx_rust import evaluate_instance, used_decision_variable_ids
 @dataclass
 class Instance:
     raw: _Instance
+    title: Optional[str] = None
+    """The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."""
+    created: Optional[datetime] = None
+    """The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."""
+    annotations: dict[str, str] = {}
+    """Arbitrary annotations also stored in OMMX artifact."""
+
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:

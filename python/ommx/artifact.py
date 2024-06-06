@@ -284,13 +284,16 @@ class ArtifactBuilder:
         """
         return ArtifactBuilder(ArtifactDirBuilder.for_github(org, repo, name, tag))
 
-    def add_instance(
-        self, instance: Instance, annotations: dict[str, str] = {}
-    ) -> Descriptor:
+    def add_instance( self, instance: Instance) -> Descriptor:
         """
         Add an instance to the artifact with annotations
         """
         blob = instance.to_bytes()
+        annotations = instance.annotations.copy()
+        if instance.created:
+            annotations["org.ommx.v1.instance.created"] = instance.created.isoformat()
+        if instance.title:
+            annotations["org.ommx.v1.instance.title"] = instance.title
         return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
 
     def add_layer(
