@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime
 
 from ._ommx_rust import (
     ArtifactArchive,
@@ -129,15 +130,28 @@ class Artifact:
         Get an instance from the artifact
 
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-        >>> for layer in artifact.layers:
-        ...     if layer.media_type == "application/org.ommx.v1.instance":
-        ...         instance = artifact.get_instance(layer)
-        ...         print(len(instance.constraints))
-        7
+
+        We know that this artifact has only one layer of type `application/org.ommx.v1.instance`
+
+        >>> desc = artifact.layers[0]
+        >>> instance = artifact.get_instance(desc)
+
+        Annotations stored in the artifact is available as attributes
+
+        >>> print(instance.title)
+        random_lp
+        >>> print(instance.created)
+        2024-05-28 08:40:28.728169+00:00
 
         """
         blob = self.get_blob(descriptor)
-        return Instance.from_bytes(blob)
+        instance = Instance.from_bytes(blob)
+        annotations = descriptor.annotations
+        if "org.ommx.v1.instance.created" in annotations:
+            instance.created = datetime.fromisoformat(annotations["org.ommx.v1.instance.created"])
+        if "org.ommx.v1.instance.title" in annotations:
+            instance.title = annotations["org.ommx.v1.instance.title"]
+        return instance
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         blob = self.get_blob(descriptor)
