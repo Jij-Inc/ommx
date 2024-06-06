@@ -68,15 +68,6 @@ fn auth_from_env() -> Result<(String, String, String)> {
         );
         return Ok((domain, username, password));
     }
-
-    // Then check running on GitHub Actions
-    if env::var("GITHUB_ACTIONS").is_ok() {
-        log::info!("Detect running on GitHub Actions. Use `GITHUB_ACTOR` and `GITHUB_TOKEN` for authentication.");
-        let token = env::var("GITHUB_TOKEN")?;
-        let username = env::var("GITHUB_ACTOR")?;
-        return Ok(("ghcr.io".to_string(), username, token));
-    }
-
     bail!("No authentication information found in environment variables");
 }
 
