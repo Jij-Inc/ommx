@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
+from datetime import datetime
+from dateutil import parser
 
 from ._ommx_rust import (
     ArtifactArchive,
@@ -129,19 +132,53 @@ class Artifact:
         Get an instance from the artifact
 
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-        >>> for layer in artifact.layers:
-        ...     if layer.media_type == "application/org.ommx.v1.instance":
-        ...         instance = artifact.get_instance(layer)
-        ...         print(len(instance.constraints))
-        7
+
+        We know that this artifact has only one layer of type `application/org.ommx.v1.instance`
+
+        >>> desc = artifact.layers[0]
+        >>> instance = artifact.get_instance(desc)
+
+        Annotations stored in the artifact is available as attributes
+
+        >>> print(instance.title)
+        random_lp
+        >>> print(instance.created)
+        2024-05-28 08:40:28.728169+00:00
 
         """
         blob = self.get_blob(descriptor)
-        return Instance.from_bytes(blob)
+        instance = Instance.from_bytes(blob)
+        annotations = descriptor.annotations
+        if "org.ommx.v1.instance.created" in annotations:
+            instance.created = parser.isoparse(
+                annotations["org.ommx.v1.instance.created"]
+            )
+        if "org.ommx.v1.instance.title" in annotations:
+            instance.title = annotations["org.ommx.v1.instance.title"]
+        return instance
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         blob = self.get_blob(descriptor)
-        return Solution.from_bytes(blob)
+        solution = Solution.from_bytes(blob)
+        if "org.ommx.v1.solution.instance" in descriptor.annotations:
+            solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
+        if "org.ommx.v1.solution.solver" in descriptor.annotations:
+            solution.solver = json.loads(
+                descriptor.annotations["org.ommx.v1.solution.solver"]
+            )
+        if "org.ommx.v1.solution.parameters" in descriptor.annotations:
+            solution.parameters = json.loads(
+                descriptor.annotations["org.ommx.v1.solution.parameters"]
+            )
+        if "org.ommx.v1.solution.start" in descriptor.annotations:
+            solution.start = parser.isoparse(
+                descriptor.annotations["org.ommx.v1.solution.start"]
+            )
+        if "org.ommx.v1.solution.end" in descriptor.annotations:
+            solution.end = parser.isoparse(
+                descriptor.annotations["org.ommx.v1.solution.end"]
+            )
+        return solution
 
 
 @dataclass(frozen=True)
@@ -284,14 +321,37 @@ class ArtifactBuilder:
         """
         return ArtifactBuilder(ArtifactDirBuilder.for_github(org, repo, name, tag))
 
-    def add_instance(
-        self, instance: Instance, annotations: dict[str, str] = {}
-    ) -> Descriptor:
+    def add_instance(self, instance: Instance) -> Descriptor:
         """
         Add an instance to the artifact with annotations
         """
         blob = instance.to_bytes()
+        annotations = instance.annotations.copy()
+        if instance.created:
+            annotations["org.ommx.v1.instance.created"] = instance.created.isoformat()
+        if instance.title:
+            annotations["org.ommx.v1.instance.title"] = instance.title
         return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
+
+    def add_solution(self, solution: Solution) -> Descriptor:
+        """
+        Add a solution to the artifact with annotations
+        """
+        blob = solution.to_bytes()
+        annotations = solution.annotations.copy()
+        if solution.instance:
+            annotations["org.ommx.v1.solution.instance"] = solution.instance
+        if solution.solver:
+            annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
+        if solution.parameters:
+            annotations["org.ommx.v1.solution.parameters"] = json.dumps(
+                solution.parameters
+            )
+        if solution.start:
+            annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
+        if solution.end:
+            annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
+        return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}

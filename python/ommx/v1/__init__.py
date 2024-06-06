@@ -1,5 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from typing import Optional
+from datetime import datetime
+from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Solution as _Solution
@@ -13,7 +15,28 @@ from .._ommx_rust import evaluate_instance, used_decision_variable_ids
 
 @dataclass
 class Instance:
+    """
+    Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
+
+    Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+    These annotations are loaded from annotations while reading from OMMX artifact.
+    """
+
     raw: _Instance
+    """The raw protobuf message."""
+
+    title: Optional[str] = None
+    """
+    The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
+    """
+    created: Optional[datetime] = None
+    """
+    The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
+    """
+    annotations: dict[str, str] = field(default_factory=dict)
+    """
+    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
+    """
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
@@ -55,7 +78,46 @@ class Instance:
 
 @dataclass
 class Solution:
+    """
+    Idiomatic wrapper of ``ommx.v1.Solution`` protobuf message.
+
+    This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+    """
+
     raw: _Solution
+    """The raw protobuf message."""
+
+    instance: Optional[str] = None
+    """
+    The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
+
+    This ``Solution`` is the solution of the mathematical programming problem described by the instance.
+    """
+
+    solver: Optional[object] = None
+    """
+    The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact.
+    """
+
+    parameters: Optional[object] = None
+    """
+    The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact.
+    """
+
+    start: Optional[datetime] = None
+    """
+    When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact.
+    """
+
+    end: Optional[datetime] = None
+    """
+    When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact.
+    """
+
+    annotations: dict[str, str] = field(default_factory=dict)
+    """
+    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
+    """
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
