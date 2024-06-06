@@ -57,14 +57,13 @@ fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn auth_from_env() -> Result<(String, String, String)> {
-    // OMMX_AUTH_* is checked first
     if let (Ok(domain), Ok(username), Ok(password)) = (
-        env::var("OMMX_AUTH_DOMAIN"),
-        env::var("OMMX_AUTH_USERNAME"),
-        env::var("OMMX_AUTH_PASSWORD"),
+        env::var("OMMX_BASIC_AUTH_DOMAIN"),
+        env::var("OMMX_BASIC_AUTH_USERNAME"),
+        env::var("OMMX_BASIC_AUTH_PASSWORD"),
     ) {
         log::info!(
-            "Detect OMMX_AUTH_DOMAIN, OMMX_AUTH_USERNAME, OMMX_AUTH_PASSWORD for authentication."
+            "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
         );
         return Ok((domain, username, password));
     }
