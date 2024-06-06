@@ -155,3 +155,7 @@ jobs:
       - name: Run notebooks
         run: |
           jupyter nbconvert --to notebook --execute notebooks/*.ipynb
+        env:
+          OMMX_BASIC_AUTH_DOMAIN: ghcr.io
+          OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
+          OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
