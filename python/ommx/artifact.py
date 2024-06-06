@@ -148,7 +148,9 @@ class Artifact:
         instance = Instance.from_bytes(blob)
         annotations = descriptor.annotations
         if "org.ommx.v1.instance.created" in annotations:
-            instance.created = datetime.fromisoformat(annotations["org.ommx.v1.instance.created"])
+            instance.created = datetime.fromisoformat(
+                annotations["org.ommx.v1.instance.created"]
+            )
         if "org.ommx.v1.instance.title" in annotations:
             instance.title = annotations["org.ommx.v1.instance.title"]
         return instance
