@@ -174,6 +174,9 @@ impl Artifact<Remote> {
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
         log::info!("Pulling: {}", image_name);
+        if let Ok((domain, username, password)) = auth_from_env() {
+            self.0.add_basic_auth(&domain, &username, &password);
+        }
         let out = ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(Artifact(OciArtifact::new(out)))
     }
