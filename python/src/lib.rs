@@ -12,6 +12,8 @@ use pyo3::prelude::*;
 
 #[pymodule]
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
+    pyo3_log::init();
+
     m.add_class::<ArtifactArchive>()?;
     m.add_class::<ArtifactDir>()?;
     m.add_class::<ArtifactArchiveBuilder>()?;
