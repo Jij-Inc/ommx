@@ -1,7 +1,7 @@
 OMMX Artifact Design
 =====================
 
-OMMX Artifact is a specification for packaging and distributing OMMX Messages and associated metadata.
+OMMX Artifact is a specification for packaging and distributing OMMX Messages and associated metadata over the OCI Artifact defined in [OCI Image specification 1.1.0](https://github.com/opencontainers/image-spec/blob/v1.1.0/spec.md) and [OCI Distribution specification 1.1.0](https://github.com/opencontainers/distribution-spec/blob/v1.1.0/spec.md).
 
 Metadata and Reference
 -----------------------
