@@ -366,7 +366,9 @@ class ArtifactBuilder:
             annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
         return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
 
-    def add_ndarray(self, array: numpy.ndarray, annotations: dict[str, str] = {}) -> Descriptor:
+    def add_ndarray(
+        self, array: numpy.ndarray, annotations: dict[str, str] = {}
+    ) -> Descriptor:
         """
         Add a numpy ndarray to the artifact with npy format
         """
