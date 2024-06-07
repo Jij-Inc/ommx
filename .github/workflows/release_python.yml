@@ -1,7 +1,9 @@
 name: Release Python SDK
 
 on:
-  pull_request:
+  push:
+    tags:
+      - python-*
   workflow_dispatch:
 
 jobs:
@@ -65,3 +67,19 @@ jobs:
           name: windows
           path: ./python/dist
           retention-days: 30
+
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    needs: [linux, macos, windows]
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: "*"
+          merge-multiple: true
+
+      - name: Upload wheels to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
