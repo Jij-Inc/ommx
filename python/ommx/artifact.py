@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
+import numpy
 from dataclasses import dataclass
 from pathlib import Path
-from datetime import datetime
 from dateutil import parser
 
 from ._ommx_rust import (
@@ -115,7 +116,7 @@ class Artifact:
             digest = digest.digest
         return self._base.get_blob(digest)
 
-    def get_layer(self, descriptor: Descriptor) -> Instance | Solution:
+    def get_layer(self, descriptor: Descriptor) -> Instance | Solution | numpy.ndarray:
         """
         Get the layer object corresponding to the descriptor
 
@@ -125,6 +126,8 @@ class Artifact:
             return self.get_instance(descriptor)
         if descriptor.media_type == "application/org.ommx.v1.solution":
             return self.get_solution(descriptor)
+        if descriptor.media_type == "application/vnd.numpy":
+            return self.get_ndarray(descriptor)
         raise ValueError(f"Unsupported media type {descriptor.media_type}")
 
     def get_instance(self, descriptor: Descriptor) -> Instance:
@@ -146,6 +149,8 @@ class Artifact:
         2024-05-28 08:40:28.728169+00:00
 
         """
+        assert descriptor.media_type == "application/org.ommx.v1.instance"
+
         blob = self.get_blob(descriptor)
         instance = Instance.from_bytes(blob)
         annotations = descriptor.annotations
@@ -158,6 +163,8 @@ class Artifact:
         return instance
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
+        assert descriptor.media_type == "application/org.ommx.v1.solution"
+
         blob = self.get_blob(descriptor)
         solution = Solution.from_bytes(blob)
         if "org.ommx.v1.solution.instance" in descriptor.annotations:
@@ -179,6 +186,12 @@ class Artifact:
                 descriptor.annotations["org.ommx.v1.solution.end"]
             )
         return solution
+
+    def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
+        assert descriptor.media_type == "application/vnd.numpy"
+        blob = self.get_blob(descriptor)
+        f = io.BytesIO(blob)
+        return numpy.load(f)
 
 
 @dataclass(frozen=True)
@@ -352,6 +365,15 @@ class ArtifactBuilder:
         if solution.end:
             annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
         return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
+
+    def add_ndarray(self, array: numpy.ndarray, annotations: dict[str, str] = {}) -> Descriptor:
+        """
+        Add a numpy ndarray to the artifact with npy format
+        """
+        f = io.BytesIO()
+        numpy.save(f, array)
+        blob = f.getvalue()
+        return self.add_layer("application/vnd.numpy", blob, annotations)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
