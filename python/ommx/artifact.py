@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import pandas
 import numpy
 from dataclasses import dataclass
 from pathlib import Path
@@ -196,6 +197,14 @@ class Artifact:
         f = io.BytesIO(blob)
         return numpy.load(f)
 
+    def get_dataframe(self, descriptor: Descriptor) -> pandas.DataFrame:
+        """
+        Get a pandas DataFrame from an artifact layer stored by :py:meth:`ArtifactBuilder.add_dataframe`
+        """
+        assert descriptor.media_type == "application/vnd.apache.parquet"
+        blob = self.get_blob(descriptor)
+        return pandas.read_parquet(io.BytesIO(blob))
+
 
 @dataclass(frozen=True)
 class ArtifactBuilder:
@@ -369,9 +378,7 @@ class ArtifactBuilder:
             annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
         return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
 
-    def add_ndarray(
-        self, array: numpy.ndarray, annotations: dict[str, str] = {}
-    ) -> Descriptor:
+    def add_ndarray(self, array: numpy.ndarray, /, **annotations: str) -> Descriptor:
         """
         Add a numpy ndarray to the artifact with npy format
 
@@ -381,16 +388,22 @@ class ArtifactBuilder:
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
 
-        Store the array in the artifact with `application/vnd.numpy` media type
+        Store the array in the artifact with `application/vnd.numpy` media type. We can also add annotations to the layer.
 
         >>> import uuid
         >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_array.ommx.{uuid.uuid4()}")
-        >>> _desc = builder.add_ndarray(array)
+        >>> _desc = builder.add_ndarray(array, title="test_array")
         >>> artifact = builder.build()
+
+        The `title` annotation is stored as `org.ommx.user.title` in the artifact, which can be accessed by :py:attr:`Descriptor.annotations` or :py:attr:`Descriptor.user_annotations`.
 
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.numpy
+        >>> print(layer.annotations)
+        {'org.ommx.user.title': 'test_array'}
+        >>> print(layer.user_annotations)
+        {'title': 'test_array'}
 
         Load the array from the artifact by :py:meth:`Artifact.get_ndarray`
 
@@ -402,7 +415,42 @@ class ArtifactBuilder:
         f = io.BytesIO()
         numpy.save(f, array)
         blob = f.getvalue()
+        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.numpy", blob, annotations)
+
+    def add_dataframe(self, df: pandas.DataFrame, /, **annotations: str) -> Descriptor:
+        """
+        Add a pandas DataFrame to the artifact with parquet format
+
+        Example
+        ========
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+
+        Store the DataFrame in the artifact with `application/vnd.apache.parquet` media type.
+
+        >>> import uuid
+        >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_dataframe.ommx.{uuid.uuid4()}")
+        >>> _desc = builder.add_dataframe(df, title="test_dataframe")
+        >>> artifact = builder.build()
+
+        The `title` annotation is stored as `org.ommx.user.title` in the artifact, which can be accessed by :py:attr:`Descriptor.annotations` or :py:attr:`Descriptor.user_annotations`.
+
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/vnd.apache.parquet
+        >>> print(layer.annotations)
+        {'org.ommx.user.title': 'test_dataframe'}
+        >>> print(layer.user_annotations)
+        {'title': 'test_dataframe'}
+
+        >>> df2 = artifact.get_dataframe(layer)
+        >>> assert df.equals(df2)
+
+        """
+        blob = df.to_parquet()
+        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        return self.add_layer("application/vnd.apache.parquet", blob, annotations)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
