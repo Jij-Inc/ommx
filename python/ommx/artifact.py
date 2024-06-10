@@ -319,6 +319,16 @@ class ArtifactBuilder:
     def temp() -> ArtifactBuilder:
         """
         Create a new artifact as a temporary file. Note that this is insecure and should only be used for testing.
+
+        >>> builder = ArtifactBuilder.temp()
+        >>> artifact = builder.build()
+
+        Image name is set by random UUID, and can be pushed to https://ttl.sh/ registry. This will be removed after 1 hour.
+
+        >>> print(artifact.image_name)
+        ttl.sh/...-...-...-...-...:1h
+        >>> artifact.push()
+
         """
         return ArtifactBuilder(ArtifactArchiveBuilder.temp())
 

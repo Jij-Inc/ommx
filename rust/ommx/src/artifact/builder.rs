@@ -54,7 +54,7 @@ impl Builder<OciArchiveBuilder> {
         let id = Uuid::new_v4();
         Self::new_archive(
             std::env::temp_dir().join(format!("ommx-{}", id)),
-            ImageName::parse(&format!("temp-{}", id))?,
+            ImageName::parse(&format!("ttl.sh/{}:1h", id))?,
         )
     }
 }
