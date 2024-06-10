@@ -56,7 +56,8 @@ impl PyDescriptor {
             annotations
                 .iter()
                 .flat_map(|(k, v)| {
-                    k.strip_prefix("org.ommx.user.").map(|k| (k.to_string(), v.clone()))
+                    k.strip_prefix("org.ommx.user.")
+                        .map(|k| (k.to_string(), v.clone()))
                 })
                 .collect()
         } else {
