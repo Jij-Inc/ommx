@@ -48,4 +48,23 @@ impl PyDescriptor {
             HashMap::new()
         }
     }
+
+    /// Return annotations with key prefix "org.ommx.user."
+    #[getter]
+    pub fn user_annotations(&self) -> HashMap<String, String> {
+        if let Some(annotations) = self.0.annotations() {
+            annotations
+                .iter()
+                .flat_map(|(k, v)| {
+                    if let Some(k) = k.strip_prefix("org.ommx.user.") {
+                        Some((k.to_string(), v.clone()))
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        } else {
+            HashMap::new()
+        }
+    }
 }
