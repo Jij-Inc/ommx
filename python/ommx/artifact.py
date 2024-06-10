@@ -371,6 +371,23 @@ class ArtifactBuilder:
     ) -> Descriptor:
         """
         Add a numpy ndarray to the artifact with npy format
+
+        >>> import numpy as np
+        >>> array = np.array([1, 2, 3])
+
+        >>> import uuid
+        >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_array.ommx.{uuid.uuid4()}")
+        >>> _desc = builder.add_ndarray(array)
+        >>> artifact = builder.build()
+
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/vnd.numpy
+
+        >>> ndarray = artifact.get_ndarray(layer)
+        >>> print(ndarray)
+        [1 2 3]
+
         """
         f = io.BytesIO()
         numpy.save(f, array)
