@@ -28,6 +28,12 @@ impl ArtifactArchiveBuilder {
         Ok(Self(Some(builder)))
     }
 
+    #[staticmethod]
+    pub fn temp() -> Result<Self> {
+        let builder = Builder::temp_archive()?;
+        Ok(Self(Some(builder)))
+    }
+
     pub fn add_layer(
         &mut self,
         media_type: &str,
