@@ -188,6 +188,9 @@ class Artifact:
         return solution
 
     def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
+        """
+        Get a numpy array from an artifact layer stored by :py:meth:`ArtifactBuilder.add_ndarray`
+        """
         assert descriptor.media_type == "application/vnd.numpy"
         blob = self.get_blob(descriptor)
         f = io.BytesIO(blob)
@@ -372,8 +375,13 @@ class ArtifactBuilder:
         """
         Add a numpy ndarray to the artifact with npy format
 
+        Example
+        ========
+
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
+
+        Store the array in the artifact with `application/vnd.numpy` media type
 
         >>> import uuid
         >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_array.ommx.{uuid.uuid4()}")
@@ -383,6 +391,8 @@ class ArtifactBuilder:
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.numpy
+
+        Load the array from the artifact by :py:meth:`Artifact.get_ndarray`
 
         >>> ndarray = artifact.get_ndarray(layer)
         >>> print(ndarray)
