@@ -316,6 +316,23 @@ class ArtifactBuilder:
         return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
 
     @staticmethod
+    def temp() -> ArtifactBuilder:
+        """
+        Create a new artifact as a temporary file. Note that this is insecure and should only be used for testing.
+
+        >>> builder = ArtifactBuilder.temp()
+        >>> artifact = builder.build()
+
+        Image name is set by random UUID, and can be pushed to https://ttl.sh/ registry. This will be removed after 1 hour.
+
+        >>> print(artifact.image_name)
+        ttl.sh/...-...-...-...-...:1h
+        >>> artifact.push()
+
+        """
+        return ArtifactBuilder(ArtifactArchiveBuilder.temp())
+
+    @staticmethod
     def for_github(org: str, repo: str, name: str, tag: str) -> ArtifactBuilder:
         """
         An alias for :py:meth:`new` to create a new artifact in local registry with GitHub Container Registry image name
@@ -390,8 +407,7 @@ class ArtifactBuilder:
 
         Store the array in the artifact with `application/vnd.numpy` media type. We can also add annotations to the layer.
 
-        >>> import uuid
-        >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_array.ommx.{uuid.uuid4()}")
+        >>> builder = ArtifactBuilder.temp()
         >>> _desc = builder.add_ndarray(array, title="test_array")
         >>> artifact = builder.build()
 
@@ -429,8 +445,7 @@ class ArtifactBuilder:
 
         Store the DataFrame in the artifact with `application/vnd.apache.parquet` media type.
 
-        >>> import uuid
-        >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_dataframe.ommx.{uuid.uuid4()}")
+        >>> builder = ArtifactBuilder.temp()
         >>> _desc = builder.add_dataframe(df, title="test_dataframe")
         >>> artifact = builder.build()
 

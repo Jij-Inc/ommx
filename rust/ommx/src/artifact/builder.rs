@@ -14,6 +14,7 @@ use std::{
     path::PathBuf,
 };
 use url::Url;
+use uuid::Uuid;
 
 /// Build [Artifact]
 pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
@@ -46,6 +47,15 @@ impl Builder<OciArchiveBuilder> {
             archive,
             media_types::v1_artifact(),
         )?))
+    }
+
+    /// Create a new artifact builder for a temporary file. This is insecure and should only be used in tests.
+    pub fn temp_archive() -> Result<Self> {
+        let id = Uuid::new_v4();
+        Self::new_archive(
+            std::env::temp_dir().join(format!("ommx-{}", id)),
+            ImageName::parse(&format!("ttl.sh/{}:1h", id))?,
+        )
     }
 }
 
