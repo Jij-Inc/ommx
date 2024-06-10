@@ -1,0 +1,65 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          pip install ".[dev]"
+
+      - name: Format
+        run: |
+          ruff format .
+
+      - name: Suggest changes
+        uses: reviewdog/action-suggester@v1
+        with:
+          tool_name: ruff format
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          pip install ".[dev]"
+          pip install pytest-github-actions-annotate-failures
+
+      - name: pyright
+        if: always()
+        run: |
+          python -m pyright ./ommx_python_mip_adapter
+
+      - name: pytest
+        if: always()
+        run: |
+          pytest --doctest-modules -vv
+
+      - name: Run codes in README.md
+        if: always()
+        run: |
+          markdown-code-runner --verbose README.md

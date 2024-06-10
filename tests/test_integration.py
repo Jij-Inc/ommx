@@ -16,7 +16,7 @@ import ommx_python_mip_adapter as adapter
     [
         SingleFeasibleLPGenerator(10, DataType.INT),
         SingleFeasibleLPGenerator(10, DataType.FLOAT),
-    ]
+    ],
 )
 def test_integration_lp(generater):
     # Objective function: 0
@@ -29,14 +29,12 @@ def test_integration_lp(generater):
     ommx_solution = adapter.model_to_solution(model, ommx_instance_bytes)
 
     ommx_solution_obj = SolutionList.FromString(ommx_solution)
-    expected_solution_obj = SolutionList.FromString(
-        generater.get_v1_solution()
-    )
+    expected_solution_obj = SolutionList.FromString(generater.get_v1_solution())
 
     # Check the number of solutions
     assert len(ommx_solution_obj.solutions) == 1
 
-    actual_entries = ommx_solution_obj.solutions[0].entries 
+    actual_entries = ommx_solution_obj.solutions[0].entries
     expected_entries = expected_solution_obj.solutions[0].entries
 
     # Check the solution of each decision variable
@@ -102,7 +100,7 @@ def test_integration_milp():
                                 coefficient=-1,
                             ),
                         ],
-                        constant=-6
+                        constant=-6,
                     ),
                 ),
                 equality=Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
@@ -120,7 +118,7 @@ def test_integration_milp():
                                 coefficient=3,
                             ),
                         ],
-                        constant=-6
+                        constant=-6,
                     ),
                 ),
                 equality=Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,

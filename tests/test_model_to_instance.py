@@ -25,25 +25,25 @@ def test_milp():
     x1 = model.add_var(
         name="1",
         var_type=mip.CONTINUOUS,
-        lb=CONTINUOUS_LOWER_BOUND,    # type: ignore
-        ub=CONTINUOUS_UPPER_BOUND,    # type: ignore
+        lb=CONTINUOUS_LOWER_BOUND,  # type: ignore
+        ub=CONTINUOUS_UPPER_BOUND,  # type: ignore
     )
     x2 = model.add_var(
         name="2",
         var_type=mip.INTEGER,
-        lb=INTEGER_LOWER_BOUND,    # type: ignore
-        ub=INTEGER_UPPER_BOUND,    # type: ignore
+        lb=INTEGER_LOWER_BOUND,  # type: ignore
+        ub=INTEGER_UPPER_BOUND,  # type: ignore
     )
     x3 = model.add_var(
         name="3",
         var_type=mip.BINARY,
     )
 
-    model.objective = -1 * x1 - 2 * x2 - 3 * x3    # type: ignore
+    model.objective = -1 * x1 - 2 * x2 - 3 * x3  # type: ignore
 
-    model.add_constr(4 * x1 - 5 * x2 + 6 == 0)    # type: ignore
-    model.add_constr(- 7 * x1 + 8 * x3 - 9 <= 0)    # type: ignore
-    model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)    # type: ignore
+    model.add_constr(4 * x1 - 5 * x2 + 6 == 0)  # type: ignore
+    model.add_constr(-7 * x1 + 8 * x3 - 9 <= 0)  # type: ignore
+    model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)  # type: ignore
 
     ommx_instance_bytes = adapter.model_to_instance(model)
     ommx_instance = Instance.FromString(ommx_instance_bytes)
@@ -141,18 +141,18 @@ def test_no_objective_model():
     x1 = model.add_var(
         name="1",
         var_type=mip.CONTINUOUS,
-        lb=LOWER_BOUND,    # type: ignore
-        ub=UPPER_BOUND,    # type: ignore
+        lb=LOWER_BOUND,  # type: ignore
+        ub=UPPER_BOUND,  # type: ignore
     )
     x2 = model.add_var(
         name="2",
         var_type=mip.CONTINUOUS,
-        lb=LOWER_BOUND,    # type: ignore
-        ub=UPPER_BOUND,    # type: ignore
+        lb=LOWER_BOUND,  # type: ignore
+        ub=UPPER_BOUND,  # type: ignore
     )
 
-    model.add_constr(1 * x1 + 2 * x2 - 5 == 0)    # type: ignore
-    model.add_constr(4 * x1 + 3 * x2 - 10 == 0)    # type: ignore
+    model.add_constr(1 * x1 + 2 * x2 - 5 == 0)  # type: ignore
+    model.add_constr(4 * x1 + 3 * x2 - 10 == 0)  # type: ignore
 
     ommx_instance_bytes = adapter.model_to_instance(model)
     ommx_instance = Instance.FromString(ommx_instance_bytes)

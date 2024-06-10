@@ -161,3 +161,6 @@ cython_debug/
 
 # setuptools
 _version.py
+
+# ruff
+.ruff_cache

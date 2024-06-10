@@ -30,10 +30,11 @@ dev = [
     "numpy",
     "pyright",
     "pytest",
+    "ruff",
     "sphinx",
-    "sphinx_rtd_theme",
-    "sphinx_fontawesome",
     "sphinx-autoapi",
+    "sphinx_fontawesome",
+    "sphinx_rtd_theme",
 ]
 
 

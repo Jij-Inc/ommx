@@ -56,7 +56,7 @@ def test_error_nonlinear_objective():
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         adapter.instance_to_model(ommx_instance_bytes)
     assert "The objective function must be" in str(e.value)
-    
+
 
 def test_error_nonlinear_constraint():
     # Objective function: 0

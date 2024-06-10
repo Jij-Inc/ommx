@@ -35,7 +35,6 @@ class PythonMIPBuilder:
             solver=solver,
         )
 
-
     def _set_decision_variables(self):
         for var in self._ommx_instance.decision_variables:
             if var.kind == DecisionVariable.KIND_BINARY:
@@ -47,47 +46,47 @@ class PythonMIPBuilder:
                 self._model.add_var(
                     name=str(var.id),
                     var_type=mip.INTEGER,
-                    lb=var.bound.lower,    # type: ignore
-                    ub=var.bound.upper,    # type: ignore
+                    lb=var.bound.lower,  # type: ignore
+                    ub=var.bound.upper,  # type: ignore
                 )
             elif var.kind == DecisionVariable.KIND_CONTINUOUS:
                 self._model.add_var(
                     name=str(var.id),
                     var_type=mip.CONTINUOUS,
-                    lb=var.bound.lower,    # type: ignore
-                    ub=var.bound.upper,    # type: ignore
+                    lb=var.bound.lower,  # type: ignore
+                    ub=var.bound.upper,  # type: ignore
                 )
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
-    
-    
+
     def _make_linear_expr(
         self,
         ommx_function: Function,
-    ) -> mip.LinExpr:        
+    ) -> mip.LinExpr:
         ommx_linear = ommx_function.linear
 
-        return mip.xsum(
-            term.coefficient * self._model.vars[str(term.id)] # type: ignore
-            for term in ommx_linear.terms
-        ) + ommx_linear.constant # type: ignore
+        return (
+            mip.xsum(
+                term.coefficient * self._model.vars[str(term.id)]  # type: ignore
+                for term in ommx_linear.terms
+            )
+            + ommx_linear.constant
+        )  # type: ignore
 
-            
     def _set_objective_function(self):
         ommx_objective = self._ommx_instance.objective
 
         if ommx_objective.HasField("constant"):
-            self._model.objective = ommx_objective.constant    # type: ignore
+            self._model.objective = ommx_objective.constant  # type: ignore
         elif ommx_objective.HasField("linear"):
             self._model.objective = self._make_linear_expr(ommx_objective)
         else:
             raise OMMXPythonMIPAdapterError(
                 "The objective function must be either `constant` or `linear`."
             )
-
 
     def _set_constraints(self):
         ommx_constraints = self._ommx_instance.constraints
@@ -103,17 +102,16 @@ class PythonMIPBuilder:
             lin_expr = self._make_linear_expr(constraint.function)
 
             if constraint.equality == Constraint.EQUALITY_EQUAL_TO_ZERO:
-                constr_expr = (lin_expr == 0)
-            elif (constraint.equality == Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO):
-                constr_expr = (lin_expr <= 0)    # type: ignore
+                constr_expr = lin_expr == 0
+            elif constraint.equality == Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+                constr_expr = lin_expr <= 0  # type: ignore
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported constraint equality: "
                     f"id: {constraint.id}, equality: {constraint.equality}"
                 )
-            
-            self._model.add_constr(constr_expr, name=str(constraint.id))
 
+            self._model.add_constr(constr_expr, name=str(constraint.id))
 
     def build(self) -> mip.Model:
         self._set_decision_variables()
@@ -151,31 +149,27 @@ class OMMXInstanceBuilder:
                     id=var.idx,
                     kind=kind,
                     bound=Bound(lower=var.lb, upper=var.ub),
-                    description=DecisionVariable.Description(name=var.name)
+                    description=DecisionVariable.Description(name=var.name),
                 )
             )
 
         return decision_variables
-    
 
     def _make_function_from_lin_expr(
         self,
         lin_expr: mip.LinExpr,
     ) -> Function:
         terms = [
-            Linear.Term(id=var.idx, coefficient=coeff)    # type: ignore
+            Linear.Term(id=var.idx, coefficient=coeff)  # type: ignore
             for var, coeff in lin_expr.expr.items()
         ]
-        constant: float = lin_expr.const    # type: ignore
+        constant: float = lin_expr.const  # type: ignore
 
         # If the terms are empty, the function is a constant.
         if len(terms) == 0:
             return Function(constant=constant)
         else:
-            return Function(
-                linear=Linear(terms=terms, constant=constant)
-            )
-
+            return Function(linear=Linear(terms=terms, constant=constant))
 
     def _objective(self) -> Function:
         # In Python-MIP, it is allowed not to set the objective function.
@@ -186,9 +180,8 @@ class OMMXInstanceBuilder:
             objective = self._model.objective
         except ParameterNotAvailable:
             return Function(constant=0)
-        
-        return self._make_function_from_lin_expr(objective)
 
+        return self._make_function_from_lin_expr(objective)
 
     def _constraints(self) -> tp.List[Constraint]:
         constraints = []
@@ -226,18 +219,16 @@ class OMMXInstanceBuilder:
                     f"Not supported constraint sense: "
                     f"name: {constr.name}, sense: {lin_expr.sense}"
                 )
-            
+
             constraints.append(constraint)
 
         return constraints
-
 
     def _sense(self):
         if self._model.sense == mip.MAXIMIZE:
             return Instance.SENSE_MAXIMIZE
         else:
             return Instance.SENSE_MINIMIZE
-
 
     def build(self) -> bytes:
         return Instance(
@@ -260,7 +251,7 @@ def instance_to_model(
 
     Args:
         ommx_instance_bytes (bytes): Serialized ommx.v1.Instance.
-        sense (str): mip.MINIMIZE or mip.MAXIMIZE. 
+        sense (str): mip.MINIMIZE or mip.MAXIMIZE.
         solver_name (str): mip.CBC or mip.GUROBI. Searches for which solver is available if not informed.
         solver (mip.Solver): if this argument is provided, solver_name will be ignored.
 
@@ -318,7 +309,7 @@ def model_to_instance(model: mip.Model) -> bytes:
 
     Args:
         model (mip.Model): Python-MIP Model.
-    
+
     Returns:
         bytes: Serialized ommx.v1.Instance.
 
@@ -410,7 +401,7 @@ def model_to_solution(
         solutions=[
             Solution(
                 entries={
-                    var.id: model.var_by_name(str(var.id)).x    # type: ignore
+                    var.id: model.var_by_name(str(var.id)).x  # type: ignore
                     for var in ommx_instance.decision_variables
                 }
             )
