@@ -1,6 +1,6 @@
 import mip
 
-from ommx.v1.constraint_pb2 import Constraint
+from ommx.v1.constraint_pb2 import Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable
 from ommx.v1.instance_pb2 import Instance
 
@@ -45,8 +45,7 @@ def test_milp():
     model.add_constr(-7 * x1 + 8 * x3 - 9 <= 0)  # type: ignore
     model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)  # type: ignore
 
-    ommx_instance_bytes = adapter.model_to_instance(model)
-    ommx_instance = Instance.FromString(ommx_instance_bytes)
+    ommx_instance = adapter.model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.SENSE_MINIMIZE
 
@@ -90,7 +89,7 @@ def test_milp():
     assert len(ommx_instance.constraints) == 3
 
     constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Constraint.EQUALITY_EQUAL_TO_ZERO
+    assert constraint1.equality == Equality.EQUALITY_EQUAL_TO_ZERO
     assert constraint1.function.HasField("linear")
     assert constraint1.function.linear.constant == 6
     assert len(constraint1.function.linear.terms) == 2
@@ -102,7 +101,7 @@ def test_milp():
     assert constraint1_term_x2.coefficient == -5
 
     constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constraint2.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint2.function.HasField("linear")
     assert constraint2.function.linear.constant == -9
     assert len(constraint2.function.linear.terms) == 2
@@ -114,7 +113,7 @@ def test_milp():
     assert constraint2_term_x3.coefficient == 8
 
     constraint3 = ommx_instance.constraints[2]
-    assert constraint3.equality == Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constraint3.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint3.function.HasField("linear")
     assert constraint3.function.linear.constant == -12
     assert len(constraint3.function.linear.terms) == 2
@@ -154,8 +153,7 @@ def test_no_objective_model():
     model.add_constr(1 * x1 + 2 * x2 - 5 == 0)  # type: ignore
     model.add_constr(4 * x1 + 3 * x2 - 10 == 0)  # type: ignore
 
-    ommx_instance_bytes = adapter.model_to_instance(model)
-    ommx_instance = Instance.FromString(ommx_instance_bytes)
+    ommx_instance = adapter.model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.SENSE_MAXIMIZE
 
@@ -182,7 +180,7 @@ def test_no_objective_model():
     assert len(ommx_instance.constraints) == 2
 
     constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Constraint.EQUALITY_EQUAL_TO_ZERO
+    assert constraint1.equality == Equality.EQUALITY_EQUAL_TO_ZERO
     assert constraint1.function.HasField("linear")
     assert constraint1.function.linear.constant == -5
     assert len(constraint1.function.linear.terms) == 2
@@ -194,7 +192,7 @@ def test_no_objective_model():
     assert constraint1_term_x2.coefficient == 2
 
     constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Constraint.EQUALITY_EQUAL_TO_ZERO
+    assert constraint2.equality == Equality.EQUALITY_EQUAL_TO_ZERO
     assert constraint2.function.HasField("linear")
     assert constraint2.function.linear.constant == -10
     assert len(constraint2.function.linear.terms) == 2

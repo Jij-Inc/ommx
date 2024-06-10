@@ -3,12 +3,13 @@ import typing as tp
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx.v1.constraint_pb2 import Constraint
+from ommx.v1.constraint_pb2 import Constraint, Equality, ConstraintDescription
 from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
-from ommx.v1.instance_pb2 import Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import Solution, SolutionList
+from ommx.v1.solution_pb2 import State
+from ommx.v1.instance_pb2 import Instance as _Instance
+from ommx.v1 import Instance
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
@@ -16,19 +17,13 @@ from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 class PythonMIPBuilder:
     def __init__(
         self,
-        ommx_instance_bytes: bytes,
+        instance: Instance,
         *,
         sense: str = mip.MINIMIZE,
         solver_name: str = mip.CBC,
         solver: tp.Optional[mip.Solver] = None,
     ):
-        try:
-            self._ommx_instance = Instance.FromString(ommx_instance_bytes)
-        except Exception as e:
-            raise OMMXPythonMIPAdapterError(
-                "Invalid `ommx_instance_bytes` as ommx.v1.Instance."
-            ) from e
-
+        self._ommx_instance = instance.raw
         self._model = mip.Model(
             sense=sense,
             solver_name=solver_name,
@@ -101,9 +96,9 @@ class PythonMIPBuilder:
 
             lin_expr = self._make_linear_expr(constraint.function)
 
-            if constraint.equality == Constraint.EQUALITY_EQUAL_TO_ZERO:
+            if constraint.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
-            elif constraint.equality == Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif constraint.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
                 constr_expr = lin_expr <= 0  # type: ignore
             else:
                 raise OMMXPythonMIPAdapterError(
@@ -194,25 +189,25 @@ class OMMXInstanceBuilder:
             if lin_expr.sense == "=":
                 constraint = Constraint(
                     id=id,
-                    equality=Constraint.EQUALITY_EQUAL_TO_ZERO,
+                    equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(lin_expr),
-                    description=Constraint.Description(name=name),
+                    description=ConstraintDescription(name=name),
                 )
             elif lin_expr.sense == "<":
                 constraint = Constraint(
                     id=id,
-                    equality=Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
+                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(lin_expr),
-                    description=Constraint.Description(name=name),
+                    description=ConstraintDescription(name=name),
                 )
             elif lin_expr.sense == ">":
                 # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
                 # So multiply the linear expression by -1.
                 constraint = Constraint(
                     id=id,
-                    equality=Constraint.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
+                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(-lin_expr),
-                    description=Constraint.Description(name=name),
+                    description=ConstraintDescription(name=name),
                 )
             else:
                 raise OMMXPythonMIPAdapterError(
@@ -226,21 +221,23 @@ class OMMXInstanceBuilder:
 
     def _sense(self):
         if self._model.sense == mip.MAXIMIZE:
-            return Instance.SENSE_MAXIMIZE
+            return _Instance.SENSE_MAXIMIZE
         else:
-            return Instance.SENSE_MINIMIZE
+            return _Instance.SENSE_MINIMIZE
 
-    def build(self) -> bytes:
+    def build(self) -> Instance:
         return Instance(
-            decision_variables=self._decision_variables(),
-            objective=self._objective(),
-            constraints=self._constraints(),
-            sense=self._sense(),
-        ).SerializeToString()
+            _Instance(
+                decision_variables=self._decision_variables(),
+                objective=self._objective(),
+                constraints=self._constraints(),
+                sense=self._sense(),
+            )
+        )
 
 
 def instance_to_model(
-    ommx_instance_bytes: bytes,
+    instance: Instance,
     *,
     sense: str = mip.MINIMIZE,
     solver_name: str = mip.CBC,
@@ -266,36 +263,37 @@ def instance_to_model(
 
         >>> import ommx_python_mip_adapter as adapter
         >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
-        >>> from ommx.v1.instance_pb2 import Instance
+        >>> from ommx.v1.instance_pb2 import Instance as _Instance
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
-        >>> from ommx.v1.solution_pb2 import SolutionList
+        >>> from ommx.v1 import Instance
+
         >>> ommx_instance = Instance(
-        ...     decision_variables=[
-        ...         DecisionVariable(
-        ...             id=1,
-        ...             kind=DecisionVariable.KIND_INTEGER,
-        ...             bound=Bound(lower=0, upper=5),
+        ...     _Instance(
+        ...         decision_variables=[
+        ...             DecisionVariable(
+        ...                 id=1,
+        ...                 kind=DecisionVariable.KIND_INTEGER,
+        ...                 bound=Bound(lower=0, upper=5),
+        ...             ),
+        ...         ],
+        ...         objective=Function(
+        ...             linear=Linear(
+        ...                 terms=[Linear.Term(id=1, coefficient=1)]
+        ...             ),
         ...         ),
-        ...     ],
-        ...     objective=Function(
-        ...         linear=Linear(
-        ...             terms=[Linear.Term(id=1, coefficient=1)]
-        ...         ),
-        ...     ),
+        ...     )
         ... )
-        >>> ommx_instance_bytes = ommx_instance.SerializeToString()
-        >>> model = adapter.instance_to_model(ommx_instance_bytes)
+        >>> model = adapter.instance_to_model(ommx_instance)
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
-        >>> ommx_solutions_bytes = adapter.model_to_solution(
-        ...     model, ommx_instance_bytes
-        ... )
-        >>> SolutionList.FromString(ommx_solutions_bytes).solutions[0].entries
+
+        >>> ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+        >>> ommx_solutions.entries
         {1: 0.0}
     """
     builder = PythonMIPBuilder(
-        ommx_instance_bytes,
+        instance,
         sense=sense,
         solver_name=solver_name,
         solver=solver,
@@ -303,7 +301,7 @@ def instance_to_model(
     return builder.build()
 
 
-def model_to_instance(model: mip.Model) -> bytes:
+def model_to_instance(model: mip.Model) -> Instance:
     """
     The function to convert Python-MIP Model to ommx.v1.Instance.
 
@@ -325,8 +323,7 @@ def model_to_instance(model: mip.Model) -> bytes:
         >>> x2=model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
         >>> model.objective = - x1 - 2 * x2
         >>> constr = model.add_constr(x1 + x2 - 6 <= 0)
-        >>> ommx_instance_bytes = adapter.model_to_instance(model)
-        >>> ommx_instance = Instance.FromString(ommx_instance_bytes)
+        >>> ommx_instance = adapter.model_to_instance(model)
     """
     builder = OMMXInstanceBuilder(model)
     return builder.build()
@@ -334,8 +331,8 @@ def model_to_instance(model: mip.Model) -> bytes:
 
 def model_to_solution(
     model: mip.Model,
-    ommx_instance_bytes: bytes,
-) -> bytes:
+    instance: Instance,
+) -> State:
     """
     The function to create ommx.v1.SolutionList from optimized Python-MIP Model.
 
@@ -354,32 +351,33 @@ def model_to_solution(
 
         >>> import ommx_python_mip_adapter as adapter
         >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
-        >>> from ommx.v1.instance_pb2 import Instance
+        >>> from ommx.v1.instance_pb2 import Instance as _Instance
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
-        >>> from ommx.v1.solution_pb2 import SolutionList
+        >>> from ommx.v1 import Instance
+
         >>> ommx_instance = Instance(
-        ...     decision_variables=[
-        ...         DecisionVariable(
-        ...             id=1,
-        ...             kind=DecisionVariable.KIND_INTEGER,
-        ...             bound=Bound(lower=0, upper=5),
+        ...     _Instance(
+        ...         decision_variables=[
+        ...             DecisionVariable(
+        ...                 id=1,
+        ...                 kind=DecisionVariable.KIND_INTEGER,
+        ...                 bound=Bound(lower=0, upper=5),
+        ...             ),
+        ...         ],
+        ...         objective=Function(
+        ...             linear=Linear(
+        ...                 terms=[Linear.Term(id=1, coefficient=1)]
+        ...             ),
         ...         ),
-        ...     ],
-        ...     objective=Function(
-        ...         linear=Linear(
-        ...             terms=[Linear.Term(id=1, coefficient=1)]
-        ...         ),
-        ...     ),
+        ...     )
         ... )
-        >>> ommx_instance_bytes = ommx_instance.SerializeToString()
-        >>> model = adapter.instance_to_model(ommx_instance_bytes)
+        >>> model = adapter.instance_to_model(ommx_instance)
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
-        >>> ommx_solutions_bytes = adapter.model_to_solution(
-        ...     model, ommx_instance_bytes
-        ... )
-        >>> SolutionList.FromString(ommx_solutions_bytes).solutions[0].entries
+
+        >>> ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+        >>> ommx_solutions.entries
         {1: 0.0}
     """
     if not (
@@ -390,20 +388,9 @@ def model_to_solution(
             "`model.status` must be `OPTIMAL` or `FEASIBLE`."
         )
 
-    try:
-        ommx_instance = Instance.FromString(ommx_instance_bytes)
-    except Exception as e:
-        raise OMMXPythonMIPAdapterError(
-            "Invalid `ommx_instance_bytes` as ommx.v1.Instance."
-        ) from e
-
-    return SolutionList(
-        solutions=[
-            Solution(
-                entries={
-                    var.id: model.var_by_name(str(var.id)).x  # type: ignore
-                    for var in ommx_instance.decision_variables
-                }
-            )
-        ]
-    ).SerializeToString()
+    return State(
+        entries={
+            var.id: model.var_by_name(str(var.id)).x  # type: ignore
+            for var in instance.raw.decision_variables
+        }
+    )
