@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import pandas
 import numpy
 from dataclasses import dataclass
 from pathlib import Path
@@ -195,6 +196,14 @@ class Artifact:
         blob = self.get_blob(descriptor)
         f = io.BytesIO(blob)
         return numpy.load(f)
+
+    def get_dataframe(self, descriptor: Descriptor) -> pandas.DataFrame:
+        """
+        Get a pandas DataFrame from an artifact layer stored by :py:meth:`ArtifactBuilder.add_dataframe`
+        """
+        assert descriptor.media_type == "application/vnd.apache.parquet"
+        blob = self.get_blob(descriptor)
+        return pandas.read_parquet(io.BytesIO(blob))
 
 
 @dataclass(frozen=True)
@@ -403,6 +412,33 @@ class ArtifactBuilder:
         numpy.save(f, array)
         blob = f.getvalue()
         return self.add_layer("application/vnd.numpy", blob, annotations)
+
+    def add_dataframe(self, df: pandas.DataFrame) -> Descriptor:
+        """
+        Add a pandas DataFrame to the artifact with parquet format
+
+        Example
+        ========
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+
+        Store the DataFrame in the artifact with `application/vnd.apache.parquet` media type
+
+        >>> import uuid
+        >>> builder = ArtifactBuilder.new_archive_unnamed(f"data/test_dataframe.ommx.{uuid.uuid4()}")
+        >>> _desc = builder.add_dataframe(df)
+        >>> artifact = builder.build()
+
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/vnd.apache.parquet
+
+        >>> df2 = artifact.get_dataframe(layer)
+        >>> assert df.equals(df2)
+
+        """
+        blob = df.to_parquet()
+        return self.add_layer("application/vnd.apache.parquet", blob)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
