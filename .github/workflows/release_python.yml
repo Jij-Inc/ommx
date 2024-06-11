@@ -18,14 +18,14 @@ jobs:
         with:
           command: build
           args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
-          working-directory: ./python
+          working-directory: ./python/ommx
           manylinux: manylinux_2_28
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: linux
-          path: ./python/dist
+          path: ./python/ommx/dist
           retention-days: 30
 
   macos:
@@ -39,13 +39,13 @@ jobs:
         with:
           command: build
           args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
-          working-directory: ./python
+          working-directory: ./python/ommx
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: ./python/dist
+          path: ./python/ommx/dist
           retention-days: 30
 
   windows:
@@ -59,13 +59,13 @@ jobs:
         with:
           command: build
           args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
-          working-directory: ./python
+          working-directory: ./python/ommx
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: ./python/dist
+          path: ./python/ommx/dist
           retention-days: 30
 
   publish:

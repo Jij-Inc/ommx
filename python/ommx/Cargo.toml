@@ -15,7 +15,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies.ommx]
-path = "../rust/ommx"
+path = "../../rust/ommx"
 
 [dependencies]
 anyhow.workspace = true
