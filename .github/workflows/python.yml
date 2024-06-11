@@ -76,37 +76,17 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install -v -e 'python/ommx/[dev]'
-
-      - name: Run Test
-        run: |
-          pytest -vv --doctest-modules python/
-
-  lint-python:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Dependencies
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
+          pip install pytest-github-actions-annotate-failures
 
       - name: Lint
+        if: always()
         run: |
           pyright python
+
+      - name: Run Test
+        if: always()
+        run: |
+          pytest -vv --doctest-modules python/
 
   format:
     runs-on: ubuntu-latest
