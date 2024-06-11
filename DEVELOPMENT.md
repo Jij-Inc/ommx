@@ -20,6 +20,14 @@ OMMX Python SDK
 
 ### Setup development environment
 
+OMMX Python SDK is Rust/Python mixed project. You need to install Rust and Python development tools.
+
+#### Install Rust
+
+See the [official guide](https://www.rust-lang.org/tools/install) for details.
+
+#### virtualenv for Python
+
 ```shell
 python -m venv .venv
 source .venv/bin/activate
