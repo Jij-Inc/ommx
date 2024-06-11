@@ -4,15 +4,17 @@ README for Developers of OMMX
 Code map
 --------
 
-- `proto/`
+- [`proto/`](./proto/)
   - `*.proto` files defining OMMX Messages
   - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml)
-- `python/ommx/`
+- [`python/ommx/`](./python/ommx/)
   - OMMX Python SDK
   - Managed by `pip`, see its configuration in [`pyproject.toml`](./python/ommx/pyproject.toml)
-- `rust/ommx/`
+- [`rust/ommx/`](./rust/ommx/)
   - OMMX Rust SDK
   - Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
+- [`rust/protogen/`](./rust/protogen/)
+  - Rust code generator from `*.proto`. Used by `cargo run --bin protogen`. This is used only for development, and not published to crates.io.
 
 OMMX Python SDK
 ----------------
