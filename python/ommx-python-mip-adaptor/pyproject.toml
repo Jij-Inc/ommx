@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ommx_python_mip_adapter"
+version = "0.3.1"
+
+description = "An adapter for the Python-MIP from/to OMMX."
+authors = [
+    { name="Jij Inc.", email="info@j-ij.com" },
+]
+readme = "README.md"
+
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "ommx >= 0.3.1, < 0.4.0",
+    "mip",
+]
+
+[project.urls]
+Repository = "https://github.com/Jij-Inc/ommx-python-mip-adapter"
+Issues = "https://github.com/Jij-Inc/ommx-python-mip-adapter/issues"
+
+[project.optional-dependencies]
+dev = [
+    "markdown-code-runner",
+    "mypy",
+    "numpy",
+    "pyright",
+    "pytest",
+    "ruff",
+    "sphinx",
+    "sphinx-autoapi",
+    "sphinx_fontawesome",
+    "sphinx_rtd_theme",
+]

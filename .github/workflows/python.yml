@@ -74,20 +74,35 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install Dependencies
+      - name: Install ommx
         run: |
           pip install -v -e 'python/ommx/[dev]'
           pip install pytest-github-actions-annotate-failures
 
-      - name: Lint
+      - name: Lint ommx
         if: always()
         run: |
-          pyright python
+          pyright python/ommx
 
       - name: Run Test
         if: always()
         run: |
-          pytest -vv --doctest-modules python/
+          pytest -vv --doctest-modules python/ommx
+
+      - name: Install ommx-python-mip-adaptor
+        if: always()
+        run: |
+          pip install -v -e 'python/ommx-python-mip-adaptor/[dev]'
+
+      - name: Lint
+        if: always()
+        run: |
+          pyright python/ommx-python-mip-adaptor/
+
+      - name: Run Test
+        if: always()
+        run: |
+          pytest -vv --doctest-modules python/ommx-python-mip-adaptor/
 
   format:
     runs-on: ubuntu-latest
