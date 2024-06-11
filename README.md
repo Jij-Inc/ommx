@@ -2,6 +2,13 @@
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
+# Design
+
+OMMX introduces two specification to solve the problem of data exchange in optimization field:
+
+- Protocol buffers based data schema called [OMMX Message](./MESSAGE.md). This helps to store the optimization models and their solutions in language and framework agnostic way.
+- OCI Artifact based packaging and distribution specification called [OMMX Artifact](./ARTIFACT.md). This helps to store your data with metadata and to exchange them with others as a container image.
+
 # API Reference
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
