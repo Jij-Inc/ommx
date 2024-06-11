@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "rust/ommx",
     "rust/protogen",
-    "python",
+    "python/ommx",
 ]
 
 [workspace.package]
