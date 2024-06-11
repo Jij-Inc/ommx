@@ -15,16 +15,16 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 
 ## Rust SDK
 
-| Crate name | crates.io | docs.rs | Document (main branch) |
+| Crate name | crates.io | docs.rs | GitHub Pages |
 | --- | --- | --- | --- |
-| ommx | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![master](https://img.shields.io/badge/docs-master-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) |
+| ommx | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) |
 
 ## Python SDK
 
-| Package name | PyPI | Document (main branch) |
+| Package name | PyPI | GitHub Pages |
 | --- | --- | --- |
-| ommx | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![master](https://img.shields.io/badge/docs-master-blue)](https://jij-inc.github.io/ommx/python/ommx/index.html) |
-| ommx-python-mip-adapter | [![ommx-python-mip-adaptor](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![master](https://img.shields.io/badge/docs-master-blue)](https://jij-inc.github.io/ommx/python/ommx-python-mip-adaptor/index.html)|
+| ommx | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx/index.html) |
+| ommx-python-mip-adapter | [![ommx-python-mip-adaptor](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx-python-mip-adaptor/index.html)|
 
 ## OMMX Message
 
