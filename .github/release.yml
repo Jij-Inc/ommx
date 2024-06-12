@@ -6,6 +6,9 @@ changelog:
     - title: Python SDK update
       labels:
         - python
+    - title: ommx-python-mip-adapter update
+      labels:
+        - python-mip-adapter
     - title: Rust SDK update
       labels:
         - rust
