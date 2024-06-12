@@ -46,19 +46,12 @@ Python-MIP can be used through `ommx-python-mip-adapter` by using the following:
 
 ```python markdown-code-runner
 import ommx_python_mip_adapter as adapter
-from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
 
 ommx_instance = Instance.from_components(
-    decision_variables=[
-        DecisionVariable(
-            id=1,
-            kind=DecisionVariable.KIND_INTEGER,
-            bound=Bound(lower=0, upper=5),
-        ),
-    ],
+    decision_variables=[DecisionVariable.integer(1, lower=0, upper=5)],
     objective=Function(
         linear=Linear(
             terms=[Linear.Term(id=1, coefficient=1)]

@@ -8,7 +8,7 @@ from .solution_pb2 import State, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
 from .function_pb2 import Function
 from .constraint_pb2 import Equality, Constraint
-from .decision_variables_pb2 import DecisionVariable
+from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
 from .._ommx_rust import evaluate_instance, used_decision_variable_ids
 
@@ -56,7 +56,7 @@ class Instance:
         return Instance(
             _Instance(
                 description=description,
-                decision_variables=decision_variables,
+                decision_variables=[v.raw for v in decision_variables],
                 objective=objective,
                 constraints=constraints,
                 sense=sense,
@@ -208,18 +208,18 @@ def _function_type(function: Function) -> str:
     raise ValueError("Unknown function type")
 
 
-def _kind(kind: DecisionVariable.Kind.ValueType) -> str:
-    if kind == DecisionVariable.Kind.KIND_UNSPECIFIED:
+def _kind(kind: _DecisionVariable.Kind.ValueType) -> str:
+    if kind == _DecisionVariable.Kind.KIND_UNSPECIFIED:
         return "unspecified"
-    if kind == DecisionVariable.Kind.KIND_BINARY:
+    if kind == _DecisionVariable.Kind.KIND_BINARY:
         return "binary"
-    if kind == DecisionVariable.Kind.KIND_INTEGER:
+    if kind == _DecisionVariable.Kind.KIND_INTEGER:
         return "integer"
-    if kind == DecisionVariable.Kind.KIND_CONTINUOUS:
+    if kind == _DecisionVariable.Kind.KIND_CONTINUOUS:
         return "continuous"
-    if kind == DecisionVariable.Kind.KIND_SEMI_INTEGER:
+    if kind == _DecisionVariable.Kind.KIND_SEMI_INTEGER:
         return "semi-integer"
-    if kind == DecisionVariable.Kind.KIND_SEMI_CONTINUOUS:
+    if kind == _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS:
         return "semi-continuous"
     raise ValueError("Unknown kind")
 
@@ -230,3 +230,123 @@ def _equality(equality: Equality.ValueType) -> str:
     if equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
         return "<=0"
     raise ValueError("Unknown equality")
+
+
+@dataclass
+class DecisionVariable:
+    raw: _DecisionVariable
+
+    Kind = _DecisionVariable.Kind.ValueType
+    Description = _DecisionVariable.Description
+
+    BINARY = _DecisionVariable.Kind.KIND_BINARY
+    INTEGER = _DecisionVariable.Kind.KIND_INTEGER
+    CONTINUOUS = _DecisionVariable.Kind.KIND_CONTINUOUS
+    SEMI_INTEGER = _DecisionVariable.Kind.KIND_SEMI_INTEGER
+    SEMI_CONTINUOUS = _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS
+
+    @staticmethod
+    def of_type(
+        kind: Kind,
+        id: int,
+        *,
+        lower: float,
+        upper: float,
+        description: Optional[Description] = None,
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=kind,
+                bound=Bound(lower=lower, upper=upper),
+                description=description,
+            )
+        )
+
+    @staticmethod
+    def binary(
+        id: int, *, description: Optional[Description] = None
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=_DecisionVariable.Kind.KIND_BINARY,
+                description=description,
+            )
+        )
+
+    @staticmethod
+    def integer(
+        id: int,
+        *,
+        lower: float = float("-inf"),
+        upper: float = float("inf"),
+        description: Optional[Description] = None,
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=_DecisionVariable.Kind.KIND_INTEGER,
+                bound=Bound(lower=lower, upper=upper),
+                description=description,
+            )
+        )
+
+    @staticmethod
+    def continuous(
+        id: int,
+        *,
+        lower: float = float("-inf"),
+        upper: float = float("inf"),
+        description: Optional[Description] = None,
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=_DecisionVariable.Kind.KIND_CONTINUOUS,
+                bound=Bound(lower=lower, upper=upper),
+                description=description,
+            )
+        )
+
+    @staticmethod
+    def semi_integer(
+        id: int,
+        *,
+        lower: float = float("-inf"),
+        upper: float = float("inf"),
+        description: Optional[Description] = None,
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=_DecisionVariable.Kind.KIND_SEMI_INTEGER,
+                bound=Bound(lower=lower, upper=upper),
+                description=description,
+            )
+        )
+
+    @staticmethod
+    def semi_continuous(
+        id: int,
+        *,
+        lower: float = float("-inf"),
+        upper: float = float("inf"),
+        description: Optional[Description] = None,
+    ) -> DecisionVariable:
+        return DecisionVariable(
+            _DecisionVariable(
+                id=id,
+                kind=_DecisionVariable.Kind.KIND_SEMI_CONTINUOUS,
+                bound=Bound(lower=lower, upper=upper),
+                description=description,
+            )
+        )
+
+    @property
+    def kind(self) -> Kind:
+        return self.raw.kind
+
+    @property
+    def bound(self) -> Bound:
+        return self.raw.bound
