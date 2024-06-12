@@ -2,9 +2,8 @@ import enum
 
 import numpy as np
 
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
 from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
@@ -93,25 +92,19 @@ class SingleFeasibleLPGenerator:
         # define decision variables
         if self._data_type == DataType.INT:
             decision_variables = [
-                DecisionVariable(
-                    id=i,
-                    kind=DecisionVariable.Kind.KIND_INTEGER,
-                    bound=Bound(
-                        lower=self.INT_LOWER_BOUND,
-                        upper=self.INT_UPPER_BOUND,
-                    ),
+                DecisionVariable.integer(
+                    i,
+                    lower=self.INT_LOWER_BOUND,
+                    upper=self.INT_UPPER_BOUND,
                 )
                 for i in range(len(self._x))
             ]
         else:
             decision_variables = [
-                DecisionVariable(
-                    id=i,
-                    kind=DecisionVariable.Kind.KIND_CONTINUOUS,
-                    bound=Bound(
-                        lower=self.FLOAT_LOWER_BOUND,
-                        upper=self.FLOAT_UPPER_BOUND,
-                    ),
+                DecisionVariable.continuous(
+                    i,
+                    lower=self.FLOAT_LOWER_BOUND,
+                    upper=self.FLOAT_UPPER_BOUND,
                 )
                 for i in range(len(self._x))
             ]

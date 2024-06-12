@@ -4,11 +4,10 @@ import mip
 
 from mip.exceptions import ParameterNotAvailable
 from ommx.v1.constraint_pb2 import Constraint, Equality, ConstraintDescription
-from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
@@ -31,19 +30,19 @@ class PythonMIPBuilder:
 
     def _set_decision_variables(self):
         for var in self._ommx_instance.decision_variables:
-            if var.kind == DecisionVariable.KIND_BINARY:
+            if var.kind == DecisionVariable.BINARY:
                 self._model.add_var(
                     name=str(var.id),
                     var_type=mip.BINARY,
                 )
-            elif var.kind == DecisionVariable.KIND_INTEGER:
+            elif var.kind == DecisionVariable.INTEGER:
                 self._model.add_var(
                     name=str(var.id),
                     var_type=mip.INTEGER,
                     lb=var.bound.lower,  # type: ignore
                     ub=var.bound.upper,  # type: ignore
                 )
-            elif var.kind == DecisionVariable.KIND_CONTINUOUS:
+            elif var.kind == DecisionVariable.CONTINUOUS:
                 self._model.add_var(
                     name=str(var.id),
                     var_type=mip.CONTINUOUS,
@@ -127,11 +126,11 @@ class OMMXInstanceBuilder:
 
         for var in self._model.vars:
             if var.var_type == mip.BINARY:
-                kind = DecisionVariable.KIND_BINARY
+                kind = DecisionVariable.BINARY
             elif var.var_type == mip.INTEGER:
-                kind = DecisionVariable.KIND_INTEGER
+                kind = DecisionVariable.INTEGER
             elif var.var_type == mip.CONTINUOUS:
-                kind = DecisionVariable.KIND_CONTINUOUS
+                kind = DecisionVariable.CONTINUOUS
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported variable type. "
@@ -139,10 +138,11 @@ class OMMXInstanceBuilder:
                 )
 
             decision_variables.append(
-                DecisionVariable(
-                    id=var.idx,
-                    kind=kind,
-                    bound=Bound(lower=var.lb, upper=var.ub),
+                DecisionVariable.of_type(
+                    kind,
+                    var.idx,
+                    lower=var.lb,
+                    upper=var.ub,
                     description=DecisionVariable.Description(name=var.name),
                 )
             )
@@ -259,19 +259,12 @@ def instance_to_model(
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
-        >>> from ommx.v1 import Instance
+        >>> from ommx.v1 import Instance, DecisionVariable
 
         >>> ommx_instance = Instance.from_components(
-        ...     decision_variables=[
-        ...         DecisionVariable(
-        ...             id=1,
-        ...             kind=DecisionVariable.KIND_INTEGER,
-        ...             bound=Bound(lower=0, upper=5),
-        ...         ),
-        ...     ],
+        ...     decision_variables=[DecisionVariable.integer(1, lower=0, upper=5)],
         ...     objective=Function(
         ...         linear=Linear(
         ...             terms=[Linear.Term(id=1, coefficient=1)]
@@ -346,19 +339,12 @@ def model_to_solution(
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
-        >>> from ommx.v1 import Instance
+        >>> from ommx.v1 import Instance, DecisionVariable
 
         >>> ommx_instance = Instance.from_components(
-        ...     decision_variables=[
-        ...         DecisionVariable(
-        ...             id=1,
-        ...             kind=DecisionVariable.KIND_INTEGER,
-        ...             bound=Bound(lower=0, upper=5),
-        ...         ),
-        ...     ],
+        ...     decision_variables=[DecisionVariable.integer(1, lower=0, upper=5)],
         ...     objective=Function(
         ...         linear=Linear(
         ...             terms=[Linear.Term(id=1, coefficient=1)]

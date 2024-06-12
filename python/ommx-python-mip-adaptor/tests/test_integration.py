@@ -1,12 +1,9 @@
 import pytest
 
 from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
-from ommx.v1.instance_pb2 import Instance as _Instance
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import State
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 import ommx_python_mip_adapter as adapter
@@ -46,79 +43,46 @@ def test_integration_milp():
     # Optimal solution: x1 = 3, x2 = 3
     LOWER_BOUND = 0
     UPPER_BOUND = 10
-    ommx_instance = Instance(
-        _Instance(
-            decision_variables=[
-                DecisionVariable(
-                    id=1,
-                    kind=DecisionVariable.KIND_INTEGER,
-                    bound=Bound(
-                        lower=LOWER_BOUND,
-                        upper=UPPER_BOUND,
-                    ),
+    ommx_instance = Instance.from_components(
+        decision_variables=[
+            DecisionVariable.integer(1, lower=LOWER_BOUND, upper=UPPER_BOUND),
+            DecisionVariable.continuous(2, lower=LOWER_BOUND, upper=UPPER_BOUND),
+        ],
+        objective=Function(
+            linear=Linear(
+                terms=[
+                    Linear.Term(id=1, coefficient=-1),
+                    Linear.Term(id=2, coefficient=-1),
+                ]
+            )
+        ),
+        constraints=[
+            Constraint(
+                function=Function(
+                    linear=Linear(
+                        terms=[
+                            Linear.Term(id=1, coefficient=3),
+                            Linear.Term(id=2, coefficient=-1),
+                        ],
+                        constant=-6,
+                    )
                 ),
-                DecisionVariable(
-                    id=2,
-                    kind=DecisionVariable.KIND_CONTINUOUS,
-                    bound=Bound(
-                        lower=LOWER_BOUND,
-                        upper=UPPER_BOUND,
-                    ),
-                ),
-            ],
-            objective=Function(
-                linear=Linear(
-                    terms=[
-                        Linear.Term(
-                            id=1,
-                            coefficient=-1,
-                        ),
-                        Linear.Term(
-                            id=2,
-                            coefficient=-1,
-                        ),
-                    ],
-                )
+                equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
             ),
-            constraints=[
-                Constraint(
-                    function=Function(
-                        linear=Linear(
-                            terms=[
-                                Linear.Term(
-                                    id=1,
-                                    coefficient=3,
-                                ),
-                                Linear.Term(
-                                    id=2,
-                                    coefficient=-1,
-                                ),
-                            ],
-                            constant=-6,
-                        ),
+            Constraint(
+                function=Function(
+                    linear=Linear(
+                        terms=[
+                            Linear.Term(id=1, coefficient=-1),
+                            Linear.Term(id=2, coefficient=3),
+                        ],
+                        constant=-6,
                     ),
-                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                 ),
-                Constraint(
-                    function=Function(
-                        linear=Linear(
-                            terms=[
-                                Linear.Term(
-                                    id=1,
-                                    coefficient=-1,
-                                ),
-                                Linear.Term(
-                                    id=2,
-                                    coefficient=3,
-                                ),
-                            ],
-                            constant=-6,
-                        ),
-                    ),
-                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
-                ),
-            ],
-        )
+                equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
+            ),
+        ],
+        sense=Instance.MINIMIZE,
     )
 
     model = adapter.instance_to_model(ommx_instance)
