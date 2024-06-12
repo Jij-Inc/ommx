@@ -3,7 +3,6 @@ import pytest
 from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.decision_variables_pb2 import DecisionVariable
 from ommx.v1.function_pb2 import Function
-from ommx.v1.instance_pb2 import Instance as _Instance
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
 from ommx.v1 import Instance
@@ -14,15 +13,16 @@ from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
 
 def test_error_not_suppoerted_decision_variable():
-    ommx_instance = Instance(
-        _Instance(
-            decision_variables=[
-                DecisionVariable(
-                    id=1,
-                    kind=DecisionVariable.KIND_UNSPECIFIED,
-                )
-            ],
-        )
+    ommx_instance = Instance.from_components(
+        decision_variables=[
+            DecisionVariable(
+                id=1,
+                kind=DecisionVariable.KIND_UNSPECIFIED,
+            )
+        ],
+        objective=Function(constant=0),
+        constraints=[],
+        sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         adapter.instance_to_model(ommx_instance)
@@ -31,22 +31,22 @@ def test_error_not_suppoerted_decision_variable():
 
 def test_error_nonlinear_objective():
     # Objective function: 2.3 * x * x
-    ommx_instance = Instance(
-        _Instance(
-            decision_variables=[
-                DecisionVariable(
-                    id=0,
-                    kind=DecisionVariable.KIND_CONTINUOUS,
-                ),
-            ],
-            objective=Function(
-                quadratic=Quadratic(
-                    rows=[1],
-                    columns=[1],
-                    values=[2.3],
-                ),
+    ommx_instance = Instance.from_components(
+        decision_variables=[
+            DecisionVariable(
+                id=0,
+                kind=DecisionVariable.KIND_CONTINUOUS,
             ),
-        )
+        ],
+        objective=Function(
+            quadratic=Quadratic(
+                rows=[1],
+                columns=[1],
+                values=[2.3],
+            ),
+        ),
+        constraints=[],
+        sense=Instance.MINIMIZE,
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
@@ -57,30 +57,29 @@ def test_error_nonlinear_objective():
 def test_error_nonlinear_constraint():
     # Objective function: 0
     # Constraint: 2.3 * x * x = 0
-    ommx_instance = Instance(
-        _Instance(
-            decision_variables=[
-                DecisionVariable(
-                    id=1,
-                    kind=DecisionVariable.KIND_CONTINUOUS,
-                ),
-            ],
-            objective=Function(
-                constant=0,
+    ommx_instance = Instance.from_components(
+        decision_variables=[
+            DecisionVariable(
+                id=1,
+                kind=DecisionVariable.KIND_CONTINUOUS,
             ),
-            constraints=[
-                Constraint(
-                    function=Function(
-                        quadratic=Quadratic(
-                            rows=[1],
-                            columns=[1],
-                            values=[2.3],
-                        ),
+        ],
+        objective=Function(
+            constant=0,
+        ),
+        constraints=[
+            Constraint(
+                function=Function(
+                    quadratic=Quadratic(
+                        rows=[1],
+                        columns=[1],
+                        values=[2.3],
                     ),
-                    equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                 ),
-            ],
-        )
+                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
+            ),
+        ],
+        sense=Instance.MINIMIZE,
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
@@ -91,33 +90,32 @@ def test_error_nonlinear_constraint():
 def test_error_not_supported_constraint_equality():
     # Objective function: 0
     # Constraint: 2x ?? 0 (equality: unspecified)
-    ommx_instance = Instance(
-        _Instance(
-            decision_variables=[
-                DecisionVariable(
-                    id=1,
-                    kind=DecisionVariable.KIND_CONTINUOUS,
-                ),
-            ],
-            objective=Function(
-                constant=0,
+    ommx_instance = Instance.from_components(
+        decision_variables=[
+            DecisionVariable(
+                id=1,
+                kind=DecisionVariable.KIND_CONTINUOUS,
             ),
-            constraints=[
-                Constraint(
-                    function=Function(
-                        linear=Linear(
-                            terms=[
-                                Linear.Term(
-                                    id=1,
-                                    coefficient=2,
-                                ),
-                            ],
-                        ),
+        ],
+        objective=Function(
+            constant=0,
+        ),
+        constraints=[
+            Constraint(
+                function=Function(
+                    linear=Linear(
+                        terms=[
+                            Linear.Term(
+                                id=1,
+                                coefficient=2,
+                            ),
+                        ],
                     ),
-                    equality=Equality.EQUALITY_UNSPECIFIED,
                 ),
-            ],
-        )
+                equality=Equality.EQUALITY_UNSPECIFIED,
+            ),
+        ],
+        sense=Instance.MINIMIZE,
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
