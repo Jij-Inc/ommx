@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, Iterable
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
@@ -7,7 +7,7 @@ from pandas import DataFrame, concat, MultiIndex
 from .solution_pb2 import State, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
 from .function_pb2 import Function
-from .constraint_pb2 import Equality
+from .constraint_pb2 import Equality, Constraint
 from .decision_variables_pb2 import DecisionVariable
 
 from .._ommx_rust import evaluate_instance, used_decision_variable_ids
@@ -37,6 +37,31 @@ class Instance:
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
+
+    # Re-export some enums
+    MAXIMIZE = _Instance.SENSE_MAXIMIZE
+    MINIMIZE = _Instance.SENSE_MINIMIZE
+
+    Description = _Instance.Description
+
+    @staticmethod
+    def from_components(
+        *,
+        objective: Function,
+        constraints: Iterable[Constraint],
+        sense: _Instance.Sense.ValueType,
+        decision_variables: Iterable[DecisionVariable],
+        description: Optional[_Instance.Description] = None,
+    ) -> Instance:
+        return Instance(
+            _Instance(
+                description=description,
+                decision_variables=decision_variables,
+                objective=objective,
+                constraints=constraints,
+                sense=sense,
+            )
+        )
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
