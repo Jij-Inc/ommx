@@ -51,15 +51,9 @@ def test_integration_milp():
         objective=Function(
             linear=Linear(
                 terms=[
-                    Linear.Term(
-                        id=1,
-                        coefficient=-1,
-                    ),
-                    Linear.Term(
-                        id=2,
-                        coefficient=-1,
-                    ),
-                ],
+                    Linear.Term(id=1, coefficient=-1),
+                    Linear.Term(id=2, coefficient=-1),
+                ]
             )
         ),
         constraints=[
@@ -67,17 +61,11 @@ def test_integration_milp():
                 function=Function(
                     linear=Linear(
                         terms=[
-                            Linear.Term(
-                                id=1,
-                                coefficient=3,
-                            ),
-                            Linear.Term(
-                                id=2,
-                                coefficient=-1,
-                            ),
+                            Linear.Term(id=1, coefficient=3),
+                            Linear.Term(id=2, coefficient=-1),
                         ],
                         constant=-6,
-                    ),
+                    )
                 ),
                 equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
             ),
@@ -85,14 +73,8 @@ def test_integration_milp():
                 function=Function(
                     linear=Linear(
                         terms=[
-                            Linear.Term(
-                                id=1,
-                                coefficient=-1,
-                            ),
-                            Linear.Term(
-                                id=2,
-                                coefficient=3,
-                            ),
+                            Linear.Term(id=1, coefficient=-1),
+                            Linear.Term(id=2, coefficient=3),
                         ],
                         constant=-6,
                     ),

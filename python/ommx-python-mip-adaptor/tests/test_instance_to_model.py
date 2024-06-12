@@ -16,10 +16,7 @@ def test_error_not_suppoerted_decision_variable():
     ommx_instance = Instance.from_components(
         decision_variables=[
             DecisionVariable(
-                _DecisionVariable(
-                    id=1,
-                    kind=_DecisionVariable.KIND_UNSPECIFIED,
-                )
+                _DecisionVariable(id=1, kind=_DecisionVariable.KIND_UNSPECIFIED)
             )
         ],
         objective=Function(constant=0),
@@ -36,11 +33,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(0)],
         objective=Function(
-            quadratic=Quadratic(
-                rows=[1],
-                columns=[1],
-                values=[2.3],
-            ),
+            quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
         ),
         constraints=[],
         sense=Instance.MINIMIZE,
@@ -62,11 +55,7 @@ def test_error_nonlinear_constraint():
         constraints=[
             Constraint(
                 function=Function(
-                    quadratic=Quadratic(
-                        rows=[1],
-                        columns=[1],
-                        values=[2.3],
-                    ),
+                    quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
                 ),
                 equality=Equality.EQUALITY_EQUAL_TO_ZERO,
             ),
@@ -88,14 +77,7 @@ def test_error_not_supported_constraint_equality():
         constraints=[
             Constraint(
                 function=Function(
-                    linear=Linear(
-                        terms=[
-                            Linear.Term(
-                                id=1,
-                                coefficient=2,
-                            ),
-                        ],
-                    ),
+                    linear=Linear(terms=[Linear.Term(id=1, coefficient=2)])
                 ),
                 equality=Equality.EQUALITY_UNSPECIFIED,
             ),
