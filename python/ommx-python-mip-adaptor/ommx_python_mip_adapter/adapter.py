@@ -8,7 +8,6 @@ from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
-from ommx.v1.instance_pb2 import Instance as _Instance
 from ommx.v1 import Instance
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
@@ -221,18 +220,16 @@ class OMMXInstanceBuilder:
 
     def _sense(self):
         if self._model.sense == mip.MAXIMIZE:
-            return _Instance.SENSE_MAXIMIZE
+            return Instance.MAXIMIZE
         else:
-            return _Instance.SENSE_MINIMIZE
+            return Instance.MINIMIZE
 
     def build(self) -> Instance:
-        return Instance(
-            _Instance(
-                decision_variables=self._decision_variables(),
-                objective=self._objective(),
-                constraints=self._constraints(),
-                sense=self._sense(),
-            )
+        return Instance.from_components(
+            decision_variables=self._decision_variables(),
+            objective=self._objective(),
+            constraints=self._constraints(),
+            sense=self._sense(),
         )
 
 
@@ -263,26 +260,25 @@ def instance_to_model(
 
         >>> import ommx_python_mip_adapter as adapter
         >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
-        >>> from ommx.v1.instance_pb2 import Instance as _Instance
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
         >>> from ommx.v1 import Instance
 
-        >>> ommx_instance = Instance(
-        ...     _Instance(
-        ...         decision_variables=[
-        ...             DecisionVariable(
-        ...                 id=1,
-        ...                 kind=DecisionVariable.KIND_INTEGER,
-        ...                 bound=Bound(lower=0, upper=5),
-        ...             ),
-        ...         ],
-        ...         objective=Function(
-        ...             linear=Linear(
-        ...                 terms=[Linear.Term(id=1, coefficient=1)]
-        ...             ),
+        >>> ommx_instance = Instance.from_components(
+        ...     decision_variables=[
+        ...         DecisionVariable(
+        ...             id=1,
+        ...             kind=DecisionVariable.KIND_INTEGER,
+        ...             bound=Bound(lower=0, upper=5),
         ...         ),
-        ...     )
+        ...     ],
+        ...     objective=Function(
+        ...         linear=Linear(
+        ...             terms=[Linear.Term(id=1, coefficient=1)]
+        ...         ),
+        ...     ),
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
         ... )
         >>> model = adapter.instance_to_model(ommx_instance)
         >>> model.optimize()
@@ -351,26 +347,25 @@ def model_to_solution(
 
         >>> import ommx_python_mip_adapter as adapter
         >>> from ommx.v1.decision_variables_pb2 import DecisionVariable, Bound
-        >>> from ommx.v1.instance_pb2 import Instance as _Instance
         >>> from ommx.v1.function_pb2 import Function
         >>> from ommx.v1.linear_pb2 import Linear
         >>> from ommx.v1 import Instance
 
-        >>> ommx_instance = Instance(
-        ...     _Instance(
-        ...         decision_variables=[
-        ...             DecisionVariable(
-        ...                 id=1,
-        ...                 kind=DecisionVariable.KIND_INTEGER,
-        ...                 bound=Bound(lower=0, upper=5),
-        ...             ),
-        ...         ],
-        ...         objective=Function(
-        ...             linear=Linear(
-        ...                 terms=[Linear.Term(id=1, coefficient=1)]
-        ...             ),
+        >>> ommx_instance = Instance.from_components(
+        ...     decision_variables=[
+        ...         DecisionVariable(
+        ...             id=1,
+        ...             kind=DecisionVariable.KIND_INTEGER,
+        ...             bound=Bound(lower=0, upper=5),
         ...         ),
-        ...     )
+        ...     ],
+        ...     objective=Function(
+        ...         linear=Linear(
+        ...             terms=[Linear.Term(id=1, coefficient=1)]
+        ...         ),
+        ...     ),
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
         ... )
         >>> model = adapter.instance_to_model(ommx_instance)
         >>> model.optimize()
