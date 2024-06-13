@@ -7,6 +7,7 @@ from pandas import DataFrame, concat, MultiIndex
 from .solution_pb2 import State, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
 from .function_pb2 import Function
+from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
@@ -350,3 +351,31 @@ class DecisionVariable:
     @property
     def bound(self) -> Bound:
         return self.raw.bound
+
+
+@dataclass
+class Linear:
+    raw: _Linear
+
+    def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
+        self.raw = _Linear(
+            terms=[
+                _Linear.Term(id=id, coefficient=coefficient)
+                for id, coefficient in terms.items()
+            ],
+            constant=constant,
+        )
+
+    def __add__(self, other: int | float | Linear) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            self.raw.constant += other
+            return self
+        if isinstance(other, Linear):
+            terms = {term.id: term.coefficient for term in self.raw.terms}
+            for term in other.raw.terms:
+                terms[term.id] = terms.get(term.id, 0) + term.coefficient
+            return Linear(terms=terms, constant=self.raw.constant + other.raw.constant)
+        raise ValueError(f"Unsupported type: {type(other)}")
+
+    def __radd__(self, other) -> Linear:
+        return self + other
