@@ -352,6 +352,27 @@ class DecisionVariable:
     def bound(self) -> Bound:
         return self.raw.bound
 
+    def __add__(self, other: int | float | DecisionVariable) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.raw.id: 1}, constant=other)
+        if isinstance(other, DecisionVariable):
+            if self.raw.id == other.raw.id:
+                return Linear(terms={self.raw.id: 2})
+            else:
+                return Linear(terms={self.raw.id: 1, other.raw.id: 1})
+        return NotImplemented
+
+    def __radd__(self, other) -> Linear:
+        return self + other
+
+    def __mul__(self, other: int | float) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.raw.id: other})
+        return NotImplemented
+
+    def __rmul__(self, other) -> Linear:
+        return self * other
+
 
 @dataclass
 class Linear:
@@ -366,16 +387,20 @@ class Linear:
             constant=constant,
         )
 
-    def __add__(self, other: int | float | Linear) -> Linear:
+    def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             self.raw.constant += other
             return self
+        if isinstance(other, DecisionVariable):
+            terms = {term.id: term.coefficient for term in self.raw.terms}
+            terms[other.raw.id] = terms.get(other.raw.id, 0) + 1
+            return Linear(terms=terms, constant=self.raw.constant)
         if isinstance(other, Linear):
             terms = {term.id: term.coefficient for term in self.raw.terms}
             for term in other.raw.terms:
                 terms[term.id] = terms.get(term.id, 0) + term.coefficient
             return Linear(terms=terms, constant=self.raw.constant + other.raw.constant)
-        raise ValueError(f"Unsupported type: {type(other)}")
+        return NotImplemented
 
     def __radd__(self, other) -> Linear:
         return self + other
@@ -386,7 +411,7 @@ class Linear:
                 terms={term.id: term.coefficient * other for term in self.raw.terms},
                 constant=self.raw.constant * other,
             )
-        raise ValueError(f"Unsupported type: {type(other)}")
+        return NotImplemented
 
     def __rmul__(self, other) -> Linear:
         return self * other
