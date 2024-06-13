@@ -379,3 +379,14 @@ class Linear:
 
     def __radd__(self, other) -> Linear:
         return self + other
+
+    def __mul__(self, other: int | float) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(
+                terms={term.id: term.coefficient * other for term in self.raw.terms},
+                constant=self.raw.constant * other,
+            )
+        raise ValueError(f"Unsupported type: {type(other)}")
+
+    def __rmul__(self, other) -> Linear:
+        return self * other
