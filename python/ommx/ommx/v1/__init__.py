@@ -395,15 +395,24 @@ class DecisionVariable:
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
 
-    def __leq__(self, other) -> Constraint:
+    def __le__(self, other) -> Constraint:
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
-    def __geq__(self, other) -> Constraint:
+    def __ge__(self, other) -> Constraint:
         return Constraint(
             function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
         )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
 
 
 @dataclass
@@ -462,15 +471,24 @@ class Linear:
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
 
-    def __leq__(self, other) -> Constraint:
+    def __le__(self, other) -> Constraint:
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
-    def __geq__(self, other) -> Constraint:
+    def __ge__(self, other) -> Constraint:
         return Constraint(
             function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
         )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
 
 
 @dataclass
@@ -532,6 +550,9 @@ def as_function(
 class Constraint:
     raw: _Constraint
     _counter = 0
+
+    EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
+    LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
 
     def __init__(
         self,
