@@ -360,6 +360,12 @@ class DecisionVariable:
     def bound(self) -> Bound:
         return self.raw.bound
 
+    def equals_to(self, other: DecisionVariable) -> bool:
+        """
+        Alternative to ``==`` operator to compare two decision variables.
+        """
+        return self.raw == other.raw
+
     def __add__(self, other: int | float | DecisionVariable) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: 1}, constant=other)
@@ -390,7 +396,20 @@ class DecisionVariable:
     def __rmul__(self, other) -> Linear:
         return self * other
 
-    def __eq__(self, other) -> Constraint:
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+        """
+        Create a constraint that this decision variable is equal to another decision variable or a constant.
+
+        To compare two objects, use :py:meth:`equals_to` method.
+
+        Examples
+        ========
+
+        >>> x = DecisionVariable.integer(1)
+        >>> x == 1
+        Constraint(...)
+
+        """
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
@@ -418,6 +437,12 @@ class DecisionVariable:
 @dataclass
 class Linear:
     raw: _Linear
+
+    def equals_to(self, other: Linear) -> bool:
+        """
+        Alternative to ``==`` operator to compare two linear functions.
+        """
+        return self.raw == other.raw
 
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
         self.raw = _Linear(
@@ -466,7 +491,23 @@ class Linear:
     def __neg__(self) -> Linear:
         return -1 * self
 
-    def __eq__(self, other) -> Constraint:
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+        """
+        Create a constraint that this linear function is equal to the right-hand side.
+
+        Examples
+        ========
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> x + y == 1
+        Constraint(...)
+
+        To compare two objects, use :py:meth:`equals_to` method.
+
+        >>> assert (x + y).equals_to(Linear(terms={1: 1, 2: 1}))
+
+        """
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
@@ -547,6 +588,7 @@ def as_function(
         raise ValueError(f"Unknown function type: {type(f)}")
 
 
+@dataclass
 class Constraint:
     raw: _Constraint
     _counter = 0
