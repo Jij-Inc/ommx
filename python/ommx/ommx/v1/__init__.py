@@ -57,17 +57,22 @@ class Instance:
         | Quadratic
         | Polynomial
         | _Function,
-        constraints: Iterable[Constraint],
+        constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
-        decision_variables: Iterable[DecisionVariable],
+        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
         return Instance(
             _Instance(
                 description=description,
-                decision_variables=[v.raw for v in decision_variables],
+                decision_variables=[
+                    v.raw if isinstance(v, DecisionVariable) else v
+                    for v in decision_variables
+                ],
                 objective=as_function(objective),
-                constraints=[c.raw for c in constraints],
+                constraints=[
+                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                ],
                 sense=sense,
             )
         )
