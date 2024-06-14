@@ -50,7 +50,7 @@ class Instance:
     @staticmethod
     def from_components(
         *,
-        objective: _Function,
+        objective: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
         constraints: Iterable[Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable],
@@ -60,7 +60,7 @@ class Instance:
             _Instance(
                 description=description,
                 decision_variables=[v.raw for v in decision_variables],
-                objective=objective,
+                objective=as_function(objective),
                 constraints=constraints,
                 sense=sense,
             )
@@ -454,3 +454,20 @@ class Polynomial:
         )
 
     # TODO: Implement __add__, __radd__, __mul__, __rmul__
+
+
+def as_function(
+    f: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
+) -> _Function:
+    if isinstance(f, (int, float)):
+        return _Function(constant=f)
+    elif isinstance(f, DecisionVariable):
+        return _Function(linear=Linear(terms={f.raw.id: 1}).raw)
+    elif isinstance(f, Linear):
+        return _Function(linear=f.raw)
+    elif isinstance(f, Quadratic):
+        return _Function(quadratic=f.raw)
+    elif isinstance(f, Polynomial):
+        return _Function(polynomial=f.raw)
+    else:
+        raise ValueError(f"Unknown function type: {type(f)}")
