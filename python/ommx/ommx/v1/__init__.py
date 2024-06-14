@@ -10,7 +10,7 @@ from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
-from .constraint_pb2 import Equality, Constraint
+from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
 from .._ommx_rust import evaluate_instance, used_decision_variable_ids
@@ -67,7 +67,7 @@ class Instance:
                 description=description,
                 decision_variables=[v.raw for v in decision_variables],
                 objective=as_function(objective),
-                constraints=constraints,
+                constraints=[c.raw for c in constraints],
                 sense=sense,
             )
         )
@@ -390,6 +390,21 @@ class DecisionVariable:
     def __rmul__(self, other) -> Linear:
         return self * other
 
+    def __eq__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
+
+    def __leq__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __geq__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
 
 @dataclass
 class Linear:
@@ -441,6 +456,21 @@ class Linear:
 
     def __neg__(self) -> Linear:
         return -1 * self
+
+    def __eq__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
+
+    def __leq__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __geq__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
 
 
 @dataclass
@@ -497,3 +527,21 @@ def as_function(
         return f
     else:
         raise ValueError(f"Unknown function type: {type(f)}")
+
+
+class Constraint:
+    raw: _Constraint
+    _counter = 0
+
+    def __init__(
+        self,
+        *,
+        function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
+        equality: Equality.ValueType,
+    ):
+        self.raw = _Constraint(
+            id=Constraint._counter,
+            function=as_function(function),
+            equality=equality,
+        )
+        Constraint._counter += 1
