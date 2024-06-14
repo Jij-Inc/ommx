@@ -50,7 +50,13 @@ class Instance:
     @staticmethod
     def from_components(
         *,
-        objective: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
+        objective: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | _Function,
         constraints: Iterable[Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable],
@@ -364,8 +370,17 @@ class DecisionVariable:
                 return Linear(terms={self.raw.id: 1, other.raw.id: 1})
         return NotImplemented
 
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
+    def __neg__(self) -> Linear:
+        return Linear(terms={self.raw.id: -1})
+
     def __radd__(self, other) -> Linear:
         return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
 
     def __mul__(self, other: int | float) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
@@ -404,8 +419,14 @@ class Linear:
             return Linear(terms=terms, constant=self.raw.constant + other.raw.constant)
         return NotImplemented
 
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
     def __radd__(self, other) -> Linear:
         return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
 
     def __mul__(self, other: int | float) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
@@ -417,6 +438,9 @@ class Linear:
 
     def __rmul__(self, other) -> Linear:
         return self * other
+
+    def __neg__(self) -> Linear:
+        return -1 * self
 
 
 @dataclass
@@ -457,7 +481,7 @@ class Polynomial:
 
 
 def as_function(
-    f: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
+    f: int | float | DecisionVariable | Linear | Quadratic | Polynomial | _Function,
 ) -> _Function:
     if isinstance(f, (int, float)):
         return _Function(constant=f)
@@ -469,5 +493,7 @@ def as_function(
         return _Function(quadratic=f.raw)
     elif isinstance(f, Polynomial):
         return _Function(polynomial=f.raw)
+    elif isinstance(f, _Function):
+        return f
     else:
         raise ValueError(f"Unknown function type: {type(f)}")
