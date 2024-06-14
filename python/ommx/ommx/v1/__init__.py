@@ -6,7 +6,9 @@ from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
-from .function_pb2 import Function
+from .function_pb2 import Function as _Function
+from .quadratic_pb2 import Quadratic as _Quadratic
+from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
@@ -48,7 +50,7 @@ class Instance:
     @staticmethod
     def from_components(
         *,
-        objective: Function,
+        objective: _Function,
         constraints: Iterable[Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable],
@@ -197,7 +199,7 @@ def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
     return concat([df, parameters], axis=1).set_index("id")
 
 
-def _function_type(function: Function) -> str:
+def _function_type(function: _Function) -> str:
     if function.HasField("constant"):
         return "constant"
     if function.HasField("linear"):
@@ -415,3 +417,40 @@ class Linear:
 
     def __rmul__(self, other) -> Linear:
         return self * other
+
+
+@dataclass
+class Quadratic:
+    raw: _Quadratic
+
+    def __init__(
+        self,
+        *,
+        columns: Iterable[int],
+        raws: Iterable[int],
+        values: Iterable[float | int],
+        linear: Optional[Linear] = None,
+    ):
+        self.raw = _Quadratic(
+            columns=columns,
+            rows=raws,
+            values=values,
+            linear=linear.raw if linear else None,
+        )
+
+    # TODO: Implement __add__, __radd__, __mul__, __rmul__
+
+
+@dataclass
+class Polynomial:
+    raw: _Polynomial
+
+    def __init__(self, *, coefficients: Iterable[tuple[Iterable[int], float | int]]):
+        self.raw = _Polynomial(
+            terms=[
+                _Monomial(ids=ids, coefficient=coefficient)
+                for ids, coefficient in coefficients
+            ]
+        )
+
+    # TODO: Implement __add__, __radd__, __mul__, __rmul__
