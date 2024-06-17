@@ -259,17 +259,12 @@ def instance_to_model(
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1.function_pb2 import Function
-        >>> from ommx.v1.linear_pb2 import Linear
         >>> from ommx.v1 import Instance, DecisionVariable
 
+        >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
         >>> ommx_instance = Instance.from_components(
-        ...     decision_variables=[DecisionVariable.integer(1, lower=0, upper=5)],
-        ...     objective=Function(
-        ...         linear=Linear(
-        ...             terms=[Linear.Term(id=1, coefficient=1)]
-        ...         ),
-        ...     ),
+        ...     decision_variables=[x1],
+        ...     objective=x1,
         ...     constraints=[],
         ...     sense=Instance.MINIMIZE,
         ... )
@@ -306,7 +301,6 @@ def model_to_instance(model: mip.Model) -> Instance:
     Examples:
         >>> import mip
         >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1.instance_pb2 import Instance
         >>> model = mip.Model()
         >>> x1=model.add_var(name="1", var_type=mip.INTEGER, lb=0, ub=5)
         >>> x2=model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
@@ -339,17 +333,12 @@ def model_to_solution(
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1.function_pb2 import Function
-        >>> from ommx.v1.linear_pb2 import Linear
         >>> from ommx.v1 import Instance, DecisionVariable
 
+        >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
         >>> ommx_instance = Instance.from_components(
-        ...     decision_variables=[DecisionVariable.integer(1, lower=0, upper=5)],
-        ...     objective=Function(
-        ...         linear=Linear(
-        ...             terms=[Linear.Term(id=1, coefficient=1)]
-        ...         ),
-        ...     ),
+        ...     decision_variables=[x1],
+        ...     objective=x1,
         ...     constraints=[],
         ...     sense=Instance.MINIMIZE,
         ... )

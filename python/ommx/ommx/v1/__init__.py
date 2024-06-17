@@ -6,8 +6,11 @@ from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
-from .function_pb2 import Function
-from .constraint_pb2 import Equality, Constraint
+from .function_pb2 import Function as _Function
+from .quadratic_pb2 import Quadratic as _Quadratic
+from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
+from .linear_pb2 import Linear as _Linear
+from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
 from .._ommx_rust import evaluate_instance, used_decision_variable_ids
@@ -47,18 +50,29 @@ class Instance:
     @staticmethod
     def from_components(
         *,
-        objective: Function,
-        constraints: Iterable[Constraint],
+        objective: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | _Function,
+        constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
-        decision_variables: Iterable[DecisionVariable],
+        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
         return Instance(
             _Instance(
                 description=description,
-                decision_variables=[v.raw for v in decision_variables],
-                objective=objective,
-                constraints=constraints,
+                decision_variables=[
+                    v.raw if isinstance(v, DecisionVariable) else v
+                    for v in decision_variables
+                ],
+                objective=as_function(objective),
+                constraints=[
+                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                ],
                 sense=sense,
             )
         )
@@ -196,7 +210,7 @@ def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
     return concat([df, parameters], axis=1).set_index("id")
 
 
-def _function_type(function: Function) -> str:
+def _function_type(function: _Function) -> str:
     if function.HasField("constant"):
         return "constant"
     if function.HasField("linear"):
@@ -350,3 +364,252 @@ class DecisionVariable:
     @property
     def bound(self) -> Bound:
         return self.raw.bound
+
+    def equals_to(self, other: DecisionVariable) -> bool:
+        """
+        Alternative to ``==`` operator to compare two decision variables.
+        """
+        return self.raw == other.raw
+
+    def __add__(self, other: int | float | DecisionVariable) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.raw.id: 1}, constant=other)
+        if isinstance(other, DecisionVariable):
+            if self.raw.id == other.raw.id:
+                return Linear(terms={self.raw.id: 2})
+            else:
+                return Linear(terms={self.raw.id: 1, other.raw.id: 1})
+        return NotImplemented
+
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
+    def __neg__(self) -> Linear:
+        return Linear(terms={self.raw.id: -1})
+
+    def __radd__(self, other) -> Linear:
+        return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
+
+    def __mul__(self, other: int | float) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.raw.id: other})
+        return NotImplemented
+
+    def __rmul__(self, other) -> Linear:
+        return self * other
+
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+        """
+        Create a constraint that this decision variable is equal to another decision variable or a constant.
+
+        To compare two objects, use :py:meth:`equals_to` method.
+
+        Examples
+        ========
+
+        >>> x = DecisionVariable.integer(1)
+        >>> x == 1
+        Constraint(...)
+
+        """
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
+
+    def __le__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __ge__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
+
+
+@dataclass
+class Linear:
+    raw: _Linear
+
+    def equals_to(self, other: Linear) -> bool:
+        """
+        Alternative to ``==`` operator to compare two linear functions.
+        """
+        return self.raw == other.raw
+
+    def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
+        self.raw = _Linear(
+            terms=[
+                _Linear.Term(id=id, coefficient=coefficient)
+                for id, coefficient in terms.items()
+            ],
+            constant=constant,
+        )
+
+    def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            self.raw.constant += other
+            return self
+        if isinstance(other, DecisionVariable):
+            terms = {term.id: term.coefficient for term in self.raw.terms}
+            terms[other.raw.id] = terms.get(other.raw.id, 0) + 1
+            return Linear(terms=terms, constant=self.raw.constant)
+        if isinstance(other, Linear):
+            terms = {term.id: term.coefficient for term in self.raw.terms}
+            for term in other.raw.terms:
+                terms[term.id] = terms.get(term.id, 0) + term.coefficient
+            return Linear(terms=terms, constant=self.raw.constant + other.raw.constant)
+        return NotImplemented
+
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
+    def __radd__(self, other) -> Linear:
+        return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
+
+    def __mul__(self, other: int | float) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(
+                terms={term.id: term.coefficient * other for term in self.raw.terms},
+                constant=self.raw.constant * other,
+            )
+        return NotImplemented
+
+    def __rmul__(self, other) -> Linear:
+        return self * other
+
+    def __neg__(self) -> Linear:
+        return -1 * self
+
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+        """
+        Create a constraint that this linear function is equal to the right-hand side.
+
+        Examples
+        ========
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> x + y == 1
+        Constraint(...)
+
+        To compare two objects, use :py:meth:`equals_to` method.
+
+        >>> assert (x + y).equals_to(Linear(terms={1: 1, 2: 1}))
+
+        """
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
+
+    def __le__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __ge__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
+
+
+@dataclass
+class Quadratic:
+    raw: _Quadratic
+
+    def __init__(
+        self,
+        *,
+        columns: Iterable[int],
+        raws: Iterable[int],
+        values: Iterable[float | int],
+        linear: Optional[Linear] = None,
+    ):
+        self.raw = _Quadratic(
+            columns=columns,
+            rows=raws,
+            values=values,
+            linear=linear.raw if linear else None,
+        )
+
+    # TODO: Implement __add__, __radd__, __mul__, __rmul__
+
+
+@dataclass
+class Polynomial:
+    raw: _Polynomial
+
+    def __init__(self, *, coefficients: Iterable[tuple[Iterable[int], float | int]]):
+        self.raw = _Polynomial(
+            terms=[
+                _Monomial(ids=ids, coefficient=coefficient)
+                for ids, coefficient in coefficients
+            ]
+        )
+
+    # TODO: Implement __add__, __radd__, __mul__, __rmul__
+
+
+def as_function(
+    f: int | float | DecisionVariable | Linear | Quadratic | Polynomial | _Function,
+) -> _Function:
+    if isinstance(f, (int, float)):
+        return _Function(constant=f)
+    elif isinstance(f, DecisionVariable):
+        return _Function(linear=Linear(terms={f.raw.id: 1}).raw)
+    elif isinstance(f, Linear):
+        return _Function(linear=f.raw)
+    elif isinstance(f, Quadratic):
+        return _Function(quadratic=f.raw)
+    elif isinstance(f, Polynomial):
+        return _Function(polynomial=f.raw)
+    elif isinstance(f, _Function):
+        return f
+    else:
+        raise ValueError(f"Unknown function type: {type(f)}")
+
+
+@dataclass
+class Constraint:
+    raw: _Constraint
+    _counter = 0
+
+    EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
+    LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+
+    def __init__(
+        self,
+        *,
+        function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
+        equality: Equality.ValueType,
+    ):
+        self.raw = _Constraint(
+            id=Constraint._counter,
+            function=as_function(function),
+            equality=equality,
+        )
+        Constraint._counter += 1
