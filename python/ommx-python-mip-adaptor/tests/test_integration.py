@@ -1,8 +1,5 @@
 import pytest
 
-from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
 from ommx.v1 import Instance, DecisionVariable
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
@@ -43,44 +40,14 @@ def test_integration_milp():
     # Optimal solution: x1 = 3, x2 = 3
     LOWER_BOUND = 0
     UPPER_BOUND = 10
+    x1 = DecisionVariable.integer(1, lower=LOWER_BOUND, upper=UPPER_BOUND)
+    x2 = DecisionVariable.continuous(2, lower=LOWER_BOUND, upper=UPPER_BOUND)
     ommx_instance = Instance.from_components(
-        decision_variables=[
-            DecisionVariable.integer(1, lower=LOWER_BOUND, upper=UPPER_BOUND),
-            DecisionVariable.continuous(2, lower=LOWER_BOUND, upper=UPPER_BOUND),
-        ],
-        objective=Function(
-            linear=Linear(
-                terms=[
-                    Linear.Term(id=1, coefficient=-1),
-                    Linear.Term(id=2, coefficient=-1),
-                ]
-            )
-        ),
+        decision_variables=[x1, x2],
+        objective=-x1 - x2,
         constraints=[
-            Constraint(
-                function=Function(
-                    linear=Linear(
-                        terms=[
-                            Linear.Term(id=1, coefficient=3),
-                            Linear.Term(id=2, coefficient=-1),
-                        ],
-                        constant=-6,
-                    )
-                ),
-                equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
-            ),
-            Constraint(
-                function=Function(
-                    linear=Linear(
-                        terms=[
-                            Linear.Term(id=1, coefficient=-1),
-                            Linear.Term(id=2, coefficient=3),
-                        ],
-                        constant=-6,
-                    ),
-                ),
-                equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
-            ),
+            3 * x1 - x2 <= 6,
+            -x1 + 3 * x2 <= 6,
         ],
         sense=Instance.MINIMIZE,
     )

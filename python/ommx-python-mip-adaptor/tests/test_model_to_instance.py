@@ -1,7 +1,6 @@
 import mip
 
-from ommx.v1.constraint_pb2 import Equality
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Constraint
 
 import ommx_python_mip_adapter as adapter
 
@@ -88,7 +87,7 @@ def test_milp():
     assert len(ommx_instance.constraints) == 3
 
     constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Equality.EQUALITY_EQUAL_TO_ZERO
+    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     assert constraint1.function.HasField("linear")
     assert constraint1.function.linear.constant == 6
     assert len(constraint1.function.linear.terms) == 2
@@ -100,7 +99,7 @@ def test_milp():
     assert constraint1_term_x2.coefficient == -5
 
     constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint2.function.HasField("linear")
     assert constraint2.function.linear.constant == -9
     assert len(constraint2.function.linear.terms) == 2
@@ -112,7 +111,7 @@ def test_milp():
     assert constraint2_term_x3.coefficient == 8
 
     constraint3 = ommx_instance.constraints[2]
-    assert constraint3.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint3.function.HasField("linear")
     assert constraint3.function.linear.constant == -12
     assert len(constraint3.function.linear.terms) == 2
@@ -179,7 +178,7 @@ def test_no_objective_model():
     assert len(ommx_instance.constraints) == 2
 
     constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Equality.EQUALITY_EQUAL_TO_ZERO
+    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     assert constraint1.function.HasField("linear")
     assert constraint1.function.linear.constant == -5
     assert len(constraint1.function.linear.terms) == 2
@@ -191,7 +190,7 @@ def test_no_objective_model():
     assert constraint1_term_x2.coefficient == 2
 
     constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Equality.EQUALITY_EQUAL_TO_ZERO
+    assert constraint2.equality == Constraint.EQUAL_TO_ZERO
     assert constraint2.function.HasField("linear")
     assert constraint2.function.linear.constant == -10
     assert len(constraint2.function.linear.terms) == 2
