@@ -15,16 +15,16 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 
 ## Rust SDK
 
-| Crate name | crates.io | docs.rs | GitHub Pages |
-| --- | --- | --- | --- |
-| ommx | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) |
+| Crate name | crates.io | Document (stable) | Document (main) |
+|:----|:----|:----|:----|
+| [ommx](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) |
 
 ## Python SDK
 
-| Package name | PyPI | GitHub Pages |
-| --- | --- | --- |
-| ommx | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx/index.html) |
-| ommx-python-mip-adapter | [![ommx-python-mip-adapter](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/index.html)|
+| Package name | PyPI | Document (main) |
+|:--- |:--- |:--- |
+| [ommx](./python/ommx) | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx/index.html) |
+| [ommx-python-mip-adapter](./python/ommx-python-mip-adapter/) | [![ommx-python-mip-adapter](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/index.html)|
 
 # License
 © 2024 Jij Inc.
