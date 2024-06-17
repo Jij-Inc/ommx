@@ -84,7 +84,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install "python/ommx[dev]"
-          pip install "python/ommx-python-mip-adaptor[dev]"
+          pip install "python/ommx-python-mip-adapter[dev]"
 
       - name: Build Python documentation
         run: |
@@ -99,13 +99,13 @@ jobs:
 
       - name: Build Python documentation
         run: |
-          sphinx-build -b html ./python/ommx-python-mip-adaptor/docs/source ./python/ommx-python-mip-adaptor/docs/build
+          sphinx-build -b html ./python/ommx-python-mip-adapter/docs/source ./python/ommx-python-mip-adapter/docs/build
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-python-ommx-python-mip-adaptor
-          path: ./python/ommx-python-mip-adaptor/docs/build
+          name: doc-python-ommx-python-mip-adapter
+          path: ./python/ommx-python-mip-adapter/docs/build
           retention-days: 30
 
   package:
@@ -133,8 +133,8 @@ jobs:
       - name: Download HTML of python
         uses: actions/download-artifact@v4
         with:
-          name: doc-python-ommx-python-mip-adaptor
-          path: ./doc/python/ommx-python-mip-adaptor
+          name: doc-python-ommx-python-mip-adapter
+          path: ./doc/python/ommx-python-mip-adapter
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

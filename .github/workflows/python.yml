@@ -89,21 +89,21 @@ jobs:
         run: |
           pytest -vv --doctest-modules python/ommx
 
-      - name: Install ommx-python-mip-adaptor
+      - name: Install ommx-python-mip-adapter
         if: always()
         run: |
-          pip install -v -e 'python/ommx-python-mip-adaptor/[dev]'
+          pip install -v -e 'python/ommx-python-mip-adapter/[dev]'
 
-      - name: Lint ommx-python-mip-adaptor
+      - name: Lint ommx-python-mip-adapter
         if: always()
         run: |
-          pyright python/ommx-python-mip-adaptor/
+          pyright python/ommx-python-mip-adapter/
 
-      - name: Test ommx-python-mip-adaptor
+      - name: Test ommx-python-mip-adapter
         if: always()
         run: |
-          pytest -vv --doctest-modules python/ommx-python-mip-adaptor/
-          markdown-code-runner ./python/ommx-python-mip-adaptor/README.md
+          pytest -vv --doctest-modules python/ommx-python-mip-adapter/
+          markdown-code-runner ./python/ommx-python-mip-adapter/README.md
 
   format:
     runs-on: ubuntu-latest
