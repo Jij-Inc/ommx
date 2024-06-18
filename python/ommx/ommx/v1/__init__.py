@@ -271,6 +271,7 @@ class DecisionVariable:
         upper: float,
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -280,6 +281,7 @@ class DecisionVariable:
                 bound=Bound(lower=lower, upper=upper),
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -290,6 +292,7 @@ class DecisionVariable:
         *,
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -298,6 +301,7 @@ class DecisionVariable:
                 kind=_DecisionVariable.Kind.KIND_BINARY,
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -310,6 +314,7 @@ class DecisionVariable:
         upper: float = float("inf"),
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -319,6 +324,7 @@ class DecisionVariable:
                 bound=Bound(lower=lower, upper=upper),
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -331,6 +337,7 @@ class DecisionVariable:
         upper: float = float("inf"),
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -340,6 +347,7 @@ class DecisionVariable:
                 bound=Bound(lower=lower, upper=upper),
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -352,6 +360,7 @@ class DecisionVariable:
         upper: float = float("inf"),
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -361,6 +370,7 @@ class DecisionVariable:
                 bound=Bound(lower=lower, upper=upper),
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -373,6 +383,7 @@ class DecisionVariable:
         upper: float = float("inf"),
         name: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
@@ -382,6 +393,7 @@ class DecisionVariable:
                 bound=Bound(lower=lower, upper=upper),
                 name=name,
                 subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
