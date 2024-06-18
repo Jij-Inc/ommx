@@ -107,6 +107,8 @@ impl Evaluate for Constraint {
                 equality: self.equality,
                 evaluated_value,
                 used_decision_variable_ids,
+                title: self.title.clone(),
+                parameters: self.parameters.clone(),
                 description: self.description.clone(),
             },
             used_ids,

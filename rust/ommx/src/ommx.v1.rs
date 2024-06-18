@@ -91,23 +91,6 @@ pub mod function {
         Polynomial(super::Polynomial),
     }
 }
-/// Additional infomations of the constraint for human-readable output
-///
-/// Consider for example a problem constains a series of constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-/// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-/// The `name` field of this message is intended to be a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
-/// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ConstraintDescription {
-    /// Name of the constraint
-    #[prost(string, tag = "1")]
-    pub name: ::prost::alloc::string::String,
-    /// Parameters of the constraint.
-    #[prost(map = "string, string", tag = "2")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-}
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Constraint {
@@ -124,8 +107,22 @@ pub struct Constraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<Function>,
-    #[prost(message, optional, tag = "4")]
-    pub description: ::core::option::Option<ConstraintDescription>,
+    /// Parameters of the constraint.
+    ///
+    /// Consider for example a problem constains a series of constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+    /// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+    /// The `name` field of this message is intended to be a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
+    /// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+    ///
+    #[prost(map = "string, string", tag = "5")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Short human-readable name of the constraint.
+    #[prost(string, optional, tag = "6")]
+    pub title: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detail human-readable description of the constraint.
+    #[prost(string, optional, tag = "7")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A constraint evaluated with a state
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -141,8 +138,16 @@ pub struct EvaluatedConstraint {
     /// IDs of decision variables used to evalute this constraint
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(message, optional, tag = "5")]
-    pub description: ::core::option::Option<ConstraintDescription>,
+    /// Parameters of the constraint.
+    #[prost(map = "string, string", tag = "5")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Short human-readable name of the constraint.
+    #[prost(string, optional, tag = "6")]
+    pub title: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detail human-readable description of the constraint.
+    #[prost(string, optional, tag = "7")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Equality of a constraint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -203,31 +208,22 @@ pub struct DecisionVariable {
     /// If the bound is not specified, the decision variable is considered as unbounded.
     #[prost(message, optional, tag = "3")]
     pub bound: ::core::option::Option<Bound>,
-    /// This is optional since the name and subscripts does not exist in general mathematical programming situation
-    #[prost(message, optional, tag = "4")]
-    pub description: ::core::option::Option<decision_variable::Description>,
+    /// Name of the decision variable. e.g. `x`
+    #[prost(string, optional, tag = "4")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Subscripts of the decision variable. e.g. `\[1, 3\]` for an element of multidimensional deicion variable `x\[1, 3\]`
+    #[prost(int64, repeated, tag = "5")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Additional parameters for decision variables
+    #[prost(map = "string, string", tag = "6")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Detail human-readable description of the decision variable.
+    #[prost(string, optional, tag = "7")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Nested message and enum types in `DecisionVariable`.
 pub mod decision_variable {
-    /// Human readable description of the decision variable.
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Description {
-        /// Name of the decision variable.
-        #[prost(string, tag = "1")]
-        pub name: ::prost::alloc::string::String,
-        /// The parameters for parameterized decision variables
-        ///
-        /// This field is intended to use for multidimensional variables like x\[i, j\] where `i` and `j` are integer parameter.
-        /// `DecisionVariable` message represents a single decision variable like `x\[1, 3\]`,
-        /// and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
-        /// The value of the parameter is string because the parameter may not be integer.
-        #[prost(map = "string, string", tag = "2")]
-        pub parameters: ::std::collections::HashMap<
-            ::prost::alloc::string::String,
-            ::prost::alloc::string::String,
-        >,
-    }
     /// Kind of the decision variable
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
