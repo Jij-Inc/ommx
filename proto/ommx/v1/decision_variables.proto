@@ -38,20 +38,15 @@ message DecisionVariable {
   // If the bound is not specified, the decision variable is considered as unbounded.
   optional Bound bound = 3;
 
-  // Human readable description of the decision variable.
-  message Description {
-    // Name of the decision variable.
-    string name = 1;
+  // Name of the decision variable. e.g. `x`
+  optional string name = 4;
 
-    // The parameters for parameterized decision variables
-    //
-    // This field is intended to use for multidimensional variables like x[i, j] where `i` and `j` are integer parameter.
-    // `DecisionVariable` message represents a single decision variable like `x[1, 3]`,
-    // and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
-    // The value of the parameter is string because the parameter may not be integer.
-    map<string, string> parameters = 2;
-  }
+  // Subscripts of the decision variable. e.g. `[1, 3]` for an element of multidimensional deicion variable `x[1, 3]`
+  repeated int64 subscripts = 5;
 
-  // This is optional since the name and subscripts does not exist in general mathematical programming situation
-  optional Description description = 4;
+  // Additional parameters for decision variables
+  map<string, string> parameters = 6;
+
+  // Detail human-readable description of the decision variable.
+  optional string description = 7;
 }
