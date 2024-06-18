@@ -42,14 +42,121 @@ EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO: Equality.ValueType  # 2
 global___Equality = Equality
 
 @typing.final
-class ConstraintDescription(google.protobuf.message.Message):
-    """Additional infomations of the constraint for human-readable output
+class Constraint(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-    then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-    The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-    and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+    @typing.final
+    class ParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    ID_FIELD_NUMBER: builtins.int
+    EQUALITY_FIELD_NUMBER: builtins.int
+    FUNCTION_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    """Constraint ID
+
+    - Constraint IDs are managed separately from decision variable IDs.
+      We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+      and constraint `x == 0` with constraint ID `1`.
+    - IDs are not required to be sequential.
+    - IDs must be unique with other types of constraints.
     """
+    equality: global___Equality.ValueType
+    name: builtins.str
+    """Name of the constraint."""
+    description: builtins.str
+    """Detail human-readable description of the constraint."""
+    @property
+    def function(self) -> ommx.v1.function_pb2.Function: ...
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Parameters of the constraint.
+
+        Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+        then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+        The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
+        and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+        """
+
+    def __init__(
+        self,
+        *,
+        id: builtins.int = ...,
+        equality: global___Equality.ValueType = ...,
+        function: ommx.v1.function_pb2.Function | None = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+        name: builtins.str | None = ...,
+        description: builtins.str | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "function",
+            b"function",
+            "name",
+            b"name",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "equality",
+            b"equality",
+            "function",
+            b"function",
+            "id",
+            b"id",
+            "name",
+            b"name",
+            "parameters",
+            b"parameters",
+        ],
+    ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_name", b"_name"]
+    ) -> typing.Literal["name"] | None: ...
+
+global___Constraint = Constraint
+
+@typing.final
+class EvaluatedConstraint(google.protobuf.message.Message):
+    """A constraint evaluated with a state"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -71,10 +178,27 @@ class ConstraintDescription(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
-    NAME_FIELD_NUMBER: builtins.int
+    ID_FIELD_NUMBER: builtins.int
+    EQUALITY_FIELD_NUMBER: builtins.int
+    EVALUATED_VALUE_FIELD_NUMBER: builtins.int
+    USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    equality: global___Equality.ValueType
+    evaluated_value: builtins.float
+    """The value of function for the state"""
     name: builtins.str
-    """Name of the constraint"""
+    """Name of the constraint."""
+    description: builtins.str
+    """Detail human-readable description of the constraint."""
+    @property
+    def used_decision_variable_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """IDs of decision variables used to evalute this constraint"""
+
     @property
     def parameters(
         self,
@@ -84,113 +208,25 @@ class ConstraintDescription(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        name: builtins.str = ...,
-        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
-    ) -> None: ...
-    def ClearField(
-        self, field_name: typing.Literal["name", b"name", "parameters", b"parameters"]
-    ) -> None: ...
-
-global___ConstraintDescription = ConstraintDescription
-
-@typing.final
-class Constraint(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    ID_FIELD_NUMBER: builtins.int
-    EQUALITY_FIELD_NUMBER: builtins.int
-    FUNCTION_FIELD_NUMBER: builtins.int
-    DESCRIPTION_FIELD_NUMBER: builtins.int
-    id: builtins.int
-    """Constraint ID
-
-    - Constraint IDs are managed separately from decision variable IDs.
-      We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
-      and constraint `x == 0` with constraint ID `1`.
-    - IDs are not required to be sequential.
-    - IDs must be unique with other types of constraints.
-    """
-    equality: global___Equality.ValueType
-    @property
-    def function(self) -> ommx.v1.function_pb2.Function: ...
-    @property
-    def description(self) -> global___ConstraintDescription: ...
-    def __init__(
-        self,
-        *,
-        id: builtins.int = ...,
-        equality: global___Equality.ValueType = ...,
-        function: ommx.v1.function_pb2.Function | None = ...,
-        description: global___ConstraintDescription | None = ...,
-    ) -> None: ...
-    def HasField(
-        self,
-        field_name: typing.Literal[
-            "_description",
-            b"_description",
-            "description",
-            b"description",
-            "function",
-            b"function",
-        ],
-    ) -> builtins.bool: ...
-    def ClearField(
-        self,
-        field_name: typing.Literal[
-            "_description",
-            b"_description",
-            "description",
-            b"description",
-            "equality",
-            b"equality",
-            "function",
-            b"function",
-            "id",
-            b"id",
-        ],
-    ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["_description", b"_description"]
-    ) -> typing.Literal["description"] | None: ...
-
-global___Constraint = Constraint
-
-@typing.final
-class EvaluatedConstraint(google.protobuf.message.Message):
-    """A constraint evaluated with a state"""
-
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    ID_FIELD_NUMBER: builtins.int
-    EQUALITY_FIELD_NUMBER: builtins.int
-    EVALUATED_VALUE_FIELD_NUMBER: builtins.int
-    USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
-    DESCRIPTION_FIELD_NUMBER: builtins.int
-    id: builtins.int
-    equality: global___Equality.ValueType
-    evaluated_value: builtins.float
-    """The value of function for the state"""
-    @property
-    def used_decision_variable_ids(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs of decision variables used to evalute this constraint"""
-
-    @property
-    def description(self) -> global___ConstraintDescription: ...
-    def __init__(
-        self,
-        *,
         id: builtins.int = ...,
         equality: global___Equality.ValueType = ...,
         evaluated_value: builtins.float = ...,
         used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
-        description: global___ConstraintDescription | None = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+        name: builtins.str | None = ...,
+        description: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
-            "_description", b"_description", "description", b"description"
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "name",
+            b"name",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -198,6 +234,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_description",
             b"_description",
+            "_name",
+            b"_name",
             "description",
             b"description",
             "equality",
@@ -206,12 +244,21 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"evaluated_value",
             "id",
             b"id",
+            "name",
+            b"name",
+            "parameters",
+            b"parameters",
             "used_decision_variable_ids",
             b"used_decision_variable_ids",
         ],
     ) -> None: ...
+    @typing.overload
     def WhichOneof(
         self, oneof_group: typing.Literal["_description", b"_description"]
     ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_name", b"_name"]
+    ) -> typing.Literal["name"] | None: ...
 
 global___EvaluatedConstraint = EvaluatedConstraint

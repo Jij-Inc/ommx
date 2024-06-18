@@ -85,60 +85,29 @@ class DecisionVariable(google.protobuf.message.Message):
     """Semi-continuous decision variable is a decision variable that can take only continuous values in the given range or zero."""
 
     @typing.final
-    class Description(google.protobuf.message.Message):
-        """Human readable description of the decision variable."""
-
+    class ParametersEntry(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        @typing.final
-        class ParametersEntry(google.protobuf.message.Message):
-            DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-            KEY_FIELD_NUMBER: builtins.int
-            VALUE_FIELD_NUMBER: builtins.int
-            key: builtins.str
-            value: builtins.str
-            def __init__(
-                self,
-                *,
-                key: builtins.str = ...,
-                value: builtins.str = ...,
-            ) -> None: ...
-            def ClearField(
-                self, field_name: typing.Literal["key", b"key", "value", b"value"]
-            ) -> None: ...
-
-        NAME_FIELD_NUMBER: builtins.int
-        PARAMETERS_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        """Name of the decision variable."""
-        @property
-        def parameters(
-            self,
-        ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
-            """The parameters for parameterized decision variables
-
-            This field is intended to use for multidimensional variables like x[i, j] where `i` and `j` are integer parameter.
-            `DecisionVariable` message represents a single decision variable like `x[1, 3]`,
-            and the `name` is `x` and `parameters` is `{"i": "1", "j": "3"}`.
-            The value of the parameter is string because the parameter may not be integer.
-            """
-
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            parameters: collections.abc.Mapping[builtins.str, builtins.str]
-            | None = ...,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
         ) -> None: ...
         def ClearField(
-            self,
-            field_name: typing.Literal["name", b"name", "parameters", b"parameters"],
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
     ID_FIELD_NUMBER: builtins.int
     KIND_FIELD_NUMBER: builtins.int
     BOUND_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    SUBSCRIPTS_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Decision variable ID.
@@ -147,6 +116,10 @@ class DecisionVariable(google.protobuf.message.Message):
     """
     kind: global___DecisionVariable.Kind.ValueType
     """Kind of the decision variable"""
+    name: builtins.str
+    """Name of the decision variable. e.g. `x`"""
+    description: builtins.str
+    """Detail human-readable description of the decision variable."""
     @property
     def bound(self) -> global___Bound:
         """Bound of the decision variable
@@ -154,8 +127,16 @@ class DecisionVariable(google.protobuf.message.Message):
         """
 
     @property
-    def description(self) -> global___DecisionVariable.Description:
-        """This is optional since the name and subscripts does not exist in general mathematical programming situation"""
+    def subscripts(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """Subscripts of the decision variable. e.g. `[1, 3]` for an element of multidimensional deicion variable `x[1, 3]`"""
+
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Additional parameters for decision variables"""
 
     def __init__(
         self,
@@ -163,7 +144,10 @@ class DecisionVariable(google.protobuf.message.Message):
         id: builtins.int = ...,
         kind: global___DecisionVariable.Kind.ValueType = ...,
         bound: global___Bound | None = ...,
-        description: global___DecisionVariable.Description | None = ...,
+        name: builtins.str | None = ...,
+        subscripts: collections.abc.Iterable[builtins.int] | None = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+        description: builtins.str | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -172,10 +156,14 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_bound",
             "_description",
             b"_description",
+            "_name",
+            b"_name",
             "bound",
             b"bound",
             "description",
             b"description",
+            "name",
+            b"name",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -185,6 +173,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_bound",
             "_description",
             b"_description",
+            "_name",
+            b"_name",
             "bound",
             b"bound",
             "description",
@@ -193,6 +183,12 @@ class DecisionVariable(google.protobuf.message.Message):
             b"id",
             "kind",
             b"kind",
+            "name",
+            b"name",
+            "parameters",
+            b"parameters",
+            "subscripts",
+            b"subscripts",
         ],
     ) -> None: ...
     @typing.overload
@@ -203,5 +199,9 @@ class DecisionVariable(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_description", b"_description"]
     ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_name", b"_name"]
+    ) -> typing.Literal["name"] | None: ...
 
 global___DecisionVariable = DecisionVariable
