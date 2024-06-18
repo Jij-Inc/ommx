@@ -117,9 +117,9 @@ pub struct Constraint {
     #[prost(map = "string, string", tag = "5")]
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Short human-readable name of the constraint.
+    /// Name of the constraint.
     #[prost(string, optional, tag = "6")]
-    pub title: ::core::option::Option<::prost::alloc::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// Detail human-readable description of the constraint.
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
@@ -142,9 +142,9 @@ pub struct EvaluatedConstraint {
     #[prost(map = "string, string", tag = "5")]
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Short human-readable name of the constraint.
+    /// Name of the constraint.
     #[prost(string, optional, tag = "6")]
-    pub title: ::core::option::Option<::prost::alloc::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// Detail human-readable description of the constraint.
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,

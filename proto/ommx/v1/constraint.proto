@@ -34,8 +34,8 @@ message Constraint {
   //
   map<string, string> parameters = 5;
 
-  // Short human-readable name of the constraint.
-  optional string title = 6;
+  // Name of the constraint.
+  optional string name = 6;
 
   // Detail human-readable description of the constraint.
   optional string description = 7;
@@ -56,8 +56,8 @@ message EvaluatedConstraint {
   // Parameters of the constraint.
   map<string, string> parameters = 5;
 
-  // Short human-readable name of the constraint.
-  optional string title = 6;
+  // Name of the constraint.
+  optional string name = 6;
 
   // Detail human-readable description of the constraint.
   optional string description = 7;
