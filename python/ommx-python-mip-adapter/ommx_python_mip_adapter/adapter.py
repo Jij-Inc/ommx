@@ -3,7 +3,7 @@ import typing as tp
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx.v1.constraint_pb2 import Constraint, Equality, ConstraintDescription
+from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
@@ -139,11 +139,7 @@ class OMMXInstanceBuilder:
 
             decision_variables.append(
                 DecisionVariable.of_type(
-                    kind,
-                    var.idx,
-                    lower=var.lb,
-                    upper=var.ub,
-                    description=DecisionVariable.Description(name=var.name),
+                    kind, var.idx, lower=var.lb, upper=var.ub, name=var.name
                 )
             )
 
@@ -190,14 +186,14 @@ class OMMXInstanceBuilder:
                     id=id,
                     equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(lin_expr),
-                    description=ConstraintDescription(name=name),
+                    name=name,
                 )
             elif lin_expr.sense == "<":
                 constraint = Constraint(
                     id=id,
                     equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(lin_expr),
-                    description=ConstraintDescription(name=name),
+                    name=name,
                 )
             elif lin_expr.sense == ">":
                 # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
@@ -206,7 +202,7 @@ class OMMXInstanceBuilder:
                     id=id,
                     equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self._make_function_from_lin_expr(-lin_expr),
-                    description=ConstraintDescription(name=name),
+                    name=name,
                 )
             else:
                 raise OMMXPythonMIPAdapterError(
