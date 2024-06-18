@@ -11,19 +11,6 @@ enum Equality {
   EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO = 2;
 }
 
-// Additional infomations of the constraint for human-readable output
-//
-// Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-// The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
-message ConstraintDescription {
-  // Name of the constraint
-  string name = 1;
-  // Parameters of the constraint.
-  map<string, string> parameters = 2;
-}
-
 message Constraint {
   // Constraint ID
   //
@@ -38,7 +25,20 @@ message Constraint {
 
   Function function = 3;
 
-  optional ConstraintDescription description = 4;
+  // Parameters of the constraint.
+  //
+  // Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+  // then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
+  // The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
+  // and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+  //
+  map<string, string> parameters = 5;
+
+  // Name of the constraint.
+  optional string name = 6;
+
+  // Detail human-readable description of the constraint.
+  optional string description = 7;
 }
 
 // A constraint evaluated with a state
@@ -53,5 +53,12 @@ message EvaluatedConstraint {
   // IDs of decision variables used to evalute this constraint
   repeated uint64 used_decision_variable_ids = 4;
 
-  optional ConstraintDescription description = 5;
+  // Parameters of the constraint.
+  map<string, string> parameters = 5;
+
+  // Name of the constraint.
+  optional string name = 6;
+
+  // Detail human-readable description of the constraint.
+  optional string description = 7;
 }

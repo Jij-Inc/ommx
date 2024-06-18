@@ -54,19 +54,19 @@ def test_milp():
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == CONTINUOUS_LOWER_BOUND
     assert decision_variables_x1.bound.upper == CONTINUOUS_UPPER_BOUND
-    assert decision_variables_x1.description.name == "1"
+    assert decision_variables_x1.name == "1"
     decision_variables_x2 = ommx_instance.decision_variables[1]
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.INTEGER
     assert decision_variables_x2.bound.lower == INTEGER_LOWER_BOUND
     assert decision_variables_x2.bound.upper == INTEGER_UPPER_BOUND
-    assert decision_variables_x2.description.name == "2"
+    assert decision_variables_x2.name == "2"
     decision_variables_x3 = ommx_instance.decision_variables[2]
     assert decision_variables_x3.id == 2
     assert decision_variables_x3.kind == DecisionVariable.BINARY
     assert decision_variables_x3.bound.lower == 0
     assert decision_variables_x3.bound.upper == 1
-    assert decision_variables_x3.description.name == "3"
+    assert decision_variables_x3.name == "3"
 
     # Check the objective function
     assert ommx_instance.objective.HasField("linear")
@@ -162,13 +162,13 @@ def test_no_objective_model():
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == LOWER_BOUND
     assert decision_variables_x1.bound.upper == UPPER_BOUND
-    assert decision_variables_x1.description.name == "1"
+    assert decision_variables_x1.name == "1"
     decision_variables_x2 = ommx_instance.decision_variables[1]
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x2.bound.lower == LOWER_BOUND
     assert decision_variables_x2.bound.upper == UPPER_BOUND
-    assert decision_variables_x2.description.name == "2"
+    assert decision_variables_x2.name == "2"
 
     # check the objective function
     assert ommx_instance.objective.HasField("constant")

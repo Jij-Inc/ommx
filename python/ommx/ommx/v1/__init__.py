@@ -93,7 +93,7 @@ class Instance:
     @property
     def constraints(self) -> DataFrame:
         constraints = self.raw.constraints
-        parameters = DataFrame(dict(v.description.parameters) for v in constraints)
+        parameters = DataFrame(dict(v.parameters) for v in constraints)
         parameters.columns = MultiIndex.from_product(
             [["parameters"], parameters.columns]
         )
@@ -103,7 +103,8 @@ class Instance:
                 "equality": _equality(c.equality),
                 "type": _function_type(c.function),
                 "used_ids": used_decision_variable_ids(c.function.SerializeToString()),
-                "name": c.description.name,
+                "name": c.name,
+                "description": c.description,
             }
             for c in constraints
         )
@@ -174,7 +175,7 @@ class Solution:
     @property
     def constraints(self) -> DataFrame:
         evaluation = self.raw.evaluated_constraints
-        parameters = DataFrame(dict(v.description.parameters) for v in evaluation)
+        parameters = DataFrame(dict(v.parameters) for v in evaluation)
         parameters.columns = MultiIndex.from_product(
             [["parameters"], parameters.columns]
         )
@@ -184,7 +185,8 @@ class Solution:
                 "equality": _equality(v.equality),
                 "value": v.evaluated_value,
                 "used_ids": set(v.used_decision_variable_ids),
-                "name": v.description.name,
+                "name": v.name,
+                "description": v.description,
             }
             for v in evaluation
         )
@@ -194,7 +196,7 @@ class Solution:
 
 def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
     decision_variables = obj.decision_variables
-    parameters = DataFrame(dict(v.description.parameters) for v in decision_variables)
+    parameters = DataFrame(dict(v.parameters) for v in decision_variables)
     parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
     df = DataFrame(
         {
@@ -202,7 +204,9 @@ def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
             "kind": _kind(v.kind),
             "lower": v.bound.lower,
             "upper": v.bound.upper,
-            "name": v.description.name,
+            "name": v.name,
+            "subscripts": v.subscripts,
+            "description": v.description,
         }
         for v in decision_variables
     )
@@ -251,7 +255,6 @@ class DecisionVariable:
     raw: _DecisionVariable
 
     Kind = _DecisionVariable.Kind.ValueType
-    Description = _DecisionVariable.Description
 
     BINARY = _DecisionVariable.Kind.KIND_BINARY
     INTEGER = _DecisionVariable.Kind.KIND_INTEGER
@@ -266,25 +269,39 @@ class DecisionVariable:
         *,
         lower: float,
         upper: float,
-        description: Optional[Description] = None,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=kind,
                 bound=Bound(lower=lower, upper=upper),
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
 
     @staticmethod
     def binary(
-        id: int, *, description: Optional[Description] = None
+        id: int,
+        *,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_BINARY,
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -295,13 +312,19 @@ class DecisionVariable:
         *,
         lower: float = float("-inf"),
         upper: float = float("inf"),
-        description: Optional[Description] = None,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_INTEGER,
                 bound=Bound(lower=lower, upper=upper),
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -312,13 +335,19 @@ class DecisionVariable:
         *,
         lower: float = float("-inf"),
         upper: float = float("inf"),
-        description: Optional[Description] = None,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_CONTINUOUS,
                 bound=Bound(lower=lower, upper=upper),
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -329,13 +358,19 @@ class DecisionVariable:
         *,
         lower: float = float("-inf"),
         upper: float = float("inf"),
-        description: Optional[Description] = None,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_SEMI_INTEGER,
                 bound=Bound(lower=lower, upper=upper),
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
@@ -346,13 +381,19 @@ class DecisionVariable:
         *,
         lower: float = float("-inf"),
         upper: float = float("inf"),
-        description: Optional[Description] = None,
+        name: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
+        description: Optional[str] = None,
     ) -> DecisionVariable:
         return DecisionVariable(
             _DecisionVariable(
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_SEMI_CONTINUOUS,
                 bound=Bound(lower=lower, upper=upper),
+                name=name,
+                subscripts=subscripts,
+                parameters=parameters,
                 description=description,
             )
         )
