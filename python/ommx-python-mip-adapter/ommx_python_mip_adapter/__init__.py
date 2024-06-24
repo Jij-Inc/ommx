@@ -1,6 +1,6 @@
 from .ommx_to_python_mip import PythonMIPBuilder, instance_to_model
-
-from ommx_python_mip_adapter.adapter import (
+from .python_mip_to_ommx import (
+    OMMXInstanceBuilder,
     model_to_instance,
     model_to_solution,
 )
@@ -10,4 +10,5 @@ __all__ = [
     "model_to_instance",
     "model_to_solution",
     "PythonMIPBuilder",
+    "OMMXInstanceBuilder",
 ]
