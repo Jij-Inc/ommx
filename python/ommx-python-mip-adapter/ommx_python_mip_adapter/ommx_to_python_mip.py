@@ -1,4 +1,5 @@
 from typing import Optional, final
+from dataclasses import dataclass
 
 import mip
 
@@ -9,10 +10,14 @@ from ommx.v1 import Instance, DecisionVariable
 from .exception import OMMXPythonMIPAdapterError
 
 
+@dataclass
 class PythonMIPBuilder:
     """
     Build Python-MIP Model from ommx.v1.Instance.
     """
+
+    instance: Instance
+    model: mip.Model
 
     def __init__(
         self,
@@ -29,29 +34,29 @@ class PythonMIPBuilder:
             raise OMMXPythonMIPAdapterError(
                 f"Not supported sense: {instance.raw.sense}"
             )
-        self._ommx_instance = instance.raw
-        self._model = mip.Model(
+        self.instance = instance
+        self.model = mip.Model(
             sense=sense,
             solver_name=solver_name,
             solver=solver,
         )
 
     def _set_decision_variables(self):
-        for var in self._ommx_instance.decision_variables:
+        for var in self.instance.raw.decision_variables:
             if var.kind == DecisionVariable.BINARY:
-                self._model.add_var(
+                self.model.add_var(
                     name=str(var.id),
                     var_type=mip.BINARY,
                 )
             elif var.kind == DecisionVariable.INTEGER:
-                self._model.add_var(
+                self.model.add_var(
                     name=str(var.id),
                     var_type=mip.INTEGER,
                     lb=var.bound.lower,  # type: ignore
                     ub=var.bound.upper,  # type: ignore
                 )
             elif var.kind == DecisionVariable.CONTINUOUS:
-                self._model.add_var(
+                self.model.add_var(
                     name=str(var.id),
                     var_type=mip.CONTINUOUS,
                     lb=var.bound.lower,  # type: ignore
@@ -71,26 +76,26 @@ class PythonMIPBuilder:
 
         return (
             mip.xsum(
-                term.coefficient * self._model.vars[str(term.id)]  # type: ignore
+                term.coefficient * self.model.vars[str(term.id)]  # type: ignore
                 for term in ommx_linear.terms
             )
             + ommx_linear.constant
         )  # type: ignore
 
     def _set_objective_function(self):
-        ommx_objective = self._ommx_instance.objective
+        ommx_objective = self.instance.raw.objective
 
         if ommx_objective.HasField("constant"):
-            self._model.objective = ommx_objective.constant  # type: ignore
+            self.model.objective = ommx_objective.constant  # type: ignore
         elif ommx_objective.HasField("linear"):
-            self._model.objective = self._make_linear_expr(ommx_objective)
+            self.model.objective = self._make_linear_expr(ommx_objective)
         else:
             raise OMMXPythonMIPAdapterError(
                 "The objective function must be either `constant` or `linear`."
             )
 
     def _set_constraints(self):
-        ommx_constraints = self._ommx_instance.constraints
+        ommx_constraints = self.instance.raw.constraints
 
         for constraint in ommx_constraints:
             if not constraint.function.HasField("linear"):
@@ -112,7 +117,7 @@ class PythonMIPBuilder:
                     f"id: {constraint.id}, equality: {constraint.equality}"
                 )
 
-            self._model.add_constr(constr_expr, name=str(constraint.id))
+            self.model.add_constr(constr_expr, name=str(constraint.id))
 
     @final
     def build(self) -> mip.Model:
@@ -120,7 +125,7 @@ class PythonMIPBuilder:
         self._set_objective_function()
         self._set_constraints()
 
-        return self._model
+        return self.model
 
 
 def instance_to_model(
