@@ -125,19 +125,8 @@ def instance_to_model(
     """
     The function to convert ommx.v1.Instance to Python-MIP Model.
 
-    Args:
-        ommx_instance_bytes (bytes): Serialized ommx.v1.Instance.
-        sense (str): mip.MINIMIZE or mip.MAXIMIZE.
-        solver_name (str): mip.CBC or mip.GUROBI. Searches for which solver is available if not informed.
-        solver (mip.Solver): if this argument is provided, solver_name will be ignored.
-
-    Returns:
-        mip.Model: Python-MIP Model converted from ommx.v1.Instance.
-
-    Raises:
-        OMMXPythonMIPAdapterError: If converting is not possible.
-
     Examples:
+
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter

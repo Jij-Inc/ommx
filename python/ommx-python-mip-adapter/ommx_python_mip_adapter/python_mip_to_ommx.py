@@ -13,6 +13,10 @@ from .exception import OMMXPythonMIPAdapterError
 
 
 class OMMXInstanceBuilder:
+    """
+    Build ommx.v1.Instance from Python-MIP Model.
+    """
+
     def __init__(
         self,
         model: mip.Model,
@@ -132,23 +136,17 @@ def model_to_instance(model: mip.Model) -> Instance:
     """
     The function to convert Python-MIP Model to ommx.v1.Instance.
 
-    Args:
-        model (mip.Model): Python-MIP Model.
-
-    Returns:
-        bytes: Serialized ommx.v1.Instance.
-
-    Raises:
-        OMMXPythonMIPAdapterError: If converting is not possible.
-
     Examples:
         >>> import mip
         >>> import ommx_python_mip_adapter as adapter
+
         >>> model = mip.Model()
         >>> x1=model.add_var(name="1", var_type=mip.INTEGER, lb=0, ub=5)
         >>> x2=model.add_var(name="2", var_type=mip.CONTINUOUS, lb=0, ub=5)
+
         >>> model.objective = - x1 - 2 * x2
         >>> constr = model.add_constr(x1 + x2 - 6 <= 0)
+
         >>> ommx_instance = adapter.model_to_instance(model)
     """
     builder = OMMXInstanceBuilder(model)
@@ -160,17 +158,7 @@ def model_to_solution(
     instance: Instance,
 ) -> State:
     """
-    The function to create ommx.v1.SolutionList from optimized Python-MIP Model.
-
-    Args:
-        model (mip.Model): Optimized Python-MIP Model.
-        ommx_instance_bytes (bytes): Serialized ommx.v1.Instance.
-
-    Returns:
-        bytes: Serialized ommx.v1.SolutionList
-
-    Raises:
-        OMMXPythonMIPAdapterError: When ommx.v1.SolutionList cannot be created.
+    The function to create ommx.v1.State from optimized Python-MIP Model.
 
     Examples:
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
