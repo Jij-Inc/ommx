@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import final
 import mip
 
 from mip.exceptions import ParameterNotAvailable
@@ -117,6 +118,7 @@ class OMMXInstanceBuilder:
         else:
             return Instance.MINIMIZE
 
+    @final
     def build(self) -> Instance:
         return Instance.from_components(
             decision_variables=self._decision_variables(),

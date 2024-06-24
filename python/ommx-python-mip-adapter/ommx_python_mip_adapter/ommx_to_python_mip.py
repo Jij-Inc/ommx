@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, final
 
 import mip
 
@@ -18,10 +18,17 @@ class PythonMIPBuilder:
         self,
         instance: Instance,
         *,
-        sense: str = mip.MINIMIZE,
         solver_name: str = mip.CBC,
         solver: Optional[mip.Solver] = None,
     ):
+        if instance.raw.sense == Instance.MAXIMIZE:
+            sense = mip.MAXIMIZE
+        elif instance.raw.sense == Instance.MINIMIZE:
+            sense = mip.MINIMIZE
+        else:
+            raise OMMXPythonMIPAdapterError(
+                f"Not supported sense: {instance.raw.sense}"
+            )
         self._ommx_instance = instance.raw
         self._model = mip.Model(
             sense=sense,
@@ -107,6 +114,7 @@ class PythonMIPBuilder:
 
             self._model.add_constr(constr_expr, name=str(constraint.id))
 
+    @final
     def build(self) -> mip.Model:
         self._set_decision_variables()
         self._set_objective_function()
@@ -118,7 +126,6 @@ class PythonMIPBuilder:
 def instance_to_model(
     instance: Instance,
     *,
-    sense: str = mip.MINIMIZE,
     solver_name: str = mip.CBC,
     solver: Optional[mip.Solver] = None,
 ) -> mip.Model:
@@ -160,7 +167,6 @@ def instance_to_model(
     """
     builder = PythonMIPBuilder(
         instance,
-        sense=sense,
         solver_name=solver_name,
         solver=solver,
     )
