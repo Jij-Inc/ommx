@@ -1,11 +1,12 @@
+from __future__ import annotations
+
 from typing import Optional, final
 from dataclasses import dataclass
 
 import mip
 
-from ommx.v1.constraint_pb2 import Equality
 from ommx.v1.function_pb2 import Function
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Constraint
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -41,7 +42,7 @@ class PythonMIPBuilder:
             solver=solver,
         )
 
-    def _set_decision_variables(self):
+    def set_decision_variables(self):
         for var in self.instance.raw.decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
@@ -68,63 +69,50 @@ class PythonMIPBuilder:
                     f"id: {var.id}, kind: {var.kind}"
                 )
 
-    def _make_linear_expr(
+    def as_lin_expr(
         self,
-        ommx_function: Function,
+        f: Function,
     ) -> mip.LinExpr:
-        ommx_linear = ommx_function.linear
-
-        return (
-            mip.xsum(
-                term.coefficient * self.model.vars[str(term.id)]  # type: ignore
-                for term in ommx_linear.terms
-            )
-            + ommx_linear.constant
-        )  # type: ignore
-
-    def _set_objective_function(self):
-        ommx_objective = self.instance.raw.objective
-
-        if ommx_objective.HasField("constant"):
-            self.model.objective = ommx_objective.constant  # type: ignore
-        elif ommx_objective.HasField("linear"):
-            self.model.objective = self._make_linear_expr(ommx_objective)
-        else:
-            raise OMMXPythonMIPAdapterError(
-                "The objective function must be either `constant` or `linear`."
-            )
-
-    def _set_constraints(self):
-        ommx_constraints = self.instance.raw.constraints
-
-        for constraint in ommx_constraints:
-            if not constraint.function.HasField("linear"):
-                raise OMMXPythonMIPAdapterError(
-                    f"Only linear constraints are supported: "
-                    f"id: {constraint.id}, "
-                    f"type: {constraint.function.WhichOneof('function')}"
+        """
+        Translate ommx.v1.Function to `mip.LinExpr` or `float`.
+        """
+        if f.HasField("constant"):
+            return mip.LinExpr(const=f.constant)  # type: ignore
+        elif f.HasField("linear"):
+            ommx_linear = f.linear
+            return (
+                mip.xsum(
+                    term.coefficient * self.model.vars[str(term.id)]  # type: ignore
+                    for term in ommx_linear.terms
                 )
+                + ommx_linear.constant
+            )  # type: ignore
+        raise OMMXPythonMIPAdapterError(
+            "The objective function must be either `constant` or `linear`."
+        )
 
-            lin_expr = self._make_linear_expr(constraint.function)
+    def set_objective(self):
+        self.model.objective = self.as_lin_expr(self.instance.raw.objective)  # type: ignore
 
-            if constraint.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+    def set_constraints(self):
+        for constraint in self.instance.raw.constraints:
+            lin_expr = self.as_lin_expr(constraint.function)
+            if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
-            elif constraint.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
                 constr_expr = lin_expr <= 0  # type: ignore
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported constraint equality: "
                     f"id: {constraint.id}, equality: {constraint.equality}"
                 )
-
             self.model.add_constr(constr_expr, name=str(constraint.id))
 
     @final
     def build(self) -> mip.Model:
-        self._set_decision_variables()
-        self._set_objective_function()
-        self._set_constraints()
-
+        self.set_decision_variables()
+        self.set_objective()
+        self.set_constraints()
         return self.model
 
 
