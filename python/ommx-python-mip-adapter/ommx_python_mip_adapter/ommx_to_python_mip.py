@@ -88,7 +88,7 @@ class PythonMIPBuilder:
                 + ommx_linear.constant
             )  # type: ignore
         raise OMMXPythonMIPAdapterError(
-            "The objective function must be either `constant` or `linear`."
+            "The function must be either `constant` or `linear`."
         )
 
     def set_objective(self):

@@ -41,7 +41,7 @@ def test_error_nonlinear_objective():
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         adapter.instance_to_model(ommx_instance)
-    assert "The objective function must be" in str(e.value)
+    assert "The function must be either `constant` or `linear`." in str(e.value)
 
 
 def test_error_nonlinear_constraint():
@@ -65,7 +65,7 @@ def test_error_nonlinear_constraint():
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         adapter.instance_to_model(ommx_instance)
-    assert "Only linear constraints are supported" in str(e.value)
+    assert "The function must be either `constant` or `linear`." in str(e.value)
 
 
 def test_error_not_supported_constraint_equality():
