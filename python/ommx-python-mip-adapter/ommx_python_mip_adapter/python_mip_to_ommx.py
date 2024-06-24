@@ -1,5 +1,4 @@
-import typing as tp
-
+from __future__ import annotations
 import mip
 
 from mip.exceptions import ParameterNotAvailable
@@ -9,7 +8,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
 from ommx.v1 import Instance, DecisionVariable
 
-from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
+from .exception import OMMXPythonMIPAdapterError
 
 
 class OMMXInstanceBuilder:
@@ -19,7 +18,7 @@ class OMMXInstanceBuilder:
     ):
         self._model = model
 
-    def _decision_variables(self) -> tp.List[DecisionVariable]:
+    def _decision_variables(self) -> list[DecisionVariable]:
         decision_variables = []
 
         for var in self._model.vars:
@@ -71,7 +70,7 @@ class OMMXInstanceBuilder:
 
         return self._make_function_from_lin_expr(objective)
 
-    def _constraints(self) -> tp.List[Constraint]:
+    def _constraints(self) -> list[Constraint]:
         constraints = []
 
         for constr in self._model.constrs:
