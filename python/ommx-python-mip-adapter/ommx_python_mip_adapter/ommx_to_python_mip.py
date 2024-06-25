@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import mip
 
 from ommx.v1.function_pb2 import Function
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import Instance, DecisionVariable, Constraint, Solution
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -153,3 +153,14 @@ def instance_to_model(
         solver=solver,
     )
     return builder.build()
+
+
+def solve(instance: Instance, relax: bool) -> Solution:
+    """
+    Solve the given ommx.v1.Instance by Python-MIP, and return ommx.v1.Solution.
+
+    :param instance: The ommx.v1.Instance to solve.
+    :param relax: If True, relax all integer variables to continuous one by calling `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`_ of Python-MIP.
+
+    """
+    raise NotImplementedError
