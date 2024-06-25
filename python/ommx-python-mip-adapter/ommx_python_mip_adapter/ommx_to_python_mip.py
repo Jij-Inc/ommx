@@ -178,4 +178,12 @@ def solve(
     state = model_to_solution(model, instance)
     solution = instance.evaluate(state)
 
+    if model.status == mip.OptimizationStatus.OPTIMAL:
+        solution.raw.optimal = True
+    else:
+        # TODO check the case where the solution is feasible but not optimal
+        pass
+
+    # TODO Store `relax` flag in the solution
+
     return solution
