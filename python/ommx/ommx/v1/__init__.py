@@ -23,6 +23,39 @@ class Instance:
 
     Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
     These annotations are loaded from annotations while reading from OMMX artifact.
+
+    Examples
+    =========
+
+    Create an instance for KnapSack Problem
+
+    .. doctest::
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+
+        Profit and weight of items
+
+        >>> p = [10, 13, 18, 31, 7, 15]
+        >>> w = [11, 15, 20, 35, 10, 33]
+
+        Decision variables
+
+        >>> x = [DecisionVariable.binary(i) for i in range(6)]
+
+        Objective and constraint
+
+        >>> objective = sum(p[i] * x[i] for i in range(6))
+        >>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47
+
+        Compose as an instance
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=objective,
+        ...     constraints=[constraint],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
     """
 
     raw: _Instance

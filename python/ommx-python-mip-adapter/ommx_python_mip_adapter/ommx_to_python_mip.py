@@ -159,7 +159,7 @@ def instance_to_model(
 def solve(
     instance: Instance,
     *,
-    relax: bool,
+    relax: bool = False,
     solver_name: str = mip.CBC,
     solver: Optional[mip.Solver] = None,
 ) -> Solution:
@@ -168,6 +168,44 @@ def solve(
 
     :param instance: The ommx.v1.Instance to solve.
     :param relax: If True, relax all integer variables to continuous one by calling `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`_ of Python-MIP.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx_python_mip_adapter import solve
+
+        KnapSack Problem
+
+        >>> p = [10, 13, 18, 31, 7, 15]
+        >>> w = [11, 15, 20, 35, 10, 33]
+        >>> x = [DecisionVariable.binary(i) for i in range(6)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(p[i] * x[i] for i in range(6)),
+        ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        Solve it
+
+        >>> solution = solve(instance)
+
+        Check output
+
+        >>> solution.raw.optimal
+        True
+        >>> solution.raw.feasible
+        True
+        >>> solution.raw.objective
+        41.0
+
+        >>> solution.constraints["value"]
+        id
+        0   -1.0
+        Name: value, dtype: float64
 
     """
     model = instance_to_model(instance, solver_name=solver_name, solver=solver)
