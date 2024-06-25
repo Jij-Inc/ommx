@@ -6,9 +6,10 @@ from dataclasses import dataclass
 import mip
 
 from ommx.v1.function_pb2 import Function
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import Instance, DecisionVariable, Constraint, Solution
 
 from .exception import OMMXPythonMIPAdapterError
+from .python_mip_to_ommx import model_to_solution
 
 
 @dataclass
@@ -125,7 +126,10 @@ def instance_to_model(
     """
     The function to convert ommx.v1.Instance to Python-MIP Model.
 
-    Examples:
+    Examples
+    =========
+
+    .. doctest::
 
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
@@ -153,3 +157,79 @@ def instance_to_model(
         solver=solver,
     )
     return builder.build()
+
+
+def solve(
+    instance: Instance,
+    *,
+    relax: bool = False,
+    solver_name: str = mip.CBC,
+    solver: Optional[mip.Solver] = None,
+) -> Solution:
+    """
+    Solve the given ommx.v1.Instance by Python-MIP, and return ommx.v1.Solution.
+
+    :param instance: The ommx.v1.Instance to solve.
+    :param relax: If True, relax all integer variables to continuous one by calling `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`_ of Python-MIP.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx_python_mip_adapter import solve
+
+        KnapSack Problem
+
+        >>> p = [10, 13, 18, 31, 7, 15]
+        >>> w = [11, 15, 20, 35, 10, 33]
+        >>> x = [DecisionVariable.binary(i) for i in range(6)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(p[i] * x[i] for i in range(6)),
+        ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        Solve it
+
+        >>> solution = solve(instance)
+
+        Check output
+
+        >>> sorted([(id, value) for id, value in solution.raw.state.entries.items()])
+        [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
+        >>> solution.raw.optimal
+        True
+        >>> solution.raw.feasible
+        True
+
+        p[0] + p[3] = 41
+        w[0] + w[3] = 46 <= 47
+
+        >>> solution.raw.objective
+        41.0
+        >>> solution.constraints["value"]
+        id
+        0   -1.0
+        Name: value, dtype: float64
+
+    """
+    model = instance_to_model(instance, solver_name=solver_name, solver=solver)
+    if relax:
+        model.relax()
+    model.optimize()
+
+    state = model_to_solution(model, instance)
+    solution = instance.evaluate(state)
+
+    if model.status == mip.OptimizationStatus.OPTIMAL:
+        solution.raw.optimal = True
+    else:
+        # TODO check the case where the solution is feasible but not optimal
+        pass
+
+    # TODO Store `relax` flag in the solution
+
+    return solution
