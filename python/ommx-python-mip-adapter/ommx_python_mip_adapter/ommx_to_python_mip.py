@@ -9,6 +9,7 @@ from ommx.v1.function_pb2 import Function
 from ommx.v1 import Instance, DecisionVariable, Constraint, Solution
 
 from .exception import OMMXPythonMIPAdapterError
+from .python_mip_to_ommx import model_to_solution
 
 
 @dataclass
@@ -155,7 +156,13 @@ def instance_to_model(
     return builder.build()
 
 
-def solve(instance: Instance, relax: bool) -> Solution:
+def solve(
+    instance: Instance,
+    *,
+    relax: bool,
+    solver_name: str = mip.CBC,
+    solver: Optional[mip.Solver] = None,
+) -> Solution:
     """
     Solve the given ommx.v1.Instance by Python-MIP, and return ommx.v1.Solution.
 
@@ -163,4 +170,12 @@ def solve(instance: Instance, relax: bool) -> Solution:
     :param relax: If True, relax all integer variables to continuous one by calling `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`_ of Python-MIP.
 
     """
-    raise NotImplementedError
+    model = instance_to_model(instance, solver_name=solver_name, solver=solver)
+    if relax:
+        model.relax()
+    model.optimize()
+
+    state = model_to_solution(model, instance)
+    solution = instance.evaluate(state)
+
+    return solution
