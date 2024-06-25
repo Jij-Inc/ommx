@@ -126,7 +126,10 @@ def instance_to_model(
     """
     The function to convert ommx.v1.Instance to Python-MIP Model.
 
-    Examples:
+    Examples
+    =========
+
+    .. doctest::
 
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
@@ -195,13 +198,18 @@ def solve(
 
         Check output
 
+        >>> sorted([(id, value) for id, value in solution.raw.state.entries.items()])
+        [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
         >>> solution.raw.optimal
         True
         >>> solution.raw.feasible
         True
+
+        p[0] + p[3] = 41
+        w[0] + w[3] = 46 <= 47
+
         >>> solution.raw.objective
         41.0
-
         >>> solution.constraints["value"]
         id
         0   -1.0

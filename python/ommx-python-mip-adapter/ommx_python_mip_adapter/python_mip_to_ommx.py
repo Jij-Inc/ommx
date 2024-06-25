@@ -132,7 +132,10 @@ def model_to_instance(model: mip.Model) -> Instance:
     """
     The function to convert Python-MIP Model to ommx.v1.Instance.
 
-    Examples:
+    Examples
+    =========
+
+    .. doctest::
         >>> import mip
         >>> import ommx_python_mip_adapter as adapter
 
@@ -156,7 +159,11 @@ def model_to_solution(
     """
     The function to create ommx.v1.State from optimized Python-MIP Model.
 
-    Examples:
+    Examples
+    =========
+
+    .. doctest::
+
         The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
 
         >>> import ommx_python_mip_adapter as adapter
