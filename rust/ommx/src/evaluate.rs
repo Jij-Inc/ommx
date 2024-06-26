@@ -1,6 +1,7 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
-    EvaluatedConstraint, Function, Instance, Linear, Polynomial, Quadratic, Solution, State,
+    EvaluatedConstraint, Function, Instance, Linear, Optimality, Polynomial, Quadratic, Solution,
+    State,
 };
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeSet;
@@ -156,7 +157,7 @@ impl Evaluate for Instance {
                 evaluated_constraints,
                 feasible,
                 objective,
-                optimal: None,
+                optimality: Optimality::Unspecified.into(),
             },
             used_ids,
         ))

@@ -336,7 +336,8 @@ pub mod instance {
         }
     }
 }
-/// Pure solution state without any evaluation, even the feasiblity of the solution.
+/// A set of values of decision variables, without any evaluation, even the
+/// feasiblity of the solution.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct State {
@@ -356,10 +357,82 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible, i.e. all constraints are satisfied or not.
+    /// Whether the solution is feasible
     #[prost(bool, tag = "5")]
     pub feasible: bool,
-    /// Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-    #[prost(bool, optional, tag = "6")]
-    pub optimal: ::core::option::Option<bool>,
+    /// The optimality of the solution.
+    #[prost(enumeration = "Optimality", tag = "6")]
+    pub optimality: i32,
+}
+/// The solver proved that the problem is infeasible.
+///
+/// TODO: Add more information about the infeasibility.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Infeasible {}
+/// The solver proved that the problem is unbounded.
+///
+/// TODO: Add more information about the unboundedness.
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Unbounded {}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Result {
+    #[prost(oneof = "result::Result", tags = "1, 2, 3, 4")]
+    pub result: ::core::option::Option<result::Result>,
+}
+/// Nested message and enum types in `Result`.
+pub mod result {
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Result {
+        /// Error information by the solver which cannot be expressed by other messages.
+        /// This string should be human-readable.
+        #[prost(string, tag = "1")]
+        Error(::prost::alloc::string::String),
+        /// Some feasible or infeasible solution for the problem is found. Most of heuristic solvers should use this value.
+        #[prost(message, tag = "2")]
+        Solution(super::Solution),
+        /// The problem is infeasible.
+        #[prost(message, tag = "3")]
+        Infeasible(super::Infeasible),
+        /// The problem is unbounded.
+        ///
+        /// TODO: Add more cases
+        #[prost(message, tag = "4")]
+        Unbounded(super::Unbounded),
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Optimality {
+    /// The solver cannot determine whether the solution is optimal. Most of heuristic solvers should use this value.
+    Unspecified = 0,
+    /// The solver has determined that the solution is optimal.
+    Optimal = 1,
+    /// The solver has determined that the solution is not optimal.
+    NotOptimal = 2,
+}
+impl Optimality {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Optimality::Unspecified => "OPTIMALITY_UNSPECIFIED",
+            Optimality::Optimal => "OPTIMALITY_OPTIMAL",
+            Optimality::NotOptimal => "OPTIMALITY_NOT_OPTIMAL",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "OPTIMALITY_UNSPECIFIED" => Some(Self::Unspecified),
+            "OPTIMALITY_OPTIMAL" => Some(Self::Optimal),
+            "OPTIMALITY_NOT_OPTIMAL" => Some(Self::NotOptimal),
+            _ => None,
+        }
+    }
 }
