@@ -5,10 +5,20 @@ package ommx.v1;
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 
-// Pure solution state without any evaluation, even the feasiblity of the solution.
+// A set of values of decision variables, without any evaluation, even the
+// feasiblity of the solution.
 message State {
   // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
+}
+
+enum Optimality {
+  // The solver cannot determine whether the solution is optimal. Most of huristic solvers should use this value.
+  OPTIMALITY_UNSPECIFIED = 0;
+  // The solver has determined that the solution is optimal.
+  OPTIMALITY_OPTIMAL = 1;
+  // The solver has determined that the solution is not optimal.
+  OPTIMALITY_NOT_OPTIMAL = 2;
 }
 
 // Solution with evaluated objective and constraints
@@ -19,9 +29,9 @@ message Solution {
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
 
-  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
+  // Whether the solution is feasible
   bool feasible = 5;
 
-  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-  optional bool optimal = 6;
+  // The optimality of the solution.
+  Optimality optimality = 6;
 }
