@@ -5,10 +5,27 @@ package ommx.v1;
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 
-// Pure solution state without any evaluation, even the feasiblity of the solution.
+// A set of values of decision variables, without any evaluation, even the
+// feasiblity of the solution.
 message State {
   // The value of the solution for each variable ID.
   map<uint64, double> entries = 1;
+}
+
+enum Optimality {
+  // The solver cannot determine whether the solution is optimal. Most of heuristic solvers should use this value.
+  OPTIMALITY_UNSPECIFIED = 0;
+  // The solver has determined that the solution is optimal.
+  OPTIMALITY_OPTIMAL = 1;
+  // The solver has determined that the solution is not optimal.
+  OPTIMALITY_NOT_OPTIMAL = 2;
+}
+
+enum Relaxation {
+  // No relaxation is used.
+  RELAXATION_UNSPECIFIED = 0;
+  // The solution is obtained by a relaxed linear programming problem.
+  RELAXATION_LP_RELAXED = 1;
 }
 
 // Solution with evaluated objective and constraints
@@ -19,9 +36,45 @@ message Solution {
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
 
-  // Whether the solution is feasible, i.e. all constraints are satisfied or not.
+  // Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+  // If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
   bool feasible = 5;
 
-  // Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality.
-  optional bool optimal = 6;
+  // The optimality of the solution.
+  Optimality optimality = 6;
+
+  // Whether the solution is obtained by a relaxed linear programming solver.
+  Relaxation relaxation = 7;
+}
+
+// The solver proved that the problem is infeasible.
+message Infeasible {
+  // TODO: Add more information about the infeasibility.
+}
+
+// The solver proved that the problem is unbounded.
+message Unbounded {
+  // TODO: Add more information about the unboundedness.
+}
+
+message Result {
+  oneof result {
+    // Error information by the solver which cannot be expressed by other messages.
+    // This string should be human-readable.
+    string error = 1;
+
+    // Some feasible or infeasible solution for the problem is found. Most of heuristic solvers should use this value.
+    Solution solution = 2;
+
+    // The solver proved that the problem is infeasible, i.e. all solutions of the problem are infeasible.
+    // If the solver cannot get the proof of infeasibility,
+    // and just cannot find any feasible solution due to the time limit or due to heuristic algorithm limitation,
+    // the solver should return its *best* `Solution` message with `feasible` field set to `false`.
+    Infeasible infeasible = 3;
+
+    // The solver proved that the problem is unbounded.
+    Unbounded unbounded = 4;
+
+    // TODO: Add more cases
+  }
 }
