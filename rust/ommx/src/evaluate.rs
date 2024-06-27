@@ -132,12 +132,10 @@ impl Evaluate for Instance {
                 // FIXME: Add a way to specify the tolerance
                 if c.evaluated_value.abs() > 1e-6 {
                     feasible = false;
-                    break;
                 }
             } else if c.equality == Equality::LessThanOrEqualToZero as i32 {
                 if c.evaluated_value > 0.0 {
                     feasible = false;
-                    break;
                 }
             } else {
                 bail!("Unsupported equality: {:?}", c.equality);
