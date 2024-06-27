@@ -29,7 +29,8 @@ message Solution {
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
 
-  // Whether the solution is feasible
+  // Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+  // If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
   bool feasible = 5;
 
   // The optimality of the solution.
@@ -55,11 +56,15 @@ message Result {
     // Some feasible or infeasible solution for the problem is found. Most of heuristic solvers should use this value.
     Solution solution = 2;
 
-    // The problem is infeasible.
+    // The solver proved that the problem is infeasible, i.e. all solutions of the problem are infeasible.
+    // If the solver cannot get the proof of infeasibility,
+    // and just cannot find any feasible solution due to the time limit or due to heuristic algorithm limitation,
+    // the solver should return its *best* `Solution` message with `feasible` field set to `false`.
     Infeasible infeasible = 3;
 
-    // The problem is unbounded.
+    // The solver proved that the problem is unbounded.
     Unbounded unbounded = 4;
+
     // TODO: Add more cases
   }
 }
