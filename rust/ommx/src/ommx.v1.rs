@@ -357,7 +357,8 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible
+    /// Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+    /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
     #[prost(bool, tag = "5")]
     pub feasible: bool,
     /// The optimality of the solution.
@@ -394,12 +395,13 @@ pub mod result {
         /// Some feasible or infeasible solution for the problem is found. Most of heuristic solvers should use this value.
         #[prost(message, tag = "2")]
         Solution(super::Solution),
-        /// The problem is infeasible.
+        /// The solver proved that the problem is infeasible, i.e. all solutions of the problem are infeasible.
+        /// If the solver cannot get the proof of infeasibility,
+        /// and just cannot find any feasible solution due to the time limit or due to heuristic algorithm limitation,
+        /// the solver should return its *best* `Solution` message with `feasible` field set to `false`.
         #[prost(message, tag = "3")]
         Infeasible(super::Infeasible),
-        /// The problem is unbounded.
-        ///
-        /// TODO: Add more cases
+        /// The solver proved that the problem is unbounded.
         #[prost(message, tag = "4")]
         Unbounded(super::Unbounded),
     }
