@@ -306,6 +306,8 @@ def solve(
     state = model_to_solution(model, instance)
     solution = instance.evaluate(state)
 
+    assert solution.raw.feasible
+
     if model.status == mip.OptimizationStatus.OPTIMAL:
         solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
