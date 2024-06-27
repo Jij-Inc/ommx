@@ -7,16 +7,51 @@ import builtins
 import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
+import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
+import sys
 import typing
+
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
+else:
+    import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
+class _Optimality:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _OptimalityEnumTypeWrapper(
+    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Optimality.ValueType],
+    builtins.type,
+):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    OPTIMALITY_UNSPECIFIED: _Optimality.ValueType  # 0
+    """The solver cannot determine whether the solution is optimal. Most of heuristic solvers should use this value."""
+    OPTIMALITY_OPTIMAL: _Optimality.ValueType  # 1
+    """The solver has determined that the solution is optimal."""
+    OPTIMALITY_NOT_OPTIMAL: _Optimality.ValueType  # 2
+    """The solver has determined that the solution is not optimal."""
+
+class Optimality(_Optimality, metaclass=_OptimalityEnumTypeWrapper): ...
+
+OPTIMALITY_UNSPECIFIED: Optimality.ValueType  # 0
+"""The solver cannot determine whether the solution is optimal. Most of heuristic solvers should use this value."""
+OPTIMALITY_OPTIMAL: Optimality.ValueType  # 1
+"""The solver has determined that the solution is optimal."""
+OPTIMALITY_NOT_OPTIMAL: Optimality.ValueType  # 2
+"""The solver has determined that the solution is not optimal."""
+global___Optimality = Optimality
+
 @typing.final
 class State(google.protobuf.message.Message):
-    """Pure solution state without any evaluation, even the feasiblity of the solution."""
+    """A set of values of decision variables, without any evaluation, even the
+    feasiblity of the solution.
+    """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -65,12 +100,14 @@ class Solution(google.protobuf.message.Message):
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
-    OPTIMAL_FIELD_NUMBER: builtins.int
+    OPTIMALITY_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
-    """Whether the solution is feasible, i.e. all constraints are satisfied or not."""
-    optimal: builtins.bool
-    """Whether the solution is optimal. This field is optional and should be used only by the solvers which can guarantee the optimality."""
+    """Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+    If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
+    """
+    optimality: global___Optimality.ValueType
+    """The optimality of the solution."""
     @property
     def state(self) -> global___State: ...
     @property
@@ -99,19 +136,14 @@ class Solution(google.protobuf.message.Message):
         ]
         | None = ...,
         feasible: builtins.bool = ...,
-        optimal: builtins.bool | None = ...,
+        optimality: global___Optimality.ValueType = ...,
     ) -> None: ...
     def HasField(
-        self,
-        field_name: typing.Literal[
-            "_optimal", b"_optimal", "optimal", b"optimal", "state", b"state"
-        ],
+        self, field_name: typing.Literal["state", b"state"]
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
-            "_optimal",
-            b"_optimal",
             "decision_variables",
             b"decision_variables",
             "evaluated_constraints",
@@ -120,14 +152,111 @@ class Solution(google.protobuf.message.Message):
             b"feasible",
             "objective",
             b"objective",
-            "optimal",
-            b"optimal",
+            "optimality",
+            b"optimality",
             "state",
             b"state",
         ],
     ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["_optimal", b"_optimal"]
-    ) -> typing.Literal["optimal"] | None: ...
 
 global___Solution = Solution
+
+@typing.final
+class Infeasible(google.protobuf.message.Message):
+    """The solver proved that the problem is infeasible.
+    TODO: Add more information about the infeasibility.
+    """
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+
+global___Infeasible = Infeasible
+
+@typing.final
+class Unbounded(google.protobuf.message.Message):
+    """The solver proved that the problem is unbounded.
+    TODO: Add more information about the unboundedness.
+    """
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+
+global___Unbounded = Unbounded
+
+@typing.final
+class Result(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    ERROR_FIELD_NUMBER: builtins.int
+    SOLUTION_FIELD_NUMBER: builtins.int
+    INFEASIBLE_FIELD_NUMBER: builtins.int
+    UNBOUNDED_FIELD_NUMBER: builtins.int
+    error: builtins.str
+    """Error information by the solver which cannot be expressed by other messages.
+    This string should be human-readable.
+    """
+    @property
+    def solution(self) -> global___Solution:
+        """Some feasible or infeasible solution for the problem is found. Most of heuristic solvers should use this value."""
+
+    @property
+    def infeasible(self) -> global___Infeasible:
+        """The solver proved that the problem is infeasible, i.e. all solutions of the problem are infeasible.
+        If the solver cannot get the proof of infeasibility,
+        and just cannot find any feasible solution due to the time limit or due to heuristic algorithm limitation,
+        the solver should return its *best* `Solution` message with `feasible` field set to `false`.
+        """
+
+    @property
+    def unbounded(self) -> global___Unbounded:
+        """The solver proved that the problem is unbounded."""
+
+    def __init__(
+        self,
+        *,
+        error: builtins.str = ...,
+        solution: global___Solution | None = ...,
+        infeasible: global___Infeasible | None = ...,
+        unbounded: global___Unbounded | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "error",
+            b"error",
+            "infeasible",
+            b"infeasible",
+            "result",
+            b"result",
+            "solution",
+            b"solution",
+            "unbounded",
+            b"unbounded",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "error",
+            b"error",
+            "infeasible",
+            b"infeasible",
+            "result",
+            b"result",
+            "solution",
+            b"solution",
+            "unbounded",
+            b"unbounded",
+        ],
+    ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["result", b"result"]
+    ) -> typing.Literal["error", "solution", "infeasible", "unbounded"] | None: ...
+
+global___Result = Result
