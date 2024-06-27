@@ -111,6 +111,7 @@ impl Evaluate for Constraint {
                 name: self.name.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
+                dual_variable: None,
             },
             used_ids,
         ))

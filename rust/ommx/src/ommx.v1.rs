@@ -148,6 +148,10 @@ pub struct EvaluatedConstraint {
     /// Detail human-readable description of the constraint.
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// Value for the Lagrangian dual variable of this constraint.
+    /// This is optional because not all solvers support to evaluate dual variables.
+    #[prost(double, optional, tag = "8")]
+    pub dual_variable: ::core::option::Option<f64>,
 }
 /// Equality of a constraint.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
