@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import mip
 
 from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import Optimality, Result, Infeasible, Unbounded
+from ommx.v1.solution_pb2 import Optimality, Result, Infeasible, Unbounded, Relaxation
 from ommx.v1 import Instance, DecisionVariable, Constraint
 
 from .exception import OMMXPythonMIPAdapterError
@@ -279,6 +279,7 @@ def solve(
     if model.status == mip.OptimizationStatus.OPTIMAL:
         solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
-    # TODO Store `relax` flag in the solution
+    if relax:
+        solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
 
     return Result(solution=solution.raw)

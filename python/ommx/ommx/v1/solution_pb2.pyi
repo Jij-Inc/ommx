@@ -47,6 +47,28 @@ OPTIMALITY_NOT_OPTIMAL: Optimality.ValueType  # 2
 """The solver has determined that the solution is not optimal."""
 global___Optimality = Optimality
 
+class _Relaxation:
+    ValueType = typing.NewType("ValueType", builtins.int)
+    V: typing_extensions.TypeAlias = ValueType
+
+class _RelaxationEnumTypeWrapper(
+    google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Relaxation.ValueType],
+    builtins.type,
+):
+    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    RELAXATION_UNSPECIFIED: _Relaxation.ValueType  # 0
+    """No relaxation is used."""
+    RELAXATION_LP_RELAXED: _Relaxation.ValueType  # 1
+    """The solution is obtained by a relaxed linear programming problem."""
+
+class Relaxation(_Relaxation, metaclass=_RelaxationEnumTypeWrapper): ...
+
+RELAXATION_UNSPECIFIED: Relaxation.ValueType  # 0
+"""No relaxation is used."""
+RELAXATION_LP_RELAXED: Relaxation.ValueType  # 1
+"""The solution is obtained by a relaxed linear programming problem."""
+global___Relaxation = Relaxation
+
 @typing.final
 class State(google.protobuf.message.Message):
     """A set of values of decision variables, without any evaluation, even the
@@ -101,6 +123,7 @@ class Solution(google.protobuf.message.Message):
     EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     OPTIMALITY_FIELD_NUMBER: builtins.int
+    RELAXATION_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
     """Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
@@ -108,6 +131,8 @@ class Solution(google.protobuf.message.Message):
     """
     optimality: global___Optimality.ValueType
     """The optimality of the solution."""
+    relaxation: global___Relaxation.ValueType
+    """Whether the solution is obtained by a relaxed linear programming solver."""
     @property
     def state(self) -> global___State: ...
     @property
@@ -137,6 +162,7 @@ class Solution(google.protobuf.message.Message):
         | None = ...,
         feasible: builtins.bool = ...,
         optimality: global___Optimality.ValueType = ...,
+        relaxation: global___Relaxation.ValueType = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing.Literal["state", b"state"]
@@ -154,6 +180,8 @@ class Solution(google.protobuf.message.Message):
             b"objective",
             "optimality",
             b"optimality",
+            "relaxation",
+            b"relaxation",
             "state",
             b"state",
         ],
