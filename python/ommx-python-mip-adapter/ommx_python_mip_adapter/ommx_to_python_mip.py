@@ -255,6 +255,26 @@ def solve(
             >>> assert result.HasField("infeasible") is False
             >>> assert result.HasField("solution") is False
 
+    Dual variable
+
+    .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx_python_mip_adapter import solve
+
+            >>> x = DecisionVariable.continuous(0, lower=0, upper=1)
+            >>> y = DecisionVariable.continuous(1, lower=0, upper=1)
+            >>> instance = Instance.from_components(
+            ...     decision_variables=[x, y],
+            ...     objective=x + y,
+            ...     constraints=[x + y <= 1],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> solution = solve(instance).solution
+            >>> solution.evaluated_constraints[0].dual_variable
+            1.0
+
     """
     model = instance_to_model(instance, solver_name=solver_name, solver=solver)
     if relax:
@@ -281,5 +301,16 @@ def solve(
 
     if relax:
         solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
+
+    dual_variables = {}
+    for constraint in model.constrs:
+        pi = constraint.pi
+        if pi is not None:
+            id = int(constraint.name)
+            dual_variables[id] = pi
+    for constraint in solution.raw.evaluated_constraints:
+        id = constraint.id
+        if id in dual_variables:
+            constraint.dual_variable = dual_variables[id]
 
     return Result(solution=solution.raw)
