@@ -25,7 +25,7 @@ classifiers = [
 ]
 dependencies = [
     "ommx >= 0.5.0, < 0.6.0",
-    "mip",
+    "mip @ git+https://github.com/coin-or/python-mip.git@0ccb81115543e737ab74a4f1309891ce5650c8d5",
 ]
 
 [project.urls]
