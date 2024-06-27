@@ -28,6 +28,7 @@ class PythonMIPBuilder:
         *,
         solver_name: str = mip.CBC,
         solver: Optional[mip.Solver] = None,
+        verbose: bool = False,
     ):
         if instance.raw.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
@@ -43,6 +44,10 @@ class PythonMIPBuilder:
             solver_name=solver_name,
             solver=solver,
         )
+        if verbose:
+            self.model.verbose = 1
+        else:
+            self.model.verbose = 0
 
     def set_decision_variables(self):
         for var in self.instance.raw.decision_variables:
@@ -123,6 +128,7 @@ def instance_to_model(
     *,
     solver_name: str = mip.CBC,
     solver: Optional[mip.Solver] = None,
+    verbose: bool = False,
 ) -> mip.Model:
     """
     The function to convert ommx.v1.Instance to Python-MIP Model.
@@ -156,6 +162,7 @@ def instance_to_model(
         instance,
         solver_name=solver_name,
         solver=solver,
+        verbose=verbose,
     )
     return builder.build()
 
@@ -166,6 +173,7 @@ def solve(
     relax: bool = False,
     solver_name: str = mip.CBC,
     solver: Optional[mip.Solver] = None,
+    verbose: bool = False,
 ) -> Result:
     """
     Solve the given ommx.v1.Instance by Python-MIP, and return ommx.v1.Solution.
@@ -276,7 +284,9 @@ def solve(
             1.0
 
     """
-    model = instance_to_model(instance, solver_name=solver_name, solver=solver)
+    model = instance_to_model(
+        instance, solver_name=solver_name, solver=solver, verbose=verbose
+    )
     if relax:
         model.relax()
     model.optimize()
