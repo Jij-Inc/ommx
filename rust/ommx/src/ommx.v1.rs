@@ -364,6 +364,9 @@ pub struct Solution {
     /// The optimality of the solution.
     #[prost(enumeration = "Optimality", tag = "6")]
     pub optimality: i32,
+    /// Whether the solution is obtained by a relaxed linear programming solver.
+    #[prost(enumeration = "Relaxation", tag = "7")]
+    pub relaxation: i32,
 }
 /// The solver proved that the problem is infeasible.
 ///
@@ -434,6 +437,34 @@ impl Optimality {
             "OPTIMALITY_UNSPECIFIED" => Some(Self::Unspecified),
             "OPTIMALITY_OPTIMAL" => Some(Self::Optimal),
             "OPTIMALITY_NOT_OPTIMAL" => Some(Self::NotOptimal),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Relaxation {
+    /// No relaxation is used.
+    Unspecified = 0,
+    /// The solution is obtained by a relaxed linear programming problem.
+    LpRelaxed = 1,
+}
+impl Relaxation {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Relaxation::Unspecified => "RELAXATION_UNSPECIFIED",
+            Relaxation::LpRelaxed => "RELAXATION_LP_RELAXED",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "RELAXATION_UNSPECIFIED" => Some(Self::Unspecified),
+            "RELAXATION_LP_RELAXED" => Some(Self::LpRelaxed),
             _ => None,
         }
     }
