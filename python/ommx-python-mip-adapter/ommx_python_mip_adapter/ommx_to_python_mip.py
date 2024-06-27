@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import mip
 
 from ommx.v1.function_pb2 import Function
+from ommx.v1.solution_pb2 import Optimality
 from ommx.v1 import Instance, DecisionVariable, Constraint, Solution
 
 from .exception import OMMXPythonMIPAdapterError
@@ -225,7 +226,7 @@ def solve(
     solution = instance.evaluate(state)
 
     if model.status == mip.OptimizationStatus.OPTIMAL:
-        solution.raw.optimal = True
+        solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
     else:
         # TODO check the case where the solution is feasible but not optimal
         pass
