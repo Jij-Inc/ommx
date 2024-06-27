@@ -179,6 +179,7 @@ def solve(
     .. doctest::
 
         >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx.v1.solution_pb2 import Optimality
         >>> from ommx_python_mip_adapter import solve
 
         KnapSack Problem
@@ -201,10 +202,9 @@ def solve(
 
         >>> sorted([(id, value) for id, value in solution.raw.state.entries.items()])
         [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
-        >>> solution.raw.optimal
-        True
         >>> solution.raw.feasible
         True
+        >>> assert solution.raw.optimality == Optimality.OPTIMALITY_OPTIMAL
 
         p[0] + p[3] = 41
         w[0] + w[3] = 46 <= 47
