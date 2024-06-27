@@ -185,6 +185,7 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     PARAMETERS_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
+    DUAL_VARIABLE_FIELD_NUMBER: builtins.int
     id: builtins.int
     equality: global___Equality.ValueType
     evaluated_value: builtins.float
@@ -193,6 +194,10 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     """Name of the constraint."""
     description: builtins.str
     """Detail human-readable description of the constraint."""
+    dual_variable: builtins.float
+    """Value for the Lagrangian dual variable of this constraint.
+    This is optional because not all solvers support to evaluate dual variables.
+    """
     @property
     def used_decision_variable_ids(
         self,
@@ -215,16 +220,21 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         name: builtins.str | None = ...,
         description: builtins.str | None = ...,
+        dual_variable: builtins.float | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_description",
             b"_description",
+            "_dual_variable",
+            b"_dual_variable",
             "_name",
             b"_name",
             "description",
             b"description",
+            "dual_variable",
+            b"dual_variable",
             "name",
             b"name",
         ],
@@ -234,10 +244,14 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_description",
             b"_description",
+            "_dual_variable",
+            b"_dual_variable",
             "_name",
             b"_name",
             "description",
             b"description",
+            "dual_variable",
+            b"dual_variable",
             "equality",
             b"equality",
             "evaluated_value",
@@ -256,6 +270,10 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_description", b"_description"]
     ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_dual_variable", b"_dual_variable"]
+    ) -> typing.Literal["dual_variable"] | None: ...
     @typing.overload
     def WhichOneof(
         self, oneof_group: typing.Literal["_name", b"_name"]
