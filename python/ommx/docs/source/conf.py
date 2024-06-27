@@ -5,7 +5,6 @@
 
 # -- Path setup --------------------------------------------------------------
 import sphinx_rtd_theme
-import sphinx_fontawesome
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -14,8 +13,8 @@ project = "ommx"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
-version = "0.1.0"
-release = "0.1.0"
+version = "0.5.0"
+release = version
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
