@@ -6,8 +6,8 @@ from dataclasses import dataclass
 import mip
 
 from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import Optimality
-from ommx.v1 import Instance, DecisionVariable, Constraint, Solution
+from ommx.v1.solution_pb2 import Optimality, Result, Infeasible, Unbounded
+from ommx.v1 import Instance, DecisionVariable, Constraint
 
 from .exception import OMMXPythonMIPAdapterError
 from .python_mip_to_ommx import model_to_solution
@@ -166,7 +166,7 @@ def solve(
     relax: bool = False,
     solver_name: str = mip.CBC,
     solver: Optional[mip.Solver] = None,
-) -> Solution:
+) -> Result:
     """
     Solve the given ommx.v1.Instance by Python-MIP, and return ommx.v1.Solution.
 
@@ -176,13 +176,13 @@ def solve(
     Examples
     =========
 
+    KnapSack Problem
+
     .. doctest::
 
         >>> from ommx.v1 import Instance, DecisionVariable
         >>> from ommx.v1.solution_pb2 import Optimality
         >>> from ommx_python_mip_adapter import solve
-
-        KnapSack Problem
 
         >>> p = [10, 13, 18, 31, 7, 15]
         >>> w = [11, 15, 20, 35, 10, 33]
@@ -196,25 +196,64 @@ def solve(
 
         Solve it
 
-        >>> solution = solve(instance)
+        >>> result = solve(instance)
+        >>> solution = result.solution
 
         Check output
 
-        >>> sorted([(id, value) for id, value in solution.raw.state.entries.items()])
+        >>> sorted([(id, value) for id, value in solution.state.entries.items()])
         [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
-        >>> solution.raw.feasible
+        >>> solution.feasible
         True
-        >>> assert solution.raw.optimality == Optimality.OPTIMALITY_OPTIMAL
+        >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
 
         p[0] + p[3] = 41
         w[0] + w[3] = 46 <= 47
 
-        >>> solution.raw.objective
+        >>> solution.objective
         41.0
-        >>> solution.constraints["value"]
-        id
-        0   -1.0
-        Name: value, dtype: float64
+        >>> solution.evaluated_constraints[0].evaluated_value
+        -1.0
+
+    Infeasible Problem
+
+    .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx_python_mip_adapter import solve
+
+            >>> x = DecisionVariable.integer(0, upper=3, lower=0)
+            >>> instance = Instance.from_components(
+            ...     decision_variables=[x],
+            ...     objective=x,
+            ...     constraints=[x >= 4],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> result = solve(instance)
+            >>> assert result.HasField("infeasible") is True
+            >>> assert result.HasField("unbounded") is False
+            >>> assert result.HasField("solution") is False
+
+    Unbounded Problem
+
+    .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx_python_mip_adapter import solve
+
+            >>> x = DecisionVariable.integer(0, lower=0)
+            >>> instance = Instance.from_components(
+            ...     decision_variables=[x],
+            ...     objective=x,
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> result = solve(instance)
+            >>> assert result.HasField("unbounded") is True
+            >>> assert result.HasField("infeasible") is False
+            >>> assert result.HasField("solution") is False
 
     """
     model = instance_to_model(instance, solver_name=solver_name, solver=solver)
@@ -222,15 +261,24 @@ def solve(
         model.relax()
     model.optimize()
 
+    if model.status == mip.OptimizationStatus.INFEASIBLE:
+        return Result(infeasible=Infeasible())
+
+    if model.status == mip.OptimizationStatus.UNBOUNDED:
+        return Result(unbounded=Unbounded())
+
+    if model.status not in [
+        mip.OptimizationStatus.OPTIMAL,
+        mip.OptimizationStatus.FEASIBLE,
+    ]:
+        return Result(error=f"Unknown status: {model.status}")
+
     state = model_to_solution(model, instance)
     solution = instance.evaluate(state)
 
     if model.status == mip.OptimizationStatus.OPTIMAL:
         solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
-    else:
-        # TODO check the case where the solution is feasible but not optimal
-        pass
 
     # TODO Store `relax` flag in the solution
 
-    return solution
+    return Result(solution=solution.raw)
