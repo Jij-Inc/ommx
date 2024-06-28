@@ -134,7 +134,7 @@ impl Evaluate for Instance {
                     feasible = false;
                 }
             } else if c.equality == Equality::LessThanOrEqualToZero as i32 {
-                if c.evaluated_value > 0.0 {
+                if c.evaluated_value > 1e-6 {
                     feasible = false;
                 }
             } else {
