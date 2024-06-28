@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "0.5.0"
+version = "0.5.1"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [
@@ -24,7 +24,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "ommx >= 0.5.0, < 0.6.0",
+    "ommx >= 0.5.1, < 0.6.0",
     "mip @ git+https://github.com/coin-or/python-mip.git@0ccb81115543e737ab74a4f1309891ce5650c8d5",
 ]
 
