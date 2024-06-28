@@ -3,10 +3,26 @@ OMMX Message
 
 [![doc](https://img.shields.io/badge/Protocol-Documentation-blue)](https://jij-inc.github.io/ommx/protobuf.html)
 
-## Why OMMX Message schema based on Protocol Buffers? Why not [JSON](https://www.json.org/json-en.html), [CBOR](https://cbor.io/), or [HDF5](https://www.hdfgroup.org/solutions/hdf5/)?
+## Why OMMX Message based on Protocol Buffers? Why not [JSON](https://www.json.org/json-en.html), [CBOR](https://cbor.io/), or [HDF5](https://www.hdfgroup.org/solutions/hdf5/)?
 
-A. We need to define a data schema for messages exchanged between applications, services, and databases.
+Short Answer: We need to define a data schema for messages exchanged between applications, services, and databases that make up OROps.
 
+We have to discuss the following points to answer the question.
+
+- Why schema is required?
+- Text-based or Binary-based?
+- Why Protocol Buffers?
+
+Note that this is a **better** selection, not the **best** selection. We have to keep considering these points and change the selection if necessary.
+
+### Why schema is required?
+TBW
+
+### Text-based or Binary-based?
+TBW
+
+### Why Protocol Buffers?
+TBW
 
 ## Compatibility
 
