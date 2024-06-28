@@ -3,6 +3,11 @@ OMMX Message
 
 [![doc](https://img.shields.io/badge/Protocol-Documentation-blue)](https://jij-inc.github.io/ommx/protobuf.html)
 
+## Why OMMX Message schema based on Protocol Buffers? Why not [JSON](https://www.json.org/json-en.html), [CBOR](https://cbor.io/), or [HDF5](https://www.hdfgroup.org/solutions/hdf5/)?
+
+A. We need to define a data schema for messages exchanged between applications, services, and databases.
+
+
 ## Compatibility
 
 - OMMX defines a protocol buffers schema with version like `v1`, `v2`, etc. `v1` schema has a namesapce `ommx.v1`.
