@@ -1,5 +1,8 @@
 changelog:
   categories:
+    - title: Bug fix
+      labels:
+        - bug
     - title: Protobuf update
       labels:
         - proto
