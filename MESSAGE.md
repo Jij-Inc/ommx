@@ -5,7 +5,7 @@ OMMX Message
 
 ## Why OMMX Message based on Protocol Buffers? Why not [JSON](https://www.json.org/json-en.html), [CBOR](https://cbor.io/), or [HDF5](https://www.hdfgroup.org/solutions/hdf5/)?
 
-Short Answer: We need to define a data schema for messages exchanged between applications, services, and databases that make up OROps.
+:zap: We need to define a data schema for messages exchanged between applications, services, and databases that make up OROps.
 
 We have to discuss the following points to answer the question.
 
