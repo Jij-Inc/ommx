@@ -9,11 +9,16 @@ Short Answer: We need to define a data schema for messages exchanged between app
 
 We have to discuss the following points to answer the question.
 
+- Where OMMX is used?
 - Why schema is required?
 - Text-based or Binary-based?
 - Why Protocol Buffers?
 
 Note that this is a **better** selection, not the **best** selection. We have to keep considering these points and change the selection if necessary.
+
+### Where OMMX is used?
+
+Mathematical programming has been studied long time in academic fields, and many software tools have been developed to improve the solving capability. However, these tools are basically designed to use in a research process. When we try to use these invaluable tools in a real-world business process, we have to face many problems. The most significant problem is the lack of interoperability between tools. We have to convert data between tools, and it is a time-consuming and error-prone process. OMMX is designed to solve this problem.
 
 ### Why schema is required?
 TBW
