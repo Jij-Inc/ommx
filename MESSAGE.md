@@ -21,7 +21,7 @@ Note that this is a **better** selection, not the **best** selection. We have to
 Mathematical programming has been studied long time in academic fields, and many software tools have been developed to improve the solving capability. However, these tools are basically designed to use in a research process. When we try to use these invaluable tools in a real-world business process, we call it "OROps" (OR = operations research) like "MLOps" in machine-learning field, we have to face many problems. The most significant problem is the lack of interoperability between tools. We have to convert data between tools, and it is a time-consuming and error-prone process. OMMX is designed to solve this problem.
 
 ### Why schema is required?
-Different from research process where few researchers use few tools, in OROps, many developers use many tools. The interoperability between tools becomes significant issue due to this point.
+Different from research process where few researchers use and create few tools, in OROps, many developers use and create many tools. The interoperability between tools becomes significant issue due to this point. It is possible for human to manage input and output data stored in general purpose data format like JSON or HDF5 for few tools, but it is hard for many tools. Thus, we have to introduce machine-readable schema.
 
 ### Text-based or Binary-based?
 TBW
