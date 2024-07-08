@@ -333,6 +333,7 @@ class DecisionVariable:
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_BINARY,
                 name=name,
+                bound=Bound(lower=0, upper=1),
                 subscripts=subscripts,
                 parameters=parameters,
                 description=description,
