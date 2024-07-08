@@ -105,6 +105,14 @@ jobs:
           pytest -vv --doctest-modules python/ommx-python-mip-adapter/
           markdown-code-runner ./python/ommx-python-mip-adapter/README.md
 
+      - name: Run notebooks
+        run: |
+          jupyter nbconvert --to notebook --execute notebooks/*.ipynb
+        env:
+          OMMX_BASIC_AUTH_DOMAIN: ghcr.io
+          OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
+          OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
+
   format:
     runs-on: ubuntu-latest
     steps:
@@ -128,31 +136,3 @@ jobs:
       - name: Format
         run: |
           ruff format --check python
-
-  notebook:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Dependencies
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
-
-      - name: Run notebooks
-        run: |
-          jupyter nbconvert --to notebook --execute notebooks/*.ipynb
-        env:
-          OMMX_BASIC_AUTH_DOMAIN: ghcr.io
-          OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
-          OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
