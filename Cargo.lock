@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "_ommx_rust"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "derive_more",
@@ -858,7 +858,7 @@ dependencies = [
 
 [[package]]
 name = "ommx"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "base64",
@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "protogen"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "colored",
