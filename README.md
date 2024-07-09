@@ -9,6 +9,14 @@ OMMX introduces two specification to solve the problem of data exchange in optim
 - Protocol buffers based data schema called [OMMX Message](./MESSAGE.md). This helps to store the optimization models and their solutions in language and framework agnostic way.
 - OCI Artifact based packaging and distribution specification called [OMMX Artifact](./ARTIFACT.md). This helps to store your data with metadata and to exchange them with others as a container image.
 
+# Tutorial
+
+| Notebook | Open in Colab |
+|:---------|:--------------|
+| [OMMX Message](./notebooks/message.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/message.ipynb) |
+| [OMMX Artifact](./notebooks/artifact.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/artifact.ipynb) |
+| [Cookbook](./notebooks/cookbook.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/cookbook.ipynb) |
+
 # API Reference
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
