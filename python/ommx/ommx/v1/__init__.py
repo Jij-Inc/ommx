@@ -681,10 +681,22 @@ class Constraint:
         *,
         function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
         equality: Equality.ValueType,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
     ):
         self.raw = _Constraint(
             id=Constraint._counter,
             function=as_function(function),
             equality=equality,
+            name=name,
+            description=description,
         )
         Constraint._counter += 1
+
+    def add_name(self, name: str) -> Constraint:
+        self.raw.name = name
+        return self
+
+    def add_description(self, description: str) -> Constraint:
+        self.raw.description = description
+        return self
