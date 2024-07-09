@@ -106,6 +106,7 @@ jobs:
           markdown-code-runner ./python/ommx-python-mip-adapter/README.md
 
       - name: Run notebooks
+        if: github.actor != 'dependabot[bot]'
         run: |
           jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
