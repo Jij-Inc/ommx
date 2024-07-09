@@ -17,6 +17,19 @@ OMMX introduces two specification to solve the problem of data exchange in optim
 | [OMMX Artifact](./notebooks/artifact.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/artifact.ipynb) |
 | [Cookbook](./notebooks/cookbook.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/cookbook.ipynb) |
 
+To run the notebooks locally, you need to install required packages listed in [requirements.txt](./requirements.txt)
+
+```bash
+# Optional: create a virtual environment
+python -m venv .venv && source .venv/bin/activate
+
+# Install required packages (including Jupyter)
+pip install -r requirements.txt
+
+# Start Jupyter
+jupyter lab
+```
+
 # API Reference
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
