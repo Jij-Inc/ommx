@@ -688,6 +688,9 @@ class Constraint:
         To set the name or other attributes, use methods like :py:meth:`add_name`.
 
         >>> (x + y <= 5).add_name("constraint 1")
+        Constraint(...
+        name: "constraint 1"
+        )
 
     """
 
