@@ -109,6 +109,7 @@ impl Evaluate for Constraint {
                 evaluated_value,
                 used_decision_variable_ids,
                 name: self.name.clone(),
+                subscripts: self.subscripts.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
                 dual_variable: None,
