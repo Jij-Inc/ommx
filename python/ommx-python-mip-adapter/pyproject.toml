@@ -25,7 +25,10 @@ classifiers = [
 ]
 dependencies = [
     "ommx >= 0.5.1, < 0.6.0",
-    "mip @ git+https://github.com/coin-or/python-mip.git@0ccb81115543e737ab74a4f1309891ce5650c8d5",
+
+    # FIXME: This project requires latest version of Python-MIP (will be 1.16.0?), which does not release yet.
+    #        https://github.com/coin-or/python-mip/issues/384
+    "mip >= 1.15.0, < 2.0.0",
 ]
 
 [project.urls]
