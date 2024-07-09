@@ -21,9 +21,7 @@ pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usiz
             id: constraint_id as u64,
             equality: Equality::EqualToZero as i32,
             function: Some(linear.into()),
-            name: None,
-            parameters: Default::default(),
-            description: None,
+            ..Default::default()
         });
     }
     let mut objective = v1::Linear::default();

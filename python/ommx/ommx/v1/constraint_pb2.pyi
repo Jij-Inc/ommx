@@ -66,6 +66,7 @@ class Constraint(google.protobuf.message.Message):
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
     FUNCTION_FIELD_NUMBER: builtins.int
+    SUBSCRIPTS_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
@@ -86,16 +87,22 @@ class Constraint(google.protobuf.message.Message):
     @property
     def function(self) -> ommx.v1.function_pb2.Function: ...
     @property
-    def parameters(
+    def subscripts(
         self,
-    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
-        """Parameters of the constraint.
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """Integer parameters of the constraint.
 
         Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
         then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
         The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-        and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+        and the `subscripts` field is intended to be the value of `[i, j]` like `[1, 5]`.
         """
+
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Key-value parameters of the constraint."""
 
     def __init__(
         self,
@@ -103,6 +110,7 @@ class Constraint(google.protobuf.message.Message):
         id: builtins.int = ...,
         equality: global___Equality.ValueType = ...,
         function: ommx.v1.function_pb2.Function | None = ...,
+        subscripts: collections.abc.Iterable[builtins.int] | None = ...,
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         name: builtins.str | None = ...,
         description: builtins.str | None = ...,
@@ -141,6 +149,8 @@ class Constraint(google.protobuf.message.Message):
             b"name",
             "parameters",
             b"parameters",
+            "subscripts",
+            b"subscripts",
         ],
     ) -> None: ...
     @typing.overload
@@ -182,6 +192,7 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     EQUALITY_FIELD_NUMBER: builtins.int
     EVALUATED_VALUE_FIELD_NUMBER: builtins.int
     USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
+    SUBSCRIPTS_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
@@ -205,10 +216,16 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         """IDs of decision variables used to evalute this constraint"""
 
     @property
+    def subscripts(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """Integer parameters of the constraint."""
+
+    @property
     def parameters(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
-        """Parameters of the constraint."""
+        """Key-value parameters of the constraint."""
 
     def __init__(
         self,
@@ -217,6 +234,7 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         equality: global___Equality.ValueType = ...,
         evaluated_value: builtins.float = ...,
         used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
+        subscripts: collections.abc.Iterable[builtins.int] | None = ...,
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         name: builtins.str | None = ...,
         description: builtins.str | None = ...,
@@ -262,6 +280,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"name",
             "parameters",
             b"parameters",
+            "subscripts",
+            b"subscripts",
             "used_decision_variable_ids",
             b"used_decision_variable_ids",
         ],
