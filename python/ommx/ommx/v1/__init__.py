@@ -121,7 +121,25 @@ class Instance:
 
     @property
     def decision_variables(self) -> DataFrame:
-        return _decision_variables(self.raw)
+        decision_variables = self.raw.decision_variables
+        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
+        parameters.columns = MultiIndex.from_product(
+            [["parameters"], parameters.columns]
+        )
+        df = DataFrame(
+            {
+                "id": v.id,
+                "kind": _kind(v.kind),
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            for v in decision_variables
+        )
+        df.columns = MultiIndex.from_product([df.columns, [""]])
+        return concat([df, parameters], axis=1).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
@@ -204,7 +222,26 @@ class Solution:
 
     @property
     def decision_variables(self) -> DataFrame:
-        return _decision_variables(self.raw)
+        decision_variables = self.raw.decision_variables
+        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
+        parameters.columns = MultiIndex.from_product(
+            [["parameters"], parameters.columns]
+        )
+        df = DataFrame(
+            {
+                "id": v.id,
+                "kind": _kind(v.kind),
+                "value": self.raw.state.entries[v.id],
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            for v in decision_variables
+        )
+        df.columns = MultiIndex.from_product([df.columns, [""]])
+        return concat([df, parameters], axis=1).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
@@ -227,26 +264,6 @@ class Solution:
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
-
-
-def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
-    decision_variables = obj.decision_variables
-    parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-    parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
-    df = DataFrame(
-        {
-            "id": v.id,
-            "kind": _kind(v.kind),
-            "lower": v.bound.lower,
-            "upper": v.bound.upper,
-            "name": v.name,
-            "subscripts": v.subscripts,
-            "description": v.description,
-        }
-        for v in decision_variables
-    )
-    df.columns = MultiIndex.from_product([df.columns, [""]])
-    return concat([df, parameters], axis=1).set_index("id")
 
 
 def _function_type(function: _Function) -> str:
