@@ -670,6 +670,25 @@ def as_function(
 
 @dataclass
 class Constraint:
+    """
+    Constraints
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> x + y == 1
+        Constraint(...)
+
+        To set the name or other attributes, use methods like :py:meth:`add_name`.
+
+        >>> (x + y <= 5).add_name("constraint 1")
+
+    """
+
     raw: _Constraint
     _counter = 0
 
@@ -683,6 +702,8 @@ class Constraint:
         equality: Equality.ValueType,
         name: Optional[str] = None,
         description: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
     ):
         self.raw = _Constraint(
             id=Constraint._counter,
@@ -690,8 +711,17 @@ class Constraint:
             equality=equality,
             name=name,
             description=description,
+            subscripts=subscripts,
+            parameters=parameters,
         )
         Constraint._counter += 1
+
+    def set_id(self, id: int) -> Constraint:
+        """
+        Overwrite the constraint ID.
+        """
+        self.raw.id = id
+        return self
 
     def add_name(self, name: str) -> Constraint:
         self.raw.name = name
@@ -699,4 +729,12 @@ class Constraint:
 
     def add_description(self, description: str) -> Constraint:
         self.raw.description = description
+        return self
+
+    def add_subscripts(self, subscripts: list[int]) -> Constraint:
+        self.raw.subscripts.extend(subscripts)
+        return self
+
+    def add_parameters(self, parameters: dict[str, str]) -> Constraint:
+        self.raw.parameters.update(parameters)
         return self
