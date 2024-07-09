@@ -73,6 +73,7 @@ jobs:
   push:
     runs-on: ubuntu-22.04
     needs: build
+    if: github.actor != 'dependabot[bot]'
     steps:
       - uses: actions/checkout@v4
 
