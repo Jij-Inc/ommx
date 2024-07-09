@@ -107,13 +107,16 @@ pub struct Constraint {
     pub equality: i32,
     #[prost(message, optional, tag = "3")]
     pub function: ::core::option::Option<Function>,
-    /// Parameters of the constraint.
+    /// Integer parameters of the constraint.
     ///
     /// Consider for example a problem constains a series of constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
     /// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
     /// The `name` field of this message is intended to be a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
-    /// and the `parameters` field is intended to be the value of `i` and `j` like `{ "i" : "1", "j": "5" }`.
+    /// and the `subscripts` field is intended to be the value of `\[i, j\]` like `\[1, 5\]`.
     ///
+    #[prost(int64, repeated, tag = "8")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the constraint.
     #[prost(map = "string, string", tag = "5")]
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
@@ -138,7 +141,10 @@ pub struct EvaluatedConstraint {
     /// IDs of decision variables used to evalute this constraint
     #[prost(uint64, repeated, tag = "4")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
-    /// Parameters of the constraint.
+    /// Integer parameters of the constraint.
+    #[prost(int64, repeated, tag = "9")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the constraint.
     #[prost(map = "string, string", tag = "5")]
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
