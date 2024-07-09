@@ -121,7 +121,25 @@ class Instance:
 
     @property
     def decision_variables(self) -> DataFrame:
-        return _decision_variables(self.raw)
+        decision_variables = self.raw.decision_variables
+        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
+        parameters.columns = MultiIndex.from_product(
+            [["parameters"], parameters.columns]
+        )
+        df = DataFrame(
+            {
+                "id": v.id,
+                "kind": _kind(v.kind),
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            for v in decision_variables
+        )
+        df.columns = MultiIndex.from_product([df.columns, [""]])
+        return concat([df, parameters], axis=1).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
@@ -137,6 +155,7 @@ class Instance:
                 "type": _function_type(c.function),
                 "used_ids": used_decision_variable_ids(c.function.SerializeToString()),
                 "name": c.name,
+                "subscripts": c.subscripts,
                 "description": c.description,
             }
             for c in constraints
@@ -203,7 +222,26 @@ class Solution:
 
     @property
     def decision_variables(self) -> DataFrame:
-        return _decision_variables(self.raw)
+        decision_variables = self.raw.decision_variables
+        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
+        parameters.columns = MultiIndex.from_product(
+            [["parameters"], parameters.columns]
+        )
+        df = DataFrame(
+            {
+                "id": v.id,
+                "kind": _kind(v.kind),
+                "value": self.raw.state.entries[v.id],
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            for v in decision_variables
+        )
+        df.columns = MultiIndex.from_product([df.columns, [""]])
+        return concat([df, parameters], axis=1).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
@@ -219,32 +257,13 @@ class Solution:
                 "value": v.evaluated_value,
                 "used_ids": set(v.used_decision_variable_ids),
                 "name": v.name,
+                "subscripts": v.subscripts,
                 "description": v.description,
             }
             for v in evaluation
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
-
-
-def _decision_variables(obj: _Instance | _Solution) -> DataFrame:
-    decision_variables = obj.decision_variables
-    parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-    parameters.columns = MultiIndex.from_product([["parameters"], parameters.columns])
-    df = DataFrame(
-        {
-            "id": v.id,
-            "kind": _kind(v.kind),
-            "lower": v.bound.lower,
-            "upper": v.bound.upper,
-            "name": v.name,
-            "subscripts": v.subscripts,
-            "description": v.description,
-        }
-        for v in decision_variables
-    )
-    df.columns = MultiIndex.from_product([df.columns, [""]])
-    return concat([df, parameters], axis=1).set_index("id")
 
 
 def _function_type(function: _Function) -> str:
@@ -333,6 +352,7 @@ class DecisionVariable:
                 id=id,
                 kind=_DecisionVariable.Kind.KIND_BINARY,
                 name=name,
+                bound=Bound(lower=0, upper=1),
                 subscripts=subscripts,
                 parameters=parameters,
                 description=description,
@@ -669,6 +689,28 @@ def as_function(
 
 @dataclass
 class Constraint:
+    """
+    Constraints
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> x + y == 1
+        Constraint(...)
+
+        To set the name or other attributes, use methods like :py:meth:`add_name`.
+
+        >>> (x + y <= 5).add_name("constraint 1")
+        Constraint(...
+        name: "constraint 1"
+        )
+
+    """
+
     raw: _Constraint
     _counter = 0
 
@@ -680,10 +722,41 @@ class Constraint:
         *,
         function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
         equality: Equality.ValueType,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        subscripts: Optional[list[int]] = None,
+        parameters: Optional[dict[str, str]] = None,
     ):
         self.raw = _Constraint(
             id=Constraint._counter,
             function=as_function(function),
             equality=equality,
+            name=name,
+            description=description,
+            subscripts=subscripts,
+            parameters=parameters,
         )
         Constraint._counter += 1
+
+    def set_id(self, id: int) -> Constraint:
+        """
+        Overwrite the constraint ID.
+        """
+        self.raw.id = id
+        return self
+
+    def add_name(self, name: str) -> Constraint:
+        self.raw.name = name
+        return self
+
+    def add_description(self, description: str) -> Constraint:
+        self.raw.description = description
+        return self
+
+    def add_subscripts(self, subscripts: list[int]) -> Constraint:
+        self.raw.subscripts.extend(subscripts)
+        return self
+
+    def add_parameters(self, parameters: dict[str, str]) -> Constraint:
+        self.raw.parameters.update(parameters)
+        return self
