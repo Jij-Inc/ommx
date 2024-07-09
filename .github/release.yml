@@ -12,6 +12,9 @@ changelog:
     - title: Rust SDK update
       labels:
         - rust
+    - title: Documentation update
+      labels:
+        - documentation
     - title: Others
       labels:
         - "*"
