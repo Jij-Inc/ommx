@@ -137,6 +137,7 @@ class Instance:
                 "type": _function_type(c.function),
                 "used_ids": used_decision_variable_ids(c.function.SerializeToString()),
                 "name": c.name,
+                "subscripts": c.subscripts,
                 "description": c.description,
             }
             for c in constraints
@@ -219,6 +220,7 @@ class Solution:
                 "value": v.evaluated_value,
                 "used_ids": set(v.used_decision_variable_ids),
                 "name": v.name,
+                "subscripts": v.subscripts,
                 "description": v.description,
             }
             for v in evaluation
