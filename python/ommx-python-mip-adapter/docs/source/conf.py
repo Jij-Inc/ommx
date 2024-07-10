@@ -12,7 +12,7 @@ project = "ommx-python-mip-adapter"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
-version = "0.5.1"
+version = "1.0.0"
 release = version
 
 # -- General configuration ---------------------------------------------------
