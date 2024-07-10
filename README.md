@@ -11,11 +11,11 @@ OMMX introduces two specification to solve the problem of data exchange in optim
 
 # Tutorial
 
-| Notebook | Open in Colab |
-|:---------|:--------------|
-| [OMMX Message](./notebooks/message.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/message.ipynb) |
-| [OMMX Artifact](./notebooks/artifact.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/artifact.ipynb) |
-| [Cookbook](./notebooks/cookbook.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/cookbook.ipynb) |
+| Notebook | Open in Binder | Open in Colab |
+|:---------|:---------------|:--------------|
+| [OMMX Message](./notebooks/message.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fmessage.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/message.ipynb) |
+| [OMMX Artifact](./notebooks/artifact.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fartifact.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/artifact.ipynb) |
+| [Cookbook](./notebooks/cookbook.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fcookbook.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/cookbook.ipynb) |
 
 To run the notebooks locally, you need to install required packages listed in [requirements.txt](./requirements.txt)
 
