@@ -1,7 +1,11 @@
 import ommx_python_mip_adapter as adapter
 from ommx.v1 import Instance, DecisionVariable, Linear
+import pytest
 
 
+@pytest.mark.skip(
+    reason="This test causes a segfault due to a bug in the Python-MIP fixed in https://github.com/coin-or/python-mip/pull/237, which is not yet released."
+)
 def test_constant_constraint_feasible():
     x = DecisionVariable.continuous(0)
     instance = Instance.from_components(
@@ -24,6 +28,9 @@ def test_constant_constraint_feasible():
     assert len(solution.evaluated_constraints) == 2
 
 
+@pytest.mark.skip(
+    reason="This test causes a segfault due to a bug in the Python-MIP fixed in https://github.com/coin-or/python-mip/pull/237, which is not yet released."
+)
 def test_constant_constraint_infeasible():
     x = DecisionVariable.continuous(0)
     instance = Instance.from_components(
