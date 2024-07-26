@@ -17,12 +17,28 @@ impl PyDescriptor {
         Ok(any.extract()?)
     }
 
+    #[staticmethod]
+    pub fn from_dict(dict: Bound<PyDict>) -> Result<Self> {
+        let descriptor = serde_pyobject::from_pyobject(dict)?;
+        Ok(Self(descriptor))
+    }
+
     pub fn to_json(&self) -> Result<String> {
         Ok(serde_json::to_string(&self.0)?)
     }
 
+    #[staticmethod]
+    pub fn from_json(json: &str) -> Result<Self> {
+        let descriptor = serde_json::from_str(json)?;
+        Ok(Self(descriptor))
+    }
+
     pub fn __str__(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.0)?)
+    }
+
+    pub fn __eq__(&self, rhs: &Self) -> bool {
+        self.0 == rhs.0
     }
 
     #[getter]
