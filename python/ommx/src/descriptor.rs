@@ -37,6 +37,10 @@ impl PyDescriptor {
         Ok(serde_json::to_string_pretty(&self.0)?)
     }
 
+    pub fn __eq__(&self, rhs: &Self) -> bool {
+        self.0 == rhs.0
+    }
+
     #[getter]
     pub fn digest(&self) -> &str {
         self.0.digest()
