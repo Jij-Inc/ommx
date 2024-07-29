@@ -7,15 +7,98 @@ import numpy
 from dataclasses import dataclass
 from pathlib import Path
 from dateutil import parser
+from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
-    ArtifactArchive,
-    ArtifactDir,
+    ArtifactArchive as _ArtifactArchive,
+    ArtifactDir as _ArtifactDir,
     Descriptor,
-    ArtifactArchiveBuilder,
-    ArtifactDirBuilder,
+    ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
+    ArtifactDirBuilder as _ArtifactDirBuilder,
 )
 from .v1 import Instance, Solution
+
+
+class ArtifactBase(ABC):
+    @property
+    @abstractmethod
+    def image_name(self) -> str | None: ...
+
+    @property
+    @abstractmethod
+    def annotations(self) -> dict[str, str]: ...
+
+    @property
+    @abstractmethod
+    def layers(self) -> list[Descriptor]: ...
+
+    @abstractmethod
+    def get_blob(self, digest: str) -> bytes: ...
+
+    @abstractmethod
+    def push(self): ...
+
+
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactArchive(ArtifactBase):
+    _base: _ArtifactArchive
+
+    @staticmethod
+    def from_oci_archive(path: str) -> ArtifactArchive:
+        return ArtifactArchive(_ArtifactArchive.from_oci_archive(path))
+
+    @property
+    def image_name(self) -> str | None:
+        return self._base.image_name
+
+    @property
+    def annotations(self) -> dict[str, str]:
+        return self._base.annotations
+
+    @property
+    def layers(self) -> list[Descriptor]:
+        return self._base.layers
+
+    def get_blob(self, digest: str) -> bytes:
+        return self._base.get_blob(digest)
+
+    def push(self):
+        self._base.push()
+
+
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactDir(ArtifactBase):
+    _base: _ArtifactDir
+
+    @staticmethod
+    def from_oci_dir(path: str) -> ArtifactDir:
+        return ArtifactDir(_ArtifactDir.from_oci_dir(path))
+
+    @staticmethod
+    def from_image_name(image_name: str) -> ArtifactDir:
+        return ArtifactDir(_ArtifactDir.from_image_name(image_name))
+
+    @property
+    def image_name(self) -> str | None:
+        return self._base.image_name
+
+    @property
+    def annotations(self) -> dict[str, str]:
+        return self._base.annotations
+
+    @property
+    def layers(self) -> list[Descriptor]:
+        return self._base.layers
+
+    def get_blob(self, digest: str) -> bytes:
+        return self._base.get_blob(digest)
+
+    def push(self):
+        self._base.push()
 
 
 @dataclass
@@ -24,7 +107,7 @@ class Artifact:
     Reader for OMMX Artifacts.
     """
 
-    _base: ArtifactArchive | ArtifactDir
+    _base: ArtifactBase
 
     @staticmethod
     def load_archive(path: str | Path) -> Artifact:
@@ -206,13 +289,82 @@ class Artifact:
         return pandas.read_parquet(io.BytesIO(blob))
 
 
+class ArtifactBuilderBase(ABC):
+    @abstractmethod
+    def add_layer(
+        self, media_type: str, blob: bytes, annotations: dict[str, str]
+    ) -> Descriptor: ...
+
+    @abstractmethod
+    def add_annotation(self, key: str, value: str): ...
+
+    @abstractmethod
+    def build(self) -> ArtifactBase: ...
+
+
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactArchiveBuilder(ArtifactBuilderBase):
+    _base: _ArtifactArchiveBuilder
+
+    @staticmethod
+    def new(path: str, image_name: str) -> ArtifactArchiveBuilder:
+        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new(path, image_name))
+
+    @staticmethod
+    def new_unnamed(path: str) -> ArtifactArchiveBuilder:
+        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new_unnamed(path))
+
+    @staticmethod
+    def temp() -> ArtifactArchiveBuilder:
+        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.temp())
+
+    def add_layer(
+        self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
+    ) -> Descriptor:
+        return self._base.add_layer(media_type, blob, annotations)
+
+    def add_annotation(self, key: str, value: str):
+        self._base.add_annotation(key, value)
+
+    def build(self) -> ArtifactArchive:
+        return ArtifactArchive(self._base.build())
+
+
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactDirBuilder(ArtifactBuilderBase):
+    _base: _ArtifactDirBuilder
+
+    @staticmethod
+    def new(image_name: str) -> ArtifactDirBuilder:
+        return ArtifactDirBuilder(_ArtifactDirBuilder.new(image_name))
+
+    @staticmethod
+    def for_github(org: str, repo: str, name: str, tag: str) -> ArtifactDirBuilder:
+        return ArtifactDirBuilder(_ArtifactDirBuilder.for_github(org, repo, name, tag))
+
+    def add_layer(
+        self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
+    ) -> Descriptor:
+        return self._base.add_layer(media_type, blob, annotations)
+
+    def add_annotation(self, key: str, value: str):
+        self._base.add_annotation(key, value)
+
+    def build(self) -> ArtifactDir:
+        return ArtifactDir(self._base.build())
+
+
 @dataclass(frozen=True)
 class ArtifactBuilder:
     """
     Builder for OMMX Artifacts.
     """
 
-    _base: ArtifactArchiveBuilder | ArtifactDirBuilder
+    _base: ArtifactBuilderBase
 
     @staticmethod
     def new_archive_unnamed(path: str | Path) -> ArtifactBuilder:
