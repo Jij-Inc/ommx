@@ -10,8 +10,8 @@ from dateutil import parser
 from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
-    ArtifactArchive,
-    ArtifactDir,
+    ArtifactArchive as _ArtifactArchive,
+    ArtifactDir as _ArtifactDir,
     Descriptor,
     ArtifactArchiveBuilder,
     ArtifactDirBuilder,
@@ -39,13 +39,75 @@ class ArtifactBase(ABC):
     def push(self): ...
 
 
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactArchive(ArtifactBase):
+    _base: _ArtifactArchive
+
+    @staticmethod
+    def from_oci_archive(path: str) -> ArtifactArchive:
+        return ArtifactArchive(_ArtifactArchive.from_oci_archive(path))
+
+    @property
+    def image_name(self) -> str | None:
+        return self._base.image_name
+
+    @property
+    def annotations(self) -> dict[str, str]:
+        return self._base.annotations
+
+    @property
+    def layers(self) -> list[Descriptor]:
+        return self._base.layers
+
+    def get_blob(self, digest: str) -> bytes:
+        return self._base.get_blob(digest)
+
+    def push(self):
+        self._base.push()
+
+
+# FIXME: This wrapper class should be defined in Rust binding directly,
+#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
+@dataclass
+class ArtifactDir(ArtifactBase):
+    _base: _ArtifactDir
+
+    @staticmethod
+    def from_oci_dir(path: str) -> ArtifactDir:
+        return ArtifactDir(_ArtifactDir.from_oci_dir(path))
+
+    @staticmethod
+    def from_image_name(image_name: str) -> ArtifactDir:
+        return ArtifactDir(_ArtifactDir.from_image_name(image_name))
+
+    @property
+    def image_name(self) -> str | None:
+        return self._base.image_name
+
+    @property
+    def annotations(self) -> dict[str, str]:
+        return self._base.annotations
+
+    @property
+    def layers(self) -> list[Descriptor]:
+        return self._base.layers
+
+    def get_blob(self, digest: str) -> bytes:
+        return self._base.get_blob(digest)
+
+    def push(self):
+        self._base.push()
+
+
 @dataclass
 class Artifact:
     """
     Reader for OMMX Artifacts.
     """
 
-    _base: ArtifactArchive | ArtifactDir
+    _base: ArtifactBase
 
     @staticmethod
     def load_archive(path: str | Path) -> Artifact:
