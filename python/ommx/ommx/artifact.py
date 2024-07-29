@@ -7,6 +7,7 @@ import numpy
 from dataclasses import dataclass
 from pathlib import Path
 from dateutil import parser
+from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
     ArtifactArchive,
@@ -16,6 +17,26 @@ from ._ommx_rust import (
     ArtifactDirBuilder,
 )
 from .v1 import Instance, Solution
+
+
+class ArtifactBase(ABC):
+    @property
+    @abstractmethod
+    def image_name(self) -> str | None: ...
+
+    @property
+    @abstractmethod
+    def annotations(self) -> dict[str, str]: ...
+
+    @property
+    @abstractmethod
+    def layers(self) -> list[Descriptor]: ...
+
+    @abstractmethod
+    def get_blob(self, digest: str) -> bytes: ...
+
+    @abstractmethod
+    def push(self): ...
 
 
 @dataclass
