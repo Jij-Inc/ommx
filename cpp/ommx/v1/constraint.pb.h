@@ -299,7 +299,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
     kDualVariableFieldNumber = 8,
     kEqualityFieldNumber = 2,
   };
-  // repeated uint64 used_decision_variable_ids = 4;
+  // repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
   int used_decision_variable_ids_size() const;
   private:
   int _internal_used_decision_variable_ids_size() const;
@@ -317,7 +317,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_used_decision_variable_ids();
 
   public:
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   int parameters_size() const;
   private:
   int _internal_parameters_size() const;
@@ -332,7 +332,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   ::google::protobuf::Map<std::string, std::string>* _internal_mutable_parameters();
 
   public:
-  // repeated int64 subscripts = 9;
+  // repeated int64 subscripts = 9 [json_name = "subscripts"];
   int subscripts_size() const;
   private:
   int _internal_subscripts_size() const;
@@ -350,7 +350,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::int64_t>* _internal_mutable_subscripts();
 
   public:
-  // optional string name = 6;
+  // optional string name = 6 [json_name = "name"];
   bool has_name() const;
   void clear_name() ;
   const std::string& name() const;
@@ -367,7 +367,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   std::string* _internal_mutable_name();
 
   public:
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   bool has_description() const;
   void clear_description() ;
   const std::string& description() const;
@@ -384,7 +384,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   std::string* _internal_mutable_description();
 
   public:
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   void clear_id() ;
   ::uint64_t id() const;
   void set_id(::uint64_t value);
@@ -394,7 +394,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   void _internal_set_id(::uint64_t value);
 
   public:
-  // double evaluated_value = 3;
+  // double evaluated_value = 3 [json_name = "evaluatedValue"];
   void clear_evaluated_value() ;
   double evaluated_value() const;
   void set_evaluated_value(double value);
@@ -404,7 +404,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   void _internal_set_evaluated_value(double value);
 
   public:
-  // optional double dual_variable = 8;
+  // optional double dual_variable = 8 [json_name = "dualVariable"];
   bool has_dual_variable() const;
   void clear_dual_variable() ;
   double dual_variable() const;
@@ -415,7 +415,7 @@ class EvaluatedConstraint final : public ::google::protobuf::Message
   void _internal_set_dual_variable(double value);
 
   public:
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   void clear_equality() ;
   ::ommx::v1::Equality equality() const;
   void set_equality(::ommx::v1::Equality value);
@@ -606,7 +606,7 @@ class Constraint final : public ::google::protobuf::Message
     kIdFieldNumber = 1,
     kEqualityFieldNumber = 2,
   };
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   int parameters_size() const;
   private:
   int _internal_parameters_size() const;
@@ -621,7 +621,7 @@ class Constraint final : public ::google::protobuf::Message
   ::google::protobuf::Map<std::string, std::string>* _internal_mutable_parameters();
 
   public:
-  // repeated int64 subscripts = 8;
+  // repeated int64 subscripts = 8 [json_name = "subscripts"];
   int subscripts_size() const;
   private:
   int _internal_subscripts_size() const;
@@ -639,7 +639,7 @@ class Constraint final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::int64_t>* _internal_mutable_subscripts();
 
   public:
-  // optional string name = 6;
+  // optional string name = 6 [json_name = "name"];
   bool has_name() const;
   void clear_name() ;
   const std::string& name() const;
@@ -656,7 +656,7 @@ class Constraint final : public ::google::protobuf::Message
   std::string* _internal_mutable_name();
 
   public:
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   bool has_description() const;
   void clear_description() ;
   const std::string& description() const;
@@ -673,7 +673,7 @@ class Constraint final : public ::google::protobuf::Message
   std::string* _internal_mutable_description();
 
   public:
-  // .ommx.v1.Function function = 3;
+  // .ommx.v1.Function function = 3 [json_name = "function"];
   bool has_function() const;
   void clear_function() ;
   const ::ommx::v1::Function& function() const;
@@ -688,7 +688,7 @@ class Constraint final : public ::google::protobuf::Message
   ::ommx::v1::Function* _internal_mutable_function();
 
   public:
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   void clear_id() ;
   ::uint64_t id() const;
   void set_id(::uint64_t value);
@@ -698,7 +698,7 @@ class Constraint final : public ::google::protobuf::Message
   void _internal_set_id(::uint64_t value);
 
   public:
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   void clear_equality() ;
   ::ommx::v1::Equality equality() const;
   void set_equality(::ommx::v1::Equality value);
@@ -771,7 +771,7 @@ class Constraint final : public ::google::protobuf::Message
 
 // Constraint
 
-// uint64 id = 1;
+// uint64 id = 1 [json_name = "id"];
 inline void Constraint::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = ::uint64_t{0u};
@@ -793,7 +793,7 @@ inline void Constraint::_internal_set_id(::uint64_t value) {
   _impl_.id_ = value;
 }
 
-// .ommx.v1.Equality equality = 2;
+// .ommx.v1.Equality equality = 2 [json_name = "equality"];
 inline void Constraint::clear_equality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equality_ = 0;
@@ -815,7 +815,7 @@ inline void Constraint::_internal_set_equality(::ommx::v1::Equality value) {
   _impl_.equality_ = value;
 }
 
-// .ommx.v1.Function function = 3;
+// .ommx.v1.Function function = 3 [json_name = "function"];
 inline bool Constraint::has_function() const {
   bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.function_ != nullptr);
@@ -906,7 +906,7 @@ inline void Constraint::set_allocated_function(::ommx::v1::Function* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Constraint.function)
 }
 
-// repeated int64 subscripts = 8;
+// repeated int64 subscripts = 8 [json_name = "subscripts"];
 inline int Constraint::_internal_subscripts_size() const {
   return _internal_subscripts().size();
 }
@@ -951,7 +951,7 @@ inline ::google::protobuf::RepeatedField<::int64_t>* Constraint::_internal_mutab
   return &_impl_.subscripts_;
 }
 
-// map<string, string> parameters = 5;
+// map<string, string> parameters = 5 [json_name = "parameters"];
 inline int Constraint::_internal_parameters_size() const {
   return _internal_parameters().size();
 }
@@ -979,7 +979,7 @@ inline ::google::protobuf::Map<std::string, std::string>* Constraint::mutable_pa
   return _internal_mutable_parameters();
 }
 
-// optional string name = 6;
+// optional string name = 6 [json_name = "name"];
 inline bool Constraint::has_name() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   return value;
@@ -1050,7 +1050,7 @@ inline void Constraint::set_allocated_name(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Constraint.name)
 }
 
-// optional string description = 7;
+// optional string description = 7 [json_name = "description"];
 inline bool Constraint::has_description() const {
   bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
   return value;
@@ -1127,7 +1127,7 @@ inline void Constraint::set_allocated_description(std::string* value) {
 
 // EvaluatedConstraint
 
-// uint64 id = 1;
+// uint64 id = 1 [json_name = "id"];
 inline void EvaluatedConstraint::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = ::uint64_t{0u};
@@ -1149,7 +1149,7 @@ inline void EvaluatedConstraint::_internal_set_id(::uint64_t value) {
   _impl_.id_ = value;
 }
 
-// .ommx.v1.Equality equality = 2;
+// .ommx.v1.Equality equality = 2 [json_name = "equality"];
 inline void EvaluatedConstraint::clear_equality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equality_ = 0;
@@ -1171,7 +1171,7 @@ inline void EvaluatedConstraint::_internal_set_equality(::ommx::v1::Equality val
   _impl_.equality_ = value;
 }
 
-// double evaluated_value = 3;
+// double evaluated_value = 3 [json_name = "evaluatedValue"];
 inline void EvaluatedConstraint::clear_evaluated_value() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.evaluated_value_ = 0;
@@ -1193,7 +1193,7 @@ inline void EvaluatedConstraint::_internal_set_evaluated_value(double value) {
   _impl_.evaluated_value_ = value;
 }
 
-// repeated uint64 used_decision_variable_ids = 4;
+// repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
 inline int EvaluatedConstraint::_internal_used_decision_variable_ids_size() const {
   return _internal_used_decision_variable_ids().size();
 }
@@ -1238,7 +1238,7 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* EvaluatedConstraint::_inte
   return &_impl_.used_decision_variable_ids_;
 }
 
-// repeated int64 subscripts = 9;
+// repeated int64 subscripts = 9 [json_name = "subscripts"];
 inline int EvaluatedConstraint::_internal_subscripts_size() const {
   return _internal_subscripts().size();
 }
@@ -1283,7 +1283,7 @@ inline ::google::protobuf::RepeatedField<::int64_t>* EvaluatedConstraint::_inter
   return &_impl_.subscripts_;
 }
 
-// map<string, string> parameters = 5;
+// map<string, string> parameters = 5 [json_name = "parameters"];
 inline int EvaluatedConstraint::_internal_parameters_size() const {
   return _internal_parameters().size();
 }
@@ -1311,7 +1311,7 @@ inline ::google::protobuf::Map<std::string, std::string>* EvaluatedConstraint::m
   return _internal_mutable_parameters();
 }
 
-// optional string name = 6;
+// optional string name = 6 [json_name = "name"];
 inline bool EvaluatedConstraint::has_name() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   return value;
@@ -1382,7 +1382,7 @@ inline void EvaluatedConstraint::set_allocated_name(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.EvaluatedConstraint.name)
 }
 
-// optional string description = 7;
+// optional string description = 7 [json_name = "description"];
 inline bool EvaluatedConstraint::has_description() const {
   bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
   return value;
@@ -1453,7 +1453,7 @@ inline void EvaluatedConstraint::set_allocated_description(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.EvaluatedConstraint.description)
 }
 
-// optional double dual_variable = 8;
+// optional double dual_variable = 8 [json_name = "dualVariable"];
 inline bool EvaluatedConstraint::has_dual_variable() const {
   bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
   return value;

@@ -239,7 +239,7 @@ class Instance_Description final : public ::google::protobuf::Message
     kDescriptionFieldNumber = 2,
     kCreatedByFieldNumber = 4,
   };
-  // repeated string authors = 3;
+  // repeated string authors = 3 [json_name = "authors"];
   int authors_size() const;
   private:
   int _internal_authors_size() const;
@@ -267,7 +267,7 @@ class Instance_Description final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedPtrField<std::string>* _internal_mutable_authors();
 
   public:
-  // optional string name = 1;
+  // optional string name = 1 [json_name = "name"];
   bool has_name() const;
   void clear_name() ;
   const std::string& name() const;
@@ -284,7 +284,7 @@ class Instance_Description final : public ::google::protobuf::Message
   std::string* _internal_mutable_name();
 
   public:
-  // optional string description = 2;
+  // optional string description = 2 [json_name = "description"];
   bool has_description() const;
   void clear_description() ;
   const std::string& description() const;
@@ -301,7 +301,7 @@ class Instance_Description final : public ::google::protobuf::Message
   std::string* _internal_mutable_description();
 
   public:
-  // optional string created_by = 4;
+  // optional string created_by = 4 [json_name = "createdBy"];
   bool has_created_by() const;
   void clear_created_by() ;
   const std::string& created_by() const;
@@ -508,7 +508,7 @@ class Instance final : public ::google::protobuf::Message
     kObjectiveFieldNumber = 3,
     kSenseFieldNumber = 5,
   };
-  // repeated .ommx.v1.DecisionVariable decision_variables = 2;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
   int decision_variables_size() const;
   private:
   int _internal_decision_variables_size() const;
@@ -525,7 +525,7 @@ class Instance final : public ::google::protobuf::Message
   const ::ommx::v1::DecisionVariable& decision_variables(int index) const;
   ::ommx::v1::DecisionVariable* add_decision_variables();
   const ::google::protobuf::RepeatedPtrField<::ommx::v1::DecisionVariable>& decision_variables() const;
-  // repeated .ommx.v1.Constraint constraints = 4;
+  // repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
   int constraints_size() const;
   private:
   int _internal_constraints_size() const;
@@ -542,7 +542,7 @@ class Instance final : public ::google::protobuf::Message
   const ::ommx::v1::Constraint& constraints(int index) const;
   ::ommx::v1::Constraint* add_constraints();
   const ::google::protobuf::RepeatedPtrField<::ommx::v1::Constraint>& constraints() const;
-  // .ommx.v1.Instance.Description description = 1;
+  // .ommx.v1.Instance.Description description = 1 [json_name = "description"];
   bool has_description() const;
   void clear_description() ;
   const ::ommx::v1::Instance_Description& description() const;
@@ -557,7 +557,7 @@ class Instance final : public ::google::protobuf::Message
   ::ommx::v1::Instance_Description* _internal_mutable_description();
 
   public:
-  // .ommx.v1.Function objective = 3;
+  // .ommx.v1.Function objective = 3 [json_name = "objective"];
   bool has_objective() const;
   void clear_objective() ;
   const ::ommx::v1::Function& objective() const;
@@ -572,7 +572,7 @@ class Instance final : public ::google::protobuf::Message
   ::ommx::v1::Function* _internal_mutable_objective();
 
   public:
-  // .ommx.v1.Instance.Sense sense = 5;
+  // .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
   void clear_sense() ;
   ::ommx::v1::Instance_Sense sense() const;
   void set_sense(::ommx::v1::Instance_Sense value);
@@ -637,7 +637,7 @@ class Instance final : public ::google::protobuf::Message
 
 // Instance_Description
 
-// optional string name = 1;
+// optional string name = 1 [json_name = "name"];
 inline bool Instance_Description::has_name() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   return value;
@@ -708,7 +708,7 @@ inline void Instance_Description::set_allocated_name(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Instance.Description.name)
 }
 
-// optional string description = 2;
+// optional string description = 2 [json_name = "description"];
 inline bool Instance_Description::has_description() const {
   bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
   return value;
@@ -779,7 +779,7 @@ inline void Instance_Description::set_allocated_description(std::string* value) 
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Instance.Description.description)
 }
 
-// repeated string authors = 3;
+// repeated string authors = 3 [json_name = "authors"];
 inline int Instance_Description::_internal_authors_size() const {
   return _internal_authors().size();
 }
@@ -881,7 +881,7 @@ Instance_Description::_internal_mutable_authors() {
   return &_impl_.authors_;
 }
 
-// optional string created_by = 4;
+// optional string created_by = 4 [json_name = "createdBy"];
 inline bool Instance_Description::has_created_by() const {
   bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
   return value;
@@ -956,7 +956,7 @@ inline void Instance_Description::set_allocated_created_by(std::string* value) {
 
 // Instance
 
-// .ommx.v1.Instance.Description description = 1;
+// .ommx.v1.Instance.Description description = 1 [json_name = "description"];
 inline bool Instance::has_description() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.description_ != nullptr);
@@ -1052,7 +1052,7 @@ inline void Instance::set_allocated_description(::ommx::v1::Instance_Description
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Instance.description)
 }
 
-// repeated .ommx.v1.DecisionVariable decision_variables = 2;
+// repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
 inline int Instance::_internal_decision_variables_size() const {
   return _internal_decision_variables().size();
 }
@@ -1097,7 +1097,7 @@ Instance::_internal_mutable_decision_variables() {
   return &_impl_.decision_variables_;
 }
 
-// .ommx.v1.Function objective = 3;
+// .ommx.v1.Function objective = 3 [json_name = "objective"];
 inline bool Instance::has_objective() const {
   bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.objective_ != nullptr);
@@ -1188,7 +1188,7 @@ inline void Instance::set_allocated_objective(::ommx::v1::Function* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Instance.objective)
 }
 
-// repeated .ommx.v1.Constraint constraints = 4;
+// repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
 inline int Instance::_internal_constraints_size() const {
   return _internal_constraints().size();
 }
@@ -1233,7 +1233,7 @@ Instance::_internal_mutable_constraints() {
   return &_impl_.constraints_;
 }
 
-// .ommx.v1.Instance.Sense sense = 5;
+// .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
 inline void Instance::clear_sense() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.sense_ = 0;

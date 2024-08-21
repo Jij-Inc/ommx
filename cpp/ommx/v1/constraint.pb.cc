@@ -210,27 +210,34 @@ static const ::_pb::Message* const file_default_instances[] = {
 const char descriptor_table_protodef_ommx_2fv1_2fconstraint_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\030ommx/v1/constraint.proto\022\007ommx.v1\032\026omm"
-    "x/v1/function.proto\"\250\002\n\nConstraint\022\n\n\002id"
-    "\030\001 \001(\004\022#\n\010equality\030\002 \001(\0162\021.ommx.v1.Equal"
-    "ity\022#\n\010function\030\003 \001(\0132\021.ommx.v1.Function"
-    "\022\022\n\nsubscripts\030\010 \003(\003\0227\n\nparameters\030\005 \003(\013"
-    "2#.ommx.v1.Constraint.ParametersEntry\022\021\n"
-    "\004name\030\006 \001(\tH\000\210\001\001\022\030\n\013description\030\007 \001(\tH\001\210"
-    "\001\001\0321\n\017ParametersEntry\022\013\n\003key\030\001 \001(\t\022\r\n\005va"
-    "lue\030\002 \001(\t:\0028\001B\007\n\005_nameB\016\n\014_description\"\200"
-    "\003\n\023EvaluatedConstraint\022\n\n\002id\030\001 \001(\004\022#\n\010eq"
-    "uality\030\002 \001(\0162\021.ommx.v1.Equality\022\027\n\017evalu"
-    "ated_value\030\003 \001(\001\022\"\n\032used_decision_variab"
-    "le_ids\030\004 \003(\004\022\022\n\nsubscripts\030\t \003(\003\022@\n\npara"
-    "meters\030\005 \003(\0132,.ommx.v1.EvaluatedConstrai"
-    "nt.ParametersEntry\022\021\n\004name\030\006 \001(\tH\000\210\001\001\022\030\n"
-    "\013description\030\007 \001(\tH\001\210\001\001\022\032\n\rdual_variable"
-    "\030\010 \001(\001H\002\210\001\001\0321\n\017ParametersEntry\022\013\n\003key\030\001 "
-    "\001(\t\022\r\n\005value\030\002 \001(\t:\0028\001B\007\n\005_nameB\016\n\014_desc"
-    "riptionB\020\n\016_dual_variable*i\n\010Equality\022\030\n"
-    "\024EQUALITY_UNSPECIFIED\020\000\022\032\n\026EQUALITY_EQUA"
-    "L_TO_ZERO\020\001\022\'\n#EQUALITY_LESS_THAN_OR_EQU"
-    "AL_TO_ZERO\020\002b\006proto3"
+    "x/v1/function.proto\"\367\002\n\nConstraint\022\016\n\002id"
+    "\030\001 \001(\004R\002id\022-\n\010equality\030\002 \001(\0162\021.ommx.v1.E"
+    "qualityR\010equality\022-\n\010function\030\003 \001(\0132\021.om"
+    "mx.v1.FunctionR\010function\022\036\n\nsubscripts\030\010"
+    " \003(\003R\nsubscripts\022C\n\nparameters\030\005 \003(\0132#.o"
+    "mmx.v1.Constraint.ParametersEntryR\nparam"
+    "eters\022\027\n\004name\030\006 \001(\tH\000R\004name\210\001\001\022%\n\013descri"
+    "ption\030\007 \001(\tH\001R\013description\210\001\001\032=\n\017Paramet"
+    "ersEntry\022\020\n\003key\030\001 \001(\tR\003key\022\024\n\005value\030\002 \001("
+    "\tR\005value:\0028\001B\007\n\005_nameB\016\n\014_description\"\374\003"
+    "\n\023EvaluatedConstraint\022\016\n\002id\030\001 \001(\004R\002id\022-\n"
+    "\010equality\030\002 \001(\0162\021.ommx.v1.EqualityR\010equa"
+    "lity\022\'\n\017evaluated_value\030\003 \001(\001R\016evaluated"
+    "Value\022;\n\032used_decision_variable_ids\030\004 \003("
+    "\004R\027usedDecisionVariableIds\022\036\n\nsubscripts"
+    "\030\t \003(\003R\nsubscripts\022L\n\nparameters\030\005 \003(\0132,"
+    ".ommx.v1.EvaluatedConstraint.ParametersE"
+    "ntryR\nparameters\022\027\n\004name\030\006 \001(\tH\000R\004name\210\001"
+    "\001\022%\n\013description\030\007 \001(\tH\001R\013description\210\001\001"
+    "\022(\n\rdual_variable\030\010 \001(\001H\002R\014dualVariable\210"
+    "\001\001\032=\n\017ParametersEntry\022\020\n\003key\030\001 \001(\tR\003key\022"
+    "\024\n\005value\030\002 \001(\tR\005value:\0028\001B\007\n\005_nameB\016\n\014_d"
+    "escriptionB\020\n\016_dual_variable*i\n\010Equality"
+    "\022\030\n\024EQUALITY_UNSPECIFIED\020\000\022\032\n\026EQUALITY_E"
+    "QUAL_TO_ZERO\020\001\022\'\n#EQUALITY_LESS_THAN_OR_"
+    "EQUAL_TO_ZERO\020\002B[\n\013com.ommx.v1B\017Constrai"
+    "ntProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Om"
+    "mx\\V1\\GPBMetadata\352\002\010Ommx::V1b\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_ommx_2fv1_2fconstraint_2eproto_deps[1] =
     {
@@ -240,7 +247,7 @@ static ::absl::once_flag descriptor_table_ommx_2fv1_2fconstraint_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2fconstraint_2eproto = {
     false,
     false,
-    860,
+    1156,
     descriptor_table_protodef_ommx_2fv1_2fconstraint_2eproto,
     "ommx/v1/constraint.proto",
     &descriptor_table_ommx_2fv1_2fconstraint_2eproto_once,
@@ -413,48 +420,48 @@ const ::_pbi::TcParseTable<3, 7, 2, 52, 2> Constraint::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Constraint>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // repeated int64 subscripts = 8;
+    // repeated int64 subscripts = 8 [json_name = "subscripts"];
     {::_pbi::TcParser::FastV64P1,
      {66, 63, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.subscripts_)}},
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Constraint, _impl_.id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.id_)}},
-    // .ommx.v1.Equality equality = 2;
+    // .ommx.v1.Equality equality = 2 [json_name = "equality"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Constraint, _impl_.equality_), 63>(),
      {16, 63, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.equality_)}},
-    // .ommx.v1.Function function = 3;
+    // .ommx.v1.Function function = 3 [json_name = "function"];
     {::_pbi::TcParser::FastMtS1,
      {26, 2, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.function_)}},
     {::_pbi::TcParser::MiniParse, {}},
     {::_pbi::TcParser::MiniParse, {}},
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     {::_pbi::TcParser::FastUS1,
      {50, 0, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.name_)}},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {::_pbi::TcParser::FastUS1,
      {58, 1, 0, PROTOBUF_FIELD_OFFSET(Constraint, _impl_.description_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.id_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
-    // .ommx.v1.Equality equality = 2;
+    // .ommx.v1.Equality equality = 2 [json_name = "equality"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.equality_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-    // .ommx.v1.Function function = 3;
+    // .ommx.v1.Function function = 3 [json_name = "function"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.function_), _Internal::kHasBitsOffset + 2, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // map<string, string> parameters = 5;
+    // map<string, string> parameters = 5 [json_name = "parameters"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.parameters_), -1, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.description_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // repeated int64 subscripts = 8;
+    // repeated int64 subscripts = 8 [json_name = "subscripts"];
     {PROTOBUF_FIELD_OFFSET(Constraint, _impl_.subscripts_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedInt64)},
   }}, {{
@@ -508,14 +515,14 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         1, this->_internal_id(), target);
   }
 
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   if (this->_internal_equality() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -523,13 +530,13 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
   }
 
   cached_has_bits = _impl_._has_bits_[0];
-  // .ommx.v1.Function function = 3;
+  // .ommx.v1.Function function = 3 [json_name = "function"];
   if (cached_has_bits & 0x00000004u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *_impl_.function_, _impl_.function_->GetCachedSize(), target, stream);
   }
 
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   if (!_internal_parameters().empty()) {
     using MapType = ::google::protobuf::Map<std::string, std::string>;
     using WireHelper = _pbi::MapEntryFuncs<std::string, std::string,
@@ -562,7 +569,7 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
     }
   }
 
-  // optional string name = 6;
+  // optional string name = 6 [json_name = "name"];
   if (cached_has_bits & 0x00000001u) {
     const std::string& _s = this->_internal_name();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -570,7 +577,7 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
     target = stream->WriteStringMaybeAliased(6, _s, target);
   }
 
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   if (cached_has_bits & 0x00000002u) {
     const std::string& _s = this->_internal_description();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -578,7 +585,7 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
     target = stream->WriteStringMaybeAliased(7, _s, target);
   }
 
-  // repeated int64 subscripts = 8;
+  // repeated int64 subscripts = 8 [json_name = "subscripts"];
   {
     int byte_size = _impl_._subscripts_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -605,14 +612,14 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   total_size += 1 * ::google::protobuf::internal::FromIntSize(_internal_parameters_size());
   for (const auto& entry : _internal_parameters()) {
     total_size += _pbi::MapEntryFuncs<std::string, std::string,
                                    _pbi::WireFormatLite::TYPE_STRING,
                                    _pbi::WireFormatLite::TYPE_STRING>::ByteSizeLong(entry.first, entry.second);
   }
-  // repeated int64 subscripts = 8;
+  // repeated int64 subscripts = 8 [json_name = "subscripts"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::Int64Size(
         this->_internal_subscripts())
@@ -627,32 +634,32 @@ PROTOBUF_NOINLINE void Constraint::Clear() {
   }
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000007u) {
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     if (cached_has_bits & 0x00000001u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_name());
     }
 
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     if (cached_has_bits & 0x00000002u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_description());
     }
 
-    // .ommx.v1.Function function = 3;
+    // .ommx.v1.Function function = 3 [json_name = "function"];
     if (cached_has_bits & 0x00000004u) {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.function_);
     }
 
   }
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
         this->_internal_id());
   }
 
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   if (this->_internal_equality() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_equality());
@@ -874,29 +881,29 @@ const ::_pbi::TcParseTable<4, 9, 1, 69, 2> EvaluatedConstraint::_table_ = {
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(EvaluatedConstraint, _impl_.id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.id_)}},
-    // .ommx.v1.Equality equality = 2;
+    // .ommx.v1.Equality equality = 2 [json_name = "equality"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(EvaluatedConstraint, _impl_.equality_), 63>(),
      {16, 63, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.equality_)}},
-    // double evaluated_value = 3;
+    // double evaluated_value = 3 [json_name = "evaluatedValue"];
     {::_pbi::TcParser::FastF64S1,
      {25, 63, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.evaluated_value_)}},
-    // repeated uint64 used_decision_variable_ids = 4;
+    // repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
     {::_pbi::TcParser::FastV64P1,
      {34, 63, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.used_decision_variable_ids_)}},
     {::_pbi::TcParser::MiniParse, {}},
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     {::_pbi::TcParser::FastUS1,
      {50, 0, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.name_)}},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {::_pbi::TcParser::FastUS1,
      {58, 1, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.description_)}},
-    // optional double dual_variable = 8;
+    // optional double dual_variable = 8 [json_name = "dualVariable"];
     {::_pbi::TcParser::FastF64S1,
      {65, 2, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.dual_variable_)}},
-    // repeated int64 subscripts = 9;
+    // repeated int64 subscripts = 9 [json_name = "subscripts"];
     {::_pbi::TcParser::FastV64P1,
      {74, 63, 0, PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.subscripts_)}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -908,31 +915,31 @@ const ::_pbi::TcParseTable<4, 9, 1, 69, 2> EvaluatedConstraint::_table_ = {
   }}, {{
     65535, 65535
   }}, {{
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.id_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
-    // .ommx.v1.Equality equality = 2;
+    // .ommx.v1.Equality equality = 2 [json_name = "equality"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.equality_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-    // double evaluated_value = 3;
+    // double evaluated_value = 3 [json_name = "evaluatedValue"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.evaluated_value_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
-    // repeated uint64 used_decision_variable_ids = 4;
+    // repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.used_decision_variable_ids_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-    // map<string, string> parameters = 5;
+    // map<string, string> parameters = 5 [json_name = "parameters"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.parameters_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.description_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // optional double dual_variable = 8;
+    // optional double dual_variable = 8 [json_name = "dualVariable"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.dual_variable_), _Internal::kHasBitsOffset + 2, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
-    // repeated int64 subscripts = 9;
+    // repeated int64 subscripts = 9 [json_name = "subscripts"];
     {PROTOBUF_FIELD_OFFSET(EvaluatedConstraint, _impl_.subscripts_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedInt64)},
   }}, {{
@@ -984,21 +991,21 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         1, this->_internal_id(), target);
   }
 
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   if (this->_internal_equality() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
         2, this->_internal_equality(), target);
   }
 
-  // double evaluated_value = 3;
+  // double evaluated_value = 3 [json_name = "evaluatedValue"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_evaluated_value = this->_internal_evaluated_value();
@@ -1010,7 +1017,7 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
         3, this->_internal_evaluated_value(), target);
   }
 
-  // repeated uint64 used_decision_variable_ids = 4;
+  // repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
   {
     int byte_size = _impl_._used_decision_variable_ids_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -1019,7 +1026,7 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
     }
   }
 
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   if (!_internal_parameters().empty()) {
     using MapType = ::google::protobuf::Map<std::string, std::string>;
     using WireHelper = _pbi::MapEntryFuncs<std::string, std::string,
@@ -1053,7 +1060,7 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
   }
 
   cached_has_bits = _impl_._has_bits_[0];
-  // optional string name = 6;
+  // optional string name = 6 [json_name = "name"];
   if (cached_has_bits & 0x00000001u) {
     const std::string& _s = this->_internal_name();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -1061,7 +1068,7 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
     target = stream->WriteStringMaybeAliased(6, _s, target);
   }
 
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   if (cached_has_bits & 0x00000002u) {
     const std::string& _s = this->_internal_description();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -1069,14 +1076,14 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
     target = stream->WriteStringMaybeAliased(7, _s, target);
   }
 
-  // optional double dual_variable = 8;
+  // optional double dual_variable = 8 [json_name = "dualVariable"];
   if (cached_has_bits & 0x00000004u) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteDoubleToArray(
         8, this->_internal_dual_variable(), target);
   }
 
-  // repeated int64 subscripts = 9;
+  // repeated int64 subscripts = 9 [json_name = "subscripts"];
   {
     int byte_size = _impl_._subscripts_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -1103,7 +1110,7 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated uint64 used_decision_variable_ids = 4;
+  // repeated uint64 used_decision_variable_ids = 4 [json_name = "usedDecisionVariableIds"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::UInt64Size(
         this->_internal_used_decision_variable_ids())
@@ -1116,14 +1123,14 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // map<string, string> parameters = 5;
+  // map<string, string> parameters = 5 [json_name = "parameters"];
   total_size += 1 * ::google::protobuf::internal::FromIntSize(_internal_parameters_size());
   for (const auto& entry : _internal_parameters()) {
     total_size += _pbi::MapEntryFuncs<std::string, std::string,
                                    _pbi::WireFormatLite::TYPE_STRING,
                                    _pbi::WireFormatLite::TYPE_STRING>::ByteSizeLong(entry.first, entry.second);
   }
-  // repeated int64 subscripts = 9;
+  // repeated int64 subscripts = 9 [json_name = "subscripts"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::Int64Size(
         this->_internal_subscripts())
@@ -1138,26 +1145,26 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
   }
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000003u) {
-    // optional string name = 6;
+    // optional string name = 6 [json_name = "name"];
     if (cached_has_bits & 0x00000001u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_name());
     }
 
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     if (cached_has_bits & 0x00000002u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_description());
     }
 
   }
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
         this->_internal_id());
   }
 
-  // double evaluated_value = 3;
+  // double evaluated_value = 3 [json_name = "evaluatedValue"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_evaluated_value = this->_internal_evaluated_value();
@@ -1167,12 +1174,12 @@ PROTOBUF_NOINLINE void EvaluatedConstraint::Clear() {
     total_size += 9;
   }
 
-  // optional double dual_variable = 8;
+  // optional double dual_variable = 8 [json_name = "dualVariable"];
   if (cached_has_bits & 0x00000004u) {
     total_size += 9;
   }
 
-  // .ommx.v1.Equality equality = 2;
+  // .ommx.v1.Equality equality = 2 [json_name = "equality"];
   if (this->_internal_equality() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_equality());

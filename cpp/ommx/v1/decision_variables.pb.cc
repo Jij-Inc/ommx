@@ -155,25 +155,30 @@ static const ::_pb::Message* const file_default_instances[] = {
 const char descriptor_table_protodef_ommx_2fv1_2fdecision_5fvariables_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n ommx/v1/decision_variables.proto\022\007ommx"
-    ".v1\"%\n\005Bound\022\r\n\005lower\030\001 \001(\001\022\r\n\005upper\030\002 \001"
-    "(\001\"\316\003\n\020DecisionVariable\022\n\n\002id\030\001 \001(\004\022,\n\004k"
-    "ind\030\002 \001(\0162\036.ommx.v1.DecisionVariable.Kin"
-    "d\022\"\n\005bound\030\003 \001(\0132\016.ommx.v1.BoundH\000\210\001\001\022\021\n"
-    "\004name\030\004 \001(\tH\001\210\001\001\022\022\n\nsubscripts\030\005 \003(\003\022=\n\n"
-    "parameters\030\006 \003(\0132).ommx.v1.DecisionVaria"
-    "ble.ParametersEntry\022\030\n\013description\030\007 \001(\t"
-    "H\002\210\001\001\0321\n\017ParametersEntry\022\013\n\003key\030\001 \001(\t\022\r\n"
-    "\005value\030\002 \001(\t:\0028\001\"\205\001\n\004Kind\022\024\n\020KIND_UNSPEC"
-    "IFIED\020\000\022\017\n\013KIND_BINARY\020\001\022\020\n\014KIND_INTEGER"
-    "\020\002\022\023\n\017KIND_CONTINUOUS\020\003\022\025\n\021KIND_SEMI_INT"
-    "EGER\020\004\022\030\n\024KIND_SEMI_CONTINUOUS\020\005B\010\n\006_bou"
-    "ndB\007\n\005_nameB\016\n\014_descriptionb\006proto3"
+    ".v1\"3\n\005Bound\022\024\n\005lower\030\001 \001(\001R\005lower\022\024\n\005up"
+    "per\030\002 \001(\001R\005upper\"\226\004\n\020DecisionVariable\022\016\n"
+    "\002id\030\001 \001(\004R\002id\0222\n\004kind\030\002 \001(\0162\036.ommx.v1.De"
+    "cisionVariable.KindR\004kind\022)\n\005bound\030\003 \001(\013"
+    "2\016.ommx.v1.BoundH\000R\005bound\210\001\001\022\027\n\004name\030\004 \001"
+    "(\tH\001R\004name\210\001\001\022\036\n\nsubscripts\030\005 \003(\003R\nsubsc"
+    "ripts\022I\n\nparameters\030\006 \003(\0132).ommx.v1.Deci"
+    "sionVariable.ParametersEntryR\nparameters"
+    "\022%\n\013description\030\007 \001(\tH\002R\013description\210\001\001\032"
+    "=\n\017ParametersEntry\022\020\n\003key\030\001 \001(\tR\003key\022\024\n\005"
+    "value\030\002 \001(\tR\005value:\0028\001\"\205\001\n\004Kind\022\024\n\020KIND_"
+    "UNSPECIFIED\020\000\022\017\n\013KIND_BINARY\020\001\022\020\n\014KIND_I"
+    "NTEGER\020\002\022\023\n\017KIND_CONTINUOUS\020\003\022\025\n\021KIND_SE"
+    "MI_INTEGER\020\004\022\030\n\024KIND_SEMI_CONTINUOUS\020\005B\010"
+    "\n\006_boundB\007\n\005_nameB\016\n\014_descriptionBb\n\013com"
+    ".ommx.v1B\026DecisionVariablesProtoP\001\242\002\003OXX"
+    "\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetada"
+    "ta\352\002\010Ommx::V1b\006proto3"
 };
 static ::absl::once_flag descriptor_table_ommx_2fv1_2fdecision_5fvariables_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2fdecision_5fvariables_2eproto = {
     false,
     false,
-    555,
+    741,
     descriptor_table_protodef_ommx_2fv1_2fdecision_5fvariables_2eproto,
     "ommx/v1/decision_variables.proto",
     &descriptor_table_ommx_2fv1_2fdecision_5fvariables_2eproto_once,
@@ -291,19 +296,19 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> Bound::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Bound>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // double upper = 2;
+    // double upper = 2 [json_name = "upper"];
     {::_pbi::TcParser::FastF64S1,
      {17, 63, 0, PROTOBUF_FIELD_OFFSET(Bound, _impl_.upper_)}},
-    // double lower = 1;
+    // double lower = 1 [json_name = "lower"];
     {::_pbi::TcParser::FastF64S1,
      {9, 63, 0, PROTOBUF_FIELD_OFFSET(Bound, _impl_.lower_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // double lower = 1;
+    // double lower = 1 [json_name = "lower"];
     {PROTOBUF_FIELD_OFFSET(Bound, _impl_.lower_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
-    // double upper = 2;
+    // double upper = 2 [json_name = "upper"];
     {PROTOBUF_FIELD_OFFSET(Bound, _impl_.upper_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
   }},
@@ -332,7 +337,7 @@ PROTOBUF_NOINLINE void Bound::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // double lower = 1;
+  // double lower = 1 [json_name = "lower"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_lower = this->_internal_lower();
@@ -344,7 +349,7 @@ PROTOBUF_NOINLINE void Bound::Clear() {
         1, this->_internal_lower(), target);
   }
 
-  // double upper = 2;
+  // double upper = 2 [json_name = "upper"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_upper = this->_internal_upper();
@@ -374,7 +379,7 @@ PROTOBUF_NOINLINE void Bound::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // double lower = 1;
+  // double lower = 1 [json_name = "lower"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_lower = this->_internal_lower();
@@ -384,7 +389,7 @@ PROTOBUF_NOINLINE void Bound::Clear() {
     total_size += 9;
   }
 
-  // double upper = 2;
+  // double upper = 2 [json_name = "upper"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_upper = this->_internal_upper();
@@ -592,47 +597,47 @@ const ::_pbi::TcParseTable<3, 7, 2, 58, 2> DecisionVariable::_table_ = {
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DecisionVariable, _impl_.id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.id_)}},
-    // .ommx.v1.DecisionVariable.Kind kind = 2;
+    // .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DecisionVariable, _impl_.kind_), 63>(),
      {16, 63, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.kind_)}},
-    // optional .ommx.v1.Bound bound = 3;
+    // optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
     {::_pbi::TcParser::FastMtS1,
      {26, 2, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.bound_)}},
-    // optional string name = 4;
+    // optional string name = 4 [json_name = "name"];
     {::_pbi::TcParser::FastUS1,
      {34, 0, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.name_)}},
-    // repeated int64 subscripts = 5;
+    // repeated int64 subscripts = 5 [json_name = "subscripts"];
     {::_pbi::TcParser::FastV64P1,
      {42, 63, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.subscripts_)}},
     {::_pbi::TcParser::MiniParse, {}},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {::_pbi::TcParser::FastUS1,
      {58, 1, 0, PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.description_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.id_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
-    // .ommx.v1.DecisionVariable.Kind kind = 2;
+    // .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.kind_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-    // optional .ommx.v1.Bound bound = 3;
+    // optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.bound_), _Internal::kHasBitsOffset + 2, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // optional string name = 4;
+    // optional string name = 4 [json_name = "name"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // repeated int64 subscripts = 5;
+    // repeated int64 subscripts = 5 [json_name = "subscripts"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.subscripts_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedInt64)},
-    // map<string, string> parameters = 6;
+    // map<string, string> parameters = 6 [json_name = "parameters"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.parameters_), -1, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     {PROTOBUF_FIELD_OFFSET(DecisionVariable, _impl_.description_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }}, {{
@@ -686,14 +691,14 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         1, this->_internal_id(), target);
   }
 
-  // .ommx.v1.DecisionVariable.Kind kind = 2;
+  // .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
   if (this->_internal_kind() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -701,13 +706,13 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
   }
 
   cached_has_bits = _impl_._has_bits_[0];
-  // optional .ommx.v1.Bound bound = 3;
+  // optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
   if (cached_has_bits & 0x00000004u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *_impl_.bound_, _impl_.bound_->GetCachedSize(), target, stream);
   }
 
-  // optional string name = 4;
+  // optional string name = 4 [json_name = "name"];
   if (cached_has_bits & 0x00000001u) {
     const std::string& _s = this->_internal_name();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -715,7 +720,7 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
     target = stream->WriteStringMaybeAliased(4, _s, target);
   }
 
-  // repeated int64 subscripts = 5;
+  // repeated int64 subscripts = 5 [json_name = "subscripts"];
   {
     int byte_size = _impl_._subscripts_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -724,7 +729,7 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
     }
   }
 
-  // map<string, string> parameters = 6;
+  // map<string, string> parameters = 6 [json_name = "parameters"];
   if (!_internal_parameters().empty()) {
     using MapType = ::google::protobuf::Map<std::string, std::string>;
     using WireHelper = _pbi::MapEntryFuncs<std::string, std::string,
@@ -757,7 +762,7 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
     }
   }
 
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   if (cached_has_bits & 0x00000002u) {
     const std::string& _s = this->_internal_description();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -783,7 +788,7 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated int64 subscripts = 5;
+  // repeated int64 subscripts = 5 [json_name = "subscripts"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::Int64Size(
         this->_internal_subscripts())
@@ -796,7 +801,7 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // map<string, string> parameters = 6;
+  // map<string, string> parameters = 6 [json_name = "parameters"];
   total_size += 1 * ::google::protobuf::internal::FromIntSize(_internal_parameters_size());
   for (const auto& entry : _internal_parameters()) {
     total_size += _pbi::MapEntryFuncs<std::string, std::string,
@@ -805,32 +810,32 @@ PROTOBUF_NOINLINE void DecisionVariable::Clear() {
   }
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000007u) {
-    // optional string name = 4;
+    // optional string name = 4 [json_name = "name"];
     if (cached_has_bits & 0x00000001u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_name());
     }
 
-    // optional string description = 7;
+    // optional string description = 7 [json_name = "description"];
     if (cached_has_bits & 0x00000002u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_description());
     }
 
-    // optional .ommx.v1.Bound bound = 3;
+    // optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
     if (cached_has_bits & 0x00000004u) {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.bound_);
     }
 
   }
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
         this->_internal_id());
   }
 
-  // .ommx.v1.DecisionVariable.Kind kind = 2;
+  // .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
   if (this->_internal_kind() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_kind());

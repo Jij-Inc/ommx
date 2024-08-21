@@ -592,7 +592,7 @@ class State final : public ::google::protobuf::Message
   enum : int {
     kEntriesFieldNumber = 1,
   };
-  // map<uint64, double> entries = 1;
+  // map<uint64, double> entries = 1 [json_name = "entries"];
   int entries_size() const;
   private:
   int _internal_entries_size() const;
@@ -777,7 +777,7 @@ class Solution final : public ::google::protobuf::Message
     kOptimalityFieldNumber = 6,
     kRelaxationFieldNumber = 7,
   };
-  // repeated .ommx.v1.DecisionVariable decision_variables = 3;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
   int decision_variables_size() const;
   private:
   int _internal_decision_variables_size() const;
@@ -794,7 +794,7 @@ class Solution final : public ::google::protobuf::Message
   const ::ommx::v1::DecisionVariable& decision_variables(int index) const;
   ::ommx::v1::DecisionVariable* add_decision_variables();
   const ::google::protobuf::RepeatedPtrField<::ommx::v1::DecisionVariable>& decision_variables() const;
-  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
   int evaluated_constraints_size() const;
   private:
   int _internal_evaluated_constraints_size() const;
@@ -811,7 +811,7 @@ class Solution final : public ::google::protobuf::Message
   const ::ommx::v1::EvaluatedConstraint& evaluated_constraints(int index) const;
   ::ommx::v1::EvaluatedConstraint* add_evaluated_constraints();
   const ::google::protobuf::RepeatedPtrField<::ommx::v1::EvaluatedConstraint>& evaluated_constraints() const;
-  // .ommx.v1.State state = 1;
+  // .ommx.v1.State state = 1 [json_name = "state"];
   bool has_state() const;
   void clear_state() ;
   const ::ommx::v1::State& state() const;
@@ -826,7 +826,7 @@ class Solution final : public ::google::protobuf::Message
   ::ommx::v1::State* _internal_mutable_state();
 
   public:
-  // double objective = 2;
+  // double objective = 2 [json_name = "objective"];
   void clear_objective() ;
   double objective() const;
   void set_objective(double value);
@@ -836,7 +836,7 @@ class Solution final : public ::google::protobuf::Message
   void _internal_set_objective(double value);
 
   public:
-  // bool feasible = 5;
+  // bool feasible = 5 [json_name = "feasible"];
   void clear_feasible() ;
   bool feasible() const;
   void set_feasible(bool value);
@@ -846,7 +846,7 @@ class Solution final : public ::google::protobuf::Message
   void _internal_set_feasible(bool value);
 
   public:
-  // .ommx.v1.Optimality optimality = 6;
+  // .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
   void clear_optimality() ;
   ::ommx::v1::Optimality optimality() const;
   void set_optimality(::ommx::v1::Optimality value);
@@ -856,7 +856,7 @@ class Solution final : public ::google::protobuf::Message
   void _internal_set_optimality(::ommx::v1::Optimality value);
 
   public:
-  // .ommx.v1.Relaxation relaxation = 7;
+  // .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
   void clear_relaxation() ;
   ::ommx::v1::Relaxation relaxation() const;
   void set_relaxation(::ommx::v1::Relaxation value);
@@ -1044,7 +1044,7 @@ class Result final : public ::google::protobuf::Message
     kInfeasibleFieldNumber = 3,
     kUnboundedFieldNumber = 4,
   };
-  // string error = 1;
+  // string error = 1 [json_name = "error"];
   bool has_error() const;
   void clear_error() ;
   const std::string& error() const;
@@ -1061,7 +1061,7 @@ class Result final : public ::google::protobuf::Message
   std::string* _internal_mutable_error();
 
   public:
-  // .ommx.v1.Solution solution = 2;
+  // .ommx.v1.Solution solution = 2 [json_name = "solution"];
   bool has_solution() const;
   private:
   bool _internal_has_solution() const;
@@ -1080,7 +1080,7 @@ class Result final : public ::google::protobuf::Message
   ::ommx::v1::Solution* _internal_mutable_solution();
 
   public:
-  // .ommx.v1.Infeasible infeasible = 3;
+  // .ommx.v1.Infeasible infeasible = 3 [json_name = "infeasible"];
   bool has_infeasible() const;
   private:
   bool _internal_has_infeasible() const;
@@ -1099,7 +1099,7 @@ class Result final : public ::google::protobuf::Message
   ::ommx::v1::Infeasible* _internal_mutable_infeasible();
 
   public:
-  // .ommx.v1.Unbounded unbounded = 4;
+  // .ommx.v1.Unbounded unbounded = 4 [json_name = "unbounded"];
   bool has_unbounded() const;
   private:
   bool _internal_has_unbounded() const;
@@ -1186,7 +1186,7 @@ class Result final : public ::google::protobuf::Message
 
 // State
 
-// map<uint64, double> entries = 1;
+// map<uint64, double> entries = 1 [json_name = "entries"];
 inline int State::_internal_entries_size() const {
   return _internal_entries().size();
 }
@@ -1218,7 +1218,7 @@ inline ::google::protobuf::Map<::uint64_t, double>* State::mutable_entries() ABS
 
 // Solution
 
-// .ommx.v1.State state = 1;
+// .ommx.v1.State state = 1 [json_name = "state"];
 inline bool Solution::has_state() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
@@ -1314,7 +1314,7 @@ inline void Solution::set_allocated_state(::ommx::v1::State* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Solution.state)
 }
 
-// double objective = 2;
+// double objective = 2 [json_name = "objective"];
 inline void Solution::clear_objective() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.objective_ = 0;
@@ -1336,7 +1336,7 @@ inline void Solution::_internal_set_objective(double value) {
   _impl_.objective_ = value;
 }
 
-// repeated .ommx.v1.DecisionVariable decision_variables = 3;
+// repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
 inline int Solution::_internal_decision_variables_size() const {
   return _internal_decision_variables().size();
 }
@@ -1381,7 +1381,7 @@ Solution::_internal_mutable_decision_variables() {
   return &_impl_.decision_variables_;
 }
 
-// repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+// repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
 inline int Solution::_internal_evaluated_constraints_size() const {
   return _internal_evaluated_constraints().size();
 }
@@ -1426,7 +1426,7 @@ Solution::_internal_mutable_evaluated_constraints() {
   return &_impl_.evaluated_constraints_;
 }
 
-// bool feasible = 5;
+// bool feasible = 5 [json_name = "feasible"];
 inline void Solution::clear_feasible() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.feasible_ = false;
@@ -1448,7 +1448,7 @@ inline void Solution::_internal_set_feasible(bool value) {
   _impl_.feasible_ = value;
 }
 
-// .ommx.v1.Optimality optimality = 6;
+// .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
 inline void Solution::clear_optimality() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.optimality_ = 0;
@@ -1470,7 +1470,7 @@ inline void Solution::_internal_set_optimality(::ommx::v1::Optimality value) {
   _impl_.optimality_ = value;
 }
 
-// .ommx.v1.Relaxation relaxation = 7;
+// .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
 inline void Solution::clear_relaxation() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.relaxation_ = 0;
@@ -1504,7 +1504,7 @@ inline void Solution::_internal_set_relaxation(::ommx::v1::Relaxation value) {
 
 // Result
 
-// string error = 1;
+// string error = 1 [json_name = "error"];
 inline bool Result::has_error() const {
   return result_case() == kError;
 }
@@ -1589,7 +1589,7 @@ inline void Result::set_allocated_error(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.Result.error)
 }
 
-// .ommx.v1.Solution solution = 2;
+// .ommx.v1.Solution solution = 2 [json_name = "solution"];
 inline bool Result::has_solution() const {
   return result_case() == kSolution;
 }
@@ -1668,7 +1668,7 @@ inline ::ommx::v1::Solution* Result::mutable_solution() ABSL_ATTRIBUTE_LIFETIME_
   return _msg;
 }
 
-// .ommx.v1.Infeasible infeasible = 3;
+// .ommx.v1.Infeasible infeasible = 3 [json_name = "infeasible"];
 inline bool Result::has_infeasible() const {
   return result_case() == kInfeasible;
 }
@@ -1747,7 +1747,7 @@ inline ::ommx::v1::Infeasible* Result::mutable_infeasible() ABSL_ATTRIBUTE_LIFET
   return _msg;
 }
 
-// .ommx.v1.Unbounded unbounded = 4;
+// .ommx.v1.Unbounded unbounded = 4 [json_name = "unbounded"];
 inline bool Result::has_unbounded() const {
   return result_case() == kUnbounded;
 }

@@ -107,16 +107,19 @@ static const ::_pb::Message* const file_default_instances[] = {
 };
 const char descriptor_table_protodef_ommx_2fv1_2flinear_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\024ommx/v1/linear.proto\022\007ommx.v1\"h\n\006Linea"
-    "r\022#\n\005terms\030\001 \003(\0132\024.ommx.v1.Linear.Term\022\020"
-    "\n\010constant\030\002 \001(\001\032\'\n\004Term\022\n\n\002id\030\001 \001(\004\022\023\n\013"
-    "coefficient\030\002 \001(\001b\006proto3"
+    "\n\024ommx/v1/linear.proto\022\007ommx.v1\"\212\001\n\006Line"
+    "ar\022*\n\005terms\030\001 \003(\0132\024.ommx.v1.Linear.TermR"
+    "\005terms\022\032\n\010constant\030\002 \001(\001R\010constant\0328\n\004Te"
+    "rm\022\016\n\002id\030\001 \001(\004R\002id\022 \n\013coefficient\030\002 \001(\001R"
+    "\013coefficientBW\n\013com.ommx.v1B\013LinearProto"
+    "P\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\G"
+    "PBMetadata\352\002\010Ommx::V1b\006proto3"
 };
 static ::absl::once_flag descriptor_table_ommx_2fv1_2flinear_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2flinear_2eproto = {
     false,
     false,
-    145,
+    269,
     descriptor_table_protodef_ommx_2fv1_2flinear_2eproto,
     "ommx/v1/linear.proto",
     &descriptor_table_ommx_2fv1_2flinear_2eproto_once,
@@ -210,19 +213,19 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> Linear_Term::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Linear_Term>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // double coefficient = 2;
+    // double coefficient = 2 [json_name = "coefficient"];
     {::_pbi::TcParser::FastF64S1,
      {17, 63, 0, PROTOBUF_FIELD_OFFSET(Linear_Term, _impl_.coefficient_)}},
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(Linear_Term, _impl_.id_), 63>(),
      {8, 63, 0, PROTOBUF_FIELD_OFFSET(Linear_Term, _impl_.id_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // uint64 id = 1;
+    // uint64 id = 1 [json_name = "id"];
     {PROTOBUF_FIELD_OFFSET(Linear_Term, _impl_.id_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kUInt64)},
-    // double coefficient = 2;
+    // double coefficient = 2 [json_name = "coefficient"];
     {PROTOBUF_FIELD_OFFSET(Linear_Term, _impl_.coefficient_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
   }},
@@ -251,14 +254,14 @@ PROTOBUF_NOINLINE void Linear_Term::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         1, this->_internal_id(), target);
   }
 
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_coefficient = this->_internal_coefficient();
@@ -288,13 +291,13 @@ PROTOBUF_NOINLINE void Linear_Term::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   if (this->_internal_id() != 0) {
     total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
         this->_internal_id());
   }
 
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_coefficient = this->_internal_coefficient();
@@ -441,19 +444,19 @@ const ::_pbi::TcParseTable<1, 2, 1, 0, 2> Linear::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Linear>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // double constant = 2;
+    // double constant = 2 [json_name = "constant"];
     {::_pbi::TcParser::FastF64S1,
      {17, 63, 0, PROTOBUF_FIELD_OFFSET(Linear, _impl_.constant_)}},
-    // repeated .ommx.v1.Linear.Term terms = 1;
+    // repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
     {::_pbi::TcParser::FastMtR1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(Linear, _impl_.terms_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // repeated .ommx.v1.Linear.Term terms = 1;
+    // repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
     {PROTOBUF_FIELD_OFFSET(Linear, _impl_.terms_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // double constant = 2;
+    // double constant = 2 [json_name = "constant"];
     {PROTOBUF_FIELD_OFFSET(Linear, _impl_.constant_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
   }}, {{
@@ -481,7 +484,7 @@ PROTOBUF_NOINLINE void Linear::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // repeated .ommx.v1.Linear.Term terms = 1;
+  // repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_terms_size());
        i < n; i++) {
@@ -492,7 +495,7 @@ PROTOBUF_NOINLINE void Linear::Clear() {
             target, stream);
   }
 
-  // double constant = 2;
+  // double constant = 2 [json_name = "constant"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_constant = this->_internal_constant();
@@ -522,12 +525,12 @@ PROTOBUF_NOINLINE void Linear::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated .ommx.v1.Linear.Term terms = 1;
+  // repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
   total_size += 1UL * this->_internal_terms_size();
   for (const auto& msg : this->_internal_terms()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
   }
-  // double constant = 2;
+  // double constant = 2 [json_name = "constant"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_constant = this->_internal_constant();

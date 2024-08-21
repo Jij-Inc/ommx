@@ -80,11 +80,15 @@ const char descriptor_table_protodef_ommx_2fv1_2ffunction_2eproto[] ABSL_ATTRIBU
     protodesc_cold) = {
     "\n\026ommx/v1/function.proto\022\007ommx.v1\032\024ommx/"
     "v1/linear.proto\032\030ommx/v1/polynomial.prot"
-    "o\032\027ommx/v1/quadratic.proto\"\241\001\n\010Function\022"
-    "\022\n\010constant\030\001 \001(\001H\000\022!\n\006linear\030\002 \001(\0132\017.om"
-    "mx.v1.LinearH\000\022\'\n\tquadratic\030\003 \001(\0132\022.ommx"
-    ".v1.QuadraticH\000\022)\n\npolynomial\030\004 \001(\0132\023.om"
-    "mx.v1.PolynomialH\000B\n\n\010functionb\006proto3"
+    "o\032\027ommx/v1/quadratic.proto\"\312\001\n\010Function\022"
+    "\034\n\010constant\030\001 \001(\001H\000R\010constant\022)\n\006linear\030"
+    "\002 \001(\0132\017.ommx.v1.LinearH\000R\006linear\0222\n\tquad"
+    "ratic\030\003 \001(\0132\022.ommx.v1.QuadraticH\000R\tquadr"
+    "atic\0225\n\npolynomial\030\004 \001(\0132\023.ommx.v1.Polyn"
+    "omialH\000R\npolynomialB\n\n\010functionBY\n\013com.o"
+    "mmx.v1B\rFunctionProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312"
+    "\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::"
+    "V1b\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_ommx_2fv1_2ffunction_2eproto_deps[3] =
     {
@@ -96,7 +100,7 @@ static ::absl::once_flag descriptor_table_ommx_2fv1_2ffunction_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2ffunction_2eproto = {
     false,
     false,
-    278,
+    410,
     descriptor_table_protodef_ommx_2fv1_2ffunction_2eproto,
     "ommx/v1/function.proto",
     &descriptor_table_ommx_2fv1_2ffunction_2eproto_once,
@@ -337,16 +341,16 @@ const ::_pbi::TcParseTable<0, 4, 3, 0, 2> Function::_table_ = {
   }}, {{
     65535, 65535
   }}, {{
-    // double constant = 1;
+    // double constant = 1 [json_name = "constant"];
     {PROTOBUF_FIELD_OFFSET(Function, _impl_.function_.constant_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kDouble)},
-    // .ommx.v1.Linear linear = 2;
+    // .ommx.v1.Linear linear = 2 [json_name = "linear"];
     {PROTOBUF_FIELD_OFFSET(Function, _impl_.function_.linear_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Quadratic quadratic = 3;
+    // .ommx.v1.Quadratic quadratic = 3 [json_name = "quadratic"];
     {PROTOBUF_FIELD_OFFSET(Function, _impl_.function_.quadratic_), _Internal::kOneofCaseOffset + 0, 1,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Polynomial polynomial = 4;
+    // .ommx.v1.Polynomial polynomial = 4 [json_name = "polynomial"];
     {PROTOBUF_FIELD_OFFSET(Function, _impl_.function_.polynomial_), _Internal::kOneofCaseOffset + 0, 2,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }}, {{
@@ -418,24 +422,24 @@ PROTOBUF_NOINLINE void Function::Clear() {
   (void) cached_has_bits;
 
   switch (function_case()) {
-    // double constant = 1;
+    // double constant = 1 [json_name = "constant"];
     case kConstant: {
       total_size += 9;
       break;
     }
-    // .ommx.v1.Linear linear = 2;
+    // .ommx.v1.Linear linear = 2 [json_name = "linear"];
     case kLinear: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.function_.linear_);
       break;
     }
-    // .ommx.v1.Quadratic quadratic = 3;
+    // .ommx.v1.Quadratic quadratic = 3 [json_name = "quadratic"];
     case kQuadratic: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.function_.quadratic_);
       break;
     }
-    // .ommx.v1.Polynomial polynomial = 4;
+    // .ommx.v1.Polynomial polynomial = 4 [json_name = "polynomial"];
     case kPolynomial: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.function_.polynomial_);

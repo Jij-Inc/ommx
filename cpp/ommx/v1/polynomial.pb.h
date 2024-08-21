@@ -199,7 +199,7 @@ class Monomial final : public ::google::protobuf::Message
     kIdsFieldNumber = 1,
     kCoefficientFieldNumber = 2,
   };
-  // repeated uint64 ids = 1;
+  // repeated uint64 ids = 1 [json_name = "ids"];
   int ids_size() const;
   private:
   int _internal_ids_size() const;
@@ -217,7 +217,7 @@ class Monomial final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_ids();
 
   public:
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   void clear_coefficient() ;
   double coefficient() const;
   void set_coefficient(double value);
@@ -390,7 +390,7 @@ class Polynomial final : public ::google::protobuf::Message
   enum : int {
     kTermsFieldNumber = 1,
   };
-  // repeated .ommx.v1.Monomial terms = 1;
+  // repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
   int terms_size() const;
   private:
   int _internal_terms_size() const;
@@ -457,7 +457,7 @@ class Polynomial final : public ::google::protobuf::Message
 
 // Monomial
 
-// repeated uint64 ids = 1;
+// repeated uint64 ids = 1 [json_name = "ids"];
 inline int Monomial::_internal_ids_size() const {
   return _internal_ids().size();
 }
@@ -502,7 +502,7 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* Monomial::_internal_mutabl
   return &_impl_.ids_;
 }
 
-// double coefficient = 2;
+// double coefficient = 2 [json_name = "coefficient"];
 inline void Monomial::clear_coefficient() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.coefficient_ = 0;
@@ -528,7 +528,7 @@ inline void Monomial::_internal_set_coefficient(double value) {
 
 // Polynomial
 
-// repeated .ommx.v1.Monomial terms = 1;
+// repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
 inline int Polynomial::_internal_terms_size() const {
   return _internal_terms().size();
 }

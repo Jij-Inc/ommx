@@ -208,7 +208,7 @@ class Function final : public ::google::protobuf::Message
     kQuadraticFieldNumber = 3,
     kPolynomialFieldNumber = 4,
   };
-  // double constant = 1;
+  // double constant = 1 [json_name = "constant"];
   bool has_constant() const;
   void clear_constant() ;
   double constant() const;
@@ -219,7 +219,7 @@ class Function final : public ::google::protobuf::Message
   void _internal_set_constant(double value);
 
   public:
-  // .ommx.v1.Linear linear = 2;
+  // .ommx.v1.Linear linear = 2 [json_name = "linear"];
   bool has_linear() const;
   private:
   bool _internal_has_linear() const;
@@ -238,7 +238,7 @@ class Function final : public ::google::protobuf::Message
   ::ommx::v1::Linear* _internal_mutable_linear();
 
   public:
-  // .ommx.v1.Quadratic quadratic = 3;
+  // .ommx.v1.Quadratic quadratic = 3 [json_name = "quadratic"];
   bool has_quadratic() const;
   private:
   bool _internal_has_quadratic() const;
@@ -257,7 +257,7 @@ class Function final : public ::google::protobuf::Message
   ::ommx::v1::Quadratic* _internal_mutable_quadratic();
 
   public:
-  // .ommx.v1.Polynomial polynomial = 4;
+  // .ommx.v1.Polynomial polynomial = 4 [json_name = "polynomial"];
   bool has_polynomial() const;
   private:
   bool _internal_has_polynomial() const;
@@ -342,7 +342,7 @@ class Function final : public ::google::protobuf::Message
 
 // Function
 
-// double constant = 1;
+// double constant = 1 [json_name = "constant"];
 inline bool Function::has_constant() const {
   return function_case() == kConstant;
 }
@@ -375,7 +375,7 @@ inline double Function::_internal_constant() const {
   return 0;
 }
 
-// .ommx.v1.Linear linear = 2;
+// .ommx.v1.Linear linear = 2 [json_name = "linear"];
 inline bool Function::has_linear() const {
   return function_case() == kLinear;
 }
@@ -443,7 +443,7 @@ inline ::ommx::v1::Linear* Function::mutable_linear() ABSL_ATTRIBUTE_LIFETIME_BO
   return _msg;
 }
 
-// .ommx.v1.Quadratic quadratic = 3;
+// .ommx.v1.Quadratic quadratic = 3 [json_name = "quadratic"];
 inline bool Function::has_quadratic() const {
   return function_case() == kQuadratic;
 }
@@ -511,7 +511,7 @@ inline ::ommx::v1::Quadratic* Function::mutable_quadratic() ABSL_ATTRIBUTE_LIFET
   return _msg;
 }
 
-// .ommx.v1.Polynomial polynomial = 4;
+// .ommx.v1.Polynomial polynomial = 4 [json_name = "polynomial"];
 inline bool Function::has_polynomial() const {
   return function_case() == kPolynomial;
 }

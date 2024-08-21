@@ -199,7 +199,7 @@ class Quadratic final : public ::google::protobuf::Message
     kValuesFieldNumber = 3,
     kLinearFieldNumber = 4,
   };
-  // repeated uint64 rows = 1;
+  // repeated uint64 rows = 1 [json_name = "rows"];
   int rows_size() const;
   private:
   int _internal_rows_size() const;
@@ -217,7 +217,7 @@ class Quadratic final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_rows();
 
   public:
-  // repeated uint64 columns = 2;
+  // repeated uint64 columns = 2 [json_name = "columns"];
   int columns_size() const;
   private:
   int _internal_columns_size() const;
@@ -235,7 +235,7 @@ class Quadratic final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::uint64_t>* _internal_mutable_columns();
 
   public:
-  // repeated double values = 3;
+  // repeated double values = 3 [json_name = "values"];
   int values_size() const;
   private:
   int _internal_values_size() const;
@@ -253,7 +253,7 @@ class Quadratic final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<double>* _internal_mutable_values();
 
   public:
-  // optional .ommx.v1.Linear linear = 4;
+  // optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
   bool has_linear() const;
   void clear_linear() ;
   const ::ommx::v1::Linear& linear() const;
@@ -324,7 +324,7 @@ class Quadratic final : public ::google::protobuf::Message
 
 // Quadratic
 
-// repeated uint64 rows = 1;
+// repeated uint64 rows = 1 [json_name = "rows"];
 inline int Quadratic::_internal_rows_size() const {
   return _internal_rows().size();
 }
@@ -369,7 +369,7 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* Quadratic::_internal_mutab
   return &_impl_.rows_;
 }
 
-// repeated uint64 columns = 2;
+// repeated uint64 columns = 2 [json_name = "columns"];
 inline int Quadratic::_internal_columns_size() const {
   return _internal_columns().size();
 }
@@ -414,7 +414,7 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* Quadratic::_internal_mutab
   return &_impl_.columns_;
 }
 
-// repeated double values = 3;
+// repeated double values = 3 [json_name = "values"];
 inline int Quadratic::_internal_values_size() const {
   return _internal_values().size();
 }
@@ -459,7 +459,7 @@ inline ::google::protobuf::RepeatedField<double>* Quadratic::_internal_mutable_v
   return &_impl_.values_;
 }
 
-// optional .ommx.v1.Linear linear = 4;
+// optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
 inline bool Quadratic::has_linear() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.linear_ != nullptr);

@@ -106,16 +106,19 @@ static const ::_pb::Message* const file_default_instances[] = {
 };
 const char descriptor_table_protodef_ommx_2fv1_2fpolynomial_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\030ommx/v1/polynomial.proto\022\007ommx.v1\",\n\010M"
-    "onomial\022\013\n\003ids\030\001 \003(\004\022\023\n\013coefficient\030\002 \001("
-    "\001\".\n\nPolynomial\022 \n\005terms\030\001 \003(\0132\021.ommx.v1"
-    ".Monomialb\006proto3"
+    "\n\030ommx/v1/polynomial.proto\022\007ommx.v1\">\n\010M"
+    "onomial\022\020\n\003ids\030\001 \003(\004R\003ids\022 \n\013coefficient"
+    "\030\002 \001(\001R\013coefficient\"5\n\nPolynomial\022\'\n\005ter"
+    "ms\030\001 \003(\0132\021.ommx.v1.MonomialR\005termsB[\n\013co"
+    "m.ommx.v1B\017PolynomialProtoP\001\242\002\003OXX\252\002\007Omm"
+    "x.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010O"
+    "mmx::V1b\006proto3"
 };
 static ::absl::once_flag descriptor_table_ommx_2fv1_2fpolynomial_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2fpolynomial_2eproto = {
     false,
     false,
-    137,
+    255,
     descriptor_table_protodef_ommx_2fv1_2fpolynomial_2eproto,
     "ommx/v1/polynomial.proto",
     &descriptor_table_ommx_2fv1_2fpolynomial_2eproto_once,
@@ -221,19 +224,19 @@ const ::_pbi::TcParseTable<1, 2, 0, 0, 2> Monomial::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Monomial>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // double coefficient = 2;
+    // double coefficient = 2 [json_name = "coefficient"];
     {::_pbi::TcParser::FastF64S1,
      {17, 63, 0, PROTOBUF_FIELD_OFFSET(Monomial, _impl_.coefficient_)}},
-    // repeated uint64 ids = 1;
+    // repeated uint64 ids = 1 [json_name = "ids"];
     {::_pbi::TcParser::FastV64P1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(Monomial, _impl_.ids_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // repeated uint64 ids = 1;
+    // repeated uint64 ids = 1 [json_name = "ids"];
     {PROTOBUF_FIELD_OFFSET(Monomial, _impl_.ids_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-    // double coefficient = 2;
+    // double coefficient = 2 [json_name = "coefficient"];
     {PROTOBUF_FIELD_OFFSET(Monomial, _impl_.coefficient_), 0, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
   }},
@@ -261,7 +264,7 @@ PROTOBUF_NOINLINE void Monomial::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // repeated uint64 ids = 1;
+  // repeated uint64 ids = 1 [json_name = "ids"];
   {
     int byte_size = _impl_._ids_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -270,7 +273,7 @@ PROTOBUF_NOINLINE void Monomial::Clear() {
     }
   }
 
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_coefficient = this->_internal_coefficient();
@@ -300,7 +303,7 @@ PROTOBUF_NOINLINE void Monomial::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated uint64 ids = 1;
+  // repeated uint64 ids = 1 [json_name = "ids"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::UInt64Size(
         this->_internal_ids())
@@ -313,7 +316,7 @@ PROTOBUF_NOINLINE void Monomial::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_coefficient = this->_internal_coefficient();
@@ -452,13 +455,13 @@ const ::_pbi::TcParseTable<0, 1, 1, 0, 2> Polynomial::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Polynomial>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // repeated .ommx.v1.Monomial terms = 1;
+    // repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
     {::_pbi::TcParser::FastMtR1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(Polynomial, _impl_.terms_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // repeated .ommx.v1.Monomial terms = 1;
+    // repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
     {PROTOBUF_FIELD_OFFSET(Polynomial, _impl_.terms_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
   }}, {{
@@ -485,7 +488,7 @@ PROTOBUF_NOINLINE void Polynomial::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // repeated .ommx.v1.Monomial terms = 1;
+  // repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_terms_size());
        i < n; i++) {
@@ -514,7 +517,7 @@ PROTOBUF_NOINLINE void Polynomial::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated .ommx.v1.Monomial terms = 1;
+  // repeated .ommx.v1.Monomial terms = 1 [json_name = "terms"];
   total_size += 1UL * this->_internal_terms_size();
   for (const auto& msg : this->_internal_terms()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);

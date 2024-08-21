@@ -86,10 +86,13 @@ static const ::_pb::Message* const file_default_instances[] = {
 const char descriptor_table_protodef_ommx_2fv1_2fquadratic_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\027ommx/v1/quadratic.proto\022\007ommx.v1\032\024ommx"
-    "/v1/linear.proto\"k\n\tQuadratic\022\014\n\004rows\030\001 "
-    "\003(\004\022\017\n\007columns\030\002 \003(\004\022\016\n\006values\030\003 \003(\001\022$\n\006"
-    "linear\030\004 \001(\0132\017.ommx.v1.LinearH\000\210\001\001B\t\n\007_l"
-    "inearb\006proto3"
+    "/v1/linear.proto\"\212\001\n\tQuadratic\022\022\n\004rows\030\001"
+    " \003(\004R\004rows\022\030\n\007columns\030\002 \003(\004R\007columns\022\026\n\006"
+    "values\030\003 \003(\001R\006values\022,\n\006linear\030\004 \001(\0132\017.o"
+    "mmx.v1.LinearH\000R\006linear\210\001\001B\t\n\007_linearBZ\n"
+    "\013com.ommx.v1B\016QuadraticProtoP\001\242\002\003OXX\252\002\007O"
+    "mmx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002"
+    "\010Ommx::V1b\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_ommx_2fv1_2fquadratic_2eproto_deps[1] =
     {
@@ -99,7 +102,7 @@ static ::absl::once_flag descriptor_table_ommx_2fv1_2fquadratic_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2fquadratic_2eproto = {
     false,
     false,
-    173,
+    297,
     descriptor_table_protodef_ommx_2fv1_2fquadratic_2eproto,
     "ommx/v1/quadratic.proto",
     &descriptor_table_ommx_2fv1_2fquadratic_2eproto_once,
@@ -225,31 +228,31 @@ const ::_pbi::TcParseTable<2, 4, 1, 0, 2> Quadratic::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Quadratic>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // optional .ommx.v1.Linear linear = 4;
+    // optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
     {::_pbi::TcParser::FastMtS1,
      {34, 0, 0, PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.linear_)}},
-    // repeated uint64 rows = 1;
+    // repeated uint64 rows = 1 [json_name = "rows"];
     {::_pbi::TcParser::FastV64P1,
      {10, 63, 0, PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.rows_)}},
-    // repeated uint64 columns = 2;
+    // repeated uint64 columns = 2 [json_name = "columns"];
     {::_pbi::TcParser::FastV64P1,
      {18, 63, 0, PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.columns_)}},
-    // repeated double values = 3;
+    // repeated double values = 3 [json_name = "values"];
     {::_pbi::TcParser::FastF64P1,
      {26, 63, 0, PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.values_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // repeated uint64 rows = 1;
+    // repeated uint64 rows = 1 [json_name = "rows"];
     {PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.rows_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-    // repeated uint64 columns = 2;
+    // repeated uint64 columns = 2 [json_name = "columns"];
     {PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.columns_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
-    // repeated double values = 3;
+    // repeated double values = 3 [json_name = "values"];
     {PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.values_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kPackedDouble)},
-    // optional .ommx.v1.Linear linear = 4;
+    // optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
     {PROTOBUF_FIELD_OFFSET(Quadratic, _impl_.linear_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
   }}, {{
@@ -284,7 +287,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // repeated uint64 rows = 1;
+  // repeated uint64 rows = 1 [json_name = "rows"];
   {
     int byte_size = _impl_._rows_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -293,7 +296,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
     }
   }
 
-  // repeated uint64 columns = 2;
+  // repeated uint64 columns = 2 [json_name = "columns"];
   {
     int byte_size = _impl_._columns_cached_byte_size_.Get();
     if (byte_size > 0) {
@@ -302,13 +305,13 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
     }
   }
 
-  // repeated double values = 3;
+  // repeated double values = 3 [json_name = "values"];
   if (this->_internal_values_size() > 0) {
     target = stream->WriteFixedPacked(3, _internal_values(), target);
   }
 
   cached_has_bits = _impl_._has_bits_[0];
-  // optional .ommx.v1.Linear linear = 4;
+  // optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
   if (cached_has_bits & 0x00000001u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *_impl_.linear_, _impl_.linear_->GetCachedSize(), target, stream);
@@ -332,7 +335,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated uint64 rows = 1;
+  // repeated uint64 rows = 1 [json_name = "rows"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::UInt64Size(
         this->_internal_rows())
@@ -345,7 +348,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // repeated uint64 columns = 2;
+  // repeated uint64 columns = 2 [json_name = "columns"];
   {
     std::size_t data_size = ::_pbi::WireFormatLite::UInt64Size(
         this->_internal_columns())
@@ -358,7 +361,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // repeated double values = 3;
+  // repeated double values = 3 [json_name = "values"];
   {
     std::size_t data_size = std::size_t{8} *
         ::_pbi::FromIntSize(this->_internal_values_size())
@@ -370,7 +373,7 @@ PROTOBUF_NOINLINE void Quadratic::Clear() {
     ;
     total_size += tag_size + data_size;
   }
-  // optional .ommx.v1.Linear linear = 4;
+  // optional .ommx.v1.Linear linear = 4 [json_name = "linear"];
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000001u) {
     total_size +=

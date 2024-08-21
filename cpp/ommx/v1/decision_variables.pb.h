@@ -267,7 +267,7 @@ class Bound final : public ::google::protobuf::Message
     kLowerFieldNumber = 1,
     kUpperFieldNumber = 2,
   };
-  // double lower = 1;
+  // double lower = 1 [json_name = "lower"];
   void clear_lower() ;
   double lower() const;
   void set_lower(double value);
@@ -277,7 +277,7 @@ class Bound final : public ::google::protobuf::Message
   void _internal_set_lower(double value);
 
   public:
-  // double upper = 2;
+  // double upper = 2 [json_name = "upper"];
   void clear_upper() ;
   double upper() const;
   void set_upper(double value);
@@ -478,7 +478,7 @@ class DecisionVariable final : public ::google::protobuf::Message
     kIdFieldNumber = 1,
     kKindFieldNumber = 2,
   };
-  // repeated int64 subscripts = 5;
+  // repeated int64 subscripts = 5 [json_name = "subscripts"];
   int subscripts_size() const;
   private:
   int _internal_subscripts_size() const;
@@ -496,7 +496,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   ::google::protobuf::RepeatedField<::int64_t>* _internal_mutable_subscripts();
 
   public:
-  // map<string, string> parameters = 6;
+  // map<string, string> parameters = 6 [json_name = "parameters"];
   int parameters_size() const;
   private:
   int _internal_parameters_size() const;
@@ -511,7 +511,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   ::google::protobuf::Map<std::string, std::string>* _internal_mutable_parameters();
 
   public:
-  // optional string name = 4;
+  // optional string name = 4 [json_name = "name"];
   bool has_name() const;
   void clear_name() ;
   const std::string& name() const;
@@ -528,7 +528,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   std::string* _internal_mutable_name();
 
   public:
-  // optional string description = 7;
+  // optional string description = 7 [json_name = "description"];
   bool has_description() const;
   void clear_description() ;
   const std::string& description() const;
@@ -545,7 +545,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   std::string* _internal_mutable_description();
 
   public:
-  // optional .ommx.v1.Bound bound = 3;
+  // optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
   bool has_bound() const;
   void clear_bound() ;
   const ::ommx::v1::Bound& bound() const;
@@ -560,7 +560,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   ::ommx::v1::Bound* _internal_mutable_bound();
 
   public:
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   void clear_id() ;
   ::uint64_t id() const;
   void set_id(::uint64_t value);
@@ -570,7 +570,7 @@ class DecisionVariable final : public ::google::protobuf::Message
   void _internal_set_id(::uint64_t value);
 
   public:
-  // .ommx.v1.DecisionVariable.Kind kind = 2;
+  // .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
   void clear_kind() ;
   ::ommx::v1::DecisionVariable_Kind kind() const;
   void set_kind(::ommx::v1::DecisionVariable_Kind value);
@@ -641,7 +641,7 @@ class DecisionVariable final : public ::google::protobuf::Message
 
 // Bound
 
-// double lower = 1;
+// double lower = 1 [json_name = "lower"];
 inline void Bound::clear_lower() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lower_ = 0;
@@ -663,7 +663,7 @@ inline void Bound::_internal_set_lower(double value) {
   _impl_.lower_ = value;
 }
 
-// double upper = 2;
+// double upper = 2 [json_name = "upper"];
 inline void Bound::clear_upper() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.upper_ = 0;
@@ -691,7 +691,7 @@ inline void Bound::_internal_set_upper(double value) {
 
 // DecisionVariable
 
-// uint64 id = 1;
+// uint64 id = 1 [json_name = "id"];
 inline void DecisionVariable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = ::uint64_t{0u};
@@ -713,7 +713,7 @@ inline void DecisionVariable::_internal_set_id(::uint64_t value) {
   _impl_.id_ = value;
 }
 
-// .ommx.v1.DecisionVariable.Kind kind = 2;
+// .ommx.v1.DecisionVariable.Kind kind = 2 [json_name = "kind"];
 inline void DecisionVariable::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
@@ -735,7 +735,7 @@ inline void DecisionVariable::_internal_set_kind(::ommx::v1::DecisionVariable_Ki
   _impl_.kind_ = value;
 }
 
-// optional .ommx.v1.Bound bound = 3;
+// optional .ommx.v1.Bound bound = 3 [json_name = "bound"];
 inline bool DecisionVariable::has_bound() const {
   bool value = (_impl_._has_bits_[0] & 0x00000004u) != 0;
   PROTOBUF_ASSUME(!value || _impl_.bound_ != nullptr);
@@ -831,7 +831,7 @@ inline void DecisionVariable::set_allocated_bound(::ommx::v1::Bound* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.DecisionVariable.bound)
 }
 
-// optional string name = 4;
+// optional string name = 4 [json_name = "name"];
 inline bool DecisionVariable::has_name() const {
   bool value = (_impl_._has_bits_[0] & 0x00000001u) != 0;
   return value;
@@ -902,7 +902,7 @@ inline void DecisionVariable::set_allocated_name(std::string* value) {
   // @@protoc_insertion_point(field_set_allocated:ommx.v1.DecisionVariable.name)
 }
 
-// repeated int64 subscripts = 5;
+// repeated int64 subscripts = 5 [json_name = "subscripts"];
 inline int DecisionVariable::_internal_subscripts_size() const {
   return _internal_subscripts().size();
 }
@@ -947,7 +947,7 @@ inline ::google::protobuf::RepeatedField<::int64_t>* DecisionVariable::_internal
   return &_impl_.subscripts_;
 }
 
-// map<string, string> parameters = 6;
+// map<string, string> parameters = 6 [json_name = "parameters"];
 inline int DecisionVariable::_internal_parameters_size() const {
   return _internal_parameters().size();
 }
@@ -975,7 +975,7 @@ inline ::google::protobuf::Map<std::string, std::string>* DecisionVariable::muta
   return _internal_mutable_parameters();
 }
 
-// optional string description = 7;
+// optional string description = 7 [json_name = "description"];
 inline bool DecisionVariable::has_description() const {
   bool value = (_impl_._has_bits_[0] & 0x00000002u) != 0;
   return value;

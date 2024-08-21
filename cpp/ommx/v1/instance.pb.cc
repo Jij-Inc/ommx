@@ -133,19 +133,24 @@ const char descriptor_table_protodef_ommx_2fv1_2finstance_2eproto[] ABSL_ATTRIBU
     protodesc_cold) = {
     "\n\026ommx/v1/instance.proto\022\007ommx.v1\032\030ommx/"
     "v1/constraint.proto\032 ommx/v1/decision_va"
-    "riables.proto\032\026ommx/v1/function.proto\"\304\003"
-    "\n\010Instance\0222\n\013description\030\001 \001(\0132\035.ommx.v"
-    "1.Instance.Description\0225\n\022decision_varia"
-    "bles\030\002 \003(\0132\031.ommx.v1.DecisionVariable\022$\n"
-    "\tobjective\030\003 \001(\0132\021.ommx.v1.Function\022(\n\013c"
-    "onstraints\030\004 \003(\0132\023.ommx.v1.Constraint\022&\n"
-    "\005sense\030\005 \001(\0162\027.ommx.v1.Instance.Sense\032\214\001"
-    "\n\013Description\022\021\n\004name\030\001 \001(\tH\000\210\001\001\022\030\n\013desc"
-    "ription\030\002 \001(\tH\001\210\001\001\022\017\n\007authors\030\003 \003(\t\022\027\n\nc"
-    "reated_by\030\004 \001(\tH\002\210\001\001B\007\n\005_nameB\016\n\014_descri"
-    "ptionB\r\n\013_created_by\"F\n\005Sense\022\025\n\021SENSE_U"
-    "NSPECIFIED\020\000\022\022\n\016SENSE_MINIMIZE\020\001\022\022\n\016SENS"
-    "E_MAXIMIZE\020\002b\006proto3"
+    "riables.proto\032\026ommx/v1/function.proto\"\252\004"
+    "\n\010Instance\022\?\n\013description\030\001 \001(\0132\035.ommx.v"
+    "1.Instance.DescriptionR\013description\022H\n\022d"
+    "ecision_variables\030\002 \003(\0132\031.ommx.v1.Decisi"
+    "onVariableR\021decisionVariables\022/\n\tobjecti"
+    "ve\030\003 \001(\0132\021.ommx.v1.FunctionR\tobjective\0225"
+    "\n\013constraints\030\004 \003(\0132\023.ommx.v1.Constraint"
+    "R\013constraints\022-\n\005sense\030\005 \001(\0162\027.ommx.v1.I"
+    "nstance.SenseR\005sense\032\263\001\n\013Description\022\027\n\004"
+    "name\030\001 \001(\tH\000R\004name\210\001\001\022%\n\013description\030\002 \001"
+    "(\tH\001R\013description\210\001\001\022\030\n\007authors\030\003 \003(\tR\007a"
+    "uthors\022\"\n\ncreated_by\030\004 \001(\tH\002R\tcreatedBy\210"
+    "\001\001B\007\n\005_nameB\016\n\014_descriptionB\r\n\013_created_"
+    "by\"F\n\005Sense\022\025\n\021SENSE_UNSPECIFIED\020\000\022\022\n\016SE"
+    "NSE_MINIMIZE\020\001\022\022\n\016SENSE_MAXIMIZE\020\002BY\n\013co"
+    "m.ommx.v1B\rInstanceProtoP\001\242\002\003OXX\252\002\007Ommx."
+    "V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Omm"
+    "x::V1b\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_ommx_2fv1_2finstance_2eproto_deps[3] =
     {
@@ -157,7 +162,7 @@ static ::absl::once_flag descriptor_table_ommx_2fv1_2finstance_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2finstance_2eproto = {
     false,
     false,
-    580,
+    773,
     descriptor_table_protodef_ommx_2fv1_2finstance_2eproto,
     "ommx/v1/instance.proto",
     &descriptor_table_ommx_2fv1_2finstance_2eproto_once,
@@ -294,31 +299,31 @@ const ::_pbi::TcParseTable<2, 4, 0, 69, 2> Instance_Description::_table_ = {
     ::_pbi::TcParser::GetTable<::ommx::v1::Instance_Description>(),  // to_prefetch
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
-    // optional string created_by = 4;
+    // optional string created_by = 4 [json_name = "createdBy"];
     {::_pbi::TcParser::FastUS1,
      {34, 2, 0, PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.created_by_)}},
-    // optional string name = 1;
+    // optional string name = 1 [json_name = "name"];
     {::_pbi::TcParser::FastUS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.name_)}},
-    // optional string description = 2;
+    // optional string description = 2 [json_name = "description"];
     {::_pbi::TcParser::FastUS1,
      {18, 1, 0, PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.description_)}},
-    // repeated string authors = 3;
+    // repeated string authors = 3 [json_name = "authors"];
     {::_pbi::TcParser::FastUR1,
      {26, 63, 0, PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.authors_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // optional string name = 1;
+    // optional string name = 1 [json_name = "name"];
     {PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.name_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // optional string description = 2;
+    // optional string description = 2 [json_name = "description"];
     {PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.description_), _Internal::kHasBitsOffset + 1, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // repeated string authors = 3;
+    // repeated string authors = 3 [json_name = "authors"];
     {PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.authors_), -1, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kUtf8String | ::_fl::kRepSString)},
-    // optional string created_by = 4;
+    // optional string created_by = 4 [json_name = "createdBy"];
     {PROTOBUF_FIELD_OFFSET(Instance_Description, _impl_.created_by_), _Internal::kHasBitsOffset + 2, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
   }},
@@ -365,7 +370,7 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  // optional string name = 1;
+  // optional string name = 1 [json_name = "name"];
   if (cached_has_bits & 0x00000001u) {
     const std::string& _s = this->_internal_name();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -373,7 +378,7 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
     target = stream->WriteStringMaybeAliased(1, _s, target);
   }
 
-  // optional string description = 2;
+  // optional string description = 2 [json_name = "description"];
   if (cached_has_bits & 0x00000002u) {
     const std::string& _s = this->_internal_description();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -381,7 +386,7 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
     target = stream->WriteStringMaybeAliased(2, _s, target);
   }
 
-  // repeated string authors = 3;
+  // repeated string authors = 3 [json_name = "authors"];
   for (int i = 0, n = this->_internal_authors_size(); i < n; ++i) {
     const auto& s = this->_internal_authors().Get(i);
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -389,7 +394,7 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
     target = stream->WriteString(3, s, target);
   }
 
-  // optional string created_by = 4;
+  // optional string created_by = 4 [json_name = "createdBy"];
   if (cached_has_bits & 0x00000004u) {
     const std::string& _s = this->_internal_created_by();
     ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
@@ -415,7 +420,7 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated string authors = 3;
+  // repeated string authors = 3 [json_name = "authors"];
   total_size += 1 * ::google::protobuf::internal::FromIntSize(_internal_authors().size());
   for (int i = 0, n = _internal_authors().size(); i < n; ++i) {
     total_size += ::google::protobuf::internal::WireFormatLite::StringSize(
@@ -423,19 +428,19 @@ PROTOBUF_NOINLINE void Instance_Description::Clear() {
   }
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000007u) {
-    // optional string name = 1;
+    // optional string name = 1 [json_name = "name"];
     if (cached_has_bits & 0x00000001u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_name());
     }
 
-    // optional string description = 2;
+    // optional string description = 2 [json_name = "description"];
     if (cached_has_bits & 0x00000002u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_description());
     }
 
-    // optional string created_by = 4;
+    // optional string created_by = 4 [json_name = "createdBy"];
     if (cached_has_bits & 0x00000004u) {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_created_by());
@@ -618,19 +623,19 @@ const ::_pbi::TcParseTable<3, 5, 4, 0, 2> Instance::_table_ = {
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
-    // .ommx.v1.Instance.Description description = 1;
+    // .ommx.v1.Instance.Description description = 1 [json_name = "description"];
     {::_pbi::TcParser::FastMtS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(Instance, _impl_.description_)}},
-    // repeated .ommx.v1.DecisionVariable decision_variables = 2;
+    // repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
     {::_pbi::TcParser::FastMtR1,
      {18, 63, 1, PROTOBUF_FIELD_OFFSET(Instance, _impl_.decision_variables_)}},
-    // .ommx.v1.Function objective = 3;
+    // .ommx.v1.Function objective = 3 [json_name = "objective"];
     {::_pbi::TcParser::FastMtS1,
      {26, 1, 2, PROTOBUF_FIELD_OFFSET(Instance, _impl_.objective_)}},
-    // repeated .ommx.v1.Constraint constraints = 4;
+    // repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
     {::_pbi::TcParser::FastMtR1,
      {34, 63, 3, PROTOBUF_FIELD_OFFSET(Instance, _impl_.constraints_)}},
-    // .ommx.v1.Instance.Sense sense = 5;
+    // .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Instance, _impl_.sense_), 63>(),
      {40, 63, 0, PROTOBUF_FIELD_OFFSET(Instance, _impl_.sense_)}},
     {::_pbi::TcParser::MiniParse, {}},
@@ -638,19 +643,19 @@ const ::_pbi::TcParseTable<3, 5, 4, 0, 2> Instance::_table_ = {
   }}, {{
     65535, 65535
   }}, {{
-    // .ommx.v1.Instance.Description description = 1;
+    // .ommx.v1.Instance.Description description = 1 [json_name = "description"];
     {PROTOBUF_FIELD_OFFSET(Instance, _impl_.description_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // repeated .ommx.v1.DecisionVariable decision_variables = 2;
+    // repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
     {PROTOBUF_FIELD_OFFSET(Instance, _impl_.decision_variables_), -1, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Function objective = 3;
+    // .ommx.v1.Function objective = 3 [json_name = "objective"];
     {PROTOBUF_FIELD_OFFSET(Instance, _impl_.objective_), _Internal::kHasBitsOffset + 1, 2,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // repeated .ommx.v1.Constraint constraints = 4;
+    // repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
     {PROTOBUF_FIELD_OFFSET(Instance, _impl_.constraints_), -1, 3,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Instance.Sense sense = 5;
+    // .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
     {PROTOBUF_FIELD_OFFSET(Instance, _impl_.sense_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
   }}, {{
@@ -695,13 +700,13 @@ PROTOBUF_NOINLINE void Instance::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  // .ommx.v1.Instance.Description description = 1;
+  // .ommx.v1.Instance.Description description = 1 [json_name = "description"];
   if (cached_has_bits & 0x00000001u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *_impl_.description_, _impl_.description_->GetCachedSize(), target, stream);
   }
 
-  // repeated .ommx.v1.DecisionVariable decision_variables = 2;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_decision_variables_size());
        i < n; i++) {
@@ -712,13 +717,13 @@ PROTOBUF_NOINLINE void Instance::Clear() {
             target, stream);
   }
 
-  // .ommx.v1.Function objective = 3;
+  // .ommx.v1.Function objective = 3 [json_name = "objective"];
   if (cached_has_bits & 0x00000002u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         3, *_impl_.objective_, _impl_.objective_->GetCachedSize(), target, stream);
   }
 
-  // repeated .ommx.v1.Constraint constraints = 4;
+  // repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_constraints_size());
        i < n; i++) {
@@ -729,7 +734,7 @@ PROTOBUF_NOINLINE void Instance::Clear() {
             target, stream);
   }
 
-  // .ommx.v1.Instance.Sense sense = 5;
+  // .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
   if (this->_internal_sense() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -754,32 +759,32 @@ PROTOBUF_NOINLINE void Instance::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated .ommx.v1.DecisionVariable decision_variables = 2;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 2 [json_name = "decisionVariables"];
   total_size += 1UL * this->_internal_decision_variables_size();
   for (const auto& msg : this->_internal_decision_variables()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
   }
-  // repeated .ommx.v1.Constraint constraints = 4;
+  // repeated .ommx.v1.Constraint constraints = 4 [json_name = "constraints"];
   total_size += 1UL * this->_internal_constraints_size();
   for (const auto& msg : this->_internal_constraints()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
   }
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000003u) {
-    // .ommx.v1.Instance.Description description = 1;
+    // .ommx.v1.Instance.Description description = 1 [json_name = "description"];
     if (cached_has_bits & 0x00000001u) {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.description_);
     }
 
-    // .ommx.v1.Function objective = 3;
+    // .ommx.v1.Function objective = 3 [json_name = "objective"];
     if (cached_has_bits & 0x00000002u) {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.objective_);
     }
 
   }
-  // .ommx.v1.Instance.Sense sense = 5;
+  // .ommx.v1.Instance.Sense sense = 5 [json_name = "sense"];
   if (this->_internal_sense() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_sense());

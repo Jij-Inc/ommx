@@ -199,7 +199,7 @@ class Linear_Term final : public ::google::protobuf::Message
     kIdFieldNumber = 1,
     kCoefficientFieldNumber = 2,
   };
-  // uint64 id = 1;
+  // uint64 id = 1 [json_name = "id"];
   void clear_id() ;
   ::uint64_t id() const;
   void set_id(::uint64_t value);
@@ -209,7 +209,7 @@ class Linear_Term final : public ::google::protobuf::Message
   void _internal_set_id(::uint64_t value);
 
   public:
-  // double coefficient = 2;
+  // double coefficient = 2 [json_name = "coefficient"];
   void clear_coefficient() ;
   double coefficient() const;
   void set_coefficient(double value);
@@ -383,7 +383,7 @@ class Linear final : public ::google::protobuf::Message
     kTermsFieldNumber = 1,
     kConstantFieldNumber = 2,
   };
-  // repeated .ommx.v1.Linear.Term terms = 1;
+  // repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
   int terms_size() const;
   private:
   int _internal_terms_size() const;
@@ -400,7 +400,7 @@ class Linear final : public ::google::protobuf::Message
   const ::ommx::v1::Linear_Term& terms(int index) const;
   ::ommx::v1::Linear_Term* add_terms();
   const ::google::protobuf::RepeatedPtrField<::ommx::v1::Linear_Term>& terms() const;
-  // double constant = 2;
+  // double constant = 2 [json_name = "constant"];
   void clear_constant() ;
   double constant() const;
   void set_constant(double value);
@@ -461,7 +461,7 @@ class Linear final : public ::google::protobuf::Message
 
 // Linear_Term
 
-// uint64 id = 1;
+// uint64 id = 1 [json_name = "id"];
 inline void Linear_Term::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = ::uint64_t{0u};
@@ -483,7 +483,7 @@ inline void Linear_Term::_internal_set_id(::uint64_t value) {
   _impl_.id_ = value;
 }
 
-// double coefficient = 2;
+// double coefficient = 2 [json_name = "coefficient"];
 inline void Linear_Term::clear_coefficient() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.coefficient_ = 0;
@@ -509,7 +509,7 @@ inline void Linear_Term::_internal_set_coefficient(double value) {
 
 // Linear
 
-// repeated .ommx.v1.Linear.Term terms = 1;
+// repeated .ommx.v1.Linear.Term terms = 1 [json_name = "terms"];
 inline int Linear::_internal_terms_size() const {
   return _internal_terms().size();
 }
@@ -558,7 +558,7 @@ Linear::_internal_mutable_terms() {
   return &_impl_.terms_;
 }
 
-// double constant = 2;
+// double constant = 2 [json_name = "constant"];
 inline void Linear::clear_constant() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.constant_ = 0;

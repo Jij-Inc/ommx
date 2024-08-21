@@ -228,25 +228,31 @@ const char descriptor_table_protodef_ommx_2fv1_2fsolution_2eproto[] ABSL_ATTRIBU
     protodesc_cold) = {
     "\n\026ommx/v1/solution.proto\022\007ommx.v1\032\030ommx/"
     "v1/constraint.proto\032 ommx/v1/decision_va"
-    "riables.proto\"e\n\005State\022,\n\007entries\030\001 \003(\0132"
-    "\033.ommx.v1.State.EntriesEntry\032.\n\014EntriesE"
-    "ntry\022\013\n\003key\030\001 \001(\004\022\r\n\005value\030\002 \001(\001:\0028\001\"\224\002\n"
-    "\010Solution\022\035\n\005state\030\001 \001(\0132\016.ommx.v1.State"
-    "\022\021\n\tobjective\030\002 \001(\001\0225\n\022decision_variable"
-    "s\030\003 \003(\0132\031.ommx.v1.DecisionVariable\022;\n\025ev"
-    "aluated_constraints\030\004 \003(\0132\034.ommx.v1.Eval"
-    "uatedConstraint\022\020\n\010feasible\030\005 \001(\010\022\'\n\nopt"
-    "imality\030\006 \001(\0162\023.ommx.v1.Optimality\022\'\n\nre"
-    "laxation\030\007 \001(\0162\023.ommx.v1.Relaxation\"\014\n\nI"
-    "nfeasible\"\013\n\tUnbounded\"\236\001\n\006Result\022\017\n\005err"
-    "or\030\001 \001(\tH\000\022%\n\010solution\030\002 \001(\0132\021.ommx.v1.S"
-    "olutionH\000\022)\n\ninfeasible\030\003 \001(\0132\023.ommx.v1."
-    "InfeasibleH\000\022\'\n\tunbounded\030\004 \001(\0132\022.ommx.v"
-    "1.UnboundedH\000B\010\n\006result*\\\n\nOptimality\022\032\n"
-    "\026OPTIMALITY_UNSPECIFIED\020\000\022\026\n\022OPTIMALITY_"
-    "OPTIMAL\020\001\022\032\n\026OPTIMALITY_NOT_OPTIMAL\020\002*C\n"
-    "\nRelaxation\022\032\n\026RELAXATION_UNSPECIFIED\020\000\022"
-    "\031\n\025RELAXATION_LP_RELAXED\020\001b\006proto3"
+    "riables.proto\"z\n\005State\0225\n\007entries\030\001 \003(\0132"
+    "\033.ommx.v1.State.EntriesEntryR\007entries\032:\n"
+    "\014EntriesEntry\022\020\n\003key\030\001 \001(\004R\003key\022\024\n\005value"
+    "\030\002 \001(\001R\005value:\0028\001\"\361\002\n\010Solution\022$\n\005state\030"
+    "\001 \001(\0132\016.ommx.v1.StateR\005state\022\034\n\tobjectiv"
+    "e\030\002 \001(\001R\tobjective\022H\n\022decision_variables"
+    "\030\003 \003(\0132\031.ommx.v1.DecisionVariableR\021decis"
+    "ionVariables\022Q\n\025evaluated_constraints\030\004 "
+    "\003(\0132\034.ommx.v1.EvaluatedConstraintR\024evalu"
+    "atedConstraints\022\032\n\010feasible\030\005 \001(\010R\010feasi"
+    "ble\0223\n\noptimality\030\006 \001(\0162\023.ommx.v1.Optima"
+    "lityR\noptimality\0223\n\nrelaxation\030\007 \001(\0162\023.o"
+    "mmx.v1.RelaxationR\nrelaxation\"\014\n\nInfeasi"
+    "ble\"\013\n\tUnbounded\"\306\001\n\006Result\022\026\n\005error\030\001 \001"
+    "(\tH\000R\005error\022/\n\010solution\030\002 \001(\0132\021.ommx.v1."
+    "SolutionH\000R\010solution\0225\n\ninfeasible\030\003 \001(\013"
+    "2\023.ommx.v1.InfeasibleH\000R\ninfeasible\0222\n\tu"
+    "nbounded\030\004 \001(\0132\022.ommx.v1.UnboundedH\000R\tun"
+    "boundedB\010\n\006result*\\\n\nOptimality\022\032\n\026OPTIM"
+    "ALITY_UNSPECIFIED\020\000\022\026\n\022OPTIMALITY_OPTIMA"
+    "L\020\001\022\032\n\026OPTIMALITY_NOT_OPTIMAL\020\002*C\n\nRelax"
+    "ation\022\032\n\026RELAXATION_UNSPECIFIED\020\000\022\031\n\025REL"
+    "AXATION_LP_RELAXED\020\001BY\n\013com.ommx.v1B\rSol"
+    "utionProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002"
+    "\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1b\006proto3"
 };
 static const ::_pbi::DescriptorTable* const descriptor_table_ommx_2fv1_2fsolution_2eproto_deps[2] =
     {
@@ -257,7 +263,7 @@ static ::absl::once_flag descriptor_table_ommx_2fv1_2fsolution_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ommx_2fv1_2fsolution_2eproto = {
     false,
     false,
-    834,
+    1079,
     descriptor_table_protodef_ommx_2fv1_2fsolution_2eproto,
     "ommx/v1/solution.proto",
     &descriptor_table_ommx_2fv1_2fsolution_2eproto_once,
@@ -405,7 +411,7 @@ const ::_pbi::TcParseTable<0, 1, 1, 0, 2> State::_table_ = {
   }}, {{
     65535, 65535
   }}, {{
-    // map<uint64, double> entries = 1;
+    // map<uint64, double> entries = 1 [json_name = "entries"];
     {PROTOBUF_FIELD_OFFSET(State, _impl_.entries_), 0, 0,
     (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
   }}, {{
@@ -435,7 +441,7 @@ PROTOBUF_NOINLINE void State::Clear() {
   ::uint32_t cached_has_bits = 0;
   (void)cached_has_bits;
 
-  // map<uint64, double> entries = 1;
+  // map<uint64, double> entries = 1 [json_name = "entries"];
   if (!_internal_entries().empty()) {
     using MapType = ::google::protobuf::Map<::uint64_t, double>;
     using WireHelper = _pbi::MapEntryFuncs<::uint64_t, double,
@@ -474,7 +480,7 @@ PROTOBUF_NOINLINE void State::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // map<uint64, double> entries = 1;
+  // map<uint64, double> entries = 1 [json_name = "entries"];
   total_size += 1 * ::google::protobuf::internal::FromIntSize(_internal_entries_size());
   for (const auto& entry : _internal_entries()) {
     total_size += _pbi::MapEntryFuncs<::uint64_t, double,
@@ -635,49 +641,49 @@ const ::_pbi::TcParseTable<3, 7, 3, 0, 2> Solution::_table_ = {
     #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
   }, {{
     {::_pbi::TcParser::MiniParse, {}},
-    // .ommx.v1.State state = 1;
+    // .ommx.v1.State state = 1 [json_name = "state"];
     {::_pbi::TcParser::FastMtS1,
      {10, 0, 0, PROTOBUF_FIELD_OFFSET(Solution, _impl_.state_)}},
-    // double objective = 2;
+    // double objective = 2 [json_name = "objective"];
     {::_pbi::TcParser::FastF64S1,
      {17, 63, 0, PROTOBUF_FIELD_OFFSET(Solution, _impl_.objective_)}},
-    // repeated .ommx.v1.DecisionVariable decision_variables = 3;
+    // repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
     {::_pbi::TcParser::FastMtR1,
      {26, 63, 1, PROTOBUF_FIELD_OFFSET(Solution, _impl_.decision_variables_)}},
-    // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+    // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
     {::_pbi::TcParser::FastMtR1,
      {34, 63, 2, PROTOBUF_FIELD_OFFSET(Solution, _impl_.evaluated_constraints_)}},
-    // bool feasible = 5;
+    // bool feasible = 5 [json_name = "feasible"];
     {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(Solution, _impl_.feasible_), 63>(),
      {40, 63, 0, PROTOBUF_FIELD_OFFSET(Solution, _impl_.feasible_)}},
-    // .ommx.v1.Optimality optimality = 6;
+    // .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Solution, _impl_.optimality_), 63>(),
      {48, 63, 0, PROTOBUF_FIELD_OFFSET(Solution, _impl_.optimality_)}},
-    // .ommx.v1.Relaxation relaxation = 7;
+    // .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
     {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(Solution, _impl_.relaxation_), 63>(),
      {56, 63, 0, PROTOBUF_FIELD_OFFSET(Solution, _impl_.relaxation_)}},
   }}, {{
     65535, 65535
   }}, {{
-    // .ommx.v1.State state = 1;
+    // .ommx.v1.State state = 1 [json_name = "state"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.state_), _Internal::kHasBitsOffset + 0, 0,
     (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    // double objective = 2;
+    // double objective = 2 [json_name = "objective"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.objective_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kDouble)},
-    // repeated .ommx.v1.DecisionVariable decision_variables = 3;
+    // repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.decision_variables_), -1, 1,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+    // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.evaluated_constraints_), -1, 2,
     (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
-    // bool feasible = 5;
+    // bool feasible = 5 [json_name = "feasible"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.feasible_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kBool)},
-    // .ommx.v1.Optimality optimality = 6;
+    // .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.optimality_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
-    // .ommx.v1.Relaxation relaxation = 7;
+    // .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
     {PROTOBUF_FIELD_OFFSET(Solution, _impl_.relaxation_), -1, 0,
     (0 | ::_fl::kFcSingular | ::_fl::kOpenEnum)},
   }}, {{
@@ -717,13 +723,13 @@ PROTOBUF_NOINLINE void Solution::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  // .ommx.v1.State state = 1;
+  // .ommx.v1.State state = 1 [json_name = "state"];
   if (cached_has_bits & 0x00000001u) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         1, *_impl_.state_, _impl_.state_->GetCachedSize(), target, stream);
   }
 
-  // double objective = 2;
+  // double objective = 2 [json_name = "objective"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_objective = this->_internal_objective();
@@ -735,7 +741,7 @@ PROTOBUF_NOINLINE void Solution::Clear() {
         2, this->_internal_objective(), target);
   }
 
-  // repeated .ommx.v1.DecisionVariable decision_variables = 3;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_decision_variables_size());
        i < n; i++) {
@@ -746,7 +752,7 @@ PROTOBUF_NOINLINE void Solution::Clear() {
             target, stream);
   }
 
-  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
   for (unsigned i = 0, n = static_cast<unsigned>(
                            this->_internal_evaluated_constraints_size());
        i < n; i++) {
@@ -757,21 +763,21 @@ PROTOBUF_NOINLINE void Solution::Clear() {
             target, stream);
   }
 
-  // bool feasible = 5;
+  // bool feasible = 5 [json_name = "feasible"];
   if (this->_internal_feasible() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteBoolToArray(
         5, this->_internal_feasible(), target);
   }
 
-  // .ommx.v1.Optimality optimality = 6;
+  // .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
   if (this->_internal_optimality() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
         6, this->_internal_optimality(), target);
   }
 
-  // .ommx.v1.Relaxation relaxation = 7;
+  // .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
   if (this->_internal_relaxation() != 0) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -796,24 +802,24 @@ PROTOBUF_NOINLINE void Solution::Clear() {
   (void) cached_has_bits;
 
   ::_pbi::Prefetch5LinesFrom7Lines(reinterpret_cast<const void*>(this));
-  // repeated .ommx.v1.DecisionVariable decision_variables = 3;
+  // repeated .ommx.v1.DecisionVariable decision_variables = 3 [json_name = "decisionVariables"];
   total_size += 1UL * this->_internal_decision_variables_size();
   for (const auto& msg : this->_internal_decision_variables()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
   }
-  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4;
+  // repeated .ommx.v1.EvaluatedConstraint evaluated_constraints = 4 [json_name = "evaluatedConstraints"];
   total_size += 1UL * this->_internal_evaluated_constraints_size();
   for (const auto& msg : this->_internal_evaluated_constraints()) {
     total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
   }
-  // .ommx.v1.State state = 1;
+  // .ommx.v1.State state = 1 [json_name = "state"];
   cached_has_bits = _impl_._has_bits_[0];
   if (cached_has_bits & 0x00000001u) {
     total_size +=
         1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.state_);
   }
 
-  // double objective = 2;
+  // double objective = 2 [json_name = "objective"];
   static_assert(sizeof(::uint64_t) == sizeof(double),
                 "Code assumes ::uint64_t and double are the same size.");
   double tmp_objective = this->_internal_objective();
@@ -823,18 +829,18 @@ PROTOBUF_NOINLINE void Solution::Clear() {
     total_size += 9;
   }
 
-  // bool feasible = 5;
+  // bool feasible = 5 [json_name = "feasible"];
   if (this->_internal_feasible() != 0) {
     total_size += 2;
   }
 
-  // .ommx.v1.Optimality optimality = 6;
+  // .ommx.v1.Optimality optimality = 6 [json_name = "optimality"];
   if (this->_internal_optimality() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_optimality());
   }
 
-  // .ommx.v1.Relaxation relaxation = 7;
+  // .ommx.v1.Relaxation relaxation = 7 [json_name = "relaxation"];
   if (this->_internal_relaxation() != 0) {
     total_size += 1 +
                   ::_pbi::WireFormatLite::EnumSize(this->_internal_relaxation());
@@ -1268,16 +1274,16 @@ const ::_pbi::TcParseTable<0, 4, 3, 28, 2> Result::_table_ = {
   }}, {{
     65535, 65535
   }}, {{
-    // string error = 1;
+    // string error = 1 [json_name = "error"];
     {PROTOBUF_FIELD_OFFSET(Result, _impl_.result_.error_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
-    // .ommx.v1.Solution solution = 2;
+    // .ommx.v1.Solution solution = 2 [json_name = "solution"];
     {PROTOBUF_FIELD_OFFSET(Result, _impl_.result_.solution_), _Internal::kOneofCaseOffset + 0, 0,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Infeasible infeasible = 3;
+    // .ommx.v1.Infeasible infeasible = 3 [json_name = "infeasible"];
     {PROTOBUF_FIELD_OFFSET(Result, _impl_.result_.infeasible_), _Internal::kOneofCaseOffset + 0, 1,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
-    // .ommx.v1.Unbounded unbounded = 4;
+    // .ommx.v1.Unbounded unbounded = 4 [json_name = "unbounded"];
     {PROTOBUF_FIELD_OFFSET(Result, _impl_.result_.unbounded_), _Internal::kOneofCaseOffset + 0, 2,
     (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
   }}, {{
@@ -1353,25 +1359,25 @@ PROTOBUF_NOINLINE void Result::Clear() {
   (void) cached_has_bits;
 
   switch (result_case()) {
-    // string error = 1;
+    // string error = 1 [json_name = "error"];
     case kError: {
       total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
                                       this->_internal_error());
       break;
     }
-    // .ommx.v1.Solution solution = 2;
+    // .ommx.v1.Solution solution = 2 [json_name = "solution"];
     case kSolution: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.result_.solution_);
       break;
     }
-    // .ommx.v1.Infeasible infeasible = 3;
+    // .ommx.v1.Infeasible infeasible = 3 [json_name = "infeasible"];
     case kInfeasible: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.result_.infeasible_);
       break;
     }
-    // .ommx.v1.Unbounded unbounded = 4;
+    // .ommx.v1.Unbounded unbounded = 4 [json_name = "unbounded"];
     case kUnbounded: {
       total_size +=
           1 + ::google::protobuf::internal::WireFormatLite::MessageSize(*_impl_.result_.unbounded_);
