@@ -32,5 +32,5 @@ jobs:
 
       - name: Check updated
         run: |
-          git add -N cpp/ommx/  # To check newly generated files
+          git add -N cpp/src/ommx/  # To check newly generated files
           git diff --exit-code
