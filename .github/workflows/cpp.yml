@@ -1,0 +1,36 @@
+name: C++
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  protogen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup protobuf compiler
+        uses: arduino/setup-protoc@v3
+        with:
+          version: "26.1"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Regenerate c++ codes from proto files
+        run: |
+          buf generate --template buf.gen.cpp.yaml
+        working-directory: proto
+
+      - name: Check updated
+        run: |
+          git add -N cpp/ommx/  # To check newly generated files
+          git diff --exit-code
