@@ -16,7 +16,7 @@ anyhow = "1.0.81"
 base64 = "0.22.1"
 built = { version = "0.7.4", features = ["git2"] }
 chrono = "0.4.38"
-clap = { version = "4.5.15", features = ["derive"] }
+clap = { version = "4.5.16", features = ["derive"] }
 colored = "2.1.0"
 derive_more = "0.99.18"
 directories = "5.0.1"
@@ -33,8 +33,8 @@ pyo3 = { version = "0.21.2", features = ["anyhow"] }
 pyo3-log = "0.10.0"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
-serde = { version = "1.0.206", features = ["derive"] }
+serde = { version = "1.0.208", features = ["derive"] }
 serde-pyobject = "0.3.0"
-serde_json = "1.0.124"
+serde_json = "1.0.125"
 thiserror = "1.0.63"
 url = "2.5.2"
