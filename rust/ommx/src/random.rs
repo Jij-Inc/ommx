@@ -7,21 +7,23 @@ use rand::Rng;
 
 /// Create a random linear programming (LP) instance in a form of `min c^T x` subject to `Ax = b` and `x >= 0` with continuous variables `x`.
 pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usize) -> v1::Instance {
-    let mut instance = v1::Instance::default();
-    instance.decision_variables = (0..num_variables)
-        .map(|i| {
-            let mut var = DecisionVariable::default();
-            var.id = i as u64;
-            var.kind = Kind::Continuous as i32;
-            var.name = Some("x".into());
-            var.subscripts = vec![i as i64];
-            var.bound = Some(Bound {
+    let decision_variables = (0..num_variables)
+        .map(|i| DecisionVariable {
+            id: i as u64,
+            kind: Kind::Continuous as i32,
+            name: Some("x".into()),
+            subscripts: vec![i as i64],
+            bound: Some(Bound {
                 lower: 0.0,
                 upper: f64::INFINITY,
-            });
-            var
+            }),
+            ..Default::default()
         })
         .collect();
+    let mut instance = v1::Instance {
+        decision_variables,
+        ..Default::default()
+    };
     for constraint_id in 0..num_constraints {
         let mut linear = v1::Linear::default();
         for id in 0..num_variables {
