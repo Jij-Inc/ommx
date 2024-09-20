@@ -21,6 +21,7 @@ pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usiz
         })
         .collect();
     let mut instance = v1::Instance {
+        sense: v1::instance::Sense::Minimize as i32,
         decision_variables,
         ..Default::default()
     };
