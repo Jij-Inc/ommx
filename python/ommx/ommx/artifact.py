@@ -214,6 +214,20 @@ class Artifact:
             return self.get_ndarray(descriptor)
         raise ValueError(f"Unsupported media type {descriptor.media_type}")
 
+    @property
+    def instance(self) -> Instance:
+        """
+        Take the first instance layer in the artifact
+
+        - If the artifact does not contain any instance layer, it raises an :py:exc:`ValueError`.
+        - For multiple instance layers, use :py:meth:`Artifact.get_instance` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.instance":
+                return self.get_instance(desc)
+        else:
+            raise ValueError("Instance layer not found")
+
     def get_instance(self, descriptor: Descriptor) -> Instance:
         """
         Get an instance from the artifact
@@ -245,6 +259,20 @@ class Artifact:
         if "org.ommx.v1.instance.title" in annotations:
             instance.title = annotations["org.ommx.v1.instance.title"]
         return instance
+
+    @property
+    def solution(self) -> Solution:
+        """
+        Take the first solution layer in the artifact
+
+        - If the artifact does not have a solution layer, it raises an :py:exc:`ValueError`.
+        - For multiple solution layers, use :py:meth:`Artifact.get_solution` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.solution":
+                return self.get_solution(desc)
+        else:
+            raise ValueError("Solution layer not found")
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         assert descriptor.media_type == "application/org.ommx.v1.solution"
