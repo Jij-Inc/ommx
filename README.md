@@ -1,5 +1,8 @@
 # OMMX
 
+[![main](https://img.shields.io/badge/Python_SDK-API_Reference-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html)
+[![main](https://img.shields.io/badge/Rust_SDK-API_Reference-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html)
+
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
 # Design
