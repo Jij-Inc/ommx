@@ -13,7 +13,7 @@ project = "ommx"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
-version = "1.1.1"
+version = "1.2.0"
 release = version
 
 # -- General configuration ---------------------------------------------------

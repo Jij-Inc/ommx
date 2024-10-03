@@ -54,8 +54,10 @@ sphinx-build -b html ./python/ommx/docs/source ./python/ommx/docs/build
 
 ### Release to PyPI
 
+[!IMPORTANT] The version of `ommx` and the adapters should be in sync.
 1. Update version in `python/ommx/pyproject.toml`
-2. Push Git tag with `python-x.y.z`, then the GitHub Actions will release to PyPI
+2. Update version in `python/ommx-python-mip-adapter/project.toml` 
+3. Push Git tag with `python-x.y.z`, then the GitHub Actions will release to PyPI
 
 OMMX Rust SDK
 --------------
