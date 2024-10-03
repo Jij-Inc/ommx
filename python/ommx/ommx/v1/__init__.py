@@ -639,13 +639,13 @@ class Quadratic:
         self,
         *,
         columns: Iterable[int],
-        raws: Iterable[int],
+        rows: Iterable[int],
         values: Iterable[float | int],
         linear: Optional[Linear] = None,
     ):
         self.raw = _Quadratic(
             columns=columns,
-            rows=raws,
+            rows=rows,
             values=values,
             linear=linear.raw if linear else None,
         )

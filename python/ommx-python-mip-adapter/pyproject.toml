@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "1.1.1"
+version = "1.2.0"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [
@@ -23,7 +23,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "ommx >= 1.1.1, < 2.0.0",
+    "ommx >= 1.2.0, < 2.0.0",
 
     # FIXME: This project requires latest version of Python-MIP (will be 1.16.0?), which does not release yet.
     #        https://github.com/coin-or/python-mip/issues/384
