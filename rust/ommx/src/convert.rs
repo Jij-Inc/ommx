@@ -1,8 +1,9 @@
 //! Additional trait implementations for generated codes
 
+mod linear;
+
 use crate::v1::{
     function::{self, Function as FunctionEnum},
-    linear::Term,
     Function, Linear, Polynomial, Quadratic, State,
 };
 use std::collections::{BTreeSet, HashMap};
@@ -29,6 +30,14 @@ impl From<Quadratic> for Function {
     }
 }
 
+impl From<f64> for Function {
+    fn from(f: f64) -> Self {
+        Self {
+            function: Some(function::Function::Constant(f)),
+        }
+    }
+}
+
 impl From<HashMap<u64, f64>> for State {
     fn from(entries: HashMap<u64, f64>) -> Self {
         Self { entries }
@@ -43,21 +52,6 @@ impl Function {
             Some(FunctionEnum::Polynomial(poly)) => poly.used_decision_variable_ids(),
             _ => BTreeSet::new(),
         }
-    }
-}
-
-impl Linear {
-    pub fn new(terms: impl Iterator<Item = (u64, f64)>, constant: f64) -> Self {
-        Self {
-            terms: terms
-                .map(|(id, coefficient)| Term { id, coefficient })
-                .collect(),
-            constant,
-        }
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms.iter().map(|term| term.id).collect()
     }
 }
 
