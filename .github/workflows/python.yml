@@ -89,24 +89,25 @@ jobs:
         run: |
           pytest -vv --doctest-modules python/ommx
 
+      # FIXME: Python-MIP does not support Python 3.12
       - name: Install ommx-python-mip-adapter
-        if: always()
+        if: ${{ matrix.python-version != '3.12' }}
         run: |
           pip install -v -e 'python/ommx-python-mip-adapter/[dev]'
 
       - name: Lint ommx-python-mip-adapter
-        if: always()
+        if: ${{ matrix.python-version != '3.12' }}
         run: |
           pyright python/ommx-python-mip-adapter/
 
       - name: Test ommx-python-mip-adapter
-        if: always()
+        if: ${{ matrix.python-version != '3.12' }}
         run: |
           pytest -vv --doctest-modules python/ommx-python-mip-adapter/
           markdown-code-runner ./python/ommx-python-mip-adapter/README.md
 
       - name: Run notebooks
-        if: github.actor != 'dependabot[bot]'
+        if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
         run: |
           jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
