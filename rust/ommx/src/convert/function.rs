@@ -1,5 +1,5 @@
 use crate::v1::{function, function::Function as FunctionEnum, Function, Linear, Quadratic};
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, iter::Sum, ops::Add};
 
 impl From<function::Function> for Function {
     fn from(f: function::Function) -> Self {
@@ -39,5 +39,27 @@ impl Function {
             Some(FunctionEnum::Polynomial(poly)) => poly.used_decision_variable_ids(),
             _ => BTreeSet::new(),
         }
+    }
+}
+
+impl Add for Function {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        let lhs = self.function.expect("Empty Function");
+        let rhs = rhs.function.expect("Empty Function");
+        match (lhs, rhs) {
+            (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => Function::from(lhs + rhs),
+            (FunctionEnum::Linear(lhs), FunctionEnum::Constant(rhs))
+            | (FunctionEnum::Constant(rhs), FunctionEnum::Linear(lhs)) => Function::from(lhs + rhs),
+            (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => Function::from(lhs + rhs),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl Sum for Function {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Function::from(0.0), |acc, x| acc + x)
     }
 }

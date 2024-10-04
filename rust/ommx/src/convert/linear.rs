@@ -1,6 +1,7 @@
 use crate::v1::{linear::Term, Linear};
 use std::{
     collections::{BTreeSet, HashMap},
+    iter::Sum,
     ops::Add,
 };
 
@@ -75,5 +76,11 @@ impl Add<Linear> for f64 {
 
     fn add(self, rhs: Linear) -> Linear {
         rhs + self
+    }
+}
+
+impl Sum for Linear {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Linear::from(0), Add::add)
     }
 }
