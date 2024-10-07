@@ -1,8 +1,8 @@
-use crate::v1::{linear::Term, Linear};
+use crate::v1::{linear::Term, Linear, Quadratic};
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     iter::Sum,
-    ops::Add,
+    ops::*,
 };
 
 impl Linear {
@@ -82,5 +82,64 @@ impl Add<Linear> for f64 {
 impl Sum for Linear {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Linear::from(0), Add::add)
+    }
+}
+
+impl Mul<f64> for Linear {
+    type Output = Self;
+
+    fn mul(self, rhs: f64) -> Self {
+        Self {
+            terms: self
+                .terms
+                .into_iter()
+                .map(|term| Term {
+                    id: term.id,
+                    coefficient: term.coefficient * rhs,
+                })
+                .collect(),
+            constant: self.constant * rhs,
+        }
+    }
+}
+
+impl Mul<Linear> for f64 {
+    type Output = Linear;
+
+    fn mul(self, rhs: Linear) -> Linear {
+        rhs * self
+    }
+}
+
+impl Mul for Linear {
+    type Output = Quadratic;
+
+    fn mul(self, rhs: Self) -> Quadratic {
+        let mut terms = BTreeMap::new();
+        for a in &self.terms {
+            for b in &rhs.terms {
+                let (row, col) = if a.id < b.id {
+                    (a.id, b.id)
+                } else {
+                    (b.id, a.id)
+                };
+                *terms.entry((row, col)).or_default() += a.coefficient * b.coefficient;
+            }
+        }
+        let mut columns = Vec::new();
+        let mut rows = Vec::new();
+        let mut values = Vec::new();
+        for ((row, col), value) in terms {
+            columns.push(col);
+            rows.push(row);
+            values.push(value);
+        }
+        let c = self.constant;
+        Quadratic {
+            columns,
+            rows,
+            values,
+            linear: Some(self * rhs.constant + c * rhs),
+        }
     }
 }
