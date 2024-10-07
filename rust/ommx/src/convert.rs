@@ -2,8 +2,9 @@
 
 mod function;
 mod linear;
+mod polynomial;
 
-use crate::v1::{Polynomial, Quadratic, State};
+use crate::v1::{Quadratic, State};
 use std::collections::{BTreeSet, HashMap};
 
 impl From<HashMap<u64, f64>> for State {
@@ -17,16 +18,6 @@ impl Quadratic {
         self.columns
             .iter()
             .chain(self.rows.iter())
-            .cloned()
-            .collect()
-    }
-}
-
-impl Polynomial {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms
-            .iter()
-            .flat_map(|term| term.ids.iter())
             .cloned()
             .collect()
     }

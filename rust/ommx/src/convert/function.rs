@@ -1,5 +1,8 @@
-use crate::v1::{function, function::Function as FunctionEnum, Function, Linear, Quadratic};
-use std::{collections::BTreeSet, iter::Sum, ops::Add};
+use crate::v1::{
+    function::{self, Function as FunctionEnum},
+    Function, Linear, Polynomial, Quadratic,
+};
+use std::{collections::BTreeSet, iter::*, ops::*};
 
 impl From<function::Function> for Function {
     fn from(f: function::Function) -> Self {
@@ -19,6 +22,14 @@ impl From<Quadratic> for Function {
     fn from(q: Quadratic) -> Self {
         Self {
             function: Some(function::Function::Quadratic(q)),
+        }
+    }
+}
+
+impl From<Polynomial> for Function {
+    fn from(poly: Polynomial) -> Self {
+        Self {
+            function: Some(function::Function::Polynomial(poly)),
         }
     }
 }
@@ -50,9 +61,43 @@ impl Add for Function {
         let rhs = rhs.function.expect("Empty Function");
         match (lhs, rhs) {
             (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => Function::from(lhs + rhs),
+            // Linear output
             (FunctionEnum::Linear(lhs), FunctionEnum::Constant(rhs))
             | (FunctionEnum::Constant(rhs), FunctionEnum::Linear(lhs)) => Function::from(lhs + rhs),
             (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => Function::from(lhs + rhs),
+            // TODO: Quadratic output
+            // Polynomial output
+            (FunctionEnum::Polynomial(lhs), FunctionEnum::Constant(rhs))
+            | (FunctionEnum::Constant(rhs), FunctionEnum::Polynomial(lhs)) => {
+                Function::from(lhs + rhs)
+            }
+            (FunctionEnum::Polynomial(lhs), FunctionEnum::Linear(rhs))
+            | (FunctionEnum::Linear(rhs), FunctionEnum::Polynomial(lhs)) => {
+                Function::from(lhs + rhs)
+            }
+            (FunctionEnum::Polynomial(lhs), FunctionEnum::Quadratic(rhs))
+            | (FunctionEnum::Quadratic(rhs), FunctionEnum::Polynomial(lhs)) => {
+                Function::from(lhs + rhs)
+            }
+            (FunctionEnum::Polynomial(lhs), FunctionEnum::Polynomial(rhs)) => {
+                Function::from(lhs + rhs)
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl Mul for Function {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self {
+        let lhs = self.function.expect("Empty Function");
+        let rhs = rhs.function.expect("Empty Function");
+        match (lhs, rhs) {
+            (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => Function::from(lhs * rhs),
+            (FunctionEnum::Linear(lhs), FunctionEnum::Constant(rhs))
+            | (FunctionEnum::Constant(rhs), FunctionEnum::Linear(lhs)) => Function::from(lhs * rhs),
+            (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => Function::from(lhs * rhs),
             _ => unimplemented!(),
         }
     }
@@ -61,5 +106,11 @@ impl Add for Function {
 impl Sum for Function {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Function::from(0.0), |acc, x| acc + x)
+    }
+}
+
+impl Product for Function {
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Function::from(1.0), |acc, x| acc * x)
     }
 }
