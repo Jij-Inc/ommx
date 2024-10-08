@@ -118,7 +118,7 @@ impl Add<f64> for Linear {
     }
 }
 
-impl_add_inverse!(f64, Linear, Linear);
+impl_add_inverse!(f64, Linear);
 
 impl Sum for Linear {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {

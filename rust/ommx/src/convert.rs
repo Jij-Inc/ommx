@@ -1,11 +1,22 @@
 //! Additional trait implementations for generated codes
 
 macro_rules! impl_add_inverse {
-    ($lhs:ty, $rhs:ty, $output:ty) => {
+    ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Add<$rhs> for $lhs {
-            type Output = $output;
+            type Output = $rhs;
             fn add(self, rhs: $rhs) -> Self::Output {
                 rhs + self
+            }
+        }
+    };
+}
+
+macro_rules! impl_add_from {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Add<$rhs> for $lhs {
+            type Output = $lhs;
+            fn add(self, rhs: $rhs) -> Self::Output {
+                self + <$lhs>::from(rhs)
             }
         }
     };

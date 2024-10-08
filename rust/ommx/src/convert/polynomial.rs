@@ -80,24 +80,9 @@ impl Add for Polynomial {
     }
 }
 
-macro_rules! impl_add_from {
-    ($other:ty) => {
-        impl Add<$other> for Polynomial {
-            type Output = Self;
-            fn add(self, rhs: $other) -> Self {
-                self + Self::from(rhs)
-            }
-        }
-
-        impl Add<Polynomial> for $other {
-            type Output = Polynomial;
-            fn add(self, rhs: Polynomial) -> Polynomial {
-                rhs + self
-            }
-        }
-    };
-}
-
-impl_add_from!(f64);
-impl_add_from!(Linear);
-impl_add_from!(Quadratic);
+impl_add_from!(Polynomial, f64);
+impl_add_from!(Polynomial, Linear);
+impl_add_from!(Polynomial, Quadratic);
+impl_add_inverse!(f64, Polynomial);
+impl_add_inverse!(Linear, Polynomial);
+impl_add_inverse!(Quadratic, Polynomial);

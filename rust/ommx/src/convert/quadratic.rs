@@ -118,10 +118,18 @@ impl Add<Linear> for Quadratic {
     }
 }
 
-impl Add<Quadratic> for Linear {
-    type Output = Quadratic;
+impl Add<f64> for Quadratic {
+    type Output = Self;
 
-    fn add(self, rhs: Quadratic) -> Quadratic {
-        rhs + self
+    fn add(mut self, rhs: f64) -> Self {
+        if let Some(linear) = self.linear {
+            self.linear = Some(linear + rhs);
+        } else {
+            self.linear = Some(rhs.into());
+        }
+        self
     }
 }
+
+impl_add_inverse!(Linear, Quadratic);
+impl_add_inverse!(f64, Quadratic);
