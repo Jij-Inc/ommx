@@ -1,11 +1,25 @@
 use crate::v1::{Linear, Monomial, Polynomial, Quadratic};
+use num::Zero;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Mul},
 };
 
+impl Zero for Polynomial {
+    fn zero() -> Self {
+        Self { terms: vec![] }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.terms.iter().all(|term| term.coefficient.is_zero())
+    }
+}
+
 impl From<f64> for Polynomial {
     fn from(c: f64) -> Self {
+        if c.is_zero() {
+            return Self::zero();
+        }
         Self {
             terms: vec![Monomial {
                 ids: vec![0],
@@ -103,7 +117,19 @@ impl Mul for Polynomial {
     }
 }
 
-impl_mul_from!(Polynomial, f64, Polynomial);
+impl Mul<f64> for Polynomial {
+    type Output = Self;
+    fn mul(mut self, rhs: f64) -> Self {
+        if rhs.is_zero() {
+            return Self::zero();
+        }
+        for term in &mut self.terms {
+            term.coefficient *= rhs;
+        }
+        self
+    }
+}
+
 impl_mul_from!(Polynomial, Linear, Polynomial);
 impl_mul_from!(Polynomial, Quadratic, Polynomial);
 impl_mul_inverse!(f64, Polynomial);

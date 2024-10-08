@@ -1,9 +1,20 @@
 use crate::v1::{linear::Term, Linear, Quadratic};
+use num::Zero;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Sum,
     ops::*,
 };
+
+impl Zero for Linear {
+    fn zero() -> Self {
+        Self::from(0.0)
+    }
+
+    fn is_zero(&self) -> bool {
+        self.terms.is_empty() && self.constant == 0.0
+    }
+}
 
 impl Linear {
     pub fn new(terms: impl Iterator<Item = (u64, f64)>, constant: f64) -> Self {
@@ -130,6 +141,9 @@ impl Mul<f64> for Linear {
     type Output = Self;
 
     fn mul(mut self, rhs: f64) -> Self {
+        if rhs.is_zero() {
+            return Linear::zero();
+        }
         for term in &mut self.terms {
             term.coefficient *= rhs;
         }

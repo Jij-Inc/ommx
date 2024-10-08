@@ -2,7 +2,26 @@ use crate::v1::{
     function::{self, Function as FunctionEnum},
     Function, Linear, Polynomial, Quadratic,
 };
+use num::Zero;
 use std::{collections::BTreeSet, iter::*, ops::*};
+
+impl Zero for Function {
+    fn zero() -> Self {
+        Self {
+            function: Some(function::Function::Constant(0.0)),
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        match &self.function {
+            Some(FunctionEnum::Constant(c)) => c.is_zero(),
+            Some(FunctionEnum::Linear(linear)) => linear.is_zero(),
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.is_zero(),
+            Some(FunctionEnum::Polynomial(poly)) => poly.is_zero(),
+            _ => false,
+        }
+    }
+}
 
 impl From<function::Function> for Function {
     fn from(f: function::Function) -> Self {

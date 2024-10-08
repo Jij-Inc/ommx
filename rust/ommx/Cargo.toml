@@ -25,6 +25,7 @@ env_logger.workspace = true
 itertools.workspace = true
 log.workspace = true
 maplit.workspace = true
+num = "0.4.3"
 ocipkg.workspace = true
 proptest.workspace = true
 prost.workspace = true

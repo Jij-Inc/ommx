@@ -1,8 +1,27 @@
 use crate::v1::{Linear, Polynomial, Quadratic};
+use num::Zero;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Mul},
 };
+
+impl Zero for Quadratic {
+    fn zero() -> Self {
+        Self {
+            columns: vec![],
+            rows: vec![],
+            values: vec![],
+            linear: Some(Linear::zero()),
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.columns.is_empty()
+            && self.rows.is_empty()
+            && self.values.is_empty()
+            && self.linear.as_ref().map_or(true, |l| l.is_zero())
+    }
+}
 
 impl Quadratic {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -156,6 +175,9 @@ impl Mul<f64> for Quadratic {
     type Output = Self;
 
     fn mul(mut self, rhs: f64) -> Self {
+        if rhs.is_zero() {
+            return Self::zero();
+        }
         for value in self.values.iter_mut() {
             *value *= rhs;
         }
