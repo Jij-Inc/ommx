@@ -162,6 +162,7 @@ impl Mul for Linear {
     type Output = Quadratic;
 
     fn mul(self, rhs: Self) -> Quadratic {
+        // Create upper triangular matrix
         let mut terms = BTreeMap::new();
         for a in &self.terms {
             for b in &rhs.terms {
@@ -173,20 +174,9 @@ impl Mul for Linear {
                 *terms.entry((row, col)).or_default() += a.coefficient * b.coefficient;
             }
         }
-        let mut columns = Vec::new();
-        let mut rows = Vec::new();
-        let mut values = Vec::new();
-        for ((row, col), value) in terms {
-            columns.push(col);
-            rows.push(row);
-            values.push(value);
-        }
+        let mut quad: Quadratic = terms.into_iter().collect();
         let c = self.constant;
-        Quadratic {
-            columns,
-            rows,
-            values,
-            linear: Some(self * rhs.constant + c * rhs),
-        }
+        quad.linear = Some(self * rhs.constant + c * rhs);
+        quad
     }
 }

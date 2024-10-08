@@ -33,12 +33,12 @@ impl From<Linear> for Quadratic {
     }
 }
 
-impl FromIterator<(u64, u64, f64)> for Quadratic {
-    fn from_iter<I: IntoIterator<Item = (u64, u64, f64)>>(iter: I) -> Self {
+impl FromIterator<((u64, u64), f64)> for Quadratic {
+    fn from_iter<I: IntoIterator<Item = ((u64, u64), f64)>>(iter: I) -> Self {
         let mut columns = Vec::new();
         let mut rows = Vec::new();
         let mut values = Vec::new();
-        for (column, row, value) in iter {
+        for ((column, row), value) in iter {
             columns.push(column);
             rows.push(row);
             values.push(value);

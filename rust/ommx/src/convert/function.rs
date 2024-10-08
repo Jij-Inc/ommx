@@ -49,8 +49,8 @@ impl FromIterator<(u64, f64)> for Function {
     }
 }
 
-impl FromIterator<(u64, u64, f64)> for Function {
-    fn from_iter<I: IntoIterator<Item = (u64, u64, f64)>>(iter: I) -> Self {
+impl FromIterator<((u64, u64), f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = ((u64, u64), f64)>>(iter: I) -> Self {
         let quad: Quadratic = iter.into_iter().collect();
         quad.into()
     }
