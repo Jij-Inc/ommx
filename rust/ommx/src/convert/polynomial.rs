@@ -17,37 +17,39 @@ impl From<f64> for Polynomial {
 
 impl From<Linear> for Polynomial {
     fn from(l: Linear) -> Self {
-        let mut poly = Polynomial::default();
-        for term in l.terms {
-            poly.terms.push(Monomial {
-                ids: vec![term.id],
-                coefficient: term.coefficient,
-            })
-        }
-        poly.terms.push(Monomial {
-            ids: vec![0],
-            coefficient: l.constant,
-        });
-        poly
+        l.into_iter()
+            .map(|(id, c)| (id.into_iter().collect(), c))
+            .collect()
     }
 }
 
 impl From<Quadratic> for Polynomial {
     fn from(q: Quadratic) -> Self {
-        assert_eq!(q.columns.len(), q.rows.len());
-        assert_eq!(q.columns.len(), q.values.len());
-        let n = q.columns.len();
-        let mut poly = Polynomial::default();
-        for i in 0..n {
-            poly.terms.push(Monomial {
-                ids: vec![q.columns[i], q.rows[i]],
-                coefficient: q.values[i],
-            })
+        q.into_iter().collect()
+    }
+}
+
+impl FromIterator<(Vec<u64>, f64)> for Polynomial {
+    fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+        Self {
+            terms: iter
+                .into_iter()
+                .map(|(ids, coefficient)| Monomial { ids, coefficient })
+                .collect(),
         }
-        if let Some(linear) = q.linear {
-            poly = poly + Self::from(linear);
-        }
-        poly
+    }
+}
+
+impl IntoIterator for Polynomial {
+    type Item = (Vec<u64>, f64);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(
+            self.terms
+                .into_iter()
+                .map(|term| (term.ids, term.coefficient)),
+        )
     }
 }
 
