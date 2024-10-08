@@ -39,6 +39,7 @@ uuid = { version = "1.10.0", features = ["v4"] }
 
 [dev-dependencies]
 colored.workspace = true
+indoc.workspace = true
 
 [build-dependencies]
 built.workspace = true

@@ -878,6 +878,7 @@ dependencies = [
  "directories",
  "env_logger",
  "flate2",
+ "indoc",
  "itertools 0.13.0",
  "log",
  "maplit",
