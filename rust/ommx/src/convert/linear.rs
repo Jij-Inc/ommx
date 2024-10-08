@@ -118,13 +118,7 @@ impl Add<f64> for Linear {
     }
 }
 
-impl Add<Linear> for f64 {
-    type Output = Linear;
-
-    fn add(self, rhs: Linear) -> Linear {
-        rhs + self
-    }
-}
+impl_add_inverse!(f64, Linear, Linear);
 
 impl Sum for Linear {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -150,13 +144,7 @@ impl Mul<f64> for Linear {
     }
 }
 
-impl Mul<Linear> for f64 {
-    type Output = Linear;
-
-    fn mul(self, rhs: Linear) -> Linear {
-        rhs * self
-    }
-}
+impl_mul_inverse!(f64, Linear, Linear);
 
 impl Mul for Linear {
     type Output = Quadratic;

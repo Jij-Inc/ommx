@@ -1,5 +1,8 @@
 use crate::v1::{Linear, Quadratic};
-use std::collections::BTreeSet;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Add,
+};
 
 impl Quadratic {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -8,6 +11,14 @@ impl Quadratic {
             .chain(self.rows.iter())
             .cloned()
             .collect()
+    }
+
+    fn quad_iter(&self) -> impl Iterator<Item = ((u64, u64), f64)> + '_ {
+        self.columns
+            .iter()
+            .zip(self.rows.iter())
+            .zip(self.values.iter())
+            .map(|((column, row), value)| ((*column, *row), *value))
     }
 }
 
@@ -72,5 +83,45 @@ impl IntoIterator for Quadratic {
         } else {
             Box::new(quad)
         }
+    }
+}
+
+impl Add for Quadratic {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        let mut map: BTreeMap<(u64, u64), f64> = self.quad_iter().collect();
+        for (id, value) in rhs.quad_iter() {
+            *map.entry(id).or_default() += value;
+        }
+        let mut out: Self = map.into_iter().collect();
+        out.linear = match (self.linear, rhs.linear) {
+            (Some(l), Some(r)) => Some(l + r),
+            (Some(l), None) => Some(l),
+            (None, Some(r)) => Some(r),
+            (None, None) => None,
+        };
+        out
+    }
+}
+
+impl Add<Linear> for Quadratic {
+    type Output = Self;
+
+    fn add(mut self, rhs: Linear) -> Self {
+        if let Some(linear) = self.linear {
+            self.linear = Some(linear + rhs);
+        } else {
+            self.linear = Some(rhs);
+        }
+        self
+    }
+}
+
+impl Add<Quadratic> for Linear {
+    type Output = Quadratic;
+
+    fn add(self, rhs: Quadratic) -> Quadratic {
+        rhs + self
     }
 }
