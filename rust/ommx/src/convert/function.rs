@@ -86,7 +86,18 @@ impl Add for Function {
             (FunctionEnum::Linear(lhs), FunctionEnum::Constant(rhs))
             | (FunctionEnum::Constant(rhs), FunctionEnum::Linear(lhs)) => Function::from(lhs + rhs),
             (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => Function::from(lhs + rhs),
-            // TODO: Quadratic output
+            // Quadratic output
+            (FunctionEnum::Quadratic(lhs), FunctionEnum::Constant(rhs))
+            | (FunctionEnum::Constant(rhs), FunctionEnum::Quadratic(lhs)) => {
+                Function::from(lhs + rhs)
+            }
+            (FunctionEnum::Quadratic(lhs), FunctionEnum::Linear(rhs))
+            | (FunctionEnum::Linear(rhs), FunctionEnum::Quadratic(lhs)) => {
+                Function::from(lhs + rhs)
+            }
+            (FunctionEnum::Quadratic(lhs), FunctionEnum::Quadratic(rhs)) => {
+                Function::from(lhs + rhs)
+            }
             // Polynomial output
             (FunctionEnum::Polynomial(lhs), FunctionEnum::Constant(rhs))
             | (FunctionEnum::Constant(rhs), FunctionEnum::Polynomial(lhs)) => {
@@ -103,7 +114,6 @@ impl Add for Function {
             (FunctionEnum::Polynomial(lhs), FunctionEnum::Polynomial(rhs)) => {
                 Function::from(lhs + rhs)
             }
-            _ => unimplemented!(),
         }
     }
 }
