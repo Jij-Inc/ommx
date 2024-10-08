@@ -23,11 +23,22 @@ macro_rules! impl_add_from {
 }
 
 macro_rules! impl_mul_inverse {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Mul<$rhs> for $lhs {
+            type Output = $rhs;
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                rhs * self
+            }
+        }
+    };
+}
+
+macro_rules! impl_mul_from {
     ($lhs:ty, $rhs:ty, $output:ty) => {
         impl ::std::ops::Mul<$rhs> for $lhs {
             type Output = $output;
             fn mul(self, rhs: $rhs) -> Self::Output {
-                rhs * self
+                self * <$lhs>::from(rhs)
             }
         }
     };

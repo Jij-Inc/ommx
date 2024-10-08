@@ -144,7 +144,7 @@ impl Mul<f64> for Linear {
     }
 }
 
-impl_mul_inverse!(f64, Linear, Linear);
+impl_mul_inverse!(f64, Linear);
 
 impl Mul for Linear {
     type Output = Quadratic;

@@ -1,7 +1,7 @@
 use crate::v1::{Linear, Monomial, Polynomial, Quadratic};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    ops::Add,
+    ops::{Add, Mul},
 };
 
 impl From<f64> for Polynomial {
@@ -86,3 +86,26 @@ impl_add_from!(Polynomial, Quadratic);
 impl_add_inverse!(f64, Polynomial);
 impl_add_inverse!(Linear, Polynomial);
 impl_add_inverse!(Quadratic, Polynomial);
+
+impl Mul for Polynomial {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self {
+        let mut terms = BTreeMap::new();
+        for (id_l, value_l) in self.into_iter() {
+            for (mut id_r, value_r) in rhs.clone().into_iter() {
+                id_r.append(&mut id_l.clone());
+                id_r.sort_unstable();
+                *terms.entry(id_r).or_default() += value_l * value_r;
+            }
+        }
+        terms.into_iter().collect()
+    }
+}
+
+impl_mul_from!(Polynomial, f64, Polynomial);
+impl_mul_from!(Polynomial, Linear, Polynomial);
+impl_mul_from!(Polynomial, Quadratic, Polynomial);
+impl_mul_inverse!(f64, Polynomial);
+impl_mul_inverse!(Linear, Polynomial);
+impl_mul_inverse!(Quadratic, Polynomial);
