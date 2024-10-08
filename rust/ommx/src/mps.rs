@@ -2,8 +2,8 @@
 //!
 //! ```no_run
 //!
-//! # fn main() -> Result<(), ommx ff::error::MpsParseError> {
-//! let mps = ommx::Mps::from_file("data/directory/data.mps.gz")?;
+//! # fn main() -> Result<(), ommx::mps::MpsParseError> {
+//! let mps = ommx::mps::load_mps_file("data/directory/data.mps.gz")?;
 //! # Ok(()) }
 //! ```
 //!
