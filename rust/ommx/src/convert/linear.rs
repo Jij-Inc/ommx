@@ -1,6 +1,6 @@
 use crate::v1::{linear::Term, Linear, Quadratic};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     iter::Sum,
     ops::*,
 };
@@ -93,7 +93,7 @@ impl Add for Linear {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self {
-        let mut terms = HashMap::new();
+        let mut terms = BTreeMap::new();
         for term in self.terms.iter().chain(rhs.terms.iter()) {
             *terms.entry(term.id).or_default() += term.coefficient;
         }
