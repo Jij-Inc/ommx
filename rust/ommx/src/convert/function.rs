@@ -42,6 +42,27 @@ impl From<f64> for Function {
     }
 }
 
+impl FromIterator<(u64, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (u64, f64)>>(iter: I) -> Self {
+        let linear: Linear = iter.into_iter().collect();
+        linear.into()
+    }
+}
+
+impl FromIterator<(u64, u64, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (u64, u64, f64)>>(iter: I) -> Self {
+        let quad: Quadratic = iter.into_iter().collect();
+        quad.into()
+    }
+}
+
+impl FromIterator<(Vec<u64>, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+        let poly: Polynomial = iter.into_iter().collect();
+        poly.into()
+    }
+}
+
 impl Function {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         match &self.function {
