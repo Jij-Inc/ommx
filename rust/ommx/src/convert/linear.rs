@@ -27,6 +27,13 @@ impl Linear {
     }
 }
 
+/// Create a linear function with a single term by regarding the input as the id of the term.
+///
+/// ```rust
+/// use ommx::v1::Linear;
+/// let linear = Linear::from(3);
+/// assert_eq!(linear, Linear::single_term(3, 1.0));
+/// ```
 impl From<u64> for Linear {
     fn from(id: u64) -> Self {
         Self::single_term(id, 1.0)
