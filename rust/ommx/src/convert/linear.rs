@@ -49,6 +49,46 @@ impl From<f64> for Linear {
     }
 }
 
+impl FromIterator<(u64, f64)> for Linear {
+    fn from_iter<I: IntoIterator<Item = (u64, f64)>>(iter: I) -> Self {
+        Self::new(iter.into_iter(), 0.0)
+    }
+}
+
+impl FromIterator<(Option<u64>, f64)> for Linear {
+    fn from_iter<I: IntoIterator<Item = (Option<u64>, f64)>>(iter: I) -> Self {
+        let mut map = BTreeMap::new();
+        for (id, coefficient) in iter {
+            *map.entry(id).or_default() += coefficient;
+        }
+        let mut out = Linear::default();
+        for (id, coefficient) in map {
+            if let Some(id) = id {
+                out.terms.push(Term { id, coefficient });
+            } else {
+                out.constant += coefficient;
+            }
+        }
+        out
+    }
+}
+
+impl IntoIterator for Linear {
+    type Item = (Option<u64>, f64);
+    // FIXME: Use impl Trait when it is stable
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(
+            std::iter::once((None, self.constant)).chain(
+                self.terms
+                    .into_iter()
+                    .map(|term| (Some(term.id), term.coefficient)),
+            ),
+        )
+    }
+}
+
 impl Add for Linear {
     type Output = Self;
 
