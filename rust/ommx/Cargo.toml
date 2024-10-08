@@ -25,7 +25,7 @@ env_logger.workspace = true
 itertools.workspace = true
 log.workspace = true
 maplit.workspace = true
-num = "0.4.3"
+num.workspace = true
 ocipkg.workspace = true
 proptest.workspace = true
 prost.workspace = true
@@ -35,7 +35,7 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 url.workspace = true
-uuid = { version = "1.10.0", features = ["v4"] }
+uuid.workspace = true
 
 [dev-dependencies]
 colored.workspace = true
