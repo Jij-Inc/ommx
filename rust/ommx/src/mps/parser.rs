@@ -267,7 +267,7 @@ impl State {
             assert_ne!(range, 0.0, "RANGES with 0.0 is not supported");
             let mut new_row_name_candidate = RowName(format!("{}_", row_name.0));
             let new_row_name = loop {
-                if self.mps.a.contains_key(&new_row_name_candidate) {
+                if !self.mps.a.contains_key(&new_row_name_candidate) {
                     break new_row_name_candidate;
                 }
                 new_row_name_candidate = RowName(format!("{}_", new_row_name_candidate.0));
