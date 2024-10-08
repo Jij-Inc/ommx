@@ -129,18 +129,12 @@ impl Sum for Linear {
 impl Mul<f64> for Linear {
     type Output = Self;
 
-    fn mul(self, rhs: f64) -> Self {
-        Self {
-            terms: self
-                .terms
-                .into_iter()
-                .map(|term| Term {
-                    id: term.id,
-                    coefficient: term.coefficient * rhs,
-                })
-                .collect(),
-            constant: self.constant * rhs,
+    fn mul(mut self, rhs: f64) -> Self {
+        for term in &mut self.terms {
+            term.coefficient *= rhs;
         }
+        self.constant *= rhs;
+        self
     }
 }
 
