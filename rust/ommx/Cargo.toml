@@ -23,6 +23,7 @@ colored.workspace = true
 derive_more.workspace = true
 directories.workspace = true
 env_logger.workspace = true
+flate2.workspace = true
 itertools.workspace = true
 log.workspace = true
 maplit.workspace = true
@@ -40,6 +41,7 @@ uuid.workspace = true
 
 [dev-dependencies]
 colored.workspace = true
+indoc.workspace = true
 
 [build-dependencies]
 built.workspace = true
