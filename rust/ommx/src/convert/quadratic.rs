@@ -248,7 +248,7 @@ impl AbsDiffEq for Quadratic {
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         match (&self.linear, &other.linear) {
             (Some(l), Some(r)) => {
-                if !l.abs_diff_eq(&r, epsilon) {
+                if !l.abs_diff_eq(r, epsilon) {
                     return false;
                 }
             }
