@@ -3,7 +3,7 @@
 //! ```no_run
 //!
 //! # fn main() -> Result<(), ommx::mps::MpsParseError> {
-//! let mps = ommx::mps::load_mps_file("data/directory/data.mps.gz")?;
+//! let mps = ommx::mps::load_file("data/directory/data.mps.gz")?;
 //! # Ok(()) }
 //! ```
 //!
@@ -57,7 +57,7 @@ mod parser;
 
 use parser::*;
 
-pub fn load_mps_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
+pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_file(path)?;
     convert::convert(mps_data)
 }
