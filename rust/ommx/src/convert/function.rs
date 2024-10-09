@@ -225,47 +225,45 @@ impl AbsDiffEq for Function {
         match (lhs, rhs) {
             // Same order
             (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => {
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
-            (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => {
-                lhs.abs_diff_eq(&rhs, epsilon)
-            }
+            (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
             (FunctionEnum::Quadratic(lhs), FunctionEnum::Quadratic(rhs)) => {
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Polynomial(lhs), FunctionEnum::Polynomial(rhs)) => {
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             // Upcast to higher order
             (FunctionEnum::Constant(lhs), FunctionEnum::Linear(rhs))
             | (FunctionEnum::Linear(rhs), FunctionEnum::Constant(lhs)) => {
-                let lhs = Linear::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                let lhs = Linear::from(*lhs);
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Constant(lhs), FunctionEnum::Quadratic(rhs))
             | (FunctionEnum::Quadratic(rhs), FunctionEnum::Constant(lhs)) => {
-                let lhs = Quadratic::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                let lhs = Quadratic::from(*lhs);
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Constant(lhs), FunctionEnum::Polynomial(rhs))
             | (FunctionEnum::Polynomial(rhs), FunctionEnum::Constant(lhs)) => {
-                let lhs = Polynomial::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                let lhs = Polynomial::from(*lhs);
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Linear(lhs), FunctionEnum::Quadratic(rhs))
             | (FunctionEnum::Quadratic(rhs), FunctionEnum::Linear(lhs)) => {
                 let lhs = Quadratic::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Linear(lhs), FunctionEnum::Polynomial(rhs))
             | (FunctionEnum::Polynomial(rhs), FunctionEnum::Linear(lhs)) => {
                 let lhs = Polynomial::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
             (FunctionEnum::Quadratic(lhs), FunctionEnum::Polynomial(rhs))
             | (FunctionEnum::Polynomial(rhs), FunctionEnum::Quadratic(lhs)) => {
                 let lhs = Polynomial::from(lhs.clone());
-                lhs.abs_diff_eq(&rhs, epsilon)
+                lhs.abs_diff_eq(rhs, epsilon)
             }
         }
     }
