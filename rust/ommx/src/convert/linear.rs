@@ -23,7 +23,11 @@ impl Linear {
         // Merge terms with the same id, and sort them by id
         let mut merged = BTreeMap::new();
         for (id, coefficient) in terms {
-            *merged.entry(id).or_default() += coefficient;
+            let v: &mut f64 = merged.entry(id).or_default();
+            *v += coefficient;
+            if v.abs() <= f64::EPSILON {
+                merged.remove(&id);
+            }
         }
         Self {
             terms: merged
@@ -245,7 +249,7 @@ mod tests {
         }
 
         #[test]
-        fn test_linear_add_associativity(a in any::<Linear>(), b in any::<Linear>(), c in any::<Linear>()) {
+        fn test_add_associativity(a in any::<Linear>(), b in any::<Linear>(), c in any::<Linear>()) {
             let left = (a.clone() + b.clone()) + c.clone();
             let right = a + (b + c);
             prop_assert!(left.abs_diff_eq(&right, 1e-10));

@@ -1,5 +1,7 @@
 use crate::v1::{Linear, Polynomial, Quadratic};
+use approx::AbsDiffEq;
 use num::Zero;
+use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Mul},
@@ -65,11 +67,16 @@ impl From<Linear> for Quadratic {
 
 impl FromIterator<((u64, u64), f64)> for Quadratic {
     fn from_iter<I: IntoIterator<Item = ((u64, u64), f64)>>(iter: I) -> Self {
+        let mut terms = BTreeMap::new();
+        for ((row, col), value) in iter {
+            let id = if row < col { (row, col) } else { (col, row) };
+            *terms.entry(id).or_default() += value;
+        }
         let mut columns = Vec::new();
         let mut rows = Vec::new();
         let mut values = Vec::new();
-        for ((column, row), value) in iter {
-            columns.push(column);
+        for ((row, col), value) in terms {
+            columns.push(col);
             rows.push(row);
             values.push(value);
         }
@@ -111,13 +118,23 @@ impl Add for Quadratic {
     fn add(self, rhs: Self) -> Self {
         let mut map: BTreeMap<(u64, u64), f64> = self.quad_iter().collect();
         for (id, value) in rhs.quad_iter() {
-            *map.entry(id).or_default() += value;
+            let v = map.entry(id).or_default();
+            *v += value;
+            if v.abs() <= f64::EPSILON {
+                map.remove(&id);
+            }
         }
         let mut out: Self = map.into_iter().collect();
         out.linear = match (self.linear, rhs.linear) {
-            (Some(l), Some(r)) => Some(l + r),
-            (Some(l), None) => Some(l),
-            (None, Some(r)) => Some(r),
+            (Some(l), Some(r)) => {
+                let out = l + r;
+                if out.is_zero() {
+                    None
+                } else {
+                    Some(out)
+                }
+            }
+            (Some(l), None) | (None, Some(l)) => Some(l),
             (None, None) => None,
         };
         out
@@ -152,6 +169,9 @@ impl Add<f64> for Quadratic {
 
 impl_add_inverse!(Linear, Quadratic);
 impl_add_inverse!(f64, Quadratic);
+impl_sub_by_neg_add!(Quadratic, Linear);
+impl_sub_by_neg_add!(Quadratic, f64);
+impl_sub_by_neg_add!(Quadratic, Quadratic);
 
 impl Mul for Quadratic {
     type Output = Polynomial;
@@ -189,3 +209,82 @@ impl Mul<f64> for Quadratic {
 }
 
 impl_mul_inverse!(f64, Quadratic);
+impl_neg_by_mul!(Quadratic);
+
+impl Arbitrary for Quadratic {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        let num_terms = 0..10_usize;
+        let terms = num_terms.prop_flat_map(|num_terms| {
+            proptest::collection::vec(
+                (
+                    (0..(2 * num_terms as u64), 0..(2 * num_terms as u64)),
+                    prop_oneof![Just(0.0), -1.0..1.0],
+                ),
+                num_terms,
+            )
+        });
+        let linear = Linear::arbitrary_with(());
+        (terms, linear)
+            .prop_map(|(terms, linear)| {
+                let mut quad: Quadratic = terms.into_iter().collect();
+                quad.linear = Some(linear);
+                quad
+            })
+            .boxed()
+    }
+}
+
+/// Compare coefficients in sup-norm.
+impl AbsDiffEq for Quadratic {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        match (&self.linear, &other.linear) {
+            (Some(l), Some(r)) => {
+                if !l.abs_diff_eq(&r, epsilon) {
+                    return false;
+                }
+            }
+            (Some(l), None) | (None, Some(l)) => {
+                if !l.abs_diff_eq(&Linear::zero(), epsilon) {
+                    return false;
+                }
+            }
+            (None, None) => {}
+        }
+        let sub = self.clone() - other.clone();
+        for (_, value) in sub.into_iter() {
+            if !value.abs_diff_eq(&0.0, epsilon) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_zero(a in any::<Quadratic>()) {
+            let z = a.clone() - a;
+            prop_assert!(z.is_zero());
+        }
+
+        #[test]
+        fn test_add_associativity(a in any::<Quadratic>(), b in any::<Quadratic>(), c in any::<Quadratic>()) {
+            let left = (a.clone() + b.clone()) + c.clone();
+            let right = a + (b + c);
+            prop_assert!(left.abs_diff_eq(&right, 1e-10));
+        }
+    }
+}
