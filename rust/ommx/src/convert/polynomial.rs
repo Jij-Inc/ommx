@@ -1,5 +1,7 @@
 use crate::v1::{Linear, Monomial, Polynomial, Quadratic};
+use approx::AbsDiffEq;
 use num::Zero;
+use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::{Add, Mul},
@@ -45,8 +47,16 @@ impl From<Quadratic> for Polynomial {
 
 impl FromIterator<(Vec<u64>, f64)> for Polynomial {
     fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+        let mut terms = BTreeMap::new();
+        for (ids, coefficient) in iter {
+            let v: &mut f64 = terms.entry(ids.clone()).or_default();
+            *v += coefficient;
+            if v.abs() <= f64::EPSILON {
+                terms.remove(&ids);
+            }
+        }
         Self {
-            terms: iter
+            terms: terms
                 .into_iter()
                 .map(|(ids, coefficient)| Monomial { ids, coefficient })
                 .collect(),
@@ -100,6 +110,7 @@ impl_add_from!(Polynomial, Quadratic);
 impl_add_inverse!(f64, Polynomial);
 impl_add_inverse!(Linear, Polynomial);
 impl_add_inverse!(Quadratic, Polynomial);
+impl_sub_by_neg_add!(Polynomial, Polynomial);
 
 impl Mul for Polynomial {
     type Output = Self;
@@ -135,3 +146,62 @@ impl_mul_from!(Polynomial, Quadratic, Polynomial);
 impl_mul_inverse!(f64, Polynomial);
 impl_mul_inverse!(Linear, Polynomial);
 impl_mul_inverse!(Quadratic, Polynomial);
+impl_neg_by_mul!(Polynomial);
+
+impl Arbitrary for Polynomial {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        let num_terms = 0..10_usize;
+        let terms = num_terms.prop_flat_map(|num_terms| {
+            proptest::collection::vec(
+                (
+                    proptest::collection::vec(0..(2 * num_terms as u64), 0..=num_terms),
+                    prop_oneof![Just(0.0), -1.0..1.0],
+                ),
+                num_terms,
+            )
+        });
+        terms.prop_map(|terms| terms.into_iter().collect()).boxed()
+    }
+}
+
+/// Compare coefficients in sup-norm.
+impl AbsDiffEq for Polynomial {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        if self.terms.len() != other.terms.len() {
+            return false;
+        }
+        let sub = self.clone() - other.clone();
+        sub.terms
+            .iter()
+            .all(|term| term.coefficient.abs() < epsilon)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_zero(a in any::<Polynomial>()) {
+            let z = a.clone() - a;
+            prop_assert!(z.is_zero());
+        }
+
+        #[test]
+        fn test_add_associativity(a in any::<Polynomial>(), b in any::<Polynomial>(), c in any::<Polynomial>()) {
+            let left = (a.clone() + b.clone()) + c.clone();
+            let right = a + (b + c);
+            prop_assert!(left.abs_diff_eq(&right, 1e-10));
+        }
+    }
+}
