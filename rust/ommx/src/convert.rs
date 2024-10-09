@@ -121,9 +121,21 @@ macro_rules! test_algebraic {
 
             #[test]
             fn test_distributive(a in any::<$target>(), b in any::<$target>(), c in any::<$target>()) {
-                let left = a.clone() * (b.clone() + c.clone());
-                let right = a.clone() * b.clone() + a * c;
-                prop_assert!(left.abs_diff_eq(&right, 1e-10));
+                let bc = b.clone() + c.clone();
+                let a_bc = a.clone() * bc.clone();
+                let ab = a.clone() * b.clone();
+                let ac = a.clone() * c.clone();
+                let ab_ac = ab.clone() + ac.clone();
+                prop_assert!(a_bc.abs_diff_eq(&ab_ac, 1e-10), r#"
+                    a = {a:?}
+                    b = {b:?}
+                    c = {c:?}
+                    b+c = {bc:?}
+                    a*b = {ab:?}
+                    a*c = {ac:?}
+                    a*(b+c) = {a_bc:?}
+                    a*b+a*c = {ab_ac:?}
+                "#);
             }
         }
     };

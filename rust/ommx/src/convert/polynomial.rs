@@ -48,7 +48,8 @@ impl From<Quadratic> for Polynomial {
 impl FromIterator<(Vec<u64>, f64)> for Polynomial {
     fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
         let mut terms = BTreeMap::new();
-        for (ids, coefficient) in iter {
+        for (mut ids, coefficient) in iter {
+            ids.sort_unstable();
             let v: &mut f64 = terms.entry(ids.clone()).or_default();
             *v += coefficient;
             if v.abs() <= f64::EPSILON {
