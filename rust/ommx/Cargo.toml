@@ -22,6 +22,7 @@ colored.workspace = true
 derive_more.workspace = true
 directories.workspace = true
 env_logger.workspace = true
+flate2.workspace = true
 itertools.workspace = true
 log.workspace = true
 maplit.workspace = true
@@ -38,6 +39,7 @@ uuid = { version = "1.10.0", features = ["v4"] }
 
 [dev-dependencies]
 colored.workspace = true
+indoc.workspace = true
 
 [build-dependencies]
 built.workspace = true
