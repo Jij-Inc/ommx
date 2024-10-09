@@ -138,6 +138,8 @@ impl Add<f64> for Linear {
 }
 
 impl_add_inverse!(f64, Linear);
+impl_sub_by_neg_add!(Linear, f64);
+impl_sub_by_neg_add!(Linear, Linear);
 
 impl Sum for Linear {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
@@ -161,6 +163,7 @@ impl Mul<f64> for Linear {
 }
 
 impl_mul_inverse!(f64, Linear);
+impl_neg_by_mul!(Linear);
 
 impl Mul for Linear {
     type Output = Quadratic;

@@ -22,6 +22,17 @@ macro_rules! impl_add_from {
     };
 }
 
+macro_rules! impl_sub_by_neg_add {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Sub<$rhs> for $lhs {
+            type Output = $lhs;
+            fn sub(self, rhs: $rhs) -> Self::Output {
+                self + (-rhs)
+            }
+        }
+    };
+}
+
 macro_rules! impl_mul_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Mul<$rhs> for $lhs {
@@ -39,6 +50,17 @@ macro_rules! impl_mul_from {
             type Output = $output;
             fn mul(self, rhs: $rhs) -> Self::Output {
                 self * <$lhs>::from(rhs)
+            }
+        }
+    };
+}
+
+macro_rules! impl_neg_by_mul {
+    ($ty:ty) => {
+        impl ::std::ops::Neg for $ty {
+            type Output = $ty;
+            fn neg(self) -> Self::Output {
+                self * -1.0
             }
         }
     };
