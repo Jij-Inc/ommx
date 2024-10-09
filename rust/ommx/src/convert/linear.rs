@@ -1,5 +1,7 @@
 use crate::v1::{linear::Term, Linear, Quadratic};
+use approx::AbsDiffEq;
 use num::Zero;
+use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter::Sum,
@@ -18,8 +20,14 @@ impl Zero for Linear {
 
 impl Linear {
     pub fn new(terms: impl Iterator<Item = (u64, f64)>, constant: f64) -> Self {
+        // Merge terms with the same id, and sort them by id
+        let mut merged = BTreeMap::new();
+        for (id, coefficient) in terms {
+            *merged.entry(id).or_default() += coefficient;
+        }
         Self {
-            terms: terms
+            terms: merged
+                .into_iter()
                 .map(|(id, coefficient)| Term { id, coefficient })
                 .collect(),
             constant,
@@ -174,5 +182,56 @@ impl Mul for Linear {
         let c = self.constant;
         quad.linear = Some(self * rhs.constant + c * rhs);
         quad
+    }
+}
+
+impl Arbitrary for Linear {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        let num_terms = 0..10_usize;
+        let terms = num_terms.prop_flat_map(|num_terms| {
+            proptest::collection::vec(
+                (0..(2 * num_terms as u64), prop_oneof![Just(0.0), -1.0..1.0]),
+                num_terms,
+            )
+        });
+        let constant = prop_oneof![Just(0.0), -1.0..1.0];
+        (terms, constant)
+            .prop_map(|(terms, constant)| Linear::new(terms.into_iter(), constant))
+            .boxed()
+    }
+}
+
+impl AbsDiffEq for Linear {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.constant.abs_diff_eq(&other.constant, epsilon)
+            && self.terms.len() == other.terms.len()
+            && self
+                .terms
+                .iter()
+                .zip(&other.terms)
+                .all(|(a, b)| a.id == b.id && a.coefficient.abs_diff_eq(&b.coefficient, epsilon))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_linear_add_associativity(a in any::<Linear>(), b in any::<Linear>(), c in any::<Linear>()) {
+            let left = (a.clone() + b.clone()) + c.clone();
+            let right = a + (b + c);
+            prop_assert!(left.abs_diff_eq(&right, 1e-10));
+        }
     }
 }

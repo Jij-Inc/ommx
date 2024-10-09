@@ -5,6 +5,9 @@
 # Rust
 target/
 
+# Proptest
+rust/ommx/proptest-regressions/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 .pytest_cache/
