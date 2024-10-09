@@ -114,7 +114,11 @@ impl Add for Linear {
     fn add(self, rhs: Self) -> Self {
         let mut terms = BTreeMap::new();
         for term in self.terms.iter().chain(rhs.terms.iter()) {
-            *terms.entry(term.id).or_default() += term.coefficient;
+            let value: &mut f64 = terms.entry(term.id).or_default();
+            *value += term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                terms.remove(&term.id);
+            }
         }
         Self {
             terms: terms
@@ -207,6 +211,7 @@ impl Arbitrary for Linear {
     }
 }
 
+/// Compare coefficients in sup-norm.
 impl AbsDiffEq for Linear {
     type Epsilon = f64;
 
@@ -215,13 +220,16 @@ impl AbsDiffEq for Linear {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.constant.abs_diff_eq(&other.constant, epsilon)
-            && self.terms.len() == other.terms.len()
-            && self
-                .terms
-                .iter()
-                .zip(&other.terms)
-                .all(|(a, b)| a.id == b.id && a.coefficient.abs_diff_eq(&b.coefficient, epsilon))
+        if !self.constant.abs_diff_eq(&other.constant, epsilon)
+            || self.terms.len() != other.terms.len()
+        {
+            return false;
+        }
+        // Since terms may be unsorted, we cannot compare them directly
+        let sub = self.clone() - other.clone();
+        sub.terms
+            .iter()
+            .all(|term| term.coefficient.abs() <= epsilon)
     }
 }
 
@@ -230,6 +238,12 @@ mod tests {
     use super::*;
 
     proptest! {
+        #[test]
+        fn test_zero(a in any::<Linear>()) {
+            let z = a.clone() - a;
+            prop_assert!(z.is_zero());
+        }
+
         #[test]
         fn test_linear_add_associativity(a in any::<Linear>(), b in any::<Linear>(), c in any::<Linear>()) {
             let left = (a.clone() + b.clone()) + c.clone();
