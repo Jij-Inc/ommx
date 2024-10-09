@@ -24,7 +24,7 @@ impl From<f64> for Polynomial {
         }
         Self {
             terms: vec![Monomial {
-                ids: vec![0],
+                ids: vec![],
                 coefficient: c,
             }],
         }

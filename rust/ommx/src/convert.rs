@@ -92,9 +92,12 @@ macro_rules! test_algebraic {
             fn test_add_associativity(a in any::<$target>(), b in any::<$target>(), c in any::<$target>()) {
                 let ab = a.clone() + b.clone();
                 let ab_c = ab.clone() + c.clone();
-                let bc = b + c;
-                let a_bc = a + bc.clone();
+                let bc = b.clone() + c.clone();
+                let a_bc = a.clone() + bc.clone();
                 prop_assert!(ab_c.abs_diff_eq(&a_bc, 1e-10), r#"
+                    a = {a:?}
+                    b = {b:?}
+                    c = {c:?}
                     a+b = {ab:?}
                     b+c = {bc:?}
                     (a+b)+c = {ab_c:?}
