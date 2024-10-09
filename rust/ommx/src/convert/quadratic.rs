@@ -190,6 +190,7 @@ impl Mul for Quadratic {
 }
 
 impl_mul_from!(Quadratic, Linear, Polynomial);
+impl_mul_inverse!(Linear, Quadratic);
 
 impl Mul<f64> for Quadratic {
     type Output = Self;

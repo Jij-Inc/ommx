@@ -3,7 +3,7 @@
 macro_rules! impl_add_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Add<$rhs> for $lhs {
-            type Output = $rhs;
+            type Output = <$rhs as ::std::ops::Add<$lhs>>::Output;
             fn add(self, rhs: $rhs) -> Self::Output {
                 rhs + self
             }
@@ -36,7 +36,7 @@ macro_rules! impl_sub_by_neg_add {
 macro_rules! impl_mul_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Mul<$rhs> for $lhs {
-            type Output = $rhs;
+            type Output = <$rhs as ::std::ops::Mul<$lhs>>::Output;
             fn mul(self, rhs: $rhs) -> Self::Output {
                 rhs * self
             }

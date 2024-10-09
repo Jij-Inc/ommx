@@ -191,7 +191,8 @@ impl Mul for Linear {
         }
         let mut quad: Quadratic = terms.into_iter().collect();
         let c = self.constant;
-        quad.linear = Some(self * rhs.constant + c * rhs);
+        let r = rhs.constant;
+        quad.linear = Some(self * r + c * rhs - r * c);
         quad
     }
 }
@@ -253,6 +254,20 @@ mod tests {
             let left = (a.clone() + b.clone()) + c.clone();
             let right = a + (b + c);
             prop_assert!(left.abs_diff_eq(&right, 1e-10));
+        }
+
+        #[test]
+        fn test_mul_associativity(a in any::<Linear>(), b in any::<Linear>(), c in any::<Linear>()) {
+            let ab = a.clone() * b.clone();
+            let ab_c = ab.clone() * c.clone();
+            let bc = b * c;
+            let a_bc = a * bc.clone();
+            prop_assert!(a_bc.abs_diff_eq(&ab_c, 1e-10), r#"
+                a*b = {ab:?}
+                b*c = {bc:?}
+                (a*b)*c = {ab_c:?}
+                a*(b*c) = {a_bc:?}
+            "#);
         }
     }
 }
