@@ -188,48 +188,5 @@ impl AbsDiffEq for Polynomial {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    proptest! {
-        #[test]
-        fn test_zero(a in any::<Polynomial>()) {
-            let z = a.clone() - a;
-            prop_assert!(z.is_zero());
-        }
-
-        #[test]
-        fn test_scalar_distributive(x in any::<Polynomial>(), y in any::<Polynomial>(), a in -1.0..1.0_f64) {
-            let a_xy = a * (x.clone() + y.clone());
-            let ax_ay = a * x + a * y;
-            prop_assert!(a_xy.abs_diff_eq(&ax_ay, 1e-10));
-        }
-
-        #[test]
-        fn test_add_associativity(a in any::<Polynomial>(), b in any::<Polynomial>(), c in any::<Polynomial>()) {
-            let left = (a.clone() + b.clone()) + c.clone();
-            let right = a + (b + c);
-            prop_assert!(left.abs_diff_eq(&right, 1e-10));
-        }
-
-        #[test]
-        fn test_mul_associativity(a in any::<Polynomial>(), b in any::<Polynomial>(), c in any::<Polynomial>()) {
-            let ab = a.clone() * b.clone();
-            let ab_c = ab.clone() * c.clone();
-            let bc = b * c;
-            let a_bc = a * bc.clone();
-            prop_assert!(a_bc.abs_diff_eq(&ab_c, 1e-10), r#"
-                a*b = {ab:?}
-                b*c = {bc:?}
-                (a*b)*c = {ab_c:?}
-                a*(b*c) = {a_bc:?}
-            "#);
-        }
-
-        #[test]
-        fn test_distributive(a in any::<Polynomial>(), b in any::<Polynomial>(), c in any::<Polynomial>()) {
-            let left = a.clone() * (b.clone() + c.clone());
-            let right = a.clone() * b.clone() + a * c;
-            prop_assert!(left.abs_diff_eq(&right, 1e-10));
-        }
-    }
+    test_algebraic!(super::Polynomial);
 }
