@@ -282,6 +282,13 @@ mod tests {
         }
 
         #[test]
+        fn test_scalar_distributive(x in any::<Quadratic>(), y in any::<Quadratic>(), a in -1.0..1.0_f64) {
+            let a_xy = a * (x.clone() + y.clone());
+            let ax_ay = a * x + a * y;
+            prop_assert!(a_xy.abs_diff_eq(&ax_ay, 1e-10));
+        }
+
+        #[test]
         fn test_add_associativity(a in any::<Quadratic>(), b in any::<Quadratic>(), c in any::<Quadratic>()) {
             let left = (a.clone() + b.clone()) + c.clone();
             let right = a + (b + c);
@@ -300,6 +307,13 @@ mod tests {
                 (a*b)*c = {ab_c:?}
                 a*(b*c) = {a_bc:?}
             "#);
+        }
+
+        #[test]
+        fn test_distributive(a in any::<Quadratic>(), b in any::<Quadratic>(), c in any::<Quadratic>()) {
+            let left = a.clone() * (b.clone() + c.clone());
+            let right = a.clone() * b.clone() + a * c;
+            prop_assert!(left.abs_diff_eq(&right, 1e-10));
         }
     }
 }
