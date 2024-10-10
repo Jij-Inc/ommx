@@ -2,6 +2,7 @@ mod artifact;
 mod builder;
 mod descriptor;
 mod evaluate;
+mod message;
 
 pub use artifact::*;
 pub use builder::*;

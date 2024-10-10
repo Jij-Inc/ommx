@@ -19,6 +19,7 @@ path = "../../rust/ommx"
 
 [dependencies]
 anyhow.workspace = true
+approx.workspace = true
 derive_more.workspace = true
 ocipkg.workspace = true
 pyo3.workspace = true
