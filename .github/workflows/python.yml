@@ -81,10 +81,6 @@ jobs:
           command: run
           args: --bin stub_gen --features=stub_gen
 
-      - name: Format generated codes
-        run: |
-          ruff format python/ommx/ommx/_ommx_rust.pyi
-
       - name: Check updated
         run: |
           git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
