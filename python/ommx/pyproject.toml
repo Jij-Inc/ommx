@@ -28,9 +28,10 @@ requires-python = ">=3.8"
 dependencies = [
     "numpy>=1.23.0, <2.0.0",
     "pandas>=2.0.0, <3.0.0",
-    "pyarrow>=16.0.0, <17.0.0",
     "protobuf>=5.26.1, <6.0.0",
+    "pyarrow>=16.0.0, <17.0.0",
     "python-dateutil>=2.9.0, <3.0.0",
+    "typing-extensions >= 4.12.2, < 5.0.0",
 ]
 
 [project.optional-dependencies]

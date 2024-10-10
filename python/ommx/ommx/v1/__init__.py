@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable
+from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
@@ -13,7 +14,7 @@ from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
-from .._ommx_rust import evaluate_instance, used_decision_variable_ids
+from .. import _ommx_rust
 
 
 @dataclass
@@ -153,7 +154,9 @@ class Instance:
                 "id": c.id,
                 "equality": _equality(c.equality),
                 "type": _function_type(c.function),
-                "used_ids": used_decision_variable_ids(c.function.SerializeToString()),
+                "used_ids": _ommx_rust.used_decision_variable_ids(
+                    c.function.SerializeToString()
+                ),
                 "name": c.name,
                 "subscripts": c.subscripts,
                 "description": c.description,
@@ -164,7 +167,9 @@ class Instance:
         return concat([df, parameters], axis=1).set_index("id")
 
     def evaluate(self, state: State) -> Solution:
-        out, _ = evaluate_instance(self.to_bytes(), state.SerializeToString())
+        out, _ = _ommx_rust.evaluate_instance(
+            self.to_bytes(), state.SerializeToString()
+        )
         return Solution.from_bytes(out)
 
 
@@ -535,13 +540,33 @@ class DecisionVariable:
 
 @dataclass
 class Linear:
-    raw: _Linear
+    """
+    Modeler API for linear function
 
-    def equals_to(self, other: Linear) -> bool:
-        """
-        Alternative to ``==`` operator to compare two linear functions.
-        """
-        return self.raw == other.raw
+    This is a wrapper of :class:`linear_pb2.Linear` protobuf message.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        Create a linear function :math:`f(x_1, x_2) = 2 x_1 + 3 x_2 + 1`
+        >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+
+        Or create via DecisionVariable
+        >>> x1 = DecisionVariable.integer(1)
+        >>> x2 = DecisionVariable.integer(2)
+        >>> g = 2*x1 + 3*x2 + 1
+
+        Compare two linear functions are equal in terms of a polynomial with tolerance
+        >>> assert f.almost_equal(g, atol=1e-12)
+
+        Note that `f == g` becomes an equality `Constraint`
+        >>> assert isinstance(f == g, Constraint)
+
+    """
+
+    raw: _Linear
 
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
         self.raw = _Linear(
@@ -551,6 +576,30 @@ class Linear:
             ],
             constant=constant,
         )
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Linear:
+        new = Linear(terms={})
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @deprecated("Use almost_equal method instead.")
+    def equals_to(self, other: Linear) -> bool:
+        """
+        Alternative to ``==`` operator to compare two linear functions.
+        """
+        return self.raw == other.raw
+
+    def almost_equal(self, other: Linear, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two linear functions have almost equal coefficients and constant.
+        """
+        lhs = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
 
     def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
@@ -602,9 +651,9 @@ class Linear:
         >>> x + y == 1
         Constraint(...)
 
-        To compare two objects, use :py:meth:`equals_to` method.
+        To compare two objects, use :py:meth:`almost_equal` method.
 
-        >>> assert (x + y).equals_to(Linear(terms={1: 1, 2: 1}))
+        >>> assert (x + y).almost_equal(Linear(terms={1: 1, 2: 1}))
 
         """
         return Constraint(
@@ -650,6 +699,23 @@ class Quadratic:
             linear=linear.raw if linear else None,
         )
 
+    @staticmethod
+    def from_bytes(data: bytes) -> Quadratic:
+        new = Quadratic(columns=[], rows=[], values=[])
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two quadratic functions have almost equal coefficients
+        """
+        lhs = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
+
     # TODO: Implement __add__, __radd__, __mul__, __rmul__
 
 
@@ -664,6 +730,23 @@ class Polynomial:
                 for ids, coefficient in coefficients
             ]
         )
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Polynomial:
+        new = Polynomial(coefficients=[])
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two polynomial have almost equal coefficients
+        """
+        lhs = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
 
     # TODO: Implement __add__, __radd__, __mul__, __rmul__
 
@@ -685,6 +768,31 @@ def as_function(
         return f
     else:
         raise ValueError(f"Unknown function type: {type(f)}")
+
+
+@dataclass
+class Function:
+    raw: _Function
+
+    def __init__(self, inner: int | float | Linear | Quadratic | Polynomial):
+        self.raw = as_function(inner)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Function:
+        new = Function(0)
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two functions have almost equal coefficients as a polynomial
+        """
+        lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
 
 
 @dataclass
