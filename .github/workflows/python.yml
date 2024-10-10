@@ -54,6 +54,41 @@ jobs:
           git add -N python/ommx/ommx/  # To check newly generated files
           git diff --exit-code
 
+  stub-gen:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+          cache: "pip"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: |
+          pip install "python/ommx/[dev]"
+
+      - name: Regenerate stub file
+        uses: actions-rs/cargo@v1
+        with:
+          command: run
+          args: --bin stub_gen --features=stub_gen
+
+      - name: Format generated codes
+        run: |
+          ruff format python/ommx/ommx/_ommx_rust.pyi
+
+      - name: Check updated
+        run: |
+          git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
+
   test:
     runs-on: ubuntu-latest
     strategy:
