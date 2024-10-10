@@ -541,6 +541,24 @@ class DecisionVariable:
 class Linear:
     raw: _Linear
 
+    def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
+        self.raw = _Linear(
+            terms=[
+                _Linear.Term(id=id, coefficient=coefficient)
+                for id, coefficient in terms.items()
+            ],
+            constant=constant,
+        )
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Linear:
+        new = Linear(terms={})
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
     def equals_to(self, other: Linear) -> bool:
         """
         Alternative to ``==`` operator to compare two linear functions.
@@ -554,15 +572,6 @@ class Linear:
         lhs = _ommx_rust.Linear.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
-
-    def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
-        self.raw = _Linear(
-            terms=[
-                _Linear.Term(id=id, coefficient=coefficient)
-                for id, coefficient in terms.items()
-            ],
-            constant=constant,
-        )
 
     def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
@@ -662,6 +671,15 @@ class Quadratic:
             linear=linear.raw if linear else None,
         )
 
+    @staticmethod
+    def from_bytes(data: bytes) -> Quadratic:
+        new = Quadratic(columns=[], rows=[], values=[])
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
     def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
         """
         Compare two quadratic functions have almost equal coefficients
@@ -684,6 +702,15 @@ class Polynomial:
                 for ids, coefficient in coefficients
             ]
         )
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Polynomial:
+        new = Polynomial(coefficients=[])
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
 
     def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
         """
@@ -721,6 +748,15 @@ class Function:
 
     def __init__(self, inner: int | float | Linear | Quadratic | Polynomial):
         self.raw = as_function(inner)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Function:
+        new = Function(0)
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
 
     def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
         """
