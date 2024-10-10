@@ -50,6 +50,7 @@
 //! - [MPS (format) -- Wikipedia](https://en.wikipedia.org/wiki/MPS_(format))
 //!
 
+use prost::Message;
 use std::path::Path;
 
 mod convert;
@@ -60,6 +61,11 @@ use parser::*;
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_file(path)?;
     convert::convert(mps_data)
+}
+
+pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError> {
+    let instance = load_file(path)?;
+    Ok(instance.encode_to_vec())
 }
 
 #[derive(Debug, thiserror::Error)]
