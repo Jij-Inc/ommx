@@ -24,6 +24,18 @@ impl Linear {
     pub fn almost_equal(&self, other: &Linear, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
     }
+
+    pub fn __add__(&self, rhs: &Linear) -> Linear {
+        Linear(self.0.clone() + rhs.0.clone())
+    }
+
+    pub fn __sub__(&self, rhs: &Linear) -> Linear {
+        Linear(self.0.clone() - rhs.0.clone())
+    }
+
+    pub fn __mul__(&self, rhs: &Linear) -> Quadratic {
+        Quadratic(self.0.clone() * rhs.0.clone())
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -47,6 +59,18 @@ impl Quadratic {
 
     pub fn almost_equal(&self, other: &Quadratic, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
+    }
+
+    pub fn __add__(&self, rhs: &Quadratic) -> Quadratic {
+        Quadratic(self.0.clone() + rhs.0.clone())
+    }
+
+    pub fn __sub__(&self, rhs: &Quadratic) -> Quadratic {
+        Quadratic(self.0.clone() - rhs.0.clone())
+    }
+
+    pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
+        Polynomial(self.0.clone() * rhs.0.clone())
     }
 }
 
@@ -72,6 +96,18 @@ impl Polynomial {
     pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
     }
+
+    pub fn __add__(&self, rhs: &Polynomial) -> Polynomial {
+        Polynomial(self.0.clone() + rhs.0.clone())
+    }
+
+    pub fn __sub__(&self, rhs: &Polynomial) -> Polynomial {
+        Polynomial(self.0.clone() - rhs.0.clone())
+    }
+
+    pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
+        Polynomial(self.0.clone() * rhs.0.clone())
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -95,5 +131,17 @@ impl Function {
 
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
+    }
+
+    pub fn __add__(&self, rhs: &Function) -> Function {
+        Function(self.0.clone() + rhs.0.clone())
+    }
+
+    pub fn __sub__(&self, rhs: &Function) -> Function {
+        Function(self.0.clone() - rhs.0.clone())
+    }
+
+    pub fn __mul__(&self, rhs: &Function) -> Function {
+        Function(self.0.clone() * rhs.0.clone())
     }
 }
