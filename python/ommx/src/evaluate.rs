@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 
 macro_rules! define_evaluate_function {
     ($evaluated:ty, $name:ident) => {
+        #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
         #[pyfunction]
         pub fn $name<'py>(
             function: &Bound<'py, PyBytes>,
@@ -27,6 +28,7 @@ define_evaluate_function!(Polynomial, evaluate_polynomial);
 
 macro_rules! define_evaluate_object {
     ($evaluated:ty, $name:ident) => {
+        #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
         #[pyfunction]
         pub fn $name<'py>(
             py: Python<'py>,
@@ -44,6 +46,7 @@ macro_rules! define_evaluate_object {
 define_evaluate_object!(Constraint, evaluate_constraint);
 define_evaluate_object!(Instance, evaluate_instance);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 #[pyfunction]
 pub fn used_decision_variable_ids(function: &Bound<PyBytes>) -> BTreeSet<u64> {
     let function = Function::decode(function.as_bytes()).unwrap();
