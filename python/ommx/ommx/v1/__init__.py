@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable
+from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
@@ -585,6 +586,7 @@ class Linear:
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
+    @deprecated("Use almost_equal method instead.")
     def equals_to(self, other: Linear) -> bool:
         """
         Alternative to ``==`` operator to compare two linear functions.
@@ -649,9 +651,9 @@ class Linear:
         >>> x + y == 1
         Constraint(...)
 
-        To compare two objects, use :py:meth:`equals_to` method.
+        To compare two objects, use :py:meth:`almost_equal` method.
 
-        >>> assert (x + y).equals_to(Linear(terms={1: 1, 2: 1}))
+        >>> assert (x + y).almost_equal(Linear(terms={1: 1, 2: 1}))
 
         """
         return Constraint(
