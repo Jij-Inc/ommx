@@ -539,6 +539,32 @@ class DecisionVariable:
 
 @dataclass
 class Linear:
+    """
+    Modeler API for linear function
+
+    This is a wrapper of :class:`linear_pb2.Linear` protobuf message.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        Create a linear function :math:`f(x_1, x_2) = 2 x_1 + 3 x_2 + 1`
+        >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+
+        Or create via DecisionVariable
+        >>> x1 = DecisionVariable.integer(1)
+        >>> x2 = DecisionVariable.integer(2)
+        >>> g = 2*x1 + 3*x2 + 1
+
+        Compare two linear functions are equal in terms of a polynomial with tolerance
+        >>> assert f.almost_equal(g, atol=1e-12)
+
+        Note that `f == g` becomes an equality `Constraint`
+        >>> assert isinstance(f == g, Constraint)
+
+    """
+
     raw: _Linear
 
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
