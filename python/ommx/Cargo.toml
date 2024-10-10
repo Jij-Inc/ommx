@@ -12,7 +12,15 @@ license.workspace = true
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "stub_gen"
+doc = false
+required-features = ["stub_gen"]
+
+[features]
+stub_gen = ["pyo3-stub-gen"]
 
 [dependencies.ommx]
 path = "../../rust/ommx"
@@ -24,5 +32,6 @@ derive_more.workspace = true
 ocipkg.workspace = true
 pyo3.workspace = true
 pyo3-log.workspace = true
+pyo3-stub-gen = { workspace = true, optional = true }
 serde-pyobject.workspace = true
 serde_json.workspace = true
