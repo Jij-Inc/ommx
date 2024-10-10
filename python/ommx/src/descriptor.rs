@@ -39,7 +39,10 @@ impl PyDescriptor {
         Ok(serde_json::to_string_pretty(&self.0)?)
     }
 
-    pub fn __eq__(&self, rhs: &Self) -> bool {
+    pub fn __eq__(&self, rhs: &Bound<PyAny>) -> bool {
+        let Ok(rhs) = rhs.extract::<Self>() else {
+            return false;
+        };
         self.0 == rhs.0
     }
 

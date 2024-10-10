@@ -107,7 +107,7 @@ class Descriptor:
     def __str__(self) -> str:
         ...
 
-    def __eq__(self, rhs:Descriptor) -> bool:
+    def __eq__(self, rhs:typing.Any) -> bool:
         ...
 
 
