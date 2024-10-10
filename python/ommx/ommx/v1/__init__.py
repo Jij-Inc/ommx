@@ -547,6 +547,14 @@ class Linear:
         """
         return self.raw == other.raw
 
+    def almost_equal(self, other: Linear, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two linear functions have almost equal coefficients and constant.
+        """
+        lhs = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
+
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
         self.raw = _Linear(
             terms=[
@@ -654,6 +662,14 @@ class Quadratic:
             linear=linear.raw if linear else None,
         )
 
+    def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two quadratic functions have almost equal coefficients
+        """
+        lhs = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
+
     # TODO: Implement __add__, __radd__, __mul__, __rmul__
 
 
@@ -668,6 +684,14 @@ class Polynomial:
                 for ids, coefficient in coefficients
             ]
         )
+
+    def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two polynomial have almost equal coefficients
+        """
+        lhs = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
 
     # TODO: Implement __add__, __radd__, __mul__, __rmul__
 
