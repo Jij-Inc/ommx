@@ -716,6 +716,22 @@ def as_function(
 
 
 @dataclass
+class Function:
+    raw: _Function
+
+    def __init__(self, inner: int | float | Linear | Quadratic | Polynomial):
+        self.raw = as_function(inner)
+
+    def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
+        """
+        Compare two functions have almost equal coefficients as a polynomial
+        """
+        lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
+        rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+        return lhs.almost_equal(rhs, atol)
+
+
+@dataclass
 class Constraint:
     """
     Constraints
