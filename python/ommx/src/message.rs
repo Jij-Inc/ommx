@@ -2,9 +2,11 @@ use approx::AbsDiffEq;
 use ommx::{v1, Message};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyBytes};
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Linear(v1::Linear);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Linear {
     #[staticmethod]
@@ -24,9 +26,11 @@ impl Linear {
     }
 }
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Quadratic(v1::Quadratic);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Quadratic {
     #[staticmethod]
@@ -46,9 +50,11 @@ impl Quadratic {
     }
 }
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Polynomial(v1::Polynomial);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Polynomial {
     #[staticmethod]
@@ -68,9 +74,11 @@ impl Polynomial {
     }
 }
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Function(v1::Function);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Function {
     #[staticmethod]
