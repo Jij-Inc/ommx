@@ -13,7 +13,7 @@ from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
-from .._ommx_rust import evaluate_instance, used_decision_variable_ids
+from .. import _ommx_rust
 
 
 @dataclass
@@ -153,7 +153,9 @@ class Instance:
                 "id": c.id,
                 "equality": _equality(c.equality),
                 "type": _function_type(c.function),
-                "used_ids": used_decision_variable_ids(c.function.SerializeToString()),
+                "used_ids": _ommx_rust.used_decision_variable_ids(
+                    c.function.SerializeToString()
+                ),
                 "name": c.name,
                 "subscripts": c.subscripts,
                 "description": c.description,
@@ -164,7 +166,9 @@ class Instance:
         return concat([df, parameters], axis=1).set_index("id")
 
     def evaluate(self, state: State) -> Solution:
-        out, _ = evaluate_instance(self.to_bytes(), state.SerializeToString())
+        out, _ = _ommx_rust.evaluate_instance(
+            self.to_bytes(), state.SerializeToString()
+        )
         return Solution.from_bytes(out)
 
 
