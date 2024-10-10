@@ -13,7 +13,7 @@ from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
-from .._ommx_rust import evaluate_instance, used_decision_variable_ids
+from .._ommx_rust import evaluate_instance, used_decision_variable_ids, load_mps_bytes
 
 
 @dataclass
@@ -109,6 +109,11 @@ class Instance:
                 sense=sense,
             )
         )
+
+    @staticmethod
+    def load_mps(path: str) -> Instance:
+        bytes = load_mps_bytes(path)
+        return Instance.from_bytes(bytes)
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
