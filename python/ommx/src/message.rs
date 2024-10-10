@@ -10,6 +10,11 @@ pub struct Linear(v1::Linear);
 #[pymethods]
 impl Linear {
     #[staticmethod]
+    pub fn single_term(id: u64, coefficient: f64) -> Self {
+        Self(v1::Linear::single_term(id, coefficient))
+    }
+
+    #[staticmethod]
     pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
         let inner = v1::Linear::decode(bytes.as_bytes())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
