@@ -5,11 +5,13 @@ use pyo3::{prelude::*, types::PyDict};
 use std::collections::HashMap;
 
 /// Descriptor of blob in artifact
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Descriptor")]
 #[derive(Debug, Clone, PartialEq, From, Deref)]
 pub struct PyDescriptor(Descriptor);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl PyDescriptor {
     pub fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
@@ -37,7 +39,10 @@ impl PyDescriptor {
         Ok(serde_json::to_string_pretty(&self.0)?)
     }
 
-    pub fn __eq__(&self, rhs: &Self) -> bool {
+    pub fn __eq__(&self, rhs: &Bound<PyAny>) -> bool {
+        let Ok(rhs) = rhs.extract::<Self>() else {
+            return false;
+        };
         self.0 == rhs.0
     }
 
