@@ -118,6 +118,26 @@ pub struct Function(v1::Function);
 #[pymethods]
 impl Function {
     #[staticmethod]
+    pub fn from_scalar(scalar: f64) -> Self {
+        Self(v1::Function::from(scalar))
+    }
+
+    #[staticmethod]
+    pub fn from_linear(linear: &Linear) -> Self {
+        Self(v1::Function::from(linear.0.clone()))
+    }
+
+    #[staticmethod]
+    pub fn from_quadratic(quadratic: &Quadratic) -> Self {
+        Self(v1::Function::from(quadratic.0.clone()))
+    }
+
+    #[staticmethod]
+    pub fn from_polynomial(polynomial: &Polynomial) -> Self {
+        Self(v1::Function::from(polynomial.0.clone()))
+    }
+
+    #[staticmethod]
     pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
         let inner = v1::Function::decode(bytes.as_bytes())
             .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
