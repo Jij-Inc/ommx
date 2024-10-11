@@ -31,3 +31,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
     Ok(())
 }
+
+#[cfg(feature = "stub_gen")]
+pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

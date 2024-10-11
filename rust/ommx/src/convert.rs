@@ -1,82 +1,156 @@
 //! Additional trait implementations for generated codes
 
-use crate::v1::{
-    function::{self, Function as FunctionEnum},
-    linear::Term,
-    Function, Linear, Polynomial, Quadratic, State,
-};
-use std::collections::{BTreeSet, HashMap};
-
-impl From<function::Function> for Function {
-    fn from(f: function::Function) -> Self {
-        Self { function: Some(f) }
-    }
-}
-
-impl From<Linear> for Function {
-    fn from(linear: Linear) -> Self {
-        Self {
-            function: Some(function::Function::Linear(linear)),
+macro_rules! impl_add_inverse {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Add<$rhs> for $lhs {
+            type Output = <$rhs as ::std::ops::Add<$lhs>>::Output;
+            fn add(self, rhs: $rhs) -> Self::Output {
+                rhs + self
+            }
         }
-    }
+    };
 }
 
-impl From<Quadratic> for Function {
-    fn from(q: Quadratic) -> Self {
-        Self {
-            function: Some(function::Function::Quadratic(q)),
+macro_rules! impl_add_from {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Add<$rhs> for $lhs {
+            type Output = $lhs;
+            fn add(self, rhs: $rhs) -> Self::Output {
+                self + <$lhs>::from(rhs)
+            }
         }
-    }
+    };
 }
+
+macro_rules! impl_sub_by_neg_add {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Sub<$rhs> for $lhs {
+            type Output = $lhs;
+            fn sub(self, rhs: $rhs) -> Self::Output {
+                self + (-rhs)
+            }
+        }
+    };
+}
+
+macro_rules! impl_mul_inverse {
+    ($lhs:ty, $rhs:ty) => {
+        impl ::std::ops::Mul<$rhs> for $lhs {
+            type Output = <$rhs as ::std::ops::Mul<$lhs>>::Output;
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                rhs * self
+            }
+        }
+    };
+}
+
+macro_rules! impl_mul_from {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
+        impl ::std::ops::Mul<$rhs> for $lhs {
+            type Output = $output;
+            fn mul(self, rhs: $rhs) -> Self::Output {
+                self * <$lhs>::from(rhs)
+            }
+        }
+    };
+}
+
+macro_rules! impl_neg_by_mul {
+    ($ty:ty) => {
+        impl ::std::ops::Neg for $ty {
+            type Output = $ty;
+            fn neg(self) -> Self::Output {
+                self * -1.0
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+macro_rules! test_algebraic {
+    ($target:ty) => {
+        use num::Zero;
+        use approx::AbsDiffEq;
+        #[allow(unused_imports)]
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn test_zero(a in any::<$target>()) {
+                let z = a.clone() - a;
+                prop_assert!(z.is_zero());
+            }
+
+            #[test]
+            fn test_scalar_distributive(x in any::<$target>(), y in any::<$target>(), a in -1.0..1.0_f64) {
+                let a_xy = a * (x.clone() + y.clone());
+                let ax_ay = a * x + a * y;
+                prop_assert!(a_xy.abs_diff_eq(&ax_ay, 1e-10));
+            }
+
+            #[test]
+            fn test_add_associativity(a in any::<$target>(), b in any::<$target>(), c in any::<$target>()) {
+                let ab = a.clone() + b.clone();
+                let ab_c = ab.clone() + c.clone();
+                let bc = b.clone() + c.clone();
+                let a_bc = a.clone() + bc.clone();
+                prop_assert!(ab_c.abs_diff_eq(&a_bc, 1e-10), r#"
+                    a = {a:?}
+                    b = {b:?}
+                    c = {c:?}
+                    a+b = {ab:?}
+                    b+c = {bc:?}
+                    (a+b)+c = {ab_c:?}
+                    a+(b+c) = {a_bc:?}
+                "#);
+            }
+
+            #[test]
+            fn test_mul_associativity(a in any::<$target>(), b in any::<$target>(), c in any::<$target>()) {
+                let ab = a.clone() * b.clone();
+                let ab_c = ab.clone() * c.clone();
+                let bc = b * c;
+                let a_bc = a * bc.clone();
+                prop_assert!(a_bc.abs_diff_eq(&ab_c, 1e-10), r#"
+                    a*b = {ab:?}
+                    b*c = {bc:?}
+                    (a*b)*c = {ab_c:?}
+                    a*(b*c) = {a_bc:?}
+                "#);
+            }
+
+            #[test]
+            fn test_distributive(a in any::<$target>(), b in any::<$target>(), c in any::<$target>()) {
+                let bc = b.clone() + c.clone();
+                let a_bc = a.clone() * bc.clone();
+                let ab = a.clone() * b.clone();
+                let ac = a.clone() * c.clone();
+                let ab_ac = ab.clone() + ac.clone();
+                prop_assert!(a_bc.abs_diff_eq(&ab_ac, 1e-10), r#"
+                    a = {a:?}
+                    b = {b:?}
+                    c = {c:?}
+                    b+c = {bc:?}
+                    a*b = {ab:?}
+                    a*c = {ac:?}
+                    a*(b+c) = {a_bc:?}
+                    a*b+a*c = {ab_ac:?}
+                "#);
+            }
+        }
+    };
+}
+
+mod function;
+mod linear;
+mod polynomial;
+mod quadratic;
+
+use crate::v1::State;
+use std::collections::HashMap;
 
 impl From<HashMap<u64, f64>> for State {
     fn from(entries: HashMap<u64, f64>) -> Self {
         Self { entries }
-    }
-}
-
-impl Function {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        match &self.function {
-            Some(FunctionEnum::Linear(linear)) => linear.used_decision_variable_ids(),
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.used_decision_variable_ids(),
-            Some(FunctionEnum::Polynomial(poly)) => poly.used_decision_variable_ids(),
-            _ => BTreeSet::new(),
-        }
-    }
-}
-
-impl Linear {
-    pub fn new(terms: impl Iterator<Item = (u64, f64)>, constant: f64) -> Self {
-        Self {
-            terms: terms
-                .map(|(id, coefficient)| Term { id, coefficient })
-                .collect(),
-            constant,
-        }
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms.iter().map(|term| term.id).collect()
-    }
-}
-
-impl Quadratic {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.columns
-            .iter()
-            .chain(self.rows.iter())
-            .cloned()
-            .collect()
-    }
-}
-
-impl Polynomial {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms
-            .iter()
-            .flat_map(|term| term.ids.iter())
-            .cloned()
-            .collect()
     }
 }

@@ -9,11 +9,13 @@ use ommx::artifact::{image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf};
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
 pub struct ArtifactArchive(Artifact<OciArchive>);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl ArtifactArchive {
     #[staticmethod]
@@ -58,11 +60,13 @@ impl ArtifactArchive {
     }
 }
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
 pub struct ArtifactDir(Artifact<OciDir>);
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl ArtifactDir {
     #[staticmethod]

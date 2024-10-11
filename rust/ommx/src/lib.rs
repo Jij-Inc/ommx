@@ -13,10 +13,7 @@
 //!   use prost::Message; // For `encode` and `decode` methods
 //!
 //!   // Create a linear function `x1 + 2 x2 + 3`
-//!   let linear = Linear {
-//!       terms: vec![ Term { id: 1, coefficient: 1.0 }, Term { id: 2, coefficient: 2.0 } ],
-//!       constant: 3.0,
-//!   };
+//!   let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //!   // Serialize the message to a byte stream
 //!   let mut buf = Vec::new();
@@ -36,13 +33,7 @@
 //!   use maplit::{hashmap, btreeset};
 //!
 //!   // Create a linear function `x1 + 2 x2 + 3`
-//!   let linear = Linear {
-//!       terms: vec![
-//!           Term { id: 1, coefficient: 1.0 },
-//!           Term { id: 2, coefficient: 2.0 }
-//!       ],
-//!       constant: 3.0,
-//!   };
+//!   let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //!   // Create a state `x1 = 4`, `x2 = 5`, and `x3 = 6`
 //!   let state: State = hashmap! { 1 => 4.0, 2 => 5.0, 3 => 6.0 }.into();
