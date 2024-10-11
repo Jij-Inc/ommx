@@ -41,6 +41,14 @@ impl Linear {
     pub fn __mul__(&self, rhs: &Linear) -> Quadratic {
         Quadratic(self.0.clone() * rhs.0.clone())
     }
+
+    pub fn add_scalar(&self, scalar: f64) -> Linear {
+        Linear(self.0.clone() + scalar)
+    }
+
+    pub fn mul_scalar(&self, scalar: f64) -> Linear {
+        Linear(self.0.clone() * scalar)
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -77,6 +85,22 @@ impl Quadratic {
     pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
         Polynomial(self.0.clone() * rhs.0.clone())
     }
+
+    pub fn add_scalar(&self, scalar: f64) -> Quadratic {
+        Quadratic(self.0.clone() + scalar)
+    }
+
+    pub fn add_linear(&self, linear: &Linear) -> Quadratic {
+        Quadratic(self.0.clone() + linear.0.clone())
+    }
+
+    pub fn mul_scalar(&self, scalar: f64) -> Quadratic {
+        Quadratic(self.0.clone() * scalar)
+    }
+
+    pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(self.0.clone() * linear.0.clone())
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -112,6 +136,30 @@ impl Polynomial {
 
     pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
         Polynomial(self.0.clone() * rhs.0.clone())
+    }
+
+    pub fn add_scalar(&self, scalar: f64) -> Polynomial {
+        Polynomial(self.0.clone() + scalar)
+    }
+
+    pub fn add_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(self.0.clone() + linear.0.clone())
+    }
+
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
+        Polynomial(self.0.clone() + quadratic.0.clone())
+    }
+
+    pub fn mul_scalar(&self, scalar: f64) -> Polynomial {
+        Polynomial(self.0.clone() * scalar)
+    }
+
+    pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(self.0.clone() * linear.0.clone())
+    }
+
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
+        Polynomial(self.0.clone() * quadratic.0.clone())
     }
 }
 
