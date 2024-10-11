@@ -4,6 +4,7 @@ use pyo3::{
     types::{PyBytes, PyString},
 };
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 #[pyfunction(name = "load_mps_bytes")]
 pub fn load_mps_bytes<'py>(
     py: Python<'py>,
