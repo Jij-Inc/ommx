@@ -726,14 +726,55 @@ class Quadratic:
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def __add__(self, other: Quadratic) -> Quadratic:
+    def __add__(
+        self, other: int | float | DecisionVariable | Linear | Quadratic
+    ) -> Quadratic:
+        if isinstance(other, float) or isinstance(other, int):
+            self.raw.linear.constant += other
+        if isinstance(other, DecisionVariable):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
+            return Quadratic.from_bytes((new.add_linear(rhs)).encode())
         if isinstance(other, Quadratic):
             new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
             rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
             return Quadratic.from_bytes((new + rhs).encode())
         return NotImplemented
 
-    # TODO: Implement __radd__, __mul__, __rmul__
+    def __radd__(self, other):
+        return self + other
+
+    def __sub__(
+        self, other: int | float | DecisionVariable | Linear | Quadratic
+    ) -> Quadratic:
+        if isinstance(other, (int, float, DecisionVariable, Linear, Quadratic)):
+            return self + (-other)
+        return NotImplemented
+
+    def __rsub__(self, other):
+        return -self + other
+
+    def __mul__(
+        self, other: int | float | Linear | Quadratic
+    ) -> Quadratic | Polynomial:
+        if isinstance(other, float) or isinstance(other, int):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            return Quadratic.from_bytes(new.mul_scalar(other).encode())
+        if isinstance(other, Linear):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
+            return Polynomial.from_bytes((new.mul_linear(rhs)).encode())
+        if isinstance(other, Quadratic):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+            return Polynomial.from_bytes((new * rhs).encode())
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __neg__(self) -> Linear:
+        return -1 * self
 
 
 @dataclass
