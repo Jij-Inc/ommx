@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Iterable
+from typing import Optional, Iterable, overload
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -615,24 +615,35 @@ class Linear:
             return Linear.from_bytes((new + rhs).encode())
         return NotImplemented
 
-    def __sub__(self, other) -> Linear:
-        return self + (-other)
-
-    def __radd__(self, other) -> Linear:
+    def __radd__(self, other):
         return self + other
 
-    def __rsub__(self, other) -> Linear:
-        return -self + other
-
-    def __mul__(self, other: int | float) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(
-                terms={term.id: term.coefficient * other for term in self.raw.terms},
-                constant=self.raw.constant * other,
-            )
+    def __sub__(self, other: int | float | DecisionVariable | Linear) -> Linear:
+        if isinstance(other, (int, float, DecisionVariable, Linear)):
+            return self + (-other)
         return NotImplemented
 
-    def __rmul__(self, other) -> Linear:
+    def __rsub__(self, other):
+        return -self + other
+
+    @overload
+    def __mul__(self, other: int | float) -> Linear: ...
+
+    @overload
+    def __mul__(self, other: Linear) -> Quadratic: ...
+
+    def __mul__(self, other: int | float | Linear) -> Linear | Quadratic:
+        if isinstance(other, float) or isinstance(other, int):
+            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+            new.mul_scalar(other)
+            return Linear.from_bytes(new.encode())
+        if isinstance(other, Linear):
+            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
+            return Quadratic.from_bytes((new * rhs).encode())
+        return NotImplemented
+
+    def __rmul__(self, other):
         return self * other
 
     def __neg__(self) -> Linear:
