@@ -7,6 +7,7 @@ name = "_ommx_rust"
 version = "1.1.1"
 dependencies = [
  "anyhow",
+ "approx",
  "derive_more",
  "ocipkg",
  "ommx",
