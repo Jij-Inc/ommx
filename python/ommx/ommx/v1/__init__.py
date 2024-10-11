@@ -606,14 +606,13 @@ class Linear:
             self.raw.constant += other
             return self
         if isinstance(other, DecisionVariable):
-            terms = {term.id: term.coefficient for term in self.raw.terms}
-            terms[other.raw.id] = terms.get(other.raw.id, 0) + 1
-            return Linear(terms=terms, constant=self.raw.constant)
+            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
+            return Linear.from_bytes((new + rhs).encode())
         if isinstance(other, Linear):
-            terms = {term.id: term.coefficient for term in self.raw.terms}
-            for term in other.raw.terms:
-                terms[term.id] = terms.get(term.id, 0) + term.coefficient
-            return Linear(terms=terms, constant=self.raw.constant + other.raw.constant)
+            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
+            return Linear.from_bytes((new + rhs).encode())
         return NotImplemented
 
     def __sub__(self, other) -> Linear:
@@ -716,7 +715,14 @@ class Quadratic:
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    # TODO: Implement __add__, __radd__, __mul__, __rmul__
+    def __add__(self, other: Quadratic) -> Quadratic:
+        if isinstance(other, Quadratic):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+            return Quadratic.from_bytes((new + rhs).encode())
+        return NotImplemented
+
+    # TODO: Implement __radd__, __mul__, __rmul__
 
 
 @dataclass
@@ -748,7 +754,14 @@ class Polynomial:
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    # TODO: Implement __add__, __radd__, __mul__, __rmul__
+    def __add__(self, other: Polynomial) -> Polynomial:
+        if isinstance(other, Polynomial):
+            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
+            return Polynomial.from_bytes((new + rhs).encode())
+        return NotImplemented
+
+    # TODO: Implement __radd__, __mul__, __rmul__
 
 
 def as_function(
@@ -793,6 +806,13 @@ class Function:
         lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
+
+    def __add__(self, other: Function) -> Function:
+        if isinstance(other, Function):
+            new = _ommx_rust.Function.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+            return Function.from_bytes((new + rhs).encode())
+        return NotImplemented
 
 
 @dataclass
