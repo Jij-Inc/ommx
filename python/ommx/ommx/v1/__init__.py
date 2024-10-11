@@ -635,8 +635,7 @@ class Linear:
     def __mul__(self, other: int | float | Linear) -> Linear | Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            new.mul_scalar(other)
-            return Linear.from_bytes(new.encode())
+            return Linear.from_bytes(new.mul_scalar(other).encode())
         if isinstance(other, Linear):
             new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
             rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
