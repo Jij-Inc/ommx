@@ -217,4 +217,36 @@ impl Function {
     pub fn __mul__(&self, rhs: &Function) -> Function {
         Function(self.0.clone() * rhs.0.clone())
     }
+
+    pub fn add_scalar(&self, scalar: f64) -> Function {
+        Function(self.0.clone() + scalar)
+    }
+
+    pub fn add_linear(&self, linear: &Linear) -> Function {
+        Function(self.0.clone() + linear.0.clone())
+    }
+
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Function {
+        Function(self.0.clone() + quadratic.0.clone())
+    }
+
+    pub fn add_polynomial(&self, polynomial: &Polynomial) -> Function {
+        Function(self.0.clone() + polynomial.0.clone())
+    }
+
+    pub fn mul_scalar(&self, scalar: f64) -> Function {
+        Function(self.0.clone() * scalar)
+    }
+
+    pub fn mul_linear(&self, linear: &Linear) -> Function {
+        Function(self.0.clone() * linear.0.clone())
+    }
+
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Function {
+        Function(self.0.clone() * quadratic.0.clone())
+    }
+
+    pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Function {
+        Function(self.0.clone() * polynomial.0.clone())
+    }
 }

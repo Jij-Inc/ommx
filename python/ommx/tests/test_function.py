@@ -1,6 +1,6 @@
 # FIXME: Use test case generator like Hypothesis
 
-from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial
+from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial, Function
 
 
 def assert_eq(lhs, rhs):
@@ -153,4 +153,27 @@ def test_polynomial():
     assert_eq(
         x1 * x2 * x3 + x1 * x2 * x3,
         2 * x1 * x2 * x3,
+    )
+
+
+def test_function():
+    x1 = DecisionVariable.binary(1)
+    x2 = DecisionVariable.binary(2)
+    x3 = DecisionVariable.binary(3)
+
+    assert_eq(
+        Function.from_linear(x1) + Function.from_scalar(3.0),
+        Function.from_linear(x1 + 3.0),
+    )
+    assert_eq(
+        Function.from_linear(x1) + Function.from_linear(x2),
+        Function.from_linear(x1 + x2),
+    )
+    assert_eq(
+        Function.from_linear(x1) * Function.from_linear(x2),
+        Function.from_quadratic(x1 * x2),
+    )
+    assert_eq(
+        Function.from_quadratic(x1 * x2) * Function.from_linear(x3),
+        Function.from_polynomial(x1 * x2 * x3),
     )

@@ -492,6 +492,12 @@ class DecisionVariable:
     def __rsub__(self, other) -> Linear:
         return -self + other
 
+    @overload
+    def __mul__(self, other: int | float) -> Linear: ...
+
+    @overload
+    def __mul__(self, other: DecisionVariable) -> Quadratic: ...
+
     def __mul__(self, other: int | float | DecisionVariable) -> Linear | Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: other})
@@ -925,6 +931,30 @@ class Function:
         self.raw = as_function(inner)
 
     @staticmethod
+    def from_scalar(value: int | float) -> Function:
+        return Function.from_bytes(_ommx_rust.Function.from_scalar(value).encode())
+
+    @staticmethod
+    def from_linear(linear: DecisionVariable | Linear) -> Function:
+        if isinstance(linear, DecisionVariable):
+            inner = _ommx_rust.Linear.single_term(linear.raw.id, 1)
+        elif isinstance(linear, Linear):
+            inner = _ommx_rust.Linear.decode(linear.raw.SerializeToString())
+        else:
+            raise ValueError(f"Unknown type: {type(linear)}")
+        return Function.from_bytes(_ommx_rust.Function.from_linear(inner).encode())
+
+    @staticmethod
+    def from_quadratic(quadratic: Quadratic) -> Function:
+        inner = _ommx_rust.Quadratic.decode(quadratic.raw.SerializeToString())
+        return Function.from_bytes(_ommx_rust.Function.from_quadratic(inner).encode())
+
+    @staticmethod
+    def from_polynomial(polynomial: Polynomial) -> Function:
+        inner = _ommx_rust.Polynomial.decode(polynomial.raw.SerializeToString())
+        return Function.from_bytes(_ommx_rust.Function.from_polynomial(inner).encode())
+
+    @staticmethod
     def from_bytes(data: bytes) -> Function:
         new = Function(0)
         new.raw.ParseFromString(data)
@@ -941,12 +971,99 @@ class Function:
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def __add__(self, other: Function) -> Function:
-        if isinstance(other, Function):
-            new = _ommx_rust.Function.decode(self.raw.SerializeToString())
+    def __add__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        if isinstance(other, float) or isinstance(other, int):
+            rhs = _ommx_rust.Function.from_scalar(other)
+        elif isinstance(other, DecisionVariable):
+            rhs = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.single_term(other.raw.id, 1)
+            )
+        elif isinstance(other, Linear):
+            rhs = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Quadratic):
+            rhs = _ommx_rust.Function.from_quadratic(
+                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Polynomial):
+            rhs = _ommx_rust.Function.from_polynomial(
+                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Function):
             rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
-            return Function.from_bytes((new + rhs).encode())
-        return NotImplemented
+        else:
+            return NotImplemented
+        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
+        return Function.from_bytes((new + rhs).encode())
+
+    def __radd__(self, other):
+        return self + other
+
+    def __sub__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self + (-other)
+
+    def __rsub__(self, other):
+        return -self + other
+
+    def __mul__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        if isinstance(other, float) or isinstance(other, int):
+            rhs = _ommx_rust.Function.from_scalar(other)
+        elif isinstance(other, DecisionVariable):
+            rhs = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.single_term(other.raw.id, 1)
+            )
+        elif isinstance(other, Linear):
+            rhs = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Quadratic):
+            rhs = _ommx_rust.Function.from_quadratic(
+                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Polynomial):
+            rhs = _ommx_rust.Function.from_polynomial(
+                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
+            )
+        elif isinstance(other, Function):
+            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+        else:
+            return NotImplemented
+        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
+        return Function.from_bytes((new * rhs).encode())
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __neg__(self) -> Function:
+        return -1 * self
 
 
 @dataclass
