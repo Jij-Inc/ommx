@@ -37,17 +37,73 @@ def test_linear():
 
 
 def test_quadratic():
-    # add to constants
+    x1 = DecisionVariable.binary(1)
+    x2 = DecisionVariable.binary(2)
+    x3 = DecisionVariable.binary(3)
+
+    # DecisionVariable * DecisionVariable
+    assert_eq(x1 * x1, Quadratic(columns=[1], rows=[1], values=[1.0]))
+    assert_eq(x1 * x2, Quadratic(columns=[1], rows=[2], values=[1.0]))
+    # DecisionVariable * Linear
+    assert_eq(2.0 * x1 * x2, Quadratic(columns=[1], rows=[2], values=[2.0]))
+    assert_eq(x1 * 2.0 * x2, Quadratic(columns=[1], rows=[2], values=[2.0]))
+    assert_eq(x1 * x2 * 2.0, Quadratic(columns=[1], rows=[2], values=[2.0]))
     assert_eq(
-        Quadratic(columns=[1], rows=[0], values=[1.0]) + 3,
+        x1 * (x2 + 1),
         Quadratic(
-            columns=[1], rows=[0], values=[1.0], linear=Linear(terms={}, constant=3)
+            columns=[1], rows=[2], values=[1.0], linear=Linear(terms={1: 1}, constant=0)
         ),
     )
     assert_eq(
-        3 + Quadratic(columns=[1], rows=[0], values=[1.0]),
+        (x2 + 1) * x1,
         Quadratic(
-            columns=[1], rows=[0], values=[1.0], linear=Linear(terms={}, constant=3)
+            columns=[1], rows=[2], values=[1.0], linear=Linear(terms={1: 1}, constant=0)
+        ),
+    )
+
+    assert_eq(
+        x1 * x2 + 2,
+        Quadratic(
+            columns=[1],
+            rows=[2],
+            values=[1.0],
+            linear=Linear(terms={}, constant=2),
+        ),
+    )
+    assert_eq(
+        2 + x1 * x2,
+        Quadratic(
+            columns=[1],
+            rows=[2],
+            values=[1.0],
+            linear=Linear(terms={}, constant=2),
+        ),
+    )
+    assert_eq(
+        x1 * x2 + x3 + 2,
+        Quadratic(
+            columns=[1],
+            rows=[2],
+            values=[1.0],
+            linear=Linear(terms={3: 1}, constant=2),
+        ),
+    )
+    assert_eq(
+        x1 * x2 + (x3 + 2),
+        Quadratic(
+            columns=[1],
+            rows=[2],
+            values=[1.0],
+            linear=Linear(terms={3: 1}, constant=2),
+        ),
+    )
+    assert_eq(
+        (x3 + 2) + x1 * x2,
+        Quadratic(
+            columns=[1],
+            rows=[2],
+            values=[1.0],
+            linear=Linear(terms={3: 1}, constant=2),
         ),
     )
 

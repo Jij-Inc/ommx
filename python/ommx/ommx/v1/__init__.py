@@ -492,12 +492,14 @@ class DecisionVariable:
     def __rsub__(self, other) -> Linear:
         return -self + other
 
-    def __mul__(self, other: int | float) -> Linear:
+    def __mul__(self, other: int | float | DecisionVariable) -> Linear | Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: other})
+        if isinstance(other, DecisionVariable):
+            return Quadratic(columns=[self.raw.id], rows=[other.raw.id], values=[1.0])
         return NotImplemented
 
-    def __rmul__(self, other) -> Linear:
+    def __rmul__(self, other):
         return self * other
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
@@ -632,10 +634,16 @@ class Linear:
     @overload
     def __mul__(self, other: Linear) -> Quadratic: ...
 
-    def __mul__(self, other: int | float | Linear) -> Linear | Quadratic:
+    def __mul__(
+        self, other: int | float | DecisionVariable | Linear
+    ) -> Linear | Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
             return Linear.from_bytes(new.mul_scalar(other).encode())
+        if isinstance(other, DecisionVariable):
+            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
+            return Quadratic.from_bytes((new * rhs).encode())
         if isinstance(other, Linear):
             new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
             rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
@@ -734,6 +742,10 @@ class Quadratic:
         if isinstance(other, DecisionVariable):
             new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
             rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
+            return Quadratic.from_bytes((new.add_linear(rhs)).encode())
+        if isinstance(other, Linear):
+            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
+            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
             return Quadratic.from_bytes((new.add_linear(rhs)).encode())
         if isinstance(other, Quadratic):
             new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
