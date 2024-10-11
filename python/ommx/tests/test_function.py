@@ -1,4 +1,6 @@
-from ommx.v1 import Linear, DecisionVariable, Quadratic
+# FIXME: Use test case generator like Hypothesis
+
+from ommx.v1 import Linear, DecisionVariable, Quadratic, Polynomial
 
 
 def assert_eq(lhs, rhs):
@@ -107,6 +109,8 @@ def test_quadratic():
         ),
     )
 
+    assert_eq(x1 * x2 + x1 * x2, 2 * x1 * x2)
+
     # x0 * x1 = x1 * x0
     assert_eq(
         Quadratic(columns=[1], rows=[0], values=[1.0]),
@@ -116,4 +120,37 @@ def test_quadratic():
     assert_eq(
         Quadratic(columns=[1, 2], rows=[0, 3], values=[1.0, 2.0]),
         Quadratic(columns=[0, 3], rows=[1, 2], values=[1.0, 2.0]),
+    )
+
+
+def test_polynomial():
+    x1 = DecisionVariable.binary(1)
+    x2 = DecisionVariable.binary(2)
+    x3 = DecisionVariable.binary(3)
+
+    # DecisionVariable * DecisionVariable
+    assert_eq(x1 * x1 * x1, Polynomial(terms={(1, 1, 1): 1.0}))
+    assert_eq(x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 1.0}))
+    assert_eq(x1 * x3 * x2, Polynomial(terms={(1, 2, 3): 1.0}))
+    assert_eq(2.0 * x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 2.0}))
+    assert_eq(x1 * 2.0 * x2 * x3, Polynomial(terms={(1, 2, 3): 2.0}))
+    assert_eq(x1 * x2 * 2.0 * x3, Polynomial(terms={(1, 2, 3): 2.0}))
+
+    assert_eq(x1 * x2 * x3 + 2, Polynomial(terms={(1, 2, 3): 1.0, (): 2.0}))
+    assert_eq(2 + x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 1.0, (): 2.0}))
+
+    assert_eq(x1 * x2 * x3 + x1, Polynomial(terms={(1, 2, 3): 1.0, (1,): 1.0}))
+    assert_eq(x1 + x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 1.0, (1,): 1.0}))
+    assert_eq(x1 * x2 * x3 + 2.0 * x1, Polynomial(terms={(1, 2, 3): 1.0, (1,): 2.0}))
+    assert_eq(2.0 * x1 + x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 1.0, (1,): 2.0}))
+    assert_eq(
+        x1 * x2 * x3 + 2.0 * x1 * x2, Polynomial(terms={(1, 2, 3): 1.0, (1, 2): 2.0})
+    )
+    assert_eq(
+        2.0 * x1 * x2 + x1 * x2 * x3, Polynomial(terms={(1, 2, 3): 1.0, (1, 2): 2.0})
+    )
+
+    assert_eq(
+        x1 * x2 * x3 + x1 * x2 * x3,
+        2 * x1 * x2 * x3,
     )
