@@ -730,6 +730,7 @@ class Quadratic:
     ) -> Quadratic:
         if isinstance(other, float) or isinstance(other, int):
             self.raw.linear.constant += other
+            return self
         if isinstance(other, DecisionVariable):
             new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
             rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)

@@ -1,4 +1,4 @@
-from ommx.v1 import Linear, DecisionVariable
+from ommx.v1 import Linear, DecisionVariable, Quadratic
 
 
 def assert_eq(lhs, rhs):
@@ -34,3 +34,30 @@ def test_linear():
     # add to linear
     assert_eq(Linear(terms={1: 2}) + Linear(terms={2: 3}), Linear(terms={1: 2, 2: 3}))
     assert_eq(Linear(terms={1: 2}) + Linear(terms={1: 3}), Linear(terms={1: 5}))
+
+
+def test_quadratic():
+    # add to constants
+    assert_eq(
+        Quadratic(columns=[1], rows=[0], values=[1.0]) + 3,
+        Quadratic(
+            columns=[1], rows=[0], values=[1.0], linear=Linear(terms={}, constant=3)
+        ),
+    )
+    assert_eq(
+        3 + Quadratic(columns=[1], rows=[0], values=[1.0]),
+        Quadratic(
+            columns=[1], rows=[0], values=[1.0], linear=Linear(terms={}, constant=3)
+        ),
+    )
+
+    # x0 * x1 = x1 * x0
+    assert_eq(
+        Quadratic(columns=[1], rows=[0], values=[1.0]),
+        Quadratic(columns=[0], rows=[1], values=[1.0]),
+    )
+    # x1 * x0 + 2 * x2 * x3 = x0 * x1 + 2 * x3 * x2
+    assert_eq(
+        Quadratic(columns=[1, 2], rows=[0, 3], values=[1.0, 2.0]),
+        Quadratic(columns=[0, 3], rows=[1, 2], values=[1.0, 2.0]),
+    )
