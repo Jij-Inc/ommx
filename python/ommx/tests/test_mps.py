@@ -8,7 +8,6 @@ def test_example_mps():
     test_dir = Path(__file__).parent
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
-    print(instance)
     assert instance.raw.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
     # convert to a format easier to test.
     # for some reason a simple to_dict gets us weird tuple keys so
@@ -23,8 +22,6 @@ def test_example_mps():
     ]
     constraints.sort(key=lambda c: c["name"])
 
-    print(dvars)
-    print(constraints)
     assert len(dvars) == 3
     assert len(constraints) == 3
     x, y, z = dvars
