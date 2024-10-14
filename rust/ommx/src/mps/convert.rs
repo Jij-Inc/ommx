@@ -42,7 +42,7 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
         // our ID ends up being dependent on the order of vars hashset. This is
         // unstable across executions -- we might want to consider an indexset
         // in the future
-        let id = (i + 1) as u64;
+        let id = i as u64;
         name_id_map.insert(var_name.clone(), id);
         dvars.push(v1::DecisionVariable {
             id: i as u64,
