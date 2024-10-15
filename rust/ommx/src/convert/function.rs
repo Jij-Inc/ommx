@@ -139,6 +139,20 @@ impl Add for Function {
     }
 }
 
+impl_add_from!(Function, f64);
+impl_add_from!(Function, Linear);
+impl_add_from!(Function, Quadratic);
+impl_add_from!(Function, Polynomial);
+impl_add_inverse!(f64, Function);
+impl_add_inverse!(Linear, Function);
+impl_add_inverse!(Quadratic, Function);
+impl_add_inverse!(Polynomial, Function);
+impl_sub_by_neg_add!(Function, Function);
+impl_sub_by_neg_add!(Function, f64);
+impl_sub_by_neg_add!(Function, Linear);
+impl_sub_by_neg_add!(Function, Quadratic);
+impl_sub_by_neg_add!(Function, Polynomial);
+
 impl Mul for Function {
     type Output = Self;
 
@@ -180,10 +194,15 @@ impl Mul for Function {
     }
 }
 
-impl_mul_from!(Function, f64, Function);
-impl_mul_inverse!(f64, Function);
 impl_neg_by_mul!(Function);
-impl_sub_by_neg_add!(Function, Function);
+impl_mul_from!(Function, f64, Function);
+impl_mul_from!(Function, Linear, Function);
+impl_mul_from!(Function, Quadratic, Function);
+impl_mul_from!(Function, Polynomial, Function);
+impl_mul_inverse!(f64, Function);
+impl_mul_inverse!(Linear, Function);
+impl_mul_inverse!(Quadratic, Function);
+impl_mul_inverse!(Polynomial, Function);
 
 impl Sum for Function {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
