@@ -487,8 +487,8 @@ class DecisionVariable:
         return self.raw.bound
 
     @property
-    def subscripts(self) -> tuple[int, ...]:
-        return tuple(self.raw.subscripts)
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
 
     @property
     def description(self) -> str:
