@@ -471,12 +471,24 @@ class DecisionVariable:
         )
 
     @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
     def kind(self) -> Kind:
         return self.raw.kind
 
     @property
     def bound(self) -> Bound:
         return self.raw.bound
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
 
     def equals_to(self, other: DecisionVariable) -> bool:
         """
