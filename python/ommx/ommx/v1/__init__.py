@@ -112,6 +112,11 @@ class Instance:
         )
 
     @staticmethod
+    def load_mps(path: str) -> Instance:
+        bytes = _ommx_rust.load_mps_bytes(path)
+        return Instance.from_bytes(bytes)
+
+    @staticmethod
     def from_bytes(data: bytes) -> Instance:
         instance = _Instance()
         instance.ParseFromString(data)

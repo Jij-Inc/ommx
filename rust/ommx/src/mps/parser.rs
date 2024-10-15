@@ -163,26 +163,28 @@ impl State {
     fn read_row_field(&mut self, fields: Vec<&str>) -> Result<()> {
         assert_eq!(fields.len(), 2);
         let row_name = RowName(fields[1].to_string());
-        self.mps.a.insert(row_name.clone(), HashMap::new());
         match fields[0] {
             "N" => {
                 if self.mps.objective_name.is_empty() {
                     self.mps.objective_name = row_name
                 }
+                // skip adding this row to `a` matrix
+                return Ok(());
             }
             "E" => {
-                self.mps.eq.insert(row_name);
+                self.mps.eq.insert(row_name.clone());
             }
             "G" => {
-                self.mps.ge.insert(row_name);
+                self.mps.ge.insert(row_name.clone());
             }
             "L" => {
-                self.mps.le.insert(row_name);
+                self.mps.le.insert(row_name.clone());
             }
             _ => {
                 return Err(MpsParseError::InvalidRowType(fields[0].to_string()));
             }
         }
+        self.mps.a.insert(row_name, HashMap::new());
         Ok(())
     }
 
