@@ -161,19 +161,7 @@ def test_function():
     x2 = DecisionVariable.binary(2)
     x3 = DecisionVariable.binary(3)
 
-    assert_eq(
-        Function.from_linear(x1) + Function.from_scalar(3.0),
-        Function.from_linear(x1 + 3.0),
-    )
-    assert_eq(
-        Function.from_linear(x1) + Function.from_linear(x2),
-        Function.from_linear(x1 + x2),
-    )
-    assert_eq(
-        Function.from_linear(x1) * Function.from_linear(x2),
-        Function.from_quadratic(x1 * x2),
-    )
-    assert_eq(
-        Function.from_quadratic(x1 * x2) * Function.from_linear(x3),
-        Function.from_polynomial(x1 * x2 * x3),
-    )
+    assert_eq(Function(x1) + Function(3.0), Function(x1 + 3.0))
+    assert_eq(Function(x1) + Function(x2), Function(x1 + x2))
+    assert_eq(Function(x1) * Function(x2), Function(x1 * x2))
+    assert_eq(Function(x1 * x2) * Function(x3), Function(x1 * x2 * x3))

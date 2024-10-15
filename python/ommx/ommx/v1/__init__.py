@@ -957,32 +957,17 @@ def as_function(
 class Function:
     raw: _Function
 
-    def __init__(self, inner: int | float | Linear | Quadratic | Polynomial):
+    def __init__(
+        self,
+        inner: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | _Function,
+    ):
         self.raw = as_function(inner)
-
-    @staticmethod
-    def from_scalar(value: int | float) -> Function:
-        return Function.from_bytes(_ommx_rust.Function.from_scalar(value).encode())
-
-    @staticmethod
-    def from_linear(linear: DecisionVariable | Linear) -> Function:
-        if isinstance(linear, DecisionVariable):
-            inner = _ommx_rust.Linear.single_term(linear.raw.id, 1)
-        elif isinstance(linear, Linear):
-            inner = _ommx_rust.Linear.decode(linear.raw.SerializeToString())
-        else:
-            raise ValueError(f"Unknown type: {type(linear)}")
-        return Function.from_bytes(_ommx_rust.Function.from_linear(inner).encode())
-
-    @staticmethod
-    def from_quadratic(quadratic: Quadratic) -> Function:
-        inner = _ommx_rust.Quadratic.decode(quadratic.raw.SerializeToString())
-        return Function.from_bytes(_ommx_rust.Function.from_quadratic(inner).encode())
-
-    @staticmethod
-    def from_polynomial(polynomial: Polynomial) -> Function:
-        inner = _ommx_rust.Polynomial.decode(polynomial.raw.SerializeToString())
-        return Function.from_bytes(_ommx_rust.Function.from_polynomial(inner).encode())
 
     @staticmethod
     def from_bytes(data: bytes) -> Function:
