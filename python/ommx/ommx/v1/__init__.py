@@ -325,6 +325,15 @@ class DecisionVariable:
     SEMI_CONTINUOUS = _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS
 
     @staticmethod
+    def from_bytes(data: bytes) -> DecisionVariable:
+        new = DecisionVariable(_DecisionVariable())
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @staticmethod
     def of_type(
         kind: Kind,
         id: int,
@@ -462,12 +471,28 @@ class DecisionVariable:
         )
 
     @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
     def kind(self) -> Kind:
         return self.raw.kind
 
     @property
     def bound(self) -> Bound:
         return self.raw.bound
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
 
     def equals_to(self, other: DecisionVariable) -> bool:
         """
@@ -1121,6 +1146,18 @@ class Constraint:
             parameters=parameters,
         )
         Constraint._counter += 1
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Constraint:
+        raw = _Constraint()
+        raw.ParseFromString(data)
+        new = Constraint(function=0, equality=Equality.EQUALITY_EQUAL_TO_ZERO)
+        new.raw = raw
+        Constraint._counter = max(Constraint._counter, raw.id + 1)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
 
     def set_id(self, id: int) -> Constraint:
         """
