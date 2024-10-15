@@ -110,7 +110,12 @@ jobs:
           pip install -v -e 'python/ommx/[dev]'
           pip install pytest-github-actions-annotate-failures
 
-      - name: Lint ommx
+      - name: Ruff check
+        if: always()
+        run: |
+          ruff check python
+
+      - name: Type check ommx
         if: always()
         run: |
           pyright python/ommx
