@@ -1,4 +1,3 @@
-from ._ommx_rust import load_mps_bytes
 from .v1 import Instance
 
 

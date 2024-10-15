@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import ommx.mps
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance
 
 
 def test_example_mps():
