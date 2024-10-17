@@ -500,6 +500,9 @@ class DecisionVariable:
         """
         return self.raw == other.raw
 
+    def __expr__(self) -> str:
+        return f"x{self.raw.id}"
+
     def __add__(self, other: int | float | DecisionVariable) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: 1}, constant=other)
@@ -639,6 +642,9 @@ class Linear:
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def __expr__(self) -> str:
+        return _ommx_rust.Linear.decode(self.raw.SerializeToString()).__expr__()
+
     def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             self.raw.constant += other
@@ -769,6 +775,9 @@ class Quadratic:
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def __expr__(self) -> str:
+        return _ommx_rust.Quadratic.decode(self.raw.SerializeToString()).__expr__()
+
     def __add__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic:
@@ -863,6 +872,9 @@ class Polynomial:
         lhs = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
+
+    def __expr__(self) -> str:
+        return _ommx_rust.Polynomial.decode(self.raw.SerializeToString()).__expr__()
 
     def __add__(
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
@@ -985,6 +997,9 @@ class Function:
         lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
+
+    def __expr__(self) -> str:
+        return _ommx_rust.Function.decode(self.raw.SerializeToString()).__expr__()
 
     def __add__(
         self,
