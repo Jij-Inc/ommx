@@ -104,11 +104,10 @@ impl<'a> IntoIterator for &'a Linear {
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
-            std::iter::once((None, self.constant)).chain(
-                self.terms
-                    .iter()
-                    .map(|term| (Some(term.id), term.coefficient)),
-            ),
+            self.terms
+                .iter()
+                .map(|term| (Some(term.id), term.coefficient))
+                .chain(std::iter::once((None, self.constant))),
         )
     }
 }
@@ -239,49 +238,16 @@ impl AbsDiffEq for Linear {
     }
 }
 
-impl fmt::Display for Term {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.coefficient == 1.0 {
-            write!(f, "x{}", self.id)
-        } else if self.coefficient == -1.0 {
-            write!(f, "-x{}", self.id)
-        } else {
-            if let Some(precision) = f.precision() {
-                write!(f, "{1:.0$}*x{2}", precision, self.coefficient, self.id)
-            } else {
-                write!(f, "{}*x{}", self.coefficient, self.id)
-            }
-        }
-    }
-}
-
 impl fmt::Display for Linear {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut terms = self.terms.iter().peekable();
-        if let Some(term) = terms.next() {
-            term.fmt(f)?;
-            for term in terms {
-                if term.coefficient < 0.0 {
-                    write!(f, " - ")?;
-                    Term {
-                        coefficient: -term.coefficient,
-                        ..*term
-                    }
-                    .fmt(f)?;
-                } else {
-                    write!(f, " + ")?;
-                    term.fmt(f)?;
-                }
-            }
+        if self.is_zero() {
+            return write!(f, "0");
         }
-        if !self.constant.is_zero() {
-            if let Some(precision) = f.precision() {
-                write!(f, " + {1:.0$}", precision, self.constant)?;
-            } else {
-                write!(f, " + {}", self.constant)?;
-            }
-        }
-        Ok(())
+        super::format::format_polynomial(
+            f,
+            self.into_iter()
+                .map(|(id, c)| (id.into_iter().collect(), c)),
+        )
     }
 }
 
@@ -303,5 +269,6 @@ mod tests {
             format!("{:.2}", linear),
             "x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00"
         );
+        assert_eq!(super::Linear::zero().to_string(), "0");
     }
 }
