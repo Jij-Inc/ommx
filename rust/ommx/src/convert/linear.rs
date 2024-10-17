@@ -4,6 +4,7 @@ use num::Zero;
 use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt,
     iter::Sum,
     ops::*,
 };
@@ -238,7 +239,69 @@ impl AbsDiffEq for Linear {
     }
 }
 
+impl fmt::Display for Term {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.coefficient == 1.0 {
+            write!(f, "x{}", self.id)
+        } else if self.coefficient == -1.0 {
+            write!(f, "-x{}", self.id)
+        } else {
+            if let Some(precision) = f.precision() {
+                write!(f, "{1:.0$}*x{2}", precision, self.coefficient, self.id)
+            } else {
+                write!(f, "{}*x{}", self.coefficient, self.id)
+            }
+        }
+    }
+}
+
+impl fmt::Display for Linear {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut terms = self.terms.iter().peekable();
+        if let Some(term) = terms.next() {
+            term.fmt(f)?;
+            for term in terms {
+                if term.coefficient < 0.0 {
+                    write!(f, " - ")?;
+                    Term {
+                        coefficient: -term.coefficient,
+                        ..*term
+                    }
+                    .fmt(f)?;
+                } else {
+                    write!(f, " + ")?;
+                    term.fmt(f)?;
+                }
+            }
+        }
+        if !self.constant.is_zero() {
+            if let Some(precision) = f.precision() {
+                write!(f, " + {1:.0$}", precision, self.constant)?;
+            } else {
+                write!(f, " + {}", self.constant)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     test_algebraic!(super::Linear);
+
+    #[test]
+    fn format() {
+        let linear = super::Linear::new(
+            [(1, 1.0), (2, -1.0), (3, -2.0), (4, 1.0 / 3.0)].into_iter(),
+            3.0,
+        );
+        assert_eq!(
+            linear.to_string(),
+            "x1 - x2 - 2*x3 + 0.3333333333333333*x4 + 3"
+        );
+        assert_eq!(
+            format!("{:.2}", linear),
+            "x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00"
+        );
+    }
 }
