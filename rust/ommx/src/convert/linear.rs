@@ -97,16 +97,16 @@ impl FromIterator<(Option<u64>, f64)> for Linear {
     }
 }
 
-impl IntoIterator for Linear {
+impl<'a> IntoIterator for &'a Linear {
     type Item = (Option<u64>, f64);
     // FIXME: Use impl Trait when it is stable
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
             std::iter::once((None, self.constant)).chain(
                 self.terms
-                    .into_iter()
+                    .iter()
                     .map(|term| (Some(term.id), term.coefficient)),
             ),
         )
