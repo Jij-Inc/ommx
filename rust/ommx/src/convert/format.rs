@@ -29,7 +29,7 @@ pub fn format_polynomial(
     iter: impl Iterator<Item = (Vec<u64>, f64)>,
 ) -> fmt::Result {
     let mut terms = iter.peekable();
-    while let Some((ids, coefficient)) = terms.next() {
+    for (ids, coefficient) in terms.by_ref() {
         if coefficient == 0.0 {
             continue;
         }
