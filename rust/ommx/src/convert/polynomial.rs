@@ -4,8 +4,11 @@ use num::Zero;
 use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt,
     ops::{Add, Mul},
 };
+
+use super::format::format_polynomial;
 
 impl Zero for Polynomial {
     fn zero() -> Self {
@@ -69,7 +72,14 @@ impl IntoIterator for Polynomial {
     type Item = (Vec<u64>, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
 
-    fn into_iter(self) -> Self::IntoIter {
+    fn into_iter(mut self) -> Self::IntoIter {
+        self.terms.sort_unstable_by(|a, b| {
+            if a.ids.len() != b.ids.len() {
+                b.ids.len().cmp(&a.ids.len())
+            } else {
+                b.ids.cmp(&a.ids)
+            }
+        });
         Box::new(
             self.terms
                 .into_iter()
@@ -187,7 +197,26 @@ impl AbsDiffEq for Polynomial {
     }
 }
 
+impl fmt::Display for Polynomial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_zero() {
+            return write!(f, "0");
+        }
+        format_polynomial(f, self.clone().into_iter())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     test_algebraic!(super::Polynomial);
+
+    #[test]
+    fn format() {
+        let p = super::Polynomial::from_iter(vec![
+            (vec![1, 2, 3], 1.0),
+            (vec![2, 3], -1.0),
+            (vec![1, 3, 5, 6], 3.0),
+        ]);
+        assert_eq!(p.to_string(), "3*x1*x3*x5*x6 + x1*x2*x3 - x2*x3");
+    }
 }

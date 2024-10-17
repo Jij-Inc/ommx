@@ -141,6 +141,7 @@ macro_rules! test_algebraic {
     };
 }
 
+mod format;
 mod function;
 mod linear;
 mod polynomial;

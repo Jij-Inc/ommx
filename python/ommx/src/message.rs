@@ -30,6 +30,10 @@ impl Linear {
         self.0.abs_diff_eq(&other.0, atol)
     }
 
+    pub fn __repr__(&self) -> String {
+        self.0.to_string()
+    }
+
     pub fn __add__(&self, rhs: &Linear) -> Linear {
         Linear(self.0.clone() + rhs.0.clone())
     }
@@ -72,6 +76,10 @@ impl Quadratic {
 
     pub fn almost_equal(&self, other: &Quadratic, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
+    }
+
+    pub fn __repr__(&self) -> String {
+        self.0.to_string()
     }
 
     pub fn __add__(&self, rhs: &Quadratic) -> Quadratic {
@@ -124,6 +132,10 @@ impl Polynomial {
 
     pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
+    }
+
+    pub fn __repr__(&self) -> String {
+        self.0.to_string()
     }
 
     pub fn __add__(&self, rhs: &Polynomial) -> Polynomial {
@@ -204,6 +216,10 @@ impl Function {
 
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, atol)
+    }
+
+    pub fn __repr__(&self) -> String {
+        self.0.to_string()
     }
 
     pub fn __add__(&self, rhs: &Function) -> Function {

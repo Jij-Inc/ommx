@@ -4,8 +4,11 @@ use num::Zero;
 use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt,
     ops::{Add, Mul},
 };
+
+use super::format::format_polynomial;
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -34,7 +37,9 @@ impl Quadratic {
             .collect()
     }
 
-    fn quad_iter(&self) -> impl Iterator<Item = ((u64, u64), f64)> + '_ {
+    pub fn quad_iter(&self) -> impl Iterator<Item = ((u64, u64), f64)> + '_ {
+        assert_eq!(self.columns.len(), self.rows.len());
+        assert_eq!(self.columns.len(), self.values.len());
         self.columns
             .iter()
             .zip(self.rows.iter())
@@ -89,16 +94,16 @@ impl FromIterator<((u64, u64), f64)> for Quadratic {
     }
 }
 
-impl IntoIterator for Quadratic {
+impl<'a> IntoIterator for &'a Quadratic {
     type Item = (Vec<u64>, f64);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         assert_eq!(self.columns.len(), self.rows.len());
         assert_eq!(self.columns.len(), self.values.len());
         let n = self.columns.len();
         let quad = (0..n).map(move |i| (vec![self.columns[i], self.rows[i]], self.values[i]));
-        if let Some(linear) = self.linear {
+        if let Some(linear) = &self.linear {
             Box::new(
                 quad.chain(
                     linear
@@ -270,7 +275,37 @@ impl AbsDiffEq for Quadratic {
     }
 }
 
+impl fmt::Display for Quadratic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_zero() {
+            return write!(f, "0");
+        }
+        format_polynomial(f, self.into_iter())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     test_algebraic!(super::Quadratic);
+
+    #[test]
+    fn format() {
+        let q = super::Quadratic::from_iter(vec![
+            ((0, 1), 1.0),
+            ((1, 2), -1.0),
+            ((2, 0), -2.0),
+            ((1, 3), 1.0 / 3.0),
+        ]) + super::Linear::new(
+            [(1, 1.0), (2, -1.0), (3, -2.0), (4, 1.0 / 3.0)].into_iter(),
+            3.0,
+        );
+        assert_eq!(
+            q.to_string(),
+            "x0*x1 - 2*x0*x2 - x1*x2 + 0.3333333333333333*x1*x3 + x1 - x2 - 2*x3 + 0.3333333333333333*x4 + 3"
+        );
+        assert_eq!(
+            format!("{:.2}", q),
+            "x0*x1 - 2.00*x0*x2 - x1*x2 + 0.33*x1*x3 + x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00"
+        );
+    }
 }
