@@ -30,7 +30,7 @@ impl Linear {
         self.0.abs_diff_eq(&other.0, atol)
     }
 
-    pub fn __expr__(&self) -> String {
+    pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
 
@@ -78,7 +78,7 @@ impl Quadratic {
         self.0.abs_diff_eq(&other.0, atol)
     }
 
-    pub fn __expr__(&self) -> String {
+    pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
 
@@ -134,7 +134,7 @@ impl Polynomial {
         self.0.abs_diff_eq(&other.0, atol)
     }
 
-    pub fn __expr__(&self) -> String {
+    pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
 
@@ -218,7 +218,7 @@ impl Function {
         self.0.abs_diff_eq(&other.0, atol)
     }
 
-    pub fn __expr__(&self) -> String {
+    pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
 
