@@ -1181,3 +1181,31 @@ class Constraint:
     def add_parameters(self, parameters: dict[str, str]) -> Constraint:
         self.raw.parameters.update(parameters)
         return self
+
+    @property
+    def function(self) -> Function:
+        return Function(self.raw.function)
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    def equality(self) -> Equality.ValueType:
+        return self.raw.equality
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
