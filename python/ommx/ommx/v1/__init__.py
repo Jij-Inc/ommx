@@ -1121,7 +1121,7 @@ class Constraint:
     """
 
     raw: _Constraint
-    _counter = 0
+    _counter: int = 0
 
     EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
     LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
@@ -1131,13 +1131,20 @@ class Constraint:
         *,
         function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
         equality: Equality.ValueType,
+        id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
         parameters: Optional[dict[str, str]] = None,
     ):
+        if id is None:
+            id = Constraint._counter
+            Constraint._counter += 1
+        if id > Constraint._counter:
+            Constraint._counter = id + 1
+
         self.raw = _Constraint(
-            id=Constraint._counter,
+            id=id,
             function=as_function(function),
             equality=equality,
             name=name,
@@ -1145,7 +1152,6 @@ class Constraint:
             subscripts=subscripts,
             parameters=parameters,
         )
-        Constraint._counter += 1
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
