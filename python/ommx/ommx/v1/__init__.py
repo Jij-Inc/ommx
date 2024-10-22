@@ -1209,3 +1209,10 @@ class Constraint:
     @property
     def parameters(self) -> dict[str, str]:
         return dict(self.raw.parameters)
+
+    def __repr__(self) -> str:
+        if self.raw.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+            return f"Constraint({self.function.__repr__()} == 0)"
+        if self.raw.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+            return f"Constraint({self.function.__repr__()} <= 0)"
+        return self.raw.__repr__()
