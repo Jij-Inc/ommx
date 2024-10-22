@@ -1,16 +1,25 @@
 use std::fmt;
 
+fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
+    if let Some(precision) = f.precision() {
+        write!(f, "{1:.0$}", precision, coefficient)?;
+    } else {
+        write!(f, "{}", coefficient)?;
+    }
+    Ok(())
+}
+
 fn write_term(f: &mut fmt::Formatter, mut ids: Vec<u64>, coefficient: f64) -> fmt::Result {
+    if ids.is_empty() {
+        write_f64_with_precision(f, coefficient)?;
+        return Ok(());
+    }
     if coefficient == -1.0 {
         write!(f, "-")?;
     } else if coefficient != 1.0 {
-        if let Some(precision) = f.precision() {
-            write!(f, "{1:.0$}", precision, coefficient)?;
-        } else {
-            write!(f, "{}", coefficient)?;
-        }
+        write_f64_with_precision(f, coefficient)?;
     }
-    if coefficient != 1.0 && !ids.is_empty() {
+    if coefficient != 1.0 {
         write!(f, "*")?;
     }
     ids.sort_unstable();
