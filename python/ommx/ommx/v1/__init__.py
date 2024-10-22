@@ -1109,19 +1109,17 @@ class Constraint:
         >>> x = DecisionVariable.integer(1)
         >>> y = DecisionVariable.integer(2)
         >>> x + y == 1
-        Constraint(...)
+        Constraint(Function(x1 + x2 - 1) == 0)
 
         To set the name or other attributes, use methods like :py:meth:`add_name`.
 
         >>> (x + y <= 5).add_name("constraint 1")
-        Constraint(...
-        name: "constraint 1"
-        )
+        Constraint(Function(x1 + x2 - 5) <= 0)
 
     """
 
     raw: _Constraint
-    _counter = 0
+    _counter: int = 0
 
     EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
     LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
@@ -1131,13 +1129,20 @@ class Constraint:
         *,
         function: int | float | DecisionVariable | Linear | Quadratic | Polynomial,
         equality: Equality.ValueType,
+        id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
         subscripts: Optional[list[int]] = None,
         parameters: Optional[dict[str, str]] = None,
     ):
+        if id is None:
+            id = Constraint._counter
+            Constraint._counter += 1
+        if id > Constraint._counter:
+            Constraint._counter = id + 1
+
         self.raw = _Constraint(
-            id=Constraint._counter,
+            id=id,
             function=as_function(function),
             equality=equality,
             name=name,
@@ -1145,7 +1150,6 @@ class Constraint:
             subscripts=subscripts,
             parameters=parameters,
         )
-        Constraint._counter += 1
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
@@ -1181,3 +1185,38 @@ class Constraint:
     def add_parameters(self, parameters: dict[str, str]) -> Constraint:
         self.raw.parameters.update(parameters)
         return self
+
+    @property
+    def function(self) -> Function:
+        return Function(self.raw.function)
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    def equality(self) -> Equality.ValueType:
+        return self.raw.equality
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
+
+    def __repr__(self) -> str:
+        if self.raw.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+            return f"Constraint({self.function.__repr__()} == 0)"
+        if self.raw.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+            return f"Constraint({self.function.__repr__()} <= 0)"
+        return self.raw.__repr__()
