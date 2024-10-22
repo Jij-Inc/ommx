@@ -1109,14 +1109,12 @@ class Constraint:
         >>> x = DecisionVariable.integer(1)
         >>> y = DecisionVariable.integer(2)
         >>> x + y == 1
-        Constraint(...)
+        Constraint(Function(x1 + x2 - 1) == 0)
 
         To set the name or other attributes, use methods like :py:meth:`add_name`.
 
         >>> (x + y <= 5).add_name("constraint 1")
-        Constraint(...
-        name: "constraint 1"
-        )
+        Constraint(Function(x1 + x2 - 5) <= 0)
 
     """
 
