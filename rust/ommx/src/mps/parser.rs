@@ -82,6 +82,16 @@ impl FromStr for ObjSense {
     }
 }
 
+impl std::fmt::Display for ObjSense {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ObjSense::Min => "MIN",
+            ObjSense::Max => "MAX",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// A marker new type of `String` to distinguish row name and column name
 #[derive(Debug, Deref, Clone, PartialEq, Eq, Hash, Default)]
 pub struct RowName(pub String);
