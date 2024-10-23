@@ -27,13 +27,13 @@ fn write_mps<W: std::io::Write>(mps: &Mps, out: &mut W) -> anyhow::Result<()> {
     write_columns(mps, out)?;
     write_rhs(mps, out)?;
     write_bounds(mps, out)?;
-    write!(out, "ENDDATA\n")?;
+    writeln!(out, "ENDDATA\n")?;
     Ok(())
 }
 
-fn write_beginning<W: std::io::Write>(mps: &Mps, f: &mut W) -> anyhow::Result<()> {
-    writeln!(f, "NAME {}", mps.name)?;
-    write!(f, "OBJSENSE {}", mps.obj_sense)?;
+fn write_beginning<W: std::io::Write>(mps: &Mps, out: &mut W) -> anyhow::Result<()> {
+    writeln!(out, "NAME {}", mps.name)?;
+    writeln!(out, "OBJSENSE {}", mps.obj_sense)?;
     Ok(())
 }
 
