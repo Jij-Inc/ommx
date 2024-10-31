@@ -48,13 +48,45 @@ fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsW
     Ok(())
 }
 
+#[derive(Default)]
+struct IntorgTracker {
+    intorg_block: bool,
+    counter: u64,
+}
+
+impl IntorgTracker {
+    fn intorg<W: Write>(&mut self, out: &mut W) -> Result<(), MpsWriteError> {
+        // only print marker if not already in INTORG block
+        if !self.intorg_block {
+            self.intorg_block = true;
+            writeln!(out, "  MARK{}   'MARKER'      'INTORG'", self.counter)?;
+            self.counter += 1;
+        }
+        Ok(())
+    }
+    fn intend<W: Write>(&mut self, out: &mut W) -> Result<(), MpsWriteError> {
+        // only print marker if in INTORG block
+        if self.intorg_block {
+            self.intorg_block = false;
+            writeln!(out, "  MARK{}   'MARKER'      'INTEND'", self.counter)?;
+            self.counter += 1;
+        }
+        Ok(())
+    }
+}
+
 fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     let obj_name = "OBJ";
-    // TODO use INTORG marker? would require some overhaul
+    let mut marker_tracker = IntorgTracker::default();
     for dvar in instance.decision_variables.iter() {
         let id = dvar.id;
         let var_name = dvar_name(dvar);
+        match dvar.kind {
+            // binary or integer var
+            1 | 2 => marker_tracker.intorg(out)?,
+            _ => marker_tracker.intend(out)?,
+        }
         // write obj function entry
         write_col_entry(id, &var_name, &obj_name, instance.objective.as_ref(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
@@ -73,6 +105,8 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
             write_col_entry(id, &var_name, &row_name, constr.function.as_ref(), out)?;
         }
     }
+    // print final INTEND
+    marker_tracker.intend(out)?;
     Ok(())
 }
 
@@ -100,7 +134,7 @@ fn write_col_entry<W: Write>(
             for term in terms {
                 if term.id == var_id && term.coefficient != 0.0 {
                     let coeff = term.coefficient;
-                    writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
+                    writeln!(out, "  {var_name}  {row_name}  {coeff}")?;
                 }
             }
         }
