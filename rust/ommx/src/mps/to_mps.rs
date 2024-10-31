@@ -17,10 +17,8 @@ fn write_beginning<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(),
     let name = instance
         .description
         .clone()
-        .map(|descr| descr.name)
-        .flatten()
+        .and_then(|descr| descr.name)
         .unwrap_or(String::from("Converted OMMX problem"));
-    // TODO fallible conversion?
     let obj_sense = match instance.sense {
         // v1::instance::Sense::Maximize
         // TODO more robust way to write this?
@@ -52,11 +50,24 @@ fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsW
 
 fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
-    let obj_name = Cow::Borrowed("OBJ");
+    let obj_name = "OBJ";
+    // TODO use INTORG marker? would require some overhaul
     for dvar in instance.decision_variables.iter() {
         let id = dvar.id;
         let var_name = dvar_name(dvar);
-        write_col_entry(id, &var_name, &obj_name, instance.objective.as_ref(), out)?;
+        // write obj function entry
+        write_col_entry(id, &var_name, &obj_name, instance.objective.as_ref(), out)
+            // a bit of a workaround so that write_col_entry is easier to write.
+            // It assumes we're dealing with constraints, but here we change the
+            // error type so the message is clearer with the objective function
+            .map_err(|err| {
+                if let MpsWriteError::InvalidConstraintType(a, b) = err {
+                    MpsWriteError::InvalidObjectiveType(a, b)
+                } else {
+                    panic!() // we know this can't happen
+                }
+            })?;
+        // write entries of this var's column for each constraint
         for constr in instance.constraints.iter() {
             let row_name = constr_name(constr);
             write_col_entry(id, &var_name, &row_name, constr.function.as_ref(), out)?;
@@ -72,8 +83,8 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
 /// coefficient is not 0.
 fn write_col_entry<W: Write>(
     var_id: u64,
-    var_name: &Cow<str>,
-    row_name: &Cow<str>,
+    var_name: &str,
+    row_name: &str,
     func: Option<&v1::Function>,
     out: &mut W,
 ) -> Result<(), MpsWriteError> {
@@ -84,18 +95,23 @@ fn write_col_entry<W: Write>(
         return Ok(());
     };
     match func {
-        v1::function::Function::Constant(_) => (),
-
-        v1::function::Function::Quadratic(_) => todo!(), // error out
-        v1::function::Function::Polynomial(_) => todo!(), // error out
         v1::function::Function::Linear(v1::Linear { terms, .. }) => {
             // search for current id in terms. If present and coefficient not 0, write entry
             for term in terms {
                 if term.id == var_id && term.coefficient != 0.0 {
                     let coeff = term.coefficient;
-                    writeln!(out, "  {var_name}  {row_name}  {coeff}")?;
+                    writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
                 }
             }
+        }
+        v1::function::Function::Constant(_) => {
+            return Err(MpsWriteError::constant_constraint(row_name))
+        }
+        v1::function::Function::Quadratic(_) => {
+            return Err(MpsWriteError::quadratic_constraint(row_name))
+        }
+        v1::function::Function::Polynomial(_) => {
+            return Err(MpsWriteError::polynomial_constraint(row_name))
         }
     }
     Ok(())
@@ -110,17 +126,22 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
         else {
             continue;
         };
+        let name = constr_name(constr);
         match func {
-            v1::function::Function::Constant(_) => (),
-
-            v1::function::Function::Quadratic(_) => todo!(), // error out
-            v1::function::Function::Polynomial(_) => todo!(), // error out
             v1::function::Function::Linear(v1::Linear { constant, .. }) => {
                 if *constant != 0.0 {
                     let rhs = -constant;
-                    let name = constr_name(constr);
-                    writeln!(out, "    RHS1    {name}   {rhs}")?;
+                    writeln!(out, "  RHS1    {name}   {rhs}")?;
                 }
+            }
+            v1::function::Function::Constant(_) => {
+                return Err(MpsWriteError::constant_constraint(name))
+            }
+            v1::function::Function::Quadratic(_) => {
+                return Err(MpsWriteError::quadratic_constraint(name))
+            }
+            v1::function::Function::Polynomial(_) => {
+                return Err(MpsWriteError::polynomial_constraint(name))
             }
         }
     }
@@ -138,8 +159,8 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
                 1 | 2 => ("LI", "UI"),
                 _ => ("LO", "UP"),
             };
-            writeln!(out, " {up_kind} BND1    {name}  {}", bound.upper)?;
-            writeln!(out, " {low_kind} BND1    {name}  {}", bound.lower)?;
+            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper)?;
+            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower)?;
         };
     }
     Ok(())
@@ -149,7 +170,7 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
 /// generates a name based on the id.
 fn constr_name(constr: &v1::Constraint) -> Cow<str> {
     match &constr.name {
-        Some(name) => Cow::Borrowed(&name),
+        Some(name) => Cow::Borrowed(name),
         None => Cow::Owned(format!("constr_id{}", constr.id)),
     }
 }
@@ -158,7 +179,7 @@ fn constr_name(constr: &v1::Constraint) -> Cow<str> {
 /// generates a name based on the id.
 fn dvar_name(dvar: &v1::DecisionVariable) -> Cow<str> {
     match &dvar.name {
-        Some(name) => Cow::Borrowed(&name),
+        Some(name) => Cow::Borrowed(name),
         None => Cow::Owned(format!("dvar_id{}", dvar.id)),
     }
 }
