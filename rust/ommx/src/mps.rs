@@ -69,6 +69,25 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
     Ok(instance.encode_to_vec())
 }
 
+pub fn write_file(
+    instance: &crate::v1::Instance,
+    out_path: impl AsRef<Path>,
+) -> Result<(), MpsWriteError> {
+    let path = std::path::absolute(out_path.as_ref())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::fs::File::options()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+
+    let mut writer = std::io::BufWriter::new(file);
+    to_mps::write_mps(instance, &mut writer)?;
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum MpsParseError {
     #[error("Unknown row name: {0}")]
@@ -94,4 +113,18 @@ pub enum MpsParseError {
 
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MpsWriteError {
+    #[error(
+        "Unsupported equation: Constraint {0} was {1}, but only linear functions are supported"
+    )]
+    InvalidConstraintType(String, String),
+    #[error(
+        "Unsupported equation: Objective function was {1}, but only linear functions are supported"
+    )]
+    InvalidObjectiveType(String, String),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }

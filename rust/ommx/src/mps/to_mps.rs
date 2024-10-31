@@ -1,21 +1,19 @@
-use crate::{
-    mps::{Mps, ObjSense},
-    v1,
-};
+use super::MpsWriteError;
+use crate::{mps::ObjSense, v1};
 use anyhow::Result;
 use std::{borrow::Cow, io::Write};
 
-fn write_mps<W: std::io::Write>(mps: &v1::Instance, out: &mut W) -> Result<()> {
-    write_beginning(mps, out)?;
-    write_rows(mps, out)?;
-    write_columns(mps, out)?;
-    write_rhs(mps, out)?;
-    write_bounds(mps, out)?;
+pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+    write_beginning(instance, out)?;
+    write_rows(instance, out)?;
+    write_columns(instance, out)?;
+    write_rhs(instance, out)?;
+    write_bounds(instance, out)?;
     writeln!(out, "ENDATA\n")?;
     Ok(())
 }
 
-fn write_beginning<W: std::io::Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
+fn write_beginning<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     let name = instance
         .description
         .clone()
@@ -34,7 +32,7 @@ fn write_beginning<W: std::io::Write>(instance: &v1::Instance, out: &mut W) -> R
     Ok(())
 }
 
-fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
+fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "ROWS")?;
     // each line must be ` Kind  constr_name`, and include objective
     writeln!(out, " N OBJ")?;
@@ -52,7 +50,7 @@ fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
     Ok(())
 }
 
-fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
+fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     let obj_name = Cow::Borrowed("OBJ");
     for dvar in instance.decision_variables.iter() {
@@ -78,7 +76,7 @@ fn write_col_entry<W: Write>(
     row_name: &Cow<str>,
     func: Option<&v1::Function>,
     out: &mut W,
-) -> Result<()> {
+) -> Result<(), MpsWriteError> {
     let Some(v1::Function {
         function: Some(func),
     }) = &func
@@ -103,21 +101,16 @@ fn write_col_entry<W: Write>(
     Ok(())
 }
 
-fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
+fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     for constr in instance.constraints.iter() {
         let name = constr_name(constr);
-        // let name = constr
-        //     .name
-        //     .clone()
-        //     .unwrap_or_else(|| format!("constr_id{}", constr.id));
-        // all are 0. We could potentially omit this section entirely?
         writeln!(out, "    RHS1    {name} 0")?;
     }
     Ok(())
 }
 
-fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<()> {
+fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
     for dvar in instance.decision_variables.iter() {
         let name = dvar_name(dvar);
