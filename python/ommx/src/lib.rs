@@ -40,6 +40,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
     m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(write_mps_file, m)?)?;
     Ok(())
 }
 

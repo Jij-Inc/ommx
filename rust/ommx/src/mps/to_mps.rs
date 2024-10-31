@@ -40,10 +40,10 @@ fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsW
             // v1::Equality::LessThanEqualToZero
             2 => "L",
             // assuming EqualToZero when unspecified. Error instead?
-            _ => "N",
+            _ => "E",
         };
         let name = constr_name(constr);
-        writeln!(out, "  {kind} {name}")?;
+        writeln!(out, " {kind} {name}")?;
     }
     Ok(())
 }
@@ -59,7 +59,7 @@ impl IntorgTracker {
         // only print marker if not already in INTORG block
         if !self.intorg_block {
             self.intorg_block = true;
-            writeln!(out, "  MARK{}   'MARKER'      'INTORG'", self.counter)?;
+            writeln!(out, "    MARK{}   'MARKER'      'INTORG'", self.counter)?;
             self.counter += 1;
         }
         Ok(())
@@ -68,7 +68,7 @@ impl IntorgTracker {
         // only print marker if in INTORG block
         if self.intorg_block {
             self.intorg_block = false;
-            writeln!(out, "  MARK{}   'MARKER'      'INTEND'", self.counter)?;
+            writeln!(out, "    MARK{}   'MARKER'      'INTEND'", self.counter)?;
             self.counter += 1;
         }
         Ok(())
@@ -76,7 +76,7 @@ impl IntorgTracker {
 }
 
 fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
-    writeln!(out, "RHS")?;
+    writeln!(out, "COLUMNS")?;
     let obj_name = "OBJ";
     let mut marker_tracker = IntorgTracker::default();
     for dvar in instance.decision_variables.iter() {
@@ -88,7 +88,7 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
             _ => marker_tracker.intend(out)?,
         }
         // write obj function entry
-        write_col_entry(id, &var_name, &obj_name, instance.objective.as_ref(), out)
+        write_col_entry(id, &var_name, obj_name, instance.objective.as_ref(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
             // It assumes we're dealing with constraints, but here we change the
             // error type so the message is clearer with the objective function
@@ -134,7 +134,7 @@ fn write_col_entry<W: Write>(
             for term in terms {
                 if term.id == var_id && term.coefficient != 0.0 {
                     let coeff = term.coefficient;
-                    writeln!(out, "  {var_name}  {row_name}  {coeff}")?;
+                    writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
                 }
             }
         }
