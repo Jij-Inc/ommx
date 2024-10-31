@@ -104,8 +104,25 @@ fn write_col_entry<W: Write>(
 fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     for constr in instance.constraints.iter() {
-        let name = constr_name(constr);
-        writeln!(out, "    RHS1    {name} 0")?;
+        let Some(v1::Function {
+            function: Some(func),
+        }) = &constr.function
+        else {
+            continue;
+        };
+        match func {
+            v1::function::Function::Constant(_) => (),
+
+            v1::function::Function::Quadratic(_) => todo!(), // error out
+            v1::function::Function::Polynomial(_) => todo!(), // error out
+            v1::function::Function::Linear(v1::Linear { constant, .. }) => {
+                if *constant != 0.0 {
+                    let rhs = -constant;
+                    let name = constr_name(constr);
+                    writeln!(out, "    RHS1    {name}   {rhs}")?;
+                }
+            }
+        }
     }
     Ok(())
 }
