@@ -83,7 +83,7 @@ pub fn write_file(
         .truncate(true)
         .open(path)?;
 
-    let mut writer = std::io::BufWriter::new(file);
+    let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
     to_mps::write_mps(instance, &mut writer)?;
     Ok(())
 }
