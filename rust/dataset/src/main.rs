@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[command(version, about, long_about = None)]
 enum Command {
     /// Convert MIPLIB collections into OMMX Artifact, and Push to GitHub
-    MIPLIB {
+    Miplib {
         /// Path to downloaded MIPLIB collection.zip file
         path: PathBuf,
     },
