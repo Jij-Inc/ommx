@@ -12,7 +12,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = "1.0.91"
+anyhow = "1.0.92"
 approx = "0.5.1"
 base64 = "0.22.1"
 built = { version = "0.7.5", features = ["git2"] }
@@ -38,9 +38,9 @@ pyo3-log = "0.10.0"
 pyo3-stub-gen = "0.6.0"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
-serde = { version = "1.0.213", features = ["derive"] }
+serde = { version = "1.0.214", features = ["derive"] }
 serde-pyobject = "0.3.0"
 serde_json = "1.0.132"
-thiserror = "1.0.65"
-url = "2.5.2"
+thiserror = "1.0.67"
+url = "2.5.3"
 uuid = { version = "1.11.0", features = ["v4"] }
