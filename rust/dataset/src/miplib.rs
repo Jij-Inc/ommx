@@ -142,7 +142,7 @@ fn miplib_entries() -> Result<HashMap<String, MiplibEntry>> {
 
 pub fn package(path: &Path) -> Result<()> {
     let entries = miplib_entries()?;
-    println!("Input Archive: {}", path.display());
+    log::info!("Input Archive: {}", path.display());
     let f = fs::File::open(path)?;
     let mut ar = ZipArchive::new(f)?;
 
@@ -152,14 +152,14 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         let Some(entry) = entries.get(&name) else {
-            eprintln!("Skip: No metadata found for '{}'", name);
+            log::warn!("Skip: No metadata found for '{}'", name);
             continue;
         };
-        println!("Loading: {}", name);
+        log::info!("Loading: {}", name);
         let instance = match ommx::mps::load_reader(file) {
             Ok(instance) => instance,
             Err(err) => {
-                eprintln!("Skip: Failed to load '{name}' with error: {err}");
+                log::warn!("Skip: Failed to load '{name}' with error: {err}");
                 continue;
             }
         };

@@ -461,6 +461,8 @@ dependencies = [
  "anyhow",
  "clap",
  "csv",
+ "env_logger",
+ "log",
  "ommx",
  "serde",
  "zip",

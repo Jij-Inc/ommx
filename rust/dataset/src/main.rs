@@ -2,6 +2,7 @@ mod miplib;
 
 use anyhow::Result;
 use clap::Parser;
+use env_logger::{Builder, Env};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -15,6 +16,8 @@ enum Command {
 }
 
 fn main() -> Result<()> {
+    Builder::from_env(Env::default().default_filter_or("info")).init();
+
     let command = Command::parse();
     match command {
         Command::Miplib { path } => {
