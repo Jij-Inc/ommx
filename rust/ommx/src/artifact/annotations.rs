@@ -37,6 +37,10 @@ impl InstanceAnnotations {
         );
     }
 
+    pub fn set_created_now(&mut self) {
+        self.set_created(Local::now());
+    }
+
     pub fn created(&self) -> Result<DateTime<Local>> {
         let created = self.get("org.ommx.v1.instance.created")?;
         Ok(DateTime::parse_from_rfc3339(created)?.with_timezone(&Local))
