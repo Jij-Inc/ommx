@@ -7,5 +7,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+csv.workspace = true
 ommx = { path = "../ommx" }
+serde = { workspace = true, features = ["derive"] }
 zip.workspace = true
