@@ -15,6 +15,17 @@ enum ObjectiveValue {
     Feasible(f64),
 }
 
+impl ObjectiveValue {
+    fn try_to_string(&self) -> Option<String> {
+        match self {
+            ObjectiveValue::Infeasible => Some("Infeasible".to_string()),
+            ObjectiveValue::NotAvailable => None,
+            ObjectiveValue::Unbounded => Some("Unbounded".to_string()),
+            ObjectiveValue::Feasible(value) => Some(value.to_string()),
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for ObjectiveValue {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -117,6 +128,29 @@ pub fn package(path: &Path) -> Result<()> {
         annotation.set_variables(entry.variable as usize);
         annotation.set_constraints(entry.constraints as usize);
 
+        // MIPLIB specific annotations
+        for (key, value) in [
+            ("binaries", entry.binaries as usize),
+            ("integers", entry.integers as usize),
+            ("continuous", entry.continuous as usize),
+            ("non_zero", entry.non_zero as usize),
+        ] {
+            annotation.set_other(format!("org.ommx.miplib.{}", key), value.to_string());
+        }
+        annotation.set_other(
+            "org.ommx.miplib.status".to_string(),
+            entry.status.to_string(),
+        );
+        if entry.group != "-" {
+            annotation.set_other("org.ommx.miplib.group".to_string(), entry.group.to_string());
+        }
+        if let Some(objective) = entry.objective.try_to_string() {
+            annotation.set_other("org.ommx.miplib.objective".to_string(), objective);
+        }
+        let tags: Vec<_> = entry.tags.split(' ').map(str::trim).collect();
+        if !tags.is_empty() {
+            annotation.set_other("org.ommx.miplib.tags".to_string(), tags.join(","));
+        }
         dbg!(annotation);
     }
     Ok(())
