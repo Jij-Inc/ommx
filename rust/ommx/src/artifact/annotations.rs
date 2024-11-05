@@ -63,6 +63,39 @@ impl InstanceAnnotations {
         self.get("org.ommx.v1.instance.license")
     }
 
+    pub fn set_dataset(&mut self, dataset: String) {
+        self.0
+            .insert("org.ommx.v1.instance.dataset".to_string(), dataset);
+    }
+
+    pub fn dataset(&self) -> Result<&String> {
+        self.get("org.ommx.v1.instance.dataset")
+    }
+
+    pub fn set_variables(&mut self, variables: usize) {
+        self.0.insert(
+            "org.ommx.v1.instance.variables".to_string(),
+            variables.to_string(),
+        );
+    }
+
+    pub fn variables(&self) -> Result<usize> {
+        let variables = self.get("org.ommx.v1.instance.variables")?;
+        Ok(variables.parse()?)
+    }
+
+    pub fn set_constraints(&mut self, constraints: usize) {
+        self.0.insert(
+            "org.ommx.v1.instance.constraints".to_string(),
+            constraints.to_string(),
+        );
+    }
+
+    pub fn constraints(&self) -> Result<usize> {
+        let constraints = self.get("org.ommx.v1.instance.constraints")?;
+        Ok(constraints.parse()?)
+    }
+
     /// Set other annotations. The key may not start with `org.ommx.v1.`, but must a valid reverse domain name.
     pub fn set_other(&mut self, key: String, value: String) {
         // TODO check key

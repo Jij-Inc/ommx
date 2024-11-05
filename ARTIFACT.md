@@ -35,10 +35,13 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
     - `org.ommx.v1.solution.start`: (RFC3339) The start time of the solution as a RFC3339 string
     - `org.ommx.v1.solution.end`: (RFC3339) The end time of the solution as a RFC3339 string
   - `application/org.ommx.v1.instance` blob with the following annotations:
-    - `org.ommx.v1.instance.title`: (Free String) The title of this instance
+    - `org.ommx.v1.instance.title`: (String) The title of this instance
     - `org.ommx.v1.instance.created`: (RFC3339) When this instance was created
-    - `org.ommx.v1.instance.authors`: (Free String) Name of authors. Multiple authors are separated by comma (`,`)
+    - `org.ommx.v1.instance.authors`: (String) Name of authors. Multiple authors are separated by comma (`,`)
     - `org.ommx.v1.instance.license`: ([SPDX License Identifier](https://spdx.org/licenses/)) License of this instance
+    - `org.ommx.v1.instance.dataset`: (String) Name of the dataset this instance belongs to
+    - `org.ommx.v1.instance.variables`: (Integer) Number of variables in this instance
+    - `org.ommx.v1.instance.constraints`: (Integer) Number of constraints in this instance
   - `application/vnd.numpy`: NumPy's ndarray with NPY format
   - `application/vnd.apache.parquet`: DataFrame with Parquet format
   - And other blobs with appropriate media types. The media type SHOULD be registered in the [IANA media type registry](https://www.iana.org/assignments/media-types/media-types.xhtml).

@@ -113,6 +113,9 @@ pub fn package(path: &Path) -> Result<()> {
             // Other submissions are licensed under the default MIPLIB license "CC-BY-SA-4.0"
             annotation.set_license("CC-BY-SA-4.0".to_string());
         }
+        annotation.set_dataset("MIPLIB2017".to_string());
+        annotation.set_variables(entry.variable as usize);
+        annotation.set_constraints(entry.constraints as usize);
 
         dbg!(annotation);
     }
