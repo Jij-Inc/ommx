@@ -108,7 +108,7 @@ pub fn package(path: &Path) -> Result<()> {
             }
         };
         let mut annotation = InstanceAnnotations::default();
-        annotation.set_title(name);
+        annotation.set_title(name.clone());
         annotation.set_authors(
             entry
                 .submitter
@@ -151,6 +151,10 @@ pub fn package(path: &Path) -> Result<()> {
         if !tags.is_empty() {
             annotation.set_other("org.ommx.miplib.tags".to_string(), tags.join(","));
         }
+        annotation.set_other(
+            "org.ommx.miplib.url".to_string(),
+            format!("https://miplib.zib.de/instance_details_{name}.html"),
+        );
         dbg!(annotation);
     }
     Ok(())
