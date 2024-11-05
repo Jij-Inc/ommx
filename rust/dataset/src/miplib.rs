@@ -34,9 +34,9 @@ impl<'de> Deserialize<'de> for ObjectiveValue {
         let s: String = Deserialize::deserialize(deserializer)?;
         let s = s.trim_end_matches("*");
         match s {
-            "Infeasible" => return Ok(ObjectiveValue::Infeasible),
-            "NA" => return Ok(ObjectiveValue::NotAvailable),
-            "Unbounded" => return Ok(ObjectiveValue::Unbounded),
+            "Infeasible" => Ok(ObjectiveValue::Infeasible),
+            "NA" => Ok(ObjectiveValue::NotAvailable),
+            "Unbounded" => Ok(ObjectiveValue::Unbounded),
             _ => s
                 .parse::<f64>()
                 .map(ObjectiveValue::Feasible)
