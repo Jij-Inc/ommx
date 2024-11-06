@@ -164,8 +164,7 @@ pub fn package(path: &Path) -> Result<()> {
             }
         };
         let annotations = entry.as_annotation();
-        let mut builder =
-            Builder::for_github("Jij-Inc", "ommx", &format!("miplib2017/{name}"), "20241105")?;
+        let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
         builder.add_instance(instance, annotations)?;
         let mut artifact = builder.build()?;
         artifact.push()?;
