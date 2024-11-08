@@ -258,6 +258,18 @@ class Artifact:
             )
         if "org.ommx.v1.instance.title" in annotations:
             instance.title = annotations["org.ommx.v1.instance.title"]
+        if "org.ommx.v1.instance.authors" in annotations:
+            instance.authors = annotations["org.ommx.v1.instance.authors"].split(",")
+        if "org.ommx.v1.instance.license" in annotations:
+            instance.license = annotations["org.ommx.v1.instance.license"]
+        if "org.ommx.v1.instance.dataset" in annotations:
+            instance.dataset = annotations["org.ommx.v1.instance.dataset"]
+        if "org.ommx.v1.instance.variables" in annotations:
+            instance.num_variables = int(annotations["org.ommx.v1.instance.variables"])
+        if "org.ommx.v1.instance.constraints" in annotations:
+            instance.num_constraints = int(
+                annotations["org.ommx.v1.instance.constraints"]
+            )
         return instance
 
     @property
@@ -553,6 +565,18 @@ class ArtifactBuilder:
             annotations["org.ommx.v1.instance.created"] = instance.created.isoformat()
         if instance.title:
             annotations["org.ommx.v1.instance.title"] = instance.title
+        if instance.authors:
+            annotations["org.ommx.v1.instance.authors"] = ",".join(instance.authors)
+        if instance.license:
+            annotations["org.ommx.v1.instance.license"] = instance.license
+        if instance.dataset:
+            annotations["org.ommx.v1.instance.dataset"] = instance.dataset
+        if instance.num_variables:
+            annotations["org.ommx.v1.instance.variables"] = str(instance.num_variables)
+        if instance.num_constraints:
+            annotations["org.ommx.v1.instance.constraints"] = str(
+                instance.num_constraints
+            )
         return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
 
     def add_solution(self, solution: Solution) -> Descriptor:
