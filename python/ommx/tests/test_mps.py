@@ -77,7 +77,10 @@ def test_output():
 
     objective = sum(obj_coeff[i] * x[i] for i in range(6))
     constraints = [
-        sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500 for c in range(5)
+        (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(
+            f"constr{c}"
+        )
+        for c in range(5)
     ]
 
     # Step 4: Create the Instance
@@ -113,11 +116,14 @@ def test_output():
 
     # once again, IDs aren't stable, so here we are just checking if the right
     # coefficients are all there by sorting them
+    constr_before = [c for c in instance.raw.constraints]
+    constr_before.sort(key=lambda c: c.name)
     constr_after = [c for c in loaded.raw.constraints]
     constr_after.sort(key=lambda c: c.name)
-    assert len(constraints) == len(constr_after)
-    for before, after in zip(constraints, constr_after):
-        terms_before = [t.coefficient for t in before.function.raw.linear.terms]
+    assert len(constr_before) == len(constr_after)
+    for before, after in zip(constr_before, constr_after):
+        assert before.name == after.name
+        terms_before = [t.coefficient for t in before.function.linear.terms]
         terms_before.sort()
 
         terms_after = [t.coefficient for t in after.function.linear.terms]
