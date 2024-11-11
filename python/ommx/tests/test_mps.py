@@ -2,8 +2,6 @@ from pathlib import Path
 
 import ommx.mps
 from ommx.v1 import Instance, DecisionVariable
-import random
-from random import randint
 
 
 test_dir = Path(__file__).parent
@@ -66,15 +64,20 @@ def test_example_mps():
 
 
 def test_output():
-    # generating a random problem
-
     test_out_file = str(test_dir / "test_mps_output.mps.gz")
     x = [DecisionVariable.binary(i, name=f"d{i}") for i in range(6)]
+    obj_coeff = [20, 37, 4, 48, 33, 13]
+    constr_coeffs = [
+        [10, 85, 12, 17, 35, 78],
+        [65, 43, 1, 89, 42, 51],
+        [50, 66, 67, 7, 5, 19],
+        [73, 33, 47, 8, 90, 2],
+        [15, 44, 33, 82, 13, 27],
+    ]
 
-    objective = sum(randint(0, 100) * x[i] for i in range(6))
+    objective = sum(obj_coeff[i] * x[i] for i in range(6))
     constraints = [
-        sum(randint(0, 100) * x[i] for i in range(6)) <= randint(0, 100)
-        for _ in range(5)
+        sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500 for c in range(5)
     ]
 
     # Step 4: Create the Instance
