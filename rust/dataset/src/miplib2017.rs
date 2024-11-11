@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 use zip::ZipArchive;
 
 pub fn package(path: &Path) -> Result<()> {
-    let annotation_dict = ommx::dataset::miplib::instance_annotations()?;
+    let annotation_dict = ommx::dataset::miplib2017::instance_annotations()?;
     log::info!("Input Archive: {}", path.display());
     let f = fs::File::open(path)?;
     let mut ar = ZipArchive::new(f)?;

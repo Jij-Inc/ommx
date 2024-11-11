@@ -1,4 +1,4 @@
-mod miplib;
+mod miplib2017;
 
 use anyhow::Result;
 use clap::Parser;
@@ -21,7 +21,7 @@ fn main() -> Result<()> {
     let command = Command::parse();
     match command {
         Command::Miplib { path } => {
-            miplib::package(&path)?;
+            miplib2017::package(&path)?;
         }
     }
     Ok(())

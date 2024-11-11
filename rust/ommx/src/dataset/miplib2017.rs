@@ -5,7 +5,7 @@ use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 
 /// CSV file downloaded from [MIPLIB website](https://miplib.zib.de/tag_collection.html)
-const MIPLIB_CSV: &str = include_str!("miplib.csv");
+const MIPLIB_CSV: &str = include_str!("miplib2017.csv");
 
 #[derive(Debug)]
 enum ObjectiveValue {
