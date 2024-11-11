@@ -82,6 +82,16 @@ impl FromStr for ObjSense {
     }
 }
 
+impl std::fmt::Display for ObjSense {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ObjSense::Min => "MIN",
+            ObjSense::Max => "MAX",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// A marker new type of `String` to distinguish row name and column name
 #[derive(Debug, Deref, Clone, PartialEq, Eq, Hash, Default)]
 pub struct RowName(pub String);
@@ -197,8 +207,6 @@ impl State {
     //                     name        name                name
     fn read_column_field(&mut self, fields: Vec<&str>) -> Result<()> {
         assert!(fields.len() == 3 || fields.len() == 5);
-        let col_name = ColumnName(fields[0].to_string());
-        self.mps.vars.insert(col_name.clone());
 
         // G. A mixed integer program requires the specification of which variables
         //    are required to be integer.  Markers are used to indicate the start
@@ -214,6 +222,9 @@ impl State {
             }
             return Ok(());
         }
+
+        let col_name = ColumnName(fields[0].to_string());
+        self.mps.vars.insert(col_name.clone());
         if self.is_integer_variable {
             self.mps.integer.insert(col_name.clone());
         } else {

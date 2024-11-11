@@ -55,6 +55,7 @@ use std::path::Path;
 
 mod convert;
 mod parser;
+mod to_mps;
 
 use parser::*;
 
@@ -66,6 +67,25 @@ pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParse
 pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError> {
     let instance = load_file(path)?;
     Ok(instance.encode_to_vec())
+}
+
+pub fn write_file(
+    instance: &crate::v1::Instance,
+    out_path: impl AsRef<Path>,
+) -> Result<(), MpsWriteError> {
+    let path = std::path::absolute(out_path.as_ref())?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::fs::File::options()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+
+    let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
+    to_mps::write_mps(instance, &mut writer)?;
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -93,4 +113,32 @@ pub enum MpsParseError {
 
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum MpsWriteError {
+    #[error(
+        "Unsupported equation in MPS output: Constraint {0} was {1}, but only linear functions are supported"
+    )]
+    InvalidConstraintType(String, String),
+    #[error(
+        "Unsupported equation in MPS output: Objective function was {1}, but only linear functions are supported"
+    )]
+    InvalidObjectiveType(String, String),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+impl MpsWriteError {
+    fn constant_constraint(name: impl ToString) -> Self {
+        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Constant"))
+    }
+
+    fn quadratic_constraint(name: impl ToString) -> Self {
+        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Quadratic"))
+    }
+
+    fn polynomial_constraint(name: impl ToString) -> Self {
+        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Polynomial"))
+    }
 }

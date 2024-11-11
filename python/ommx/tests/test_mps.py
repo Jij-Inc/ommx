@@ -1,11 +1,13 @@
 from pathlib import Path
 
 import ommx.mps
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
+
+
+test_dir = Path(__file__).parent
 
 
 def test_example_mps():
-    test_dir = Path(__file__).parent
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
     assert instance.raw.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
@@ -13,10 +15,10 @@ def test_example_mps():
     # for some reason a simple to_dict gets us weird tuple keys so
     # transforming the structure to make it simpler.
     dvars = [
-        {k[0]: v for k, v in c.items()}
-        for c in instance.decision_variables.to_dict("records")
+        {k[0]: v for k, v in x.items()}
+        for x in instance.decision_variables.to_dict("records")
     ]
-    dvars.sort(key=lambda c: c["name"])
+    dvars.sort(key=lambda x: x["name"])
     constraints = [
         {k[0]: v for k, v in c.items()} for c in instance.constraints.to_dict("records")
     ]
@@ -59,3 +61,81 @@ def test_example_mps():
     assert len(constr3["used_ids"]) == 2
     assert constr3["type"] == "linear"
     assert constr3["equality"] == "<=0"
+
+
+def test_output():
+    test_out_file = str(test_dir / "test_mps_output.mps.gz")
+    x = [DecisionVariable.binary(i, name=f"d{i}") for i in range(6)]
+    obj_coeff = [20, 37, 4, 48, 33, 13]
+    constr_coeffs = [
+        [10, 85, 12, 17, 35, 78],
+        [65, 43, 1, 89, 42, 51],
+        [50, 66, 67, 7, 5, 19],
+        [73, 33, 47, 8, 90, 2],
+        [15, 44, 33, 82, 13, 27],
+    ]
+
+    objective = sum(obj_coeff[i] * x[i] for i in range(6))
+    constraints = [
+        (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(  # type: ignore[reportAttributeAccessIssue]
+            f"constr{c}"
+        )
+        for c in range(5)
+    ]
+
+    # Step 4: Create the Instance
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=objective,
+        constraints=constraints,
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.write_mps(test_out_file)
+    loaded = ommx.mps.load_file(test_out_file)
+
+    # convert to a format easier to test.
+    dvars_before = [
+        {k[0]: v for k, v in x.items()}
+        for x in instance.decision_variables.to_dict("records")
+    ]
+    dvars_before.sort(key=lambda x: x["name"])
+    dvars_after = [
+        {k[0]: v for k, v in x.items()}
+        for x in loaded.decision_variables.to_dict("records")
+    ]
+    dvars_after.sort(key=lambda c: c["name"])
+    assert len(dvars_before) == len(dvars_after)
+    # IDs are not stable
+    for before, after in zip(dvars_before, dvars_after):
+        assert before["name"] == after["name"]
+        assert before["kind"] == after["kind"]
+        assert before["lower"] == after["lower"]
+        assert before["upper"] == after["upper"]
+        assert before["subscripts"] == after["subscripts"]
+
+    # once again, IDs aren't stable, so here we are just checking if the right
+    # coefficients are all there by sorting them
+    constr_before = [c for c in instance.raw.constraints]
+    constr_before.sort(key=lambda c: c.name)
+    constr_after = [c for c in loaded.raw.constraints]
+    constr_after.sort(key=lambda c: c.name)
+    assert len(constr_before) == len(constr_after)
+    for before, after in zip(constr_before, constr_after):
+        assert before.name == after.name
+        terms_before = [t.coefficient for t in before.function.linear.terms]
+        terms_before.sort()
+
+        terms_after = [t.coefficient for t in after.function.linear.terms]
+        terms_after.sort()
+        assert terms_before == terms_after
+
+    # same as above for objective function
+    obj_before = [t.coefficient for t in instance.raw.objective.linear.terms]
+    obj_before.sort()
+
+    obj_after = [t.coefficient for t in loaded.raw.objective.linear.terms]
+    obj_after.sort()
+    assert obj_before == obj_after
+
+    # assert instance == loaded, f"===inst \n{instance}\n=== loaded\n{loaded}"

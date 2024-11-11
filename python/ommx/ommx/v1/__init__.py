@@ -116,6 +116,9 @@ class Instance:
         bytes = _ommx_rust.load_mps_bytes(path)
         return Instance.from_bytes(bytes)
 
+    def write_mps(self, path: str):
+        _ommx_rust.write_mps_file(self.to_bytes(), path)
+
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
         instance = _Instance()
