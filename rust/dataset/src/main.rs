@@ -9,7 +9,7 @@ use std::path::PathBuf;
 #[command(version, about, long_about = None)]
 enum Command {
     /// Convert MIPLIB collections into OMMX Artifact, and Push to GitHub
-    Miplib {
+    Miplib2017 {
         /// Path to downloaded MIPLIB collection.zip file
         path: PathBuf,
     },
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
 
     let command = Command::parse();
     match command {
-        Command::Miplib { path } => {
+        Command::Miplib2017 { path } => {
             miplib2017::package(&path)?;
         }
     }
