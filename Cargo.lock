@@ -1315,6 +1315,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "csv",
  "derive_more",
  "directories",
  "env_logger",
