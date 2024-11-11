@@ -77,7 +77,7 @@ def test_output():
 
     objective = sum(obj_coeff[i] * x[i] for i in range(6))
     constraints = [
-        (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name(
+        (sum(constr_coeffs[c][i] * x[i] for i in range(6)) <= 500).add_name( # type: ignore[reportAttributeAccessIssue]
             f"constr{c}"
         )
         for c in range(5)
