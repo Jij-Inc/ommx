@@ -207,8 +207,6 @@ impl State {
     //                     name        name                name
     fn read_column_field(&mut self, fields: Vec<&str>) -> Result<()> {
         assert!(fields.len() == 3 || fields.len() == 5);
-        let col_name = ColumnName(fields[0].to_string());
-        self.mps.vars.insert(col_name.clone());
 
         // G. A mixed integer program requires the specification of which variables
         //    are required to be integer.  Markers are used to indicate the start
@@ -224,6 +222,9 @@ impl State {
             }
             return Ok(());
         }
+
+        let col_name = ColumnName(fields[0].to_string());
+        self.mps.vars.insert(col_name.clone());
         if self.is_integer_variable {
             self.mps.integer.insert(col_name.clone());
         } else {
