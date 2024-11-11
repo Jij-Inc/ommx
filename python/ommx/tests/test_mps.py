@@ -113,13 +113,11 @@ def test_output():
 
     # once again, IDs aren't stable, so here we are just checking if the right
     # coefficients are all there by sorting them
-    constr_before = [c for c in instance.raw.constraints]
-    constr_before.sort(key=lambda c: c.name)
     constr_after = [c for c in loaded.raw.constraints]
     constr_after.sort(key=lambda c: c.name)
-    assert len(constr_before) == len(constr_after)
-    for before, after in zip(constr_before, constr_after):
-        terms_before = [t.coefficient for t in before.function.linear.terms]
+    assert len(constraints) == len(constr_after)
+    for before, after in zip(constraints, constr_after):
+        terms_before = [t.coefficient for t in before.function.raw.linear.terms]
         terms_before.sort()
 
         terms_after = [t.coefficient for t in after.function.linear.terms]
