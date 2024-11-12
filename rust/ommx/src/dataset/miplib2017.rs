@@ -1,6 +1,9 @@
-use crate::artifact::InstanceAnnotations;
+use crate::{
+    artifact::{ghcr, Artifact, InstanceAnnotations},
+    v1::Instance,
+};
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 
@@ -130,12 +133,37 @@ impl RawEntry {
     }
 }
 
-pub fn instance_annotations() -> Result<HashMap<String, InstanceAnnotations>> {
+pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
     let mut rdr = csv::Reader::from_reader(MIPLIB_CSV.as_bytes());
     let mut entries = HashMap::new();
     for result in rdr.deserialize() {
-        let entry: RawEntry = result?;
+        let entry: RawEntry = result.expect("Invalid CSV for MIPLIB2017");
         entries.insert(entry.instance.clone(), entry.as_annotation());
     }
-    Ok(entries)
+    entries
+}
+
+pub fn load_instance(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
+    let mut artifact = Artifact::from_remote(image_name)?.pull()?;
+    let mut instances = artifact.get_instances()?;
+    ensure!(
+        instances.len() == 1,
+        "MIPLIB2017 Artifact should contain exactly one instance"
+    );
+    let (desc, instance) = instances.pop().unwrap();
+    Ok((
+        instance,
+        InstanceAnnotations::from(desc.annotations().clone().unwrap_or_default()),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_instance_annotations() {
+        let annotations = super::instance_annotations();
+        // Update this number if the CSV file is updated
+        assert_eq!(annotations.len(), 1065);
+    }
 }

@@ -1,5 +1,7 @@
 use crate::{
-    artifact::{data_dir, media_types, Artifact, Config, InstanceAnnotations, SolutionAnnotations},
+    artifact::{
+        data_dir, ghcr, media_types, Artifact, Config, InstanceAnnotations, SolutionAnnotations,
+    },
     v1,
 };
 use anyhow::Result;
@@ -71,13 +73,7 @@ impl Builder<OciDirBuilder> {
 
     /// Create a new artifact builder for a GitHub container registry image
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
-        let image_name = ImageName::parse(&format!(
-            "ghcr.io/{}/{}/{}:{}",
-            org.to_lowercase(),
-            repo.to_lowercase(),
-            name.to_lowercase(),
-            tag
-        ))?;
+        let image_name = ghcr(org, repo, name, tag)?;
         let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
 
         let mut builder = Self::new(image_name)?;
