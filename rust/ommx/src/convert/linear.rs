@@ -49,6 +49,24 @@ impl Linear {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.terms.iter().map(|term| term.id).collect()
     }
+
+    pub fn to_qubo(&self) -> (BTreeMap<(u64, u64), f64>, f64) {
+        (
+            self.terms
+                .iter()
+                .map(|term| ((term.id, term.id), term.coefficient))
+                .collect(),
+            self.constant,
+        )
+    }
+
+    pub fn to_pubo(&self) -> BTreeMap<Vec<u64>, f64> {
+        self.terms
+            .iter()
+            .map(|term| (vec![term.id], term.coefficient))
+            .chain(std::iter::once((vec![], self.constant)))
+            .collect()
+    }
 }
 
 /// Create a linear function with a single term by regarding the input as the id of the term.
@@ -278,5 +296,27 @@ mod tests {
         let linear = super::Linear::new([(1, 1.0)].into_iter(), -1.0);
         assert_eq!(linear.to_string(), "x1 - 1");
         assert_eq!(format!("{:.2}", linear), "x1 - 1.00");
+    }
+
+    #[test]
+    fn to_qubo() {
+        let linear = super::Linear::new([(1, 1.0), (2, -1.0), (3, -2.0)].into_iter(), 3.0);
+        let (qubo, constant) = linear.to_qubo();
+        assert_eq!(qubo.len(), 3);
+        assert_eq!(qubo[&(1, 1)], 1.0);
+        assert_eq!(qubo[&(2, 2)], -1.0);
+        assert_eq!(qubo[&(3, 3)], -2.0);
+        assert_eq!(constant, 3.0);
+    }
+
+    #[test]
+    fn to_pubo() {
+        let linear = super::Linear::new([(1, 1.0), (2, -1.0), (3, -2.0)].into_iter(), 3.0);
+        let pubo = linear.to_pubo();
+        assert_eq!(pubo.len(), 4);
+        assert_eq!(pubo[&vec![1]], 1.0);
+        assert_eq!(pubo[&vec![2]], -1.0);
+        assert_eq!(pubo[&vec![3]], -2.0);
+        assert_eq!(pubo[&vec![]], 3.0);
     }
 }
