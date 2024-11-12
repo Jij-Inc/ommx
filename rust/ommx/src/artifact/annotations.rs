@@ -10,6 +10,13 @@ use std::collections::HashMap;
 pub struct InstanceAnnotations(HashMap<String, String>);
 
 impl InstanceAnnotations {
+    fn get(&self, key: &str) -> Result<&String> {
+        self.0.get(key).context(format!(
+            "Annotation does not have the entry with the key `{}`",
+            key
+        ))
+    }
+
     pub fn from_descriptor(desc: &Descriptor) -> Self {
         Self(desc.annotations().as_ref().cloned().unwrap_or_default())
     }
@@ -20,9 +27,7 @@ impl InstanceAnnotations {
     }
 
     pub fn title(&self) -> Result<&String> {
-        self.0
-            .get("org.ommx.v1.instance.title")
-            .context("Annotation does not have the entry with the key `org.ommx.v1.instance.title`")
+        self.get("org.ommx.v1.instance.title")
     }
 
     pub fn set_created(&mut self, created: DateTime<Local>) {
@@ -32,11 +37,67 @@ impl InstanceAnnotations {
         );
     }
 
+    pub fn set_created_now(&mut self) {
+        self.set_created(Local::now());
+    }
+
     pub fn created(&self) -> Result<DateTime<Local>> {
-        let created = self.0.get("org.ommx.v1.instance.created").context(
-            "Annotation does not have the entry with the key `org.ommx.v1.instance.created`",
-        )?;
+        let created = self.get("org.ommx.v1.instance.created")?;
         Ok(DateTime::parse_from_rfc3339(created)?.with_timezone(&Local))
+    }
+
+    pub fn set_authors(&mut self, authors: Vec<String>) {
+        self.0.insert(
+            "org.ommx.v1.instance.authors".to_string(),
+            authors.join(","),
+        );
+    }
+
+    pub fn authors(&self) -> Result<impl Iterator<Item = &str>> {
+        let authors = self.get("org.ommx.v1.instance.authors")?;
+        Ok(authors.split(','))
+    }
+
+    pub fn set_license(&mut self, license: String) {
+        self.0
+            .insert("org.ommx.v1.instance.license".to_string(), license);
+    }
+
+    pub fn license(&self) -> Result<&String> {
+        self.get("org.ommx.v1.instance.license")
+    }
+
+    pub fn set_dataset(&mut self, dataset: String) {
+        self.0
+            .insert("org.ommx.v1.instance.dataset".to_string(), dataset);
+    }
+
+    pub fn dataset(&self) -> Result<&String> {
+        self.get("org.ommx.v1.instance.dataset")
+    }
+
+    pub fn set_variables(&mut self, variables: usize) {
+        self.0.insert(
+            "org.ommx.v1.instance.variables".to_string(),
+            variables.to_string(),
+        );
+    }
+
+    pub fn variables(&self) -> Result<usize> {
+        let variables = self.get("org.ommx.v1.instance.variables")?;
+        Ok(variables.parse()?)
+    }
+
+    pub fn set_constraints(&mut self, constraints: usize) {
+        self.0.insert(
+            "org.ommx.v1.instance.constraints".to_string(),
+            constraints.to_string(),
+        );
+    }
+
+    pub fn constraints(&self) -> Result<usize> {
+        let constraints = self.get("org.ommx.v1.instance.constraints")?;
+        Ok(constraints.parse()?)
     }
 
     /// Set other annotations. The key may not start with `org.ommx.v1.`, but must a valid reverse domain name.

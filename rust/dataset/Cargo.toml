@@ -1,0 +1,15 @@
+[package]
+name = "dataset"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+csv.workspace = true
+env_logger.workspace = true
+log.workspace = true
+ommx = { path = "../ommx" }
+serde = { workspace = true, features = ["derive"] }
+zip.workspace = true

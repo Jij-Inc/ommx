@@ -132,15 +132,20 @@
 //!   ```
 //!
 
+// Re-export the dependencies
 pub use ocipkg;
-
-pub mod artifact;
-pub mod random;
 pub use prost::Message;
+
+// Public modules
+pub mod artifact;
+pub mod dataset;
+pub mod mps;
+pub mod random;
+
+// Internal modules
 mod arbitrary;
 mod convert;
 mod evaluate;
-pub mod mps;
 
 pub use evaluate::Evaluate;
 

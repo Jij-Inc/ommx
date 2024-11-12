@@ -62,6 +62,7 @@ class Instance:
     raw: _Instance
     """The raw protobuf message."""
 
+    # Annotations
     title: Optional[str] = None
     """
     The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
@@ -69,6 +70,26 @@ class Instance:
     created: Optional[datetime] = None
     """
     The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
+    """
+    authors: list[str] = field(default_factory=list)
+    """
+    Authors of this instance. This is stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact.
+    """
+    license: Optional[str] = None
+    """
+    License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact.
+    """
+    dataset: Optional[str] = None
+    """
+    Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact.
+    """
+    num_variables: Optional[int] = None
+    """
+    Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact.
+    """
+    num_constraints: Optional[int] = None
+    """
+    Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact.
     """
     annotations: dict[str, str] = field(default_factory=dict)
     """

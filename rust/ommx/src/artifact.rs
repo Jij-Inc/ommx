@@ -39,6 +39,16 @@ pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
     Ok(data_dir()?.join(image_name.as_path()))
 }
 
+pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
+    ImageName::parse(&format!(
+        "ghcr.io/{}/{}/{}:{}",
+        org.to_lowercase(),
+        repo.to_lowercase(),
+        name.to_lowercase(),
+        tag
+    ))
+}
+
 fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut images = Vec::new();
     for entry in std::fs::read_dir(dir)? {

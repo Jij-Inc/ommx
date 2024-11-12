@@ -51,13 +51,18 @@
 //!
 
 use prost::Message;
-use std::path::Path;
+use std::{io::Read, path::Path};
 
 mod convert;
 mod parser;
 mod to_mps;
 
 use parser::*;
+
+pub fn load_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::from_reader(reader)?;
+    convert::convert(mps_data)
+}
 
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_file(path)?;
