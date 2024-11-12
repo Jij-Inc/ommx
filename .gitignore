@@ -2,6 +2,9 @@
 *.ommx
 *.ommx.*
 
+# MPS files
+**/*.mps.gz
+
 # Rust
 target/
 

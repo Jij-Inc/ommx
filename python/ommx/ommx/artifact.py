@@ -251,24 +251,28 @@ class Artifact:
 
         blob = self.get_blob(descriptor)
         instance = Instance.from_bytes(blob)
-        annotations = descriptor.annotations
-        if "org.ommx.v1.instance.created" in annotations:
+        instance.annotations = descriptor.annotations
+        if "org.ommx.v1.instance.created" in instance.annotations:
             instance.created = parser.isoparse(
-                annotations["org.ommx.v1.instance.created"]
+                instance.annotations["org.ommx.v1.instance.created"]
             )
-        if "org.ommx.v1.instance.title" in annotations:
-            instance.title = annotations["org.ommx.v1.instance.title"]
-        if "org.ommx.v1.instance.authors" in annotations:
-            instance.authors = annotations["org.ommx.v1.instance.authors"].split(",")
-        if "org.ommx.v1.instance.license" in annotations:
-            instance.license = annotations["org.ommx.v1.instance.license"]
-        if "org.ommx.v1.instance.dataset" in annotations:
-            instance.dataset = annotations["org.ommx.v1.instance.dataset"]
-        if "org.ommx.v1.instance.variables" in annotations:
-            instance.num_variables = int(annotations["org.ommx.v1.instance.variables"])
-        if "org.ommx.v1.instance.constraints" in annotations:
+        if "org.ommx.v1.instance.title" in instance.annotations:
+            instance.title = instance.annotations["org.ommx.v1.instance.title"]
+        if "org.ommx.v1.instance.authors" in instance.annotations:
+            instance.authors = instance.annotations[
+                "org.ommx.v1.instance.authors"
+            ].split(",")
+        if "org.ommx.v1.instance.license" in instance.annotations:
+            instance.license = instance.annotations["org.ommx.v1.instance.license"]
+        if "org.ommx.v1.instance.dataset" in instance.annotations:
+            instance.dataset = instance.annotations["org.ommx.v1.instance.dataset"]
+        if "org.ommx.v1.instance.variables" in instance.annotations:
+            instance.num_variables = int(
+                instance.annotations["org.ommx.v1.instance.variables"]
+            )
+        if "org.ommx.v1.instance.constraints" in instance.annotations:
             instance.num_constraints = int(
-                annotations["org.ommx.v1.instance.constraints"]
+                instance.annotations["org.ommx.v1.instance.constraints"]
             )
         return instance
 
