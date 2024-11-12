@@ -7,8 +7,8 @@ use anyhow::{ensure, Result};
 use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 
-/// CSV file downloaded from [MIPLIB website](https://miplib.zib.de/tag_collection.html)
-const MIPLIB_CSV: &str = include_str!("miplib2017.csv");
+/// CSV downloaded from [MIPLIB website](https://miplib.zib.de/tag_collection.html)
+pub const MIPLIB2017_CSV: &str = include_str!("miplib2017.csv");
 
 #[derive(Debug)]
 enum ObjectiveValue {
@@ -133,8 +133,32 @@ impl RawEntry {
     }
 }
 
+/// Convert [MIPLIB2017_CSV] as [InstanceAnnotations] dictionary
+///
+/// MIPLIB-specific annotations are stored in the `org.ommx.miplib.*` namespace.
+///
+/// ```rust
+/// use ommx::dataset::miplib2017;
+///
+/// let annotations = miplib2017::instance_annotations().get("air05").unwrap().clone();
+///
+/// // Common annotations
+/// assert_eq!(annotations.title().unwrap(), "air05");
+/// assert_eq!(annotations.authors().unwrap().next(), Some("G. Astfalk"));
+///
+/// // MIPLIB specific annotations
+/// assert_eq!(annotations.get("org.ommx.miplib.status").unwrap(), "easy");
+/// assert_eq!(annotations.get("org.ommx.miplib.group").unwrap(), "air");
+/// assert_eq!(annotations.get("org.ommx.miplib.binaries").unwrap(), "7195");
+/// assert_eq!(annotations.get("org.ommx.miplib.integers").unwrap(), "0");
+/// assert_eq!(annotations.get("org.ommx.miplib.continuous").unwrap(), "0");
+/// assert_eq!(annotations.get("org.ommx.miplib.non_zero").unwrap(), "52121");
+/// assert_eq!(annotations.get("org.ommx.miplib.objective").unwrap(), "26374");
+/// assert_eq!(annotations.get("org.ommx.miplib.tags").unwrap(), "benchmark,binary,benchmark_suitable,set_partitioning");
+/// assert_eq!(annotations.get("org.ommx.miplib.url").unwrap(), "https://miplib.zib.de/instance_details_air05.html");
+/// ```
 pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
-    let mut rdr = csv::Reader::from_reader(MIPLIB_CSV.as_bytes());
+    let mut rdr = csv::Reader::from_reader(MIPLIB2017_CSV.as_bytes());
     let mut entries = HashMap::new();
     for result in rdr.deserialize() {
         let entry: RawEntry = result.expect("Invalid CSV for MIPLIB2017");
@@ -143,7 +167,8 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
     entries
 }
 
-pub fn load_instance(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+/// Load an instance from the MIPLIB 2017 dataset
+pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
     let mut artifact = Artifact::from_remote(image_name)?.pull()?;
     let mut instances = artifact.get_instances()?;
