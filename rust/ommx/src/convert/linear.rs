@@ -50,7 +50,10 @@ impl Linear {
         self.terms.iter().map(|term| term.id).collect()
     }
 
-    pub fn to_qubo(&self) -> (BTreeMap<(u64, u64), f64>, f64) {
+    /// Convert to QUBO format, which may contain non-binary variables.
+    ///
+    /// This returns a valid QUBO only when `self` consists of binary variables.
+    pub(crate) fn to_qubo_format(&self) -> (BTreeMap<(u64, u64), f64>, f64) {
         (
             self.terms
                 .iter()
@@ -60,7 +63,10 @@ impl Linear {
         )
     }
 
-    pub fn to_pubo(&self) -> BTreeMap<Vec<u64>, f64> {
+    /// Convert to PUBO format, which may contain non-binary variables.
+    ///
+    /// This returns a valid PUBO only when `self` consists of binary variables.
+    pub(crate) fn to_pubo_format(&self) -> BTreeMap<Vec<u64>, f64> {
         self.terms
             .iter()
             .map(|term| (vec![term.id], term.coefficient))
@@ -301,7 +307,7 @@ mod tests {
     #[test]
     fn to_qubo() {
         let linear = super::Linear::new([(1, 1.0), (2, -1.0), (3, -2.0)].into_iter(), 3.0);
-        let (qubo, constant) = linear.to_qubo();
+        let (qubo, constant) = linear.to_qubo_format();
         assert_eq!(qubo.len(), 3);
         assert_eq!(qubo[&(1, 1)], 1.0);
         assert_eq!(qubo[&(2, 2)], -1.0);
@@ -312,7 +318,7 @@ mod tests {
     #[test]
     fn to_pubo() {
         let linear = super::Linear::new([(1, 1.0), (2, -1.0), (3, -2.0)].into_iter(), 3.0);
-        let pubo = linear.to_pubo();
+        let pubo = linear.to_pubo_format();
         assert_eq!(pubo.len(), 4);
         assert_eq!(pubo[&vec![1]], 1.0);
         assert_eq!(pubo[&vec![2]], -1.0);
