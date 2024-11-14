@@ -10,6 +10,25 @@ use std::{
 
 use super::format::format_polynomial;
 
+/// Graded lexicographical order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct GrLex(Vec<u64>);
+
+impl Ord for GrLex {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.0.len() != other.0.len() {
+            return self.0.len().cmp(&other.0.len());
+        }
+        other.0.cmp(&self.0)
+    }
+}
+
+impl PartialOrd for GrLex {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl Zero for Polynomial {
     fn zero() -> Self {
         Self { terms: vec![] }
@@ -48,42 +67,43 @@ impl From<Quadratic> for Polynomial {
     }
 }
 
+impl From<BTreeMap<GrLex, f64>> for Polynomial {
+    fn from(map: BTreeMap<GrLex, f64>) -> Self {
+        Self {
+            terms: map
+                .into_iter()
+                .map(|(GrLex(ids), coefficient)| Monomial { ids, coefficient })
+                .rev()
+                .collect(),
+        }
+    }
+}
+
 impl FromIterator<(Vec<u64>, f64)> for Polynomial {
     fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
         let mut terms = BTreeMap::new();
         for (mut ids, coefficient) in iter {
             ids.sort_unstable();
+            let ids = GrLex(ids);
             let v: &mut f64 = terms.entry(ids.clone()).or_default();
             *v += coefficient;
             if v.abs() <= f64::EPSILON {
                 terms.remove(&ids);
             }
         }
-        Self {
-            terms: terms
-                .into_iter()
-                .map(|(ids, coefficient)| Monomial { ids, coefficient })
-                .collect(),
-        }
+        Self::from(terms)
     }
 }
 
-impl IntoIterator for Polynomial {
+impl<'a> IntoIterator for &'a Polynomial {
     type Item = (Vec<u64>, f64);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
-    fn into_iter(mut self) -> Self::IntoIter {
-        self.terms.sort_unstable_by(|a, b| {
-            if a.ids.len() != b.ids.len() {
-                b.ids.len().cmp(&a.ids.len())
-            } else {
-                b.ids.cmp(&a.ids)
-            }
-        });
+    fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.terms
-                .into_iter()
-                .map(|term| (term.ids, term.coefficient)),
+                .iter()
+                .map(|term| (term.ids.clone(), term.coefficient)),
         )
     }
 }
@@ -103,15 +123,10 @@ impl Add for Polynomial {
 
     fn add(self, rhs: Self) -> Self {
         let mut terms = BTreeMap::new();
-        for term in self.terms.iter().chain(rhs.terms.iter()) {
-            *terms.entry(term.ids.clone()).or_default() += term.coefficient;
+        for term in self.terms.into_iter().chain(rhs.terms.into_iter()) {
+            *terms.entry(GrLex(term.ids)).or_default() += term.coefficient;
         }
-        Self {
-            terms: terms
-                .into_iter()
-                .map(|(ids, coefficient)| Monomial { ids, coefficient })
-                .collect(),
-        }
+        Self::from(terms)
     }
 }
 
@@ -132,10 +147,10 @@ impl Mul for Polynomial {
             for (mut id_r, value_r) in rhs.clone().into_iter() {
                 id_r.append(&mut id_l.clone());
                 id_r.sort_unstable();
-                *terms.entry(id_r).or_default() += value_l * value_r;
+                *terms.entry(GrLex(id_r)).or_default() += value_l * value_r;
             }
         }
-        terms.into_iter().collect()
+        Self::from(terms)
     }
 }
 
@@ -209,6 +224,29 @@ impl fmt::Display for Polynomial {
 #[cfg(test)]
 mod tests {
     test_algebraic!(super::Polynomial);
+
+    #[test]
+    fn graded_lexical_order() {
+        // [1, 2, 3] > [1, 3, 5] > [2, 1, 4] > [1, 2] > [1, 3] > [2, 1] > [1] > [2] > []
+        let a = super::GrLex(vec![1, 2, 3]);
+        let b = super::GrLex(vec![1, 3, 5]);
+        let c = super::GrLex(vec![2, 1, 4]);
+        let d = super::GrLex(vec![1, 2]);
+        let e = super::GrLex(vec![1, 3]);
+        let f = super::GrLex(vec![2, 1]);
+        let g = super::GrLex(vec![1]);
+        let h = super::GrLex(vec![2]);
+        let i = super::GrLex(vec![]);
+
+        assert!(a > b);
+        assert!(b > c);
+        assert!(c > d);
+        assert!(d > e);
+        assert!(e > f);
+        assert!(f > g);
+        assert!(g > h);
+        assert!(h > i);
+    }
 
     #[test]
     fn format() {
