@@ -39,4 +39,25 @@ impl Instance {
 
         Ok(objective_pubo)
     }
+
+    pub fn to_qubo(&self) -> Result<(BTreeMap<(u64, u64), f64>, f64)> {
+        let pubo = self.to_pubo()?;
+        let mut constant = 0.0;
+        let mut qubo = BTreeMap::new();
+        for (id, coefficient) in pubo {
+            match id[..] {
+                [a, b] => {
+                    qubo.insert((a, b), coefficient);
+                }
+                [a] => {
+                    qubo.insert((a, a), coefficient);
+                }
+                [] => {
+                    constant += coefficient;
+                }
+                _ => bail!("QUBO can only contain pairs of variables"),
+            }
+        }
+        Ok((qubo, constant))
+    }
 }
