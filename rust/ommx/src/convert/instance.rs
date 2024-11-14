@@ -40,8 +40,20 @@ impl Instance {
         Ok(objective_pubo)
     }
 
-    pub fn to_qubo(&self) -> Result<(BTreeMap<(u64, u64), f64>, f64)> {
-        let pubo = self.to_pubo()?;
+    pub fn to_qubo(&self) -> Result<Qubo> {
+        Qubo::from_pubo(self.to_pubo()?)
+    }
+}
+
+/// Quadratic unconstrained binary optimization (QUBO)
+#[derive(Debug, Clone)]
+pub struct Qubo {
+    pub qubo: BTreeMap<(u64, u64), f64>,
+    pub constant: f64,
+}
+
+impl Qubo {
+    pub fn from_pubo(pubo: BTreeMap<Vec<u64>, f64>) -> Result<Self> {
         let mut constant = 0.0;
         let mut qubo = BTreeMap::new();
         for (id, coefficient) in pubo {
@@ -55,9 +67,9 @@ impl Instance {
                 [] => {
                     constant += coefficient;
                 }
-                _ => bail!("QUBO can only contain pairs of variables"),
+                _ => bail!("Higher order terms are not supported: {id:?}"),
             }
         }
-        Ok((qubo, constant))
+        Ok(Self { qubo, constant })
     }
 }
