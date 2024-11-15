@@ -126,6 +126,19 @@ pub struct Constraint {
     /// Detail human-readable description of the constraint.
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// Temporal value for the Lagrangian dual variable of this constraint.
+    ///
+    /// This field is intended to use for storing the temporal dual variable value during the optimization process.
+    /// This will be different from the optimal dual variable value.
+    ///
+    /// This field is also allowed to use for modified dual variable like appearing augmented Lagrangian method,
+    /// which uses modified Lagrangian and thus the dual variable is also modified.
+    ///
+    #[prost(double, optional, tag = "9")]
+    pub dual_variable: ::core::option::Option<f64>,
+    /// Weight of the penalty term for the constraint.
+    #[prost(double, optional, tag = "10")]
+    pub penalty_weight: ::core::option::Option<f64>,
 }
 /// A constraint evaluated with a state
 #[allow(clippy::derive_partial_eq_without_eq)]

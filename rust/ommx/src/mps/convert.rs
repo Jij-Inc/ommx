@@ -105,6 +105,8 @@ fn convert_constraints(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> Vec
             parameters: HashMap::new(),
             name: Some(row_name.0.clone()),
             description: None,
+            dual_variable: None,
+            penalty_weight: None,
         })
     }
     constrs
