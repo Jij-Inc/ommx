@@ -1210,6 +1210,14 @@ class Constraint:
         self.raw.parameters.update(parameters)
         return self
 
+    def set_dual_variable(self, value: float) -> Constraint:
+        self.raw.dual_variable = value
+        return self
+
+    def set_penalty_weight(self, value: float) -> Constraint:
+        self.raw.penalty_weight = value
+        return self
+
     @property
     def function(self) -> Function:
         return Function(self.raw.function)
@@ -1237,6 +1245,14 @@ class Constraint:
     @property
     def parameters(self) -> dict[str, str]:
         return dict(self.raw.parameters)
+
+    @property
+    def dual_variable(self) -> float:
+        return self.raw.dual_variable
+
+    @property
+    def penalty_weight(self) -> float:
+        return self.raw.penalty_weight
 
     def __repr__(self) -> str:
         if self.raw.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
