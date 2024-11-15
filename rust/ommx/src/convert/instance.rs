@@ -1,4 +1,4 @@
-use crate::v1::{decision_variable::Kind, Instance};
+use crate::v1::{decision_variable::Kind, Equality, Instance};
 use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -28,7 +28,7 @@ impl Instance {
             bail!("Objective contains non-binary variables");
         }
 
-        let objective_pubo: BTreeMap<Vec<u64>, f64> = objective
+        let mut pubo: BTreeMap<Vec<u64>, f64> = objective
             .into_iter()
             .map(|(mut id, coefficient)| {
                 // Order reduction for binary variable by x^2 = x
@@ -36,8 +36,43 @@ impl Instance {
                 (id, coefficient)
             })
             .collect();
+        for constraint in &self.constraints {
+            if constraint.equality != Equality::EqualToZero as i32 {
+                bail!("Only equality constraints are supported");
+            }
+            let f = constraint
+                .function
+                .as_ref()
+                .context("No function found in the constraint")?;
+            if !f.used_decision_variable_ids().is_subset(&binary) {
+                bail!("Constraint contains non-binary variables");
+            }
+            if let Some(dual_variable) = constraint.dual_variable {
+                if dual_variable != 0.0 {
+                    for (mut id, coefficient) in f.into_iter() {
+                        id.dedup();
+                        let coefficient = dual_variable * coefficient;
+                        pubo.entry(id)
+                            .and_modify(|c| *c += coefficient)
+                            .or_insert(coefficient);
+                    }
+                }
+            }
+            if let Some(penalty_weight) = constraint.penalty_weight {
+                if penalty_weight != 0.0 {
+                    let f2 = f.clone() * f.clone();
+                    for (mut id, coefficient) in f2.into_iter() {
+                        id.dedup();
+                        let coefficient = penalty_weight * coefficient;
+                        pubo.entry(id)
+                            .and_modify(|c| *c += coefficient)
+                            .or_insert(coefficient);
+                    }
+                }
+            }
+        }
 
-        Ok(objective_pubo)
+        Ok(pubo)
     }
 
     pub fn to_qubo(&self) -> Result<Qubo> {
