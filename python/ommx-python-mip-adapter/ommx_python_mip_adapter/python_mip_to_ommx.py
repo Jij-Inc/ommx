@@ -180,8 +180,8 @@ def model_to_state(
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
 
-        >>> ommx_solutions = adapter.model_to_state(model, ommx_instance)
-        >>> ommx_solutions.entries
+        >>> ommx_state = adapter.model_to_state(model, ommx_instance)
+        >>> ommx_state.entries
         {1: 0.0}
     """
     if not (
@@ -213,7 +213,6 @@ def model_to_solution(
     .. doctest::
 
         >>> from ommx.v1 import Instance, DecisionVariable
-        >>> from ommx.v1.solution_pb2 import Optimality
         >>> from ommx_python_mip_adapter import instance_to_model, model_to_solution
 
         >>> p = [10, 13, 18, 31, 7, 15]

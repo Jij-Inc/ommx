@@ -154,8 +154,8 @@ def instance_to_model(
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
 
-        >>> ommx_solutions = adapter.model_to_state(model, ommx_instance)
-        >>> ommx_solutions.entries
+        >>> ommx_state = adapter.model_to_state(model, ommx_instance)
+        >>> ommx_state.entries
         {1: 0.0}
     """
     builder = PythonMIPBuilder(

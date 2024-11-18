@@ -60,9 +60,9 @@ ommx_instance = Instance.from_components(
 model = adapter.instance_to_model(ommx_instance)
 model.optimize()
 # Create `ommx.v1.State` from Optimized `mip.Model`
-ommx_solutions = adapter.model_to_state(model, ommx_instance)
+ommx_state = adapter.model_to_state(model, ommx_instance)
 
-print(ommx_solutions)
+print(ommx_state)
 ```
 
 You can get `ommx.v1.Instance` from a Python-MIP model as the following:
