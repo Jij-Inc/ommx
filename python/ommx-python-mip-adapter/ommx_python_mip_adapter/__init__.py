@@ -3,12 +3,14 @@ from .python_mip_to_ommx import (
     OMMXInstanceBuilder,
     model_to_instance,
     model_to_state,
+    model_to_solution,
 )
 
 __all__ = [
     "instance_to_model",
     "model_to_instance",
     "model_to_state",
+    "model_to_solution",
     "PythonMIPBuilder",
     "OMMXInstanceBuilder",
     "solve",

@@ -8,7 +8,7 @@ from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.solution_pb2 import State
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Solution
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -198,3 +198,55 @@ def model_to_state(
             for var in instance.raw.decision_variables
         }
     )
+
+
+def model_to_solution(
+    model: mip.Model,
+    instance: Instance,
+) -> Solution:
+    """
+    Convert optimized Python-MIP model and ommx.v1.Instance to ommx.v1.Solution.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> from ommx.v1.solution_pb2 import Optimality
+        >>> from ommx_python_mip_adapter import instance_to_model, model_to_solution
+
+        >>> p = [10, 13, 18, 31, 7, 15]
+        >>> w = [11, 15, 20, 35, 10, 33]
+        >>> x = [DecisionVariable.binary(i) for i in range(6)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(p[i] * x[i] for i in range(6)),
+        ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> model = instance_to_model(instance)
+        >>> model.optimize()
+        <OptimizationStatus.OPTIMAL: 0>
+
+        >>> solution = model_to_solution(model, instance)
+        >>> solution.raw.objective
+        41.0
+
+    """
+    state = model_to_state(model, instance)
+    solution = instance.evaluate(state)
+
+    dual_variables = {}
+    for constraint in model.constrs:
+        pi = constraint.pi
+        if pi is not None:
+            id = int(constraint.name)
+            dual_variables[id] = pi
+    for constraint in solution.raw.evaluated_constraints:
+        id = constraint.id
+        if id in dual_variables:
+            constraint.dual_variable = dual_variables[id]
+
+    return solution
