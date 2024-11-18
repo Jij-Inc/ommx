@@ -10,7 +10,7 @@ from ommx.v1.solution_pb2 import Optimality, Result, Infeasible, Unbounded, Rela
 from ommx.v1 import Instance, DecisionVariable, Constraint
 
 from .exception import OMMXPythonMIPAdapterError
-from .python_mip_to_ommx import model_to_solution
+from .python_mip_to_ommx import model_to_state
 
 
 @dataclass
@@ -154,7 +154,7 @@ def instance_to_model(
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
 
-        >>> ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+        >>> ommx_solutions = adapter.model_to_state(model, ommx_instance)
         >>> ommx_solutions.entries
         {1: 0.0}
     """
@@ -303,7 +303,7 @@ def solve(
     ]:
         return Result(error=f"Unknown status: {model.status}")
 
-    state = model_to_solution(model, instance)
+    state = model_to_state(model, instance)
     solution = instance.evaluate(state)
 
     assert solution.raw.feasible

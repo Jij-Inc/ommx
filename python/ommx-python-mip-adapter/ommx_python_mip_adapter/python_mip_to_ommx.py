@@ -152,7 +152,7 @@ def model_to_instance(model: mip.Model) -> Instance:
     return builder.build()
 
 
-def model_to_solution(
+def model_to_state(
     model: mip.Model,
     instance: Instance,
 ) -> State:
@@ -180,7 +180,7 @@ def model_to_solution(
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
 
-        >>> ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+        >>> ommx_solutions = adapter.model_to_state(model, ommx_instance)
         >>> ommx_solutions.entries
         {1: 0.0}
     """

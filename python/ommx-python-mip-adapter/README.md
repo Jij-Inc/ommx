@@ -60,7 +60,7 @@ ommx_instance = Instance.from_components(
 model = adapter.instance_to_model(ommx_instance)
 model.optimize()
 # Create `ommx.v1.State` from Optimized `mip.Model`
-ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+ommx_solutions = adapter.model_to_state(model, ommx_instance)
 
 print(ommx_solutions)
 ```
