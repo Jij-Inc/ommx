@@ -12,7 +12,6 @@ import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
-import ommx.v1.parameter_pb2
 import sys
 import typing
 
@@ -22,6 +21,46 @@ else:
     import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+
+@typing.final
+class Parameters(google.protobuf.message.Message):
+    """A set of parameters for instantiating an optimization problem from a parametric instance"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class EntriesEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.float
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.float = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    ENTRIES_FIELD_NUMBER: builtins.int
+    @property
+    def entries(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[
+        builtins.int, builtins.float
+    ]: ...
+    def __init__(
+        self,
+        *,
+        entries: collections.abc.Mapping[builtins.int, builtins.float] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
+
+global___Parameters = Parameters
 
 @typing.final
 class Instance(google.protobuf.message.Message):
@@ -167,7 +206,7 @@ class Instance(google.protobuf.message.Message):
         """Constraints of the optimization problem"""
 
     @property
-    def parameters(self) -> ommx.v1.parameter_pb2.Parameters:
+    def parameters(self) -> global___Parameters:
         """Parameters used when instantiating this instance"""
 
     def __init__(
@@ -182,7 +221,7 @@ class Instance(google.protobuf.message.Message):
         constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint]
         | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
-        parameters: ommx.v1.parameter_pb2.Parameters | None = ...,
+        parameters: global___Parameters | None = ...,
     ) -> None: ...
     def HasField(
         self,

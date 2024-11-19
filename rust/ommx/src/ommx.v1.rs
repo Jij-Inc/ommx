@@ -276,30 +276,6 @@ pub mod decision_variable {
         }
     }
 }
-/// Placeholder of a parameter in a parametrized optimization problem
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Parameter {
-    /// ID for the parameter
-    ///
-    /// - IDs are not required to be sequential.
-    /// - The ID must be unique within the instance including the decision variables.
-    #[prost(uint64, tag = "1")]
-    pub id: u64,
-    /// Name of the parameter. e.g. `x`
-    #[prost(string, optional, tag = "2")]
-    pub name: ::core::option::Option<::prost::alloc::string::String>,
-    /// Subscripts of the parameter, same usage as DecisionVariable.subscripts
-    #[prost(int64, repeated, tag = "3")]
-    pub subscripts: ::prost::alloc::vec::Vec<i64>,
-    /// Additional metadata for the parameter, same usage as DecisionVariable.parameters
-    #[prost(map = "string, string", tag = "4")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Human-readable description for the parameter
-    #[prost(string, optional, tag = "5")]
-    pub description: ::core::option::Option<::prost::alloc::string::String>,
-}
 /// A set of parameters for instantiating an optimization problem from a parametric instance
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -379,6 +355,30 @@ pub mod instance {
             }
         }
     }
+}
+/// Placeholder of a parameter in a parametrized optimization problem
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Parameter {
+    /// ID for the parameter
+    ///
+    /// - IDs are not required to be sequential.
+    /// - The ID must be unique within the instance including the decision variables.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// Name of the parameter. e.g. `x`
+    #[prost(string, optional, tag = "2")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Subscripts of the parameter, same usage as DecisionVariable.subscripts
+    #[prost(int64, repeated, tag = "3")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Additional metadata for the parameter, same usage as DecisionVariable.parameters
+    #[prost(map = "string, string", tag = "4")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Human-readable description for the parameter
+    #[prost(string, optional, tag = "5")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Optimization problem including parameter, variables varying while solving the problem like penalty weights or dual variables.
 /// These parameters are not decision variables.

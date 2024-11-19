@@ -5,7 +5,11 @@ package ommx.v1;
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
-import "ommx/v1/parameter.proto";
+
+// A set of parameters for instantiating an optimization problem from a parametric instance
+message Parameters {
+  map<uint64, double> entries = 1;
+}
 
 message Instance {
   message Description {

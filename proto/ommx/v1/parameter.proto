@@ -22,8 +22,3 @@ message Parameter {
   // Human-readable description for the parameter
   optional string description = 5;
 }
-
-// A set of parameters for instantiating an optimization problem from a parametric instance
-message Parameters {
-  map<uint64, double> entries = 1;
-}
