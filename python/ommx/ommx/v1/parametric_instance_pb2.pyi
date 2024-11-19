@@ -12,10 +12,112 @@ import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
 import ommx.v1.instance_pb2
-import ommx.v1.parameter_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+
+@typing.final
+class Parameter(google.protobuf.message.Message):
+    """Placeholder of a parameter in a parametrized optimization problem"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class ParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    ID_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    SUBSCRIPTS_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    """ID for the parameter
+
+    - IDs are not required to be sequential.
+    - The ID must be unique within the instance including the decision variables.
+    """
+    name: builtins.str
+    """Name of the parameter. e.g. `x`"""
+    description: builtins.str
+    """Human-readable description for the parameter"""
+    @property
+    def subscripts(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """Subscripts of the parameter, same usage as DecisionVariable.subscripts"""
+
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Additional metadata for the parameter, same usage as DecisionVariable.parameters"""
+
+    def __init__(
+        self,
+        *,
+        id: builtins.int = ...,
+        name: builtins.str | None = ...,
+        subscripts: collections.abc.Iterable[builtins.int] | None = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+        description: builtins.str | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "name",
+            b"name",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "id",
+            b"id",
+            "name",
+            b"name",
+            "parameters",
+            b"parameters",
+            "subscripts",
+            b"subscripts",
+        ],
+    ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_name", b"_name"]
+    ) -> typing.Literal["name"] | None: ...
+
+global___Parameter = Parameter
 
 @typing.final
 class ParametricInstance(google.protobuf.message.Message):
@@ -47,7 +149,7 @@ class ParametricInstance(google.protobuf.message.Message):
     def parameters(
         self,
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        ommx.v1.parameter_pb2.Parameter
+        global___Parameter
     ]:
         """Parameters of this instance
 
@@ -74,8 +176,7 @@ class ParametricInstance(google.protobuf.message.Message):
             ommx.v1.decision_variables_pb2.DecisionVariable
         ]
         | None = ...,
-        parameters: collections.abc.Iterable[ommx.v1.parameter_pb2.Parameter]
-        | None = ...,
+        parameters: collections.abc.Iterable[global___Parameter] | None = ...,
         objective: ommx.v1.function_pb2.Function | None = ...,
         constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint]
         | None = ...,
