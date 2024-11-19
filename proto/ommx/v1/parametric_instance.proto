@@ -28,8 +28,9 @@ message Parameter {
   optional string description = 5;
 }
 
+// A set of parameters for instantiating an optimization problem from a parametric instance
 message Parameters {
-  map<uint64, double> values = 1;
+  map<uint64, double> entries = 1;
 }
 
 message ParametricInstance {
