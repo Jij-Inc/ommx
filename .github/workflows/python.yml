@@ -62,25 +62,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install ommx
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
+        run: task install_python_sdk
 
       - name: Test ommx
         if: always()
-        run: |
-          pytest -vv --doctest-modules python/ommx
+        run: task test_python_sdk
 
       # FIXME: Python-MIP does not support Python 3.12
       - name: Install ommx-python-mip-adapter
         if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          pip install -v -e 'python/ommx-python-mip-adapter/[dev]'
+        run: task install_python_mip_adapter
 
       - name: Test ommx-python-mip-adapter
         if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          pytest -vv --doctest-modules python/ommx-python-mip-adapter/
-          markdown-code-runner ./python/ommx-python-mip-adapter/README.md
+        run: task test_python_mip_adapter
 
       - name: Run notebooks
         if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
@@ -91,7 +86,7 @@ jobs:
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
           OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
 
-  format:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,18 +98,6 @@ jobs:
         run: |
           ruff format --check python
 
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
-
       - name: Lint
         run: |
           ruff check python
-
-      - name: Type check
-        run: |
-          pyright python
