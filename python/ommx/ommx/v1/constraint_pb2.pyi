@@ -70,8 +70,6 @@ class Constraint(google.protobuf.message.Message):
     PARAMETERS_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
-    DUAL_VARIABLE_FIELD_NUMBER: builtins.int
-    PENALTY_WEIGHT_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Constraint ID
 
@@ -86,17 +84,6 @@ class Constraint(google.protobuf.message.Message):
     """Name of the constraint."""
     description: builtins.str
     """Detail human-readable description of the constraint."""
-    dual_variable: builtins.float
-    """Temporal value for the Lagrangian dual variable of this constraint.
-
-    This field is intended to use for storing the temporal dual variable value during the optimization process.
-    This will be different from the optimal dual variable value.
-
-    This field is also allowed to use for modified dual variable like appearing augmented Lagrangian method,
-    which uses modified Lagrangian and thus the dual variable is also modified.
-    """
-    penalty_weight: builtins.float
-    """Weight of the penalty term for the constraint."""
     @property
     def function(self) -> ommx.v1.function_pb2.Function: ...
     @property
@@ -127,30 +114,20 @@ class Constraint(google.protobuf.message.Message):
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         name: builtins.str | None = ...,
         description: builtins.str | None = ...,
-        dual_variable: builtins.float | None = ...,
-        penalty_weight: builtins.float | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_description",
             b"_description",
-            "_dual_variable",
-            b"_dual_variable",
             "_name",
             b"_name",
-            "_penalty_weight",
-            b"_penalty_weight",
             "description",
             b"description",
-            "dual_variable",
-            b"dual_variable",
             "function",
             b"function",
             "name",
             b"name",
-            "penalty_weight",
-            b"penalty_weight",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -158,16 +135,10 @@ class Constraint(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_description",
             b"_description",
-            "_dual_variable",
-            b"_dual_variable",
             "_name",
             b"_name",
-            "_penalty_weight",
-            b"_penalty_weight",
             "description",
             b"description",
-            "dual_variable",
-            b"dual_variable",
             "equality",
             b"equality",
             "function",
@@ -178,8 +149,6 @@ class Constraint(google.protobuf.message.Message):
             b"name",
             "parameters",
             b"parameters",
-            "penalty_weight",
-            b"penalty_weight",
             "subscripts",
             b"subscripts",
         ],
@@ -190,16 +159,8 @@ class Constraint(google.protobuf.message.Message):
     ) -> typing.Literal["description"] | None: ...
     @typing.overload
     def WhichOneof(
-        self, oneof_group: typing.Literal["_dual_variable", b"_dual_variable"]
-    ) -> typing.Literal["dual_variable"] | None: ...
-    @typing.overload
-    def WhichOneof(
         self, oneof_group: typing.Literal["_name", b"_name"]
     ) -> typing.Literal["name"] | None: ...
-    @typing.overload
-    def WhichOneof(
-        self, oneof_group: typing.Literal["_penalty_weight", b"_penalty_weight"]
-    ) -> typing.Literal["penalty_weight"] | None: ...
 
 global___Constraint = Constraint
 
