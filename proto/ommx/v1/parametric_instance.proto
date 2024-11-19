@@ -6,33 +6,10 @@ import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
 import "ommx/v1/instance.proto";
+import "ommx/v1/parameter.proto";
 
-// Placeholder of a parameter in a parametrized optimization problem
-message Parameter {
-  // ID for the parameter
-  //
-  // - IDs are not required to be sequential.
-  // - The ID must be unique within the instance including the decision variables.
-  uint64 id = 1;
-
-  // Name of the parameter. e.g. `x`
-  optional string name = 2;
-
-  // Subscripts of the parameter, same usage as DecisionVariable.subscripts
-  repeated int64 subscripts = 3;
-
-  // Additional metadata for the parameter, same usage as DecisionVariable.parameters
-  map<string, string> parameters = 4;
-
-  // Human-readable description for the parameter
-  optional string description = 5;
-}
-
-// A set of parameters for instantiating an optimization problem from a parametric instance
-message Parameters {
-  map<uint64, double> entries = 1;
-}
-
+// Optimization problem including parameter, variables varying while solving the problem like penalty weights or dual variables.
+// These parameters are not decision variables.
 message ParametricInstance {
   Instance.Description description = 1;
 
