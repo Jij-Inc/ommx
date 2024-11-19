@@ -144,6 +144,7 @@ macro_rules! test_algebraic {
 mod format;
 mod function;
 mod linear;
+mod parametric_instance;
 mod polynomial;
 mod quadratic;
 
