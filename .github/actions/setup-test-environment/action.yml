@@ -36,6 +36,7 @@ runs:
         cache: "pip"
 
     - name: Setup ruff
+      shell: bash
       run: |
         pip install "ruff >= 0.7.0, < 0.8.0"
         ruff --version
