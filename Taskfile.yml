@@ -3,20 +3,48 @@
 version: "3"
 
 tasks:
-  default:
+  # Protocol Buffers
+  protogen:
     cmds:
-      - which ruff
+      - task: protogen_python
+      - task: protogen_rust
 
-  python_proto_gen:
+  protogen_python:
     cmds:
       - task: buf_generate_python
-      - task: ruff_format
+      - task: format_python
+
+  protogen_rust:
+    cmds:
+      - cargo run --bin protogen
 
   buf_generate_python:
     cmds:
       - buf generate --template buf.gen.python.yaml
     dir: proto
 
-  ruff_format:
+  # Python
+  install_python_sdk:
+    cmds:
+      - pip install -ve "python/ommx[dev]"
+
+  install_python_mip_adapter:
+    cmds:
+      - pip install -ve "python/ommx-python-mip-adapter[dev]"
+
+  format_python:
     cmds:
       - ruff format
+
+  test_python:
+    cmds:
+      - task: test_python_sdk
+      - task: test_python_mip_adapter
+
+  test_python_sdk:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx/
+
+  test_python_mip_adapter:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx-python-mip-adapter/
