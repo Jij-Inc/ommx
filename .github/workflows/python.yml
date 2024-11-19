@@ -64,17 +64,6 @@ jobs:
       - name: Install ommx
         run: |
           pip install -v -e 'python/ommx/[dev]'
-          pip install pytest-github-actions-annotate-failures
-
-      - name: Ruff check
-        if: always()
-        run: |
-          ruff check python
-
-      - name: Type check ommx
-        if: always()
-        run: |
-          pyright python/ommx
 
       - name: Test ommx
         if: always()
@@ -86,11 +75,6 @@ jobs:
         if: ${{ matrix.python-version != '3.12' }}
         run: |
           pip install -v -e 'python/ommx-python-mip-adapter/[dev]'
-
-      - name: Lint ommx-python-mip-adapter
-        if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          pyright python/ommx-python-mip-adapter/
 
       - name: Test ommx-python-mip-adapter
         if: ${{ matrix.python-version != '3.12' }}
@@ -118,3 +102,19 @@ jobs:
       - name: Format
         run: |
           ruff format --check python
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Lint
+        run: |
+          ruff check python
+
+      - name: Type check
+        run: |
+          pyright python

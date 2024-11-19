@@ -41,8 +41,9 @@ runs:
         python-version: ${{ inputs.python-version }}
         cache: "pip"
 
-    - name: Setup ruff
+    - name: Setup Python tools
       shell: bash
       run: |
         pip install "ruff >= 0.7.0, < 0.8.0"
-        ruff --version
+        pip install pyright
+        pip install pytest-github-actions-annotate-failures
