@@ -14,9 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
@@ -25,13 +24,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
       - uses: giraffate/clippy-action@v1
         with:
           reporter: "github-pr-check"
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
           clippy_flags: -- -Dwarnings
 
   test:
@@ -40,10 +40,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Run tests
         run: cargo test
@@ -54,18 +52,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Setup protobuf compiler
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "26.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate Rust codes from proto files
         run: cargo run --bin=protogen
