@@ -38,10 +38,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate stub file
-        uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin stub_gen --features=stub_gen
+        run: task stubgen
 
       - name: Check updated
         run: |
@@ -69,13 +66,11 @@ jobs:
         run: task test_python_sdk
 
       # FIXME: Python-MIP does not support Python 3.12
-      - name: Install ommx-python-mip-adapter
-        if: ${{ matrix.python-version != '3.12' }}
-        run: task install_python_mip_adapter
-
       - name: Test ommx-python-mip-adapter
         if: ${{ matrix.python-version != '3.12' }}
-        run: task test_python_mip_adapter
+        run: |
+          task install_python_mip_adapter
+          task test_python_mip_adapter
 
       - name: Run notebooks
         if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
@@ -95,9 +90,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Format
-        run: |
-          ruff format --check python
+        run: ruff format --check python
 
       - name: Lint
-        run: |
-          ruff check python
+        run: ruff check python

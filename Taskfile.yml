@@ -51,3 +51,7 @@ tasks:
       - pytest -vv --doctest-modules python/ommx-python-mip-adapter/
       - markdown-code-runner python/ommx-python-mip-adapter/README.md
       - pyright python/ommx-python-mip-adapter/
+
+  stubgen:
+    cmds:
+      - cargo run --bin stub_gen --features=stub_gen
