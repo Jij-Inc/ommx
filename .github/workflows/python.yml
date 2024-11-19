@@ -17,12 +17,6 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
       - name: Install dependencies
         run: |
           pip install "python/ommx/[dev]"
@@ -47,16 +41,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
         run: |
@@ -81,16 +67,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
 
       - name: Install ommx
         run: |
@@ -143,16 +123,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install Dependencies
         run: |

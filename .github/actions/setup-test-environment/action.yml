@@ -1,6 +1,12 @@
 name: "Setup Test Environment"
 description: "Setup common environment for testing jobs"
 
+inputs:
+  python-version:
+    description: "Python version to setup"
+    required: true
+    default: "3.8"
+
 runs:
   using: "composite"
   steps:
@@ -22,3 +28,9 @@ runs:
 
     - name: Setup caching for Rust
       uses: Swatinem/rust-cache@v2
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache: "pip"
