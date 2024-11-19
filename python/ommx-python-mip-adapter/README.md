@@ -17,7 +17,7 @@ sequenceDiagram
     P->>P: Solve with CBC, Gurobi, or other solvers
     P->>U: Optimized model
     U->>A: Optimized model and ommx.v1.Instance
-    A->>U: ommx:SolutionList
+    A->>U: ommx.v1.Solution
 ```
 
 Python-MIP as a user interface to create OMMX instance
