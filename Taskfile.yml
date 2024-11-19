@@ -1,0 +1,22 @@
+# https://taskfile.dev
+
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - which ruff
+
+  python_proto_gen:
+    cmds:
+      - task: buf_generate_python
+      - task: ruff_format
+
+  buf_generate_python:
+    cmds:
+      - buf generate --template buf.gen.python.yaml
+    dir: proto
+
+  ruff_format:
+    cmds:
+      - ruff format
