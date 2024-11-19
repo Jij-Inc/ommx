@@ -34,3 +34,8 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
         cache: "pip"
+
+    - name: Setup ruff
+      run: |
+        pip install "ruff >= 0.7.0, < 0.8.0"
+        ruff --version

@@ -44,10 +44,6 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Install dependencies
-        run: |
-          pip install "python/ommx/[dev]"
-
       - name: Regenerate stub file
         uses: actions-rs/cargo@v1
         with:
@@ -125,10 +121,6 @@ jobs:
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
-
-      - name: Install Dependencies
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
 
       - name: Format
         run: |
