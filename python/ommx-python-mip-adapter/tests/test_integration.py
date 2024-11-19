@@ -21,13 +21,11 @@ def test_integration_lp(generater):
 
     model = adapter.instance_to_model(ommx_instance_bytes)
     model.optimize()
-    ommx_solution = adapter.model_to_solution(model, ommx_instance_bytes)
+    ommx_state = adapter.model_to_state(model, ommx_instance_bytes)
     expected_solution = generater.get_v1_state()
-    assert ommx_solution.entries.keys() == expected_solution.entries.keys()
-    for key in ommx_solution.entries.keys():
-        assert ommx_solution.entries[key] == pytest.approx(
-            expected_solution.entries[key]
-        )
+    assert ommx_state.entries.keys() == expected_solution.entries.keys()
+    for key in ommx_state.entries.keys():
+        assert ommx_state.entries[key] == pytest.approx(expected_solution.entries[key])
 
 
 def test_integration_milp():
@@ -54,7 +52,7 @@ def test_integration_milp():
 
     model = adapter.instance_to_model(ommx_instance)
     model.optimize()
-    ommx_solution = adapter.model_to_solution(model, ommx_instance)
+    ommx_state = adapter.model_to_state(model, ommx_instance)
 
-    assert ommx_solution.entries[1] == pytest.approx(3)
-    assert ommx_solution.entries[2] == pytest.approx(3)
+    assert ommx_state.entries[1] == pytest.approx(3)
+    assert ommx_state.entries[2] == pytest.approx(3)

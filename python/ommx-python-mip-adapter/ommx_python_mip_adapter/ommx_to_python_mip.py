@@ -154,8 +154,8 @@ def instance_to_model(
         >>> model.optimize()
         <OptimizationStatus.OPTIMAL: 0>
 
-        >>> ommx_solutions = adapter.model_to_solution(model, ommx_instance)
-        >>> ommx_solutions.entries
+        >>> ommx_state = adapter.model_to_state(model, ommx_instance)
+        >>> ommx_state.entries
         {1: 0.0}
     """
     builder = PythonMIPBuilder(
@@ -303,26 +303,12 @@ def solve(
     ]:
         return Result(error=f"Unknown status: {model.status}")
 
-    state = model_to_solution(model, instance)
-    solution = instance.evaluate(state)
-
-    assert solution.raw.feasible
+    solution = model_to_solution(model, instance)
 
     if model.status == mip.OptimizationStatus.OPTIMAL:
         solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
     if relax:
         solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
-
-    dual_variables = {}
-    for constraint in model.constrs:
-        pi = constraint.pi
-        if pi is not None:
-            id = int(constraint.name)
-            dual_variables[id] = pi
-    for constraint in solution.raw.evaluated_constraints:
-        id = constraint.id
-        if id in dual_variables:
-            constraint.dual_variable = dual_variables[id]
 
     return Result(solution=solution.raw)

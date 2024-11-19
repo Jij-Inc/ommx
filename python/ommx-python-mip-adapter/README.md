@@ -17,7 +17,7 @@ sequenceDiagram
     P->>P: Solve with CBC, Gurobi, or other solvers
     P->>U: Optimized model
     U->>A: Optimized model and ommx.v1.Instance
-    A->>U: ommx:SolutionList
+    A->>U: ommx.v1.Solution
 ```
 
 Python-MIP as a user interface to create OMMX instance
@@ -60,9 +60,9 @@ ommx_instance = Instance.from_components(
 model = adapter.instance_to_model(ommx_instance)
 model.optimize()
 # Create `ommx.v1.State` from Optimized `mip.Model`
-ommx_solutions = adapter.model_to_solution(model, ommx_instance)
+ommx_state = adapter.model_to_state(model, ommx_instance)
 
-print(ommx_solutions)
+print(ommx_state)
 ```
 
 You can get `ommx.v1.Instance` from a Python-MIP model as the following:
