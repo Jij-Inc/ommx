@@ -44,8 +44,10 @@ tasks:
   test_python_sdk:
     cmds:
       - pytest -vv --doctest-modules python/ommx/
+      - pyright python/ommx/
 
   test_python_mip_adapter:
     cmds:
       - pytest -vv --doctest-modules python/ommx-python-mip-adapter/
       - markdown-code-runner python/ommx-python-mip-adapter/README.md
+      - pyright python/ommx-python-mip-adapter/
