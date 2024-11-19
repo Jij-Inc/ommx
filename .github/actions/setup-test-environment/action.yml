@@ -24,7 +24,7 @@ runs:
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       with:
-        components: rustfmt
+        components: rustfmt, clippy
 
     - name: Setup caching for Rust
       uses: Swatinem/rust-cache@v2
