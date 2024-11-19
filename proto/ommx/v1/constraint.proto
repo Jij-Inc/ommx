@@ -42,19 +42,6 @@ message Constraint {
 
   // Detail human-readable description of the constraint.
   optional string description = 7;
-
-  // Temporal value for the Lagrangian dual variable of this constraint.
-  //
-  // This field is intended to use for storing the temporal dual variable value during the optimization process.
-  // This will be different from the optimal dual variable value.
-  //
-  // This field is also allowed to use for modified dual variable like appearing augmented Lagrangian method,
-  // which uses modified Lagrangian and thus the dual variable is also modified.
-  //
-  optional double dual_variable = 9;
-
-  // Weight of the penalty term for the constraint.
-  optional double penalty_weight = 10;
 }
 
 // A constraint evaluated with a state
