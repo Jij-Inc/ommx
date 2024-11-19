@@ -18,17 +18,10 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
-        run: |
-          pip install "python/ommx/[dev]"
+        run: pip install "python/ommx/[dev]"
 
-      - name: Regenerate python codes from proto files
-        run: |
-          buf generate --template buf.gen.python.yaml
-        working-directory: proto
-
-      - name: Format generated codes
-        run: |
-          ruff format $(find python -type f -regex ".*_pb2.pyi*")
+      - name: Regenerate python bindings
+        run: task protogen_python
 
       - name: Check updated
         run: |

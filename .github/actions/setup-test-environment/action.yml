@@ -21,6 +21,12 @@ runs:
       with:
         github_token: ${{ github.token }}
 
+    - name: Install Task
+      uses: arduino/setup-task@v2
+      with:
+        version: 3.x
+        repo-token: ${{ github.token }}
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       with:
