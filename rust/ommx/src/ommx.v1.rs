@@ -346,6 +346,60 @@ pub mod instance {
         }
     }
 }
+/// Placeholder of a parameter in a parametrized optimization problem
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Parameter {
+    /// ID for the parameter
+    ///
+    /// - IDs are not required to be sequential.
+    /// - The ID must be unique within the instance including the decision variables.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// Name of the parameter. e.g. `x`
+    #[prost(string, optional, tag = "2")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Subscripts of the parameter, same usage as DecisionVariable.subscripts
+    #[prost(int64, repeated, tag = "3")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Additional metadata for the parameter, same usage as DecisionVariable.parameters
+    #[prost(map = "string, string", tag = "4")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Human-readable description for the parameter
+    #[prost(string, optional, tag = "5")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// A set of parameters for instantiating an optimization problem from a parametric instance
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Parameters {
+    #[prost(map = "uint64, double", tag = "1")]
+    pub entries: ::std::collections::HashMap<u64, f64>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ParametricInstance {
+    #[prost(message, optional, tag = "1")]
+    pub description: ::core::option::Option<instance::Description>,
+    /// Decision variables used in this instance
+    #[prost(message, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
+    /// Parameters of this instance
+    ///
+    /// - The ID must be unique within the instance including the decision variables.
+    #[prost(message, repeated, tag = "3")]
+    pub parameters: ::prost::alloc::vec::Vec<Parameter>,
+    /// Objective function of the optimization problem. This may contain parameters in addition to the decision variables.
+    #[prost(message, optional, tag = "4")]
+    pub objective: ::core::option::Option<Function>,
+    /// Constraints of the optimization problem. This may contain parameters in addition to the decision variables.
+    #[prost(message, repeated, tag = "5")]
+    pub constraints: ::prost::alloc::vec::Vec<Constraint>,
+    /// The sense of this problem, i.e. minimize the objective or maximize it.
+    #[prost(enumeration = "instance::Sense", tag = "6")]
+    pub sense: i32,
+}
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
 #[allow(clippy::derive_partial_eq_without_eq)]
