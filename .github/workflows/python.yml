@@ -31,14 +31,9 @@ jobs:
           python-version: "3.8"
           cache: "pip"
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install dependencies
+      - name: Install ruff
         run: |
-          pip install "python/ommx/[dev]"
+          pip install "ruff>=0.7.0,<0.8.0"
 
       - name: Regenerate python codes from proto files
         run: |
@@ -71,9 +66,9 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install dependencies
+      - name: Install ruff
         run: |
-          pip install "python/ommx/[dev]"
+          pip install "ruff>=0.7.0,<0.8.0"
 
       - name: Regenerate stub file
         uses: actions-rs/cargo@v1
