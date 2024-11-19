@@ -18,17 +18,10 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
-        run: |
-          pip install "python/ommx/[dev]"
+        run: pip install "python/ommx/[dev]"
 
-      - name: Regenerate python codes from proto files
-        run: |
-          buf generate --template buf.gen.python.yaml
-        working-directory: proto
-
-      - name: Format generated codes
-        run: |
-          ruff format $(find python -type f -regex ".*_pb2.pyi*")
+      - name: Regenerate python bindings
+        run: task protogen_python
 
       - name: Check updated
         run: |
@@ -45,10 +38,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate stub file
-        uses: actions-rs/cargo@v1
-        with:
-          command: run
-          args: --bin stub_gen --features=stub_gen
+        run: task stubgen
 
       - name: Check updated
         run: |
@@ -69,41 +59,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install ommx
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
-          pip install pytest-github-actions-annotate-failures
-
-      - name: Ruff check
-        if: always()
-        run: |
-          ruff check python
-
-      - name: Type check ommx
-        if: always()
-        run: |
-          pyright python/ommx
+        run: task install_python_sdk
 
       - name: Test ommx
         if: always()
-        run: |
-          pytest -vv --doctest-modules python/ommx
+        run: task test_python_sdk
 
       # FIXME: Python-MIP does not support Python 3.12
-      - name: Install ommx-python-mip-adapter
-        if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          pip install -v -e 'python/ommx-python-mip-adapter/[dev]'
-
-      - name: Lint ommx-python-mip-adapter
-        if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          pyright python/ommx-python-mip-adapter/
-
       - name: Test ommx-python-mip-adapter
         if: ${{ matrix.python-version != '3.12' }}
         run: |
-          pytest -vv --doctest-modules python/ommx-python-mip-adapter/
-          markdown-code-runner ./python/ommx-python-mip-adapter/README.md
+          task install_python_mip_adapter
+          task test_python_mip_adapter
 
       - name: Run notebooks
         if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
@@ -114,7 +81,7 @@ jobs:
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
           OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
 
-  format:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,5 +90,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Format
-        run: |
-          ruff format --check python
+        run: ruff format --check python
+
+      - name: Lint
+        run: ruff check python

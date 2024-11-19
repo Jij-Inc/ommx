@@ -1,0 +1,57 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  # Protocol Buffers
+  protogen:
+    cmds:
+      - task: protogen_python
+      - task: protogen_rust
+
+  protogen_python:
+    cmds:
+      - task: buf_generate_python
+      - task: format_python
+
+  protogen_rust:
+    cmds:
+      - cargo run --bin protogen
+
+  buf_generate_python:
+    cmds:
+      - buf generate --template buf.gen.python.yaml
+    dir: proto
+
+  # Python
+  install_python_sdk:
+    cmds:
+      - pip install -ve "python/ommx[dev]"
+
+  install_python_mip_adapter:
+    cmds:
+      - pip install -ve "python/ommx-python-mip-adapter[dev]"
+
+  format_python:
+    cmds:
+      - ruff format
+
+  test_python:
+    cmds:
+      - task: test_python_sdk
+      - task: test_python_mip_adapter
+
+  test_python_sdk:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx/
+      - pyright python/ommx/
+
+  test_python_mip_adapter:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx-python-mip-adapter/
+      - markdown-code-runner python/ommx-python-mip-adapter/README.md
+      - pyright python/ommx-python-mip-adapter/
+
+  stubgen:
+    cmds:
+      - cargo run --bin stub_gen --features=stub_gen

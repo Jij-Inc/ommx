@@ -21,6 +21,12 @@ runs:
       with:
         github_token: ${{ github.token }}
 
+    - name: Install Task
+      uses: arduino/setup-task@v2
+      with:
+        version: 3.x
+        repo-token: ${{ github.token }}
+
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -35,8 +41,8 @@ runs:
         python-version: ${{ inputs.python-version }}
         cache: "pip"
 
-    - name: Setup ruff
+    - name: Setup Python tools
       shell: bash
       run: |
         pip install "ruff >= 0.7.0, < 0.8.0"
-        ruff --version
+        pip install pytest-github-actions-annotate-failures
