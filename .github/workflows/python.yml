@@ -14,27 +14,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup protobuf compiler
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "26.1"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup buf
-        uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ github.token }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
         run: |
@@ -60,20 +41,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install dependencies
-        run: |
-          pip install "python/ommx/[dev]"
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate stub file
         uses: actions-rs/cargo@v1
@@ -94,16 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
         with:
           python-version: ${{ matrix.python-version }}
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
 
       - name: Install ommx
         run: |
@@ -156,20 +119,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-          cache: "pip"
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Dependencies
-        run: |
-          pip install -v -e 'python/ommx/[dev]'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Format
         run: |
