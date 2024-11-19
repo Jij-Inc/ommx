@@ -43,7 +43,7 @@ dev = [
     "networkx",
     "pyright",
     "pytest",
-    "ruff >= 0.4.4, < 0.5.0",
+    "ruff >= 0.7.0, < 0.8.0",
     "sphinx",
     "sphinx-autoapi",
     "sphinx_fontawesome",
