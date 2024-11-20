@@ -288,5 +288,47 @@ mod tests {
             let (h_value, _) = (f * g).evaluate(&s).unwrap();
             prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
         }
+
+        #[test]
+        fn quadratic_evaluate_add(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f + g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
+        }
+
+        #[test]
+        fn quadratic_evaluate_mull(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f * g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+        }
+
+        #[test]
+        fn polynomial_evaluate_add(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f + g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
+        }
+
+        #[test]
+        fn polynomial_evaluate_mul(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f * g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+        }
+
+        #[test]
+        fn function_evaluate_add(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f + g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
+        }
+
+        #[test]
+        fn function_evaluate_mul(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
+            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, _) = (f * g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+        }
     }
 }
