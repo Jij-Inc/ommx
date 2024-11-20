@@ -217,17 +217,23 @@ impl Product for Function {
 }
 
 impl Arbitrary for Function {
-    type Parameters = ();
+    type Parameters = (usize, usize, u64);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+    fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
         prop_oneof![
             prop_oneof![Just(0.0), -1.0..1.0_f64].prop_map(Function::from),
-            any::<Linear>().prop_map(Function::from),
-            any::<Quadratic>().prop_map(Function::from),
-            any::<Polynomial>().prop_map(Function::from),
+            Linear::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
+            Quadratic::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
+            Polynomial::arbitrary_with((num_terms, max_degree, max_id)).prop_map(Function::from),
         ]
         .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..10_usize, 0..5_usize, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
     }
 }
 
