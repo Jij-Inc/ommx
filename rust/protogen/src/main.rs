@@ -33,6 +33,7 @@ fn main() -> Result<()> {
     eprintln!("{:>12} {}", "Writing".bold().cyan(), out_file.display());
 
     let mut cfg = Config::new();
+    cfg.type_attribute(".", "#[non_exhaustive]");
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
     std::process::Command::new("rustfmt")
