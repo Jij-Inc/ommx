@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use super::{arbitrary_coefficient, format::format_polynomial};
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -223,7 +223,7 @@ impl Arbitrary for Quadratic {
 
     fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
         let terms = proptest::collection::vec(
-            ((0..=max_id, 0..=max_id), prop_oneof![Just(0.0), -1.0..1.0]),
+            ((0..=max_id, 0..=max_id), arbitrary_coefficient()),
             num_terms,
         );
         let linear = Linear::arbitrary_with((num_terms, max_id));

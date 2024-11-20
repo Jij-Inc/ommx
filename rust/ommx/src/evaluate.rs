@@ -256,7 +256,9 @@ impl Evaluate for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::*;
     use maplit::*;
+    use proptest::prelude::*;
 
     #[test]
     fn linear_partial_evaluate() {
@@ -270,5 +272,23 @@ mod tests {
         assert_eq!(linear.terms.len(), 1);
         assert_eq!(linear.terms[0].id, 4);
         assert_eq!(linear.terms[0].coefficient, 4.0);
+    }
+
+    proptest! {
+        #[test]
+        fn linear_evaluate_add(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
+            let (Ok((f_value, f_used)), Ok((g_value, g_used))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, h_used) = (f + g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(f_value + g_value, h_value));
+            prop_assert_eq!(f_used.union(&g_used).cloned().collect::<BTreeSet<_>>(), h_used);
+        }
+
+        #[test]
+        fn linear_evaluate_mul(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
+            let (Ok((f_value, f_used)), Ok((g_value, g_used))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+            let (h_value, h_used) = (f * g).evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(f_value * g_value, h_value));
+            prop_assert_eq!(f_used.union(&g_used).cloned().collect::<BTreeSet<_>>(), h_used);
+        }
     }
 }

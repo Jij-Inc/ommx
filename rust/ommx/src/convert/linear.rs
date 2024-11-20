@@ -9,6 +9,8 @@ use std::{
     ops::*,
 };
 
+use super::arbitrary_coefficient;
+
 impl Zero for Linear {
     fn zero() -> Self {
         Self::from(0.0)
@@ -202,9 +204,8 @@ impl Arbitrary for Linear {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
-        let terms =
-            proptest::collection::vec((0..=max_id, prop_oneof![Just(0.0), -1.0..1.0]), num_terms);
-        let constant = prop_oneof![Just(0.0), -1.0..1.0];
+        let terms = proptest::collection::vec((0..=max_id, arbitrary_coefficient()), num_terms);
+        let constant = arbitrary_coefficient();
         (terms, constant)
             .prop_map(|(terms, constant)| Linear::new(terms.into_iter(), constant))
             .boxed()
