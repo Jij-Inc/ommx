@@ -330,5 +330,33 @@ mod tests {
             let (h_value, _) = (f * g).evaluate(&s).unwrap();
             prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
         }
+
+        #[test]
+        fn linear_partial_eval(mut f in any::<Linear>(), s in any::<State>()) {
+            let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+            let ss = partial_state(&s);
+            f.partial_evaluate(&ss).unwrap();
+            let (u, _) = f.evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
+        }
+
+        #[test]
+        fn quadratic_partial_eval(mut f in any::<Quadratic>(), s in any::<State>()) {
+            let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+            let ss = partial_state(&s);
+            f.partial_evaluate(&ss).unwrap();
+            let (u, _) = f.evaluate(&s).unwrap();
+            prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
+        }
+    }
+
+    fn partial_state(state: &State) -> State {
+        let mut ss = State::default();
+        for (n, (id, value)) in state.entries.iter().enumerate() {
+            if n % 2 == 0 {
+                ss.entries.insert(*id, *value);
+            }
+        }
+        ss
     }
 }
