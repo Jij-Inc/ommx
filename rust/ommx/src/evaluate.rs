@@ -104,7 +104,7 @@ impl Evaluate for Quadratic {
         let mut used = BTreeSet::new();
         let mut linear = BTreeMap::new();
         let mut constant = self.linear.as_ref().map_or(0.0, |l| l.constant);
-        for term in self.linear.iter().map(|l| l.terms.iter()).flatten() {
+        for term in self.linear.iter().flat_map(|l| l.terms.iter()) {
             if let Some(value) = state.entries.get(&term.id) {
                 constant += term.coefficient * value;
                 used.insert(term.id);
