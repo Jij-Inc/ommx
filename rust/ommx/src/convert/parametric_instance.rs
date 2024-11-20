@@ -1,4 +1,4 @@
-use crate::v1::{Instance, Parameters, ParametricInstance};
+use crate::v1::{Instance, Parameters, ParametricInstance, State};
 use anyhow::Result;
 
 impl From<Instance> for ParametricInstance {
@@ -23,9 +23,21 @@ impl From<Instance> for ParametricInstance {
     }
 }
 
+impl From<State> for Parameters {
+    fn from(State { entries }: State) -> Self {
+        Self { entries }
+    }
+}
+
+impl From<Parameters> for State {
+    fn from(Parameters { entries }: Parameters) -> Self {
+        Self { entries }
+    }
+}
+
 impl ParametricInstance {
     /// Create a new [Instance] with the given parameters.
-    pub fn with_parameters(&self, parameters: Parameters) -> Result<Instance> {
+    pub fn with_parameters(&self, _parameters: Parameters) -> Result<Instance> {
         todo!()
     }
 }

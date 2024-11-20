@@ -11,6 +11,9 @@ pub trait Evaluate {
     type Output;
     /// Evaluate to return the output with used variable ids
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)>;
+
+    /// Partially evaluate the function to return the used variable ids
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>>;
 }
 
 impl Evaluate for Function {
@@ -24,6 +27,16 @@ impl Evaluate for Function {
             None => bail!("Function is not set"),
         };
         Ok(out)
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        Ok(match &mut self.function {
+            Some(FunctionEnum::Constant(_)) => BTreeSet::new(),
+            Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
+            Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
+            None => bail!("Function is not set"),
+        })
     }
 }
 
@@ -41,6 +54,22 @@ impl Evaluate for Linear {
             sum += coefficient * s;
         }
         Ok((sum, used_ids))
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        let mut used = BTreeSet::new();
+        let mut i = 0;
+        while i < self.terms.len() {
+            let LinearTerm { id, coefficient } = self.terms[i];
+            if let Some(value) = state.entries.get(&id) {
+                self.constant += coefficient * value;
+                self.terms.swap_remove(i);
+                used.insert(id);
+            } else {
+                i += 1;
+            }
+        }
+        Ok(used)
     }
 }
 
@@ -70,6 +99,10 @@ impl Evaluate for Quadratic {
         }
         Ok((sum, used_ids))
     }
+
+    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
+        todo!()
+    }
 }
 
 impl Evaluate for Polynomial {
@@ -89,6 +122,10 @@ impl Evaluate for Polynomial {
             sum += v;
         }
         Ok((sum, used_ids))
+    }
+
+    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
+        todo!()
     }
 }
 
@@ -116,6 +153,10 @@ impl Evaluate for Constraint {
             },
             used_ids,
         ))
+    }
+
+    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
+        todo!()
     }
 }
 
@@ -162,5 +203,29 @@ impl Evaluate for Instance {
             },
             used_ids,
         ))
+    }
+
+    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use maplit::*;
+
+    #[test]
+    fn linear_partial_evaluate() {
+        let mut linear = Linear::new([(1, 1.0), (2, 2.0), (3, 3.0), (4, 4.0)].into_iter(), 5.0);
+        let state = State {
+            entries: hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0, 5 => 5.0, 6 => 6.0 },
+        };
+        let used = linear.partial_evaluate(&state).unwrap();
+        assert_eq!(used, btreeset! { 1, 2, 3 });
+        assert_eq!(linear.constant, 5.0 + 1.0 * 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+        assert_eq!(linear.terms.len(), 1);
+        assert_eq!(linear.terms[0].id, 4);
+        assert_eq!(linear.terms[0].coefficient, 4.0);
     }
 }
