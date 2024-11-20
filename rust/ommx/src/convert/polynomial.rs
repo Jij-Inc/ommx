@@ -104,7 +104,11 @@ impl Add for Polynomial {
     fn add(self, rhs: Self) -> Self {
         let mut terms = BTreeMap::new();
         for term in self.terms.iter().chain(rhs.terms.iter()) {
-            *terms.entry(term.ids.clone()).or_default() += term.coefficient;
+            let value: &mut f64 = terms.entry(term.ids.clone()).or_default();
+            *value += term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                terms.remove(&term.ids);
+            }
         }
         Self {
             terms: terms
