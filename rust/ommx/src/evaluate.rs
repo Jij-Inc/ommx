@@ -3,8 +3,8 @@ use crate::v1::{
     EvaluatedConstraint, Function, Instance, Linear, Optimality, Polynomial, Quadratic, Relaxation,
     Solution, State,
 };
-use anyhow::{bail, Context, Result};
-use std::collections::BTreeSet;
+use anyhow::{bail, ensure, Context, Result};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -100,8 +100,51 @@ impl Evaluate for Quadratic {
         Ok((sum, used_ids))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        let mut used = BTreeSet::new();
+        let mut linear = BTreeMap::new();
+        let mut constant = self.linear.as_ref().map_or(0.0, |l| l.constant);
+        for term in self.linear.iter().map(|l| l.terms.iter()).flatten() {
+            if let Some(value) = state.entries.get(&term.id) {
+                constant += term.coefficient * value;
+                used.insert(term.id);
+            } else {
+                *linear.entry(term.id).or_insert(0.0) += term.coefficient;
+            }
+        }
+
+        ensure!(self.rows.len() == self.columns.len());
+        ensure!(self.rows.len() == self.values.len());
+        let mut i = 0;
+        while i < self.rows.len() {
+            let (row, column, value) = (self.rows[i], self.columns[i], self.values[i]);
+            match (state.entries.get(&row), state.entries.get(&column)) {
+                (Some(u), Some(v)) => {
+                    constant += value * u * v;
+                    used.insert(row);
+                    used.insert(column);
+                }
+                (Some(u), None) => {
+                    *linear.entry(column).or_insert(0.0) += value * u;
+                    used.insert(row);
+                }
+                (None, Some(v)) => {
+                    *linear.entry(row).or_insert(0.0) += value * v;
+                    used.insert(column);
+                }
+                _ => {
+                    i += 1;
+                    continue;
+                }
+            }
+            self.rows.swap_remove(i);
+            self.columns.swap_remove(i);
+            self.values.swap_remove(i);
+        }
+        if !linear.is_empty() || constant != 0.0 {
+            self.linear = Some(Linear::new(linear.into_iter(), constant));
+        }
+        Ok(used)
     }
 }
 
