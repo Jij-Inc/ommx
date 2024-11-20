@@ -198,20 +198,21 @@ impl Mul for Linear {
 }
 
 impl Arbitrary for Linear {
-    type Parameters = ();
+    type Parameters = (usize /* num_terms */, u64 /* Max ID */);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        let num_terms = 0..10_usize;
-        let terms = num_terms.prop_flat_map(|num_terms| {
-            proptest::collection::vec(
-                (0..(2 * num_terms as u64), prop_oneof![Just(0.0), -1.0..1.0]),
-                num_terms,
-            )
-        });
+    fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
+        let terms =
+            proptest::collection::vec((0..=max_id, prop_oneof![Just(0.0), -1.0..1.0]), num_terms);
         let constant = prop_oneof![Just(0.0), -1.0..1.0];
         (terms, constant)
             .prop_map(|(terms, constant)| Linear::new(terms.into_iter(), constant))
+            .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..5_usize, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }
