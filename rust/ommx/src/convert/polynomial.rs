@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use super::{arbitrary_coefficient, format::format_polynomial};
 
 impl Zero for Polynomial {
     fn zero() -> Self {
@@ -167,7 +167,7 @@ impl Arbitrary for Polynomial {
         let terms = proptest::collection::vec(
             (
                 proptest::collection::vec(0..=max_id, 0..=max_degree),
-                prop_oneof![Just(0.0), -1.0..1.0],
+                arbitrary_coefficient(),
             ),
             num_terms,
         );

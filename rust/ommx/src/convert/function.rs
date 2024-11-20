@@ -222,7 +222,7 @@ impl Arbitrary for Function {
 
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
         prop_oneof![
-            prop_oneof![Just(0.0), -1.0..1.0_f64].prop_map(Function::from),
+            super::arbitrary_coefficient().prop_map(Function::from),
             Linear::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
             Quadratic::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
             Polynomial::arbitrary_with((num_terms, max_degree, max_id)).prop_map(Function::from),
