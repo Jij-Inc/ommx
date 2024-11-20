@@ -3,6 +3,15 @@
 version: "3"
 
 tasks:
+  # Documents
+  doc_rust:
+    cmds:
+      - cargo doc --no-deps -p ommx
+
+  doc_rust_open:
+    cmds:
+      - cargo doc --no-deps --open -p ommx
+
   # Protocol Buffers
   protogen:
     cmds:
