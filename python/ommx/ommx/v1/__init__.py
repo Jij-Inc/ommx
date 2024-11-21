@@ -5,7 +5,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
 
-from .solution_pb2 import State, Solution as _Solution
+from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance
 from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
@@ -150,6 +150,10 @@ class Instance:
         return self.raw.SerializeToString()
 
     @property
+    def description(self) -> _Instance.Description:
+        return self.raw.description
+
+    @property
     def decision_variables(self) -> DataFrame:
         decision_variables = self.raw.decision_variables
         parameters = DataFrame(dict(v.parameters) for v in decision_variables)
@@ -170,6 +174,10 @@ class Instance:
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
+
+    @property
+    def objective(self) -> Function:
+        return Function(self.raw.objective)
 
     @property
     def constraints(self) -> DataFrame:
@@ -194,6 +202,10 @@ class Instance:
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
+
+    @property
+    def sense(self) -> _Instance.Sense.ValueType:
+        return self.raw.sense
 
     def evaluate(self, state: State) -> Solution:
         out, _ = _ommx_rust.evaluate_instance(
@@ -255,6 +267,14 @@ class Solution:
         return self.raw.SerializeToString()
 
     @property
+    def state(self) -> State:
+        return self.raw.state
+
+    @property
+    def objective(self) -> float:
+        return self.raw.objective
+
+    @property
     def decision_variables(self) -> DataFrame:
         decision_variables = self.raw.decision_variables
         parameters = DataFrame(dict(v.parameters) for v in decision_variables)
@@ -298,6 +318,18 @@ class Solution:
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
+
+    @property
+    def feasible(self) -> bool:
+        return self.raw.feasible
+
+    @property
+    def optimality(self) -> Optimality.ValueType:
+        return self.raw.optimality
+
+    @property
+    def relaxation(self) -> Relaxation.ValueType:
+        return self.raw.relaxation
 
 
 def _function_type(function: _Function) -> str:
@@ -513,6 +545,10 @@ class DecisionVariable:
     @property
     def subscripts(self) -> list[int]:
         return list(self.raw.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
 
     @property
     def description(self) -> str:
