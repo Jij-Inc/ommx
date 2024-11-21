@@ -274,63 +274,42 @@ mod tests {
         assert_eq!(linear.terms[0].coefficient, 4.0);
     }
 
+    /// f(x) + g(x) = (f + g)(x)
+    macro_rules! evaluate_add_commutativity {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
+                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                    let (h_value, _) = (f + g).evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    /// f(x) * g(x) = (f * g)(x)
+    macro_rules! evaluate_mul_commutativity {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
+                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                    let (h_value, _) = (f * g).evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    evaluate_add_commutativity!(Linear, linear_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Linear, linear_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Quadratic, quadratic_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Quadratic, quadratic_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Polynomial, polynomial_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Polynomial, polynomial_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Function, function_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Function, function_evaluate_mul_commutativity);
+
     proptest! {
-        #[test]
-        fn linear_evaluate_add(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn linear_evaluate_mul(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn quadratic_evaluate_add(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn quadratic_evaluate_mull(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn polynomial_evaluate_add(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn polynomial_evaluate_mul(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn function_evaluate_add(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn function_evaluate_mul(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
         #[test]
         fn linear_partial_eval(mut f in any::<Linear>(), s in any::<State>()) {
             let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
