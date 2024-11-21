@@ -226,8 +226,11 @@ impl Evaluate for Constraint {
         ))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        self.function
+            .as_mut()
+            .context("Function is not set")?
+            .partial_evaluate(state)
     }
 }
 
@@ -276,8 +279,17 @@ impl Evaluate for Instance {
         ))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        let mut used = self
+            .objective
+            .as_mut()
+            .context("Objective is not set")?
+            .partial_evaluate(state)?;
+        for constraints in &mut self.constraints {
+            let mut new = constraints.partial_evaluate(state)?;
+            used.append(&mut new);
+        }
+        Ok(used)
     }
 }
 
