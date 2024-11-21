@@ -146,12 +146,10 @@ mod function;
 mod linear;
 mod polynomial;
 mod quadratic;
+mod state;
 
-use crate::v1::State;
-use std::collections::HashMap;
+use proptest::prelude::*;
 
-impl From<HashMap<u64, f64>> for State {
-    fn from(entries: HashMap<u64, f64>) -> Self {
-        Self { entries }
-    }
+fn arbitrary_coefficient() -> BoxedStrategy<f64> {
+    prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -1.0..1.0].boxed()
 }

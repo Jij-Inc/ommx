@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use super::{arbitrary_coefficient, format::format_polynomial};
 
 impl Zero for Polynomial {
     fn zero() -> Self {
@@ -96,6 +96,29 @@ impl Polynomial {
             .cloned()
             .collect()
     }
+
+    pub fn degree(&self) -> usize {
+        self.terms
+            .iter()
+            .map(|term| term.ids.len())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Downcast to a constant if the polynomial is a constant.
+    pub fn as_constant(self) -> Option<f64> {
+        if self.terms.len() >= 2 {
+            return None;
+        }
+        if self.terms.len() == 1 {
+            if self.terms[0].ids.is_empty() {
+                return Some(self.terms[0].coefficient);
+            } else {
+                return None;
+            }
+        }
+        Some(0.0)
+    }
 }
 
 impl Add for Polynomial {
@@ -104,7 +127,11 @@ impl Add for Polynomial {
     fn add(self, rhs: Self) -> Self {
         let mut terms = BTreeMap::new();
         for term in self.terms.iter().chain(rhs.terms.iter()) {
-            *terms.entry(term.ids.clone()).or_default() += term.coefficient;
+            let value: &mut f64 = terms.entry(term.ids.clone()).or_default();
+            *value += term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                terms.remove(&term.ids);
+            }
         }
         Self {
             terms: terms
@@ -160,21 +187,24 @@ impl_mul_inverse!(Quadratic, Polynomial);
 impl_neg_by_mul!(Polynomial);
 
 impl Arbitrary for Polynomial {
-    type Parameters = ();
+    type Parameters = (usize, usize, u64);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        let num_terms = 0..10_usize;
-        let terms = num_terms.prop_flat_map(|num_terms| {
-            proptest::collection::vec(
-                (
-                    proptest::collection::vec(0..(2 * num_terms as u64), 0..=num_terms),
-                    prop_oneof![Just(0.0), -1.0..1.0],
-                ),
-                num_terms,
-            )
-        });
+    fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
+        let terms = proptest::collection::vec(
+            (
+                proptest::collection::vec(0..=max_id, 0..=max_degree),
+                arbitrary_coefficient(),
+            ),
+            num_terms,
+        );
         terms.prop_map(|terms| terms.into_iter().collect()).boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..10_usize, 0..5_usize, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
     }
 }
 

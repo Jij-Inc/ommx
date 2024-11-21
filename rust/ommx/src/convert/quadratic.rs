@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use super::{arbitrary_coefficient, format::format_polynomial};
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -45,6 +45,20 @@ impl Quadratic {
             .zip(self.rows.iter())
             .zip(self.values.iter())
             .map(|((column, row), value)| ((*column, *row), *value))
+    }
+
+    /// Downcast to a linear function if the quadratic function is linear.
+    pub fn as_linear(self) -> Option<Linear> {
+        if self.values.iter().all(|v| v.abs() <= f64::EPSILON) {
+            Some(self.linear.unwrap_or_default())
+        } else {
+            None
+        }
+    }
+
+    /// Downcast to a constant if the quadratic function is constant.
+    pub fn as_constant(self) -> Option<f64> {
+        self.as_linear()?.as_constant()
     }
 }
 
@@ -218,27 +232,27 @@ impl_mul_inverse!(f64, Quadratic);
 impl_neg_by_mul!(Quadratic);
 
 impl Arbitrary for Quadratic {
-    type Parameters = ();
+    type Parameters = (usize /* num_terms */, u64 /* max id */);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-        let num_terms = 0..10_usize;
-        let terms = num_terms.prop_flat_map(|num_terms| {
-            proptest::collection::vec(
-                (
-                    (0..(2 * num_terms as u64), 0..(2 * num_terms as u64)),
-                    prop_oneof![Just(0.0), -1.0..1.0],
-                ),
-                num_terms,
-            )
-        });
-        let linear = Linear::arbitrary_with(());
+    fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
+        let terms = proptest::collection::vec(
+            ((0..=max_id, 0..=max_id), arbitrary_coefficient()),
+            num_terms,
+        );
+        let linear = Linear::arbitrary_with((num_terms, max_id));
         (terms, linear)
             .prop_map(|(terms, linear)| {
                 let mut quad: Quadratic = terms.into_iter().collect();
                 quad.linear = Some(linear);
                 quad
             })
+            .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..5_usize, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }
