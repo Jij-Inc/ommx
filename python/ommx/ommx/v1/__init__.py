@@ -265,11 +265,11 @@ class Solution:
 
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
-    
+
     @property
     def state(self) -> State:
         return self.raw.state
-    
+
     @property
     def objective(self) -> float:
         return self.raw.objective
@@ -322,11 +322,11 @@ class Solution:
     @property
     def feasible(self) -> bool:
         return self.raw.feasible
-    
+
     @property
     def optimality(self) -> Optimality:
         return self.raw.optimality
-    
+
     @property
     def relaxation(self) -> Relaxation:
         return self.raw.relaxation
@@ -545,7 +545,7 @@ class DecisionVariable:
     @property
     def subscripts(self) -> list[int]:
         return list(self.raw.subscripts)
-    
+
     @property
     def parameters(self) -> dict[str, str]:
         return dict(self.raw.parameters)
