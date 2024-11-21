@@ -143,6 +143,7 @@ macro_rules! test_algebraic {
 
 mod format;
 mod function;
+mod instance;
 mod linear;
 mod polynomial;
 mod quadratic;
