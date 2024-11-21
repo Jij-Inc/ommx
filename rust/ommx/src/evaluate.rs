@@ -1,7 +1,7 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
-    EvaluatedConstraint, Function, Instance, Linear, Optimality, Polynomial, Quadratic, Relaxation,
-    Solution, State,
+    EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
+    Relaxation, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -141,7 +141,9 @@ impl Evaluate for Quadratic {
             self.columns.swap_remove(i);
             self.values.swap_remove(i);
         }
-        if !linear.is_empty() || constant != 0.0 {
+        if linear.is_empty() && constant == 0.0 {
+            self.linear = None;
+        } else {
             self.linear = Some(Linear::new(linear.into_iter(), constant));
         }
         Ok(used)
@@ -167,8 +169,34 @@ impl Evaluate for Polynomial {
         Ok((sum, used_ids))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        let mut used = BTreeSet::new();
+        let mut monomials = BTreeMap::new();
+        for term in self.terms.iter() {
+            let mut value = term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for id in term.ids.iter() {
+                if let Some(v) = state.entries.get(id) {
+                    value *= v;
+                    used.insert(*id);
+                } else {
+                    ids.push(*id);
+                }
+            }
+            let coefficient: &mut f64 = monomials.entry(ids.clone()).or_default();
+            *coefficient += value;
+            if coefficient.abs() <= f64::EPSILON {
+                monomials.remove(&ids);
+            }
+        }
+        self.terms = monomials
+            .into_iter()
+            .map(|(ids, coefficient)| Monomial { ids, coefficient })
+            .collect();
+        Ok(used)
     }
 }
 
@@ -198,8 +226,11 @@ impl Evaluate for Constraint {
         ))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        self.function
+            .as_mut()
+            .context("Function is not set")?
+            .partial_evaluate(state)
     }
 }
 
@@ -248,8 +279,17 @@ impl Evaluate for Instance {
         ))
     }
 
-    fn partial_evaluate(&mut self, _state: &State) -> Result<BTreeSet<u64>> {
-        todo!()
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        let mut used = self
+            .objective
+            .as_mut()
+            .context("Objective is not set")?
+            .partial_evaluate(state)?;
+        for constraints in &mut self.constraints {
+            let mut new = constraints.partial_evaluate(state)?;
+            used.append(&mut new);
+        }
+        Ok(used)
     }
 }
 
@@ -274,61 +314,85 @@ mod tests {
         assert_eq!(linear.terms[0].coefficient, 4.0);
     }
 
-    proptest! {
-        #[test]
-        fn linear_evaluate_add(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
+    /// f(x) + g(x) = (f + g)(x)
+    macro_rules! evaluate_add_commutativity {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
+                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                    let (h_value, _) = (f + g).evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    /// f(x) * g(x) = (f * g)(x)
+    macro_rules! evaluate_mul_commutativity {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
+                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                    let (h_value, _) = (f * g).evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    evaluate_add_commutativity!(Linear, linear_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Linear, linear_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Quadratic, quadratic_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Quadratic, quadratic_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Polynomial, polynomial_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Polynomial, polynomial_evaluate_mul_commutativity);
+    evaluate_add_commutativity!(Function, function_evaluate_add_commutativity);
+    evaluate_mul_commutativity!(Function, function_evaluate_mul_commutativity);
 
-        #[test]
-        fn linear_evaluate_mul(f in any::<Linear>(), g in any::<Linear>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
+    macro_rules! partial_evaluate_to_constant {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(mut f in any::<$t>(), s in any::<State>()) {
+                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+                    f.partial_evaluate(&s).unwrap();
+                    let c = dbg!(f).as_constant().expect("Non constant");
+                    prop_assert!(abs_diff_eq!(v, c, epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    partial_evaluate_to_constant!(Linear, linear_partial_evaluate_to_constant);
+    partial_evaluate_to_constant!(Quadratic, quadratic_partial_evaluate_to_constant);
+    partial_evaluate_to_constant!(Polynomial, polynomial_partial_evaluate_to_constant);
+    partial_evaluate_to_constant!(Function, function_partial_evaluate_to_constant);
 
-        #[test]
-        fn quadratic_evaluate_add(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
+    macro_rules! half_partial_evaluate {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(mut f in any::<$t>(), s in any::<State>()) {
+                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+                    let ss = partial_state(&s);
+                    f.partial_evaluate(&ss).unwrap();
+                    let (u, _) = f.evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    half_partial_evaluate!(Linear, linear_half_partial_evaluate);
+    half_partial_evaluate!(Quadratic, quadratic_half_partial_evaluate);
+    half_partial_evaluate!(Polynomial, polynomial_half_partial_evaluate);
+    half_partial_evaluate!(Function, function_half_partial_evaluate);
 
-        #[test]
-        fn quadratic_evaluate_mull(f in any::<Quadratic>(), g in any::<Quadratic>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
+    fn partial_state(state: &State) -> State {
+        let mut ss = State::default();
+        for (n, (id, value)) in state.entries.iter().enumerate() {
+            if n % 2 == 0 {
+                ss.entries.insert(*id, *value);
+            }
         }
-
-        #[test]
-        fn polynomial_evaluate_add(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn polynomial_evaluate_mul(f in any::<Polynomial>(), g in any::<Polynomial>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn function_evaluate_add(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f + g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
-        }
-
-        #[test]
-        fn function_evaluate_mul(f in any::<Function>(), g in any::<Function>(), s in any::<State>()) {
-            let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
-            let (h_value, _) = (f * g).evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
-        }
+        ss
     }
 }

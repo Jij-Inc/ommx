@@ -46,6 +46,20 @@ impl Quadratic {
             .zip(self.values.iter())
             .map(|((column, row), value)| ((*column, *row), *value))
     }
+
+    /// Downcast to a linear function if the quadratic function is linear.
+    pub fn as_linear(self) -> Option<Linear> {
+        if self.values.iter().all(|v| v.abs() <= f64::EPSILON) {
+            Some(self.linear.unwrap_or_default())
+        } else {
+            None
+        }
+    }
+
+    /// Downcast to a constant if the quadratic function is constant.
+    pub fn as_constant(self) -> Option<f64> {
+        self.as_linear()?.as_constant()
+    }
 }
 
 impl From<f64> for Quadratic {
