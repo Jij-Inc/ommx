@@ -107,11 +107,17 @@ impl Polynomial {
 
     /// Downcast to a constant if the polynomial is a constant.
     pub fn as_constant(self) -> Option<f64> {
-        if self.terms.len() == 1 && self.terms[0].ids.is_empty() {
-            Some(self.terms[0].coefficient)
-        } else {
-            None
+        if self.terms.len() >= 2 {
+            return None;
         }
+        if self.terms.len() == 1 {
+            if self.terms[0].ids.is_empty() {
+                return Some(self.terms[0].coefficient);
+            } else {
+                return None;
+            }
+        }
+        Some(0.0)
     }
 }
 
