@@ -93,6 +93,15 @@ impl Function {
             _ => BTreeSet::new(),
         }
     }
+
+    pub fn as_constant(self) -> Option<f64> {
+        match self.function? {
+            FunctionEnum::Constant(c) => Some(c),
+            FunctionEnum::Linear(linear) => linear.as_constant(),
+            FunctionEnum::Quadratic(quadratic) => quadratic.as_constant(),
+            FunctionEnum::Polynomial(poly) => poly.as_constant(),
+        }
+    }
 }
 
 impl Add for Function {

@@ -141,7 +141,9 @@ impl Evaluate for Quadratic {
             self.columns.swap_remove(i);
             self.values.swap_remove(i);
         }
-        if !linear.is_empty() || constant != 0.0 {
+        if linear.is_empty() && constant == 0.0 {
+            self.linear = None;
+        } else {
             self.linear = Some(Linear::new(linear.into_iter(), constant));
         }
         Ok(used)
@@ -309,25 +311,38 @@ mod tests {
     evaluate_add_commutativity!(Function, function_evaluate_add_commutativity);
     evaluate_mul_commutativity!(Function, function_evaluate_mul_commutativity);
 
-    proptest! {
-        #[test]
-        fn linear_partial_eval(mut f in any::<Linear>(), s in any::<State>()) {
-            let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
-            let ss = partial_state(&s);
-            f.partial_evaluate(&ss).unwrap();
-            let (u, _) = f.evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
-        }
-
-        #[test]
-        fn quadratic_partial_eval(mut f in any::<Quadratic>(), s in any::<State>()) {
-            let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
-            let ss = partial_state(&s);
-            f.partial_evaluate(&ss).unwrap();
-            let (u, _) = f.evaluate(&s).unwrap();
-            prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
-        }
+    macro_rules! partial_evaluate_to_constant {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(mut f in any::<$t>(), s in any::<State>()) {
+                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+                    f.partial_evaluate(&s).unwrap();
+                    let c = dbg!(f).as_constant().unwrap();
+                    prop_assert!(abs_diff_eq!(v, c, epsilon = 1e-9));
+                }
+            }
+        };
     }
+    partial_evaluate_to_constant!(Linear, linear_partial_evaluate_to_constant);
+    partial_evaluate_to_constant!(Quadratic, quadratic_partial_evaluate_to_constant);
+
+    macro_rules! half_partial_evaluate {
+        ($t:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(mut f in any::<$t>(), s in any::<State>()) {
+                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+                    let ss = partial_state(&s);
+                    f.partial_evaluate(&ss).unwrap();
+                    let (u, _) = f.evaluate(&s).unwrap();
+                    prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
+                }
+            }
+        };
+    }
+    half_partial_evaluate!(Linear, linear_half_partial_evaluate);
+    half_partial_evaluate!(Quadratic, quadratic_half_partial_evaluate);
 
     fn partial_state(state: &State) -> State {
         let mut ss = State::default();

@@ -96,6 +96,23 @@ impl Polynomial {
             .cloned()
             .collect()
     }
+
+    pub fn degree(&self) -> usize {
+        self.terms
+            .iter()
+            .map(|term| term.ids.len())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// Downcast to a constant if the polynomial is a constant.
+    pub fn as_constant(self) -> Option<f64> {
+        if self.terms.len() == 1 && self.terms[0].ids.is_empty() {
+            Some(self.terms[0].coefficient)
+        } else {
+            None
+        }
+    }
 }
 
 impl Add for Polynomial {

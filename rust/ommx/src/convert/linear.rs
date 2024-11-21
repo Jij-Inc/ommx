@@ -51,6 +51,15 @@ impl Linear {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.terms.iter().map(|term| term.id).collect()
     }
+
+    /// Downcast to a constant if the linear function is constant.
+    pub fn as_constant(self) -> Option<f64> {
+        if self.terms.is_empty() {
+            Some(self.constant)
+        } else {
+            None
+        }
+    }
 }
 
 /// Create a linear function with a single term by regarding the input as the id of the term.
