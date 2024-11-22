@@ -116,6 +116,7 @@ impl Arbitrary for Instance {
                                     decision_variables,
                                     description,
                                     sense: sense as i32,
+                                    ..Default::default()
                                 }
                             },
                         )
