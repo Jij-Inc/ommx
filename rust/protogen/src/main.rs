@@ -34,6 +34,10 @@ fn main() -> Result<()> {
 
     let mut cfg = Config::new();
     cfg.type_attribute(".", "#[non_exhaustive]");
+    cfg.type_attribute(
+        "ommx.v1.Instance.Description",
+        "#[derive(::proptest_derive::Arbitrary)]",
+    );
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
     std::process::Command::new("rustfmt")
