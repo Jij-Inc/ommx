@@ -1,5 +1,5 @@
 use crate::{
-    v1::{Instance, Parameters, ParametricInstance, State},
+    v1::{Function, Instance, Parameters, ParametricInstance, State},
     Evaluate,
 };
 use anyhow::{bail, Context, Result};
@@ -73,5 +73,52 @@ impl ParametricInstance {
             sense: self.sense,
             parameters: Some(parameters),
         })
+    }
+
+    pub fn objective(&self) -> Result<&Function> {
+        self.objective
+            .as_ref()
+            .context("Objective function of ParametricInstance is empty")
+    }
+
+    pub fn used_ids(&self) -> Result<BTreeSet<u64>> {
+        let mut used_ids = self.objective()?.used_decision_variable_ids();
+        for c in &self.constraints {
+            used_ids.extend(c.function()?.used_decision_variable_ids());
+        }
+        Ok(used_ids)
+    }
+
+    pub fn defined_ids(&self) -> BTreeSet<u64> {
+        self.decision_variables
+            .iter()
+            .map(|dv| dv.id)
+            .collect::<BTreeSet<_>>()
+    }
+
+    pub fn parameter_ids(&self) -> BTreeSet<u64> {
+        self.parameters.iter().map(|p| p.id).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::convert::instance::InstanceParameter;
+
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_parametric_instance_conversion(instance in Instance::arbitrary_with(InstanceParameter::Any {
+            num_constraints: 2,
+            num_terms: 2,
+            max_id: 5,
+            max_degree: 2
+        })) {
+            let parametric_instance: ParametricInstance = instance.clone().into();
+            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
+            prop_assert_eq!(instance, converted_instance);
+        }
     }
 }
