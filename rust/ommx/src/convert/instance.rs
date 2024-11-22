@@ -1,6 +1,6 @@
 use crate::{
     random::random_lp,
-    v1::{Constraint, Equality, Function, Instance},
+    v1::{instance::Description, Constraint, Equality, Function, Instance},
 };
 use proptest::prelude::*;
 use rand::SeedableRng;
@@ -66,10 +66,11 @@ impl Arbitrary for Instance {
                     }
                     c
                 });
-                (objective, constraints)
-                    .prop_map(|(objective, constraints)| Instance {
+                (objective, constraints, Description::arbitrary())
+                    .prop_map(|(objective, constraints, description)| Instance {
                         objective: Some(objective),
                         constraints,
+                        description: Some(description),
                         ..Default::default()
                     })
                     .boxed()
