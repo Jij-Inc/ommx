@@ -2,13 +2,15 @@ use crate::{
     random::random_lp,
     v1::{
         instance::{Description, Sense},
-        Constraint, DecisionVariable, Function, Instance,
+        Function, Instance,
     },
 };
 use anyhow::{bail, Context, Result};
 use proptest::prelude::*;
 use rand::SeedableRng;
 use std::collections::BTreeSet;
+
+use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
 
 impl Instance {
     pub fn objective(&self) -> Result<&Function> {
@@ -83,70 +85,44 @@ impl Arbitrary for Instance {
                 num_terms,
                 max_id,
                 max_degree,
-            } => {
-                let objective = Function::arbitrary_with((num_terms, max_degree, max_id));
-                let constraints = proptest::collection::vec(
-                    Constraint::arbitrary_with((num_terms, max_degree, max_id)),
-                    num_constraints,
-                );
-                let constraint_ids = prop_oneof![
-                    // continuous case
-                    Just((0..(num_constraints as u64)).collect::<Vec<u64>>()).prop_shuffle(),
-                    // discrete case
-                    Just((0..(3 * num_constraints as u64)).collect::<Vec<u64>>()).prop_shuffle(),
-                ];
-                let constraints = (constraints, constraint_ids).prop_map(|(mut c, id)| {
-                    for (id, c) in id.iter().zip(c.iter_mut()) {
-                        c.id = *id;
+            } => (
+                Function::arbitrary_with((num_terms, max_degree, max_id)),
+                arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+            )
+                .prop_flat_map(|(objective, constraints)| {
+                    let mut used_ids = objective.used_decision_variable_ids();
+                    for c in &constraints {
+                        used_ids.extend(c.function().unwrap().used_decision_variable_ids());
                     }
-                    c
-                });
-                (objective, constraints)
-                    .prop_flat_map(|(objective, constraints)| {
-                        let mut used_ids = objective.used_decision_variable_ids();
-                        for c in &constraints {
-                            used_ids.extend(c.function().unwrap().used_decision_variable_ids());
-                        }
-                        let decision_variables = (
-                            proptest::collection::vec(
-                                DecisionVariable::arbitrary(),
-                                used_ids.len(),
-                            ),
-                            Just(used_ids),
-                        )
-                            .prop_map(|(mut dvs, used_ids)| {
-                                for (dv, id) in dvs.iter_mut().zip(used_ids.iter()) {
-                                    dv.id = *id;
-                                }
-                                dvs
-                            });
-                        (
-                            Just(objective),
-                            Just(constraints),
-                            decision_variables,
-                            Option::<Description>::arbitrary(),
-                            prop_oneof![Just(Sense::Minimize as i32), Just(Sense::Maximize as i32)],
-                        )
-                            .prop_map(
-                                |(
-                                    objective,
+                    (
+                        Just(objective),
+                        Just(constraints),
+                        arbitrary_decision_variables(used_ids),
+                        Option::<Description>::arbitrary(),
+                        Sense::arbitrary(),
+                    )
+                        .prop_map(
+                            |(objective, constraints, decision_variables, description, sense)| {
+                                Instance {
+                                    objective: Some(objective),
                                     constraints,
                                     decision_variables,
                                     description,
-                                    sense,
-                                )| {
-                                    Instance {
-                                        objective: Some(objective),
-                                        constraints,
-                                        decision_variables,
-                                        description,
-                                        sense,
-                                    }
-                                },
-                            )
-                    })
-                    .boxed()
-            }
+                                    sense: sense as i32,
+                                }
+                            },
+                        )
+                })
+                .boxed(),
         }
+    }
+}
+
+impl Arbitrary for Sense {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_parameter: ()) -> Self::Strategy {
+        prop_oneof![Just(Sense::Minimize), Just(Sense::Maximize)].boxed()
     }
 }

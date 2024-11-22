@@ -36,3 +36,25 @@ impl Arbitrary for Constraint {
             .boxed()
     }
 }
+
+pub fn arbitrary_constraints(
+    num_constraints: usize,
+    parameters: <Constraint as Arbitrary>::Parameters,
+) -> BoxedStrategy<Vec<Constraint>> {
+    let constraints =
+        proptest::collection::vec(Constraint::arbitrary_with(parameters), num_constraints);
+    let constraint_ids = prop_oneof![
+        // continuous case
+        Just((0..(num_constraints as u64)).collect::<Vec<u64>>()).prop_shuffle(),
+        // discrete case
+        Just((0..(3 * num_constraints as u64)).collect::<Vec<u64>>()).prop_shuffle(),
+    ];
+    (constraints, constraint_ids)
+        .prop_map(|(mut c, id)| {
+            for (id, c) in id.iter().zip(c.iter_mut()) {
+                c.id = *id;
+            }
+            c
+        })
+        .boxed()
+}
