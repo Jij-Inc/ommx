@@ -143,7 +143,6 @@ pub mod mps;
 pub mod random;
 
 // Internal modules
-mod arbitrary;
 mod convert;
 mod evaluate;
 

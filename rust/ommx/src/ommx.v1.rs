@@ -317,6 +317,7 @@ pub struct Instance {
 /// Nested message and enum types in `Instance`.
 pub mod instance {
     #[non_exhaustive]
+    #[derive(::proptest_derive::Arbitrary)]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Description {
