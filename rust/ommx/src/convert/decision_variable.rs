@@ -54,13 +54,21 @@ impl Arbitrary for DecisionVariable {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(max_id: Self::Parameters) -> Self::Strategy {
+        let subscripts = prop_oneof![
+            Just(Vec::<i64>::new()),
+            proptest::collection::vec(-(max_id as i64)..=(max_id as i64), 1..=3),
+        ];
+        let parameters = prop_oneof![
+            Just(HashMap::<String, String>::new()),
+            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 1..=3),
+        ];
         (
             0..=max_id,
             Option::<Bound>::arbitrary(),
             Option::<String>::arbitrary(),
             Kind::arbitrary(),
-            Vec::<i64>::arbitrary(),
-            HashMap::<String, String>::arbitrary(),
+            subscripts,
+            parameters,
             Option::<String>::arbitrary(),
         )
             .prop_map(
