@@ -2,11 +2,43 @@ use crate::{
     random::random_lp,
     v1::{
         instance::{Description, Sense},
-        Constraint, DecisionVariable, Equality, Function, Instance,
+        Constraint, DecisionVariable, Function, Instance,
     },
 };
+use anyhow::{bail, Context, Result};
 use proptest::prelude::*;
 use rand::SeedableRng;
+use std::collections::BTreeSet;
+
+impl Instance {
+    pub fn objective(&self) -> Result<&Function> {
+        self.objective
+            .as_ref()
+            .context("Instance does not contain objective function")
+    }
+
+    pub fn used_decision_variable_ids(&self) -> Result<BTreeSet<u64>> {
+        let mut used_ids = self.objective()?.used_decision_variable_ids();
+        for c in &self.constraints {
+            used_ids.extend(c.function()?.used_decision_variable_ids());
+        }
+        Ok(used_ids)
+    }
+
+    pub fn check_decision_variables(&self) -> Result<()> {
+        let used_ids = self.used_decision_variable_ids()?;
+        let defined_ids = self
+            .decision_variables
+            .iter()
+            .map(|dv| dv.id)
+            .collect::<BTreeSet<_>>();
+        if !used_ids.is_subset(&defined_ids) {
+            let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
+            bail!("Undefined decision variable IDs: {:?}", undefined_ids);
+        }
+        Ok(())
+    }
+}
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -73,8 +105,7 @@ impl Arbitrary for Instance {
                     .prop_flat_map(|(objective, constraints)| {
                         let mut used_ids = objective.used_decision_variable_ids();
                         for c in &constraints {
-                            used_ids
-                                .extend(c.function.as_ref().unwrap().used_decision_variable_ids());
+                            used_ids.extend(c.function().unwrap().used_decision_variable_ids());
                         }
                         let decision_variables = (
                             proptest::collection::vec(
@@ -117,32 +148,5 @@ impl Arbitrary for Instance {
                     .boxed()
             }
         }
-    }
-}
-
-impl Arbitrary for Constraint {
-    type Parameters = <Function as Arbitrary>::Parameters;
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
-        let function = Function::arbitrary_with(parameters);
-        let equality = prop_oneof![
-            Just(Equality::EqualToZero),
-            Just(Equality::LessThanOrEqualToZero)
-        ];
-        (function, equality)
-            .prop_map(|(function, equality)| Constraint {
-                id: 0, // ID should be changed when creating an instance
-                function: Some(function),
-                equality: equality as i32,
-                ..Default::default()
-            })
-            .boxed()
-    }
-
-    fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_usize, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
     }
 }

@@ -141,6 +141,7 @@ macro_rules! test_algebraic {
     };
 }
 
+mod constraint;
 mod decision_variable;
 mod format;
 mod function;
