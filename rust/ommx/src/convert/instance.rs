@@ -27,13 +27,16 @@ impl Instance {
         Ok(used_ids)
     }
 
-    pub fn check_decision_variables(&self) -> Result<()> {
-        let used_ids = self.used_decision_variable_ids()?;
-        let defined_ids = self
-            .decision_variables
+    pub fn defined_ids(&self) -> BTreeSet<u64> {
+        self.decision_variables
             .iter()
             .map(|dv| dv.id)
-            .collect::<BTreeSet<_>>();
+            .collect::<BTreeSet<_>>()
+    }
+
+    pub fn check_decision_variables(&self) -> Result<()> {
+        let used_ids = self.used_decision_variable_ids()?;
+        let defined_ids = self.defined_ids();
         if !used_ids.is_subset(&defined_ids) {
             let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
             bail!("Undefined decision variable IDs: {:?}", undefined_ids);
