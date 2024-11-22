@@ -1,6 +1,6 @@
 use crate::{
     random::random_lp,
-    v1::{instance::Description, Constraint, Equality, Function, Instance},
+    v1::{Constraint, DecisionVariable, Equality, Function, Instance},
 };
 use proptest::prelude::*;
 use rand::SeedableRng;
@@ -66,12 +66,34 @@ impl Arbitrary for Instance {
                     }
                     c
                 });
-                (objective, constraints, Description::arbitrary())
-                    .prop_map(|(objective, constraints, description)| Instance {
-                        objective: Some(objective),
-                        constraints,
-                        description: Some(description),
-                        ..Default::default()
+                (objective, constraints)
+                    .prop_flat_map(|(objective, constraints)| {
+                        let mut used_ids = objective.used_decision_variable_ids();
+                        for c in &constraints {
+                            used_ids
+                                .extend(c.function.as_ref().unwrap().used_decision_variable_ids());
+                        }
+                        let decision_variables = (
+                            proptest::collection::vec(
+                                DecisionVariable::arbitrary(),
+                                used_ids.len(),
+                            ),
+                            Just(used_ids),
+                        )
+                            .prop_map(|(mut dvs, used_ids)| {
+                                for (dv, id) in dvs.iter_mut().zip(used_ids.iter()) {
+                                    dv.id = *id;
+                                }
+                                dvs
+                            });
+                        (Just(objective), Just(constraints), decision_variables).prop_map(
+                            |(objective, constraints, decision_variables)| Instance {
+                                objective: Some(objective),
+                                constraints,
+                                decision_variables,
+                                ..Default::default()
+                            },
+                        )
                     })
                     .boxed()
             }
