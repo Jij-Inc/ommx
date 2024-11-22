@@ -1,6 +1,9 @@
 use crate::{
     random::random_lp,
-    v1::{Constraint, DecisionVariable, Equality, Function, Instance},
+    v1::{
+        instance::{Description, Sense},
+        Constraint, DecisionVariable, Equality, Function, Instance,
+    },
 };
 use proptest::prelude::*;
 use rand::SeedableRng;
@@ -86,14 +89,30 @@ impl Arbitrary for Instance {
                                 }
                                 dvs
                             });
-                        (Just(objective), Just(constraints), decision_variables).prop_map(
-                            |(objective, constraints, decision_variables)| Instance {
-                                objective: Some(objective),
-                                constraints,
-                                decision_variables,
-                                ..Default::default()
-                            },
+                        (
+                            Just(objective),
+                            Just(constraints),
+                            decision_variables,
+                            Option::<Description>::arbitrary(),
+                            prop_oneof![Just(Sense::Minimize as i32), Just(Sense::Maximize as i32)],
                         )
+                            .prop_map(
+                                |(
+                                    objective,
+                                    constraints,
+                                    decision_variables,
+                                    description,
+                                    sense,
+                                )| {
+                                    Instance {
+                                        objective: Some(objective),
+                                        constraints,
+                                        decision_variables,
+                                        description,
+                                        sense,
+                                    }
+                                },
+                            )
                     })
                     .boxed()
             }
