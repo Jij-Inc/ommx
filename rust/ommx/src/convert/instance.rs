@@ -60,9 +60,11 @@ pub enum InstanceParameter {
 
 impl Default for InstanceParameter {
     fn default() -> Self {
-        InstanceParameter::LP {
-            num_constraints: 5,
-            num_variables: 7,
+        InstanceParameter::Any {
+            num_constraints: 3,
+            num_terms: 3,
+            max_id: 5,
+            max_degree: 3,
         }
     }
 }
@@ -72,14 +74,16 @@ impl Arbitrary for Instance {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(parameter: InstanceParameter) -> Self::Strategy {
-        // The instance yielded from strategy must depends only on the parameter deterministically.
-        // Thus we should not use `thread_rng` here.
-        let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
         match parameter {
             InstanceParameter::LP {
                 num_constraints,
                 num_variables,
-            } => Just(random_lp(&mut rng, num_variables, num_constraints)).boxed(),
+            } => {
+                // The instance yielded from strategy must depends only on the parameter deterministically.
+                // Thus we should not use `thread_rng` here.
+                let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
+                Just(random_lp(&mut rng, num_variables, num_constraints)).boxed()
+            }
             InstanceParameter::Any {
                 num_constraints,
                 num_terms,
@@ -124,5 +128,38 @@ impl Arbitrary for Sense {
 
     fn arbitrary_with(_parameter: ()) -> Self::Strategy {
         prop_oneof![Just(Sense::Minimize), Just(Sense::Maximize)].boxed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_instance_arbitrary_lp(
+            instance in Instance::arbitrary_with(
+                InstanceParameter::LP {
+                    num_constraints: 5,
+                    num_variables: 3
+                }
+            )
+        ) {
+            instance.check_decision_variables().unwrap();
+        }
+
+        #[test]
+        fn test_instance_arbitrary_any(
+            instance in Instance::arbitrary_with(
+                InstanceParameter::Any {
+                    num_constraints: 3,
+                    num_terms: 3,
+                    max_id: 5,
+                    max_degree: 3
+                }
+            )
+        ) {
+            instance.check_decision_variables().unwrap();
+        }
     }
 }
