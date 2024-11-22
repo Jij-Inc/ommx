@@ -135,6 +135,27 @@ impl Arbitrary for Sense {
     }
 }
 
+impl Arbitrary for Description {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_parameter: ()) -> Self::Strategy {
+        (
+            Option::<String>::arbitrary(),
+            Option::<String>::arbitrary(),
+            prop_oneof![Just(Vec::new()), proptest::collection::vec(".*", 1..3)],
+            Option::<String>::arbitrary(),
+        )
+            .prop_map(|(name, description, authors, created_by)| Description {
+                name,
+                description,
+                authors,
+                created_by,
+            })
+            .boxed()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
