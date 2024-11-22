@@ -103,21 +103,16 @@ impl ParametricInstance {
 
 #[cfg(test)]
 mod tests {
-    use crate::convert::instance::InstanceParameter;
-
     use super::*;
     use proptest::prelude::*;
 
     proptest! {
         #[test]
-        fn test_parametric_instance_conversion(instance in Instance::arbitrary_with(InstanceParameter::Any {
-            num_constraints: 2,
-            num_terms: 2,
-            max_id: 5,
-            max_degree: 2
-        })) {
+        fn test_parametric_instance_conversion(instance in Instance::arbitrary()) {
             let parametric_instance: ParametricInstance = instance.clone().into();
-            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
+            let mut converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
+            prop_assert_eq!(converted_instance.parameters, Some(Parameters::default()));
+            converted_instance.parameters = None;
             prop_assert_eq!(instance, converted_instance);
         }
     }
