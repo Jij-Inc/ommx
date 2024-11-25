@@ -81,6 +81,7 @@ impl ParametricInstance {
             .context("Objective function of ParametricInstance is empty")
     }
 
+    /// Used decision variable and parameter IDs in the objective and constraints.
     pub fn used_ids(&self) -> Result<BTreeSet<u64>> {
         let mut used_ids = self.objective()?.used_decision_variable_ids();
         for c in &self.constraints {
@@ -89,14 +90,16 @@ impl ParametricInstance {
         Ok(used_ids)
     }
 
-    pub fn defined_ids(&self) -> BTreeSet<u64> {
+    /// Defined decision variable IDs. These IDs may not be used in the objective and constraints.
+    pub fn defined_decision_variable_ids(&self) -> BTreeSet<u64> {
         self.decision_variables
             .iter()
             .map(|dv| dv.id)
             .collect::<BTreeSet<_>>()
     }
 
-    pub fn parameter_ids(&self) -> BTreeSet<u64> {
+    /// Defined parameter IDs. These IDs may not be used in the objective and constraints.
+    pub fn defined_parameter_ids(&self) -> BTreeSet<u64> {
         self.parameters.iter().map(|p| p.id).collect()
     }
 }
