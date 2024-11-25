@@ -1,5 +1,6 @@
 use crate::v1::{Constraint, Equality, Function};
 use anyhow::{Context, Result};
+use approx::AbsDiffEq;
 use proptest::prelude::*;
 
 impl Constraint {
@@ -7,6 +8,25 @@ impl Constraint {
         self.function
             .as_ref()
             .context("Constraint does not contain function")
+    }
+}
+
+impl AbsDiffEq for Constraint {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::EPSILON
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        if self.equality != other.equality {
+            return false;
+        }
+        if let (Some(f), Some(g)) = (&self.function, &other.function) {
+            f.abs_diff_eq(g, epsilon)
+        } else {
+            false
+        }
     }
 }
 

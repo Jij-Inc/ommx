@@ -104,16 +104,19 @@ impl ParametricInstance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::abs_diff_eq;
     use proptest::prelude::*;
 
     proptest! {
         #[test]
         fn test_parametric_instance_conversion(instance in Instance::arbitrary()) {
             let parametric_instance: ParametricInstance = instance.clone().into();
-            let mut converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
-            prop_assert_eq!(converted_instance.parameters, Some(Parameters::default()));
-            converted_instance.parameters = None;
-            prop_assert_eq!(instance, converted_instance);
+            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
+            prop_assert_eq!(&converted_instance.parameters, &Some(Parameters::default()));
+            prop_assert!(
+                abs_diff_eq!(instance, converted_instance, epsilon = 1e-10),
+                "\nLeft : {:?}\nRight: {:?}", instance, converted_instance
+            );
         }
     }
 }

@@ -63,6 +63,13 @@ macro_rules! impl_neg_by_mul {
                 self * -1.0
             }
         }
+
+        impl ::std::ops::Neg for &$ty {
+            type Output = $ty;
+            fn neg(self) -> Self::Output {
+                self.clone() * -1.0
+            }
+        }
     };
 }
 

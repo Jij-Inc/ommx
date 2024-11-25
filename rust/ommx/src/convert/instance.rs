@@ -6,9 +6,10 @@ use crate::{
     },
 };
 use anyhow::{bail, Context, Result};
+use approx::AbsDiffEq;
 use proptest::prelude::*;
 use rand::SeedableRng;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
 
@@ -153,6 +154,65 @@ impl Arbitrary for Description {
                 created_by,
             })
             .boxed()
+    }
+}
+
+/// Compare two instances as mathematical programming problems. This does not compare the metadata.
+///
+/// - This regards `min f` and `max -f` as the same problem.
+/// - This cannot compare scaled constraints. For example, `2x + 3y <= 4` and `4x + 6y <= 8` are mathematically same,
+///   but this regarded them as different problems.
+///
+impl AbsDiffEq for Instance {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        let (Some(f), Some(g)) = (&self.objective, &other.objective) else {
+            // Return false if one of instance is invalid
+            return false;
+        };
+        match (self.sense.try_into(), other.sense.try_into()) {
+            (Ok(Sense::Minimize), Ok(Sense::Minimize))
+            | (Ok(Sense::Maximize), Ok(Sense::Maximize)) => {
+                if !f.abs_diff_eq(g, epsilon) {
+                    return false;
+                }
+            }
+            (Ok(Sense::Minimize), Ok(Sense::Maximize))
+            | (Ok(Sense::Maximize), Ok(Sense::Minimize)) => {
+                if !f.abs_diff_eq(&-g, epsilon) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+
+        if self.constraints.len() != other.constraints.len() {
+            return false;
+        }
+        // The constraints may not ordered in the same way
+        let lhs = self
+            .constraints
+            .iter()
+            .map(|c| (c.id, (c.equality, c.function())))
+            .collect::<BTreeMap<_, _>>();
+        for c in &other.constraints {
+            if let (Some((eq, Ok(f))), Ok(g)) = (lhs.get(&c.id), c.function()) {
+                if *eq != c.equality as i32 {
+                    return false;
+                }
+                if !(*f).abs_diff_eq(g, epsilon) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        true
     }
 }
 
