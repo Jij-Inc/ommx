@@ -31,7 +31,6 @@ maplit.workspace = true
 num.workspace = true
 ocipkg.workspace = true
 proptest.workspace = true
-proptest-derive.workspace = true
 prost.workspace = true
 rand.workspace = true
 rand_xoshiro.workspace = true

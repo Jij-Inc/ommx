@@ -6,6 +6,11 @@ import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
 
+// A set of parameters for instantiating an optimization problem from a parametric instance
+message Parameters {
+  map<uint64, double> entries = 1;
+}
+
 message Instance {
   message Description {
     optional string name = 1;
@@ -45,4 +50,7 @@ message Instance {
   // - This is a required field. Most mathematical modeling tools allow for an empty sense and default to minimization. Alternatively, some tools do not create such a field and represent maximization problems by negating the objective function. This project prefers explicit descriptions over implicit ones to avoid such ambiguity and to make it unnecessary for developers to look up the reference for the treatment of omitted cases.
   //
   Sense sense = 5;
+
+  // Parameters used when instantiating this instance
+  optional Parameters parameters = 6;
 }

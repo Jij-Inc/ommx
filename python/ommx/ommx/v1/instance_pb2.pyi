@@ -23,6 +23,46 @@ else:
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
+class Parameters(google.protobuf.message.Message):
+    """A set of parameters for instantiating an optimization problem from a parametric instance"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class EntriesEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.float
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.float = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    ENTRIES_FIELD_NUMBER: builtins.int
+    @property
+    def entries(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[
+        builtins.int, builtins.float
+    ]: ...
+    def __init__(
+        self,
+        *,
+        entries: collections.abc.Mapping[builtins.int, builtins.float] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
+
+global___Parameters = Parameters
+
+@typing.final
 class Instance(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -134,6 +174,7 @@ class Instance(google.protobuf.message.Message):
     OBJECTIVE_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it.
 
@@ -164,6 +205,10 @@ class Instance(google.protobuf.message.Message):
     ]:
         """Constraints of the optimization problem"""
 
+    @property
+    def parameters(self) -> global___Parameters:
+        """Parameters used when instantiating this instance"""
+
     def __init__(
         self,
         *,
@@ -176,16 +221,26 @@ class Instance(google.protobuf.message.Message):
         constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint]
         | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
+        parameters: global___Parameters | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
-            "description", b"description", "objective", b"objective"
+            "_parameters",
+            b"_parameters",
+            "description",
+            b"description",
+            "objective",
+            b"objective",
+            "parameters",
+            b"parameters",
         ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
+            "_parameters",
+            b"_parameters",
             "constraints",
             b"constraints",
             "decision_variables",
@@ -194,9 +249,14 @@ class Instance(google.protobuf.message.Message):
             b"description",
             "objective",
             b"objective",
+            "parameters",
+            b"parameters",
             "sense",
             b"sense",
         ],
     ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_parameters", b"_parameters"]
+    ) -> typing.Literal["parameters"] | None: ...
 
 global___Instance = Instance
