@@ -202,7 +202,7 @@ impl AbsDiffEq for Instance {
             .collect::<BTreeMap<_, _>>();
         for c in &other.constraints {
             if let (Some((eq, Ok(f))), Ok(g)) = (lhs.get(&c.id), c.function()) {
-                if *eq != c.equality as i32 {
+                if *eq != c.equality {
                     return false;
                 }
                 if !(*f).abs_diff_eq(g, epsilon) {
