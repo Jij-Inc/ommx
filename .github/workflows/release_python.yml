@@ -69,7 +69,7 @@ jobs:
           retention-days: 30
 
   python-mip-adapter:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,11 +91,34 @@ jobs:
           path: ./dist/
           retention-days: 30
 
+  pyscipopt-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --sdist --outdir ./dist ./python/ommx-pyscipopt-adapter
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pyscipopt-adapter
+          path: ./dist/
+          retention-days: 30
+
   publish:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
-    needs: [linux, macos, windows, python-mip-adapter]
+    needs: [linux, macos, windows, python-mip-adapter, pyscipopt-adapter]
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
