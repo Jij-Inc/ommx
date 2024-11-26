@@ -3,15 +3,13 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ommx_python_mip_adapter"
+name = "ommx_pyscipopt_adapter"
 version = "1.4.2"
-
-description = "An adapter for the Python-MIP from/to OMMX."
+description = "An adapter for the SCIP from OMMX."
 authors = [
     { name="Jij Inc.", email="info@j-ij.com" },
 ]
 readme = "README.md"
-
 requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -19,31 +17,20 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "ommx >= 1.4.0, < 2.0.0",
-
-    # FIXME: This project requires latest version of Python-MIP (will be 1.16.0?), which does not release yet.
-    #        https://github.com/coin-or/python-mip/issues/384
-    "mip >= 1.15.0, < 2.0.0",
+    "ommx >= 1.4.1, < 2.0.0",
+    "PySCIPOpt >= 5.1.0, < 6.0.0",
 ]
 
-[project.urls]
-Repository = "https://github.com/Jij-Inc/ommx-python-mip-adapter"
-Issues = "https://github.com/Jij-Inc/ommx-python-mip-adapter/issues"
 
 [project.optional-dependencies]
 dev = [
     "markdown-code-runner",
-    "mypy",
-    "numpy",
     "pyright",
     "pytest",
-    "ruff >= 0.7.0, < 0.8.0",
-    "sphinx",
-    "sphinx-autoapi",
-    "sphinx_fontawesome",
-    "sphinx_rtd_theme",
+    "ruff",
 ]
