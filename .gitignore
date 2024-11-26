@@ -25,3 +25,6 @@ __pycache__/
 python/**/build/
 python/**/dist/
 python/**/*.egg-info/
+
+# Docs
+docs/pages/_build/
