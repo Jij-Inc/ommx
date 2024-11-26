@@ -57,6 +57,9 @@ mod convert;
 mod parser;
 mod to_mps;
 
+#[cfg(test)]
+mod tests;
+
 use parser::*;
 
 pub fn load_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
