@@ -52,6 +52,14 @@ impl Linear {
         self.terms.iter().map(|term| term.id).collect()
     }
 
+    pub fn degree(&self) -> usize {
+        if self.terms.is_empty() {
+            0
+        } else {
+            1
+        }
+    }
+
     /// Downcast to a constant if the linear function is constant.
     pub fn as_constant(self) -> Option<f64> {
         if self.terms.is_empty() {

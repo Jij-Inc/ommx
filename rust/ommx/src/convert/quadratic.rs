@@ -60,6 +60,14 @@ impl Quadratic {
     pub fn as_constant(self) -> Option<f64> {
         self.as_linear()?.as_constant()
     }
+
+    pub fn degree(&self) -> usize {
+        if !self.columns.is_empty() {
+            2
+        } else {
+            self.linear.as_ref().map_or(0, |l| l.degree())
+        }
+    }
 }
 
 impl From<f64> for Quadratic {
@@ -300,16 +308,18 @@ impl fmt::Display for Quadratic {
 
 #[cfg(test)]
 mod tests {
-    test_algebraic!(super::Quadratic);
+    use super::*;
+
+    test_algebraic!(Quadratic);
 
     #[test]
     fn format() {
-        let q = super::Quadratic::from_iter(vec![
+        let q = Quadratic::from_iter(vec![
             ((0, 1), 1.0),
             ((1, 2), -1.0),
             ((2, 0), -2.0),
             ((1, 3), 1.0 / 3.0),
-        ]) + super::Linear::new(
+        ]) + Linear::new(
             [(1, 1.0), (2, -1.0), (3, -2.0), (4, 1.0 / 3.0)].into_iter(),
             3.0,
         );
@@ -321,5 +331,17 @@ mod tests {
             format!("{:.2}", q),
             "x0*x1 - 2.00*x0*x2 - x1*x2 + 0.33*x1*x3 + x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00"
         );
+    }
+
+    proptest! {
+        #[test]
+        fn test_as_linear_any(f in Quadratic::arbitrary()) {
+            prop_assert!(dbg!(f.degree()) >= 2 || dbg!(f.as_linear()).is_some());
+        }
+
+        #[test]
+        fn test_as_const_any(f in Quadratic::arbitrary()) {
+            prop_assert!(dbg!(f.degree()) >= 1 || dbg!(f.as_constant()).is_some());
+        }
     }
 }

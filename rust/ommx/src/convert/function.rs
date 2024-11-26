@@ -94,6 +94,16 @@ impl Function {
         }
     }
 
+    pub fn degree(&self) -> usize {
+        match &self.function {
+            Some(FunctionEnum::Constant(_)) => 0,
+            Some(FunctionEnum::Linear(linear)) => linear.degree(),
+            Some(FunctionEnum::Quadratic(quad)) => quad.degree(),
+            Some(FunctionEnum::Polynomial(poly)) => poly.degree(),
+            None => 0,
+        }
+    }
+
     pub fn as_linear(self) -> Option<Linear> {
         match self.function? {
             FunctionEnum::Constant(c) => Some(Linear::from(c)),
@@ -344,10 +354,26 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_as_linear(f in Function::arbitrary_with((5, 1, 10))) {
+        fn test_as_linear_roundtrip(f in Function::arbitrary_with((5, 1, 10))) {
             let linear = f.clone().as_linear().unwrap();
             // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
             prop_assert!(f.abs_diff_eq(&Function::from(linear), 1e-10));
+        }
+
+        #[test]
+        fn test_as_constant_roundtrip(f in Function::arbitrary_with((5, 0, 10))) {
+            let c = f.clone().as_constant().unwrap();
+            prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
+        }
+
+        #[test]
+        fn test_as_linear_any(f in Function::arbitrary()) {
+            prop_assert!(dbg!(f.degree()) >= 2 || dbg!(f.as_linear()).is_some());
+        }
+
+        #[test]
+        fn test_as_const_any(f in Function::arbitrary()) {
+            prop_assert!(dbg!(f.degree()) >= 1 || dbg!(f.as_constant()).is_some());
         }
     }
 }
