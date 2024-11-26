@@ -43,7 +43,7 @@ rand_xoshiro = "0.6.0"
 serde = { version = "1.0.214", features = ["derive"] }
 serde-pyobject = "0.3.0"
 serde_json = "1.0.133"
-thiserror = "1.0.69"
+thiserror = "2.0.3"
 url = "2.5.3"
 uuid = { version = "1.11.0", features = ["v4"] }
 zip = "2.2.0"

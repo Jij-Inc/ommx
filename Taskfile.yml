@@ -41,6 +41,10 @@ tasks:
     cmds:
       - pip install -ve "python/ommx-python-mip-adapter[dev]"
 
+  install_pyscipopt_adapter:
+    cmds:
+      - pip install -ve "python/ommx-pyscipopt-adapter[dev]"
+
   format_python:
     cmds:
       - ruff format
@@ -49,6 +53,7 @@ tasks:
     cmds:
       - task: test_python_sdk
       - task: test_python_mip_adapter
+      - task: test_pyscipopt_adapter
 
   test_python_sdk:
     cmds:
@@ -60,6 +65,12 @@ tasks:
       - pytest -vv --doctest-modules python/ommx-python-mip-adapter/
       - markdown-code-runner python/ommx-python-mip-adapter/README.md
       - pyright python/ommx-python-mip-adapter/
+
+  test_pyscipopt_adapter:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx-pyscipopt-adapter/
+      - markdown-code-runner python/ommx-pyscipopt-adapter/README.md
+      - pyright python/ommx-pyscipopt-adapter/
 
   stubgen:
     cmds:

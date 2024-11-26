@@ -1,0 +1,2 @@
+class OMMXPySCIPOptAdapterError(Exception):
+    pass
