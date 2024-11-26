@@ -26,5 +26,5 @@ python/**/build/
 python/**/dist/
 python/**/*.egg-info/
 
-# Docs
-docs/pages/_build/
+# Doc
+doc/pages/_build/
