@@ -94,6 +94,15 @@ impl Function {
         }
     }
 
+    pub fn as_linear(self) -> Option<Linear> {
+        match self.function? {
+            FunctionEnum::Constant(c) => Some(Linear::from(c)),
+            FunctionEnum::Linear(linear) => Some(linear),
+            FunctionEnum::Quadratic(quadratic) => quadratic.as_linear(),
+            FunctionEnum::Polynomial(poly) => poly.as_linear(),
+        }
+    }
+
     pub fn as_constant(self) -> Option<f64> {
         match self.function? {
             FunctionEnum::Constant(c) => Some(c),
@@ -230,10 +239,22 @@ impl Arbitrary for Function {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
+        let linear = if max_degree >= 1 {
+            Linear::arbitrary_with((num_terms, max_id))
+        } else {
+            super::arbitrary_coefficient()
+                .prop_map(Linear::from)
+                .boxed()
+        };
+        let quad = if max_degree >= 2 {
+            Quadratic::arbitrary_with((num_terms, max_id))
+        } else {
+            linear.clone().prop_map(Quadratic::from).boxed()
+        };
         prop_oneof![
             super::arbitrary_coefficient().prop_map(Function::from),
-            Linear::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
-            Quadratic::arbitrary_with((num_terms, max_id)).prop_map(Function::from),
+            linear.prop_map(Function::from),
+            quad.prop_map(Function::from),
             Polynomial::arbitrary_with((num_terms, max_degree, max_id)).prop_map(Function::from),
         ]
         .boxed()
@@ -320,4 +341,13 @@ mod tests {
     use super::*;
 
     test_algebraic!(Function);
+
+    proptest! {
+        #[test]
+        fn test_as_linear(f in Function::arbitrary_with((5, 1, 10))) {
+            let linear = f.clone().as_linear().unwrap();
+            // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
+            prop_assert!(f.abs_diff_eq(&Function::from(linear), 1e-10));
+        }
+    }
 }
