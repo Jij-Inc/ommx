@@ -105,6 +105,17 @@ impl Polynomial {
             .unwrap_or(0)
     }
 
+    pub fn as_linear(self) -> Option<Linear> {
+        self.terms
+            .into_iter()
+            .map(|Monomial { ids, coefficient }| match ids.as_slice() {
+                [id] => Some((Some(*id), coefficient)),
+                [] => Some((None, coefficient)),
+                _ => None,
+            })
+            .collect::<Option<Linear>>()
+    }
+
     /// Downcast to a constant if the polynomial is a constant.
     pub fn as_constant(self) -> Option<f64> {
         if self.terms.len() >= 2 {
@@ -248,5 +259,19 @@ mod tests {
             (vec![1, 3, 5, 6], 3.0),
         ]);
         assert_eq!(p.to_string(), "3*x1*x3*x5*x6 + x1*x2*x3 - x2*x3");
+    }
+
+    proptest! {
+        #[test]
+        fn test_as_linear(p in super::Polynomial::arbitrary_with((5, 1, 10))) {
+            let linear = p.clone().as_linear().unwrap();
+            prop_assert_eq!(p, super::Polynomial::from(linear));
+        }
+
+        #[test]
+        fn test_as_constant(p in super::Polynomial::arbitrary_with((5, 0, 10))) {
+            let c = p.clone().as_constant().unwrap();
+            prop_assert_eq!(p, super::Polynomial::from(c));
+        }
     }
 }
