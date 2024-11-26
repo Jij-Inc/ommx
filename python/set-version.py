@@ -67,6 +67,7 @@ def main():
         new_version = args.version
     else:
         new_version = generrate_next_version(sdk)
+    print(new_version)
 
     for pyproject in [sdk] + adapters:
         update_version(pyproject, new_version)
