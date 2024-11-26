@@ -37,7 +37,6 @@ Issues = "https://github.com/Jij-Inc/ommx-python-mip-adapter/issues"
 [project.optional-dependencies]
 dev = [
     "markdown-code-runner",
-    "mypy",
     "numpy",
     "pyright",
     "pytest",
@@ -46,4 +45,5 @@ dev = [
     "sphinx-autoapi",
     "sphinx_fontawesome",
     "sphinx_rtd_theme",
+    "tomlkit",
 ]

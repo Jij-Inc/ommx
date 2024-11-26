@@ -72,6 +72,21 @@ tasks:
       - markdown-code-runner python/ommx-pyscipopt-adapter/README.md
       - pyright python/ommx-pyscipopt-adapter/
 
+  doc_python:
+    cmds:
+      - task: doc_python_sdk
+      - task: doc_python_mip_adapter
+
+  doc_python_sdk:
+    cmds:
+      - sphinx-build -b html source build
+    dir: python/ommx/docs
+
+  doc_python_mip_adapter:
+    cmds:
+      - sphinx-build -b html source build
+    dir: python/ommx-python-mip-adapter/docs
+
   stubgen:
     cmds:
       - cargo run --bin stub_gen --features=stub_gen
