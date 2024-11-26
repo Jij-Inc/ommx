@@ -1,6 +1,6 @@
 # This is a setting for end user and Binder environment. Do not use this for development.
 ommx
-ommx-python-mip-adapter
+ommx-python-mip-adapter >= 1.4.0, < 2.0.0
 jupyterlab
 matplotlib
 networkx
