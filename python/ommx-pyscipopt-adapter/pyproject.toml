@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_pyscipopt_adapter"
-version = "1.4.0"
+version = "1.4.2"
 description = "An adapter for the SCIP from OMMX."
 authors = [
     { name="Jij Inc.", email="info@j-ij.com" },
@@ -22,7 +22,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "ommx >= 1.4.0, < 2.0.0",
+    "ommx >= 1.4.1, < 2.0.0",
     "PySCIPOpt >= 5.1.0, < 6.0.0",
 ]
 
@@ -30,7 +30,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "markdown-code-runner",
-    "mypy",
     "pyright",
     "pytest",
     "ruff",

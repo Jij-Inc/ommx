@@ -283,7 +283,7 @@ def model_to_solution(model: pyscipopt.Model, instance: Instance) -> Solution:
         >>> model.optimize()
 
         >>> solution = adapter.model_to_solution(model, instance)
-        >>> solution.raw.objective
+        >>> solution.objective
         41.0
 
     """
