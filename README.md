@@ -51,6 +51,7 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 |:--- |:--- |:--- |
 | [ommx](./python/ommx) | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html) |
 | [ommx-python-mip-adapter](./python/ommx-python-mip-adapter/) | [![ommx-python-mip-adapter](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/autoapi/index.html)|
+| [ommx-pyscipopt-adapter](./python/ommx-pyscipopt-adapter/) | [![ommx-pyscipopt-adapter](https://img.shields.io/pypi/v/ommx-pyscipopt-adapter)](https://pypi.org/project/ommx-pyscipopt-adapter/) | Preparing |
 
 # License
 © 2024 Jij Inc.
