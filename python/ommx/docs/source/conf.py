@@ -5,6 +5,8 @@
 
 # -- Path setup --------------------------------------------------------------
 import sphinx_rtd_theme
+import tomlkit
+from pathlib import Path
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -13,7 +15,9 @@ project = "ommx"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
-version = "1.4.2"
+here = Path(__file__).parent
+pyproject_toml = tomlkit.loads((here.parent.parent / "pyproject.toml").read_text())
+version = str(pyproject_toml["project"]["version"])  # type: ignore
 release = version
 
 # -- General configuration ---------------------------------------------------

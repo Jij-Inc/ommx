@@ -48,6 +48,7 @@ dev = [
     "sphinx-autoapi",
     "sphinx_fontawesome",
     "sphinx_rtd_theme",
+    "tomlkit",
     "types-protobuf>=0.1.14",
 ]
 
