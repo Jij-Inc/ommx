@@ -26,9 +26,11 @@ parts:
   - url: https://jij-inc.github.io/ommx/protobuf.html
     title: "Protocol Buffers"
   - url: https://jij-inc.github.io/ommx/rust/ommx/index.html
-    title: "Rust SDK"
+    title: "OMMX Rust SDK"
   - url: https://jij-inc.github.io/ommx/python/ommx/index.html
-    title: "Python SDK"
+    title: "OMMX Python SDK"
+  - url: https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/index.html
+    title: "OMMX Python-MIP Adapter"
 - caption: "Release Note"
   chapters:
   - file: release_note/ommx-x.y.z
