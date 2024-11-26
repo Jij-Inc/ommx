@@ -1,6 +1,6 @@
 import pytest
 
-from ommx_pyscipopt_adapter.adapter import (
+from ommx_pyscipopt_adapter import (
     instance_to_model,
     model_to_state,
 )

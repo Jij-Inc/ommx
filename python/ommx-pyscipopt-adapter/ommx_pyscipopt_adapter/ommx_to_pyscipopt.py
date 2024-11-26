@@ -6,6 +6,8 @@ from ommx.v1 import Constraint, Instance, DecisionVariable, Solution
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State
 
+from .exception import OMMXPySCIPOptAdapterError
+
 
 class OMMXSCIPAdapter:
     def __init__(self, instance: Instance):
@@ -37,7 +39,7 @@ class OMMXSCIPAdapter:
                     ub=var.bound.upper,
                 )
             else:
-                raise RuntimeError(
+                raise OMMXPySCIPOptAdapterError(
                     f"Not supported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
@@ -88,7 +90,9 @@ class OMMXSCIPAdapter:
         elif self._ommx_instance.sense == Instance.MINIMIZE:
             sense = "minimize"
         else:
-            raise RuntimeError(f"Not supported sense: {self._ommx_instance.sense}")
+            raise OMMXPySCIPOptAdapterError(
+                f"Not supported sense: {self._ommx_instance.sense}"
+            )
 
         if ommx_objective.HasField("constant"):
             self._model.setObjective(ommx_objective.constant, sense=sense)
@@ -119,7 +123,7 @@ class OMMXSCIPAdapter:
             self._model.addCons(constr_expr, name="constraint_for_linearized_objective")
 
         else:
-            raise RuntimeError(
+            raise OMMXPySCIPOptAdapterError(
                 "The objective function must be `constant`, `linear`, `quadratic`."
             )
 
@@ -142,12 +146,12 @@ class OMMXSCIPAdapter:
                 ):
                     continue
                 else:
-                    raise RuntimeError(
+                    raise OMMXPySCIPOptAdapterError(
                         f"Infeasible constant constraint was found:"
                         f"id: {constraint.id}"
                     )
             else:
-                raise RuntimeError(
+                raise OMMXPySCIPOptAdapterError(
                     f"Constraints must be either `constant`, `linear` or `quadratic`."
                     f"id: {constraint.id}, "
                     f"type: {constraint.function.WhichOneof('function')}"
@@ -158,7 +162,7 @@ class OMMXSCIPAdapter:
             elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
                 constr_expr = expr <= 0
             else:
-                raise RuntimeError(
+                raise OMMXPySCIPOptAdapterError(
                     f"Not supported constraint equality: "
                     f"id: {constraint.id}, equality: {constraint.equality}"
                 )
@@ -238,7 +242,9 @@ def model_to_state(model: pyscipopt.Model, instance: Instance) -> State:
     """
 
     if model.getStatus() == "unknown":
-        raise RuntimeError("The model may not be optimized. [status: unknown]")
+        raise OMMXPySCIPOptAdapterError(
+            "The model may not be optimized. [status: unknown]"
+        )
 
     # NOTE: It is assumed that getBestSol will return an error
     #       if there is no feasible solution.
@@ -252,7 +258,7 @@ def model_to_state(model: pyscipopt.Model, instance: Instance) -> State:
             }
         )
     except Exception:
-        raise RuntimeError(
+        raise OMMXPySCIPOptAdapterError(
             f"There is no feasible solution. [status: {model.getStatus()}]"
         )
 

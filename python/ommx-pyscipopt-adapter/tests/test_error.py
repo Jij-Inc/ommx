@@ -1,7 +1,11 @@
 import pytest
 import pyscipopt
 
-from ommx_pyscipopt_adapter import adapter
+from ommx_pyscipopt_adapter import (
+    instance_to_model,
+    model_to_state,
+    OMMXPySCIPOptAdapterError,
+)
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Polynomial
 from ommx.v1.decision_variables_pb2 import DecisionVariable as _DecisionVariable
@@ -17,8 +21,8 @@ def test_error_not_suppoerted_decision_variable():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "Not supported decision variable" in str(e.value)
 
 
@@ -30,8 +34,8 @@ def test_error_polynomial_objective():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "The objective function must be" in str(e.value)
 
 
@@ -49,8 +53,8 @@ def test_error_nonlinear_constraint():
         ],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "Constraints must be either `constant`, `linear` or `quadratic`." in str(
         e.value
     )
@@ -71,8 +75,8 @@ def test_error_not_supported_constraint_equality():
         ],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "Not supported constraint equality" in str(e.value)
 
 
@@ -84,8 +88,8 @@ def test_error_not_optimized_model():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.model_to_state(model, instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        model_to_state(model, instance)
     assert "The model may not be optimized." in str(e.value)
 
 
@@ -106,10 +110,10 @@ def test_error_infeasible_model():
         ],
         sense=Instance.MINIMIZE,
     )
-    model = adapter.instance_to_model(ommx_instance)
+    model = instance_to_model(ommx_instance)
     model.optimize()
-    with pytest.raises(RuntimeError) as e:
-        adapter.model_to_state(model, ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        model_to_state(model, ommx_instance)
     assert "There is no feasible solution." in str(e.value)
 
 
@@ -125,8 +129,8 @@ def test_error_infeasible_constant_equality_constraint():
         ],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "Infeasible constant constraint was found" in str(e.value)
 
 
@@ -142,6 +146,6 @@ def test_error_infeasible_constant_inequality_constraint():
         ],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
-        adapter.instance_to_model(ommx_instance)
+    with pytest.raises(OMMXPySCIPOptAdapterError) as e:
+        instance_to_model(ommx_instance)
     assert "Infeasible constant constraint was found" in str(e.value)
