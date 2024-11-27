@@ -1,14 +1,10 @@
-use crate::{
-    random::random_lp,
-    v1::{
-        instance::{Description, Sense},
-        Function, Instance,
-    },
+use crate::v1::{
+    instance::{Description, Sense},
+    Function, Instance,
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use proptest::prelude::*;
-use rand::SeedableRng;
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
@@ -44,86 +40,57 @@ impl Instance {
         }
         Ok(())
     }
-}
 
-#[non_exhaustive]
-#[derive(Debug, Clone)]
-pub enum InstanceParameter {
-    Any {
-        num_constraints: usize,
-        num_terms: usize,
-        max_id: u64,
-        max_degree: usize,
-    },
-    LP {
-        num_constraints: usize,
-        num_variables: usize,
-    },
-    // FIXME: Add more instance types
-}
-
-impl Default for InstanceParameter {
-    fn default() -> Self {
-        InstanceParameter::Any {
-            num_constraints: 3,
-            num_terms: 3,
-            max_id: 5,
-            max_degree: 3,
-        }
+    pub fn arbitrary_lp() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..10_usize, 0..=1_u64, 0..10_usize)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
     }
 }
 
 impl Arbitrary for Instance {
-    type Parameters = InstanceParameter;
+    type Parameters = (usize, usize, u64, usize);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(parameter: InstanceParameter) -> Self::Strategy {
-        match parameter {
-            InstanceParameter::LP {
-                num_constraints,
-                num_variables,
-            } => {
-                // The instance yielded from strategy must depends only on the parameter deterministically.
-                // Thus we should not use `thread_rng` here.
-                let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
-                Just(random_lp(&mut rng, num_variables, num_constraints)).boxed()
-            }
-            InstanceParameter::Any {
-                num_constraints,
-                num_terms,
-                max_id,
-                max_degree,
-            } => (
-                Function::arbitrary_with((num_terms, max_degree, max_id)),
-                arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
-            )
-                .prop_flat_map(|(objective, constraints)| {
-                    let mut used_ids = objective.used_decision_variable_ids();
-                    for c in &constraints {
-                        used_ids.extend(c.function().unwrap().used_decision_variable_ids());
-                    }
-                    (
-                        Just(objective),
-                        Just(constraints),
-                        arbitrary_decision_variables(used_ids),
-                        Option::<Description>::arbitrary(),
-                        Sense::arbitrary(),
+    fn arbitrary_with(
+        (num_constraints, num_terms, max_id, max_degree): Self::Parameters,
+    ) -> Self::Strategy {
+        (
+            Function::arbitrary_with((num_terms, max_degree, max_id)),
+            arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+        )
+            .prop_flat_map(|(objective, constraints)| {
+                let mut used_ids = objective.used_decision_variable_ids();
+                for c in &constraints {
+                    used_ids.extend(c.function().unwrap().used_decision_variable_ids());
+                }
+                (
+                    Just(objective),
+                    Just(constraints),
+                    arbitrary_decision_variables(used_ids),
+                    Option::<Description>::arbitrary(),
+                    Sense::arbitrary(),
+                )
+                    .prop_map(
+                        |(objective, constraints, decision_variables, description, sense)| {
+                            Instance {
+                                objective: Some(objective),
+                                constraints,
+                                decision_variables,
+                                description,
+                                sense: sense as i32,
+                                ..Default::default()
+                            }
+                        },
                     )
-                        .prop_map(
-                            |(objective, constraints, decision_variables, description, sense)| {
-                                Instance {
-                                    objective: Some(objective),
-                                    constraints,
-                                    decision_variables,
-                                    description,
-                                    sense: sense as i32,
-                                    ..Default::default()
-                                }
-                            },
-                        )
-                })
-                .boxed(),
-        }
+            })
+            .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..10_usize, 0..10_usize, 0..4_u64, 0..10_usize)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
     }
 }
 
@@ -222,28 +189,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_instance_arbitrary_lp(
-            instance in Instance::arbitrary_with(
-                InstanceParameter::LP {
-                    num_constraints: 5,
-                    num_variables: 3
-                }
-            )
-        ) {
-            instance.check_decision_variables().unwrap();
-        }
-
-        #[test]
-        fn test_instance_arbitrary_any(
-            instance in Instance::arbitrary_with(
-                InstanceParameter::Any {
-                    num_constraints: 3,
-                    num_terms: 3,
-                    max_id: 5,
-                    max_degree: 3
-                }
-            )
-        ) {
+        fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.check_decision_variables().unwrap();
         }
     }

@@ -60,6 +60,14 @@ impl Quadratic {
     pub fn as_constant(self) -> Option<f64> {
         self.as_linear()?.as_constant()
     }
+
+    pub fn degree(&self) -> usize {
+        if self.values.iter().any(|v| v.abs() > f64::EPSILON) {
+            2
+        } else {
+            self.linear.as_ref().map_or(0, |l| l.degree())
+        }
+    }
 }
 
 impl From<f64> for Quadratic {
@@ -300,16 +308,18 @@ impl fmt::Display for Quadratic {
 
 #[cfg(test)]
 mod tests {
-    test_algebraic!(super::Quadratic);
+    use super::*;
+
+    test_algebraic!(Quadratic);
 
     #[test]
     fn format() {
-        let q = super::Quadratic::from_iter(vec![
+        let q = Quadratic::from_iter(vec![
             ((0, 1), 1.0),
             ((1, 2), -1.0),
             ((2, 0), -2.0),
             ((1, 3), 1.0 / 3.0),
-        ]) + super::Linear::new(
+        ]) + Linear::new(
             [(1, 1.0), (2, -1.0), (3, -2.0), (4, 1.0 / 3.0)].into_iter(),
             3.0,
         );
