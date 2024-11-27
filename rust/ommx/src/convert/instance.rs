@@ -147,20 +147,18 @@ impl AbsDiffEq for Instance {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        let (Some(f), Some(g)) = (&self.objective, &other.objective) else {
-            // Return false if one of instance is invalid
-            return false;
-        };
+        let f = self.objective();
+        let g = other.objective();
         match (self.sense.try_into(), other.sense.try_into()) {
             (Ok(Sense::Minimize), Ok(Sense::Minimize))
             | (Ok(Sense::Maximize), Ok(Sense::Maximize)) => {
-                if !f.abs_diff_eq(g, epsilon) {
+                if !f.abs_diff_eq(&g, epsilon) {
                     return false;
                 }
             }
             (Ok(Sense::Minimize), Ok(Sense::Maximize))
             | (Ok(Sense::Maximize), Ok(Sense::Minimize)) => {
-                if !f.abs_diff_eq(&-g, epsilon) {
+                if !f.abs_diff_eq(&-g.as_ref(), epsilon) {
                     return false;
                 }
             }

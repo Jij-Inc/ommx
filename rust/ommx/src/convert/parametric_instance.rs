@@ -2,7 +2,7 @@ use crate::{
     v1::{Function, Instance, Parameters, ParametricInstance, State},
     Evaluate,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::{borrow::Cow, collections::BTreeSet};
 
 impl From<Instance> for ParametricInstance {
@@ -57,10 +57,9 @@ impl ParametricInstance {
         }
 
         let state = State::from(parameters.clone());
-        self.objective
-            .as_mut()
-            .context("Objective function of ParametricInstance is empty")?
-            .partial_evaluate(&state)?;
+        if let Some(f) = self.objective.as_mut() {
+            f.partial_evaluate(&state)?;
+        }
         for constraint in self.constraints.iter_mut() {
             constraint.partial_evaluate(&state)?;
         }

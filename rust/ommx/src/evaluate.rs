@@ -24,7 +24,7 @@ impl Evaluate for Function {
             Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution)?,
             Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution)?,
-            None => bail!("Function is not set"),
+            None => (0.0, BTreeSet::new()),
         };
         Ok(out)
     }
@@ -35,7 +35,7 @@ impl Evaluate for Function {
             Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
             Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
-            None => bail!("Function is not set"),
+            None => BTreeSet::new(),
         })
     }
 }
@@ -204,11 +204,7 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
 
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
-        let (evaluated_value, used_ids) = self
-            .function
-            .as_ref()
-            .context("Function is not set")?
-            .evaluate(solution)?;
+        let (evaluated_value, used_ids) = self.function().evaluate(solution)?;
         let used_decision_variable_ids = used_ids.iter().cloned().collect();
         Ok((
             EvaluatedConstraint {
@@ -227,10 +223,11 @@ impl Evaluate for Constraint {
     }
 
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
-        self.function
-            .as_mut()
-            .context("Function is not set")?
-            .partial_evaluate(state)
+        let Some(f) = self.function.as_mut() else {
+            // Since empty function means zero constant, we can return an empty set
+            return Ok(BTreeSet::new());
+        };
+        f.partial_evaluate(state)
     }
 }
 
