@@ -332,6 +332,14 @@ class Artifact:
         blob = self.get_blob(descriptor)
         return pandas.read_parquet(io.BytesIO(blob))
 
+    def get_json(self, descriptor: Descriptor):
+        """
+        Get a JSON object from an artifact layer stored by :py:meth:`ArtifactBuilder.add_json`
+        """
+        assert descriptor.media_type == "application/json"
+        blob = self.get_blob(descriptor)
+        return json.loads(blob)
+
 
 class ArtifactBuilderBase(ABC):
     @abstractmethod
@@ -674,6 +682,36 @@ class ArtifactBuilder:
         blob = df.to_parquet()
         annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.apache.parquet", blob, annotations)
+
+    def add_json(self, obj, /, **annotations: str) -> Descriptor:
+        """
+        Add a JSON object to the artifact
+
+        Example
+        ========
+
+        >>> obj = {"a": 1, "b": 2}
+
+        Store the object in the artifact with `application/json` media type.
+
+        >>> builder = ArtifactBuilder.temp()
+        >>> _desc = builder.add_json(obj, title="test_json")
+        >>> artifact = builder.build()
+
+        The `title` annotation is stored as `org.ommx.user.title` in the artifact, which can be accessed by :py:attr:`Descriptor.annotations` or :py:attr:`Descriptor.user_annotations`.
+
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/json
+        >>> print(layer.annotations)
+        {'org.ommx.user.title': 'test_json'}
+        >>> print(layer.user_annotations)
+        {'title': 'test_json'}
+
+        """
+        blob = json.dumps(obj).encode("utf-8")
+        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        return self.add_layer("application/json", blob, annotations)
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
