@@ -368,12 +368,12 @@ mod tests {
 
         #[test]
         fn test_as_linear_any(f in Function::arbitrary()) {
-            prop_assert!(dbg!(f.degree()) >= 2 || dbg!(f.as_linear()).is_some());
+            prop_assert!((dbg!(f.degree()) >= 2) ^ dbg!(f.as_linear()).is_some());
         }
 
         #[test]
         fn test_as_const_any(f in Function::arbitrary()) {
-            prop_assert!(dbg!(f.degree()) >= 1 || dbg!(f.as_constant()).is_some());
+            prop_assert!((dbg!(f.degree()) >= 1) ^ dbg!(f.as_constant()).is_some());
         }
     }
 }
