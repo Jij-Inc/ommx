@@ -88,13 +88,13 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
             _ => marker_tracker.intend(out)?,
         }
         // write obj function entry
-        write_col_entry(id, &var_name, obj_name, instance.objective.as_ref(), out)
+        write_col_entry(id, &var_name, obj_name, instance.objective().as_ref(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
             // It assumes we're dealing with constraints, but here we change the
             // error type so the message is clearer with the objective function
             .map_err(|err| {
-                if let MpsWriteError::InvalidConstraintType(a, b) = err {
-                    MpsWriteError::InvalidObjectiveType(a, b)
+                if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
+                    MpsWriteError::InvalidObjectiveType { degree }
                 } else {
                     panic!() // we know this can't happen
                 }
@@ -102,7 +102,7 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
         // write entries of this var's column for each constraint
         for constr in instance.constraints.iter() {
             let row_name = constr_name(constr);
-            write_col_entry(id, &var_name, &row_name, constr.function.as_ref(), out)?;
+            write_col_entry(id, &var_name, &row_name, constr.function().as_ref(), out)?;
         }
     }
     // print final INTEND
@@ -119,34 +119,22 @@ fn write_col_entry<W: Write>(
     var_id: u64,
     var_name: &str,
     row_name: &str,
-    func: Option<&v1::Function>,
+    func: &v1::Function,
     out: &mut W,
 ) -> Result<(), MpsWriteError> {
-    let Some(v1::Function {
-        function: Some(func),
-    }) = &func
-    else {
-        return Ok(());
-    };
-    match func {
-        v1::function::Function::Linear(v1::Linear { terms, .. }) => {
-            // search for current id in terms. If present and coefficient not 0, write entry
-            for term in terms {
-                if term.id == var_id && term.coefficient != 0.0 {
-                    let coeff = term.coefficient;
-                    writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
-                }
+    if let Some(v1::Linear { terms, .. }) = func.clone().as_linear() {
+        // search for current id in terms. If present and coefficient not 0, write entry
+        for term in terms {
+            if term.id == var_id && term.coefficient != 0.0 {
+                let coeff = term.coefficient;
+                writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
             }
         }
-        v1::function::Function::Constant(_) => {
-            return Err(MpsWriteError::constant_constraint(row_name))
-        }
-        v1::function::Function::Quadratic(_) => {
-            return Err(MpsWriteError::quadratic_constraint(row_name))
-        }
-        v1::function::Function::Polynomial(_) => {
-            return Err(MpsWriteError::polynomial_constraint(row_name))
-        }
+    } else {
+        return Err(MpsWriteError::InvalidConstraintType {
+            name: row_name.to_string(),
+            degree: func.degree(),
+        });
     }
     Ok(())
 }
@@ -154,29 +142,17 @@ fn write_col_entry<W: Write>(
 fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     for constr in instance.constraints.iter() {
-        let Some(v1::Function {
-            function: Some(func),
-        }) = &constr.function
-        else {
-            continue;
-        };
         let name = constr_name(constr);
-        match func {
-            v1::function::Function::Linear(v1::Linear { constant, .. }) => {
-                if *constant != 0.0 {
-                    let rhs = -constant;
-                    writeln!(out, "  RHS1    {name}   {rhs}")?;
-                }
+        if let Some(v1::Linear { constant, .. }) = constr.function().into_owned().as_linear() {
+            if constant != 0.0 {
+                let rhs = -constant;
+                writeln!(out, "  RHS1    {name}   {rhs}")?;
             }
-            v1::function::Function::Constant(_) => {
-                return Err(MpsWriteError::constant_constraint(name))
-            }
-            v1::function::Function::Quadratic(_) => {
-                return Err(MpsWriteError::quadratic_constraint(name))
-            }
-            v1::function::Function::Polynomial(_) => {
-                return Err(MpsWriteError::polynomial_constraint(name))
-            }
+        } else {
+            return Err(MpsWriteError::InvalidConstraintType {
+                name: name.to_string(),
+                degree: constr.function().degree(),
+            });
         }
     }
     Ok(())

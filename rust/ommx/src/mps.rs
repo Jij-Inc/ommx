@@ -125,28 +125,10 @@ pub enum MpsParseError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
-    #[error(
-        "Unsupported equation in MPS output: Constraint {0} was {1}, but only linear functions are supported"
-    )]
-    InvalidConstraintType(String, String),
-    #[error(
-        "Unsupported equation in MPS output: Objective function was {1}, but only linear functions are supported"
-    )]
-    InvalidObjectiveType(String, String),
+    #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]
+    InvalidConstraintType { name: String, degree: u64 },
+    #[error( "MPS format does not support nonlinear objective: Objective function has {degree}-degree term")]
+    InvalidObjectiveType { degree: u64 },
     #[error(transparent)]
     Io(#[from] std::io::Error),
-}
-
-impl MpsWriteError {
-    fn constant_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Constant"))
-    }
-
-    fn quadratic_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Quadratic"))
-    }
-
-    fn polynomial_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Polynomial"))
-    }
 }
