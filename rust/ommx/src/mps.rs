@@ -126,9 +126,9 @@ pub enum MpsParseError {
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
     #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]
-    InvalidConstraintType { name: String, degree: u64 },
+    InvalidConstraintType { name: String, degree: u32 },
     #[error( "MPS format does not support nonlinear objective: Objective function has {degree}-degree term")]
-    InvalidObjectiveType { degree: u64 },
+    InvalidObjectiveType { degree: u32 },
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
