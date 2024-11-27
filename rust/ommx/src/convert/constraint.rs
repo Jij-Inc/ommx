@@ -1,13 +1,16 @@
 use crate::v1::{Constraint, Equality, Function};
-use anyhow::{Context, Result};
 use approx::AbsDiffEq;
+use num::Zero;
 use proptest::prelude::*;
+use std::borrow::Cow;
 
 impl Constraint {
-    pub fn function(&self) -> Result<&Function> {
-        self.function
-            .as_ref()
-            .context("Constraint does not contain function")
+    pub fn function(&self) -> Cow<Function> {
+        match &self.function {
+            Some(f) => Cow::Borrowed(f),
+            // Empty function is regarded as zero function
+            None => Cow::Owned(Function::zero()),
+        }
     }
 }
 
@@ -35,7 +38,7 @@ impl Arbitrary for Constraint {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
-        let function = Function::arbitrary_with(parameters);
+        let function = proptest::option::of(Function::arbitrary_with(parameters));
         let equality = prop_oneof![
             Just(Equality::EqualToZero),
             Just(Equality::LessThanOrEqualToZero)
@@ -43,7 +46,7 @@ impl Arbitrary for Constraint {
         (function, equality)
             .prop_map(|(function, equality)| Constraint {
                 id: 0, // ID should be changed when creating an instance
-                function: Some(function),
+                function,
                 equality: equality as i32,
                 ..Default::default()
             })

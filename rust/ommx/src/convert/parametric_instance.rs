@@ -2,8 +2,8 @@ use crate::{
     v1::{Function, Instance, Parameters, ParametricInstance, State},
     Evaluate,
 };
-use anyhow::{bail, Context, Result};
-use std::collections::BTreeSet;
+use anyhow::{bail, Result};
+use std::{borrow::Cow, collections::BTreeSet};
 
 impl From<Instance> for ParametricInstance {
     fn from(
@@ -57,10 +57,9 @@ impl ParametricInstance {
         }
 
         let state = State::from(parameters.clone());
-        self.objective
-            .as_mut()
-            .context("Objective function of ParametricInstance is empty")?
-            .partial_evaluate(&state)?;
+        if let Some(f) = self.objective.as_mut() {
+            f.partial_evaluate(&state)?;
+        }
         for constraint in self.constraints.iter_mut() {
             constraint.partial_evaluate(&state)?;
         }
@@ -75,17 +74,18 @@ impl ParametricInstance {
         })
     }
 
-    pub fn objective(&self) -> Result<&Function> {
-        self.objective
-            .as_ref()
-            .context("Objective function of ParametricInstance is empty")
+    pub fn objective(&self) -> Cow<Function> {
+        match &self.objective {
+            Some(f) => Cow::Borrowed(f),
+            None => Cow::Owned(Function::default()),
+        }
     }
 
     /// Used decision variable and parameter IDs in the objective and constraints.
     pub fn used_ids(&self) -> Result<BTreeSet<u64>> {
-        let mut used_ids = self.objective()?.used_decision_variable_ids();
+        let mut used_ids = self.objective().used_decision_variable_ids();
         for c in &self.constraints {
-            used_ids.extend(c.function()?.used_decision_variable_ids());
+            used_ids.extend(c.function().used_decision_variable_ids());
         }
         Ok(used_ids)
     }

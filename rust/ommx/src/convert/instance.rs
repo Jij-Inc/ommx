@@ -2,24 +2,30 @@ use crate::v1::{
     instance::{Description, Sense},
     Function, Instance,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use approx::AbsDiffEq;
+use num::Zero;
 use proptest::prelude::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
 
 impl Instance {
-    pub fn objective(&self) -> Result<&Function> {
-        self.objective
-            .as_ref()
-            .context("Instance does not contain objective function")
+    pub fn objective(&self) -> Cow<Function> {
+        match &self.objective {
+            Some(f) => Cow::Borrowed(f),
+            // Empty function is regarded as zero function
+            None => Cow::Owned(Function::zero()),
+        }
     }
 
     pub fn used_decision_variable_ids(&self) -> Result<BTreeSet<u64>> {
-        let mut used_ids = self.objective()?.used_decision_variable_ids();
+        let mut used_ids = self.objective().used_decision_variable_ids();
         for c in &self.constraints {
-            used_ids.extend(c.function()?.used_decision_variable_ids());
+            used_ids.extend(c.function().used_decision_variable_ids());
         }
         Ok(used_ids)
     }
@@ -56,13 +62,16 @@ impl Arbitrary for Instance {
         (num_constraints, num_terms, max_id, max_degree): Self::Parameters,
     ) -> Self::Strategy {
         (
-            Function::arbitrary_with((num_terms, max_degree, max_id)),
+            proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
             arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
         )
             .prop_flat_map(|(objective, constraints)| {
-                let mut used_ids = objective.used_decision_variable_ids();
+                let mut used_ids = objective
+                    .as_ref()
+                    .map(|f| f.used_decision_variable_ids())
+                    .unwrap_or_default();
                 for c in &constraints {
-                    used_ids.extend(c.function().unwrap().used_decision_variable_ids());
+                    used_ids.extend(c.function().used_decision_variable_ids());
                 }
                 (
                     Just(objective),
@@ -74,7 +83,7 @@ impl Arbitrary for Instance {
                     .prop_map(
                         |(objective, constraints, decision_variables, description, sense)| {
                             Instance {
-                                objective: Some(objective),
+                                objective,
                                 constraints,
                                 decision_variables,
                                 description,
@@ -138,20 +147,18 @@ impl AbsDiffEq for Instance {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        let (Some(f), Some(g)) = (&self.objective, &other.objective) else {
-            // Return false if one of instance is invalid
-            return false;
-        };
+        let f = self.objective();
+        let g = other.objective();
         match (self.sense.try_into(), other.sense.try_into()) {
             (Ok(Sense::Minimize), Ok(Sense::Minimize))
             | (Ok(Sense::Maximize), Ok(Sense::Maximize)) => {
-                if !f.abs_diff_eq(g, epsilon) {
+                if !f.abs_diff_eq(&g, epsilon) {
                     return false;
                 }
             }
             (Ok(Sense::Minimize), Ok(Sense::Maximize))
             | (Ok(Sense::Maximize), Ok(Sense::Minimize)) => {
-                if !f.abs_diff_eq(&-g, epsilon) {
+                if !f.abs_diff_eq(&-g.as_ref(), epsilon) {
                     return false;
                 }
             }
@@ -168,11 +175,11 @@ impl AbsDiffEq for Instance {
             .map(|c| (c.id, (c.equality, c.function())))
             .collect::<BTreeMap<_, _>>();
         for c in &other.constraints {
-            if let (Some((eq, Ok(f))), Ok(g)) = (lhs.get(&c.id), c.function()) {
+            if let Some((eq, f)) = lhs.get(&c.id) {
                 if *eq != c.equality {
                     return false;
                 }
-                if !(*f).abs_diff_eq(g, epsilon) {
+                if !f.abs_diff_eq(&c.function(), epsilon) {
                     return false;
                 }
             } else {
