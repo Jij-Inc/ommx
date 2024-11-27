@@ -24,7 +24,7 @@ parts:
 - caption: "API Reference"
   chapters:
   - url: https://jij-inc.github.io/ommx/protobuf.html
-    title: "Protocol Buffers"
+    title: "OMMX Message Schema"
   - url: https://jij-inc.github.io/ommx/rust/ommx/index.html
     title: "OMMX Rust SDK"
   - url: https://jij-inc.github.io/ommx/python/ommx/index.html
