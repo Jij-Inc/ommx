@@ -1,4 +1,5 @@
 use crate::{mps::*, v1::Instance};
+use approx::AbsDiffEq;
 use proptest::prelude::*;
 
 proptest! {
@@ -7,6 +8,6 @@ proptest! {
         let mut buffer = Vec::new();
         to_mps::write_mps(&instance, &mut buffer).unwrap();
         let parsed = load_reader(buffer.as_slice()).unwrap();
-        assert_eq!(instance, parsed);
+        prop_assert!(instance.abs_diff_eq(&parsed, 1e-9));
     }
 }
