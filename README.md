@@ -1,7 +1,8 @@
 # OMMX
 
-[![main](https://img.shields.io/badge/Python_SDK-API_Reference-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html)
-[![main](https://img.shields.io/badge/Rust_SDK-API_Reference-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html)
+[![Document](https://img.shields.io/badge/OMMX-Document-blue)](https://jij-inc.github.io/ommx/)
+[![Discord-EN](https://img.shields.io/badge/Discord-English-default?logo=Discord)](https://discord.gg/aGfCmnJp)
+[![Discord-JP](https://img.shields.io/badge/Discord-日本語-default?logo=Discord)](https://discord.gg/ckAgHqE3)
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
