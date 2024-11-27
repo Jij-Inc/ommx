@@ -4,6 +4,15 @@ version: "3"
 
 tasks:
   # Documents
+  install_doc:
+    cmds:
+      - pip install -r requirements.txt
+      - pip install -r doc/requirements.txt
+
+  build_book:
+    cmds:
+      - jupyter-book build doc
+
   doc_rust:
     cmds:
       - cargo doc --no-deps -p ommx

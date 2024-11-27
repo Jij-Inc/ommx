@@ -19,6 +19,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  jupyter-book:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r doc/requirements.txt
+
+      - name: Build Jupyter Book
+        run: jupyter-book build doc
+
+      - name: Upload HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-jupyter-book
+          path: ./doc/_build/html
+          retention-days: 30
+
   protobuf:
     runs-on: ubuntu-latest
     steps:
@@ -109,9 +135,15 @@ jobs:
           retention-days: 30
 
   package:
-    needs: [protobuf, rust, python]
+    needs: [jupyter-book, protobuf, rust, python]
     runs-on: ubuntu-latest
     steps:
+      - name: Download HTML of JupyterBook
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-jupyter-book
+          path: ./doc
+
       - name: Download HTML of protobuf
         uses: actions/download-artifact@v4
         with:
