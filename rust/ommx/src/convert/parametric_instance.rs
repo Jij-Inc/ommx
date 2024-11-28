@@ -207,5 +207,16 @@ mod tests {
                 "\nLeft : {:?}\nRight: {:?}", instance, converted_instance
             );
         }
+
+        #[test]
+        fn test_ids(pi in ParametricInstance::arbitrary()) {
+            let dv_ids = pi.defined_decision_variable_ids();
+            let p_ids = pi.defined_parameter_ids();
+            prop_assert!(dv_ids.is_disjoint(&p_ids));
+
+            let all_ids: BTreeSet<u64> = dv_ids.union(&p_ids).cloned().collect();
+            let used_ids = pi.used_ids().unwrap();
+            prop_assert!(used_ids.is_subset(&all_ids));
+        }
     }
 }
