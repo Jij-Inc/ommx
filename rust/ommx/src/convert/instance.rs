@@ -223,5 +223,17 @@ mod tests {
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.check_decision_variables().unwrap();
         }
+
+        #[test]
+        fn test_penalty_method(instance in Instance::arbitrary()) {
+            let parametric_instance = instance.penalty_method();
+            let dv_ids = parametric_instance.defined_decision_variable_ids();
+            let p_ids = parametric_instance.defined_parameter_ids();
+            prop_assert!(dv_ids.is_disjoint(&p_ids));
+
+            let used_ids = parametric_instance.used_ids().unwrap();
+            let all_ids = dv_ids.union(&p_ids).cloned().collect();
+            prop_assert!(used_ids.is_subset(&all_ids));
+        }
     }
 }
