@@ -256,11 +256,7 @@ impl Evaluate for Instance {
             evaluated_constraints.push(c);
         }
 
-        let (objective, used_ids_) = self
-            .objective
-            .as_ref()
-            .context("Objective is not set")?
-            .evaluate(state)?;
+        let (objective, used_ids_) = self.objective().evaluate(state)?;
         used_ids.extend(used_ids_);
         Ok((
             Solution {
@@ -282,11 +278,11 @@ impl Evaluate for Instance {
                 v.substituted_value = Some(*value);
             }
         }
-        let mut used = self
-            .objective
-            .as_mut()
-            .context("Objective is not set")?
-            .partial_evaluate(state)?;
+        let mut used = if let Some(f) = self.objective.as_mut() {
+            f.partial_evaluate(state)?
+        } else {
+            BTreeSet::new()
+        };
         for constraints in &mut self.constraints {
             let mut new = constraints.partial_evaluate(state)?;
             used.append(&mut new);
@@ -396,5 +392,19 @@ mod tests {
             }
         }
         ss
+    }
+
+    proptest! {
+        #[test]
+        fn partial_eval_instance(mut instance in Instance::arbitrary(), state in any::<State>()) {
+            instance.partial_evaluate(&state).unwrap();
+            for v in &instance.decision_variables {
+                if let Some(value) = state.entries.get(&v.id) {
+                    prop_assert_eq!(v.substituted_value, Some(*value));
+                } else {
+                    prop_assert_eq!(v.substituted_value, None);
+                }
+            }
+        }
     }
 }
