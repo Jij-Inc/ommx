@@ -154,6 +154,7 @@ mod format;
 mod function;
 mod instance;
 mod linear;
+mod parameter;
 mod parametric_instance;
 mod polynomial;
 mod quadratic;
