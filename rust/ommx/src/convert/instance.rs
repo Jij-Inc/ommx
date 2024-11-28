@@ -64,7 +64,8 @@ impl Instance {
                 subscripts: vec![c.id as i64],
                 ..Default::default()
             };
-            objective = objective + &parameter * c.function().into_owned();
+            let f = c.function().into_owned();
+            objective = objective + &parameter * f.clone() * f;
             parameters.push(parameter);
         }
         ParametricInstance {
@@ -217,6 +218,7 @@ impl AbsDiffEq for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::v1::Parameters;
 
     proptest! {
         #[test]
@@ -226,7 +228,7 @@ mod tests {
 
         #[test]
         fn test_penalty_method(instance in Instance::arbitrary()) {
-            let parametric_instance = instance.penalty_method();
+            let parametric_instance = instance.clone().penalty_method();
             let dv_ids = parametric_instance.defined_decision_variable_ids();
             let p_ids = parametric_instance.defined_parameter_ids();
             prop_assert!(dv_ids.is_disjoint(&p_ids));
@@ -234,6 +236,26 @@ mod tests {
             let used_ids = parametric_instance.used_ids().unwrap();
             let all_ids = dv_ids.union(&p_ids).cloned().collect();
             prop_assert!(used_ids.is_subset(&all_ids));
+
+            // Put every penalty weights to zero
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+            };
+            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert_eq!(substituted.constraints.len(), 0);
+
+            // Put every penalty weights to two
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+            };
+            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let mut objective = instance.objective().into_owned();
+            for c in &instance.constraints {
+                let f = c.function().into_owned();
+                objective = objective + 2.0 * f.clone() * f;
+            }
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
         }
     }
 }
