@@ -109,6 +109,7 @@ class DecisionVariable(google.protobuf.message.Message):
     SUBSCRIPTS_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
+    SUBSTITUTED_VALUE_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Decision variable ID.
 
@@ -120,6 +121,8 @@ class DecisionVariable(google.protobuf.message.Message):
     """Name of the decision variable. e.g. `x`"""
     description: builtins.str
     """Detail human-readable description of the decision variable."""
+    substituted_value: builtins.float
+    """The value substituted by partial evaluation of the instance. Not determined by the solver."""
     @property
     def bound(self) -> global___Bound:
         """Bound of the decision variable
@@ -148,6 +151,7 @@ class DecisionVariable(google.protobuf.message.Message):
         subscripts: collections.abc.Iterable[builtins.int] | None = ...,
         parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
         description: builtins.str | None = ...,
+        substituted_value: builtins.float | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -158,12 +162,16 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_description",
             "_name",
             b"_name",
+            "_substituted_value",
+            b"_substituted_value",
             "bound",
             b"bound",
             "description",
             b"description",
             "name",
             b"name",
+            "substituted_value",
+            b"substituted_value",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -175,6 +183,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"_description",
             "_name",
             b"_name",
+            "_substituted_value",
+            b"_substituted_value",
             "bound",
             b"bound",
             "description",
@@ -189,6 +199,8 @@ class DecisionVariable(google.protobuf.message.Message):
             b"parameters",
             "subscripts",
             b"subscripts",
+            "substituted_value",
+            b"substituted_value",
         ],
     ) -> None: ...
     @typing.overload
@@ -203,5 +215,9 @@ class DecisionVariable(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_name", b"_name"]
     ) -> typing.Literal["name"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_substituted_value", b"_substituted_value"]
+    ) -> typing.Literal["substituted_value"] | None: ...
 
 global___DecisionVariable = DecisionVariable
