@@ -54,7 +54,7 @@ impl Arbitrary for Constraint {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_usize, 0..10_u64)
+        (0..10_usize, 0..5_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }

@@ -48,18 +48,18 @@ impl Instance {
     }
 
     pub fn arbitrary_lp() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..10_usize, 0..=1_u64, 0..10_usize)
+        (0..10_usize, 0..10_usize, 0..=1_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }
 
 impl Arbitrary for Instance {
-    type Parameters = (usize, usize, u64, usize);
+    type Parameters = (usize, usize, u32, u64);
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(
-        (num_constraints, num_terms, max_id, max_degree): Self::Parameters,
+        (num_constraints, num_terms, max_degree, max_id): Self::Parameters,
     ) -> Self::Strategy {
         (
             proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
@@ -97,7 +97,7 @@ impl Arbitrary for Instance {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..10_usize, 0..4_u64, 0..10_usize)
+        (0..10_usize, 0..10_usize, 0..4_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }

@@ -94,7 +94,7 @@ impl Function {
         }
     }
 
-    pub fn degree(&self) -> usize {
+    pub fn degree(&self) -> u32 {
         match &self.function {
             Some(FunctionEnum::Constant(_)) => 0,
             Some(FunctionEnum::Linear(linear)) => linear.degree(),
@@ -245,7 +245,7 @@ impl Product for Function {
 }
 
 impl Arbitrary for Function {
-    type Parameters = (usize, usize, u64);
+    type Parameters = (usize, u32, u64);
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
@@ -271,7 +271,7 @@ impl Arbitrary for Function {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_usize, 0..10_u64)
+        (0..10_usize, 0..5_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
@@ -364,6 +364,21 @@ mod tests {
         fn test_as_constant_roundtrip(f in Function::arbitrary_with((5, 0, 10))) {
             let c = f.clone().as_constant().unwrap();
             prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
+        }
+
+        #[test]
+        fn test_max_degree_0(f in Function::arbitrary_with((5, 0, 10))) {
+            prop_assert!(f.degree() == 0);
+        }
+
+        #[test]
+        fn test_max_degree_1(f in Function::arbitrary_with((5, 1, 10))) {
+            prop_assert!(f.degree() <= 1);
+        }
+
+        #[test]
+        fn test_max_degree_2(f in Function::arbitrary_with((5, 2, 10))) {
+            prop_assert!(f.degree() <= 2);
         }
 
         #[test]

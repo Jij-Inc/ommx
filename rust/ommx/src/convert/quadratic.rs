@@ -61,7 +61,7 @@ impl Quadratic {
         self.as_linear()?.as_constant()
     }
 
-    pub fn degree(&self) -> usize {
+    pub fn degree(&self) -> u32 {
         if self.values.iter().any(|v| v.abs() > f64::EPSILON) {
             2
         } else {
