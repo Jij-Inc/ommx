@@ -1,6 +1,6 @@
 use crate::v1::{
     instance::{Description, Sense},
-    Function, Instance,
+    Function, Instance, Parameter, ParametricInstance,
 };
 use anyhow::{bail, Result};
 use approx::AbsDiffEq;
@@ -51,6 +51,27 @@ impl Instance {
         (0..10_usize, 0..10_usize, 0..=1_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
+    }
+
+    pub fn penalty_method(self) -> ParametricInstance {
+        let mut objective = self.objective().into_owned();
+        let mut parameters = Vec::new();
+        for c in self.constraints {
+            let parameter = Parameter {
+                id: c.id,
+                ..Default::default()
+            };
+            objective = objective + &parameter * c.function().into_owned();
+            parameters.push(parameter);
+        }
+        ParametricInstance {
+            description: self.description,
+            objective: Some(objective),
+            constraints: Vec::new(),
+            decision_variables: self.decision_variables.clone(),
+            sense: self.sense,
+            parameters,
+        }
     }
 }
 
