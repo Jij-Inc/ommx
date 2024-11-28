@@ -1,4 +1,4 @@
-use crate::v1::{Function, Linear, Parameter, Polynomial, Quadratic};
+use crate::v1::{DecisionVariable, Function, Linear, Parameter, Polynomial, Quadratic};
 use proptest::prelude::*;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -31,6 +31,20 @@ impl Add for &Parameter {
     }
 }
 
+impl Add<&DecisionVariable> for &Parameter {
+    type Output = Linear;
+    fn add(self, rhs: &DecisionVariable) -> Self::Output {
+        Linear::from(self) + Linear::from(rhs)
+    }
+}
+
+impl Add<&Parameter> for &DecisionVariable {
+    type Output = Linear;
+    fn add(self, rhs: &Parameter) -> Self::Output {
+        Linear::from(self) + Linear::from(rhs)
+    }
+}
+
 macro_rules! impl_add_parameter {
     ($t:ty) => {
         impl Add<$t> for &Parameter {
@@ -57,6 +71,20 @@ impl Mul for &Parameter {
     type Output = Quadratic;
 
     fn mul(self, rhs: Self) -> Self::Output {
+        Linear::from(self) * Linear::from(rhs)
+    }
+}
+
+impl Mul<&DecisionVariable> for &Parameter {
+    type Output = Quadratic;
+    fn mul(self, rhs: &DecisionVariable) -> Self::Output {
+        Linear::from(self) * Linear::from(rhs)
+    }
+}
+
+impl Mul<&Parameter> for &DecisionVariable {
+    type Output = Quadratic;
+    fn mul(self, rhs: &Parameter) -> Self::Output {
         Linear::from(self) * Linear::from(rhs)
     }
 }
