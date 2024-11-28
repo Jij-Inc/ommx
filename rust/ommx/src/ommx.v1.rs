@@ -243,6 +243,9 @@ pub struct DecisionVariable {
     /// Detail human-readable description of the decision variable.
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// The value substituted by partial evaluation of the instance. Not determined by the solver.
+    #[prost(double, optional, tag = "8")]
+    pub substituted_value: ::core::option::Option<f64>,
 }
 /// Nested message and enum types in `DecisionVariable`.
 pub mod decision_variable {

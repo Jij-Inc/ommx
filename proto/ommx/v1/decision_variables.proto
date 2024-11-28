@@ -49,4 +49,7 @@ message DecisionVariable {
 
   // Detail human-readable description of the decision variable.
   optional string description = 7;
+
+  // The value substituted by partial evaluation of the instance. Not determined by the solver.
+  optional double substituted_value = 8;
 }
