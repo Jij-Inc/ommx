@@ -54,11 +54,14 @@ impl Instance {
     }
 
     pub fn penalty_method(self) -> ParametricInstance {
+        let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
         let mut parameters = Vec::new();
-        for c in self.constraints {
+        for (i, c) in self.constraints.into_iter().enumerate() {
             let parameter = Parameter {
-                id: c.id,
+                id: id_base + i as u64,
+                name: Some("penalty".to_string()),
+                subscripts: vec![c.id as i64],
                 ..Default::default()
             };
             objective = objective + &parameter * c.function().into_owned();
