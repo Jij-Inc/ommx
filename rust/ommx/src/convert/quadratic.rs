@@ -30,10 +30,11 @@ impl Zero for Quadratic {
 
 impl Quadratic {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.columns
-            .iter()
-            .chain(self.rows.iter())
-            .cloned()
+        self.linear
+            .as_ref()
+            .map_or_else(BTreeSet::new, |l| l.used_decision_variable_ids())
+            .into_iter()
+            .chain(self.columns.iter().chain(self.rows.iter()).cloned())
             .collect()
     }
 
