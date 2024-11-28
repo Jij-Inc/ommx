@@ -277,6 +277,11 @@ impl Evaluate for Instance {
     }
 
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        for v in &mut self.decision_variables {
+            if let Some(value) = state.entries.get(&v.id) {
+                v.substituted_value = Some(*value);
+            }
+        }
         let mut used = self
             .objective
             .as_mut()
