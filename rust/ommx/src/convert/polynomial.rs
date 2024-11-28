@@ -97,10 +97,10 @@ impl Polynomial {
             .collect()
     }
 
-    pub fn degree(&self) -> usize {
+    pub fn degree(&self) -> u32 {
         self.terms
             .iter()
-            .map(|term| term.ids.len())
+            .map(|term| term.ids.len() as u32)
             .max()
             .unwrap_or(0)
     }
@@ -198,13 +198,13 @@ impl_mul_inverse!(Quadratic, Polynomial);
 impl_neg_by_mul!(Polynomial);
 
 impl Arbitrary for Polynomial {
-    type Parameters = (usize, usize, u64);
+    type Parameters = (usize, u32, u64);
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
         let terms = proptest::collection::vec(
             (
-                proptest::collection::vec(0..=max_id, 0..=max_degree),
+                proptest::collection::vec(0..=max_id, 0..=(max_degree as usize)),
                 arbitrary_coefficient(),
             ),
             num_terms,
@@ -213,7 +213,7 @@ impl Arbitrary for Polynomial {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_usize, 0..10_u64)
+        (0..10_usize, 0..5_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }

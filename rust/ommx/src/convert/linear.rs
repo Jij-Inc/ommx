@@ -52,7 +52,7 @@ impl Linear {
         self.terms.iter().map(|term| term.id).collect()
     }
 
-    pub fn degree(&self) -> usize {
+    pub fn degree(&self) -> u32 {
         if self.terms.is_empty() {
             0
         } else {
