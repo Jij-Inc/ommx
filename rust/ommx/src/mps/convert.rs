@@ -7,17 +7,32 @@ use super::{
 use crate::v1;
 
 pub fn convert(mps: Mps) -> Result<v1::Instance, MpsParseError> {
+    let description = convert_description(&mps);
     let (decision_variables, name_id_map) = convert_dvars(&mps);
     let objective = convert_objective(&mps, &name_id_map);
     let constraints = convert_constraints(&mps, &name_id_map);
     Ok(v1::Instance {
-        description: None, // TODO add description?
+        description,
         decision_variables,
         objective: Some(objective),
         constraints,
         sense: convert_sense(mps.obj_sense),
         parameters: None,
     })
+}
+
+fn convert_description(mps: &Mps) -> Option<v1::instance::Description> {
+    // currently only gets the name
+    if mps.name.is_empty() {
+        None
+    } else {
+        Some(v1::instance::Description {
+            name: Some(mps.name.to_owned()),
+            description: None,
+            authors: Vec::new(),
+            created_by: None,
+        })
+    }
 }
 
 fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u64>) {
