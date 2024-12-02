@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::{
     parser::{ColumnName, ObjSense, RowName},
+    to_mps::{CONSTR_PREFIX, OBJ_NAME, VAR_PREFIX},
     Mps, MpsParseError,
 };
 use crate::v1;
@@ -28,9 +29,7 @@ fn convert_description(mps: &Mps) -> Option<v1::instance::Description> {
     } else {
         Some(v1::instance::Description {
             name: Some(mps.name.to_owned()),
-            description: None,
-            authors: Vec::new(),
-            created_by: None,
+            ..Default::default()
         })
     }
 }
@@ -55,12 +54,12 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
     // We want to be able to recover IDs if the var name is in the form
     // "OMMX_VAR_<number>", matching how our output formats names.
     //
-    // NOTE considering the case where an OMMX-created MPS file was then edited,
-    // there may be a mix of valid OMMX id names and invalid names. Handling all
-    // edge cases would be pretty complex and potentially bad for performance.
-    // For simplicity, we only apply ID recovery when ALL variables match the
-    // naming pattern.
-    if vars.iter().any(|name| !name.starts_with("OMMX_VAR_")) {
+    // NOTE considering the case where an OMMX-created MPS file was later
+    // edited, there may be a mix of valid OMMX id names and invalid names.
+    // Handling all edge cases would be pretty complex and potentially bad for
+    // performance. For simplicity, we only apply ID recovery when ALL variables
+    // match the naming pattern.
+    if vars.iter().any(|name| !name.starts_with(VAR_PREFIX)) {
         // general case -- assign ids by order
         for (i, var_name) in vars.iter().enumerate() {
             let kind = get_dvar_kind(var_name, integer, binary, real);
@@ -75,8 +74,6 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
                 kind,
                 bound: Some(bound),
                 name: Some(var_name.0.clone()),
-                subscripts: Vec::new(),
-                parameters: HashMap::new(),
                 ..Default::default()
             })
         }
@@ -84,7 +81,7 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
         // recover IDs case
         for (id, var_name) in vars
             .iter()
-            .filter_map(|name| parse_id_tag("OMMX_VAR_", name).map(|id| (id, name)))
+            .filter_map(|name| parse_id_tag(VAR_PREFIX, name).map(|id| (id, name)))
         {
             let kind = get_dvar_kind(var_name, integer, binary, real);
             let bound = get_dvar_bound(var_name, l, u);
@@ -93,9 +90,6 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
                 id,
                 kind,
                 bound: Some(bound),
-                name: None,
-                subscripts: Vec::new(),
-                parameters: HashMap::new(),
                 ..Default::default()
             })
         }
@@ -103,9 +97,9 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
     (dvars, name_id_map)
 }
 
-/// Strips the prefix and parses the number.
+/// Strips the prefix of a variable/constraint name, and parses the following id number.
 ///
-/// Returns none if prefix is not present, or if parsing as u64 fails
+/// Returns none if prefix is not present, or if parsing as u64 fails.
 fn parse_id_tag(prefix: &str, name: &str) -> Option<u64> {
     name.strip_prefix(prefix)?.parse().ok()
 }
@@ -115,7 +109,7 @@ fn parse_id_tag(prefix: &str, name: &str) -> Option<u64> {
 fn convert_objective(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> v1::Function {
     let Mps { b, c, .. } = mps;
     let terms = convert_terms(c, name_id_map);
-    let mut constant = b.get(&"OBJ".into()).copied().unwrap_or_default();
+    let mut constant = b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
     if constant != 0.0 {
         constant = -constant;
     }
@@ -149,7 +143,7 @@ fn convert_constraints(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> Vec
     let mut constrs = Vec::with_capacity(a.len());
 
     // as with decision variables, we're trying to recover IDs whenever all constraints match the naming scheme
-    if a.keys().any(|name| !name.starts_with("OMMX_CONSTR_")) {
+    if a.keys().any(|name| !name.starts_with(CONSTR_PREFIX)) {
         // general case -- assign ids by order
         for (i, (row_name, row)) in a.iter().enumerate() {
             let b = b.get(row_name).copied().unwrap_or(0.0);
@@ -159,16 +153,14 @@ fn convert_constraints(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> Vec
                 id: i as u64,
                 equality,
                 function: Some(function),
-                subscripts: Vec::new(),
-                parameters: HashMap::new(),
                 name: Some(row_name.0.clone()),
-                description: None,
+                ..Default::default()
             })
         }
     } else {
         // recover IDs case
         for (id, row_name, row) in a.iter().filter_map(|(row_name, row)| {
-            parse_id_tag("OMMX_CONSTR_", row_name).map(|id| (id, row_name, row))
+            parse_id_tag(CONSTR_PREFIX, row_name).map(|id| (id, row_name, row))
         }) {
             let b = b.get(row_name).copied().unwrap_or(0.0);
             let terms = convert_terms(row, name_id_map);
@@ -177,10 +169,7 @@ fn convert_constraints(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> Vec
                 id,
                 equality,
                 function: Some(function),
-                subscripts: Vec::new(),
-                parameters: HashMap::new(),
-                name: None,
-                description: None,
+                ..Default::default()
             })
         }
     }
@@ -200,10 +189,14 @@ fn convert_inequality(
     le: &HashSet<RowName>,
 ) -> (v1::Function, i32) {
     let equality = if eq.contains(name) {
-        b = -b;
+        if b != 0. {
+            b = -b;
+        }
         v1::Equality::EqualToZero as i32
     } else if le.contains(name) {
-        b = -b;
+        if b != 0. {
+            b = -b;
+        }
         v1::Equality::LessThanOrEqualToZero as i32
     } else if ge.contains(name) {
         // must multiply all terms by -1
@@ -211,7 +204,9 @@ fn convert_inequality(
         v1::Equality::LessThanOrEqualToZero as i32
     } else {
         // unsure what to do -- just gonna assume equality
-        b = -b;
+        if b != 0. {
+            b = -b;
+        }
         v1::Equality::Unspecified as i32
     };
 

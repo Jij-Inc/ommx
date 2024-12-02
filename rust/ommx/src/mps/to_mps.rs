@@ -3,7 +3,9 @@ use crate::{mps::ObjSense, v1};
 use anyhow::Result;
 use std::io::Write;
 
-const OBJ_NAME: &str = "OBJ";
+pub(crate) const OBJ_NAME: &str = "OBJ";
+pub(crate) const CONSTR_PREFIX: &str = "OMMX_CONSTR_";
+pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
@@ -188,12 +190,12 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
 ///
 /// The constraint's name is ignored, if present.
 fn constr_name(constr: &v1::Constraint) -> String {
-    format!("OMMX_CONSTR_{}", constr.id)
+    format!("{CONSTR_PREFIX}{}", constr.id)
 }
 
 /// Generates a name for the decision variable based on its ID.
 ///
 /// The decision variable's name is ignored, if present.
 fn dvar_name(dvar: &v1::DecisionVariable) -> String {
-    format!("OMMX_VAR_{}", dvar.id)
+    format!("{VAR_PREFIX}{}", dvar.id)
 }
