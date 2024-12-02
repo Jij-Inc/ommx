@@ -12,5 +12,5 @@ message ConstraintHint {
   oneof constraint_type {
     // One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
     OneHot one_hot = 2;
-  };
+  }
 }

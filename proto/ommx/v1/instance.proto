@@ -3,9 +3,9 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
+import "ommx/v1/constraint_hint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
-import "ommx/v1/constraint_hint.proto";
 
 // A set of parameters for instantiating an optimization problem from a parametric instance
 message Parameters {
