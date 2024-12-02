@@ -1,7 +1,7 @@
 use super::MpsWriteError;
 use crate::{mps::ObjSense, v1};
 use anyhow::Result;
-use std::{borrow::Cow, io::Write};
+use std::io::Write;
 
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
@@ -178,18 +178,16 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
 
 /// Either returns a borrowed name of the constraint if present or
 /// generates a name based on the id.
-fn constr_name(constr: &v1::Constraint) -> Cow<str> {
-    match &constr.name {
-        Some(name) => Cow::Borrowed(name),
-        None => Cow::Owned(format!("constr_id{}", constr.id)),
-    }
+/// Generates a name for the constraint based on its ID.
+///
+/// The constraint's name is ignored, if present.
+fn constr_name(constr: &v1::Constraint) -> String {
+    format!("OMMX_CONTSR_{}", constr.id)
 }
 
-/// Either returns a borrowed name of the decision variable if present or
-/// generates a name based on the id.
-fn dvar_name(dvar: &v1::DecisionVariable) -> Cow<str> {
-    match &dvar.name {
-        Some(name) => Cow::Borrowed(name),
-        None => Cow::Owned(format!("dvar_id{}", dvar.id)),
-    }
+/// Generates a name for the decision variable based on its ID.
+///
+/// The decision variable's name is ignored, if present.
+fn dvar_name(dvar: &v1::DecisionVariable) -> String {
+    format!("OMMX_VAR_{}", dvar.id)
 }
