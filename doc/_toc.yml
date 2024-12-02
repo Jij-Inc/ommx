@@ -10,7 +10,7 @@ parts:
 - caption: "Tutorial"
   chapters:
   - file: tutorial/solve_with_scip
-  - file: tutorial/share_artifact
+  - file: tutorial/share_in_ommx_artifact
   - file: tutorial/download_miplib_instance
 - caption: "OMMX Message"
   chapters:
