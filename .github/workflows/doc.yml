@@ -36,7 +36,10 @@ jobs:
           pip install -r doc/requirements.txt
 
       - name: Build Jupyter Book
-        run: jupyter-book build doc
+        run: |
+          jupyter-book build doc
+          ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
+          if [ -z $ERROR_LOGS ]; then echo "Build Success"; else echo "Build Failed" && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
