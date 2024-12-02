@@ -62,8 +62,12 @@ mod tests;
 
 use parser::*;
 
-pub fn load_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
-    let mps_data = Mps::from_reader(reader)?;
+pub fn load_zipped_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::from_zipped_reader(reader)?;
+    convert::convert(mps_data)
+}
+pub fn load_raw_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::from_raw_reader(reader)?;
     convert::convert(mps_data)
 }
 

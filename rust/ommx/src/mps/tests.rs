@@ -13,8 +13,8 @@ proptest! {
     fn test_roundtrip(instance in Instance::arbitrary_lp()) {
         let mut buffer = Vec::new();
         prop_assert!(to_mps::write_mps(&instance, &mut buffer).is_ok());
-
-        let loaded_instance = load_reader(&buffer[..]).unwrap();
+        let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
+        dbg!(&instance);
         prop_assert!(instance.abs_diff_eq(&dbg!(loaded_instance), 1e-6))
     }
 }
