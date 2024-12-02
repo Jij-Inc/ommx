@@ -38,8 +38,8 @@ jobs:
       - name: Build Jupyter Book
         run: |
           jupyter-book build doc
-          find doc/_build -type f -name "*.err.log" -exec cat {} +
-        # if [ -z $ERROR_LOGS ]; then echo "Build Success"; else echo $ERROR_LOGS && exit 1; fi
+          ERROR_LOGS = $(find doc/_build -type f -name "*.err.log")
+          if [ -z $ERROR_LOGS ]; then echo "Build Success"; else find doc/_build -type f -name "*.err.log" -exec cat {} + && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
