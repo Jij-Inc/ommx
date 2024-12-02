@@ -39,7 +39,7 @@ jobs:
         run: |
           jupyter-book build doc
           ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
-          if [ -z $ERROR_LOGS ]; then echo "Build Success"; else find doc/_build -type f -name "*.err.log" -exec cat {} + && exit 1; fi
+          if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
