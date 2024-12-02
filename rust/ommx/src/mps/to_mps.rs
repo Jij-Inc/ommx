@@ -3,6 +3,8 @@ use crate::{mps::ObjSense, v1};
 use anyhow::Result;
 use std::io::Write;
 
+const OBJ_NAME: &str = "OBJ";
+
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
@@ -77,7 +79,6 @@ impl IntorgTracker {
 
 fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
-    let obj_name = "OBJ";
     let mut marker_tracker = IntorgTracker::default();
     for dvar in instance.decision_variables.iter() {
         let id = dvar.id;
@@ -88,7 +89,7 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
             _ => marker_tracker.intend(out)?,
         }
         // write obj function entry
-        write_col_entry(id, &var_name, obj_name, instance.objective().as_ref(), out)
+        write_col_entry(id, &var_name, OBJ_NAME, instance.objective().as_ref(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
             // It assumes we're dealing with constraints, but here we change the
             // error type so the message is clearer with the objective function
@@ -141,6 +142,13 @@ fn write_col_entry<W: Write>(
 
 fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
+    // write out a RHS entry for the objective function if a non-zero constant is present
+    if let Some(v1::Linear { constant, .. }) = instance.objective().into_owned().as_linear() {
+        if constant != 0.0 {
+            let rhs = -constant;
+            writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
+        }
+    }
     for constr in instance.constraints.iter() {
         let name = constr_name(constr);
         if let Some(v1::Linear { constant, .. }) = constr.function().into_owned().as_linear() {
