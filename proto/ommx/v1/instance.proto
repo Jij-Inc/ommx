@@ -5,6 +5,7 @@ package ommx.v1;
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
+import "ommx/v1/constraint_hint.proto";
 
 // A set of parameters for instantiating an optimization problem from a parametric instance
 message Parameters {
@@ -53,4 +54,7 @@ message Instance {
 
   // Parameters used when instantiating this instance
   optional Parameters parameters = 6;
+
+  // A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+  repeated ConstraintHint constraint_hints = 7;
 }

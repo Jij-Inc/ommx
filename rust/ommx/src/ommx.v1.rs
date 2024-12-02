@@ -199,6 +199,38 @@ impl Equality {
         }
     }
 }
+/// A message representing a one-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OneHot {
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "1")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+}
+/// A constraint hint is an additional inforomation to be used by solver to gain performance.
+/// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConstraintHint {
+    /// The list of constraint IDs involved in the constraint.
+    #[prost(uint64, repeated, tag = "1")]
+    pub constraint_ids: ::prost::alloc::vec::Vec<u64>,
+    #[prost(oneof = "constraint_hint::ConstraintType", tags = "2")]
+    pub constraint_type: ::core::option::Option<constraint_hint::ConstraintType>,
+}
+/// Nested message and enum types in `ConstraintHint`.
+pub mod constraint_hint {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum ConstraintType {
+        /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+        #[prost(message, tag = "2")]
+        OneHot(super::OneHot),
+    }
+}
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -327,6 +359,9 @@ pub struct Instance {
     /// Parameters used when instantiating this instance
     #[prost(message, optional, tag = "6")]
     pub parameters: ::core::option::Option<Parameters>,
+    /// A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    #[prost(message, repeated, tag = "7")]
+    pub constraint_hints: ::prost::alloc::vec::Vec<ConstraintHint>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
