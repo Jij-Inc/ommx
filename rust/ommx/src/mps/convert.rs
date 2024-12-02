@@ -52,39 +52,77 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
     // this way
     let mut name_id_map = HashMap::with_capacity(u.len());
 
-    for (i, var_name) in vars.iter().enumerate() {
-        let kind = get_dvar_kind(var_name, integer, binary, real);
-        let bound = get_dvar_bound(var_name, l, u);
-        // our ID ends up being dependent on the order of vars hashset. This is
-        // unstable across executions -- we might want to consider an indexset
-        // in the future
-        let id = i as u64;
-        name_id_map.insert(var_name.clone(), id);
-        dvars.push(v1::DecisionVariable {
-            id: i as u64,
-            kind,
-            bound: Some(bound),
-            name: Some(var_name.0.clone()),
-            subscripts: Vec::new(),
-            parameters: HashMap::new(),
-            ..Default::default()
-        })
+    // We want to be able to recover IDs if the var name is in the form
+    // "OMMX_VAR_<number>", matching how our output formats names.
+    //
+    // NOTE considering the case where an OMMX-created MPS file was then edited,
+    // there may be a mix of valid OMMX id names and invalid names. Handling all
+    // edge cases would be pretty complex and potentially bad for performance.
+    // For simplicity, we only apply ID recovery when ALL variables match the
+    // naming pattern.
+    if vars.iter().any(|name| !name.starts_with("OMMX_VAR_")) {
+        // general case -- assign ids by order
+        for (i, var_name) in vars.iter().enumerate() {
+            let kind = get_dvar_kind(var_name, integer, binary, real);
+            let bound = get_dvar_bound(var_name, l, u);
+            // our ID ends up being dependent on the order of vars hashset. This is
+            // unstable across executions -- we might want to consider an indexset
+            // in the future
+            let id = i as u64;
+            name_id_map.insert(var_name.clone(), id);
+            dvars.push(v1::DecisionVariable {
+                id: i as u64,
+                kind,
+                bound: Some(bound),
+                name: Some(var_name.0.clone()),
+                subscripts: Vec::new(),
+                parameters: HashMap::new(),
+                ..Default::default()
+            })
+        }
+    } else {
+        // recover IDs case
+        for (id, var_name) in vars
+            .iter()
+            .filter_map(|name| parse_id_tag("OMMX_VAR_", name).map(|id| (id, name)))
+        {
+            let kind = get_dvar_kind(var_name, integer, binary, real);
+            let bound = get_dvar_bound(var_name, l, u);
+            name_id_map.insert(var_name.clone(), id);
+            dvars.push(v1::DecisionVariable {
+                id,
+                kind,
+                bound: Some(bound),
+                name: None,
+                subscripts: Vec::new(),
+                parameters: HashMap::new(),
+                ..Default::default()
+            })
+        }
     }
     (dvars, name_id_map)
+}
+
+/// Strips the prefix and parses the number.
+///
+/// Returns none if prefix is not present, or if parsing as u64 fails
+fn parse_id_tag(prefix: &str, name: &str) -> Option<u64> {
+    name.strip_prefix(prefix)?.parse().ok()
 }
 
 // name_id_map helps us convert from column name to id.
 // See comment in `convert_dvars`
 fn convert_objective(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> v1::Function {
-    let Mps { c, .. } = mps;
+    let Mps { b, c, .. } = mps;
     let terms = convert_terms(c, name_id_map);
+    let mut constant = b.get(&"OBJ".into()).copied().unwrap_or_default();
+    if constant != 0.0 {
+        constant = -constant;
+    }
     let function = if terms.is_empty() {
-        v1::function::Function::Constant(0.0)
+        v1::function::Function::Constant(constant)
     } else {
-        v1::function::Function::Linear(v1::Linear {
-            terms,
-            constant: 0.0,
-        })
+        v1::function::Function::Linear(v1::Linear { terms, constant })
     };
     v1::Function {
         function: Some(function),
@@ -109,19 +147,42 @@ fn convert_constraints(mps: &Mps, name_id_map: &HashMap<ColumnName, u64>) -> Vec
         a, b, eq, ge, le, ..
     } = mps;
     let mut constrs = Vec::with_capacity(a.len());
-    for (i, (row_name, row)) in a.iter().enumerate() {
-        let b = b.get(row_name).copied().unwrap_or(0.0);
-        let terms = convert_terms(row, name_id_map);
-        let (function, equality) = convert_inequality(terms, b, row_name, eq, ge, le);
-        constrs.push(v1::Constraint {
-            id: i as u64,
-            equality,
-            function: Some(function),
-            subscripts: Vec::new(),
-            parameters: HashMap::new(),
-            name: Some(row_name.0.clone()),
-            description: None,
-        })
+
+    // as with decision variables, we're trying to recover IDs whenever all constraints match the naming scheme
+    if a.keys().any(|name| !name.starts_with("OMMX_CONSTR_")) {
+        // general case -- assign ids by order
+        for (i, (row_name, row)) in a.iter().enumerate() {
+            let b = b.get(row_name).copied().unwrap_or(0.0);
+            let terms = convert_terms(row, name_id_map);
+            let (function, equality) = convert_inequality(terms, b, row_name, eq, ge, le);
+            constrs.push(v1::Constraint {
+                id: i as u64,
+                equality,
+                function: Some(function),
+                subscripts: Vec::new(),
+                parameters: HashMap::new(),
+                name: Some(row_name.0.clone()),
+                description: None,
+            })
+        }
+    } else {
+        // recover IDs case
+        for (id, row_name, row) in a.iter().filter_map(|(row_name, row)| {
+            parse_id_tag("OMMX_CONSTR_", row_name).map(|id| (id, row_name, row))
+        }) {
+            let b = b.get(row_name).copied().unwrap_or(0.0);
+            let terms = convert_terms(row, name_id_map);
+            let (function, equality) = convert_inequality(terms, b, row_name, eq, ge, le);
+            constrs.push(v1::Constraint {
+                id,
+                equality,
+                function: Some(function),
+                subscripts: Vec::new(),
+                parameters: HashMap::new(),
+                name: None,
+                description: None,
+            })
+        }
     }
     constrs
 }

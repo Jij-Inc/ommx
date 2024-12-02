@@ -184,13 +184,11 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
     Ok(())
 }
 
-/// Either returns a borrowed name of the constraint if present or
-/// generates a name based on the id.
 /// Generates a name for the constraint based on its ID.
 ///
 /// The constraint's name is ignored, if present.
 fn constr_name(constr: &v1::Constraint) -> String {
-    format!("OMMX_CONTSR_{}", constr.id)
+    format!("OMMX_CONSTR_{}", constr.id)
 }
 
 /// Generates a name for the decision variable based on its ID.
