@@ -38,7 +38,7 @@ jobs:
       - name: Build Jupyter Book
         run: |
           jupyter-book build doc
-          ERROR_LOGS = $(find doc/_build -type f -name "*.err.log")
+          ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
           if [ -z $ERROR_LOGS ]; then echo "Build Success"; else find doc/_build -type f -name "*.err.log" -exec cat {} + && exit 1; fi
 
       - name: Upload HTML
