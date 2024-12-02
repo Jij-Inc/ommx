@@ -52,7 +52,7 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
             name: Some(var_name.0.clone()),
             subscripts: Vec::new(),
             parameters: HashMap::new(),
-            description: None,
+            ..Default::default()
         })
     }
     (dvars, name_id_map)
