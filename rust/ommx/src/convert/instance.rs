@@ -75,6 +75,7 @@ impl Instance {
             decision_variables: self.decision_variables.clone(),
             sense: self.sense,
             parameters,
+            constraint_hints: self.constraint_hints,
         }
     }
 }

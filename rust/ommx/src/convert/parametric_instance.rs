@@ -21,6 +21,7 @@ impl From<Instance> for ParametricInstance {
             constraints,
             decision_variables,
             sense,
+            constraint_hints,
             parameters: _, // Drop previous parameters
         }: Instance,
     ) -> Self {
@@ -31,6 +32,7 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             sense,
             parameters: Default::default(),
+            constraint_hints,
         }
     }
 }
@@ -79,6 +81,7 @@ impl ParametricInstance {
             decision_variables: self.decision_variables,
             sense: self.sense,
             parameters: Some(parameters),
+            constraint_hints: self.constraint_hints,
         })
     }
 
@@ -163,6 +166,7 @@ impl Arbitrary for ParametricInstance {
                                             description,
                                             sense: sense as i32,
                                             parameters,
+                                            constraint_hints: vec![],
                                         }
                                     },
                                 )

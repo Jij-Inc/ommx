@@ -461,6 +461,8 @@ pub struct ParametricInstance {
     /// The sense of this problem, i.e. minimize the objective or maximize it.
     #[prost(enumeration = "instance::Sense", tag = "6")]
     pub sense: i32,
+    #[prost(message, repeated, tag = "7")]
+    pub constraint_hints: ::prost::alloc::vec::Vec<ConstraintHint>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
