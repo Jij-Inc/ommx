@@ -461,6 +461,7 @@ pub struct ParametricInstance {
     /// The sense of this problem, i.e. minimize the objective or maximize it.
     #[prost(enumeration = "instance::Sense", tag = "6")]
     pub sense: i32,
+    /// A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     #[prost(message, repeated, tag = "7")]
     pub constraint_hints: ::prost::alloc::vec::Vec<ConstraintHint>,
 }
