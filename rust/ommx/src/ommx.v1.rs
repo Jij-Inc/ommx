@@ -199,6 +199,28 @@ impl Equality {
         }
     }
 }
+/// A message representing a one-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OneHot {
+    /// The ID of the constraint.
+    #[prost(uint64, tag = "1")]
+    pub constraint_id: u64,
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+}
+/// A constraint hint is an additional inforomation to be used by solver to gain performance.
+/// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConstraintHints {
+    /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+    #[prost(message, repeated, tag = "2")]
+    pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
+}
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -327,6 +349,9 @@ pub struct Instance {
     /// Parameters used when instantiating this instance
     #[prost(message, optional, tag = "6")]
     pub parameters: ::core::option::Option<Parameters>,
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    #[prost(message, optional, tag = "7")]
+    pub constraint_hints: ::core::option::Option<ConstraintHints>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -426,6 +451,9 @@ pub struct ParametricInstance {
     /// The sense of this problem, i.e. minimize the objective or maximize it.
     #[prost(enumeration = "instance::Sense", tag = "6")]
     pub sense: i32,
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    #[prost(message, optional, tag = "7")]
+    pub constraint_hints: ::core::option::Option<ConstraintHints>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.

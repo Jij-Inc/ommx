@@ -3,6 +3,7 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
+import "ommx/v1/constraint_hints.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
 import "ommx/v1/instance.proto";
@@ -49,4 +50,7 @@ message ParametricInstance {
 
   // The sense of this problem, i.e. minimize the objective or maximize it.
   Instance.Sense sense = 6;
+
+  // Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+  ConstraintHints constraint_hints = 7;
 }
