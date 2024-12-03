@@ -4,7 +4,7 @@ package ommx.v1;
 
 // A message representing a one-hot constraint.
 message OneHot {
-  // The list of constraint IDs involved in the constraint.
+  // The ID of the constraint.
   uint64 constraint_id = 1;
   // The list of ids of decision variables that are constrained to be one-hot.
   repeated uint64 decision_variables = 2;
