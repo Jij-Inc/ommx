@@ -97,7 +97,7 @@ def test_output():
     # convert to a format easier to test.
     dvars_before = instance.raw.decision_variables
     dvars_before.sort(key=lambda x: x.id)
-    dvars_after =loaded.raw.decision_variables
+    dvars_after = loaded.raw.decision_variables
     dvars_after.sort(key=lambda x: x.id)
     assert len(dvars_before) == len(dvars_after)
     # IDs are stable specifically for OMMX-outputed MPS files
@@ -131,5 +131,6 @@ def test_output():
     obj_after = [t.coefficient for t in loaded.raw.objective.linear.terms]
     obj_after.sort()
     assert obj_before == obj_after
-    assert instance.raw.objective.linear.constant == loaded.raw.objective.linear.constant
-
+    assert (
+        instance.raw.objective.linear.constant == loaded.raw.objective.linear.constant
+    )
