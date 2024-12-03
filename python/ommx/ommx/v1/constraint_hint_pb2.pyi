@@ -21,43 +21,23 @@ class ConstraintHint(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    CONSTRAINT_IDS_FIELD_NUMBER: builtins.int
-    ONE_HOT_FIELD_NUMBER: builtins.int
+    ONE_HOT_CONSTRAINTS_FIELD_NUMBER: builtins.int
     @property
-    def constraint_ids(
+    def one_hot_constraints(
         self,
-    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """The list of constraint IDs involved in the constraint."""
-
-    @property
-    def one_hot(self) -> ommx.v1.one_hot_pb2.OneHot:
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.one_hot_pb2.OneHot
+    ]:
         """One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`."""
 
     def __init__(
         self,
         *,
-        constraint_ids: collections.abc.Iterable[builtins.int] | None = ...,
-        one_hot: ommx.v1.one_hot_pb2.OneHot | None = ...,
+        one_hot_constraints: collections.abc.Iterable[ommx.v1.one_hot_pb2.OneHot]
+        | None = ...,
     ) -> None: ...
-    def HasField(
-        self,
-        field_name: typing.Literal[
-            "constraint_type", b"constraint_type", "one_hot", b"one_hot"
-        ],
-    ) -> builtins.bool: ...
     def ClearField(
-        self,
-        field_name: typing.Literal[
-            "constraint_ids",
-            b"constraint_ids",
-            "constraint_type",
-            b"constraint_type",
-            "one_hot",
-            b"one_hot",
-        ],
+        self, field_name: typing.Literal["one_hot_constraints", b"one_hot_constraints"]
     ) -> None: ...
-    def WhichOneof(
-        self, oneof_group: typing.Literal["constraint_type", b"constraint_type"]
-    ) -> typing.Literal["one_hot"] | None: ...
 
 global___ConstraintHint = ConstraintHint

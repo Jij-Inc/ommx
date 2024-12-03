@@ -204,8 +204,11 @@ impl Equality {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OneHot {
+    /// The list of constraint IDs involved in the constraint.
+    #[prost(uint64, tag = "1")]
+    pub constraint_id: u64,
     /// The list of ids of decision variables that are constrained to be one-hot.
-    #[prost(uint64, repeated, tag = "1")]
+    #[prost(uint64, repeated, tag = "2")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
 /// A constraint hint is an additional inforomation to be used by solver to gain performance.
@@ -214,22 +217,9 @@ pub struct OneHot {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConstraintHint {
-    /// The list of constraint IDs involved in the constraint.
-    #[prost(uint64, repeated, tag = "1")]
-    pub constraint_ids: ::prost::alloc::vec::Vec<u64>,
-    #[prost(oneof = "constraint_hint::ConstraintType", tags = "2")]
-    pub constraint_type: ::core::option::Option<constraint_hint::ConstraintType>,
-}
-/// Nested message and enum types in `ConstraintHint`.
-pub mod constraint_hint {
-    #[non_exhaustive]
-    #[allow(clippy::derive_partial_eq_without_eq)]
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum ConstraintType {
-        /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
-        #[prost(message, tag = "2")]
-        OneHot(super::OneHot),
-    }
+    /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+    #[prost(message, repeated, tag = "2")]
+    pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
 }
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]

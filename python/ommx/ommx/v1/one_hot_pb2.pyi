@@ -18,7 +18,10 @@ class OneHot(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    CONSTRAINT_ID_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
+    constraint_id: builtins.int
+    """The list of constraint IDs involved in the constraint."""
     @property
     def decision_variables(
         self,
@@ -28,10 +31,17 @@ class OneHot(google.protobuf.message.Message):
     def __init__(
         self,
         *,
+        constraint_id: builtins.int = ...,
         decision_variables: collections.abc.Iterable[builtins.int] | None = ...,
     ) -> None: ...
     def ClearField(
-        self, field_name: typing.Literal["decision_variables", b"decision_variables"]
+        self,
+        field_name: typing.Literal[
+            "constraint_id",
+            b"constraint_id",
+            "decision_variables",
+            b"decision_variables",
+        ],
     ) -> None: ...
 
 global___OneHot = OneHot

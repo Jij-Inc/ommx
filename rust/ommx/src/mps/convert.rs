@@ -16,8 +16,7 @@ pub fn convert(mps: Mps) -> Result<v1::Instance, MpsParseError> {
         objective: Some(objective),
         constraints,
         sense: convert_sense(mps.obj_sense),
-        parameters: None,
-        constraint_hints: vec![],
+        ..Default::default()
     })
 }
 
