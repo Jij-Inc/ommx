@@ -9,7 +9,7 @@ parts:
   - file: concept/architecture
 - caption: "Tutorial"
   chapters:
-  - file: tutorial/solve_with_scip
+  - file: tutorial/solve_with_ommx_adapter
   - file: tutorial/share_artifact
   - file: tutorial/download_miplib_instance
 - caption: "OMMX Message"
