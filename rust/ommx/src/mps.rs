@@ -62,15 +62,19 @@ mod tests;
 
 use parser::*;
 
+/// Reads and parses the reader as a gzipped MPS file.
 pub fn load_zipped_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_zipped_reader(reader)?;
     convert::convert(mps_data)
 }
+
+/// Reads and parses the reader as an _uncompressed_ MPS file.
 pub fn load_raw_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_raw_reader(reader)?;
     convert::convert(mps_data)
 }
 
+/// Reads and parses the file at the given path as a gzipped MPS file.
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_file(path)?;
     convert::convert(mps_data)
@@ -81,6 +85,14 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
     Ok(instance.encode_to_vec())
 }
 
+/// Writes out the instance as an MPS file to the specified path.
+///
+/// This function automatically Gzips the output.
+///
+/// Only linear problems are supported.
+///
+/// Metadata like problem descriptions and variable/constraint names are not
+/// preserved.
 pub fn write_file(
     instance: &crate::v1::Instance,
     out_path: impl AsRef<Path>,

@@ -7,6 +7,15 @@ pub(crate) const OBJ_NAME: &str = "OBJ";
 pub(crate) const CONSTR_PREFIX: &str = "OMMX_CONSTR_";
 pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 
+/// Writes out the instance in MPS format to the specified `Write`r.
+///
+/// This function does not automatically Gzip the output -- that is the
+/// responsibility of the Write implementation.
+///
+/// Only linear problems are supported.
+///
+/// Metadata like problem descriptions and variable/constraint names are not
+/// preserved.
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
