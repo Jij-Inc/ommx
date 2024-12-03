@@ -213,7 +213,7 @@ class Instance(google.protobuf.message.Message):
 
     @property
     def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
-        """A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
+        """Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
 
     def __init__(
         self,

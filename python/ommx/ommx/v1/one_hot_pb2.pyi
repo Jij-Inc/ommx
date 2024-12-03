@@ -21,7 +21,7 @@ class OneHot(google.protobuf.message.Message):
     CONSTRAINT_ID_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     constraint_id: builtins.int
-    """The list of constraint IDs involved in the constraint."""
+    """The ID of the constraint."""
     @property
     def decision_variables(
         self,

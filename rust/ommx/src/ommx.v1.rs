@@ -204,7 +204,7 @@ impl Equality {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OneHot {
-    /// The list of constraint IDs involved in the constraint.
+    /// The ID of the constraint.
     #[prost(uint64, tag = "1")]
     pub constraint_id: u64,
     /// The list of ids of decision variables that are constrained to be one-hot.
@@ -349,7 +349,7 @@ pub struct Instance {
     /// Parameters used when instantiating this instance
     #[prost(message, optional, tag = "6")]
     pub parameters: ::core::option::Option<Parameters>,
-    /// A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     #[prost(message, optional, tag = "7")]
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
 }
@@ -451,7 +451,7 @@ pub struct ParametricInstance {
     /// The sense of this problem, i.e. minimize the objective or maximize it.
     #[prost(enumeration = "instance::Sense", tag = "6")]
     pub sense: i32,
-    /// A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     #[prost(message, optional, tag = "7")]
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
 }
