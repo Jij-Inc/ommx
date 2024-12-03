@@ -138,6 +138,13 @@ class Instance:
         return Instance.from_bytes(bytes)
 
     def write_mps(self, path: str):
+        """
+        Outputs the instance as an MPS file.
+
+        - The outputted file is compressed by gzip.
+        - Only linear problems are supported.
+        - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
+        """
         _ommx_rust.write_mps_file(self.to_bytes(), path)
 
     @staticmethod
