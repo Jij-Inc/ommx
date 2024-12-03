@@ -8,7 +8,7 @@ import collections.abc
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
-import ommx.v1.constraint_hint_pb2
+import ommx.v1.constraint_hints_pb2
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
@@ -171,11 +171,7 @@ class ParametricInstance(google.protobuf.message.Message):
         """Constraints of the optimization problem. This may contain parameters in addition to the decision variables."""
 
     @property
-    def constraint_hints(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        ommx.v1.constraint_hint_pb2.ConstraintHint
-    ]:
+    def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
         """A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
 
     def __init__(
@@ -191,15 +187,17 @@ class ParametricInstance(google.protobuf.message.Message):
         constraints: collections.abc.Iterable[ommx.v1.constraint_pb2.Constraint]
         | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
-        constraint_hints: collections.abc.Iterable[
-            ommx.v1.constraint_hint_pb2.ConstraintHint
-        ]
-        | None = ...,
+        constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
-            "description", b"description", "objective", b"objective"
+            "constraint_hints",
+            b"constraint_hints",
+            "description",
+            b"description",
+            "objective",
+            b"objective",
         ],
     ) -> builtins.bool: ...
     def ClearField(

@@ -3,7 +3,7 @@ syntax = "proto3";
 package ommx.v1;
 
 import "ommx/v1/constraint.proto";
-import "ommx/v1/constraint_hint.proto";
+import "ommx/v1/constraint_hints.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
 import "ommx/v1/instance.proto";
@@ -52,5 +52,5 @@ message ParametricInstance {
   Instance.Sense sense = 6;
 
   // A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
-  repeated ConstraintHint constraint_hints = 7;
+  ConstraintHints constraint_hints = 7;
 }

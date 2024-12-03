@@ -9,7 +9,7 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
-import ommx.v1.constraint_hint_pb2
+import ommx.v1.constraint_hints_pb2
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
@@ -212,11 +212,7 @@ class Instance(google.protobuf.message.Message):
         """Parameters used when instantiating this instance"""
 
     @property
-    def constraint_hints(
-        self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        ommx.v1.constraint_hint_pb2.ConstraintHint
-    ]:
+    def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
         """A list of constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
 
     def __init__(
@@ -232,16 +228,15 @@ class Instance(google.protobuf.message.Message):
         | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
         parameters: global___Parameters | None = ...,
-        constraint_hints: collections.abc.Iterable[
-            ommx.v1.constraint_hint_pb2.ConstraintHint
-        ]
-        | None = ...,
+        constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "constraint_hints",
+            b"constraint_hints",
             "description",
             b"description",
             "objective",

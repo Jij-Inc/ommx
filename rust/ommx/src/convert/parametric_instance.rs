@@ -167,7 +167,7 @@ impl Arbitrary for ParametricInstance {
                                             sense: sense as i32,
                                             parameters,
                                             // FIXME: generate valid constraint_hints
-                                            constraint_hints: vec![],
+                                            constraint_hints: None,
                                         }
                                     },
                                 )

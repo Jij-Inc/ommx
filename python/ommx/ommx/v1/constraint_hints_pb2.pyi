@@ -14,7 +14,7 @@ import typing
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
-class ConstraintHint(google.protobuf.message.Message):
+class ConstraintHints(google.protobuf.message.Message):
     """A constraint hint is an additional inforomation to be used by solver to gain performance.
     They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     """
@@ -40,4 +40,4 @@ class ConstraintHint(google.protobuf.message.Message):
         self, field_name: typing.Literal["one_hot_constraints", b"one_hot_constraints"]
     ) -> None: ...
 
-global___ConstraintHint = ConstraintHint
+global___ConstraintHints = ConstraintHints
