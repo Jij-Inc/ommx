@@ -46,6 +46,7 @@ runs:
       run: |
         pip install "ruff >= 0.7.0, < 0.8.0"
         pip install pytest-github-actions-annotate-failures
+        pip install twine
 
     - name: Install uv
       uses: astral-sh/setup-uv@v3
