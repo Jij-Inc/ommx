@@ -84,6 +84,25 @@ impl FromIterator<(Vec<u64>, f64)> for Function {
     }
 }
 
+impl<'a> IntoIterator for &'a Function {
+    type Item = (Vec<u64>, f64);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match &self.function {
+            Some(FunctionEnum::Constant(c)) => Box::new(std::iter::once((Vec::new(), *c))),
+            Some(FunctionEnum::Linear(linear)) => Box::new(
+                linear
+                    .into_iter()
+                    .map(|(id, c)| (id.into_iter().collect(), c)),
+            ),
+            Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
+            Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
+            None => Box::new(std::iter::empty()),
+        }
+    }
+}
+
 impl Function {
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         match &self.function {

@@ -68,22 +68,15 @@ impl FromIterator<(Vec<u64>, f64)> for Polynomial {
     }
 }
 
-impl IntoIterator for Polynomial {
+impl<'a> IntoIterator for &'a Polynomial {
     type Item = (Vec<u64>, f64);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
-    fn into_iter(mut self) -> Self::IntoIter {
-        self.terms.sort_unstable_by(|a, b| {
-            if a.ids.len() != b.ids.len() {
-                b.ids.len().cmp(&a.ids.len())
-            } else {
-                b.ids.cmp(&a.ids)
-            }
-        });
+    fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.terms
-                .into_iter()
-                .map(|term| (term.ids, term.coefficient)),
+                .iter()
+                .map(|term| (term.ids.clone(), term.coefficient)),
         )
     }
 }
