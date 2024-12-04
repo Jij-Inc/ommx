@@ -19,7 +19,7 @@ fn write_term(f: &mut fmt::Formatter, mut ids: Vec<u64>, coefficient: f64) -> fm
     } else if coefficient != 1.0 {
         write_f64_with_precision(f, coefficient)?;
     }
-    if coefficient != 1.0 {
+    if coefficient.abs() != 1.0 {
         write!(f, "*")?;
     }
     ids.sort_unstable();

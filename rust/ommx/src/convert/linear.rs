@@ -290,6 +290,9 @@ mod tests {
         );
         assert_eq!(super::Linear::zero().to_string(), "0");
 
+        let linear = super::Linear::new([(1, -1.0)].into_iter(), 0.0);
+        assert_eq!(linear.to_string(), "-x1");
+
         let linear = super::Linear::new([(1, 1.0)].into_iter(), 1.0);
         assert_eq!(linear.to_string(), "x1 + 1");
         assert_eq!(format!("{:.2}", linear), "x1 + 1.00");
