@@ -78,6 +78,14 @@ impl Instance {
             constraint_hints: self.constraint_hints,
         }
     }
+
+    pub fn to_pubo(&self) -> Result<BTreeMap<Vec<u64>, f64>> {
+        if !self.constraints.is_empty() {
+            bail!("The instance has constraints. Use penalty method or other way to unconstrained problem first.");
+        }
+
+        todo!()
+    }
 }
 
 impl Arbitrary for Instance {
