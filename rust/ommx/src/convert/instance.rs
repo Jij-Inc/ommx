@@ -105,7 +105,7 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        if self
+        if !self
             .objective()
             .used_decision_variable_ids()
             .is_subset(&self.binary_ids())
@@ -133,7 +133,7 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
-        if self
+        if !self
             .objective()
             .used_decision_variable_ids()
             .is_subset(&self.binary_ids())
@@ -330,6 +330,11 @@ mod tests {
                 objective = objective + 2.0 * f.clone() * f;
             }
             prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+        }
+
+        #[test]
+        fn test_pubo(instance in (Just(0), 0..10_usize, 0..4_u32, 0..10_u64).prop_flat_map(Instance::arbitrary_with)) {
+            instance.to_pubo().unwrap();
         }
     }
 }

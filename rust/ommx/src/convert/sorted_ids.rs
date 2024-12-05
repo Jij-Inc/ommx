@@ -3,6 +3,9 @@ use proptest::prelude::*;
 use std::{collections::BTreeSet, ops::*};
 
 /// A sorted list of decision variable and parameter IDs
+///
+/// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
+/// This is better than `[(1, 2), (2, 3)]` or `{1: 2, 2: 3}` style for low-degree polynomials.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SortedIds(Vec<u64>);
 
