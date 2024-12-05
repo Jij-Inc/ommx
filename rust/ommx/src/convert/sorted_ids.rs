@@ -1,3 +1,4 @@
+use anyhow::bail;
 use proptest::prelude::*;
 use std::{collections::BTreeSet, ops::*};
 
@@ -129,5 +130,36 @@ impl Deref for BinaryIds {
     type Target = BTreeSet<u64>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+/// ID pair for QUBO problems
+#[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+pub struct BinaryIdPair(pub u64, pub u64);
+
+impl TryFrom<Vec<u64>> for BinaryIdPair {
+    type Error = anyhow::Error;
+    fn try_from(ids: Vec<u64>) -> Result<Self, Self::Error> {
+        match &ids[..] {
+            [a, b] if a <= b => Ok(Self(*a, *b)),
+            [a, b] => Ok(Self(*b, *a)),
+            // For binary variable $x$, $x^2 = x$
+            [a] => Ok(Self(*a, *a)),
+            _ => bail!("Invalid ID for QUBO: {ids:?}"),
+        }
+    }
+}
+
+impl TryFrom<SortedIds> for BinaryIdPair {
+    type Error = anyhow::Error;
+    fn try_from(ids: SortedIds) -> Result<Self, Self::Error> {
+        Self::try_from(ids.0)
+    }
+}
+
+impl TryFrom<BinaryIds> for BinaryIdPair {
+    type Error = anyhow::Error;
+    fn try_from(ids: BinaryIds) -> Result<Self, Self::Error> {
+        Self::try_from(ids.0.into_iter().collect::<Vec<u64>>())
     }
 }

@@ -13,8 +13,9 @@ use std::{
 };
 
 use super::{
-    constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables,
-    sorted_ids::BinaryIds,
+    constraint::arbitrary_constraints,
+    decision_variable::arbitrary_decision_variables,
+    sorted_ids::{BinaryIdPair, BinaryIds},
 };
 
 impl Instance {
@@ -91,6 +92,15 @@ impl Instance {
             .collect()
     }
 
+    /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for PUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    ///
     pub fn to_pubo(&self) -> Result<BTreeMap<BinaryIds, f64>> {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
@@ -107,6 +117,39 @@ impl Instance {
             .into_iter()
             .map(|(ids, c)| (BinaryIds::from(ids), c))
             .collect())
+    }
+
+    /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for QUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    /// - The degree of the objective is at most 2.
+    ///
+    pub fn to_qubo(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+        if !self.constraints.is_empty() {
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
+        }
+        if self
+            .objective()
+            .used_decision_variable_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
+        }
+        let mut constant = 0.0;
+        let mut quad = BTreeMap::new();
+        for (ids, c) in self.objective().into_iter() {
+            if ids.is_empty() {
+                constant += c;
+            } else {
+                quad.insert(BinaryIdPair::try_from(ids)?, c);
+            }
+        }
+        Ok((quad, constant))
     }
 }
 
