@@ -140,6 +140,17 @@ impl Function {
             FunctionEnum::Polynomial(poly) => poly.as_constant(),
         }
     }
+
+    /// Get 0-th order term.
+    pub fn get_constant(&self) -> f64 {
+        match &self.function {
+            Some(FunctionEnum::Constant(c)) => *c,
+            Some(FunctionEnum::Linear(linear)) => linear.constant,
+            Some(FunctionEnum::Quadratic(quad)) => quad.get_constant(),
+            Some(FunctionEnum::Polynomial(poly)) => poly.get_constant(),
+            None => 0.0,
+        }
+    }
 }
 
 impl Add for Function {

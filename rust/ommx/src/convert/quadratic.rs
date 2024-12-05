@@ -69,6 +69,10 @@ impl Quadratic {
             self.linear.as_ref().map_or(0, |l| l.degree())
         }
     }
+
+    pub fn get_constant(&self) -> f64 {
+        self.linear.as_ref().map_or(0.0, |l| l.constant)
+    }
 }
 
 impl From<f64> for Quadratic {

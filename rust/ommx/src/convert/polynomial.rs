@@ -125,6 +125,20 @@ impl Polynomial {
         }
         Some(0.0)
     }
+
+    pub fn get_constant(&self) -> f64 {
+        self.terms
+            .iter()
+            .filter_map(|m| {
+                if m.ids.is_empty() {
+                    Some(m.coefficient)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap_or_default()
+    }
 }
 
 impl Add for Polynomial {
