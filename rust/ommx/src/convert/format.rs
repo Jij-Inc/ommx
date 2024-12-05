@@ -49,7 +49,7 @@ pub fn format_polynomial(
         if a.len() != b.len() {
             b.len().cmp(&a.len())
         } else {
-            a.cmp(&b)
+            a.cmp(b)
         }
     });
 
