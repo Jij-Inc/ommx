@@ -1,4 +1,5 @@
 use crate::v1::{
+    decision_variable::Kind,
     instance::{Description, Sense},
     Function, Instance, Parameter, ParametricInstance,
 };
@@ -79,9 +80,24 @@ impl Instance {
         }
     }
 
+    pub fn binary_ids(&self) -> BTreeSet<u64> {
+        self.decision_variables
+            .iter()
+            .filter(|dv| dv.kind() == Kind::Binary)
+            .map(|dv| dv.id)
+            .collect()
+    }
+
     pub fn to_pubo(&self) -> Result<BTreeMap<Vec<u64>, f64>> {
         if !self.constraints.is_empty() {
             bail!("The instance has constraints. Use penalty method or other way to unconstrained problem first.");
+        }
+        if self
+            .objective()
+            .used_decision_variable_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
         }
 
         todo!()

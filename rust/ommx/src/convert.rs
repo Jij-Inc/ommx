@@ -158,6 +158,7 @@ mod parameter;
 mod parametric_instance;
 mod polynomial;
 mod quadratic;
+mod sorted_ids;
 mod state;
 
 use proptest::prelude::*;

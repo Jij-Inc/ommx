@@ -1,5 +1,7 @@
 use std::fmt;
 
+use super::sorted_ids::SortedIds;
+
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
     if let Some(precision) = f.precision() {
         write!(f, "{1:.0$}", precision, coefficient)?;
@@ -9,7 +11,7 @@ fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Re
     Ok(())
 }
 
-fn write_term(f: &mut fmt::Formatter, mut ids: Vec<u64>, coefficient: f64) -> fmt::Result {
+fn write_term(f: &mut fmt::Formatter, ids: SortedIds, coefficient: f64) -> fmt::Result {
     if ids.is_empty() {
         write_f64_with_precision(f, coefficient)?;
         return Ok(());
@@ -22,7 +24,6 @@ fn write_term(f: &mut fmt::Formatter, mut ids: Vec<u64>, coefficient: f64) -> fm
     if coefficient.abs() != 1.0 {
         write!(f, "*")?;
     }
-    ids.sort_unstable();
     let mut ids = ids.iter().peekable();
     if let Some(id) = ids.next() {
         write!(f, "x{}", id)?;
@@ -35,7 +36,7 @@ fn write_term(f: &mut fmt::Formatter, mut ids: Vec<u64>, coefficient: f64) -> fm
 
 pub fn format_polynomial(
     f: &mut fmt::Formatter,
-    iter: impl Iterator<Item = (Vec<u64>, f64)>,
+    iter: impl Iterator<Item = (SortedIds, f64)>,
 ) -> fmt::Result {
     let mut terms: Vec<_> = iter
         .filter(|(_, coefficient)| coefficient.abs() > f64::EPSILON)

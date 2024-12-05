@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::{arbitrary_coefficient, format::format_polynomial};
+use super::{arbitrary_coefficient, format::format_polynomial, sorted_ids::SortedIds};
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -118,14 +118,19 @@ impl FromIterator<((u64, u64), f64)> for Quadratic {
 }
 
 impl<'a> IntoIterator for &'a Quadratic {
-    type Item = (Vec<u64>, f64);
+    type Item = (SortedIds, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         assert_eq!(self.columns.len(), self.rows.len());
         assert_eq!(self.columns.len(), self.values.len());
         let n = self.columns.len();
-        let quad = (0..n).map(move |i| (vec![self.columns[i], self.rows[i]], self.values[i]));
+        let quad = (0..n).map(move |i| {
+            (
+                SortedIds::new(vec![self.columns[i], self.rows[i]]),
+                self.values[i],
+            )
+        });
         if let Some(linear) = &self.linear {
             Box::new(
                 quad.chain(
@@ -207,10 +212,9 @@ impl Mul for Quadratic {
     fn mul(self, rhs: Self) -> Self::Output {
         let mut terms = BTreeMap::new();
         for (id_l, value_l) in self.into_iter() {
-            for (mut id_r, value_r) in rhs.clone().into_iter() {
-                id_r.append(&mut id_l.clone());
-                id_r.sort_unstable();
-                *terms.entry(id_r).or_default() += value_l * value_r;
+            for (id_r, value_r) in rhs.clone().into_iter() {
+                let ids = id_r + id_l.clone();
+                *terms.entry(ids).or_default() += value_l * value_r;
             }
         }
         terms.into_iter().collect()

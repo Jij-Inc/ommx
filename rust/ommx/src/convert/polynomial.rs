@@ -8,7 +8,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::{arbitrary_coefficient, format::format_polynomial};
+use super::{arbitrary_coefficient, format::format_polynomial, sorted_ids::SortedIds};
 
 impl Zero for Polynomial {
     fn zero() -> Self {
@@ -48,11 +48,10 @@ impl From<Quadratic> for Polynomial {
     }
 }
 
-impl FromIterator<(Vec<u64>, f64)> for Polynomial {
-    fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+impl FromIterator<(SortedIds, f64)> for Polynomial {
+    fn from_iter<I: IntoIterator<Item = (SortedIds, f64)>>(iter: I) -> Self {
         let mut terms = BTreeMap::new();
-        for (mut ids, coefficient) in iter {
-            ids.sort_unstable();
+        for (ids, coefficient) in iter {
             let v: &mut f64 = terms.entry(ids.clone()).or_default();
             *v += coefficient;
             if v.abs() <= f64::EPSILON {
@@ -62,21 +61,24 @@ impl FromIterator<(Vec<u64>, f64)> for Polynomial {
         Self {
             terms: terms
                 .into_iter()
-                .map(|(ids, coefficient)| Monomial { ids, coefficient })
+                .map(|(ids, coefficient)| Monomial {
+                    ids: ids.into_inner(),
+                    coefficient,
+                })
                 .collect(),
         }
     }
 }
 
 impl<'a> IntoIterator for &'a Polynomial {
-    type Item = (Vec<u64>, f64);
+    type Item = (SortedIds, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.terms
                 .iter()
-                .map(|term| (term.ids.clone(), term.coefficient)),
+                .map(|term| (SortedIds::new(term.ids.clone()), term.coefficient)),
         )
     }
 }
@@ -160,10 +162,9 @@ impl Mul for Polynomial {
     fn mul(self, rhs: Self) -> Self {
         let mut terms = BTreeMap::new();
         for (id_l, value_l) in self.into_iter() {
-            for (mut id_r, value_r) in rhs.clone().into_iter() {
-                id_r.append(&mut id_l.clone());
-                id_r.sort_unstable();
-                *terms.entry(id_r).or_default() += value_l * value_r;
+            for (id_r, value_r) in rhs.clone().into_iter() {
+                let ids = id_r + id_l.clone();
+                *terms.entry(ids).or_default() += value_l * value_r;
             }
         }
         terms.into_iter().collect()
@@ -197,7 +198,7 @@ impl Arbitrary for Polynomial {
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
         let terms = proptest::collection::vec(
             (
-                proptest::collection::vec(0..=max_id, 0..=(max_degree as usize)),
+                SortedIds::arbitrary_with((max_degree, max_id)),
                 arbitrary_coefficient(),
             ),
             num_terms,
@@ -247,9 +248,9 @@ mod tests {
     #[test]
     fn format() {
         let p = super::Polynomial::from_iter(vec![
-            (vec![1, 2, 3], 1.0),
-            (vec![2, 3], -1.0),
-            (vec![1, 3, 5, 6], 3.0),
+            (vec![1, 2, 3].into(), 1.0),
+            (vec![2, 3].into(), -1.0),
+            (vec![1, 3, 5, 6].into(), 3.0),
         ]);
         assert_eq!(p.to_string(), "3*x1*x3*x5*x6 + x1*x2*x3 - x2*x3");
     }

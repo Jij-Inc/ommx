@@ -7,6 +7,8 @@ use num::Zero;
 use proptest::prelude::*;
 use std::{collections::BTreeSet, fmt, iter::*, ops::*};
 
+use super::sorted_ids::SortedIds;
+
 impl Zero for Function {
     fn zero() -> Self {
         Self {
@@ -77,25 +79,23 @@ impl FromIterator<((u64, u64), f64)> for Function {
     }
 }
 
-impl FromIterator<(Vec<u64>, f64)> for Function {
-    fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+impl FromIterator<(SortedIds, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (SortedIds, f64)>>(iter: I) -> Self {
         let poly: Polynomial = iter.into_iter().collect();
         poly.into()
     }
 }
 
 impl<'a> IntoIterator for &'a Function {
-    type Item = (Vec<u64>, f64);
+    type Item = (SortedIds, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match &self.function {
-            Some(FunctionEnum::Constant(c)) => Box::new(std::iter::once((Vec::new(), *c))),
-            Some(FunctionEnum::Linear(linear)) => Box::new(
-                linear
-                    .into_iter()
-                    .map(|(id, c)| (id.into_iter().collect(), c)),
-            ),
+            Some(FunctionEnum::Constant(c)) => Box::new(std::iter::once((SortedIds::empty(), *c))),
+            Some(FunctionEnum::Linear(linear)) => {
+                Box::new(linear.into_iter().map(|(id, c)| (id.into(), c)))
+            }
             Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
             Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
             None => Box::new(std::iter::empty()),
