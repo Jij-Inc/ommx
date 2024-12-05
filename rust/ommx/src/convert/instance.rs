@@ -145,7 +145,13 @@ impl Instance {
         Ok(self
             .objective()
             .into_iter()
-            .map(|(ids, c)| (BinaryIds::from(ids), c))
+            .filter_map(|(ids, c)| {
+                if c.abs() > f64::EPSILON {
+                    Some((BinaryIds::from(ids), c))
+                } else {
+                    None
+                }
+            })
             .collect())
     }
 
@@ -173,6 +179,9 @@ impl Instance {
         let mut constant = 0.0;
         let mut quad = BTreeMap::new();
         for (ids, c) in self.objective().into_iter() {
+            if c.abs() <= f64::EPSILON {
+                continue;
+            }
             if ids.is_empty() {
                 constant += c;
             } else {
@@ -378,12 +387,19 @@ mod tests {
 
         #[test]
         fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
-            instance.to_pubo().unwrap();
+            let pubo = instance.to_pubo().unwrap();
+            for (_, c) in pubo {
+                prop_assert!(c.abs() > f64::EPSILON);
+            }
         }
 
         #[test]
         fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
-            instance.to_qubo().unwrap();
+            let (quad, _) = instance.to_qubo().unwrap();
+            for (ids, c) in quad {
+                prop_assert!(ids.0 <= ids.1);
+                prop_assert!(c.abs() > f64::EPSILON);
+            }
         }
     }
 }
