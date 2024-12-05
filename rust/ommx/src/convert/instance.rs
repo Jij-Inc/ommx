@@ -58,6 +58,28 @@ impl Instance {
             .boxed()
     }
 
+    pub fn arbitrary_binary() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..10_usize, 0..=1_u32, 0..10_u64)
+            .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
+                arbitrary_instance(
+                    num_constraints,
+                    num_terms,
+                    max_degree,
+                    max_id,
+                    Just(Kind::Binary),
+                )
+            })
+            .boxed()
+    }
+
+    pub fn arbitrary_binary_unconstrained() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..=1_u32, 0..10_u64)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
+            })
+            .boxed()
+    }
+
     pub fn penalty_method(self) -> ParametricInstance {
         let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
@@ -153,6 +175,46 @@ impl Instance {
     }
 }
 
+fn arbitrary_instance(
+    num_constraints: usize,
+    num_terms: usize,
+    max_degree: u32,
+    max_id: u64,
+    kind_strategy: impl Strategy<Value = Kind> + 'static + Clone,
+) -> BoxedStrategy<Instance> {
+    (
+        proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
+        arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+    )
+        .prop_flat_map(move |(objective, constraints)| {
+            let mut used_ids = objective
+                .as_ref()
+                .map(|f| f.used_decision_variable_ids())
+                .unwrap_or_default();
+            for c in &constraints {
+                used_ids.extend(c.function().used_decision_variable_ids());
+            }
+            (
+                Just(objective),
+                Just(constraints),
+                arbitrary_decision_variables(used_ids, kind_strategy.clone()),
+                Option::<Description>::arbitrary(),
+                Sense::arbitrary(),
+            )
+                .prop_map(
+                    |(objective, constraints, decision_variables, description, sense)| Instance {
+                        objective,
+                        constraints,
+                        decision_variables,
+                        description,
+                        sense: sense as i32,
+                        ..Default::default()
+                    },
+                )
+        })
+        .boxed()
+}
+
 impl Arbitrary for Instance {
     type Parameters = (usize, usize, u32, u64);
     type Strategy = BoxedStrategy<Self>;
@@ -160,39 +222,13 @@ impl Arbitrary for Instance {
     fn arbitrary_with(
         (num_constraints, num_terms, max_degree, max_id): Self::Parameters,
     ) -> Self::Strategy {
-        (
-            proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
-            arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+        arbitrary_instance(
+            num_constraints,
+            num_terms,
+            max_degree,
+            max_id,
+            Kind::arbitrary(),
         )
-            .prop_flat_map(|(objective, constraints)| {
-                let mut used_ids = objective
-                    .as_ref()
-                    .map(|f| f.used_decision_variable_ids())
-                    .unwrap_or_default();
-                for c in &constraints {
-                    used_ids.extend(c.function().used_decision_variable_ids());
-                }
-                (
-                    Just(objective),
-                    Just(constraints),
-                    arbitrary_decision_variables(used_ids),
-                    Option::<Description>::arbitrary(),
-                    Sense::arbitrary(),
-                )
-                    .prop_map(
-                        |(objective, constraints, decision_variables, description, sense)| {
-                            Instance {
-                                objective,
-                                constraints,
-                                decision_variables,
-                                description,
-                                sense: sense as i32,
-                                ..Default::default()
-                            }
-                        },
-                    )
-            })
-            .boxed()
     }
 
     fn arbitrary() -> Self::Strategy {
@@ -333,7 +369,7 @@ mod tests {
         }
 
         #[test]
-        fn test_pubo(instance in (Just(0), 0..10_usize, 0..4_u32, 0..10_u64).prop_flat_map(Instance::arbitrary_with)) {
+        fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
             instance.to_pubo().unwrap();
         }
     }

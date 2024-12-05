@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     v1::{
+        decision_variable::Kind,
         instance::{Description, Sense},
         Function, Instance, Parameters, ParametricInstance, State,
     },
@@ -145,7 +146,10 @@ impl Arbitrary for ParametricInstance {
                             (
                                 Just(objective),
                                 Just(constraints),
-                                arbitrary_decision_variables(decision_variable_ids),
+                                arbitrary_decision_variables(
+                                    decision_variable_ids,
+                                    Kind::arbitrary(),
+                                ),
                                 arbitrary_parameters(parameter_ids),
                                 Option::<Description>::arbitrary(),
                                 Sense::arbitrary(),
