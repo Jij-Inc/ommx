@@ -12,7 +12,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
+use super::{
+    constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables,
+    sorted_ids::BinaryIds,
+};
 
 impl Instance {
     pub fn objective(&self) -> Cow<Function> {
@@ -88,9 +91,9 @@ impl Instance {
             .collect()
     }
 
-    pub fn to_pubo(&self) -> Result<BTreeMap<Vec<u64>, f64>> {
+    pub fn to_pubo(&self) -> Result<BTreeMap<BinaryIds, f64>> {
         if !self.constraints.is_empty() {
-            bail!("The instance has constraints. Use penalty method or other way to unconstrained problem first.");
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
         if self
             .objective()
@@ -99,8 +102,11 @@ impl Instance {
         {
             bail!("The objective function uses non-binary decision variables.");
         }
-
-        todo!()
+        Ok(self
+            .objective()
+            .into_iter()
+            .map(|(ids, c)| (BinaryIds::from(ids), c))
+            .collect())
     }
 }
 

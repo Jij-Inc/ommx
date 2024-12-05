@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use std::ops::*;
+use std::{collections::BTreeSet, ops::*};
 
 /// A sorted list of decision variable and parameter IDs
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,5 +95,39 @@ impl Arbitrary for SortedIds {
         (0..5_u32, 0..10_u64)
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinaryIds(BTreeSet<u64>);
+
+impl Ord for BinaryIds {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let a = &self.0;
+        let b = &other.0;
+        if a.len() != b.len() {
+            b.len().cmp(&a.len())
+        } else {
+            a.cmp(b)
+        }
+    }
+}
+
+impl PartialOrd for BinaryIds {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl From<SortedIds> for BinaryIds {
+    fn from(ids: SortedIds) -> Self {
+        Self(ids.0.into_iter().collect())
+    }
+}
+
+impl Deref for BinaryIds {
+    type Target = BTreeSet<u64>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
