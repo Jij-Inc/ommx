@@ -59,7 +59,7 @@ impl Instance {
     }
 
     pub fn arbitrary_binary() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..10_usize, 0..=1_u32, 0..10_u64)
+        (0..10_usize, 0..10_usize, 0..=4_u32, 0..10_u64)
             .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
                 arbitrary_instance(
                     num_constraints,
@@ -73,7 +73,15 @@ impl Instance {
     }
 
     pub fn arbitrary_binary_unconstrained() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..=1_u32, 0..10_u64)
+        (0..10_usize, 0..=4_u32, 0..10_u64)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
+            })
+            .boxed()
+    }
+
+    pub fn arbitrary_quadratic_binary_unconstrained() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..=2_u32, 0..10_u64)
             .prop_flat_map(|(num_terms, max_degree, max_id)| {
                 arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
             })
@@ -371,6 +379,11 @@ mod tests {
         #[test]
         fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
             instance.to_pubo().unwrap();
+        }
+
+        #[test]
+        fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
+            instance.to_qubo().unwrap();
         }
     }
 }
