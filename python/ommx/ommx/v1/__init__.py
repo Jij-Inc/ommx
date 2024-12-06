@@ -567,9 +567,6 @@ class DecisionVariable:
         """
         return self.raw == other.raw
 
-    def __repr__(self) -> str:
-        return f"x{self.raw.id}"
-
     def __add__(self, other: int | float | DecisionVariable) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: 1}, constant=other)
