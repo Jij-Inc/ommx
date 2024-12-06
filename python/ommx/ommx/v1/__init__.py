@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Iterable, overload
+from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -706,7 +706,7 @@ class Linear:
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State) -> tuple[float, set]:
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
         """
         Evaluate the linear function with the given state.
 
@@ -715,11 +715,10 @@ class Linear:
 
         .. doctest::
 
-            Evaluate `2 x_1 + 3 x_2 + 1` with `x_1 = 3, x_2 = 4, x_3 = 5`
+            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3, x2 = 4, x3 = 5`
 
             >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> state = State(entries={1: 3, 2: 4, 3: 5})
-            >>> value, used_ids = f.evaluate(state)
+            >>> value, used_ids = f.evaluate({1: 3, 2: 4, 3: 5}) # Unused ID `3` can be included
 
             2*3 + 3*4 + 1 = 19
             >>> value
@@ -729,10 +728,20 @@ class Linear:
             >>> used_ids
             {1, 2}
 
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
         """
+        if not isinstance(state, State):
+            state = State(entries=state)
         return _ommx_rust.evaluate_linear(self.to_bytes(), state.SerializeToString())
 
-    def partial_evaluate(self, state: State) -> tuple[Linear, set]:
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Linear, set]:
         """
         Partially evaluate the linear function with the given state.
 
@@ -741,17 +750,20 @@ class Linear:
 
         .. doctest::
 
-            Evaluate `2 x_1 + 3 x_2 + 1` with `x_1 = 3`, yielding `3 x_2 + 7`
+            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3`, yielding `3 x2 + 7`
 
             >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> state = State(entries={1: 3, 3: 5})  # Unused ID `3` can be included
-            >>> new_f, used_ids = f.partial_evaluate(state)
+            >>> new_f, used_ids = f.partial_evaluate({1: 3})
             >>> new_f
             Linear(3*x2 + 7)
             >>> used_ids
             {1}
+            >>> new_f.partial_evaluate({2: 4})
+            (Linear(19), {2})
 
         """
+        if not isinstance(state, State):
+            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_linear(
             self.to_bytes(), state.SerializeToString()
         )
