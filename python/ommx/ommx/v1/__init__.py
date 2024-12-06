@@ -214,11 +214,21 @@ class Instance:
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
 
-    def evaluate(self, state: State) -> Solution:
+    def evaluate(self, state: State | Mapping[int, float]) -> Solution:
+        if not isinstance(state, State):
+            state = State(entries=state)
         out, _ = _ommx_rust.evaluate_instance(
             self.to_bytes(), state.SerializeToString()
         )
         return Solution.from_bytes(out)
+
+    def partial_evaluate(self, state: State | Mapping[int, float]) -> Instance:
+        if not isinstance(state, State):
+            state = State(entries=state)
+        out, _ = _ommx_rust.partial_evaluate_instance(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Instance.from_bytes(out)
 
 
 @dataclass
