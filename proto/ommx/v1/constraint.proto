@@ -77,10 +77,13 @@ message RemovedConstraint {
   // The removed constraint
   Constraint constraint = 1;
 
-  // Short reason why the constraint was removed. This is usually the name of method or application which remove the constraint.
+  // Short reason why the constraint was removed.
+  //
+  // This should be the name of method, function or application which remove the constraint.
   string reason = 2;
 
   // Arbitrary key-value parameters representing why the constraint was removed.
-  // The value must be valid JSON string.
+  //
+  // This should be human-readable and can be used for debugging.
   map<string, string> parameters = 3;
 }

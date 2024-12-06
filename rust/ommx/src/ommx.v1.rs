@@ -175,11 +175,14 @@ pub struct RemovedConstraint {
     /// The removed constraint
     #[prost(message, optional, tag = "1")]
     pub constraint: ::core::option::Option<Constraint>,
-    /// Short reason why the constraint was removed. This is usually the name of method or application which remove the constraint.
+    /// Short reason why the constraint was removed.
+    ///
+    /// This should be the name of method, function or application which remove the constraint.
     #[prost(string, tag = "2")]
     pub reason: ::prost::alloc::string::String,
     /// Arbitrary key-value parameters representing why the constraint was removed.
-    /// The value must be valid JSON string.
+    ///
+    /// This should be human-readable and can be used for debugging.
     #[prost(map = "string, string", tag = "3")]
     pub parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,

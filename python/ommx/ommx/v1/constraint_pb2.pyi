@@ -327,7 +327,10 @@ class RemovedConstraint(google.protobuf.message.Message):
     REASON_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
     reason: builtins.str
-    """Short reason why the constraint was removed. This is usually the name of method or application which remove the constraint."""
+    """Short reason why the constraint was removed.
+
+    This should be the name of method, function or application which remove the constraint.
+    """
     @property
     def constraint(self) -> global___Constraint:
         """The removed constraint"""
@@ -337,7 +340,8 @@ class RemovedConstraint(google.protobuf.message.Message):
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """Arbitrary key-value parameters representing why the constraint was removed.
-        The value must be valid JSON string.
+
+        This should be human-readable and can be used for debugging.
         """
 
     def __init__(
