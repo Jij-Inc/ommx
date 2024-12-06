@@ -300,3 +300,66 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     ) -> typing.Literal["name"] | None: ...
 
 global___EvaluatedConstraint = EvaluatedConstraint
+
+@typing.final
+class RemovedConstraint(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class ParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    CONSTRAINT_FIELD_NUMBER: builtins.int
+    REASON_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    reason: builtins.str
+    """Short reason why the constraint was removed. This is usually the name of method or application which remove the constraint."""
+    @property
+    def constraint(self) -> global___Constraint:
+        """The removed constraint"""
+
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Arbitrary key-value parameters representing why the constraint was removed.
+        The value must be valid JSON string.
+        """
+
+    def __init__(
+        self,
+        *,
+        constraint: global___Constraint | None = ...,
+        reason: builtins.str = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+    ) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["constraint", b"constraint"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constraint",
+            b"constraint",
+            "parameters",
+            b"parameters",
+            "reason",
+            b"reason",
+        ],
+    ) -> None: ...
+
+global___RemovedConstraint = RemovedConstraint
