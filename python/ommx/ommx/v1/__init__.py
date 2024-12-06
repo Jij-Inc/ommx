@@ -1063,6 +1063,71 @@ class Polynomial:
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+        """
+        Evaluate the polynomial with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
+            >>> f
+            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
+
+            >>> f.evaluate({1: 3, 2: 4, 3: 5})
+            (181.0, {1, 2, 3})
+
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        return _ommx_rust.evaluate_polynomial(
+            self.to_bytes(), state.SerializeToString()
+        )
+
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Polynomial, set]:
+        """
+        Partially evaluate the polynomial with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3`, yielding `9 x2 x3 + 1`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
+            >>> f
+            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
+
+            >>> f.partial_evaluate({1: 3})
+            (Polynomial(9*x2*x3 + 1), {1})
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        new, used_ids = _ommx_rust.partial_evaluate_polynomial(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Polynomial.from_bytes(new), used_ids
+
     def __repr__(self) -> str:
         return f"Polynomial({_ommx_rust.Polynomial.decode(self.raw.SerializeToString()).__repr__()})"
 
