@@ -1,4 +1,5 @@
 use crate::v1::{
+    decision_variable::Kind,
     instance::{Description, Sense},
     Function, Instance, Parameter, ParametricInstance,
 };
@@ -11,7 +12,11 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-use super::{constraint::arbitrary_constraints, decision_variable::arbitrary_decision_variables};
+use super::{
+    constraint::arbitrary_constraints,
+    decision_variable::arbitrary_decision_variables,
+    sorted_ids::{BinaryIdPair, BinaryIds},
+};
 
 impl Instance {
     pub fn objective(&self) -> Cow<Function> {
@@ -53,6 +58,36 @@ impl Instance {
             .boxed()
     }
 
+    pub fn arbitrary_binary() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..10_usize, 0..=4_u32, 0..10_u64)
+            .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
+                arbitrary_instance(
+                    num_constraints,
+                    num_terms,
+                    max_degree,
+                    max_id,
+                    Just(Kind::Binary),
+                )
+            })
+            .boxed()
+    }
+
+    pub fn arbitrary_binary_unconstrained() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..=4_u32, 0..10_u64)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
+            })
+            .boxed()
+    }
+
+    pub fn arbitrary_quadratic_binary_unconstrained() -> BoxedStrategy<Self> {
+        (0..10_usize, 0..=2_u32, 0..10_u64)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
+            })
+            .boxed()
+    }
+
     pub fn penalty_method(self) -> ParametricInstance {
         let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
@@ -78,6 +113,123 @@ impl Instance {
             constraint_hints: self.constraint_hints,
         }
     }
+
+    pub fn binary_ids(&self) -> BTreeSet<u64> {
+        self.decision_variables
+            .iter()
+            .filter(|dv| dv.kind() == Kind::Binary)
+            .map(|dv| dv.id)
+            .collect()
+    }
+
+    /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for PUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    ///
+    pub fn to_pubo(&self) -> Result<BTreeMap<BinaryIds, f64>> {
+        if !self.constraints.is_empty() {
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
+        }
+        if !self
+            .objective()
+            .used_decision_variable_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
+        }
+        Ok(self
+            .objective()
+            .into_iter()
+            .filter_map(|(ids, c)| {
+                if c.abs() > f64::EPSILON {
+                    Some((BinaryIds::from(ids), c))
+                } else {
+                    None
+                }
+            })
+            .collect())
+    }
+
+    /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for QUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    /// - The degree of the objective is at most 2.
+    ///
+    pub fn to_qubo(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+        if !self.constraints.is_empty() {
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
+        }
+        if !self
+            .objective()
+            .used_decision_variable_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
+        }
+        let mut constant = 0.0;
+        let mut quad = BTreeMap::new();
+        for (ids, c) in self.objective().into_iter() {
+            if c.abs() <= f64::EPSILON {
+                continue;
+            }
+            if ids.is_empty() {
+                constant += c;
+            } else {
+                quad.insert(BinaryIdPair::try_from(ids)?, c);
+            }
+        }
+        Ok((quad, constant))
+    }
+}
+
+fn arbitrary_instance(
+    num_constraints: usize,
+    num_terms: usize,
+    max_degree: u32,
+    max_id: u64,
+    kind_strategy: impl Strategy<Value = Kind> + 'static + Clone,
+) -> BoxedStrategy<Instance> {
+    (
+        proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
+        arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+    )
+        .prop_flat_map(move |(objective, constraints)| {
+            let mut used_ids = objective
+                .as_ref()
+                .map(|f| f.used_decision_variable_ids())
+                .unwrap_or_default();
+            for c in &constraints {
+                used_ids.extend(c.function().used_decision_variable_ids());
+            }
+            (
+                Just(objective),
+                Just(constraints),
+                arbitrary_decision_variables(used_ids, kind_strategy.clone()),
+                Option::<Description>::arbitrary(),
+                Sense::arbitrary(),
+            )
+                .prop_map(
+                    |(objective, constraints, decision_variables, description, sense)| Instance {
+                        objective,
+                        constraints,
+                        decision_variables,
+                        description,
+                        sense: sense as i32,
+                        ..Default::default()
+                    },
+                )
+        })
+        .boxed()
 }
 
 impl Arbitrary for Instance {
@@ -87,39 +239,13 @@ impl Arbitrary for Instance {
     fn arbitrary_with(
         (num_constraints, num_terms, max_degree, max_id): Self::Parameters,
     ) -> Self::Strategy {
-        (
-            proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
-            arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+        arbitrary_instance(
+            num_constraints,
+            num_terms,
+            max_degree,
+            max_id,
+            Kind::arbitrary(),
         )
-            .prop_flat_map(|(objective, constraints)| {
-                let mut used_ids = objective
-                    .as_ref()
-                    .map(|f| f.used_decision_variable_ids())
-                    .unwrap_or_default();
-                for c in &constraints {
-                    used_ids.extend(c.function().used_decision_variable_ids());
-                }
-                (
-                    Just(objective),
-                    Just(constraints),
-                    arbitrary_decision_variables(used_ids),
-                    Option::<Description>::arbitrary(),
-                    Sense::arbitrary(),
-                )
-                    .prop_map(
-                        |(objective, constraints, decision_variables, description, sense)| {
-                            Instance {
-                                objective,
-                                constraints,
-                                decision_variables,
-                                description,
-                                sense: sense as i32,
-                                ..Default::default()
-                            }
-                        },
-                    )
-            })
-            .boxed()
     }
 
     fn arbitrary() -> Self::Strategy {
@@ -257,6 +383,23 @@ mod tests {
                 objective = objective + 2.0 * f.clone() * f;
             }
             prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+        }
+
+        #[test]
+        fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
+            let pubo = instance.to_pubo().unwrap();
+            for (_, c) in pubo {
+                prop_assert!(c.abs() > f64::EPSILON);
+            }
+        }
+
+        #[test]
+        fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
+            let (quad, _) = instance.to_qubo().unwrap();
+            for (ids, c) in quad {
+                prop_assert!(ids.0 <= ids.1);
+                prop_assert!(c.abs() > f64::EPSILON);
+            }
         }
     }
 }
