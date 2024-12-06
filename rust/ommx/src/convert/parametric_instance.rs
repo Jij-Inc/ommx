@@ -23,6 +23,7 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             sense,
             constraint_hints,
+            remove_constraints,
             parameters: _, // Drop previous parameters
         }: Instance,
     ) -> Self {
@@ -34,6 +35,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             parameters: Default::default(),
             constraint_hints,
+            remove_constraints,
         }
     }
 }
@@ -83,6 +85,7 @@ impl ParametricInstance {
             sense: self.sense,
             parameters: Some(parameters),
             constraint_hints: self.constraint_hints,
+            remove_constraints: self.remove_constraints,
         })
     }
 
@@ -170,8 +173,7 @@ impl Arbitrary for ParametricInstance {
                                             description,
                                             sense: sense as i32,
                                             parameters,
-                                            // FIXME: generate valid constraint_hints
-                                            constraint_hints: None,
+                                            ..Default::default()
                                         }
                                     },
                                 )
