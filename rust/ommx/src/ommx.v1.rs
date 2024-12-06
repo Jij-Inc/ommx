@@ -168,6 +168,22 @@ pub struct EvaluatedConstraint {
     #[prost(double, optional, tag = "8")]
     pub dual_variable: ::core::option::Option<f64>,
 }
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemovedConstraint {
+    /// The removed constraint
+    #[prost(message, optional, tag = "1")]
+    pub constraint: ::core::option::Option<Constraint>,
+    /// Short reason why the constraint was removed. This is usually the name of method or application which remove the constraint.
+    #[prost(string, tag = "2")]
+    pub reason: ::prost::alloc::string::String,
+    /// Arbitrary key-value parameters representing why the constraint was removed.
+    /// The value must be valid JSON string.
+    #[prost(map = "string, string", tag = "3")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
 /// Equality of a constraint.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -352,6 +368,9 @@ pub struct Instance {
     /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     #[prost(message, optional, tag = "7")]
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
+    /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
+    #[prost(message, repeated, tag = "8")]
+    pub remove_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -454,6 +473,9 @@ pub struct ParametricInstance {
     /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
     #[prost(message, optional, tag = "7")]
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
+    /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
+    #[prost(message, repeated, tag = "8")]
+    pub remove_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.

@@ -135,6 +135,7 @@ class ParametricInstance(google.protobuf.message.Message):
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     CONSTRAINT_HINTS_FIELD_NUMBER: builtins.int
+    REMOVE_CONSTRAINTS_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it."""
     @property
@@ -174,6 +175,14 @@ class ParametricInstance(google.protobuf.message.Message):
     def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
         """Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
 
+    @property
+    def remove_constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.constraint_pb2.RemovedConstraint
+    ]:
+        """Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`."""
+
     def __init__(
         self,
         *,
@@ -188,6 +197,10 @@ class ParametricInstance(google.protobuf.message.Message):
         | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
         constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
+        remove_constraints: collections.abc.Iterable[
+            ommx.v1.constraint_pb2.RemovedConstraint
+        ]
+        | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -215,6 +228,8 @@ class ParametricInstance(google.protobuf.message.Message):
             b"objective",
             "parameters",
             b"parameters",
+            "remove_constraints",
+            b"remove_constraints",
             "sense",
             b"sense",
         ],

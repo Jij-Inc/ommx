@@ -1,7 +1,7 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Function, Instance, Parameter, ParametricInstance,
+    Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
 };
 use anyhow::{bail, Result};
 use approx::AbsDiffEq;
@@ -92,6 +92,7 @@ impl Instance {
         let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
         let mut parameters = Vec::new();
+        let mut remove_constraints = Vec::new();
         for (i, c) in self.constraints.into_iter().enumerate() {
             let parameter = Parameter {
                 id: id_base + i as u64,
@@ -102,6 +103,11 @@ impl Instance {
             let f = c.function().into_owned();
             objective = objective + &parameter * f.clone() * f;
             parameters.push(parameter);
+            remove_constraints.push(RemovedConstraint {
+                constraint: Some(c),
+                reason: "penalty_method".to_string(),
+                parameters: Default::default(),
+            });
         }
         ParametricInstance {
             description: self.description,
@@ -111,6 +117,7 @@ impl Instance {
             sense: self.sense,
             parameters,
             constraint_hints: self.constraint_hints,
+            remove_constraints,
         }
     }
 
