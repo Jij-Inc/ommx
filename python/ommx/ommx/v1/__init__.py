@@ -706,6 +706,57 @@ class Linear:
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def evaluate(self, state: State) -> tuple[float, set]:
+        """
+        Evaluate the linear function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x_1 + 3 x_2 + 1` with `x_1 = 3, x_2 = 4, x_3 = 5`
+
+            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+            >>> state = State(entries={1: 3, 2: 4, 3: 5})
+            >>> value, used_ids = f.evaluate(state)
+
+            2*3 + 3*4 + 1 = 19
+            >>> value
+            19.0
+
+            Since the value of ID `3` of `state` is not used, the it is not included in `used_ids`.
+            >>> used_ids
+            {1, 2}
+
+        """
+        return _ommx_rust.evaluate_linear(self.to_bytes(), state.SerializeToString())
+
+    def partial_evaluate(self, state: State) -> tuple[Linear, set]:
+        """
+        Partially evaluate the linear function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x_1 + 3 x_2 + 1` with `x_1 = 3`, yielding `3 x_2 + 7`
+
+            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+            >>> state = State(entries={1: 3, 3: 5})  # Unused ID `3` can be included
+            >>> new_f, used_ids = f.partial_evaluate(state)
+            >>> new_f
+            Linear(3*x2 + 7)
+            >>> used_ids
+            {1}
+
+        """
+        new, used_ids = _ommx_rust.partial_evaluate_linear(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Linear.from_bytes(new), used_ids
+
     def __repr__(self) -> str:
         return f"Linear({_ommx_rust.Linear.decode(self.raw.SerializeToString()).__repr__()})"
 
