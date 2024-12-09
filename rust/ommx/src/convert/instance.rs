@@ -3,13 +3,13 @@ use crate::v1::{
     instance::{Description, Sense},
     Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
 };
 
 use super::{
@@ -127,6 +127,26 @@ impl Instance {
             .filter(|dv| dv.kind() == Kind::Binary)
             .map(|dv| dv.id)
             .collect()
+    }
+
+    pub fn relax_constraint(
+        &mut self,
+        constraint_id: u64,
+        removed_reason: String,
+        removed_reason_parameters: HashMap<String, String>,
+    ) -> Result<()> {
+        let index = self
+            .constraints
+            .iter()
+            .position(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let c = self.constraints.remove(index);
+        self.removed_constraints.push(RemovedConstraint {
+            constraint: Some(c),
+            removed_reason,
+            removed_reason_parameters,
+        });
+        Ok(())
     }
 
     /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
