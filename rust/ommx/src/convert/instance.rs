@@ -257,21 +257,51 @@ fn arbitrary_instance(
             for c in &constraints {
                 used_ids.extend(c.function().used_decision_variable_ids());
             }
+            let relaxed = if constraints.is_empty() {
+                Just(Vec::new()).boxed()
+            } else {
+                let constraint_ids = constraints.iter().map(|c| c.id).collect::<Vec<_>>();
+                proptest::sample::subsequence(constraint_ids, 0..=constraints.len()).boxed()
+            };
             (
                 Just(objective),
                 Just(constraints),
                 arbitrary_decision_variables(used_ids, kind_strategy.clone()),
                 Option::<Description>::arbitrary(),
                 Sense::arbitrary(),
+                relaxed,
+                String::arbitrary(),
+                proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 0..=2),
             )
                 .prop_map(
-                    |(objective, constraints, decision_variables, description, sense)| Instance {
+                    |(
                         objective,
                         constraints,
                         decision_variables,
                         description,
-                        sense: sense as i32,
-                        ..Default::default()
+                        sense,
+                        relaxed,
+                        removed_reason,
+                        removed_parameters,
+                    )| {
+                        let mut instance = Instance {
+                            objective,
+                            constraints,
+                            decision_variables,
+                            description,
+                            sense: sense as i32,
+                            ..Default::default()
+                        };
+                        for i in relaxed {
+                            instance
+                                .relax_constraint(
+                                    i,
+                                    removed_reason.clone(),
+                                    removed_parameters.clone(),
+                                )
+                                .unwrap();
+                        }
+                        instance
                     },
                 )
         })
