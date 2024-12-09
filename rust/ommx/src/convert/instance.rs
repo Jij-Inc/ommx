@@ -105,8 +105,8 @@ impl Instance {
             parameters.push(parameter);
             remove_constraints.push(RemovedConstraint {
                 constraint: Some(c),
-                reason: "penalty_method".to_string(),
-                parameters: Default::default(),
+                removed_reason: "penalty_method".to_string(),
+                removed_reason_parameters: Default::default(),
             });
         }
         ParametricInstance {

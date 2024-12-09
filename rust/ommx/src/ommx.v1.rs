@@ -167,6 +167,13 @@ pub struct EvaluatedConstraint {
     /// This is optional because not all solvers support to evaluate dual variables.
     #[prost(double, optional, tag = "8")]
     pub dual_variable: ::core::option::Option<f64>,
+    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(string, optional, tag = "10")]
+    pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(map = "string, string", tag = "11")]
+    pub removed_reason_parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -179,12 +186,12 @@ pub struct RemovedConstraint {
     ///
     /// This should be the name of method, function or application which remove the constraint.
     #[prost(string, tag = "2")]
-    pub reason: ::prost::alloc::string::String,
+    pub removed_reason: ::prost::alloc::string::String,
     /// Arbitrary key-value parameters representing why the constraint was removed.
     ///
     /// This should be human-readable and can be used for debugging.
     #[prost(map = "string, string", tag = "3")]
-    pub parameters:
+    pub removed_reason_parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// Equality of a constraint.

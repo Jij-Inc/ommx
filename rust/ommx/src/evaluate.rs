@@ -216,7 +216,7 @@ impl Evaluate for Constraint {
                 subscripts: self.subscripts.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
-                dual_variable: None,
+                ..Default::default()
             },
             used_ids,
         ))

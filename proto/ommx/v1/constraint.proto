@@ -71,6 +71,12 @@ message EvaluatedConstraint {
   // Value for the Lagrangian dual variable of this constraint.
   // This is optional because not all solvers support to evaluate dual variables.
   optional double dual_variable = 8;
+
+  // Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+  optional string removed_reason = 10;
+
+  // Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+  map<string, string> removed_reason_parameters = 11;
 }
 
 message RemovedConstraint {
@@ -80,10 +86,10 @@ message RemovedConstraint {
   // Short reason why the constraint was removed.
   //
   // This should be the name of method, function or application which remove the constraint.
-  string reason = 2;
+  string removed_reason = 2;
 
   // Arbitrary key-value parameters representing why the constraint was removed.
   //
   // This should be human-readable and can be used for debugging.
-  map<string, string> parameters = 3;
+  map<string, string> removed_reason_parameters = 3;
 }
