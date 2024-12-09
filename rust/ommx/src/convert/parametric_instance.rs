@@ -23,7 +23,7 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             sense,
             constraint_hints,
-            remove_constraints,
+            removed_constraints,
             parameters: _, // Drop previous parameters
         }: Instance,
     ) -> Self {
@@ -35,7 +35,7 @@ impl From<Instance> for ParametricInstance {
             sense,
             parameters: Default::default(),
             constraint_hints,
-            remove_constraints,
+            removed_constraints,
         }
     }
 }
@@ -85,7 +85,7 @@ impl ParametricInstance {
             sense: self.sense,
             parameters: Some(parameters),
             constraint_hints: self.constraint_hints,
-            remove_constraints: self.remove_constraints,
+            removed_constraints: self.removed_constraints,
         })
     }
 

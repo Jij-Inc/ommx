@@ -1,7 +1,7 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
-    Relaxation, Solution, State,
+    Relaxation, RemovedConstraint, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -231,6 +231,28 @@ impl Evaluate for Constraint {
     }
 }
 
+impl Evaluate for RemovedConstraint {
+    type Output = EvaluatedConstraint;
+
+    fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
+        let (mut out, used_ids) = self
+            .constraint
+            .as_ref()
+            .context("RemovedConstraint does not contain constraint")?
+            .evaluate(solution)?;
+        out.removed_reason = Some(self.removed_reason.clone());
+        out.removed_reason_parameters = self.removed_reason_parameters.clone();
+        Ok((out, used_ids))
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        self.constraint
+            .as_mut()
+            .context("RemovedConstraint does not contain constraint")?
+            .partial_evaluate(state)
+    }
+}
+
 impl Evaluate for Instance {
     type Output = Solution;
 
@@ -241,6 +263,7 @@ impl Evaluate for Instance {
         for c in &self.constraints {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
+            // Only check non-removed constraints for feasibility
             if c.equality == Equality::EqualToZero as i32 {
                 // FIXME: Add a way to specify the tolerance
                 if c.evaluated_value.abs() > 1e-6 {
@@ -253,6 +276,11 @@ impl Evaluate for Instance {
             } else {
                 bail!("Unsupported equality: {:?}", c.equality);
             }
+            evaluated_constraints.push(c);
+        }
+        for c in &self.removed_constraints {
+            let (c, used_ids_) = c.evaluate(state)?;
+            used_ids.extend(used_ids_);
             evaluated_constraints.push(c);
         }
 
@@ -284,6 +312,10 @@ impl Evaluate for Instance {
             BTreeSet::new()
         };
         for constraints in &mut self.constraints {
+            let mut new = constraints.partial_evaluate(state)?;
+            used.append(&mut new);
+        }
+        for constraints in &mut self.removed_constraints {
             let mut new = constraints.partial_evaluate(state)?;
             used.append(&mut new);
         }

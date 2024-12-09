@@ -55,5 +55,5 @@ message ParametricInstance {
   ConstraintHints constraint_hints = 7;
 
   // Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
-  repeated RemovedConstraint remove_constraints = 8;
+  repeated RemovedConstraint removed_constraints = 8;
 }

@@ -380,7 +380,7 @@ pub struct Instance {
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
-    pub remove_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -485,7 +485,7 @@ pub struct ParametricInstance {
     pub constraint_hints: ::core::option::Option<ConstraintHints>,
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
-    pub remove_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
