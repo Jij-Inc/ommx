@@ -42,6 +42,10 @@ impl Instance {
             .collect::<BTreeSet<_>>()
     }
 
+    pub fn constraint_ids(&self) -> BTreeSet<u64> {
+        self.constraints.iter().map(|c| c.id).collect()
+    }
+
     pub fn check_decision_variables(&self) -> Result<()> {
         let used_ids = self.used_decision_variable_ids()?;
         let defined_ids = self.defined_ids();
@@ -146,6 +150,21 @@ impl Instance {
             removed_reason,
             removed_reason_parameters,
         });
+        Ok(())
+    }
+
+    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
+        let index = self
+            .removed_constraints
+            .iter()
+            .position(|c| {
+                c.constraint
+                    .as_ref()
+                    .map_or(false, |c| c.id == constraint_id)
+            })
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let c = self.removed_constraints.remove(index).constraint.unwrap();
+        self.constraints.push(c);
         Ok(())
     }
 
