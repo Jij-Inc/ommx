@@ -32,6 +32,11 @@ impl Instance {
         for c in &self.constraints {
             used_ids.extend(c.function().used_decision_variable_ids());
         }
+        for c in &self.removed_constraints {
+            if let Some(c) = &c.constraint {
+                used_ids.extend(c.function().used_decision_variable_ids());
+            }
+        }
         Ok(used_ids)
     }
 

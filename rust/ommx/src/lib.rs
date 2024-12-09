@@ -143,8 +143,8 @@ pub mod mps;
 pub mod random;
 
 // Internal modules
-mod convert;
-mod evaluate;
+pub(crate) mod convert;
+pub(crate) mod evaluate;
 
 pub use evaluate::Evaluate;
 

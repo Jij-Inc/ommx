@@ -439,4 +439,34 @@ mod tests {
             }
         }
     }
+
+    fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
+        (
+            proptest::collection::vec(crate::convert::arbitrary_coefficient(), ids.len()),
+            Just(ids),
+        )
+            .prop_map(|(coefficients, ids)| {
+                dbg!(&ids, &coefficients);
+                let entries = ids.into_iter().zip(coefficients).collect();
+                State { entries }
+            })
+            .boxed()
+    }
+
+    fn instance_with_state() -> BoxedStrategy<(Instance, State)> {
+        Instance::arbitrary()
+            .prop_flat_map(|instance| {
+                let used_ids = instance.used_decision_variable_ids().unwrap();
+                let state = arbitrary_state(used_ids);
+                (Just(instance), state)
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn evaluate_instance((instance, state) in instance_with_state()) {
+            instance.evaluate(&state).unwrap();
+        }
+    }
 }
