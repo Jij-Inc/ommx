@@ -1,13 +1,13 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
+requires = ["maturin == 1.7.5"]
 build-backend = "maturin"
 
 [project]
 name = "ommx"
 
-version = "1.4.4"
+version = "1.4.5"
 description = "Open Mathematical prograMming eXchange (OMMX)"
-authors = [{ name="Jij Inc.", email="info@j-ij.com" }]
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
 classifiers = [
@@ -61,4 +61,4 @@ module-name = "ommx._ommx_rust"
 features = ["pyo3/extension-module"]
 
 [tool.ruff.lint]
-per-file-ignores = {"*_pb2.py" = ["ALL"]}
+per-file-ignores = { "*_pb2.py" = ["ALL"] }

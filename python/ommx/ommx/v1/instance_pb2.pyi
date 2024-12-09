@@ -9,6 +9,7 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
+import ommx.v1.constraint_hints_pb2
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
@@ -175,6 +176,7 @@ class Instance(google.protobuf.message.Message):
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
+    CONSTRAINT_HINTS_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it.
 
@@ -209,6 +211,10 @@ class Instance(google.protobuf.message.Message):
     def parameters(self) -> global___Parameters:
         """Parameters used when instantiating this instance"""
 
+    @property
+    def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
+        """Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
+
     def __init__(
         self,
         *,
@@ -222,12 +228,15 @@ class Instance(google.protobuf.message.Message):
         | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
         parameters: global___Parameters | None = ...,
+        constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "constraint_hints",
+            b"constraint_hints",
             "description",
             b"description",
             "objective",
@@ -241,6 +250,8 @@ class Instance(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "constraint_hints",
+            b"constraint_hints",
             "constraints",
             b"constraints",
             "decision_variables",

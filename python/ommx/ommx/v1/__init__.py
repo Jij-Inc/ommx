@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Iterable, overload
+from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -138,6 +138,13 @@ class Instance:
         return Instance.from_bytes(bytes)
 
     def write_mps(self, path: str):
+        """
+        Outputs the instance as an MPS file.
+
+        - The outputted file is compressed by gzip.
+        - Only linear problems are supported.
+        - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
+        """
         _ommx_rust.write_mps_file(self.to_bytes(), path)
 
     @staticmethod
@@ -207,11 +214,21 @@ class Instance:
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
 
-    def evaluate(self, state: State) -> Solution:
+    def evaluate(self, state: State | Mapping[int, float]) -> Solution:
+        if not isinstance(state, State):
+            state = State(entries=state)
         out, _ = _ommx_rust.evaluate_instance(
             self.to_bytes(), state.SerializeToString()
         )
         return Solution.from_bytes(out)
+
+    def partial_evaluate(self, state: State | Mapping[int, float]) -> Instance:
+        if not isinstance(state, State):
+            state = State(entries=state)
+        out, _ = _ommx_rust.partial_evaluate_instance(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Instance.from_bytes(out)
 
 
 @dataclass
@@ -560,9 +577,6 @@ class DecisionVariable:
         """
         return self.raw == other.raw
 
-    def __repr__(self) -> str:
-        return f"x{self.raw.id}"
-
     def __add__(self, other: int | float | DecisionVariable) -> Linear:
         if isinstance(other, float) or isinstance(other, int):
             return Linear(terms={self.raw.id: 1}, constant=other)
@@ -702,6 +716,69 @@ class Linear:
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+        """
+        Evaluate the linear function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3, x2 = 4, x3 = 5`
+
+            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+            >>> value, used_ids = f.evaluate({1: 3, 2: 4, 3: 5}) # Unused ID `3` can be included
+
+            2*3 + 3*4 + 1 = 19
+            >>> value
+            19.0
+
+            Since the value of ID `3` of `state` is not used, the it is not included in `used_ids`.
+            >>> used_ids
+            {1, 2}
+
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        return _ommx_rust.evaluate_linear(self.to_bytes(), state.SerializeToString())
+
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Linear, set]:
+        """
+        Partially evaluate the linear function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3`, yielding `3 x2 + 7`
+
+            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+            >>> new_f, used_ids = f.partial_evaluate({1: 3})
+            >>> new_f
+            Linear(3*x2 + 7)
+            >>> used_ids
+            {1}
+            >>> new_f.partial_evaluate({2: 4})
+            (Linear(19), {2})
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        new, used_ids = _ommx_rust.partial_evaluate_linear(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Linear.from_bytes(new), used_ids
+
     def __repr__(self) -> str:
         return f"Linear({_ommx_rust.Linear.decode(self.raw.SerializeToString()).__repr__()})"
 
@@ -835,6 +912,69 @@ class Quadratic:
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+        """
+        Evaluate the quadratic function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2 + 3*x2*x3 + 1
+            >>> f
+            Quadratic(2*x1*x2 + 3*x2*x3 + 1)
+
+            >>> f.evaluate({1: 3, 2: 4, 3: 5})
+            (85.0, {1, 2, 3})
+
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        return _ommx_rust.evaluate_quadratic(self.to_bytes(), state.SerializeToString())
+
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Quadratic, set]:
+        """
+        Partially evaluate the quadratic function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3`, yielding `3 x2 x3 + 6 x2 + 1`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2 + 3*x2*x3 + 1
+            >>> f
+            Quadratic(2*x1*x2 + 3*x2*x3 + 1)
+
+            >>> f.partial_evaluate({1: 3})
+            (Quadratic(3*x2*x3 + 6*x2 + 1), {1})
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        new, used_ids = _ommx_rust.partial_evaluate_quadratic(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Quadratic.from_bytes(new), used_ids
+
     def __repr__(self) -> str:
         return f"Quadratic({_ommx_rust.Quadratic.decode(self.raw.SerializeToString()).__repr__()})"
 
@@ -932,6 +1072,71 @@ class Polynomial:
         lhs = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
+
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+        """
+        Evaluate the polynomial with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
+            >>> f
+            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
+
+            >>> f.evaluate({1: 3, 2: 4, 3: 5})
+            (181.0, {1, 2, 3})
+
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        return _ommx_rust.evaluate_polynomial(
+            self.to_bytes(), state.SerializeToString()
+        )
+
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Polynomial, set]:
+        """
+        Partially evaluate the polynomial with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3`, yielding `9 x2 x3 + 1`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
+            >>> f
+            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
+
+            >>> f.partial_evaluate({1: 3})
+            (Polynomial(9*x2*x3 + 1), {1})
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        new, used_ids = _ommx_rust.partial_evaluate_polynomial(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Polynomial.from_bytes(new), used_ids
 
     def __repr__(self) -> str:
         return f"Polynomial({_ommx_rust.Polynomial.decode(self.raw.SerializeToString()).__repr__()})"
@@ -1057,6 +1262,69 @@ class Function:
         lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
+
+    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+        """
+        Evaluate the function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = Function(2*x1*x2 + 3*x2*x3 + 1)
+            >>> f
+            Function(2*x1*x2 + 3*x2*x3 + 1)
+
+            >>> f.evaluate({1: 3, 2: 4, 3: 5})
+            (85.0, {1, 2, 3})
+
+            Missing ID raises an error
+            >>> f.evaluate({1: 3})
+            Traceback (most recent call last):
+            ...
+            RuntimeError: Variable id (2) is not found in the solution
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        return _ommx_rust.evaluate_function(self.to_bytes(), state.SerializeToString())
+
+    def partial_evaluate(
+        self, state: State | Mapping[int, float]
+    ) -> tuple[Function, set]:
+        """
+        Partially evaluate the function with the given state.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3`, yielding `3 x2 x3 + 6 x2 + 1`
+
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> x3 = DecisionVariable.integer(3)
+            >>> f = Function(2*x1*x2 + 3*x2*x3 + 1)
+            >>> f
+            Function(2*x1*x2 + 3*x2*x3 + 1)
+
+            >>> f.partial_evaluate({1: 3})
+            (Function(3*x2*x3 + 6*x2 + 1), {1})
+
+        """
+        if not isinstance(state, State):
+            state = State(entries=state)
+        new, used_ids = _ommx_rust.partial_evaluate_function(
+            self.to_bytes(), state.SerializeToString()
+        )
+        return Function.from_bytes(new), used_ids
 
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"

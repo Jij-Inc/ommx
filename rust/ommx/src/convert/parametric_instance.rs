@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     v1::{
+        decision_variable::Kind,
         instance::{Description, Sense},
         Function, Instance, Parameters, ParametricInstance, State,
     },
@@ -21,6 +22,7 @@ impl From<Instance> for ParametricInstance {
             constraints,
             decision_variables,
             sense,
+            constraint_hints,
             parameters: _, // Drop previous parameters
         }: Instance,
     ) -> Self {
@@ -31,6 +33,7 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             sense,
             parameters: Default::default(),
+            constraint_hints,
         }
     }
 }
@@ -79,6 +82,7 @@ impl ParametricInstance {
             decision_variables: self.decision_variables,
             sense: self.sense,
             parameters: Some(parameters),
+            constraint_hints: self.constraint_hints,
         })
     }
 
@@ -142,7 +146,10 @@ impl Arbitrary for ParametricInstance {
                             (
                                 Just(objective),
                                 Just(constraints),
-                                arbitrary_decision_variables(decision_variable_ids),
+                                arbitrary_decision_variables(
+                                    decision_variable_ids,
+                                    Kind::arbitrary(),
+                                ),
                                 arbitrary_parameters(parameter_ids),
                                 Option::<Description>::arbitrary(),
                                 Sense::arbitrary(),
@@ -163,6 +170,8 @@ impl Arbitrary for ParametricInstance {
                                             description,
                                             sense: sense as i32,
                                             parameters,
+                                            // FIXME: generate valid constraint_hints
+                                            constraint_hints: None,
                                         }
                                     },
                                 )
