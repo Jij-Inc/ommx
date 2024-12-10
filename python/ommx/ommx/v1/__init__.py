@@ -1019,8 +1019,7 @@ class Quadratic:
     def __mul__(self, other: int | float) -> Quadratic: ...
 
     @overload
-    def __mul__(self, other: DecisionVariable |
-                Linear | Quadratic) -> Polynomial: ...
+    def __mul__(self, other: DecisionVariable | Linear | Quadratic) -> Polynomial: ...
 
     def __mul__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
@@ -1177,8 +1176,7 @@ class Polynomial:
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(
-            other, (int, float, DecisionVariable,
-                    Linear, Quadratic, Polynomial)
+            other, (int, float, DecisionVariable, Linear, Quadratic, Polynomial)
         ):
             return self + (-other)
         return NotImplemented
