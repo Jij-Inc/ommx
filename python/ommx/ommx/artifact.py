@@ -611,7 +611,13 @@ class ArtifactBuilder:
             annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
         return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
 
-    def add_ndarray(self, array: numpy.ndarray, /, **annotations: str) -> Descriptor:
+    def add_ndarray(
+        self,
+        array: numpy.ndarray,
+        /,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
+    ) -> Descriptor:
         """
         Add a numpy ndarray to the artifact with npy format
 
@@ -647,10 +653,18 @@ class ArtifactBuilder:
         f = io.BytesIO()
         numpy.save(f, array)
         blob = f.getvalue()
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.numpy", blob, annotations)
 
-    def add_dataframe(self, df: pandas.DataFrame, /, **annotations: str) -> Descriptor:
+    def add_dataframe(
+        self,
+        df: pandas.DataFrame,
+        /,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
+    ) -> Descriptor:
         """
         Add a pandas DataFrame to the artifact with parquet format
 
@@ -680,10 +694,14 @@ class ArtifactBuilder:
 
         """
         blob = df.to_parquet()
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.apache.parquet", blob, annotations)
 
-    def add_json(self, obj, /, **annotations: str) -> Descriptor:
+    def add_json(
+        self, obj, /, annotation_namespace: str = "org.ommx.user.", **annotations: str
+    ) -> Descriptor:
         """
         Add a JSON object to the artifact
 
@@ -710,7 +728,9 @@ class ArtifactBuilder:
 
         """
         blob = json.dumps(obj).encode("utf-8")
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/json", blob, annotations)
 
     def add_layer(
