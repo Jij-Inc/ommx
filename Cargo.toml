@@ -1,11 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "rust/ommx",
-    "rust/protogen",
-    "rust/dataset",
-    "python/ommx",
-]
+members = ["rust/ommx", "rust/protogen", "rust/dataset", "python/ommx"]
 
 [workspace.package]
 version = "2.0.0-rc.0"
@@ -37,7 +32,7 @@ prost = "0.12.6"
 prost-build = "0.12.6"
 pyo3 = { version = "0.21.2", features = ["anyhow"] }
 pyo3-log = "0.10.0"
-pyo3-stub-gen = "0.6.0"
+pyo3-stub-gen = "0.6.1"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 serde = { version = "1.0.214", features = ["derive"] }

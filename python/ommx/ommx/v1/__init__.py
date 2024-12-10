@@ -16,6 +16,8 @@ from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
 from .. import _ommx_rust
 
+__all__ = ["Bound"]
+
 
 @dataclass
 class Instance:
@@ -615,7 +617,7 @@ class DecisionVariable:
     def __rmul__(self, other):
         return self * other
 
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
         """
         Create a constraint that this decision variable is equal to another decision variable or a constant.
 
@@ -835,7 +837,7 @@ class Linear:
     def __neg__(self) -> Linear:
         return -1 * self
 
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportGeneralTypeIssues]
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
         """
         Create a constraint that this linear function is equal to the right-hand side.
 
