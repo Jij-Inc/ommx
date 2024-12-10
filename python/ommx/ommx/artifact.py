@@ -615,6 +615,7 @@ class ArtifactBuilder:
         self,
         array: numpy.ndarray,
         /,
+        *,
         annotation_namespace: str = "org.ommx.user.",
         **annotations: str,
     ) -> Descriptor:
@@ -662,6 +663,7 @@ class ArtifactBuilder:
         self,
         df: pandas.DataFrame,
         /,
+        *,
         annotation_namespace: str = "org.ommx.user.",
         **annotations: str,
     ) -> Descriptor:
@@ -692,6 +694,13 @@ class ArtifactBuilder:
         >>> df2 = artifact.get_dataframe(layer)
         >>> assert df.equals(df2)
 
+        You can use another namespace for annotations via `annotation_namespace` argument.
+
+        >>> builder = ArtifactBuilder.temp()
+        >>> desc = builder.add_dataframe(df, annotation_namespace="org.ommx.user2.", title="test_dataframe")
+        >>> print(desc.annotations)
+        {'org.ommx.user2.title': 'test_dataframe'}
+
         """
         blob = df.to_parquet()
         if not annotation_namespace.endswith("."):
@@ -700,7 +709,12 @@ class ArtifactBuilder:
         return self.add_layer("application/vnd.apache.parquet", blob, annotations)
 
     def add_json(
-        self, obj, /, annotation_namespace: str = "org.ommx.user.", **annotations: str
+        self,
+        obj,
+        /,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
     ) -> Descriptor:
         """
         Add a JSON object to the artifact
