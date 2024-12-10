@@ -466,7 +466,10 @@ mod tests {
     proptest! {
         #[test]
         fn evaluate_instance((instance, state) in instance_with_state()) {
-            instance.evaluate(&state).unwrap();
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            let mut cids = instance.constraint_ids();
+            cids.extend(instance.removed_constraint_ids());
+            prop_assert!(solution.constraint_ids() == cids);
         }
     }
 }
