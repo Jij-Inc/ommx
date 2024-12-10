@@ -1,4 +1,4 @@
-use crate::v1::{Constraint, Equality, Function};
+use crate::v1::{Constraint, Equality, Function, RemovedConstraint};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
@@ -80,4 +80,31 @@ pub fn arbitrary_constraints(
             c
         })
         .boxed()
+}
+
+impl Arbitrary for RemovedConstraint {
+    type Parameters = <Constraint as Arbitrary>::Parameters;
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
+        (
+            Constraint::arbitrary_with(parameters),
+            String::arbitrary(),
+            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 0..=2),
+        )
+            .prop_map(
+                |(constraint, removed_reason, removed_reason_parameters)| RemovedConstraint {
+                    constraint: Some(constraint),
+                    removed_reason,
+                    removed_reason_parameters,
+                },
+            )
+            .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..10_usize, 0..5_u32, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
+    }
 }
