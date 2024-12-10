@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .artifact import Artifact
 from . import v1, _ommx_rust
 
