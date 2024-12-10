@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// Annotations for [`application/org.ommx.v1.instance`][crate::artifact::media_types::v1_instance]
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
 pub struct InstanceAnnotations(HashMap<String, String>);
 
 impl InstanceAnnotations {
@@ -108,7 +108,7 @@ impl InstanceAnnotations {
 }
 
 /// Annotations for [`application/org.ommx.v1.solution`][crate::artifact::media_types::v1_solution]
-#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into)]
+#[derive(Debug, Default, Clone, PartialEq, From, Deref, Into, Serialize, Deserialize)]
 pub struct SolutionAnnotations(HashMap<String, String>);
 
 impl SolutionAnnotations {
