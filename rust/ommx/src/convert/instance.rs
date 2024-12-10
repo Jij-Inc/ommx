@@ -1,15 +1,15 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Function, Instance, Parameter, ParametricInstance,
+    Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
 };
 
 use super::{
@@ -32,6 +32,11 @@ impl Instance {
         for c in &self.constraints {
             used_ids.extend(c.function().used_decision_variable_ids());
         }
+        for c in &self.removed_constraints {
+            if let Some(c) = &c.constraint {
+                used_ids.extend(c.function().used_decision_variable_ids());
+            }
+        }
         Ok(used_ids)
     }
 
@@ -40,6 +45,17 @@ impl Instance {
             .iter()
             .map(|dv| dv.id)
             .collect::<BTreeSet<_>>()
+    }
+
+    pub fn constraint_ids(&self) -> BTreeSet<u64> {
+        self.constraints.iter().map(|c| c.id).collect()
+    }
+
+    pub fn removed_constraint_ids(&self) -> BTreeSet<u64> {
+        self.removed_constraints
+            .iter()
+            .filter_map(|c| c.constraint.as_ref().map(|c| c.id))
+            .collect()
     }
 
     pub fn check_decision_variables(&self) -> Result<()> {
@@ -92,6 +108,7 @@ impl Instance {
         let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
         let mut parameters = Vec::new();
+        let mut removed_constraints = Vec::new();
         for (i, c) in self.constraints.into_iter().enumerate() {
             let parameter = Parameter {
                 id: id_base + i as u64,
@@ -102,6 +119,11 @@ impl Instance {
             let f = c.function().into_owned();
             objective = objective + &parameter * f.clone() * f;
             parameters.push(parameter);
+            removed_constraints.push(RemovedConstraint {
+                constraint: Some(c),
+                removed_reason: "penalty_method".to_string(),
+                removed_reason_parameters: Default::default(),
+            });
         }
         ParametricInstance {
             description: self.description,
@@ -111,6 +133,7 @@ impl Instance {
             sense: self.sense,
             parameters,
             constraint_hints: self.constraint_hints,
+            removed_constraints,
         }
     }
 
@@ -120,6 +143,41 @@ impl Instance {
             .filter(|dv| dv.kind() == Kind::Binary)
             .map(|dv| dv.id)
             .collect()
+    }
+
+    pub fn relax_constraint(
+        &mut self,
+        constraint_id: u64,
+        removed_reason: String,
+        removed_reason_parameters: HashMap<String, String>,
+    ) -> Result<()> {
+        let index = self
+            .constraints
+            .iter()
+            .position(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let c = self.constraints.remove(index);
+        self.removed_constraints.push(RemovedConstraint {
+            constraint: Some(c),
+            removed_reason,
+            removed_reason_parameters,
+        });
+        Ok(())
+    }
+
+    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
+        let index = self
+            .removed_constraints
+            .iter()
+            .position(|c| {
+                c.constraint
+                    .as_ref()
+                    .map_or(false, |c| c.id == constraint_id)
+            })
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let c = self.removed_constraints.remove(index).constraint.unwrap();
+        self.constraints.push(c);
+        Ok(())
     }
 
     /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
@@ -211,21 +269,51 @@ fn arbitrary_instance(
             for c in &constraints {
                 used_ids.extend(c.function().used_decision_variable_ids());
             }
+            let relaxed = if constraints.is_empty() {
+                Just(Vec::new()).boxed()
+            } else {
+                let constraint_ids = constraints.iter().map(|c| c.id).collect::<Vec<_>>();
+                proptest::sample::subsequence(constraint_ids, 0..=constraints.len()).boxed()
+            };
             (
                 Just(objective),
                 Just(constraints),
                 arbitrary_decision_variables(used_ids, kind_strategy.clone()),
                 Option::<Description>::arbitrary(),
                 Sense::arbitrary(),
+                relaxed,
+                String::arbitrary(),
+                proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 0..=2),
             )
                 .prop_map(
-                    |(objective, constraints, decision_variables, description, sense)| Instance {
+                    |(
                         objective,
                         constraints,
                         decision_variables,
                         description,
-                        sense: sense as i32,
-                        ..Default::default()
+                        sense,
+                        relaxed,
+                        removed_reason,
+                        removed_parameters,
+                    )| {
+                        let mut instance = Instance {
+                            objective,
+                            constraints,
+                            decision_variables,
+                            description,
+                            sense: sense as i32,
+                            ..Default::default()
+                        };
+                        for i in relaxed {
+                            instance
+                                .relax_constraint(
+                                    i,
+                                    removed_reason.clone(),
+                                    removed_parameters.clone(),
+                                )
+                                .unwrap();
+                        }
+                        instance
                     },
                 )
         })
@@ -351,6 +439,9 @@ mod tests {
         #[test]
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.check_decision_variables().unwrap();
+            let constraint_ids = instance.constraint_ids();
+            let removed_constraint_ids = instance.removed_constraint_ids();
+            prop_assert!(constraint_ids.is_disjoint(&removed_constraint_ids));
         }
 
         #[test]
