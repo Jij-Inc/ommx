@@ -34,6 +34,13 @@ jobs:
           github_token: ${{ github.token }}
           clippy_flags: -- -Dwarnings
 
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+
   test:
     runs-on: ubuntu-latest
     steps:
