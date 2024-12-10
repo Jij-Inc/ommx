@@ -617,8 +617,7 @@ class DecisionVariable:
     def __rmul__(self, other):
         return self * other
 
-    # type: ignore[reportGeneralTypeIssues]
-    def __eq__(self, other) -> Constraint:
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
         """
         Create a constraint that this decision variable is equal to another decision variable or a constant.
 
@@ -838,8 +837,7 @@ class Linear:
     def __neg__(self) -> Linear:
         return -1 * self
 
-    # type: ignore[reportGeneralTypeIssues]
-    def __eq__(self, other) -> Constraint:
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
         """
         Create a constraint that this linear function is equal to the right-hand side.
 
