@@ -1,5 +1,6 @@
 mod artifact;
 mod builder;
+mod dataset;
 mod descriptor;
 mod evaluate;
 mod message;
@@ -7,6 +8,7 @@ mod mps;
 
 pub use artifact::*;
 pub use builder::*;
+pub use dataset::*;
 pub use descriptor::*;
 pub use evaluate::*;
 pub use message::*;
@@ -49,6 +51,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(write_mps_file, m)?)?;
+
+    // Dataset
+    m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
     Ok(())
 }
 
