@@ -51,6 +51,13 @@ impl Instance {
         self.constraints.iter().map(|c| c.id).collect()
     }
 
+    pub fn removed_constraint_ids(&self) -> BTreeSet<u64> {
+        self.removed_constraints
+            .iter()
+            .filter_map(|c| c.constraint.as_ref().map(|c| c.id))
+            .collect()
+    }
+
     pub fn check_decision_variables(&self) -> Result<()> {
         let used_ids = self.used_decision_variable_ids()?;
         let defined_ids = self.defined_ids();
@@ -432,6 +439,9 @@ mod tests {
         #[test]
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
             instance.check_decision_variables().unwrap();
+            let constraint_ids = instance.constraint_ids();
+            let removed_constraint_ids = instance.removed_constraint_ids();
+            prop_assert!(constraint_ids.is_disjoint(&removed_constraint_ids));
         }
 
         #[test]
