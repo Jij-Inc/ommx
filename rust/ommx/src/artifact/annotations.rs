@@ -10,6 +10,10 @@ use std::collections::HashMap;
 pub struct InstanceAnnotations(HashMap<String, String>);
 
 impl InstanceAnnotations {
+    pub fn into_inner(self) -> HashMap<String, String> {
+        self.0
+    }
+
     fn get(&self, key: &str) -> Result<&String> {
         self.0.get(key).context(format!(
             "Annotation does not have the entry with the key `{}`",
@@ -112,6 +116,10 @@ impl InstanceAnnotations {
 pub struct SolutionAnnotations(HashMap<String, String>);
 
 impl SolutionAnnotations {
+    pub fn into_inner(self) -> HashMap<String, String> {
+        self.0
+    }
+
     pub fn from_descriptor(desc: &Descriptor) -> Self {
         Self(desc.annotations().as_ref().cloned().unwrap_or_default())
     }
