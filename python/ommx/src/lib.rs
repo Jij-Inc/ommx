@@ -3,6 +3,7 @@ mod builder;
 mod dataset;
 mod descriptor;
 mod evaluate;
+mod instance;
 mod message;
 mod mps;
 
@@ -11,6 +12,7 @@ pub use builder::*;
 pub use dataset::*;
 pub use descriptor::*;
 pub use evaluate::*;
+pub use instance::*;
 pub use message::*;
 pub use mps::*;
 
@@ -47,6 +49,10 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
     m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
+
+    // Instance
+    m.add_function(wrap_pyfunction!(instance_to_pubo, m)?)?;
+    m.add_function(wrap_pyfunction!(instance_to_qubo, m)?)?;
 
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
