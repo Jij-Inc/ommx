@@ -54,7 +54,7 @@ impl ParametricInstance {
         Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
     }
 
-    pub fn with_parameters<'py>(&self, parameters: &Parameters) -> Result<Instance> {
+    pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
         let instance = self.0.clone().with_parameters(parameters.0.clone())?;
         Ok(Instance(instance))
     }
