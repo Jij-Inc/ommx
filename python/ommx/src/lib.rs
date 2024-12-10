@@ -36,6 +36,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
     m.add_class::<Instance>()?;
     m.add_class::<ParametricInstance>()?;
+    m.add_class::<Parameters>()?;
 
     // Evaluate
     m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
