@@ -9,7 +9,7 @@ use num::Zero;
 use proptest::prelude::*;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
 };
 
 use super::{
@@ -58,12 +58,38 @@ impl Instance {
             .collect()
     }
 
-    pub fn check_decision_variables(&self) -> Result<()> {
+    /// Execute all validations for this instance
+    pub fn validate(&self) -> Result<()> {
+        self.validate_decision_variable_ids()?;
+        self.validate_constraint_ids()?;
+        Ok(())
+    }
+
+    /// Validate that all decision variable IDs used in the instance are defined.
+    pub fn validate_decision_variable_ids(&self) -> Result<()> {
         let used_ids = self.used_decision_variable_ids()?;
         let defined_ids = self.defined_ids();
         if !used_ids.is_subset(&defined_ids) {
             let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
             bail!("Undefined decision variable IDs: {:?}", undefined_ids);
+        }
+        Ok(())
+    }
+
+    /// Test all constraints and removed constraints have unique IDs.
+    pub fn validate_constraint_ids(&self) -> Result<()> {
+        let mut map = HashSet::new();
+        for c in &self.constraints {
+            if !map.insert(c.id) {
+                bail!("Duplicated constraint ID: {}", c.id);
+            }
+        }
+        for c in &self.removed_constraints {
+            if let Some(c) = &c.constraint {
+                if !map.insert(c.id) {
+                    bail!("Duplicated constraint ID: {}", c.id);
+                }
+            }
         }
         Ok(())
     }
@@ -438,10 +464,7 @@ mod tests {
     proptest! {
         #[test]
         fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
-            instance.check_decision_variables().unwrap();
-            let constraint_ids = instance.constraint_ids();
-            let removed_constraint_ids = instance.removed_constraint_ids();
-            prop_assert!(constraint_ids.is_disjoint(&removed_constraint_ids));
+            instance.validate().unwrap();
         }
 
         #[test]
