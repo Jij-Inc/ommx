@@ -189,7 +189,7 @@ impl Instance {
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     ///
-    pub fn to_pubo(&self) -> Result<BTreeMap<BinaryIds, f64>> {
+    pub fn as_pubo_format(&self) -> Result<BTreeMap<BinaryIds, f64>> {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
@@ -223,7 +223,7 @@ impl Instance {
     ///   - TODO: Binary encoding will be added.
     /// - The degree of the objective is at most 2.
     ///
-    pub fn to_qubo(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+    pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
@@ -478,7 +478,7 @@ mod tests {
 
         #[test]
         fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
-            let pubo = instance.to_pubo().unwrap();
+            let pubo = instance.as_pubo_format().unwrap();
             for (_, c) in pubo {
                 prop_assert!(c.abs() > f64::EPSILON);
             }
@@ -486,7 +486,7 @@ mod tests {
 
         #[test]
         fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
-            let (quad, _) = instance.to_qubo().unwrap();
+            let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);
                 prop_assert!(c.abs() > f64::EPSILON);
