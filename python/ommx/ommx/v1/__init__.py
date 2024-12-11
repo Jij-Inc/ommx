@@ -15,7 +15,6 @@ from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
-    Parameter as _Parameter,
 )
 
 from .. import _ommx_rust
@@ -189,6 +188,21 @@ class Instance:
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
 
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
     @property
     def objective(self) -> Function:
         return Function(self.raw.objective)
@@ -216,6 +230,21 @@ class Instance:
         )
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
+
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint` instances.
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
 
     @property
     def sense(self) -> _Instance.Sense.ValueType:
@@ -1538,6 +1567,13 @@ class Constraint:
             subscripts=subscripts,
             parameters=parameters,
         )
+
+    @staticmethod
+    def from_raw(raw: _Constraint) -> Constraint:
+        new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
+        new.raw = raw
+        Constraint._counter = max(Constraint._counter, raw.id + 1)
+        return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
