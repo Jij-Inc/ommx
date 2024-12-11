@@ -16,7 +16,20 @@ from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 
 from .. import _ommx_rust
 
-__all__ = ["Bound"]
+__all__ = [
+    "Bound",
+    "Function",
+    "Instance",
+    "DecisionVariable",
+    "Linear",
+    "Quadratic",
+    "Polynomial",
+    "Constraint",
+    "State",
+    "Optimality",
+    "Relaxation",
+    "Solution",
+]
 
 
 @dataclass
