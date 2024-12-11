@@ -266,15 +266,6 @@ class Instance:
         )
         return Instance.from_bytes(out)
 
-    def to_qubo(self) -> tuple[dict[tuple[int, int], float], float]:
-        """
-        Easy-to-use method to convert non-QUBO instance into QUBO and return as a QUBO format.
-        """
-        raise NotImplementedError
-
-    def to_pubo(self) -> dict[tuple[int, ...], float]:
-        raise NotImplementedError
-
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
         Convert unconstrained quadratic instance to PyQUBO-style format.
@@ -294,6 +285,13 @@ class Instance:
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_pubo_format()
+
+    def penalty_method(self) -> ParametricInstance:
+        """
+        Convert the instance to a parametric instance for penalty method.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
 
 @dataclass
