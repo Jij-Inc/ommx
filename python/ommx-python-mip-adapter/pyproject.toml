@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "1.5.1"
+version = "1.5.2"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [
