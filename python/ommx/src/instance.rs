@@ -22,13 +22,13 @@ impl Instance {
         Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
     }
 
-    pub fn to_pubo<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
-        let pubo = self.0.to_pubo()?;
+    pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let pubo = self.0.as_pubo_format()?;
         Ok(serde_pyobject::to_pyobject(py, &pubo)?.extract()?)
     }
 
-    pub fn to_qubo<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let (qubo, constant) = self.0.to_qubo()?;
+    pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+        let (qubo, constant) = self.0.as_qubo_format()?;
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 

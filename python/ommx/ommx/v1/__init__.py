@@ -232,6 +232,35 @@ class Instance:
         )
         return Instance.from_bytes(out)
 
+    def to_qubo(self) -> tuple[dict[tuple[int, int], float], float]:
+        """
+        Easy-to-use method to convert non-QUBO instance into QUBO and return as a QUBO format.
+        """
+        raise NotImplementedError
+
+    def to_pubo(self) -> dict[tuple[int, ...], float]:
+        raise NotImplementedError
+
+    def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
+        """
+        Convert unconstrained quadratic instance to PyQUBO-style format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_qubo_format()
+
+    def as_pubo_format(self) -> dict[tuple[int, ...], float]:
+        """
+        Convert unconstrained polynomial instance to simple PUBO format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_pubo_format()
+
 
 @dataclass
 class Solution:
