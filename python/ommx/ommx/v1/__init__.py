@@ -15,6 +15,7 @@ from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
+    Parameter as _Parameter,
 )
 
 from .. import _ommx_rust
@@ -311,11 +312,97 @@ class ParametricInstance:
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_parameters(self) -> list[Parameter]:
+        """
+        Get parameters as a list of :class:`Parameter`.
+        """
+        return [Parameter(raw) for raw in self.raw.parameters]
+
+    def get_parameter(self, parameter_id: int) -> Parameter:
+        """
+        Get a parameter by ID.
+        """
+        for p in self.raw.parameters:
+            if p.id == parameter_id:
+                return Parameter(p)
+        raise ValueError(f"Parameter ID {parameter_id} is not found")
+
     def with_parameters(self, parameters: Parameters) -> Instance:
+        """
+        Substitute parameters to yield an instance.
+        """
         pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
         return Instance.from_bytes(instance.to_bytes())
+
+
+@dataclass
+class Parameter:
+    """
+    Idiomatic wrapper of ``ommx.v1.Parameter`` protobuf message.
+    """
+
+    raw: _Parameter
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Parameter:
+        raw = _Parameter()
+        raw.ParseFromString(data)
+        return Parameter(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
 
 
 @dataclass
