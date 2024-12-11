@@ -52,11 +52,16 @@ impl ParametricInstance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::ParametricInstance::decode(bytes.as_bytes())?;
+        inner.validate()?;
         Ok(Self(inner))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.0.validate()
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
