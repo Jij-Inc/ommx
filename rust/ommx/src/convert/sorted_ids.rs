@@ -1,5 +1,6 @@
 use anyhow::bail;
 use proptest::prelude::*;
+use serde::{ser::*, Serialize};
 use std::{collections::BTreeSet, ops::*};
 
 /// A sorted list of decision variable and parameter IDs
@@ -136,6 +137,16 @@ impl Deref for BinaryIds {
     }
 }
 
+impl Serialize for BinaryIds {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut tup = serializer.serialize_tuple(self.0.len())?;
+        for id in &self.0 {
+            tup.serialize_element(id)?;
+        }
+        tup.end()
+    }
+}
+
 /// ID pair for QUBO problems
 #[derive(Debug, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub struct BinaryIdPair(pub u64, pub u64);
@@ -164,5 +175,14 @@ impl TryFrom<BinaryIds> for BinaryIdPair {
     type Error = anyhow::Error;
     fn try_from(ids: BinaryIds) -> Result<Self, Self::Error> {
         Self::try_from(ids.0.into_iter().collect::<Vec<u64>>())
+    }
+}
+
+impl Serialize for BinaryIdPair {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut tup = serializer.serialize_tuple(2)?;
+        tup.serialize_element(&self.0)?;
+        tup.serialize_element(&self.1)?;
+        tup.end()
     }
 }

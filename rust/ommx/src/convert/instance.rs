@@ -68,7 +68,12 @@ impl Instance {
     /// Validate that all decision variable IDs used in the instance are defined.
     pub fn validate_decision_variable_ids(&self) -> Result<()> {
         let used_ids = self.used_decision_variable_ids()?;
-        let defined_ids = self.defined_ids();
+        let mut defined_ids = BTreeSet::new();
+        for dv in &self.decision_variables {
+            if !defined_ids.insert(dv.id) {
+                bail!("Duplicated definition of decision variable ID: {}", dv.id);
+            }
+        }
         if !used_ids.is_subset(&defined_ids) {
             let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
             bail!("Undefined decision variable IDs: {:?}", undefined_ids);

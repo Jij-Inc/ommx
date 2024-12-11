@@ -6,17 +6,42 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
-from .instance_pb2 import Instance as _Instance
+from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
+from .parametric_instance_pb2 import (
+    ParametricInstance as _ParametricInstance,
+    Parameter as _Parameter,
+)
 
 from .. import _ommx_rust
 
-__all__ = ["Bound"]
+# Exposes as it is for basic classes which does not require any additional logic
+__all__ = [
+    # Imported
+    "Bound",
+    "State",
+    "Optimality",
+    "Relaxation",
+    "Parameters",
+    # Composed classes
+    "ParametricInstance",
+    "Instance",
+    "Solution",
+    "Constraint",
+    # Function
+    "DecisionVariable",
+    "Parameter",
+    "Linear",
+    "Quadratic",
+    "Polynomial",
+    "Equality",
+    "Function",
+]
 
 
 @dataclass
@@ -184,6 +209,21 @@ class Instance:
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
 
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
     @property
     def objective(self) -> Function:
         return Function(self.raw.objective)
@@ -212,6 +252,21 @@ class Instance:
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
 
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint` instances.
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
     @property
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
@@ -231,6 +286,143 @@ class Instance:
             self.to_bytes(), state.SerializeToString()
         )
         return Instance.from_bytes(out)
+
+    def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
+        """
+        Convert unconstrained quadratic instance to PyQUBO-style format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_qubo_format()
+
+    def as_pubo_format(self) -> dict[tuple[int, ...], float]:
+        """
+        Convert unconstrained polynomial instance to simple PUBO format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_pubo_format()
+
+    def penalty_method(self) -> ParametricInstance:
+        """
+        Convert the instance to a parametric instance for penalty method.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
+
+
+@dataclass
+class ParametricInstance:
+    """
+    Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
+    """
+
+    raw: _ParametricInstance
+
+    @staticmethod
+    def from_bytes(data: bytes) -> ParametricInstance:
+        raw = _ParametricInstance()
+        raw.ParseFromString(data)
+        return ParametricInstance(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_parameters(self) -> list[Parameter]:
+        """
+        Get parameters as a list of :class:`Parameter`.
+        """
+        return [Parameter(raw) for raw in self.raw.parameters]
+
+    def get_parameter(self, parameter_id: int) -> Parameter:
+        """
+        Get a parameter by ID.
+        """
+        for p in self.raw.parameters:
+            if p.id == parameter_id:
+                return Parameter(p)
+        raise ValueError(f"Parameter ID {parameter_id} is not found")
+
+    def with_parameters(self, parameters: Parameters) -> Instance:
+        """
+        Substitute parameters to yield an instance.
+        """
+        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
+        ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
+        instance = pi.with_parameters(ps)
+        return Instance.from_bytes(instance.to_bytes())
+
+
+@dataclass
+class Parameter:
+    """
+    Idiomatic wrapper of ``ommx.v1.Parameter`` protobuf message.
+    """
+
+    raw: _Parameter
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Parameter:
+        raw = _Parameter()
+        raw.ParseFromString(data)
+        return Parameter(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
 
 
 @dataclass
@@ -1480,6 +1672,13 @@ class Constraint:
             subscripts=subscripts,
             parameters=parameters,
         )
+
+    @staticmethod
+    def from_raw(raw: _Constraint) -> Constraint:
+        new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
+        new.raw = raw
+        Constraint._counter = max(Constraint._counter, raw.id + 1)
+        return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:

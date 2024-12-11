@@ -3,6 +3,7 @@ mod builder;
 mod dataset;
 mod descriptor;
 mod evaluate;
+mod instance;
 mod message;
 mod mps;
 
@@ -11,6 +12,7 @@ pub use builder::*;
 pub use dataset::*;
 pub use descriptor::*;
 pub use evaluate::*;
+pub use instance::*;
 pub use message::*;
 pub use mps::*;
 
@@ -32,6 +34,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Quadratic>()?;
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
+    m.add_class::<Instance>()?;
+    m.add_class::<ParametricInstance>()?;
+    m.add_class::<Parameters>()?;
 
     // Evaluate
     m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
