@@ -6,17 +6,22 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
-from .instance_pb2 import Instance as _Instance
+from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
+from .parametric_instance_pb2 import (
+    ParametricInstance as _ParametricInstance,
+    Parameter as _Parameter,
+)
 
 from .. import _ommx_rust
 
-__all__ = ["Bound"]
+# Exposes as it is for basic classes which does not require any additional logic
+__all__ = ["Bound", "State", "Optimality", "Relaxation", "Parameters"]
 
 
 @dataclass
@@ -260,6 +265,30 @@ class Instance:
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_pubo_format()
+
+
+@dataclass
+class ParametricInstance:
+    """
+    Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
+    """
+
+    raw: _ParametricInstance
+
+    @staticmethod
+    def from_bytes(data: bytes) -> ParametricInstance:
+        raw = _ParametricInstance()
+        raw.ParseFromString(data)
+        return ParametricInstance(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def with_parameters(self, parameters: Parameters) -> Instance:
+        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
+        ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
+        instance = pi.with_parameters(ps)
+        return Instance.from_bytes(instance.to_bytes())
 
 
 @dataclass
