@@ -187,12 +187,7 @@ class Instance:
 
     @property
     def decision_variables(self) -> DataFrame:
-        decision_variables = self.raw.decision_variables
-        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
+        return DataFrame(
             {
                 "id": v.id,
                 "kind": _kind(v.kind),
@@ -201,11 +196,11 @@ class Instance:
                 "name": v.name,
                 "subscripts": v.subscripts,
                 "description": v.description,
+                "substituted_value": v.substituted_value,
+                **{f"parameters.{key}": value for key, value in v.parameters},
             }
-            for v in decision_variables
+            for v in self.raw.decision_variables
         )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """

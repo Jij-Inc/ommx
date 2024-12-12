@@ -14,11 +14,8 @@ def test_example_mps():
     # convert to a format easier to test.
     # for some reason a simple to_dict gets us weird tuple keys so
     # transforming the structure to make it simpler.
-    dvars = [
-        {k[0]: v for k, v in x.items()}
-        for x in instance.decision_variables.to_dict("records")
-    ]
-    dvars.sort(key=lambda x: x["name"])
+    dvars = instance.get_decision_variables()
+    dvars.sort(key=lambda x: x.name)
     constraints = [
         {k[0]: v for k, v in c.items()} for c in instance.constraints.to_dict("records")
     ]
@@ -27,21 +24,21 @@ def test_example_mps():
     assert len(dvars) == 3
     assert len(constraints) == 3
     x, y, z = dvars
-    assert x["name"] == "x"
-    assert x["kind"] == "continuous"
-    assert x["lower"] == 0
-    assert x["upper"] == 3
-    assert x["subscripts"] == []
-    assert y["name"] == "y"
-    assert y["kind"] == "continuous"
-    assert y["lower"] == 0
-    assert y["upper"] == 5
-    assert y["subscripts"] == []
-    assert z["name"] == "z"
-    assert z["kind"] == "continuous"
-    assert z["lower"] == 0
-    assert z["upper"] == 10
-    assert z["subscripts"] == []
+    assert x.name == "x"
+    assert x.kind == DecisionVariable.CONTINUOUS
+    assert x.bound.lower == 0
+    assert x.bound.upper == 3
+    assert x.subscripts == []
+    assert y.name == "y"
+    assert y.kind == DecisionVariable.CONTINUOUS
+    assert y.bound.lower == 0
+    assert y.bound.upper == 5
+    assert y.subscripts == []
+    assert z.name == "z"
+    assert z.kind == DecisionVariable.CONTINUOUS
+    assert z.bound.lower == 0
+    assert z.bound.upper == 10
+    assert z.subscripts == []
     # constr1
     constr1 = constraints[0]
     assert constr1["name"] == "constr1"
