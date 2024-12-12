@@ -3,7 +3,7 @@ from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
-from pandas import DataFrame, concat, MultiIndex
+from pandas import DataFrame, concat, MultiIndex, NA
 from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
@@ -191,12 +191,14 @@ class Instance:
             {
                 "id": v.id,
                 "kind": _kind(v.kind),
-                "lower": v.bound.lower,
-                "upper": v.bound.upper,
-                "name": v.name,
+                "lower": v.bound.lower if v.HasField("bound") else NA,
+                "upper": v.bound.upper if v.HasField("bound") else NA,
+                "name": v.name if v.HasField("name") else NA,
                 "subscripts": v.subscripts,
-                "description": v.description,
-                "substituted_value": v.substituted_value,
+                "description": v.description if v.HasField("description") else NA,
+                "substituted_value": v.substituted_value
+                if v.HasField("substituted_value")
+                else NA,
                 **{f"parameters.{key}": value for key, value in v.parameters.items()},
             }
             for v in self.raw.decision_variables
