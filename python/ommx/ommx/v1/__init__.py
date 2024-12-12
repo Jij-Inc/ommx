@@ -197,10 +197,10 @@ class Instance:
                 "subscripts": v.subscripts,
                 "description": v.description,
                 "substituted_value": v.substituted_value,
-                **{f"parameters.{key}": value for key, value in v.parameters},
+                **{f"parameters.{key}": value for key, value in v.parameters.items()},
             }
             for v in self.raw.decision_variables
-        )
+        ).set_index("id")
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
