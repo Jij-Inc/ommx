@@ -4,33 +4,33 @@
 format: jb-book
 root: introduction
 parts:
-- caption: "Concept"
-  chapters:
-  - file: concept/architecture
-- caption: "Tutorial"
-  chapters:
-  - file: tutorial/solve_with_ommx_adapter
-  - file: tutorial/share_artifact
-  - file: tutorial/download_miplib_instance
-- caption: "OMMX Message"
-  chapters:
-  - file: ommx_message/architecture
-- caption: "OMMX Artifact"
-  chapters:
-  - file: ommx_artifact/architecture
-- caption: "OMMX Ecosystem"
-  chapters:
-  - file: ommx_ecosystem/links
-- caption: "API Reference"
-  chapters:
-  - url: https://jij-inc.github.io/ommx/protobuf.html
-    title: "OMMX Message Schema"
-  - url: https://jij-inc.github.io/ommx/rust/ommx/index.html
-    title: "OMMX Rust SDK"
-  - url: https://jij-inc.github.io/ommx/python/ommx/index.html
-    title: "OMMX Python SDK"
-  - url: https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/index.html
-    title: "OMMX Python-MIP Adapter"
-- caption: "Release Note"
-  chapters:
-  - file: release_note/ommx-x.y.z
+  - caption: "Concept"
+    chapters:
+      - file: concept/architecture
+  - caption: "Tutorial"
+    chapters:
+      - file: tutorial/solve_with_ommx_adapter
+      - file: tutorial/share_artifact
+      - file: tutorial/download_miplib_instance
+  - caption: "OMMX Message"
+    chapters:
+      - file: ommx_message/architecture
+  - caption: "OMMX Artifact"
+    chapters:
+      - file: ommx_artifact/architecture
+  - caption: "OMMX Ecosystem"
+    chapters:
+      - file: ommx_ecosystem/links
+  - caption: "API Reference"
+    chapters:
+      - url: https://jij-inc.github.io/ommx/protobuf.html
+        title: "OMMX Message Schema"
+      - url: https://jij-inc.github.io/ommx/rust/ommx/index.html
+        title: "OMMX Rust SDK"
+      - url: https://jij-inc.github.io/ommx/python/ommx/index.html
+        title: "OMMX Python SDK"
+      - url: https://jij-inc.github.io/ommx/python/ommx-python-mip-adapter/index.html
+        title: "OMMX Python-MIP Adapter"
+  - caption: "Release Note"
+    chapters:
+      - file: release_note/ommx-1.5.0
