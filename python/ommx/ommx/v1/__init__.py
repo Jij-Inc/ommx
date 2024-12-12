@@ -374,10 +374,12 @@ class ParametricInstance:
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
-    def with_parameters(self, parameters: Parameters) -> Instance:
+    def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
         """
         Substitute parameters to yield an instance.
         """
+        if not isinstance(parameters, Parameters):
+            parameters = Parameters(entries=parameters)
         pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
