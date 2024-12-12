@@ -17,18 +17,20 @@ from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 from .. import _ommx_rust
 
 __all__ = [
-    "Bound",
-    "Function",
     "Instance",
+    "Solution",
+    "Constraint",
+    # Function and its bases
     "DecisionVariable",
     "Linear",
     "Quadratic",
     "Polynomial",
-    "Constraint",
+    "Function",
+    # Imported from protobuf
     "State",
     "Optimality",
     "Relaxation",
-    "Solution",
+    "Bound",
 ]
 
 
