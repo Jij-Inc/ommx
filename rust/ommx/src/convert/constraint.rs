@@ -89,8 +89,8 @@ impl Arbitrary for RemovedConstraint {
     fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
         (
             Constraint::arbitrary_with(parameters),
-            String::arbitrary(),
-            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 0..=2),
+            ".{0,3}",
+            proptest::collection::hash_map(".{0,3}", ".{0,3}", 0..=2),
         )
             .prop_map(
                 |(constraint, removed_reason, removed_reason_parameters)| RemovedConstraint {
