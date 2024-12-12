@@ -117,6 +117,49 @@ impl ParametricInstance {
     pub fn defined_parameter_ids(&self) -> BTreeSet<u64> {
         self.parameters.iter().map(|p| p.id).collect()
     }
+
+    pub fn validate(&self) -> Result<()> {
+        self.validate_ids()?;
+        self.validate_constraint_ids()?;
+        Ok(())
+    }
+
+    pub fn validate_ids(&self) -> Result<()> {
+        let mut ids = BTreeSet::new();
+        for dv in &self.decision_variables {
+            if !ids.insert(dv.id) {
+                bail!("Duplicate decision variable ID: {}", dv.id);
+            }
+        }
+        for p in &self.parameters {
+            if !ids.insert(p.id) {
+                bail!("Duplicate parameter ID: {}", p.id);
+            }
+        }
+        let used_ids = self.used_ids()?;
+        if !used_ids.is_subset(&ids) {
+            let sub = used_ids.difference(&ids).collect::<BTreeSet<_>>();
+            bail!("Undefined ID is used: {:?}", sub);
+        }
+        Ok(())
+    }
+
+    pub fn validate_constraint_ids(&self) -> Result<()> {
+        let mut ids = BTreeSet::new();
+        for c in &self.constraints {
+            if !ids.insert(c.id) {
+                bail!("Duplicate constraint ID: {}", c.id);
+            }
+        }
+        for c in &self.removed_constraints {
+            if let Some(c) = c.constraint.as_ref() {
+                if !ids.insert(c.id) {
+                    bail!("Duplicate removed constraint ID: {}", c.id);
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Arbitrary for ParametricInstance {
@@ -220,14 +263,8 @@ mod tests {
         }
 
         #[test]
-        fn test_ids(pi in ParametricInstance::arbitrary()) {
-            let dv_ids = pi.defined_decision_variable_ids();
-            let p_ids = pi.defined_parameter_ids();
-            prop_assert!(dv_ids.is_disjoint(&p_ids));
-
-            let all_ids: BTreeSet<u64> = dv_ids.union(&p_ids).cloned().collect();
-            let used_ids = pi.used_ids().unwrap();
-            prop_assert!(used_ids.is_subset(&all_ids));
+        fn validate(pi in ParametricInstance::arbitrary()) {
+            pi.validate().unwrap();
         }
     }
 }

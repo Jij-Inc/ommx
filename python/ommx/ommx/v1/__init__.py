@@ -4,30 +4,38 @@ from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
+from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
-from .instance_pb2 import Instance as _Instance
+from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import Equality, Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
+from .parametric_instance_pb2 import (
+    ParametricInstance as _ParametricInstance,
+    Parameter as _Parameter,
+)
 
 from .. import _ommx_rust
 
 __all__ = [
     "Instance",
+    "ParametricInstance",
     "Solution",
     "Constraint",
     # Function and its bases
     "DecisionVariable",
+    "Parameter",
     "Linear",
     "Quadratic",
     "Polynomial",
     "Function",
     # Imported from protobuf
     "State",
+    "Parameters",
     "Optimality",
     "Relaxation",
     "Bound",
@@ -199,6 +207,21 @@ class Instance:
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
 
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
     @property
     def objective(self) -> Function:
         return Function(self.raw.objective)
@@ -227,6 +250,21 @@ class Instance:
         df.columns = MultiIndex.from_product([df.columns, [""]])
         return concat([df, parameters], axis=1).set_index("id")
 
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint` instances.
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
     @property
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
@@ -246,6 +284,220 @@ class Instance:
             self.to_bytes(), state.SerializeToString()
         )
         return Instance.from_bytes(out)
+
+    def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
+        """
+        Convert unconstrained quadratic instance to PyQUBO-style format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_qubo_format()
+
+    def as_pubo_format(self) -> dict[tuple[int, ...], float]:
+        """
+        Convert unconstrained polynomial instance to simple PUBO format.
+
+        This method is designed for better composability rather than easy-to-use.
+        This does not execute any conversion of the instance, only translates the data format.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_pubo_format()
+
+    def penalty_method(self) -> ParametricInstance:
+        """
+        Convert the instance to a parametric instance for penalty method.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
+
+
+@dataclass
+class ParametricInstance:
+    """
+    Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
+    """
+
+    raw: _ParametricInstance
+
+    @staticmethod
+    def from_bytes(data: bytes) -> ParametricInstance:
+        raw = _ParametricInstance()
+        raw.ParseFromString(data)
+        return ParametricInstance(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    def get_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get decision variables as a list of :class:`DecisionVariable` instances.
+        """
+        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.raw.decision_variables:
+            if v.id == variable_id:
+                return DecisionVariable(v)
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraints(self) -> list[Constraint]:
+        """
+        Get constraints as a list of :class:`Constraint
+        """
+        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.raw.constraints:
+            if c.id == constraint_id:
+                return Constraint.from_raw(c)
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_parameters(self) -> list[Parameter]:
+        """
+        Get parameters as a list of :class:`Parameter`.
+        """
+        return [Parameter(raw) for raw in self.raw.parameters]
+
+    def get_parameter(self, parameter_id: int) -> Parameter:
+        """
+        Get a parameter by ID.
+        """
+        for p in self.raw.parameters:
+            if p.id == parameter_id:
+                return Parameter(p)
+        raise ValueError(f"Parameter ID {parameter_id} is not found")
+
+    def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
+        """
+        Substitute parameters to yield an instance.
+        """
+        if not isinstance(parameters, Parameters):
+            parameters = Parameters(entries=parameters)
+        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
+        ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
+        instance = pi.with_parameters(ps)
+        return Instance.from_bytes(instance.to_bytes())
+
+
+class VariableBase(ABC):
+    @property
+    @abstractmethod
+    def id(self) -> int: ...
+
+    def __add__(self, other: int | float | VariableBase) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.id: 1}, constant=other)
+        if isinstance(other, VariableBase):
+            if self.id == other.id:
+                return Linear(terms={self.id: 2})
+            else:
+                return Linear(terms={self.id: 1, other.id: 1})
+        return NotImplemented
+
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
+    def __neg__(self) -> Linear:
+        return Linear(terms={self.id: -1})
+
+    def __radd__(self, other) -> Linear:
+        return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
+
+    @overload
+    def __mul__(self, other: int | float) -> Linear: ...
+
+    @overload
+    def __mul__(self, other: VariableBase) -> Quadratic: ...
+
+    def __mul__(self, other: int | float | VariableBase) -> Linear | Quadratic:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.id: other})
+        if isinstance(other, VariableBase):
+            return Quadratic(columns=[self.id], rows=[other.id], values=[1.0])
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __le__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __ge__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
+
+
+@dataclass
+class Parameter(VariableBase):
+    """
+    Idiomatic wrapper of ``ommx.v1.Parameter`` protobuf message.
+    """
+
+    raw: _Parameter
+
+    @staticmethod
+    def from_bytes(data: bytes) -> Parameter:
+        raw = _Parameter()
+        raw.ParseFromString(data)
+        return Parameter(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def name(self) -> str:
+        return self.raw.name
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def description(self) -> str:
+        return self.raw.description
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.parameters)
+
+    def equals_to(self, other: Parameter) -> bool:
+        """
+        Alternative to ``==`` operator to compare two decision variables.
+        """
+        return self.raw == other.raw
+
+    # The special function __eq__ cannot be inherited from VariableBase
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
 
 
 @dataclass
@@ -403,7 +655,24 @@ def _equality(equality: Equality.ValueType) -> str:
 
 
 @dataclass
-class DecisionVariable:
+class DecisionVariable(VariableBase):
+    """
+    Idiomatic wrapper of ``ommx.v1.DecisionVariable`` protobuf message.
+
+    Note that this object overloads `==` for creating a constraint, not for equality comparison for better integration to mathematical programming.
+
+    >>> x = DecisionVariable.integer(1)
+    >>> x == 1
+    Constraint(...)
+
+    To compare two objects, use :py:meth:`equals_to` method.
+
+    >>> y = DecisionVariable.integer(2)
+    >>> x.equals_to(y)
+    False
+
+    """
+
     raw: _DecisionVariable
 
     Kind = _DecisionVariable.Kind.ValueType
@@ -594,80 +863,11 @@ class DecisionVariable:
         """
         return self.raw == other.raw
 
-    def __add__(self, other: int | float | DecisionVariable) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.raw.id: 1}, constant=other)
-        if isinstance(other, DecisionVariable):
-            if self.raw.id == other.raw.id:
-                return Linear(terms={self.raw.id: 2})
-            else:
-                return Linear(terms={self.raw.id: 1, other.raw.id: 1})
-        return NotImplemented
-
-    def __sub__(self, other) -> Linear:
-        return self + (-other)
-
-    def __neg__(self) -> Linear:
-        return Linear(terms={self.raw.id: -1})
-
-    def __radd__(self, other) -> Linear:
-        return self + other
-
-    def __rsub__(self, other) -> Linear:
-        return -self + other
-
-    @overload
-    def __mul__(self, other: int | float) -> Linear: ...
-
-    @overload
-    def __mul__(self, other: DecisionVariable) -> Quadratic: ...
-
-    def __mul__(self, other: int | float | DecisionVariable) -> Linear | Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.raw.id: other})
-        if isinstance(other, DecisionVariable):
-            return Quadratic(columns=[self.raw.id], rows=[other.raw.id], values=[1.0])
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
+    # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        """
-        Create a constraint that this decision variable is equal to another decision variable or a constant.
-
-        To compare two objects, use :py:meth:`equals_to` method.
-
-        Examples
-        ========
-
-        >>> x = DecisionVariable.integer(1)
-        >>> x == 1
-        Constraint(...)
-
-        """
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
-
-    def __le__(self, other) -> Constraint:
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __ge__(self, other) -> Constraint:
-        return Constraint(
-            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __req__(self, other) -> Constraint:
-        return self == other
-
-    def __rle__(self, other) -> Constraint:
-        return self.__ge__(other)
-
-    def __rge__(self, other) -> Constraint:
-        return self.__le__(other)
 
 
 @dataclass
@@ -1495,6 +1695,13 @@ class Constraint:
             subscripts=subscripts,
             parameters=parameters,
         )
+
+    @staticmethod
+    def from_raw(raw: _Constraint) -> Constraint:
+        new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
+        new.raw = raw
+        Constraint._counter = max(Constraint._counter, raw.id + 1)
+        return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
