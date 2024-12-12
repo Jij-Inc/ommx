@@ -20,27 +20,24 @@ from .parametric_instance_pb2 import (
 
 from .. import _ommx_rust
 
-# Exposes as it is for basic classes which does not require any additional logic
 __all__ = [
-    # Imported
-    "Bound",
-    "State",
-    "Optimality",
-    "Relaxation",
-    "Parameters",
-    # Composed classes
-    "ParametricInstance",
     "Instance",
+    "ParametricInstance",
     "Solution",
     "Constraint",
-    # Function
+    # Function and its bases
     "DecisionVariable",
     "Parameter",
     "Linear",
     "Quadratic",
     "Polynomial",
-    "Equality",
     "Function",
+    # Imported from protobuf
+    "State",
+    "Parameters",
+    "Optimality",
+    "Relaxation",
+    "Bound",
 ]
 
 
