@@ -4,6 +4,7 @@ from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, concat, MultiIndex
+from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -386,8 +387,71 @@ class ParametricInstance:
         return Instance.from_bytes(instance.to_bytes())
 
 
+class VariableBase(ABC):
+    @property
+    @abstractmethod
+    def id(self) -> int: ...
+
+    def __add__(self, other: int | float | VariableBase) -> Linear:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.id: 1}, constant=other)
+        if isinstance(other, VariableBase):
+            if self.id == other.id:
+                return Linear(terms={self.id: 2})
+            else:
+                return Linear(terms={self.id: 1, other.id: 1})
+        return NotImplemented
+
+    def __sub__(self, other) -> Linear:
+        return self + (-other)
+
+    def __neg__(self) -> Linear:
+        return Linear(terms={self.id: -1})
+
+    def __radd__(self, other) -> Linear:
+        return self + other
+
+    def __rsub__(self, other) -> Linear:
+        return -self + other
+
+    @overload
+    def __mul__(self, other: int | float) -> Linear: ...
+
+    @overload
+    def __mul__(self, other: VariableBase) -> Quadratic: ...
+
+    def __mul__(self, other: int | float | VariableBase) -> Linear | Quadratic:
+        if isinstance(other, float) or isinstance(other, int):
+            return Linear(terms={self.id: other})
+        if isinstance(other, VariableBase):
+            return Quadratic(columns=[self.id], rows=[other.id], values=[1.0])
+        return NotImplemented
+
+    def __rmul__(self, other):
+        return self * other
+
+    def __le__(self, other) -> Constraint:
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __ge__(self, other) -> Constraint:
+        return Constraint(
+            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        )
+
+    def __req__(self, other) -> Constraint:
+        return self == other
+
+    def __rle__(self, other) -> Constraint:
+        return self.__ge__(other)
+
+    def __rge__(self, other) -> Constraint:
+        return self.__le__(other)
+
+
 @dataclass
-class Parameter:
+class Parameter(VariableBase):
     """
     Idiomatic wrapper of ``ommx.v1.Parameter`` protobuf message.
     """
@@ -422,6 +486,18 @@ class Parameter:
     @property
     def parameters(self) -> dict[str, str]:
         return dict(self.raw.parameters)
+
+    def equals_to(self, other: Parameter) -> bool:
+        """
+        Alternative to ``==`` operator to compare two decision variables.
+        """
+        return self.raw == other.raw
+
+    # The special function __eq__ cannot be inherited from VariableBase
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
 
 
 @dataclass
@@ -579,7 +655,24 @@ def _equality(equality: Equality.ValueType) -> str:
 
 
 @dataclass
-class DecisionVariable:
+class DecisionVariable(VariableBase):
+    """
+    Idiomatic wrapper of ``ommx.v1.DecisionVariable`` protobuf message.
+
+    Note that this object overloads `==` for creating a constraint, not for equality comparison for better integration to mathematical programming.
+
+    >>> x = DecisionVariable.integer(1)
+    >>> x == 1
+    Constraint(...)
+
+    To compare two objects, use :py:meth:`equals_to` method.
+
+    >>> y = DecisionVariable.integer(2)
+    >>> x.equals_to(y)
+    False
+
+    """
+
     raw: _DecisionVariable
 
     Kind = _DecisionVariable.Kind.ValueType
@@ -770,80 +863,11 @@ class DecisionVariable:
         """
         return self.raw == other.raw
 
-    def __add__(self, other: int | float | DecisionVariable) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.raw.id: 1}, constant=other)
-        if isinstance(other, DecisionVariable):
-            if self.raw.id == other.raw.id:
-                return Linear(terms={self.raw.id: 2})
-            else:
-                return Linear(terms={self.raw.id: 1, other.raw.id: 1})
-        return NotImplemented
-
-    def __sub__(self, other) -> Linear:
-        return self + (-other)
-
-    def __neg__(self) -> Linear:
-        return Linear(terms={self.raw.id: -1})
-
-    def __radd__(self, other) -> Linear:
-        return self + other
-
-    def __rsub__(self, other) -> Linear:
-        return -self + other
-
-    @overload
-    def __mul__(self, other: int | float) -> Linear: ...
-
-    @overload
-    def __mul__(self, other: DecisionVariable) -> Quadratic: ...
-
-    def __mul__(self, other: int | float | DecisionVariable) -> Linear | Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.raw.id: other})
-        if isinstance(other, DecisionVariable):
-            return Quadratic(columns=[self.raw.id], rows=[other.raw.id], values=[1.0])
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
+    # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        """
-        Create a constraint that this decision variable is equal to another decision variable or a constant.
-
-        To compare two objects, use :py:meth:`equals_to` method.
-
-        Examples
-        ========
-
-        >>> x = DecisionVariable.integer(1)
-        >>> x == 1
-        Constraint(...)
-
-        """
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
-
-    def __le__(self, other) -> Constraint:
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __ge__(self, other) -> Constraint:
-        return Constraint(
-            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __req__(self, other) -> Constraint:
-        return self == other
-
-    def __rle__(self, other) -> Constraint:
-        return self.__ge__(other)
-
-    def __rge__(self, other) -> Constraint:
-        return self.__le__(other)
 
 
 @dataclass
