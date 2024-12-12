@@ -344,13 +344,40 @@ mod tests {
         assert_eq!(linear.terms[0].coefficient, 4.0);
     }
 
+    fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
+        (
+            proptest::collection::vec(crate::convert::arbitrary_coefficient(), ids.len()),
+            Just(ids),
+        )
+            .prop_map(|(coefficients, ids)| {
+                dbg!(&ids, &coefficients);
+                let entries = ids.into_iter().zip(coefficients).collect();
+                State { entries }
+            })
+            .boxed()
+    }
+
+    macro_rules! pair_with_state {
+        ($t:ty) => {
+            (<$t>::arbitrary(), <$t>::arbitrary()).prop_flat_map(|(f, g)| {
+                let ids = f
+                    .used_decision_variable_ids()
+                    .union(&g.used_decision_variable_ids())
+                    .cloned()
+                    .collect();
+                (Just(f), Just(g), arbitrary_state(ids))
+            })
+        };
+    }
+
     /// f(x) + g(x) = (f + g)(x)
     macro_rules! evaluate_add_commutativity {
         ($t:ty, $name:ident) => {
             proptest! {
                 #[test]
-                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
-                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                fn $name((f, g, s) in pair_with_state!($t)) {
+                    let (f_value, _) = f.evaluate(&s).unwrap();
+                    let (g_value, _) = g.evaluate(&s).unwrap();
                     let (h_value, _) = (f + g).evaluate(&s).unwrap();
                     prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
                 }
@@ -362,8 +389,9 @@ mod tests {
         ($t:ty, $name:ident) => {
             proptest! {
                 #[test]
-                fn $name(f in any::<$t>(), g in any::<$t>(), s in any::<State>()) {
-                    let (Ok((f_value, _)), Ok((g_value, _))) = (f.evaluate(&s), g.evaluate(&s)) else { return Ok(()); };
+                fn $name((f, g, s) in pair_with_state!($t)) {
+                    let (f_value, _) = f.evaluate(&s).unwrap();
+                    let (g_value, _) = g.evaluate(&s).unwrap();
                     let (h_value, _) = (f * g).evaluate(&s).unwrap();
                     prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
                 }
@@ -438,19 +466,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
-        (
-            proptest::collection::vec(crate::convert::arbitrary_coefficient(), ids.len()),
-            Just(ids),
-        )
-            .prop_map(|(coefficients, ids)| {
-                dbg!(&ids, &coefficients);
-                let entries = ids.into_iter().zip(coefficients).collect();
-                State { entries }
-            })
-            .boxed()
     }
 
     fn instance_with_state() -> BoxedStrategy<(Instance, State)> {
