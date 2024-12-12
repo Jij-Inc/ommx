@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import ommx.mps
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import Instance, DecisionVariable, Constraint, Function
 
 
 test_dir = Path(__file__).parent
@@ -11,9 +11,6 @@ def test_example_mps():
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
     assert instance.raw.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
-    # convert to a format easier to test.
-    # for some reason a simple to_dict gets us weird tuple keys so
-    # transforming the structure to make it simpler.
     dvars = instance.get_decision_variables()
     dvars.sort(key=lambda x: x.name)
     constraints = instance.get_constraints()
@@ -40,21 +37,17 @@ def test_example_mps():
     # constr1
     constr1 = constraints[0]
     assert constr1.name == "constr1"
-    # ids are unstable as of the initial implementation so we can't assert the correct ones are used.
-    # assert len(constr1["used_ids"]) == 2
-    # assert constr1["type"] == "linear"
+    assert constr1.function.almost_equal(Function(x + y - 4.0))
     assert constr1.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     # constr2
     constr2 = constraints[1]
     assert constr2.name == "constr2"
-    # assert len(constr2["used_ids"]) == 3
-    # assert constr2["type"] == "linear"
+    assert constr2.function.almost_equal(Function(x + 2 * y + z - 7))
     assert constr2.equality == Constraint.EQUAL_TO_ZERO
     # constr3
     constr3 = constraints[2]
     assert constr3.name == "constr3"
-    # assert len(constr3["used_ids"]) == 2
-    # assert constr3["type"] == "linear"
+    assert constr3.function.almost_equal(Function(-z - 2 * x + 10))
     assert constr3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
 
 
