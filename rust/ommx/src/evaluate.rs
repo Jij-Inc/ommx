@@ -407,12 +407,21 @@ mod tests {
     evaluate_add_commutativity!(Function, function_evaluate_add_commutativity);
     evaluate_mul_commutativity!(Function, function_evaluate_mul_commutativity);
 
+    macro_rules! function_with_state {
+        ($t:ty) => {
+            <$t>::arbitrary().prop_flat_map(|f| {
+                let ids = f.used_decision_variable_ids();
+                (Just(f), arbitrary_state(ids))
+            })
+        };
+    }
+
     macro_rules! partial_evaluate_to_constant {
         ($t:ty, $name:ident) => {
             proptest! {
                 #[test]
-                fn $name(mut f in any::<$t>(), s in any::<State>()) {
-                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
+                fn $name((mut f, s) in function_with_state!($t)) {
+                    let (v, _) = f.evaluate(&s).unwrap();
                     f.partial_evaluate(&s).unwrap();
                     let c = dbg!(f).as_constant().expect("Non constant");
                     prop_assert!(abs_diff_eq!(v, c, epsilon = 1e-9));
@@ -425,15 +434,43 @@ mod tests {
     partial_evaluate_to_constant!(Polynomial, polynomial_partial_evaluate_to_constant);
     partial_evaluate_to_constant!(Function, function_partial_evaluate_to_constant);
 
+    fn split_state(state: State) -> BoxedStrategy<(State, State)> {
+        let ids: Vec<(u64, f64)> = state.entries.into_iter().collect();
+        let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
+        (Just(ids), flips)
+            .prop_map(|(ids, flips)| {
+                let mut a = State::default();
+                let mut b = State::default();
+                for (flip, (id, value)) in flips.into_iter().zip(ids.into_iter()) {
+                    if flip {
+                        a.entries.insert(id, value);
+                    } else {
+                        b.entries.insert(id, value);
+                    }
+                }
+                (a, b)
+            })
+            .boxed()
+    }
+
+    macro_rules! function_with_split_state {
+        ($t:ty) => {
+            <$t>::arbitrary().prop_flat_map(|f| {
+                let ids = f.used_decision_variable_ids();
+                (Just(f), arbitrary_state(ids))
+                    .prop_flat_map(|(f, s)| (Just(f), Just(s.clone()), split_state(s)))
+            })
+        };
+    }
+
     macro_rules! half_partial_evaluate {
         ($t:ty, $name:ident) => {
             proptest! {
                 #[test]
-                fn $name(mut f in any::<$t>(), s in any::<State>()) {
-                    let Ok((v, _)) = f.evaluate(&s) else { return Ok(()) };
-                    let ss = partial_state(&s);
-                    f.partial_evaluate(&ss).unwrap();
-                    let (u, _) = f.evaluate(&s).unwrap();
+                fn $name((mut f, s, (s1, s2)) in function_with_split_state!($t)) {
+                    let (v, _) = f.evaluate(&s).unwrap();
+                    f.partial_evaluate(&s1).unwrap();
+                    let (u, _) = f.evaluate(&s2).unwrap();
                     prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
                 }
             }
@@ -443,16 +480,6 @@ mod tests {
     half_partial_evaluate!(Quadratic, quadratic_half_partial_evaluate);
     half_partial_evaluate!(Polynomial, polynomial_half_partial_evaluate);
     half_partial_evaluate!(Function, function_half_partial_evaluate);
-
-    fn partial_state(state: &State) -> State {
-        let mut ss = State::default();
-        for (n, (id, value)) in state.entries.iter().enumerate() {
-            if n % 2 == 0 {
-                ss.entries.insert(*id, *value);
-            }
-        }
-        ss
-    }
 
     proptest! {
         #[test]
