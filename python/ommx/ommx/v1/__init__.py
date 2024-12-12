@@ -188,20 +188,7 @@ class Instance:
     @property
     def decision_variables(self) -> DataFrame:
         return DataFrame(
-            {
-                "id": v.id,
-                "kind": _kind(v.kind),
-                "lower": v.bound.lower if v.HasField("bound") else NA,
-                "upper": v.bound.upper if v.HasField("bound") else NA,
-                "name": v.name if v.HasField("name") else NA,
-                "subscripts": v.subscripts,
-                "description": v.description if v.HasField("description") else NA,
-                "substituted_value": v.substituted_value
-                if v.HasField("substituted_value")
-                else NA,
-                **{f"parameters.{key}": value for key, value in v.parameters.items()},
-            }
-            for v in self.raw.decision_variables
+            _as_pandas_entry(v) for v in self.raw.decision_variables
         ).set_index("id")
 
     def get_decision_variables(self) -> list[DecisionVariable]:
@@ -225,12 +212,7 @@ class Instance:
 
     @property
     def constraints(self) -> DataFrame:
-        constraints = self.raw.constraints
-        parameters = DataFrame(dict(v.parameters) for v in constraints)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
+        return DataFrame(
             {
                 "id": c.id,
                 "equality": _equality(c.equality),
@@ -238,14 +220,13 @@ class Instance:
                 "used_ids": _ommx_rust.used_decision_variable_ids(
                     c.function.SerializeToString()
                 ),
-                "name": c.name,
+                "name": c.name if c.HasField("name") else NA,
                 "subscripts": c.subscripts,
-                "description": c.description,
+                "description": c.description if c.HasField("description") else NA,
+                **{f"parameters.{key}": value for key, value in c.parameters.items()},
             }
-            for c in constraints
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+            for c in self.raw.constraints
+        ).set_index("id")
 
     def get_constraints(self) -> list[Constraint]:
         """
@@ -308,6 +289,22 @@ class Instance:
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
+
+
+def _as_pandas_entry(v: _DecisionVariable) -> dict:
+    return {
+        "id": v.id,
+        "kind": _kind(v.kind),
+        "lower": v.bound.lower if v.HasField("bound") else NA,
+        "upper": v.bound.upper if v.HasField("bound") else NA,
+        "name": v.name if v.HasField("name") else NA,
+        "subscripts": v.subscripts,
+        "description": v.description if v.HasField("description") else NA,
+        "substituted_value": v.substituted_value
+        if v.HasField("substituted_value")
+        else NA,
+        **{f"parameters.{key}": value for key, value in v.parameters.items()},
+    }
 
 
 @dataclass

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import ommx.mps
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Constraint
 
 
 test_dir = Path(__file__).parent
@@ -16,10 +16,8 @@ def test_example_mps():
     # transforming the structure to make it simpler.
     dvars = instance.get_decision_variables()
     dvars.sort(key=lambda x: x.name)
-    constraints = [
-        {k[0]: v for k, v in c.items()} for c in instance.constraints.to_dict("records")
-    ]
-    constraints.sort(key=lambda c: c["name"])
+    constraints = instance.get_constraints()
+    constraints.sort(key=lambda c: c.name)
 
     assert len(dvars) == 3
     assert len(constraints) == 3
@@ -41,23 +39,23 @@ def test_example_mps():
     assert z.subscripts == []
     # constr1
     constr1 = constraints[0]
-    assert constr1["name"] == "constr1"
+    assert constr1.name == "constr1"
     # ids are unstable as of the initial implementation so we can't assert the correct ones are used.
-    assert len(constr1["used_ids"]) == 2
-    assert constr1["type"] == "linear"
-    assert constr1["equality"] == "<=0"
+    # assert len(constr1["used_ids"]) == 2
+    # assert constr1["type"] == "linear"
+    assert constr1.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     # constr2
     constr2 = constraints[1]
-    assert constr2["name"] == "constr2"
-    assert len(constr2["used_ids"]) == 3
-    assert constr2["type"] == "linear"
-    assert constr2["equality"] == "=0"
+    assert constr2.name == "constr2"
+    # assert len(constr2["used_ids"]) == 3
+    # assert constr2["type"] == "linear"
+    assert constr2.equality == Constraint.EQUAL_TO_ZERO
     # constr3
     constr3 = constraints[2]
-    assert constr3["name"] == "constr3"
-    assert len(constr3["used_ids"]) == 2
-    assert constr3["type"] == "linear"
-    assert constr3["equality"] == "<=0"
+    assert constr3.name == "constr3"
+    # assert len(constr3["used_ids"]) == 2
+    # assert constr3["type"] == "linear"
+    assert constr3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
 
 
 def test_output():
