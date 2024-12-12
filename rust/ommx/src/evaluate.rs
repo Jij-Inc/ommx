@@ -286,10 +286,17 @@ impl Evaluate for Instance {
 
         let (objective, used_ids_) = self.objective().evaluate(state)?;
         used_ids.extend(used_ids_);
+
+        let mut state = state.clone();
+        for v in &self.decision_variables {
+            if let Some(value) = v.substituted_value {
+                state.entries.insert(v.id, value);
+            }
+        }
         Ok((
             Solution {
                 decision_variables: self.decision_variables.clone(),
-                state: Some(state.clone()),
+                state: Some(state),
                 evaluated_constraints,
                 feasible,
                 objective,
@@ -350,7 +357,6 @@ mod tests {
             Just(ids),
         )
             .prop_map(|(coefficients, ids)| {
-                dbg!(&ids, &coefficients);
                 let entries = ids.into_iter().zip(coefficients).collect();
                 State { entries }
             })
@@ -532,7 +538,9 @@ mod tests {
             let (solution, _) = instance.evaluate(&state).unwrap();
             instance.partial_evaluate(&s1).unwrap();
             let (solution1, _) = instance.evaluate(&s2).unwrap();
-            prop_assert_eq!(solution, solution1);
+            prop_assert_eq!(solution.decision_variable_ids(), solution1.decision_variable_ids());
+            prop_assert_eq!(solution.constraint_ids(), solution1.constraint_ids());
+            prop_assert_eq!(solution.state, solution1.state);
         }
     }
 }
