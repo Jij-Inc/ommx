@@ -481,20 +481,6 @@ mod tests {
     half_partial_evaluate!(Polynomial, polynomial_half_partial_evaluate);
     half_partial_evaluate!(Function, function_half_partial_evaluate);
 
-    proptest! {
-        #[test]
-        fn partial_eval_instance(mut instance in Instance::arbitrary(), state in any::<State>()) {
-            instance.partial_evaluate(&state).unwrap();
-            for v in &instance.decision_variables {
-                if let Some(value) = state.entries.get(&v.id) {
-                    prop_assert_eq!(v.substituted_value, Some(*value));
-                } else {
-                    prop_assert_eq!(v.substituted_value, None);
-                }
-            }
-        }
-    }
-
     fn instance_with_state() -> BoxedStrategy<(Instance, State)> {
         Instance::arbitrary()
             .prop_flat_map(|instance| {
@@ -512,6 +498,41 @@ mod tests {
             let mut cids = instance.constraint_ids();
             cids.extend(instance.removed_constraint_ids());
             prop_assert!(solution.constraint_ids() == cids);
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn partial_eval_instance(mut instance in Instance::arbitrary(), state in any::<State>()) {
+            instance.partial_evaluate(&state).unwrap();
+            for v in &instance.decision_variables {
+                if let Some(value) = state.entries.get(&v.id) {
+                    prop_assert_eq!(v.substituted_value, Some(*value));
+                } else {
+                    prop_assert_eq!(v.substituted_value, None);
+                }
+            }
+        }
+    }
+
+    fn instance_with_split_state() -> BoxedStrategy<(Instance, State, (State, State))> {
+        Instance::arbitrary()
+            .prop_flat_map(|instance| {
+                let used_ids = instance.used_decision_variable_ids().unwrap();
+                (Just(instance), arbitrary_state(used_ids)).prop_flat_map(|(instance, state)| {
+                    (Just(instance), Just(state.clone()), split_state(state))
+                })
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn partial_eval_instance_to_solution((mut instance, state, (s1, s2)) in instance_with_split_state()) {
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            instance.partial_evaluate(&s1).unwrap();
+            let (solution1, _) = instance.evaluate(&s2).unwrap();
+            prop_assert_eq!(solution, solution1);
         }
     }
 }
