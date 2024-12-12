@@ -313,8 +313,8 @@ fn arbitrary_instance(
                 Option::<Description>::arbitrary(),
                 Sense::arbitrary(),
                 relaxed,
-                String::arbitrary(),
-                proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 0..=2),
+                ".{0,3}",
+                proptest::collection::hash_map(".{0,3}", ".{0,3}", 0..=2),
             )
                 .prop_map(
                     |(
@@ -389,10 +389,10 @@ impl Arbitrary for Description {
 
     fn arbitrary_with(_parameter: ()) -> Self::Strategy {
         (
-            Option::<String>::arbitrary(),
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
+            proptest::option::of(".{0,3}"),
             prop_oneof![Just(Vec::new()), proptest::collection::vec(".*", 1..3)],
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
         )
             .prop_map(|(name, description, authors, created_by)| Description {
                 name,

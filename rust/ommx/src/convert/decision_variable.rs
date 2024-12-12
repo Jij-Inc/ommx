@@ -151,16 +151,16 @@ impl Arbitrary for DecisionVariable {
         ];
         let parameters = prop_oneof![
             Just(HashMap::<String, String>::new()),
-            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 1..=3),
+            proptest::collection::hash_map(".{0,3}", ".{0,3}", 1..=3),
         ];
         (
             Just(id),
             Option::<Bound>::arbitrary(),
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
             Just(kind),
             subscripts,
             parameters,
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
         )
             .prop_map(
                 |(id, bound, name, kind, subscripts, parameters, description)| DecisionVariable {
