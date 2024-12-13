@@ -12,7 +12,11 @@ from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
-from .constraint_pb2 import Equality, Constraint as _Constraint
+from .constraint_pb2 import (
+    Equality,
+    Constraint as _Constraint,
+    RemovedConstraint as _RemovedConstraint,
+)
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
@@ -47,6 +51,8 @@ class InstanceBase(ABC):
     def get_decision_variables(self) -> list[DecisionVariable]: ...
     @abstractmethod
     def get_constraints(self) -> list[Constraint]: ...
+    @abstractmethod
+    def get_removed_constraints(self) -> list[RemovedConstraint]: ...
 
     def get_decision_variable(self, variable_id: int) -> DecisionVariable:
         """
@@ -66,6 +72,15 @@ class InstanceBase(ABC):
                 return c
         raise ValueError(f"Constraint ID {constraint_id} is not found")
 
+    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.get_removed_constraints():
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
     @property
     def decision_variables(self) -> DataFrame:
         return DataFrame(
@@ -76,6 +91,12 @@ class InstanceBase(ABC):
     def constraints(self) -> DataFrame:
         return DataFrame(
             c._as_pandas_entry() for c in self.get_constraints()
+        ).set_index("id")
+
+    @property
+    def removed_constraints(self) -> DataFrame:
+        return DataFrame(
+            rc._as_pandas_entry() for rc in self.get_removed_constraints()
         ).set_index("id")
 
 
@@ -242,6 +263,12 @@ class Instance(InstanceBase):
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
 
+    def get_removed_constraints(self) -> list[RemovedConstraint]:
+        """
+        Get removed constraints as a list of :class:`RemovedConstraint` instances.
+        """
+        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
+
     def evaluate(self, state: State | Mapping[int, float]) -> Solution:
         if not isinstance(state, State):
             state = State(entries=state)
@@ -314,6 +341,12 @@ class ParametricInstance(InstanceBase):
         Get constraints as a list of :class:`Constraint
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+
+    def get_removed_constraints(self) -> list[RemovedConstraint]:
+        """
+        Get removed constraints as a list of :class:`RemovedConstraint` instances.
+        """
+        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
     def get_parameters(self) -> list[Parameter]:
         """
@@ -1719,16 +1752,16 @@ class Constraint:
         return self.raw.id
 
     @property
-    def name(self) -> str:
-        return self.raw.name
-
-    @property
     def equality(self) -> Equality.ValueType:
         return self.raw.equality
 
     @property
-    def description(self) -> str:
-        return self.raw.description
+    def name(self) -> str | None:
+        return self.raw.name if self.raw.HasField("name") else None
+
+    @property
+    def description(self) -> str | None:
+        return self.raw.description if self.raw.HasField("description") else None
 
     @property
     def subscripts(self) -> list[int]:
@@ -1758,3 +1791,56 @@ class Constraint:
             "subscripts": c.subscripts,
             "description": c.description if c.HasField("description") else NA,
         } | {f"parameters.{key}": value for key, value in c.parameters.items()}
+
+
+@dataclass
+class RemovedConstraint:
+    """
+    Constraints removed while preprocessing
+    """
+
+    raw: _RemovedConstraint
+
+    @property
+    def id(self) -> int:
+        return self.raw.constraint.id
+
+    @property
+    def name(self) -> str | None:
+        return (
+            self.raw.constraint.name if self.raw.constraint.HasField("name") else None
+        )
+
+    @property
+    def description(self) -> str | None:
+        return (
+            self.raw.constraint.description
+            if self.raw.constraint.HasField("description")
+            else None
+        )
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.constraint.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.constraint.parameters)
+
+    @property
+    def removed_reason(self) -> str:
+        return self.raw.removed_reason
+
+    @property
+    def removed_reason_parameters(self) -> dict[str, str]:
+        return dict(self.raw.removed_reason_parameters)
+
+    def _as_pandas_entry(self) -> dict:
+        return (
+            Constraint.from_raw(self.raw.constraint)._as_pandas_entry()
+            | {"removed_reason": self.removed_reason}
+            | {
+                f"removed_reason.{key}": value
+                for key, value in self.removed_reason_parameters.items()
+            }
+        )
