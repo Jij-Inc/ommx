@@ -19,7 +19,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
+          args: --release --out dist --interpreter 3.9 3.10 3.11 3.12
           working-directory: ./python/ommx
           manylinux: manylinux_2_28
 
@@ -40,7 +40,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
+          args: --release --out dist --interpreter 3.9 3.10 3.11 3.12
           working-directory: ./python/ommx
 
       - name: Upload wheels
@@ -60,7 +60,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.9 3.10 3.11 3.12
+          args: --release --out dist --interpreter 3.9 3.10 3.11 3.12
           working-directory: ./python/ommx
 
       - name: Upload wheels
@@ -79,7 +79,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: Build wheel
         run: |
@@ -102,7 +102,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: Build wheel
         run: |
@@ -171,7 +171,7 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.8"
+          python-version: "3.9"
 
       - name: Bump version
         run: |
