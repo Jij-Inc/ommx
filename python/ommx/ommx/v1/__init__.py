@@ -330,6 +330,12 @@ class ParametricInstance(InstanceBase):
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
+    @property
+    def parameters(self) -> DataFrame:
+        return DataFrame(p._as_pandas_entry() for p in self.get_parameters()).set_index(
+            "id"
+        )
+
     def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
         """
         Substitute parameters to yield an instance.
@@ -453,6 +459,16 @@ class Parameter(VariableBase):
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
+
+    def _as_pandas_entry(self) -> dict:
+        p = self.raw
+        return {
+            "id": p.id,
+            "name": p.name if p.HasField("name") else NA,
+            "subscripts": p.subscripts,
+            "description": p.description if p.HasField("description") else NA,
+            **{f"parameters.{key}": value for key, value in p.parameters.items()},
+        }
 
 
 @dataclass
