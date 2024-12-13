@@ -1040,6 +1040,13 @@ class Linear:
         """
         return [(term.id, term.coefficient) for term in self.raw.terms]
 
+    @property
+    def constant(self) -> float:
+        """
+        Get the constant term of the linear function
+        """
+        return self.raw.constant
+
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
         new = Linear(terms={})
