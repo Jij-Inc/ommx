@@ -3,7 +3,7 @@ from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
-from pandas import DataFrame, concat, MultiIndex, NA
+from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
