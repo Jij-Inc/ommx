@@ -533,48 +533,34 @@ class Solution:
 
     @property
     def decision_variables(self) -> DataFrame:
-        decision_variables = self.raw.decision_variables
-        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
-            {
-                "id": v.id,
-                "kind": _kind(v.kind),
-                "value": self.raw.state.entries[v.id],
-                "lower": v.bound.lower,
-                "upper": v.bound.upper,
-                "name": v.name,
-                "subscripts": v.subscripts,
-                "description": v.description,
-            }
-            for v in decision_variables
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+        return DataFrame(
+            DecisionVariable(v)._as_pandas_entry()
+            | {"value": self.raw.state.entries[v.id]}
+            for v in self.raw.decision_variables
+        ).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
-        evaluation = self.raw.evaluated_constraints
-        parameters = DataFrame(dict(v.parameters) for v in evaluation)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
+        return DataFrame(
             {
-                "id": v.id,
-                "equality": _equality(v.equality),
-                "value": v.evaluated_value,
-                "used_ids": set(v.used_decision_variable_ids),
-                "name": v.name,
-                "subscripts": v.subscripts,
-                "description": v.description,
+                "id": c.id,
+                "equality": _equality(c.equality),
+                "value": c.evaluated_value,
+                "used_ids": set(c.used_decision_variable_ids),
+                "name": c.name if c.HasField("name") else NA,
+                "subscripts": c.subscripts,
+                "description": c.description if c.HasField("description") else NA,
+                "dual_variable": c.dual_variable if c.HasField("dual_variable") else NA,
+                "removed_reason": c.removed_reason
+                if c.HasField("removed_reason")
+                else NA,
             }
-            for v in evaluation
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+            | {
+                f"removed_reason.{key}": value
+                for key, value in c.removed_reason_parameters.items()
+            }
+            for c in self.raw.evaluated_constraints
+        ).set_index("id")
 
     @property
     def feasible(self) -> bool:
@@ -853,8 +839,7 @@ class DecisionVariable(VariableBase):
             "substituted_value": v.substituted_value
             if v.HasField("substituted_value")
             else NA,
-            **{f"parameters.{key}": value for key, value in v.parameters.items()},
-        }
+        } | {f"parameters.{key}": value for key, value in v.parameters.items()}
 
 
 @dataclass
@@ -1772,5 +1757,4 @@ class Constraint:
             "name": c.name if c.HasField("name") else NA,
             "subscripts": c.subscripts,
             "description": c.description if c.HasField("description") else NA,
-            **{f"parameters.{key}": value for key, value in c.parameters.items()},
-        }
+        } | {f"parameters.{key}": value for key, value in c.parameters.items()}
