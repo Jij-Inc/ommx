@@ -14,7 +14,7 @@ def test_example_mps():
     dvars = instance.get_decision_variables()
     dvars.sort(key=lambda x: x.name)
     constraints = instance.get_constraints()
-    constraints.sort(key=lambda c: c.name)
+    constraints.sort(key=lambda c: c.name or "")
 
     assert len(dvars) == 3
     assert len(constraints) == 3
