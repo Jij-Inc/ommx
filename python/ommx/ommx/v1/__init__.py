@@ -1033,6 +1033,13 @@ class Linear:
             constant=constant,
         )
 
+    @property
+    def terms(self) -> list[tuple[int, float]]:
+        """
+        Get the terms of the linear function as a dictionary
+        """
+        return [(term.id, term.coefficient) for term in self.raw.terms]
+
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
         new = Linear(terms={})
