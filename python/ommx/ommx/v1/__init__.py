@@ -188,7 +188,7 @@ class Instance:
     @property
     def decision_variables(self) -> DataFrame:
         return DataFrame(
-            _as_pandas_entry(v) for v in self.raw.decision_variables
+            _as_pandas_entry_decision_variable(v) for v in self.raw.decision_variables
         ).set_index("id")
 
     def get_decision_variables(self) -> list[DecisionVariable]:
@@ -213,19 +213,7 @@ class Instance:
     @property
     def constraints(self) -> DataFrame:
         return DataFrame(
-            {
-                "id": c.id,
-                "equality": _equality(c.equality),
-                "type": _function_type(c.function),
-                "used_ids": _ommx_rust.used_decision_variable_ids(
-                    c.function.SerializeToString()
-                ),
-                "name": c.name if c.HasField("name") else NA,
-                "subscripts": c.subscripts,
-                "description": c.description if c.HasField("description") else NA,
-                **{f"parameters.{key}": value for key, value in c.parameters.items()},
-            }
-            for c in self.raw.constraints
+            _as_pandas_entry_constraints(c) for c in self.raw.constraints
         ).set_index("id")
 
     def get_constraints(self) -> list[Constraint]:
@@ -291,7 +279,7 @@ class Instance:
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
 
-def _as_pandas_entry(v: _DecisionVariable) -> dict:
+def _as_pandas_entry_decision_variable(v: _DecisionVariable) -> dict:
     return {
         "id": v.id,
         "kind": _kind(v.kind),
@@ -304,6 +292,21 @@ def _as_pandas_entry(v: _DecisionVariable) -> dict:
         if v.HasField("substituted_value")
         else NA,
         **{f"parameters.{key}": value for key, value in v.parameters.items()},
+    }
+
+
+def _as_pandas_entry_constraints(c: _Constraint) -> dict:
+    return {
+        "id": c.id,
+        "equality": _equality(c.equality),
+        "type": _function_type(c.function),
+        "used_ids": _ommx_rust.used_decision_variable_ids(
+            c.function.SerializeToString()
+        ),
+        "name": c.name if c.HasField("name") else NA,
+        "subscripts": c.subscripts,
+        "description": c.description if c.HasField("description") else NA,
+        **{f"parameters.{key}": value for key, value in c.parameters.items()},
     }
 
 
@@ -324,6 +327,12 @@ class ParametricInstance:
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
+    @property
+    def decision_variables(self) -> DataFrame:
+        return DataFrame(
+            _as_pandas_entry_decision_variable(v) for v in self.raw.decision_variables
+        ).set_index("id")
+
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
@@ -338,6 +347,12 @@ class ParametricInstance:
             if v.id == variable_id:
                 return DecisionVariable(v)
         raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    @property
+    def constraints(self) -> DataFrame:
+        return DataFrame(
+            _as_pandas_entry_constraints(c) for c in self.raw.constraints
+        ).set_index("id")
 
     def get_constraints(self) -> list[Constraint]:
         """
