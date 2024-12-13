@@ -42,8 +42,45 @@ __all__ = [
 ]
 
 
+class InstanceBase(ABC):
+    @abstractmethod
+    def get_decision_variables(self) -> list[DecisionVariable]: ...
+    @abstractmethod
+    def get_constraints(self) -> list[Constraint]: ...
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.get_decision_variables():
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.get_constraints():
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    @property
+    def decision_variables(self) -> DataFrame:
+        return DataFrame(
+            v._as_pandas_entry() for v in self.get_decision_variables()
+        ).set_index("id")
+
+    @property
+    def constraints(self) -> DataFrame:
+        return DataFrame(
+            c._as_pandas_entry() for c in self.get_constraints()
+        ).set_index("id")
+
+
 @dataclass
-class Instance:
+class Instance(InstanceBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -186,10 +223,12 @@ class Instance:
         return self.raw.description
 
     @property
-    def decision_variables(self) -> DataFrame:
-        return DataFrame(
-            _as_pandas_entry_decision_variable(v) for v in self.raw.decision_variables
-        ).set_index("id")
+    def objective(self) -> Function:
+        return Function(self.raw.objective)
+
+    @property
+    def sense(self) -> _Instance.Sense.ValueType:
+        return self.raw.sense
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
@@ -197,43 +236,11 @@ class Instance:
         """
         return [DecisionVariable(raw) for raw in self.raw.decision_variables]
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.raw.decision_variables:
-            if v.id == variable_id:
-                return DecisionVariable(v)
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    @property
-    def objective(self) -> Function:
-        return Function(self.raw.objective)
-
-    @property
-    def constraints(self) -> DataFrame:
-        return DataFrame(
-            _as_pandas_entry_constraints(c) for c in self.raw.constraints
-        ).set_index("id")
-
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances.
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
-
-    def get_constraint(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.raw.constraints:
-            if c.id == constraint_id:
-                return Constraint.from_raw(c)
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    @property
-    def sense(self) -> _Instance.Sense.ValueType:
-        return self.raw.sense
 
     def evaluate(self, state: State | Mapping[int, float]) -> Solution:
         if not isinstance(state, State):
@@ -279,39 +286,8 @@ class Instance:
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
 
-def _as_pandas_entry_decision_variable(v: _DecisionVariable) -> dict:
-    return {
-        "id": v.id,
-        "kind": _kind(v.kind),
-        "lower": v.bound.lower if v.HasField("bound") else NA,
-        "upper": v.bound.upper if v.HasField("bound") else NA,
-        "name": v.name if v.HasField("name") else NA,
-        "subscripts": v.subscripts,
-        "description": v.description if v.HasField("description") else NA,
-        "substituted_value": v.substituted_value
-        if v.HasField("substituted_value")
-        else NA,
-        **{f"parameters.{key}": value for key, value in v.parameters.items()},
-    }
-
-
-def _as_pandas_entry_constraints(c: _Constraint) -> dict:
-    return {
-        "id": c.id,
-        "equality": _equality(c.equality),
-        "type": _function_type(c.function),
-        "used_ids": _ommx_rust.used_decision_variable_ids(
-            c.function.SerializeToString()
-        ),
-        "name": c.name if c.HasField("name") else NA,
-        "subscripts": c.subscripts,
-        "description": c.description if c.HasField("description") else NA,
-        **{f"parameters.{key}": value for key, value in c.parameters.items()},
-    }
-
-
 @dataclass
-class ParametricInstance:
+class ParametricInstance(InstanceBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
     """
@@ -327,47 +303,17 @@ class ParametricInstance:
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
-    @property
-    def decision_variables(self) -> DataFrame:
-        return DataFrame(
-            _as_pandas_entry_decision_variable(v) for v in self.raw.decision_variables
-        ).set_index("id")
-
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
         return [DecisionVariable(raw) for raw in self.raw.decision_variables]
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.raw.decision_variables:
-            if v.id == variable_id:
-                return DecisionVariable(v)
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    @property
-    def constraints(self) -> DataFrame:
-        return DataFrame(
-            _as_pandas_entry_constraints(c) for c in self.raw.constraints
-        ).set_index("id")
-
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
-
-    def get_constraint(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.raw.constraints:
-            if c.id == constraint_id:
-                return Constraint.from_raw(c)
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
 
     def get_parameters(self) -> list[Parameter]:
         """
@@ -877,6 +823,22 @@ class DecisionVariable(VariableBase):
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
+
+    def _as_pandas_entry(self) -> dict:
+        v = self.raw
+        return {
+            "id": v.id,
+            "kind": _kind(v.kind),
+            "lower": v.bound.lower if v.HasField("bound") else NA,
+            "upper": v.bound.upper if v.HasField("bound") else NA,
+            "name": v.name if v.HasField("name") else NA,
+            "subscripts": v.subscripts,
+            "description": v.description if v.HasField("description") else NA,
+            "substituted_value": v.substituted_value
+            if v.HasField("substituted_value")
+            else NA,
+            **{f"parameters.{key}": value for key, value in v.parameters.items()},
+        }
 
 
 @dataclass
@@ -1781,3 +1743,18 @@ class Constraint:
         if self.raw.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
             return f"Constraint({self.function.__repr__()} <= 0)"
         return self.raw.__repr__()
+
+    def _as_pandas_entry(self) -> dict:
+        c = self.raw
+        return {
+            "id": c.id,
+            "equality": _equality(c.equality),
+            "type": _function_type(c.function),
+            "used_ids": _ommx_rust.used_decision_variable_ids(
+                c.function.SerializeToString()
+            ),
+            "name": c.name if c.HasField("name") else NA,
+            "subscripts": c.subscripts,
+            "description": c.description if c.HasField("description") else NA,
+            **{f"parameters.{key}": value for key, value in c.parameters.items()},
+        }
