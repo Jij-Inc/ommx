@@ -3,7 +3,7 @@ from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
-from pandas import DataFrame, concat, MultiIndex
+from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
@@ -12,7 +12,11 @@ from .function_pb2 import Function as _Function
 from .quadratic_pb2 import Quadratic as _Quadratic
 from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
 from .linear_pb2 import Linear as _Linear
-from .constraint_pb2 import Equality, Constraint as _Constraint
+from .constraint_pb2 import (
+    Equality,
+    Constraint as _Constraint,
+    RemovedConstraint as _RemovedConstraint,
+)
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable, Bound
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
@@ -42,8 +46,62 @@ __all__ = [
 ]
 
 
+class InstanceBase(ABC):
+    @abstractmethod
+    def get_decision_variables(self) -> list[DecisionVariable]: ...
+    @abstractmethod
+    def get_constraints(self) -> list[Constraint]: ...
+    @abstractmethod
+    def get_removed_constraints(self) -> list[RemovedConstraint]: ...
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.get_decision_variables():
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.get_constraints():
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.get_removed_constraints():
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
+    @property
+    def decision_variables(self) -> DataFrame:
+        return DataFrame(
+            v._as_pandas_entry() for v in self.get_decision_variables()
+        ).set_index("id")
+
+    @property
+    def constraints(self) -> DataFrame:
+        return DataFrame(
+            c._as_pandas_entry() for c in self.get_constraints()
+        ).set_index("id")
+
+    @property
+    def removed_constraints(self) -> DataFrame:
+        return DataFrame(
+            rc._as_pandas_entry() for rc in self.get_removed_constraints()
+        ).set_index("id")
+
+
 @dataclass
-class Instance:
+class Instance(InstanceBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -186,26 +244,12 @@ class Instance:
         return self.raw.description
 
     @property
-    def decision_variables(self) -> DataFrame:
-        decision_variables = self.raw.decision_variables
-        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
-            {
-                "id": v.id,
-                "kind": _kind(v.kind),
-                "lower": v.bound.lower,
-                "upper": v.bound.upper,
-                "name": v.name,
-                "subscripts": v.subscripts,
-                "description": v.description,
-            }
-            for v in decision_variables
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+    def objective(self) -> Function:
+        return Function(self.raw.objective)
+
+    @property
+    def sense(self) -> _Instance.Sense.ValueType:
+        return self.raw.sense
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
@@ -213,61 +257,17 @@ class Instance:
         """
         return [DecisionVariable(raw) for raw in self.raw.decision_variables]
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.raw.decision_variables:
-            if v.id == variable_id:
-                return DecisionVariable(v)
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    @property
-    def objective(self) -> Function:
-        return Function(self.raw.objective)
-
-    @property
-    def constraints(self) -> DataFrame:
-        constraints = self.raw.constraints
-        parameters = DataFrame(dict(v.parameters) for v in constraints)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
-            {
-                "id": c.id,
-                "equality": _equality(c.equality),
-                "type": _function_type(c.function),
-                "used_ids": _ommx_rust.used_decision_variable_ids(
-                    c.function.SerializeToString()
-                ),
-                "name": c.name,
-                "subscripts": c.subscripts,
-                "description": c.description,
-            }
-            for c in constraints
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
-
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances.
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
 
-    def get_constraint(self, constraint_id: int) -> Constraint:
+    def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
-        Get a constraint by ID.
+        Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        for c in self.raw.constraints:
-            if c.id == constraint_id:
-                return Constraint.from_raw(c)
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    @property
-    def sense(self) -> _Instance.Sense.ValueType:
-        return self.raw.sense
+        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
     def evaluate(self, state: State | Mapping[int, float]) -> Solution:
         if not isinstance(state, State):
@@ -314,7 +314,7 @@ class Instance:
 
 
 @dataclass
-class ParametricInstance:
+class ParametricInstance(InstanceBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
     """
@@ -336,29 +336,17 @@ class ParametricInstance:
         """
         return [DecisionVariable(raw) for raw in self.raw.decision_variables]
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.raw.decision_variables:
-            if v.id == variable_id:
-                return DecisionVariable(v)
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint
         """
         return [Constraint.from_raw(raw) for raw in self.raw.constraints]
 
-    def get_constraint(self, constraint_id: int) -> Constraint:
+    def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
-        Get a constraint by ID.
+        Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        for c in self.raw.constraints:
-            if c.id == constraint_id:
-                return Constraint.from_raw(c)
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
+        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
     def get_parameters(self) -> list[Parameter]:
         """
@@ -374,6 +362,12 @@ class ParametricInstance:
             if p.id == parameter_id:
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
+
+    @property
+    def parameters(self) -> DataFrame:
+        return DataFrame(p._as_pandas_entry() for p in self.get_parameters()).set_index(
+            "id"
+        )
 
     def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
         """
@@ -499,6 +493,16 @@ class Parameter(VariableBase):
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
 
+    def _as_pandas_entry(self) -> dict:
+        p = self.raw
+        return {
+            "id": p.id,
+            "name": p.name if p.HasField("name") else NA,
+            "subscripts": p.subscripts,
+            "description": p.description if p.HasField("description") else NA,
+            **{f"parameters.{key}": value for key, value in p.parameters.items()},
+        }
+
 
 @dataclass
 class Solution:
@@ -562,48 +566,34 @@ class Solution:
 
     @property
     def decision_variables(self) -> DataFrame:
-        decision_variables = self.raw.decision_variables
-        parameters = DataFrame(dict(v.parameters) for v in decision_variables)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
-            {
-                "id": v.id,
-                "kind": _kind(v.kind),
-                "value": self.raw.state.entries[v.id],
-                "lower": v.bound.lower,
-                "upper": v.bound.upper,
-                "name": v.name,
-                "subscripts": v.subscripts,
-                "description": v.description,
-            }
-            for v in decision_variables
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+        return DataFrame(
+            DecisionVariable(v)._as_pandas_entry()
+            | {"value": self.raw.state.entries[v.id]}
+            for v in self.raw.decision_variables
+        ).set_index("id")
 
     @property
     def constraints(self) -> DataFrame:
-        evaluation = self.raw.evaluated_constraints
-        parameters = DataFrame(dict(v.parameters) for v in evaluation)
-        parameters.columns = MultiIndex.from_product(
-            [["parameters"], parameters.columns]
-        )
-        df = DataFrame(
+        return DataFrame(
             {
-                "id": v.id,
-                "equality": _equality(v.equality),
-                "value": v.evaluated_value,
-                "used_ids": set(v.used_decision_variable_ids),
-                "name": v.name,
-                "subscripts": v.subscripts,
-                "description": v.description,
+                "id": c.id,
+                "equality": _equality(c.equality),
+                "value": c.evaluated_value,
+                "used_ids": set(c.used_decision_variable_ids),
+                "name": c.name if c.HasField("name") else NA,
+                "subscripts": c.subscripts,
+                "description": c.description if c.HasField("description") else NA,
+                "dual_variable": c.dual_variable if c.HasField("dual_variable") else NA,
+                "removed_reason": c.removed_reason
+                if c.HasField("removed_reason")
+                else NA,
             }
-            for v in evaluation
-        )
-        df.columns = MultiIndex.from_product([df.columns, [""]])
-        return concat([df, parameters], axis=1).set_index("id")
+            | {
+                f"removed_reason.{key}": value
+                for key, value in c.removed_reason_parameters.items()
+            }
+            for c in self.raw.evaluated_constraints
+        ).set_index("id")
 
     @property
     def feasible(self) -> bool:
@@ -868,6 +858,21 @@ class DecisionVariable(VariableBase):
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
+
+    def _as_pandas_entry(self) -> dict:
+        v = self.raw
+        return {
+            "id": v.id,
+            "kind": _kind(v.kind),
+            "lower": v.bound.lower if v.HasField("bound") else NA,
+            "upper": v.bound.upper if v.HasField("bound") else NA,
+            "name": v.name if v.HasField("name") else NA,
+            "subscripts": v.subscripts,
+            "description": v.description if v.HasField("description") else NA,
+            "substituted_value": v.substituted_value
+            if v.HasField("substituted_value")
+            else NA,
+        } | {f"parameters.{key}": value for key, value in v.parameters.items()}
 
 
 @dataclass
@@ -1747,16 +1752,16 @@ class Constraint:
         return self.raw.id
 
     @property
-    def name(self) -> str:
-        return self.raw.name
-
-    @property
     def equality(self) -> Equality.ValueType:
         return self.raw.equality
 
     @property
-    def description(self) -> str:
-        return self.raw.description
+    def name(self) -> str | None:
+        return self.raw.name if self.raw.HasField("name") else None
+
+    @property
+    def description(self) -> str | None:
+        return self.raw.description if self.raw.HasField("description") else None
 
     @property
     def subscripts(self) -> list[int]:
@@ -1772,3 +1777,70 @@ class Constraint:
         if self.raw.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
             return f"Constraint({self.function.__repr__()} <= 0)"
         return self.raw.__repr__()
+
+    def _as_pandas_entry(self) -> dict:
+        c = self.raw
+        return {
+            "id": c.id,
+            "equality": _equality(c.equality),
+            "type": _function_type(c.function),
+            "used_ids": _ommx_rust.used_decision_variable_ids(
+                c.function.SerializeToString()
+            ),
+            "name": c.name if c.HasField("name") else NA,
+            "subscripts": c.subscripts,
+            "description": c.description if c.HasField("description") else NA,
+        } | {f"parameters.{key}": value for key, value in c.parameters.items()}
+
+
+@dataclass
+class RemovedConstraint:
+    """
+    Constraints removed while preprocessing
+    """
+
+    raw: _RemovedConstraint
+
+    @property
+    def id(self) -> int:
+        return self.raw.constraint.id
+
+    @property
+    def name(self) -> str | None:
+        return (
+            self.raw.constraint.name if self.raw.constraint.HasField("name") else None
+        )
+
+    @property
+    def description(self) -> str | None:
+        return (
+            self.raw.constraint.description
+            if self.raw.constraint.HasField("description")
+            else None
+        )
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.constraint.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return dict(self.raw.constraint.parameters)
+
+    @property
+    def removed_reason(self) -> str:
+        return self.raw.removed_reason
+
+    @property
+    def removed_reason_parameters(self) -> dict[str, str]:
+        return dict(self.raw.removed_reason_parameters)
+
+    def _as_pandas_entry(self) -> dict:
+        return (
+            Constraint.from_raw(self.raw.constraint)._as_pandas_entry()
+            | {"removed_reason": self.removed_reason}
+            | {
+                f"removed_reason.{key}": value
+                for key, value in self.removed_reason_parameters.items()
+            }
+        )
