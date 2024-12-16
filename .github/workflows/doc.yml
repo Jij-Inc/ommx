@@ -26,7 +26,7 @@ jobs:
       - name: Build Jupyter Book
         run: |
           uv run jupyter-book build .
-          ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
+          ERROR_LOGS=$(find _build -type f -name "*.err.log")
           if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do echo "[ERROR LOG] $log" && cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
         working-directory: doc/
 
