@@ -13,11 +13,6 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
   jupyter-book:
     runs-on: ubuntu-latest
@@ -179,6 +174,9 @@ jobs:
           retention-days: 30
 
   deploy:
+    concurrency:
+      group: "pages-deploy"
+      cancel-in-progress: true
     if: github.ref == 'refs/heads/main'
     needs: package
     environment:
