@@ -1058,7 +1058,7 @@ class Linear:
         Linear terms and constant as a dictionary
         """
         return {(id,): value for id, value in self.linear_terms.items()} | {
-            (0,): self.constant
+            (): self.constant
         }
 
     @property
