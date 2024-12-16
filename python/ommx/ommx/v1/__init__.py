@@ -100,8 +100,50 @@ class InstanceBase(ABC):
         ).set_index("id")
 
 
+class UserAnnotationBase(ABC):
+    @property
+    @abstractmethod
+    def _annotations(self) -> dict[str, str]: ...
+
+    def add_user_annotation(
+        self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
+    ):
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        self._annotations[annotation_namespace + key] = value
+
+    def add_user_annotations(
+        self,
+        annotations: dict[str, str],
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ):
+        for key, value in annotations.items():
+            self.add_user_annotation(
+                key, value, annotation_namespace=annotation_namespace
+            )
+
+    def get_user_annotation(
+        self, key: str, *, annotation_namespace: str = "org.ommx.user."
+    ):
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        return self._annotations[annotation_namespace + key]
+
+    def get_user_annotations(
+        self, *, annotation_namespace: str = "org.ommx.user."
+    ) -> dict[str, str]:
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        return {
+            key[len(annotation_namespace) :]: value
+            for key, value in self._annotations.items()
+            if key.startswith(annotation_namespace)
+        }
+
+
 @dataclass
-class Instance(InstanceBase):
+class Instance(InstanceBase, UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -178,6 +220,10 @@ class Instance(InstanceBase):
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     # Re-export some enums
     MAXIMIZE = _Instance.SENSE_MAXIMIZE
@@ -574,7 +620,7 @@ class Parameter(VariableBase):
 
 
 @dataclass
-class Solution:
+class Solution(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Solution`` protobuf message.
 
@@ -615,6 +661,10 @@ class Solution:
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
     """
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:

@@ -585,8 +585,10 @@ class ArtifactBuilder:
         Add the instance to the artifact
         >>> builder = ArtifactBuilder.temp()
         >>> desc = builder.add_instance(instance)
-        >>> desc.annotations
-        {'org.ommx.v1.instance.title': 'test instance', 'org.ommx.user.author': 'Alice'}
+        >>> print(desc.annotations['org.ommx.v1.instance.title'])
+        test instance
+        >>> print(desc.annotations['org.ommx.user.author'])
+        Alice
         >>> artifact = builder.build()
 
         Load the instance from the artifact by :py:meth:`Artifact.get_instance`
@@ -620,6 +622,34 @@ class ArtifactBuilder:
     def add_solution(self, solution: Solution) -> Descriptor:
         """
         Add a solution to the artifact with annotations
+
+        Example
+        ========
+
+        >>> from ommx.v1 import Instance, Solution
+        >>> instance = Instance.empty()
+        >>> solution = instance.evaluate({})
+
+        Add the instance to the artifact first
+        >>> builder = ArtifactBuilder.temp()
+        >>> instance_desc = builder.add_instance(instance)
+
+        Set annotations into the solution itself
+        >>> solution.instance = instance_desc.digest
+        >>> solution.solver = "manual"
+        >>> solution.add_user_annotation("title", "test solution")
+        >>> _desc = builder.add_solution(solution)
+        >>> artifact = builder.build()
+
+        Load the solution from the artifact by :py:meth:`Artifact.get_solution`
+        >>> solution2 = artifact.get_solution(_desc)
+        >>> print(solution2.instance)
+        sha256:...
+        >>> print(solution2.solver)
+        manual
+        >>> print(solution2.get_user_annotations())
+        {'title': 'test solution'}
+
         """
         blob = solution.to_bytes()
         annotations = solution.annotations.copy()
