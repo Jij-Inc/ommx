@@ -4,14 +4,10 @@ version: "3"
 
 tasks:
   # Documents
-  install_doc:
-    cmds:
-      - pip install -r requirements.txt
-      - pip install -r doc/requirements.txt
-
   build_book:
     cmds:
       - jupyter-book build doc
+      - python -m webbrowser file:///$(pwd)/doc/_build/html/index.html
 
   doc_rust:
     cmds:
@@ -99,3 +95,8 @@ tasks:
   stubgen:
     cmds:
       - cargo run --bin stub_gen --features=stub_gen
+
+  pip_compile:
+    cmds:
+      - uv pip compile pyproject.toml -o ../requirements.txt
+    dir: doc/

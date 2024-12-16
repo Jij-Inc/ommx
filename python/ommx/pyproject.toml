@@ -35,10 +35,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "jupyter-book>=1.0.3",
     "jupyterlab",
     "matplotlib",
     "mypy-protobuf",
     "mypy>=0.910",
+    "nbconvert>=7.16.4",
     "networkx",
     "pyright",
     "pytest",
