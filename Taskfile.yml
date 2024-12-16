@@ -9,6 +9,10 @@ tasks:
       - jupyter-book build doc
       - python -m webbrowser file:///$(pwd)/doc/_build/html/index.html
 
+  watch_build_book:
+    cmds:
+      - fswatch -o doc/**/*.ipynb | xargs -n1 -I{} jupyter-book build doc
+
   doc_rust:
     cmds:
       - cargo doc --no-deps -p ommx
