@@ -295,6 +295,7 @@ class Artifact:
 
         blob = self.get_blob(descriptor)
         solution = Solution.from_bytes(blob)
+        solution.annotations = descriptor.annotations
         if "org.ommx.v1.solution.instance" in descriptor.annotations:
             solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
         if "org.ommx.v1.solution.solver" in descriptor.annotations:
