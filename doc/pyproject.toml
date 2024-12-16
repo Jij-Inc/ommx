@@ -2,7 +2,7 @@
 name = "ommx-book"
 version = "0.1.0"
 description = "Jupyter Book for OMMX"
-requires-python = ">=3.11"
+requires-python = ">=3.9, <3.13"
 dependencies = [
     "jupyter-book>=1.0.3",
     "nbconvert>=7.16.4",
