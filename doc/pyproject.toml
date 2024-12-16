@@ -10,7 +10,9 @@ requires-python = ">=3.9, <3.13"
 # These dependencies must be published ones.
 dependencies = [
     "jupyter-book>=1.0.3",
+    "matplotlib>=3.9.4",
     "nbconvert>=7.16.4",
+    "networkx>=3.2.1",
     "ommx-pyscipopt-adapter>=1.5.1",
     "ommx-python-mip-adapter>=1.5.1",
     "ommx>=1.5.1",
