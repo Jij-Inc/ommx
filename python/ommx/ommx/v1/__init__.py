@@ -1670,7 +1670,7 @@ class Function:
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
         if self.raw.HasField("constant"):
-            return {(0,): self.raw.constant}
+            return {(): self.raw.constant}
         if self.raw.HasField("linear"):
             return Linear.from_raw(self.raw.linear).terms
         if self.raw.HasField("quadratic"):
