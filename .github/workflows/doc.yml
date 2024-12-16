@@ -20,10 +20,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
         run: |
@@ -49,9 +47,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ github.token }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Generate API docs
         run: buf generate --template buf.gen.docs.yaml
@@ -70,14 +67,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Check warnings in documents
         uses: actions-rs/cargo@v1
@@ -100,10 +91,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
         run: |
