@@ -22,6 +22,8 @@ jobs:
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: "3.12"
 
       - name: Install OMMX Book dependencies
         run: pip install -r requirements.txt
