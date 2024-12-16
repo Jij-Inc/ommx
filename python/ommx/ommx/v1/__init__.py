@@ -186,6 +186,15 @@ class Instance(InstanceBase):
     Description = _Instance.Description
 
     @staticmethod
+    def empty() -> Instance:
+        """
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
+        """
+        return Instance.from_components(
+            objective=0, constraints=[], sense=Instance.MINIMIZE, decision_variables=[]
+        )
+
+    @staticmethod
     def from_components(
         *,
         objective: int
@@ -229,6 +238,66 @@ class Instance(InstanceBase):
         - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
         """
         _ommx_rust.write_mps_file(self.to_bytes(), path)
+
+    def add_user_annotation(
+        self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
+    ):
+        """
+        Add a user annotation to the instance.
+
+        Examples
+        =========
+
+        .. doctest::
+
+                >>> instance = Instance.empty()
+                >>> instance.add_user_annotation("author", "Alice")
+                >>> instance.get_user_annotations()
+                {'author': 'Alice'}
+                >>> instance.annotations
+                {'org.ommx.user.author': 'Alice'}
+
+        """
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        self.annotations[annotation_namespace + key] = value
+
+    def get_user_annotation(
+        self, key: str, *, annotation_namespace: str = "org.ommx.user."
+    ):
+        """
+        Get a user annotation from the instance.
+
+        Examples
+        =========
+
+        .. doctest::
+
+                >>> instance = Instance.empty()
+                >>> instance.add_user_annotation("author", "Alice")
+                >>> instance.get_user_annotation("author")
+                'Alice'
+
+        """
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        return self.annotations[annotation_namespace + key]
+
+    def get_user_annotations(
+        self, *, annotation_namespace: str = "org.ommx.user."
+    ) -> dict[str, str]:
+        """
+        Get user annotations from the instance.
+
+        See also :py:meth:`add_user_annotation`.
+        """
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        return {
+            key[len(annotation_namespace) :]: value
+            for key, value in self.annotations.items()
+            if key.startswith(annotation_namespace)
+        }
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:

@@ -571,6 +571,31 @@ class ArtifactBuilder:
     def add_instance(self, instance: Instance) -> Descriptor:
         """
         Add an instance to the artifact with annotations
+
+        Example
+        ========
+
+        >>> from ommx.v1 import Instance
+        >>> instance = Instance.empty()
+
+        Set annotations into the instance itself
+        >>> instance.title = "test instance"
+        >>> instance.add_user_annotation("author", "Alice")
+
+        Add the instance to the artifact
+        >>> builder = ArtifactBuilder.temp()
+        >>> desc = builder.add_instance(instance)
+        >>> desc.annotations
+        {'org.ommx.v1.instance.title': 'test instance', 'org.ommx.user.author': 'Alice'}
+        >>> artifact = builder.build()
+
+        Load the instance from the artifact by :py:meth:`Artifact.get_instance`
+        >>> instance2 = artifact.get_instance(desc)
+        >>> print(instance2.title)
+        test instance
+        >>> print(instance2.get_user_annotations())
+        {'author': 'Alice'}
+
         """
         blob = instance.to_bytes()
         annotations = instance.annotations.copy()
