@@ -1034,6 +1034,41 @@ class Linear:
         )
 
     @staticmethod
+    def from_raw(raw: _Linear) -> Linear:
+        new = Linear(terms={})
+        new.raw = raw
+        return new
+
+    @property
+    def linear_terms(self) -> dict[int, float]:
+        """
+        Get the terms of the linear function as a dictionary
+        """
+        out = {}
+        for term in self.raw.terms:
+            if term.id not in out:
+                out[term.id] = term.coefficient
+            else:
+                out[term.id] += term.coefficient
+        return out
+
+    @property
+    def terms(self) -> dict[tuple[int, ...], float]:
+        """
+        Linear terms and constant as a dictionary
+        """
+        return {(id,): value for id, value in self.linear_terms.items()} | {
+            (): self.constant
+        }
+
+    @property
+    def constant(self) -> float:
+        """
+        Get the constant term of the linear function
+        """
+        return self.raw.constant
+
+    @staticmethod
     def from_bytes(data: bytes) -> Linear:
         new = Linear(terms={})
         new.raw.ParseFromString(data)
@@ -1237,6 +1272,12 @@ class Quadratic:
         )
 
     @staticmethod
+    def from_raw(raw: _Quadratic) -> Quadratic:
+        new = Quadratic(columns=[], rows=[], values=[])
+        new.raw = raw
+        return new
+
+    @staticmethod
     def from_bytes(data: bytes) -> Quadratic:
         new = Quadratic(columns=[], rows=[], values=[])
         new.raw.ParseFromString(data)
@@ -1315,6 +1356,27 @@ class Quadratic:
             self.to_bytes(), state.SerializeToString()
         )
         return Quadratic.from_bytes(new), used_ids
+
+    @property
+    def linear(self) -> Linear | None:
+        if self.raw.HasField("linear"):
+            return Linear.from_raw(self.raw.linear)
+        return None
+
+    @property
+    def quad_terms(self) -> dict[tuple[int, int], float]:
+        assert len(self.raw.columns) == len(self.raw.rows) == len(self.raw.values)
+        out = {}
+        for column, row, value in zip(self.raw.columns, self.raw.rows, self.raw.values):
+            if (column, row) not in out:
+                out[(column, row)] = value
+            else:
+                out[(column, row)] += value
+        return out
+
+    @property
+    def terms(self) -> dict[tuple[int, ...], float]:
+        return self.quad_terms | (self.linear.terms if self.linear else {})
 
     def __repr__(self) -> str:
         return f"Quadratic({_ommx_rust.Quadratic.decode(self.raw.SerializeToString()).__repr__()})"
@@ -1398,10 +1460,28 @@ class Polynomial:
         )
 
     @staticmethod
+    def from_raw(raw: _Polynomial) -> Polynomial:
+        new = Polynomial()
+        new.raw = raw
+        return new
+
+    @staticmethod
     def from_bytes(data: bytes) -> Polynomial:
         new = Polynomial()
         new.raw.ParseFromString(data)
         return new
+
+    @property
+    def terms(self) -> dict[tuple[int, ...], float]:
+        out = {}
+        for term in self.raw.terms:
+            term.ids.sort()
+            key = tuple(term.ids)
+            if key in out:
+                out[key] += term.coefficient
+            else:
+                out[key] = term.coefficient
+        return out
 
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
@@ -1586,6 +1666,18 @@ class Function:
         | _Function,
     ):
         self.raw = as_function(inner)
+
+    @property
+    def terms(self) -> dict[tuple[int, ...], float]:
+        if self.raw.HasField("constant"):
+            return {(): self.raw.constant}
+        if self.raw.HasField("linear"):
+            return Linear.from_raw(self.raw.linear).terms
+        if self.raw.HasField("quadratic"):
+            return Quadratic.from_raw(self.raw.quadratic).terms
+        if self.raw.HasField("polynomial"):
+            return Polynomial.from_raw(self.raw.polynomial).terms
+        raise ValueError("Unknown function type")
 
     @staticmethod
     def from_bytes(data: bytes) -> Function:
