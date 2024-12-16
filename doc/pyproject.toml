@@ -1,0 +1,12 @@
+[project]
+name = "ommx-book"
+version = "0.1.0"
+description = "Jupyter Book for OMMX"
+requires-python = ">=3.11"
+dependencies = [
+    "jupyter-book>=1.0.3",
+    "nbconvert>=7.16.4",
+    "ommx-pyscipopt-adapter>=1.5.1",
+    "ommx-python-mip-adapter>=1.5.1",
+    "ommx>=1.5.1",
+]

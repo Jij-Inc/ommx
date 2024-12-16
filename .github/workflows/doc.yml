@@ -23,16 +23,12 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -r doc/requirements.txt
-
       - name: Build Jupyter Book
         run: |
-          jupyter-book build doc
+          uv run jupyter-book build doc
           ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
           if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do echo "[ERROR LOG] $log" && cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
+        working-directory: doc/
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
