@@ -13,11 +13,6 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
   jupyter-book:
     runs-on: ubuntu-latest
@@ -25,15 +20,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.9"
+          python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -r doc/requirements.txt
+      - name: Install OMMX Book dependencies
+        run: pip install -r requirements.txt
 
       - name: Build Jupyter Book
         run: |
@@ -54,9 +47,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ github.token }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Generate API docs
         run: buf generate --template buf.gen.docs.yaml
@@ -75,14 +67,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Check warnings in documents
         uses: actions-rs/cargo@v1
@@ -105,10 +91,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
         run: |
@@ -179,6 +163,9 @@ jobs:
           retention-days: 30
 
   deploy:
+    concurrency:
+      group: "pages-deploy"
+      cancel-in-progress: true
     if: github.ref == 'refs/heads/main'
     needs: package
     environment:
