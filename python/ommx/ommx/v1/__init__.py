@@ -471,9 +471,9 @@ class Instance(InstanceBase, UserAnnotationBase):
             >>> len(pi.get_removed_constraints())
             2
             >>> pi.get_removed_constraints()[0]
-            RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method)
+            RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method, parameter_id=3)
             >>> pi.get_removed_constraints()[1]
-            RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method)
+            RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method, parameter_id=4)
 
             There are two parameters corresponding to the two constraints
 
