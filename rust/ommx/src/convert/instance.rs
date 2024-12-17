@@ -146,7 +146,7 @@ impl Instance {
             }
             let parameter = Parameter {
                 id: id_base + i as u64,
-                name: Some("penalty".to_string()),
+                name: Some("penalty_weight".to_string()),
                 subscripts: vec![c.id as i64],
                 ..Default::default()
             };
@@ -176,7 +176,7 @@ impl Instance {
         let mut objective = self.objective().into_owned();
         let parameter = Parameter {
             id: id_base,
-            name: Some("uniform_penalty".to_string()),
+            name: Some("uniform_penalty_weight".to_string()),
             ..Default::default()
         };
         let mut removed_constraints = Vec::new();

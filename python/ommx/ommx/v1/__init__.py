@@ -421,15 +421,105 @@ class Instance(InstanceBase, UserAnnotationBase):
         return instance.as_pubo_format()
 
     def penalty_method(self) -> ParametricInstance:
-        """
-        Convert the instance to a parametric instance for penalty method.
+        r"""
+        Convert to a parametric unconstrained instance by penalty method.
+
+        Roughly, this converts a constrained problem
+
+        .. math::
+
+            \begin{align*}
+                \min_x & \space f(x) & \\
+                \text{ s.t. } & \space g_i(x) = 0 & (\forall i)
+            \end{align*}
+
+        to an unconstrained problem with parameters
+
+        .. math::
+
+            \min_x f(x) + \sum_i \lambda_i g_i(x)^2
+
+        where :math:`\lambda_i` are the penalty weight parameters for each constraint.
+        If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
+
+        :raises RuntimeError: If the instance contains inequality constraints.
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
     def uniform_penalty_method(self) -> ParametricInstance:
-        """
-        Convert the instance to a parametric instance for uniform penalty method.
+        r"""
+        Convert to a parametric unconstrained instance by penalty method with uniform weight.
+
+        Roughly, this converts a constrained problem
+
+        .. math::
+
+            \begin{align*}
+                \min_x & \space f(x) & \\
+                \text{ s.t. } & \space g_i(x) = 0 & (\forall i)
+            \end{align*}
+
+        to an unconstrained problem with a parameter
+
+        .. math::
+
+            \min_x f(x) + \lambda \sum_i g_i(x)^2
+
+        where :math:`\lambda` is the uniform penalty weight parameter for all constraints.
+
+        :raises RuntimeError: If the instance contains inequality constraints.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[sum(x) == 3],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> instance.objective
+            Function(x0 + x1 + x2)
+
+            >>> pi = instance.uniform_penalty_method()
+
+            The constraint is put in `removed_constraints`
+
+            >>> pi.get_constraints()
+            []
+            >>> len(pi.get_removed_constraints())
+            1
+            >>> pi.get_removed_constraints()[0]
+            RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=uniform_penalty_method)
+
+            There is only one parameter in the instance
+
+            >>> len(pi.get_parameters())
+            1
+            >>> p = pi.get_parameters()[0]
+            >>> p.id
+            3
+            >>> p.name
+            'uniform_penalty_weight'
+
+            Substitute `p = 0` to get the original objective
+
+            >>> instance0 = pi.with_parameters({p.id: 0.0})
+            >>> instance0.objective
+            Function(x0 + x1 + x2)
+
+            Substitute `p = 1`
+
+            >>> instance1 = pi.with_parameters({p.id: 1.0})
+            >>> instance1.objective.almost_equal(instance.objective + (sum(x) - 3) * (sum(x) - 3))
+            True
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(
@@ -2046,9 +2136,30 @@ class RemovedConstraint:
 
     raw: _RemovedConstraint
 
+    def __repr__(self) -> str:
+        reason = f"reason={self.removed_reason}"
+        if self.removed_reason_parameters:
+            reason += ", " + ", ".join(
+                f"{key}={value}"
+                for key, value in self.removed_reason_parameters.items()
+            )
+        if self.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+            return f"RemovedConstraint({self.function.__repr__()} == 0, {reason})"
+        if self.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+            return f"RemovedConstraint({self.function.__repr__()} <= 0, {reason})"
+        return self.raw.__repr__()
+
+    @property
+    def equality(self) -> Equality.ValueType:
+        return self.raw.constraint.equality
+
     @property
     def id(self) -> int:
         return self.raw.constraint.id
+
+    @property
+    def function(self) -> Function:
+        return Function(self.raw.constraint.function)
 
     @property
     def name(self) -> str | None:
