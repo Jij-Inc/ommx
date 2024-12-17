@@ -41,8 +41,12 @@ impl Instance {
         ParametricInstance(self.0.clone().into())
     }
 
-    pub fn penalty_method(&self) -> ParametricInstance {
-        ParametricInstance(self.0.clone().penalty_method())
+    pub fn penalty_method(&self) -> Result<ParametricInstance> {
+        Ok(ParametricInstance(self.0.clone().penalty_method()?))
+    }
+
+    pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
+        Ok(ParametricInstance(self.0.clone().uniform_penalty_method()?))
     }
 }
 

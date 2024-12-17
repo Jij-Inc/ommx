@@ -427,6 +427,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
+    def uniform_penalty_method(self) -> ParametricInstance:
+        """
+        Convert the instance to a parametric instance for uniform penalty method.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return ParametricInstance.from_bytes(
+            instance.uniform_penalty_method().to_bytes()
+        )
+
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
