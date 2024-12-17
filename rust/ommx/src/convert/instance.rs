@@ -5,6 +5,7 @@ use crate::v1::{
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
+use maplit::hashmap;
 use num::Zero;
 use proptest::prelude::*;
 use std::{
@@ -152,12 +153,12 @@ impl Instance {
             };
             let f = c.function().into_owned();
             objective = objective + &parameter * f.clone() * f;
-            parameters.push(parameter);
             removed_constraints.push(RemovedConstraint {
                 constraint: Some(c),
                 removed_reason: "penalty_method".to_string(),
-                removed_reason_parameters: Default::default(),
+                removed_reason_parameters: hashmap! { "parameter_id".to_string() => parameter.id.to_string() },
             });
+            parameters.push(parameter);
         }
         Ok(ParametricInstance {
             description: self.description,
