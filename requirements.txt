@@ -2,7 +2,7 @@
 #    uv pip compile pyproject.toml -o ../requirements.txt
 accessible-pygments==0.0.5
     # via pydata-sphinx-theme
-alabaster==0.7.16
+alabaster==1.0.0
     # via sphinx
 appnope==0.1.4
     # via ipykernel
@@ -25,7 +25,7 @@ bleach==6.2.0
     # via nbconvert
 certifi==2024.12.14
     # via requests
-cffi==1.15.1
+cffi==1.17.1
     # via mip
 charset-normalizer==3.4.0
     # via requests
@@ -46,7 +46,7 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
-docutils==0.20.1
+docutils==0.21.2
     # via
     #   myst-parser
     #   pybtex-docutils
@@ -156,7 +156,7 @@ nest-asyncio==1.6.0
     # via ipykernel
 networkx==3.4.2
     # via ommx-book (pyproject.toml)
-numpy==1.26.4
+numpy==2.2.0
     # via
     #   contourpy
     #   matplotlib
@@ -201,7 +201,7 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.3
     # via stack-data
-pyarrow==16.1.0
+pyarrow==18.1.0
     # via ommx
 pybtex==0.24.0
     # via
