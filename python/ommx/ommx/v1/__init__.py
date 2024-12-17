@@ -442,6 +442,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         where :math:`\lambda_i` are the penalty weight parameters for each constraint.
         If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
 
+        The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+
         :raises RuntimeError: If the instance contains inequality constraints.
 
         Examples
@@ -520,6 +522,8 @@ class Instance(InstanceBase, UserAnnotationBase):
             \min_x f(x) + \lambda \sum_i g_i(x)^2
 
         where :math:`\lambda` is the uniform penalty weight parameter for all constraints.
+
+        The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
         :raises RuntimeError: If the instance contains inequality constraints.
 
