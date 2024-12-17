@@ -1233,22 +1233,6 @@ class Linear(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        """
-        Create a constraint that this linear function is equal to the right-hand side.
-
-        Examples
-        ========
-
-        >>> x = DecisionVariable.integer(1)
-        >>> y = DecisionVariable.integer(2)
-        >>> x + y == 1
-        Constraint(...)
-
-        To compare two objects, use :py:meth:`almost_equal` method.
-
-        >>> assert (x + y).almost_equal(Linear(terms={1: 1, 2: 1}))
-
-        """
         return Constraint(
             function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
         )
@@ -1448,6 +1432,11 @@ class Quadratic(AsConstraint):
     def __neg__(self) -> Linear:
         return -1 * self
 
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
+
 
 @dataclass
 class Polynomial(AsConstraint):
@@ -1632,6 +1621,11 @@ class Polynomial(AsConstraint):
 
     def __neg__(self) -> Linear:
         return -1 * self
+
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
 
 
 def as_function(
@@ -1866,6 +1860,11 @@ class Function(AsConstraint):
 
     def __neg__(self) -> Function:
         return -1 * self
+
+    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
+        return Constraint(
+            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
+        )
 
 
 @dataclass
