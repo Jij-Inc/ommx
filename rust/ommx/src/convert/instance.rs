@@ -168,6 +168,38 @@ impl Instance {
         }
     }
 
+    pub fn uniform_penalty_method(self) -> ParametricInstance {
+        let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
+        let mut objective = self.objective().into_owned();
+        let parameter = Parameter {
+            id: id_base,
+            name: Some("uniform_penalty".to_string()),
+            ..Default::default()
+        };
+        let mut removed_constraints = Vec::new();
+        let mut quad_sum = Function::zero();
+        for c in self.constraints.into_iter() {
+            let f = c.function().into_owned();
+            quad_sum = quad_sum + f.clone() * f;
+            removed_constraints.push(RemovedConstraint {
+                constraint: Some(c),
+                removed_reason: "uniform_penalty_method".to_string(),
+                removed_reason_parameters: Default::default(),
+            });
+        }
+        objective = objective + &parameter * quad_sum;
+        ParametricInstance {
+            description: self.description,
+            objective: Some(objective),
+            constraints: Vec::new(),
+            decision_variables: self.decision_variables.clone(),
+            sense: self.sense,
+            parameters: vec![parameter],
+            constraint_hints: self.constraint_hints,
+            removed_constraints,
+        }
+    }
+
     pub fn binary_ids(&self) -> BTreeSet<u64> {
         self.decision_variables
             .iter()
@@ -478,6 +510,39 @@ mod tests {
             let dv_ids = parametric_instance.defined_decision_variable_ids();
             let p_ids = parametric_instance.defined_parameter_ids();
             prop_assert!(dv_ids.is_disjoint(&p_ids));
+
+            let used_ids = parametric_instance.used_ids().unwrap();
+            let all_ids = dv_ids.union(&p_ids).cloned().collect();
+            prop_assert!(used_ids.is_subset(&all_ids));
+
+            // Put every penalty weights to zero
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+            };
+            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert_eq!(substituted.constraints.len(), 0);
+
+            // Put every penalty weights to two
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+            };
+            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let mut objective = instance.objective().into_owned();
+            for c in &instance.constraints {
+                let f = c.function().into_owned();
+                objective = objective + 2.0 * f.clone() * f;
+            }
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+        }
+
+        #[test]
+        fn test_uniform_penalty_method(instance in Instance::arbitrary()) {
+            let parametric_instance = instance.clone().uniform_penalty_method();
+            let dv_ids = parametric_instance.defined_decision_variable_ids();
+            let p_ids = parametric_instance.defined_parameter_ids();
+            prop_assert!(dv_ids.is_disjoint(&p_ids));
+            prop_assert_eq!(p_ids.len(), 1);
 
             let used_ids = parametric_instance.used_ids().unwrap();
             let all_ids = dv_ids.union(&p_ids).cloned().collect();
