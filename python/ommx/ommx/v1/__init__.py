@@ -444,6 +444,58 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         :raises RuntimeError: If the instance contains inequality constraints.
 
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable, Constraint
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> instance.objective
+            Function(x0 + x1 + x2)
+
+            >>> pi = instance.penalty_method()
+
+            The constraint is put in `removed_constraints`
+
+            >>> pi.get_constraints()
+            []
+            >>> len(pi.get_removed_constraints())
+            2
+            >>> pi.get_removed_constraints()[0]
+            RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method)
+            >>> pi.get_removed_constraints()[1]
+            RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method)
+
+            There are two parameters corresponding to the two constraints
+
+            >>> len(pi.get_parameters())
+            2
+            >>> p1 = pi.get_parameters()[0]
+            >>> p1.id, p1.name
+            (3, 'penalty_weight')
+            >>> p2 = pi.get_parameters()[1]
+            >>> p2.id, p2.name
+            (4, 'penalty_weight')
+
+            Substitute all parameters to zero to get the original objective
+
+            >>> instance0 = pi.with_parameters({p1.id: 0.0, p2.id: 0.0})
+            >>> instance0.objective
+            Function(x0 + x1 + x2)
+
+            Substitute all parameters to one
+
+            >>> instance1 = pi.with_parameters({p1.id: 1.0, p2.id: 1.0})
+            >>> instance1.objective
+            Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
@@ -517,8 +569,8 @@ class Instance(InstanceBase, UserAnnotationBase):
             Substitute `p = 1`
 
             >>> instance1 = pi.with_parameters({p.id: 1.0})
-            >>> instance1.objective.almost_equal(instance.objective + (sum(x) - 3) * (sum(x) - 3))
-            True
+            >>> instance1.objective
+            Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
