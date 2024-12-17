@@ -1,7 +1,7 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
@@ -135,15 +135,18 @@ impl Instance {
             .boxed()
     }
 
-    pub fn penalty_method(self) -> ParametricInstance {
+    pub fn penalty_method(self) -> Result<ParametricInstance> {
         let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let mut objective = self.objective().into_owned();
         let mut parameters = Vec::new();
         let mut removed_constraints = Vec::new();
         for (i, c) in self.constraints.into_iter().enumerate() {
+            if c.equality() != Equality::EqualToZero {
+                bail!("Penalty method is only for equality constraints. Non-equality constraint is found: ID={}", c.id);
+            }
             let parameter = Parameter {
                 id: id_base + i as u64,
-                name: Some("penalty".to_string()),
+                name: Some("penalty_weight".to_string()),
                 subscripts: vec![c.id as i64],
                 ..Default::default()
             };
@@ -156,7 +159,7 @@ impl Instance {
                 removed_reason_parameters: Default::default(),
             });
         }
-        ParametricInstance {
+        Ok(ParametricInstance {
             description: self.description,
             objective: Some(objective),
             constraints: Vec::new(),
@@ -165,7 +168,42 @@ impl Instance {
             parameters,
             constraint_hints: self.constraint_hints,
             removed_constraints,
+        })
+    }
+
+    pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+        let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
+        let mut objective = self.objective().into_owned();
+        let parameter = Parameter {
+            id: id_base,
+            name: Some("uniform_penalty_weight".to_string()),
+            ..Default::default()
+        };
+        let mut removed_constraints = Vec::new();
+        let mut quad_sum = Function::zero();
+        for c in self.constraints.into_iter() {
+            if c.equality() != Equality::EqualToZero {
+                bail!("Uniform penalty method is only for equality constraints. Non-equality constraint is found: ID={}", c.id);
+            }
+            let f = c.function().into_owned();
+            quad_sum = quad_sum + f.clone() * f;
+            removed_constraints.push(RemovedConstraint {
+                constraint: Some(c),
+                removed_reason: "uniform_penalty_method".to_string(),
+                removed_reason_parameters: Default::default(),
+            });
         }
+        objective = objective + &parameter * quad_sum;
+        Ok(ParametricInstance {
+            description: self.description,
+            objective: Some(objective),
+            constraints: Vec::new(),
+            decision_variables: self.decision_variables.clone(),
+            sense: self.sense,
+            parameters: vec![parameter],
+            constraint_hints: self.constraint_hints,
+            removed_constraints,
+        })
     }
 
     pub fn binary_ids(&self) -> BTreeSet<u64> {
@@ -474,10 +512,43 @@ mod tests {
 
         #[test]
         fn test_penalty_method(instance in Instance::arbitrary()) {
-            let parametric_instance = instance.clone().penalty_method();
+            let Ok(parametric_instance) = instance.clone().penalty_method() else { return Ok(()); };
             let dv_ids = parametric_instance.defined_decision_variable_ids();
             let p_ids = parametric_instance.defined_parameter_ids();
             prop_assert!(dv_ids.is_disjoint(&p_ids));
+
+            let used_ids = parametric_instance.used_ids().unwrap();
+            let all_ids = dv_ids.union(&p_ids).cloned().collect();
+            prop_assert!(used_ids.is_subset(&all_ids));
+
+            // Put every penalty weights to zero
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+            };
+            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert_eq!(substituted.constraints.len(), 0);
+
+            // Put every penalty weights to two
+            let parameters = Parameters {
+                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+            };
+            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let mut objective = instance.objective().into_owned();
+            for c in &instance.constraints {
+                let f = c.function().into_owned();
+                objective = objective + 2.0 * f.clone() * f;
+            }
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+        }
+
+        #[test]
+        fn test_uniform_penalty_method(instance in Instance::arbitrary()) {
+            let Ok(parametric_instance) = instance.clone().uniform_penalty_method() else { return Ok(()); };
+            let dv_ids = parametric_instance.defined_decision_variable_ids();
+            let p_ids = parametric_instance.defined_parameter_ids();
+            prop_assert!(dv_ids.is_disjoint(&p_ids));
+            prop_assert_eq!(p_ids.len(), 1);
 
             let used_ids = parametric_instance.used_ids().unwrap();
             let all_ids = dv_ids.union(&p_ids).cloned().collect();
