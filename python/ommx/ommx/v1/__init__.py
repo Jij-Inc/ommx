@@ -427,6 +427,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
 
+    def as_parametric_instance(self) -> ParametricInstance:
+        """
+        Convert the instance to a :class:`ParametricInstance`.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return ParametricInstance.from_bytes(
+            instance.as_parametric_instance().to_bytes()
+        )
+
 
 @dataclass
 class ParametricInstance(InstanceBase):

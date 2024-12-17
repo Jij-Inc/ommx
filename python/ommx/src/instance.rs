@@ -37,6 +37,10 @@ impl Instance {
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
+    pub fn as_parametric_instance(&self) -> ParametricInstance {
+        ParametricInstance(self.0.clone().into())
+    }
+
     pub fn penalty_method(&self) -> ParametricInstance {
         ParametricInstance(self.0.clone().penalty_method())
     }
