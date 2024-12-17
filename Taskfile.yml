@@ -7,7 +7,28 @@ tasks:
   build_book:
     cmds:
       - jupyter-book build doc
+
+  build_book_all:
+    cmds:
+      - jupyter-book build doc --all
+
+  open_book:
+    cmds:
       - python -m webbrowser file:///$(pwd)/doc/_build/html/index.html
+
+  book:
+    cmds:
+      - task: build_book
+      - task: open_book
+
+  book_all:
+    cmds:
+      - task: build_book_all
+      - task: open_book
+
+  watch_build_book:
+    cmds:
+      - fswatch -o doc/**/*.ipynb | xargs -n1 -I{} jupyter-book build doc
 
   doc_rust:
     cmds:
@@ -91,6 +112,14 @@ tasks:
     cmds:
       - sphinx-build -b html source build
     dir: python/ommx-python-mip-adapter/docs
+
+  open_doc_python_sdk:
+    cmds:
+      - python -m webbrowser file:///$(pwd)/python/ommx/docs/build/index.html
+
+  open_doc_python_mip_adapter:
+    cmds:
+      - python -m webbrowser file:///$(pwd)/python/ommx-python-mip-adapter/docs/build/index.html
 
   stubgen:
     cmds:

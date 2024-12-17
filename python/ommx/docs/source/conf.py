@@ -55,6 +55,7 @@ html_static_path = []
 autoapi_dirs = ["../../ommx"]
 autoapi_options = [
     "members",
+    "inherited-members",
     "undoc-members",
     "show-module-summary",
 ]
