@@ -15,6 +15,7 @@ parts:
   - caption: "OMMX Message"
     chapters:
       - file: ommx_message/architecture
+      - file: ommx_message/function
   - caption: "OMMX Artifact"
     chapters:
       - file: ommx_artifact/architecture
