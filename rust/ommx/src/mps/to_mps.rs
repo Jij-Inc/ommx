@@ -1,7 +1,7 @@
 use super::MpsWriteError;
 use crate::{mps::ObjSense, v1};
 use anyhow::Result;
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
 pub(crate) const CONSTR_PREFIX: &str = "OMMX_CONSTR_";
@@ -180,7 +180,7 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
 fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> anyhow::Result<()> {
     writeln!(out, "BOUNDS")?;
     // build an id -> dvar map as the vec is not guaranteed to be in order
-    let var_by_id: std::collections::HashMap<_, _> = instance
+    let var_by_id: HashMap<_, _> = instance
         .decision_variables
         .iter()
         .map(|var| (var.id, var))
