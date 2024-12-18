@@ -87,6 +87,7 @@ def main():
         for name in [
             "ommx-pyscipopt-adapter",
             "ommx-python-mip-adapter",
+            "ommx-openjij-adapter",
             # Add new adapter here
         ]
     ]
