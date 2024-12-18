@@ -28,7 +28,7 @@ impl Instance {
         }
     }
 
-    pub fn used_decision_variable_ids(&self) -> Result<BTreeSet<u64>> {
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
         let mut used_ids = self.objective().used_decision_variable_ids();
         for c in &self.constraints {
             used_ids.extend(c.function().used_decision_variable_ids());
@@ -38,7 +38,7 @@ impl Instance {
                 used_ids.extend(c.function().used_decision_variable_ids());
             }
         }
-        Ok(used_ids)
+        used_ids
     }
 
     pub fn defined_ids(&self) -> BTreeSet<u64> {
@@ -68,7 +68,7 @@ impl Instance {
 
     /// Validate that all decision variable IDs used in the instance are defined.
     pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.used_decision_variable_ids()?;
+        let used_ids = self.used_decision_variable_ids();
         let mut defined_ids = BTreeSet::new();
         for dv in &self.decision_variables {
             if !defined_ids.insert(dv.id) {

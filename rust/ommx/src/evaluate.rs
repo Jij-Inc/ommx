@@ -490,7 +490,7 @@ mod tests {
     fn instance_with_state() -> BoxedStrategy<(Instance, State)> {
         Instance::arbitrary()
             .prop_flat_map(|instance| {
-                let used_ids = instance.used_decision_variable_ids().unwrap();
+                let used_ids = instance.used_decision_variable_ids();
                 let state = arbitrary_state(used_ids);
                 (Just(instance), state)
             })
@@ -524,7 +524,7 @@ mod tests {
     fn instance_with_split_state() -> BoxedStrategy<(Instance, State, (State, State))> {
         Instance::arbitrary()
             .prop_flat_map(|instance| {
-                let used_ids = instance.used_decision_variable_ids().unwrap();
+                let used_ids = instance.used_decision_variable_ids();
                 (Just(instance), arbitrary_state(used_ids)).prop_flat_map(|(instance, state)| {
                     (Just(instance), Just(state.clone()), split_state(state))
                 })
