@@ -1,6 +1,5 @@
 use super::MpsWriteError;
 use crate::{mps::ObjSense, v1};
-use anyhow::Result;
 use std::{collections::HashMap, io::Write};
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
@@ -177,7 +176,7 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
     Ok(())
 }
 
-fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> anyhow::Result<()> {
+fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
     // build an id -> dvar map as the vec is not guaranteed to be in order
     let var_by_id: HashMap<_, _> = instance
@@ -185,7 +184,7 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> anyhow::Resul
         .iter()
         .map(|var| (var.id, var))
         .collect();
-    for dvar_id in instance.used_decision_variable_ids()?.into_iter() {
+    for dvar_id in instance.used_decision_variable_ids().into_iter() {
         let dvar = var_by_id
             .get(&dvar_id)
             .ok_or(MpsWriteError::InvalidVariableId(dvar_id))?;

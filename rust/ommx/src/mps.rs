@@ -151,6 +151,4 @@ pub enum MpsWriteError {
     InvalidVariableId(u64),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-    #[error("Unknown Error: {0}")]
-    UnknownError(#[from] anyhow::Error),
 }
