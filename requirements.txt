@@ -163,14 +163,14 @@ numpy==1.26.4
     #   ommx
     #   pandas
     #   pyarrow
-ommx==1.5.1
+ommx==1.6.0rc1
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-pyscipopt-adapter==1.5.1
+ommx-pyscipopt-adapter==1.6.0rc1
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==1.5.1
+ommx-python-mip-adapter==1.6.0rc1
     # via ommx-book (pyproject.toml)
 packaging==24.2
     # via
