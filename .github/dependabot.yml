@@ -26,7 +26,11 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
-    directory: "/"
+    directories:
+      - "doc/"
+      - "python/ommx/"
+      - "python/ommx-pyscipopt-adapter/"
+      - "python/ommx-python-mip-adapter/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
