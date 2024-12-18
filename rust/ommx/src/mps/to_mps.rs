@@ -177,9 +177,18 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
     Ok(())
 }
 
-fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> anyhow::Result<()> {
     writeln!(out, "BOUNDS")?;
-    for dvar in instance.decision_variables.iter() {
+    // build an id -> dvar map as the vec is not guaranteed to be in order
+    let var_by_id: std::collections::HashMap<_, _> = instance
+        .decision_variables
+        .iter()
+        .map(|var| (var.id, var))
+        .collect();
+    for dvar_id in instance.used_decision_variable_ids()?.into_iter() {
+        let dvar = var_by_id
+            .get(&dvar_id)
+            .ok_or(MpsWriteError::InvalidVariableId(dvar_id))?;
         let name = dvar_name(dvar);
         if let Some(bound) = &dvar.bound {
             let (low_kind, up_kind) = match dvar.kind {

@@ -145,6 +145,12 @@ pub enum MpsWriteError {
     InvalidConstraintType { name: String, degree: u32 },
     #[error( "MPS format does not support nonlinear objective: Objective function has {degree}-degree term")]
     InvalidObjectiveType { degree: u32 },
+    #[error(
+        "Invalid variable ID: Functions in Instance used a variable id {0} that doesn't exist"
+    )]
+    InvalidVariableId(u64),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error("Unknown Error: {0}")]
+    UnknownError(#[from] anyhow::Error),
 }
