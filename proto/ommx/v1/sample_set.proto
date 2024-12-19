@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/constraint.proto";
+import "ommx/v1/decision_variables.proto";
+
+// A map from sample IDs to sampled values
+message SampledValues {
+  map<uint64, double> values = 1;
+}
+
+// A pair of decision variable description and its sampled values
+message SampledDecisionVariable {
+  DecisionVariable decision_variable = 1;
+  SampledValues samples = 2;
+}
+
+// Evaluated constraint for samples
+message SampledConstraints {
+  // Constraint ID
+  uint64 id = 1;
+
+  Equality equality = 2;
+
+  // Name of the constraint.
+  optional string name = 3;
+
+  // Integer parameters of the constraint.
+  repeated int64 subscripts = 4;
+
+  // Key-value parameters of the constraint.
+  map<string, string> parameters = 5;
+
+  // Detail human-readable description of the constraint.
+  optional string description = 6;
+
+  // Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+  optional string removed_reason = 7;
+
+  // Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+  map<string, string> removed_reason_parameters = 8;
+
+  // Evaluated values of constraint for each sample
+  SampledValues evaluated_values = 9;
+}
+
+// Output of the sampling process.
+message SampleSet {
+  SampledValues objectives = 1;
+  repeated SampledDecisionVariable decision_variables = 2;
+  SampledConstraints constraints = 3;
+}
