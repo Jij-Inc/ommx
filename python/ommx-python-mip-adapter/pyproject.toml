@@ -28,8 +28,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/Jij-Inc/ommx-python-mip-adapter"
-Issues = "https://github.com/Jij-Inc/ommx-python-mip-adapter/issues"
+Repository = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [project.optional-dependencies]
 dev = [
