@@ -297,7 +297,9 @@ def model_to_solution(model: pyscipopt.Model, instance: Instance) -> Solution:
     solution = instance.evaluate(state)
 
     # Set solution.optimality based on the model
-    if model.getStatus() == "optimal": # pyscipopt does not appear to have an enum or constant for this
+    if (
+        model.getStatus() == "optimal"
+    ):  # pyscipopt does not appear to have an enum or constant for this
         solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
     # TODO: Add the feature to store dual variables in `solution`.
