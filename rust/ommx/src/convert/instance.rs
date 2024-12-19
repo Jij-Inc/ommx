@@ -1,7 +1,8 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint, SampleSet,
+    State,
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
@@ -321,6 +322,10 @@ impl Instance {
             }
         }
         Ok((quad, constant))
+    }
+
+    pub fn evaluate_samples(&self, _states: &[State]) -> Result<SampleSet> {
+        todo!()
     }
 }
 

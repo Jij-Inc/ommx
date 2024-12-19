@@ -48,6 +48,10 @@ impl Instance {
     pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
         Ok(ParametricInstance(self.0.clone().uniform_penalty_method()?))
     }
+
+    pub fn evaluate_samples(&self, states: &States) -> Result<SampleSet> {
+        Ok(SampleSet(self.0.evaluate_samples(&states.0.states)?))
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -88,6 +92,42 @@ impl Parameters {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::Parameters::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct States(ommx::v1::States);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl States {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::States::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct SampleSet(ommx::v1::SampleSet);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl SampleSet {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
         Ok(Self(inner))
     }
 
