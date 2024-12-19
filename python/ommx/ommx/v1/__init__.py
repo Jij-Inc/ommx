@@ -878,6 +878,80 @@ class Solution(UserAnnotationBase):
             for c in self.raw.evaluated_constraints
         ).set_index("id")
 
+    def extract_decision_variables(self, name: str) -> dict[tuple[int, ...], float]:
+        """
+        Extract the values of decision variables based on the `name` with `subscripts` key.
+
+        :raises ValueError: If the decision variable with parameters is found, or if the same subscript is found.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[sum(x) == 1],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({i: 1 for i in range(3)})
+            >>> solution.extract_decision_variables("x")
+            {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+
+        """
+        out = {}
+        for v in self.raw.decision_variables:
+            if v.name != name:
+                continue
+            if v.parameters:
+                raise ValueError("Decision variable with parameters is not supported")
+            key = tuple(v.subscripts)
+            if key in out:
+                raise ValueError(f"Duplicate subscript: {key}")
+            out[key] = self.state.entries[v.id]
+        return out
+
+    def extract_constraints(self, name: str) -> dict[tuple[int, ...], float]:
+        """
+        Extract the values of constraints based on the `name` with `subscripts` key.
+
+        :raises ValueError: If the constraint with parameters is found, or if the same subscript is found.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
+            >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[c0, c1],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+            >>> solution.extract_constraints("c")
+            {(0,): 0.0, (1,): 0.0}
+
+        """
+        out = {}
+        for c in self.raw.evaluated_constraints:
+            if c.name != name:
+                continue
+            if c.parameters:
+                raise ValueError("Constraint with parameters is not supported")
+            key = tuple(c.subscripts)
+            if key in out:
+                raise ValueError(f"Duplicate subscript: {key}")
+            out[key] = c.evaluated_value
+        return out
+
     @property
     def feasible(self) -> bool:
         return self.raw.feasible
