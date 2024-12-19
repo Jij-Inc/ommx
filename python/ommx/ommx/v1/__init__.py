@@ -22,6 +22,7 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
+from .sample_set_pb2 import SampleSet as _SampleSet, States
 
 from .. import _ommx_rust
 
@@ -30,6 +31,7 @@ __all__ = [
     "ParametricInstance",
     "Solution",
     "Constraint",
+    "SampleSet",
     # Function and its bases
     "DecisionVariable",
     "Parameter",
@@ -590,6 +592,16 @@ class Instance(InstanceBase, UserAnnotationBase):
         return ParametricInstance.from_bytes(
             instance.as_parametric_instance().to_bytes()
         )
+
+    def evaluate_samples(self, states: list[State]) -> SampleSet:
+        """
+        Evaluate the instance with multiple states.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        states_ = _ommx_rust.States.from_bytes(
+            States(states=states).SerializeToString()
+        )
+        return SampleSet.from_bytes(instance.evaluate_samples(states_).to_bytes())
 
 
 @dataclass
@@ -2330,3 +2342,17 @@ class RemovedConstraint:
                 for key, value in self.removed_reason_parameters.items()
             }
         )
+
+
+@dataclass
+class SampleSet:
+    raw: _SampleSet
+
+    @staticmethod
+    def from_bytes(data: bytes) -> SampleSet:
+        new = SampleSet(_SampleSet())
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
