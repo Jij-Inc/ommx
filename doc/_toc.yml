@@ -10,7 +10,7 @@ parts:
   - caption: "Tutorial"
     chapters:
       - file: tutorial/solve_with_ommx_adapter
-      - file: tutorial/share_artifact
+      - file: tutorial/tsp_sampling_with_openjij_adapter
       - file: tutorial/download_miplib_instance
   - caption: "OMMX Message"
     chapters:
