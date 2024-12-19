@@ -10,9 +10,32 @@ import google.protobuf.internal.containers
 import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
+import ommx.v1.solution_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+
+@typing.final
+class States(google.protobuf.message.Message):
+    """List of states"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    STATES_FIELD_NUMBER: builtins.int
+    @property
+    def states(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.solution_pb2.State
+    ]: ...
+    def __init__(
+        self,
+        *,
+        states: collections.abc.Iterable[ommx.v1.solution_pb2.State] | None = ...,
+    ) -> None: ...
+    def ClearField(self, field_name: typing.Literal["states", b"states"]) -> None: ...
+
+global___States = States
 
 @typing.final
 class SampledValues(google.protobuf.message.Message):

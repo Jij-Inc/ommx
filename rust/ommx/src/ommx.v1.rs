@@ -487,70 +487,6 @@ pub struct ParametricInstance {
     #[prost(message, repeated, tag = "8")]
     pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
 }
-/// A map from sample IDs to sampled values
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledValues {
-    #[prost(map = "uint64, double", tag = "1")]
-    pub values: ::std::collections::HashMap<u64, f64>,
-}
-/// A pair of decision variable description and its sampled values
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledDecisionVariable {
-    #[prost(message, optional, tag = "1")]
-    pub decision_variable: ::core::option::Option<DecisionVariable>,
-    #[prost(message, optional, tag = "2")]
-    pub samples: ::core::option::Option<SampledValues>,
-}
-/// Evaluated constraint for samples
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledConstraints {
-    /// Constraint ID
-    #[prost(uint64, tag = "1")]
-    pub id: u64,
-    #[prost(enumeration = "Equality", tag = "2")]
-    pub equality: i32,
-    /// Name of the constraint.
-    #[prost(string, optional, tag = "3")]
-    pub name: ::core::option::Option<::prost::alloc::string::String>,
-    /// Integer parameters of the constraint.
-    #[prost(int64, repeated, tag = "4")]
-    pub subscripts: ::prost::alloc::vec::Vec<i64>,
-    /// Key-value parameters of the constraint.
-    #[prost(map = "string, string", tag = "5")]
-    pub parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Detail human-readable description of the constraint.
-    #[prost(string, optional, tag = "6")]
-    pub description: ::core::option::Option<::prost::alloc::string::String>,
-    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
-    #[prost(string, optional, tag = "7")]
-    pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
-    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
-    #[prost(map = "string, string", tag = "8")]
-    pub removed_reason_parameters:
-        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
-    /// Evaluated values of constraint for each sample
-    #[prost(message, optional, tag = "9")]
-    pub evaluated_values: ::core::option::Option<SampledValues>,
-}
-/// Output of the sampling process.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampleSet {
-    #[prost(message, optional, tag = "1")]
-    pub objectives: ::core::option::Option<SampledValues>,
-    #[prost(message, repeated, tag = "2")]
-    pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
-    #[prost(message, optional, tag = "3")]
-    pub constraints: ::core::option::Option<SampledConstraints>,
-}
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
 #[non_exhaustive]
@@ -691,4 +627,76 @@ impl Relaxation {
             _ => None,
         }
     }
+}
+/// List of states
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct States {
+    #[prost(message, repeated, tag = "1")]
+    pub states: ::prost::alloc::vec::Vec<State>,
+}
+/// A map from sample IDs to sampled values
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledValues {
+    #[prost(map = "uint64, double", tag = "1")]
+    pub values: ::std::collections::HashMap<u64, f64>,
+}
+/// A pair of decision variable description and its sampled values
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledDecisionVariable {
+    #[prost(message, optional, tag = "1")]
+    pub decision_variable: ::core::option::Option<DecisionVariable>,
+    #[prost(message, optional, tag = "2")]
+    pub samples: ::core::option::Option<SampledValues>,
+}
+/// Evaluated constraint for samples
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledConstraints {
+    /// Constraint ID
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(enumeration = "Equality", tag = "2")]
+    pub equality: i32,
+    /// Name of the constraint.
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Integer parameters of the constraint.
+    #[prost(int64, repeated, tag = "4")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the constraint.
+    #[prost(map = "string, string", tag = "5")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Detail human-readable description of the constraint.
+    #[prost(string, optional, tag = "6")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(string, optional, tag = "7")]
+    pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(map = "string, string", tag = "8")]
+    pub removed_reason_parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Evaluated values of constraint for each sample
+    #[prost(message, optional, tag = "9")]
+    pub evaluated_values: ::core::option::Option<SampledValues>,
+}
+/// Output of the sampling process.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampleSet {
+    #[prost(message, optional, tag = "1")]
+    pub objectives: ::core::option::Option<SampledValues>,
+    #[prost(message, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
+    #[prost(message, optional, tag = "3")]
+    pub constraints: ::core::option::Option<SampledConstraints>,
 }
