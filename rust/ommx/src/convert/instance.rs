@@ -273,9 +273,11 @@ impl Instance {
         let mut out = BTreeMap::new();
         for (ids, c) in self.objective().into_iter() {
             if c.abs() > f64::EPSILON {
-                out.entry(BinaryIds::from(ids))
-                    .and_modify(|v| *v += c)
-                    .or_insert(c);
+                let key = BinaryIds::from(ids);
+                let value = out.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
+                if value.abs() < f64::EPSILON {
+                    out.remove(&key);
+                }
             }
         }
         Ok(out)
@@ -311,9 +313,11 @@ impl Instance {
             if ids.is_empty() {
                 constant += c;
             } else {
-                quad.entry(BinaryIdPair::try_from(ids)?)
-                    .and_modify(|v| *v += c)
-                    .or_insert(c);
+                let key = BinaryIdPair::try_from(ids)?;
+                let value = quad.entry(key).and_modify(|v| *v += c).or_insert(c);
+                if value.abs() < f64::EPSILON {
+                    quad.remove(&key);
+                }
             }
         }
         Ok((quad, constant))
