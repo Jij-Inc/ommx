@@ -270,17 +270,15 @@ impl Instance {
         {
             bail!("The objective function uses non-binary decision variables.");
         }
-        Ok(self
-            .objective()
-            .into_iter()
-            .filter_map(|(ids, c)| {
-                if c.abs() > f64::EPSILON {
-                    Some((BinaryIds::from(ids), c))
-                } else {
-                    None
-                }
-            })
-            .collect())
+        let mut out = BTreeMap::new();
+        for (ids, c) in self.objective().into_iter() {
+            if c.abs() > f64::EPSILON {
+                out.entry(BinaryIds::from(ids))
+                    .and_modify(|v| *v += c)
+                    .or_insert(c);
+            }
+        }
+        Ok(out)
     }
 
     /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
@@ -313,7 +311,9 @@ impl Instance {
             if ids.is_empty() {
                 constant += c;
             } else {
-                quad.insert(BinaryIdPair::try_from(ids)?, c);
+                quad.entry(BinaryIdPair::try_from(ids)?)
+                    .and_modify(|v| *v += c)
+                    .or_insert(c);
             }
         }
         Ok((quad, constant))
