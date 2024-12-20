@@ -19,7 +19,7 @@ pub trait Evaluate {
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>>;
 
     /// Evaluate for each sample
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput>;
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)>;
 }
 
 impl Evaluate for Function {
@@ -47,11 +47,15 @@ impl Evaluate for Function {
         })
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        samples
-            .iter()
-            .map(|(id, state)| Ok((*id, self.evaluate(state)?.0)))
-            .collect()
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut values = HashMap::new();
+        let mut ids = BTreeSet::new();
+        for (sample_id, state) in samples.iter() {
+            let (value, mut used_ids) = self.evaluate(state)?;
+            values.insert(*sample_id, value);
+            ids.append(&mut used_ids);
+        }
+        Ok((SampledValues { values }, ids))
     }
 }
 
@@ -89,14 +93,15 @@ impl Evaluate for Linear {
         Ok(used)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        samples
-            .iter()
-            .map(|(id, state)| {
-                let value = self.evaluate(state)?.0;
-                Ok((*id, value))
-            })
-            .collect()
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut values = HashMap::new();
+        let mut ids = BTreeSet::new();
+        for (sample_id, state) in samples.iter() {
+            let (value, mut used_ids) = self.evaluate(state)?;
+            values.insert(*sample_id, value);
+            ids.append(&mut used_ids);
+        }
+        Ok((SampledValues { values }, ids))
     }
 }
 
@@ -178,14 +183,15 @@ impl Evaluate for Quadratic {
         Ok(used)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        samples
-            .iter()
-            .map(|(id, state)| {
-                let value = self.evaluate(state)?.0;
-                Ok((*id, value))
-            })
-            .collect()
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut values = HashMap::new();
+        let mut ids = BTreeSet::new();
+        for (sample_id, state) in samples.iter() {
+            let (value, mut used_ids) = self.evaluate(state)?;
+            values.insert(*sample_id, value);
+            ids.append(&mut used_ids);
+        }
+        Ok((SampledValues { values }, ids))
     }
 }
 
@@ -240,14 +246,15 @@ impl Evaluate for Polynomial {
         Ok(used)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        samples
-            .iter()
-            .map(|(id, state)| {
-                let value = self.evaluate(state)?.0;
-                Ok((*id, value))
-            })
-            .collect()
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut values = HashMap::new();
+        let mut ids = BTreeSet::new();
+        for (sample_id, state) in samples.iter() {
+            let (value, mut used_ids) = self.evaluate(state)?;
+            values.insert(*sample_id, value);
+            ids.append(&mut used_ids);
+        }
+        Ok((SampledValues { values }, ids))
     }
 }
 
@@ -284,20 +291,23 @@ impl Evaluate for Constraint {
         f.partial_evaluate(state)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let evaluated_values = self.function().evaluate_samples(samples)?;
-        Ok(SampledConstraint {
-            id: self.id,
-            evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: Vec::new(),
-            name: self.name.clone(),
-            subscripts: self.subscripts.clone(),
-            parameters: self.parameters.clone(),
-            description: self.description.clone(),
-            equality: self.equality,
-            removed_reason: None,
-            removed_reason_parameters: Default::default(),
-        })
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let (evaluated_values, used_ids) = self.function().evaluate_samples(samples)?;
+        Ok((
+            SampledConstraint {
+                id: self.id,
+                evaluated_values: Some(evaluated_values),
+                used_decision_variable_ids: used_ids.iter().cloned().collect(),
+                name: self.name.clone(),
+                subscripts: self.subscripts.clone(),
+                parameters: self.parameters.clone(),
+                description: self.description.clone(),
+                equality: self.equality,
+                removed_reason: None,
+                removed_reason_parameters: Default::default(),
+            },
+            used_ids,
+        ))
     }
 }
 
@@ -323,15 +333,15 @@ impl Evaluate for RemovedConstraint {
             .partial_evaluate(state)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let mut evaluated = self
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let (mut evaluated, used_ids) = self
             .constraint
             .as_ref()
             .expect("RemovedConstraint does not contain constraint")
             .evaluate_samples(samples)?;
         evaluated.removed_reason = Some(self.removed_reason.clone());
         evaluated.removed_reason_parameters = self.removed_reason_parameters.clone();
-        Ok(evaluated)
+        Ok((evaluated, used_ids))
     }
 }
 
@@ -403,29 +413,29 @@ impl Evaluate for Instance {
         Ok(used)
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
         let mut feasible: HashMap<u64, bool> =
             samples.states.keys().map(|id| (*id, true)).collect();
-        let constraints = self
-            .constraints
-            .iter()
-            .map(|c| {
-                let evaluated = c.evaluate_samples(samples)?;
-                for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
-                    if !feasible_ {
-                        feasible.insert(sample_id, false);
-                    }
+        let mut used_ids = BTreeSet::new();
+        let mut constraints = Vec::new();
+        for c in &self.constraints {
+            let (evaluated, mut ids) = c.evaluate_samples(samples)?;
+            used_ids.append(&mut ids);
+            for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
+                if !feasible_ {
+                    feasible.insert(sample_id, false);
                 }
-                Ok(evaluated)
-            })
-            .chain(
-                self.removed_constraints
-                    .iter()
-                    .map(|c| c.evaluate_samples(samples)),
-            )
-            .collect::<Result<_>>()?;
+            }
+            constraints.push(evaluated);
+        }
+        for c in &self.removed_constraints {
+            let (v, mut ids) = c.evaluate_samples(samples)?;
+            used_ids.append(&mut ids);
+            constraints.push(v);
+        }
 
-        let objectives = self.objective().evaluate_samples(samples)?;
+        let (objectives, mut ids) = self.objective().evaluate_samples(samples)?;
+        used_ids.append(&mut ids);
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
@@ -438,12 +448,15 @@ impl Evaluate for Instance {
             })
             .collect::<Result<_>>()?;
 
-        Ok(SampleSet {
-            decision_variables,
-            objectives: Some(objectives),
-            constraints,
-            feasible,
-        })
+        Ok((
+            SampleSet {
+                decision_variables,
+                objectives: Some(objectives),
+                constraints,
+                feasible,
+            },
+            used_ids,
+        ))
     }
 }
 
