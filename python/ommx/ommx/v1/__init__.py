@@ -22,6 +22,7 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
+from .sample_set_pb2 import SampleSet as _SampleSet, Samples
 
 from .. import _ommx_rust
 
@@ -30,6 +31,7 @@ __all__ = [
     "ParametricInstance",
     "Solution",
     "Constraint",
+    "SampleSet",
     # Function and its bases
     "DecisionVariable",
     "Parameter",
@@ -39,6 +41,7 @@ __all__ = [
     "Function",
     # Imported from protobuf
     "State",
+    "Samples",
     "Parameters",
     "Optimality",
     "Relaxation",
@@ -590,6 +593,26 @@ class Instance(InstanceBase, UserAnnotationBase):
         return ParametricInstance.from_bytes(
             instance.as_parametric_instance().to_bytes()
         )
+
+    def evaluate_samples(
+        self, samples: Samples | Mapping[int, State] | list[State]
+    ) -> SampleSet:
+        """
+        Evaluate the instance with multiple states.
+        """
+        if isinstance(samples, list):
+            samples = {i: state for i, state in enumerate(samples)}
+        if not isinstance(samples, Samples):
+            # Do not compress the samples
+            samples = Samples(
+                entries=[
+                    Samples.SamplesEntry(state=state, ids=[i])
+                    for i, state in samples.items()
+                ]
+            )
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
+        return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
 
 @dataclass
@@ -2330,3 +2353,17 @@ class RemovedConstraint:
                 for key, value in self.removed_reason_parameters.items()
             }
         )
+
+
+@dataclass
+class SampleSet:
+    raw: _SampleSet
+
+    @staticmethod
+    def from_bytes(data: bytes) -> SampleSet:
+        new = SampleSet(_SampleSet())
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
