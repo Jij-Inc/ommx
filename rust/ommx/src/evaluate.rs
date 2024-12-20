@@ -1,7 +1,8 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
-    Relaxation, RemovedConstraint, Solution, State,
+    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledValues, Samples, Solution,
+    State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,15 +10,22 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Evaluate with a [State]
 pub trait Evaluate {
     type Output;
+    type SampledOutput;
+
     /// Evaluate to return the output with used variable ids
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)>;
 
     /// Partially evaluate the function to return the used variable ids
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>>;
+
+    /// Evaluate for each sample
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput>;
 }
 
 impl Evaluate for Function {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let out = match &self.function {
             Some(FunctionEnum::Constant(c)) => (*c, BTreeSet::new()),
@@ -38,10 +46,19 @@ impl Evaluate for Function {
             None => BTreeSet::new(),
         })
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        samples
+            .iter()
+            .map(|(id, state)| Ok((*id, self.evaluate(state)?.0)))
+            .collect()
+    }
 }
 
 impl Evaluate for Linear {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let mut sum = self.constant;
         let mut used_ids = BTreeSet::new();
@@ -71,10 +88,22 @@ impl Evaluate for Linear {
         }
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        samples
+            .iter()
+            .map(|(id, state)| {
+                let value = self.evaluate(state)?.0;
+                Ok((*id, value))
+            })
+            .collect()
+    }
 }
 
 impl Evaluate for Quadratic {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let (mut sum, mut used_ids) = if let Some(linear) = &self.linear {
             linear.evaluate(solution)?
@@ -148,10 +177,22 @@ impl Evaluate for Quadratic {
         }
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        samples
+            .iter()
+            .map(|(id, state)| {
+                let value = self.evaluate(state)?.0;
+                Ok((*id, value))
+            })
+            .collect()
+    }
 }
 
 impl Evaluate for Polynomial {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let mut sum = 0.0;
         let mut used_ids = BTreeSet::new();
@@ -198,10 +239,21 @@ impl Evaluate for Polynomial {
             .collect();
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        samples
+            .iter()
+            .map(|(id, state)| {
+                let value = self.evaluate(state)?.0;
+                Ok((*id, value))
+            })
+            .collect()
+    }
 }
 
 impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
+    type SampledOutput = SampledConstraint;
 
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let (evaluated_value, used_ids) = self.function().evaluate(solution)?;
@@ -229,10 +281,15 @@ impl Evaluate for Constraint {
         };
         f.partial_evaluate(state)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        todo!()
+    }
 }
 
 impl Evaluate for RemovedConstraint {
     type Output = EvaluatedConstraint;
+    type SampledOutput = SampledConstraint;
 
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let (mut out, used_ids) = self
@@ -251,10 +308,15 @@ impl Evaluate for RemovedConstraint {
             .context("RemovedConstraint does not contain constraint")?
             .partial_evaluate(state)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        todo!()
+    }
 }
 
 impl Evaluate for Instance {
     type Output = Solution;
+    type SampledOutput = SampleSet;
 
     fn evaluate(&self, state: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let mut used_ids = BTreeSet::new();
@@ -327,6 +389,10 @@ impl Evaluate for Instance {
             used.append(&mut new);
         }
         Ok(used)
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        todo!()
     }
 }
 
