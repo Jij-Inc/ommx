@@ -603,7 +603,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         if isinstance(samples, list):
             samples = {i: state for i, state in enumerate(samples)}
         if not isinstance(samples, Samples):
-            samples = Samples(states=samples)
+            # Do not compress the samples
+            samples = Samples(
+                entries=[
+                    Samples.SamplesEntry(state=state, ids=[i])
+                    for i, state in samples.items()
+                ]
+            )
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())

@@ -639,6 +639,7 @@ pub struct Samples {
 /// Nested message and enum types in `Samples`.
 pub mod samples {
     /// Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+    /// Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -661,6 +662,7 @@ pub struct SampledValues {
 }
 /// Nested message and enum types in `SampledValues`.
 pub mod sampled_values {
+    /// Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct.
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]

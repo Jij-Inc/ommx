@@ -9,6 +9,7 @@ import "ommx/v1/solution.proto";
 // A map from sample ID to state
 message Samples {
   // Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+  // Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
   message SamplesEntry {
     // State of the sample
     State state = 1;
@@ -20,6 +21,7 @@ message Samples {
 
 // A map from sample IDs to sampled values
 message SampledValues {
+  // Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct.
   message SampledValuesEntry {
     double value = 1;
     // IDs of the sample

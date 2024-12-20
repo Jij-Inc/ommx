@@ -23,7 +23,9 @@ class Samples(google.protobuf.message.Message):
 
     @typing.final
     class SamplesEntry(google.protobuf.message.Message):
-        """Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry."""
+        """Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+        Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
+        """
 
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -78,6 +80,8 @@ class SampledValues(google.protobuf.message.Message):
 
     @typing.final
     class SampledValuesEntry(google.protobuf.message.Message):
+        """Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct."""
+
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
         VALUE_FIELD_NUMBER: builtins.int
