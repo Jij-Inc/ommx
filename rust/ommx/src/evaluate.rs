@@ -1,8 +1,8 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
-    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledValues, Samples, Solution,
-    State,
+    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
+    SampledValues, Samples, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -412,7 +412,46 @@ impl Evaluate for Instance {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        todo!()
+        let constraints = self
+            .constraints
+            .iter()
+            .map(|c| c.evaluate_samples(samples))
+            .chain(
+                self.removed_constraints
+                    .iter()
+                    .map(|c| c.evaluate_samples(samples)),
+            )
+            .collect::<Result<_>>()?;
+
+        let objectives = self.objective().evaluate_samples(samples)?;
+        let decision_variables: Vec<SampledDecisionVariable> = self
+            .decision_variables
+            .iter()
+            .map(|d| -> Result<_> {
+                let values: SampledValues = samples
+                    .iter()
+                    .map(|(sample_id, state)| {
+                        let value = state.entries.get(&d.id).copied().with_context(|| {
+                            format!(
+                                "Variable id ({}) is not found in the {sample_id}-th sample",
+                                d.id
+                            )
+                        })?;
+                        Ok((*sample_id, value))
+                    })
+                    .collect::<Result<_>>()?;
+                Ok(SampledDecisionVariable {
+                    decision_variable: Some(d.clone()),
+                    samples: Some(values),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives: Some(objectives),
+            constraints,
+        })
     }
 }
 
