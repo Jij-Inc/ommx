@@ -41,6 +41,7 @@ __all__ = [
     "Function",
     # Imported from protobuf
     "State",
+    "Samples",
     "Parameters",
     "Optimality",
     "Relaxation",
