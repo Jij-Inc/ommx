@@ -673,4 +673,17 @@ mod tests {
             prop_assert_eq!(solution.state, solution1.state);
         }
     }
+
+    proptest! {
+        #[test]
+        fn evaluate_samples((instance, state) in instance_with_state()) {
+            let (solution, ids1) = instance.evaluate(&state).unwrap();
+
+            let samples = Samples { states: hashmap! { 0 => state.clone() } };
+            let (sample_set, ids2) = instance.evaluate_samples(&samples).unwrap();
+
+            prop_assert_eq!(ids1, ids2);
+            prop_assert_eq!(solution, sample_set.get(0).unwrap());
+        }
+    }
 }
