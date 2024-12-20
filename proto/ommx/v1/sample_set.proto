@@ -50,6 +50,9 @@ message SampledConstraint {
 
   // Evaluated values of constraint for each sample
   SampledValues evaluated_values = 9;
+
+  // IDs of decision variables used to evaluate this constraint
+  repeated uint64 used_decision_variable_ids = 10;
 }
 
 // Output of the sampling process.

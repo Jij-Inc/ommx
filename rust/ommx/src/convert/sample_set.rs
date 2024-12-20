@@ -1,4 +1,5 @@
-use crate::v1::{SampledValues, Samples, State};
+use crate::v1::{SampleSet, SampledValues, Samples, Solution, State};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 
 impl FromIterator<(u64, f64)> for SampledValues {
@@ -22,6 +23,10 @@ impl SampledValues {
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &f64)> {
         self.values.iter()
     }
+
+    pub fn get(&self, sample_id: u64) -> Option<f64> {
+        self.values.get(&sample_id).cloned()
+    }
 }
 
 impl Samples {
@@ -41,5 +46,56 @@ impl Samples {
             }
         }
         out
+    }
+}
+
+impl SampleSet {
+    pub fn get(&self, sample_id: u64) -> Result<Solution> {
+        let mut decision_variables = Vec::new();
+        let mut state = State::default();
+
+        let evaluated_constraints = self
+            .constraints
+            .iter()
+            .map(|c| c.get(sample_id))
+            .collect::<Result<Vec<_>>>()?;
+
+        for sampled in &self.decision_variables {
+            let v = sampled
+                .decision_variable
+                .clone()
+                .context("SampledDecisionVariable lacks decision_variable")?;
+            if let Some(value) = v.substituted_value {
+                state.entries.insert(v.id, value);
+            } else {
+                if let Some(value) = sampled.samples.as_ref().and_then(|s| s.get(sample_id)) {
+                    state.entries.insert(v.id, value);
+                }
+                bail!("Missing value for decision_variable with ID={}", v.id);
+            }
+            decision_variables.push(v);
+        }
+
+        Ok(Solution {
+            state: Some(state),
+            objective: self
+                .objectives
+                .as_ref()
+                .context("SampleSet lacks objectives")?
+                .get(sample_id)
+                .with_context(|| {
+                    format!("SampleSet lacks objective for sample with ID={}", sample_id)
+                })?,
+            decision_variables,
+            feasible: *self.feasible.get(&sample_id).with_context(|| {
+                format!(
+                    "SampleSet lacks feasibility for sample with ID={}",
+                    sample_id
+                )
+            })?,
+            evaluated_constraints,
+            optimality: Default::default(),
+            relaxation: Default::default(),
+        })
     }
 }

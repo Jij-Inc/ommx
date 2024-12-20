@@ -688,6 +688,9 @@ pub struct SampledConstraint {
     /// Evaluated values of constraint for each sample
     #[prost(message, optional, tag = "9")]
     pub evaluated_values: ::core::option::Option<SampledValues>,
+    /// IDs of decision variables used to evaluate this constraint
+    #[prost(uint64, repeated, tag = "10")]
+    pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
 }
 /// Output of the sampling process.
 #[non_exhaustive]

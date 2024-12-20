@@ -199,6 +199,7 @@ class SampledConstraint(google.protobuf.message.Message):
     REMOVED_REASON_FIELD_NUMBER: builtins.int
     REMOVED_REASON_PARAMETERS_FIELD_NUMBER: builtins.int
     EVALUATED_VALUES_FIELD_NUMBER: builtins.int
+    USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Constraint ID"""
     equality: ommx.v1.constraint_pb2.Equality.ValueType
@@ -230,6 +231,12 @@ class SampledConstraint(google.protobuf.message.Message):
     def evaluated_values(self) -> global___SampledValues:
         """Evaluated values of constraint for each sample"""
 
+    @property
+    def used_decision_variable_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """IDs of decision variables used to evaluate this constraint"""
+
     def __init__(
         self,
         *,
@@ -243,6 +250,7 @@ class SampledConstraint(google.protobuf.message.Message):
         removed_reason_parameters: collections.abc.Mapping[builtins.str, builtins.str]
         | None = ...,
         evaluated_values: global___SampledValues | None = ...,
+        used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -290,6 +298,8 @@ class SampledConstraint(google.protobuf.message.Message):
             b"removed_reason_parameters",
             "subscripts",
             b"subscripts",
+            "used_decision_variable_ids",
+            b"used_decision_variable_ids",
         ],
     ) -> None: ...
     @typing.overload

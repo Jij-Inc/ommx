@@ -49,6 +49,27 @@ impl SampledConstraint {
         }
         bail!("Unsupported equality: {:?}", self.equality());
     }
+
+    pub fn get(&self, sample_id: u64) -> Result<EvaluatedConstraint> {
+        Ok(EvaluatedConstraint {
+            id: self.id,
+            equality: self.equality,
+            evaluated_value: self
+                .evaluated_values
+                .as_ref()
+                .context("evaluated_values of SampledConstraints is lacked")?
+                .get(sample_id)
+                .context("SampledConstraint lacks evaluated value")?,
+            used_decision_variable_ids: self.used_decision_variable_ids.clone(),
+            name: self.name.clone(),
+            subscripts: self.subscripts.clone(),
+            parameters: self.parameters.clone(),
+            description: self.description.clone(),
+            removed_reason: self.removed_reason.clone(),
+            removed_reason_parameters: self.removed_reason_parameters.clone(),
+            dual_variable: None,
+        })
+    }
 }
 
 impl AbsDiffEq for Constraint {
