@@ -430,14 +430,9 @@ impl Evaluate for Instance {
             .decision_variables
             .iter()
             .map(|d| -> Result<_> {
-                let samples = if let Some(value) = transposed.remove(&d.id) {
-                    value
-                } else {
-                    todo!()
-                };
                 Ok(SampledDecisionVariable {
                     decision_variable: Some(d.clone()),
-                    samples: Some(samples),
+                    samples: transposed.remove(&d.id),
                 })
             })
             .collect::<Result<_>>()?;

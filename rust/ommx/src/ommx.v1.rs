@@ -651,6 +651,7 @@ pub struct SampledValues {
 pub struct SampledDecisionVariable {
     #[prost(message, optional, tag = "1")]
     pub decision_variable: ::core::option::Option<DecisionVariable>,
+    /// Sampled values of decision variable. This becomes `None` if the decision variable is not sampled.
     #[prost(message, optional, tag = "2")]
     pub samples: ::core::option::Option<SampledValues>,
 }

@@ -19,7 +19,8 @@ message SampledValues {
 // A pair of decision variable description and its sampled values
 message SampledDecisionVariable {
   DecisionVariable decision_variable = 1;
-  SampledValues samples = 2;
+  // Sampled values of decision variable. This becomes `None` if the decision variable is not sampled.
+  optional SampledValues samples = 2;
 }
 
 // Evaluated constraint for samples

@@ -111,7 +111,9 @@ class SampledDecisionVariable(google.protobuf.message.Message):
     @property
     def decision_variable(self) -> ommx.v1.decision_variables_pb2.DecisionVariable: ...
     @property
-    def samples(self) -> global___SampledValues: ...
+    def samples(self) -> global___SampledValues:
+        """Sampled values of decision variable. This becomes `None` if the decision variable is not sampled."""
+
     def __init__(
         self,
         *,
@@ -121,15 +123,28 @@ class SampledDecisionVariable(google.protobuf.message.Message):
     def HasField(
         self,
         field_name: typing.Literal[
-            "decision_variable", b"decision_variable", "samples", b"samples"
+            "_samples",
+            b"_samples",
+            "decision_variable",
+            b"decision_variable",
+            "samples",
+            b"samples",
         ],
     ) -> builtins.bool: ...
     def ClearField(
         self,
         field_name: typing.Literal[
-            "decision_variable", b"decision_variable", "samples", b"samples"
+            "_samples",
+            b"_samples",
+            "decision_variable",
+            b"decision_variable",
+            "samples",
+            b"samples",
         ],
     ) -> None: ...
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_samples", b"_samples"]
+    ) -> typing.Literal["samples"] | None: ...
 
 global___SampledDecisionVariable = SampledDecisionVariable
 
