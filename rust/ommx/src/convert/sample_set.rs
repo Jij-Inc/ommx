@@ -67,12 +67,10 @@ impl SampleSet {
                 .context("SampledDecisionVariable lacks decision_variable")?;
             if let Some(value) = v.substituted_value {
                 state.entries.insert(v.id, value);
+            } else if let Some(value) = sampled.samples.as_ref().and_then(|s| s.get(sample_id)) {
+                state.entries.insert(v.id, value);
             } else {
-                if let Some(value) = sampled.samples.as_ref().and_then(|s| s.get(sample_id)) {
-                    state.entries.insert(v.id, value);
-                } else {
-                    bail!("Missing value for decision_variable with ID={}", v.id);
-                }
+                bail!("Missing value for decision_variable with ID={}", v.id);
             }
             decision_variables.push(v);
         }
