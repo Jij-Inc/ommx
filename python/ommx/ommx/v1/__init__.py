@@ -604,8 +604,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         if not isinstance(samples, Samples):
             samples = Samples(states=samples)
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        states_ = _ommx_rust.States.from_bytes(samples.SerializeToString())
-        return SampleSet.from_bytes(instance.evaluate_samples(states_).to_bytes())
+        samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
+        return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
 
 @dataclass
