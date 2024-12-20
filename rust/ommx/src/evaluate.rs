@@ -1,11 +1,11 @@
 use crate::v1::{
-    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
     Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
     SampledValues, Samples, Solution, State,
 };
-use anyhow::{bail, ensure, Context, Result};
-use std::collections::{BTreeMap, BTreeSet};
+use anyhow::{ensure, Context, Result};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -346,17 +346,8 @@ impl Evaluate for Instance {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
             // Only check non-removed constraints for feasibility
-            if c.equality == Equality::EqualToZero as i32 {
-                // FIXME: Add a way to specify the tolerance
-                if c.evaluated_value.abs() > 1e-6 {
-                    feasible = false;
-                }
-            } else if c.equality == Equality::LessThanOrEqualToZero as i32 {
-                if c.evaluated_value > 1e-6 {
-                    feasible = false;
-                }
-            } else {
-                bail!("Unsupported equality: {:?}", c.equality);
+            if feasible {
+                feasible = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
@@ -412,10 +403,20 @@ impl Evaluate for Instance {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        let mut feasible: HashMap<u64, bool> =
+            samples.states.keys().map(|id| (*id, true)).collect();
         let constraints = self
             .constraints
             .iter()
-            .map(|c| c.evaluate_samples(samples))
+            .map(|c| {
+                let evaluated = c.evaluate_samples(samples)?;
+                for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
+                    if !feasible_ {
+                        feasible.insert(sample_id, false);
+                    }
+                }
+                Ok(evaluated)
+            })
             .chain(
                 self.removed_constraints
                     .iter()
@@ -451,6 +452,7 @@ impl Evaluate for Instance {
             decision_variables,
             objectives: Some(objectives),
             constraints,
+            feasible,
         })
     }
 }

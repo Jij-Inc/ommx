@@ -56,4 +56,7 @@ message SampleSet {
   SampledValues objectives = 1;
   repeated SampledDecisionVariable decision_variables = 2;
   repeated SampledConstraint constraints = 3;
+
+  // Feasibility of each sample
+  map<uint64, bool> feasible = 4;
 }

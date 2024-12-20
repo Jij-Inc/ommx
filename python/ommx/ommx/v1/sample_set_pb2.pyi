@@ -298,9 +298,28 @@ class SampleSet(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing.final
+    class FeasibleEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.bool
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.bool = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     OBJECTIVES_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
+    FEASIBLE_FIELD_NUMBER: builtins.int
     @property
     def objectives(self) -> global___SampledValues: ...
     @property
@@ -315,6 +334,12 @@ class SampleSet(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         global___SampledConstraint
     ]: ...
+    @property
+    def feasible(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
+        """Feasibility of each sample"""
+
     def __init__(
         self,
         *,
@@ -322,6 +347,7 @@ class SampleSet(google.protobuf.message.Message):
         decision_variables: collections.abc.Iterable[global___SampledDecisionVariable]
         | None = ...,
         constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
+        feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing.Literal["objectives", b"objectives"]
@@ -333,6 +359,8 @@ class SampleSet(google.protobuf.message.Message):
             b"constraints",
             "decision_variables",
             b"decision_variables",
+            "feasible",
+            b"feasible",
             "objectives",
             b"objectives",
         ],

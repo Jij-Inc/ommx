@@ -699,4 +699,7 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
+    /// Feasibility of each sample
+    #[prost(map = "uint64, bool", tag = "4")]
+    pub feasible: ::std::collections::HashMap<u64, bool>,
 }

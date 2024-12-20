@@ -1,8 +1,11 @@
-use crate::v1::{Constraint, Equality, Function, RemovedConstraint};
+use crate::v1::{
+    Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
+};
+use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 impl Constraint {
     pub fn function(&self) -> Cow<Function> {
@@ -11,6 +14,40 @@ impl Constraint {
             // Empty function is regarded as zero function
             None => Cow::Owned(Function::zero()),
         }
+    }
+}
+
+impl EvaluatedConstraint {
+    pub fn is_feasible(&self, atol: f64) -> Result<bool> {
+        ensure!(atol > 0.0, "atol must be positive");
+        if self.equality() == Equality::EqualToZero {
+            return Ok(self.evaluated_value.abs() < atol);
+        } else if self.equality() == Equality::LessThanOrEqualToZero {
+            return Ok(self.evaluated_value < atol);
+        }
+        bail!("Unsupported equality: {:?}", self.equality());
+    }
+}
+
+impl SampledConstraint {
+    pub fn is_feasible(&self, atol: f64) -> Result<HashMap<u64, bool>> {
+        ensure!(atol > 0.0, "atol must be positive");
+        let values = self
+            .evaluated_values
+            .as_ref()
+            .context("evaluated_values of SampledConstraints is lacked")?;
+        if self.equality() == Equality::EqualToZero {
+            return Ok(values
+                .iter()
+                .map(|(id, value)| (*id, value.abs() < atol))
+                .collect());
+        } else if self.equality() == Equality::LessThanOrEqualToZero {
+            return Ok(values
+                .iter()
+                .map(|(id, value)| (*id, *value < atol))
+                .collect());
+        }
+        bail!("Unsupported equality: {:?}", self.equality());
     }
 }
 
