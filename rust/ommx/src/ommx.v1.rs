@@ -634,7 +634,7 @@ impl Relaxation {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Samples {
     #[prost(message, repeated, tag = "1")]
-    pub entries: ::prost::alloc::vec::Vec<samples::Entry>,
+    pub entries: ::prost::alloc::vec::Vec<samples::SamplesEntry>,
 }
 /// Nested message and enum types in `Samples`.
 pub mod samples {
@@ -642,7 +642,7 @@ pub mod samples {
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Entry {
+    pub struct SamplesEntry {
         /// State of the sample
         #[prost(message, optional, tag = "1")]
         pub state: ::core::option::Option<super::State>,
@@ -657,14 +657,14 @@ pub mod samples {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledValues {
     #[prost(message, repeated, tag = "1")]
-    pub entries: ::prost::alloc::vec::Vec<sampled_values::Entry>,
+    pub entries: ::prost::alloc::vec::Vec<sampled_values::SampledValuesEntry>,
 }
 /// Nested message and enum types in `SampledValues`.
 pub mod sampled_values {
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Entry {
+    pub struct SampledValuesEntry {
         #[prost(double, tag = "1")]
         pub value: f64,
         /// IDs of the sample

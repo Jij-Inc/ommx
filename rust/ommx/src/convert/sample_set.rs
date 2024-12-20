@@ -1,4 +1,7 @@
-use crate::v1::{SampleSet, SampledValues, Samples, Solution, State};
+use crate::v1::{
+    sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet, SampledValues, Samples,
+    Solution, State,
+};
 use anyhow::{bail, Context, Result};
 use ordered_float::OrderedFloat;
 use std::collections::HashMap;
@@ -10,7 +13,7 @@ impl From<HashMap<OrderedFloat<f64>, Vec<u64>>> for SampledValues {
                 .into_iter()
                 .map(|(value, ids)| {
                     let value = value.into_inner();
-                    crate::v1::sampled_values::Entry { value, ids }
+                    SampledValuesEntry { value, ids }
                 })
                 .collect(),
         }
@@ -45,6 +48,22 @@ impl SampledValues {
 }
 
 impl Samples {
+    pub fn add_sample(&mut self, sample_id: u64, state: State) {
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|v| v.state.as_ref().map_or(false, |s| s == &state));
+        match entry {
+            Some(entry) => entry.ids.push(sample_id),
+            None => {
+                self.entries.push(SamplesEntry {
+                    state: Some(state),
+                    ids: vec![sample_id],
+                });
+            }
+        }
+    }
+
     pub fn ids(&self) -> impl Iterator<Item = &u64> {
         self.entries.iter().flat_map(|v| v.ids.iter())
     }
@@ -83,7 +102,7 @@ impl Samples {
                 .entries
                 .iter()
                 .map(|v| {
-                    Ok(crate::v1::sampled_values::Entry {
+                    Ok(SampledValuesEntry {
                         value: f(v
                             .state
                             .as_ref()

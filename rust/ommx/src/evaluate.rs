@@ -457,8 +457,6 @@ impl Evaluate for Instance {
 
 #[cfg(test)]
 mod tests {
-    use crate::v1::samples;
-
     use super::*;
     use approx::*;
     use maplit::*;
@@ -676,7 +674,8 @@ mod tests {
         fn evaluate_samples((instance, state) in instance_with_state()) {
             let (solution, ids1) = instance.evaluate(&state).unwrap();
 
-            let samples = Samples { entries: vec![samples::Entry { state: Some(state.clone()), ids: vec![0] }] };
+            let mut samples = Samples::default();
+            samples.add_sample(0, state);
             let (sample_set, ids2) = instance.evaluate_samples(&samples).unwrap();
 
             prop_assert_eq!(ids1, ids2);

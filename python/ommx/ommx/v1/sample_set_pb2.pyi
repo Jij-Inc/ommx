@@ -22,7 +22,7 @@ class Samples(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class Entry(google.protobuf.message.Message):
+    class SamplesEntry(google.protobuf.message.Message):
         """Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry."""
 
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -59,12 +59,12 @@ class Samples(google.protobuf.message.Message):
     def entries(
         self,
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___Samples.Entry
+        global___Samples.SamplesEntry
     ]: ...
     def __init__(
         self,
         *,
-        entries: collections.abc.Iterable[global___Samples.Entry] | None = ...,
+        entries: collections.abc.Iterable[global___Samples.SamplesEntry] | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
@@ -77,7 +77,7 @@ class SampledValues(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class Entry(google.protobuf.message.Message):
+    class SampledValuesEntry(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
         VALUE_FIELD_NUMBER: builtins.int
@@ -106,12 +106,13 @@ class SampledValues(google.protobuf.message.Message):
     def entries(
         self,
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        global___SampledValues.Entry
+        global___SampledValues.SampledValuesEntry
     ]: ...
     def __init__(
         self,
         *,
-        entries: collections.abc.Iterable[global___SampledValues.Entry] | None = ...,
+        entries: collections.abc.Iterable[global___SampledValues.SampledValuesEntry]
+        | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
