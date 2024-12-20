@@ -6,9 +6,9 @@ import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/solution.proto";
 
-// List of states
-message States {
-  repeated State states = 1;
+// A map from sample ID to state
+message Samples {
+  map<uint64, State> states = 1;
 }
 
 // A map from sample IDs to sampled values

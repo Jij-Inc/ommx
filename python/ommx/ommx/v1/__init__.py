@@ -22,7 +22,7 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
-from .sample_set_pb2 import SampleSet as _SampleSet, States
+from .sample_set_pb2 import SampleSet as _SampleSet, Samples
 
 from .. import _ommx_rust
 
@@ -593,14 +593,18 @@ class Instance(InstanceBase, UserAnnotationBase):
             instance.as_parametric_instance().to_bytes()
         )
 
-    def evaluate_samples(self, states: list[State]) -> SampleSet:
+    def evaluate_samples(
+        self, samples: Samples | Mapping[int, State] | list[State]
+    ) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
+        if isinstance(samples, list):
+            samples = {i: state for i, state in enumerate(samples)}
+        if not isinstance(samples, Samples):
+            samples = Samples(states=samples)
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        states_ = _ommx_rust.States.from_bytes(
-            States(states=states).SerializeToString()
-        )
+        states_ = _ommx_rust.States.from_bytes(samples.SerializeToString())
         return SampleSet.from_bytes(instance.evaluate_samples(states_).to_bytes())
 
 

@@ -49,8 +49,8 @@ impl Instance {
         Ok(ParametricInstance(self.0.clone().uniform_penalty_method()?))
     }
 
-    pub fn evaluate_samples(&self, states: &States) -> Result<SampleSet> {
-        Ok(SampleSet(self.0.evaluate_samples(&states.0.states)?))
+    pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
+        Ok(SampleSet(self.0.evaluate_samples(&samples.0)?))
     }
 }
 
@@ -102,14 +102,14 @@ impl Parameters {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct States(ommx::v1::States);
+pub struct Samples(ommx::v1::Samples);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
-impl States {
+impl Samples {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::States::decode(bytes.as_bytes())?;
+        let inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
         Ok(Self(inner))
     }
 

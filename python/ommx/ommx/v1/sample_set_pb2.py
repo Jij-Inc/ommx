@@ -19,7 +19,7 @@ from ommx.v1 import solution_pb2 as ommx_dot_v1_dot_solution__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x18ommx/v1/sample_set.proto\x12\x07ommx.v1\x1a\x18ommx/v1/constraint.proto\x1a ommx/v1/decision_variables.proto\x1a\x16ommx/v1/solution.proto"0\n\x06States\x12&\n\x06states\x18\x01 \x03(\x0b\x32\x0e.ommx.v1.StateR\x06states"\x86\x01\n\rSampledValues\x12:\n\x06values\x18\x01 \x03(\x0b\x32".ommx.v1.SampledValues.ValuesEntryR\x06values\x1a\x39\n\x0bValuesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01"\x93\x01\n\x17SampledDecisionVariable\x12\x46\n\x11\x64\x65\x63ision_variable\x18\x01 \x01(\x0b\x32\x19.ommx.v1.DecisionVariableR\x10\x64\x65\x63isionVariable\x12\x30\n\x07samples\x18\x02 \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\x07samples"\x99\x05\n\x11SampledConstraint\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12-\n\x08\x65quality\x18\x02 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12\x17\n\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x1e\n\nsubscripts\x18\x04 \x03(\x03R\nsubscripts\x12J\n\nparameters\x18\x05 \x03(\x0b\x32*.ommx.v1.SampledConstraint.ParametersEntryR\nparameters\x12%\n\x0b\x64\x65scription\x18\x06 \x01(\tH\x01R\x0b\x64\x65scription\x88\x01\x01\x12*\n\x0eremoved_reason\x18\x07 \x01(\tH\x02R\rremovedReason\x88\x01\x01\x12s\n\x19removed_reason_parameters\x18\x08 \x03(\x0b\x32\x37.ommx.v1.SampledConstraint.RemovedReasonParametersEntryR\x17removedReasonParameters\x12\x41\n\x10\x65valuated_values\x18\t \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\x0f\x65valuatedValues\x1a=\n\x0fParametersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x1aJ\n\x1cRemovedReasonParametersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x42\x07\n\x05_nameB\x0e\n\x0c_descriptionB\x11\n\x0f_removed_reason"\xd2\x01\n\tSampleSet\x12\x36\n\nobjectives\x18\x01 \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\nobjectives\x12O\n\x12\x64\x65\x63ision_variables\x18\x02 \x03(\x0b\x32 .ommx.v1.SampledDecisionVariableR\x11\x64\x65\x63isionVariables\x12<\n\x0b\x63onstraints\x18\x03 \x03(\x0b\x32\x1a.ommx.v1.SampledConstraintR\x0b\x63onstraintsBZ\n\x0b\x63om.ommx.v1B\x0eSampleSetProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
+    b'\n\x18ommx/v1/sample_set.proto\x12\x07ommx.v1\x1a\x18ommx/v1/constraint.proto\x1a ommx/v1/decision_variables.proto\x1a\x16ommx/v1/solution.proto"\x8a\x01\n\x07Samples\x12\x34\n\x06states\x18\x01 \x03(\x0b\x32\x1c.ommx.v1.Samples.StatesEntryR\x06states\x1aI\n\x0bStatesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12$\n\x05value\x18\x02 \x01(\x0b\x32\x0e.ommx.v1.StateR\x05value:\x02\x38\x01"\x86\x01\n\rSampledValues\x12:\n\x06values\x18\x01 \x03(\x0b\x32".ommx.v1.SampledValues.ValuesEntryR\x06values\x1a\x39\n\x0bValuesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01"\x93\x01\n\x17SampledDecisionVariable\x12\x46\n\x11\x64\x65\x63ision_variable\x18\x01 \x01(\x0b\x32\x19.ommx.v1.DecisionVariableR\x10\x64\x65\x63isionVariable\x12\x30\n\x07samples\x18\x02 \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\x07samples"\x99\x05\n\x11SampledConstraint\x12\x0e\n\x02id\x18\x01 \x01(\x04R\x02id\x12-\n\x08\x65quality\x18\x02 \x01(\x0e\x32\x11.ommx.v1.EqualityR\x08\x65quality\x12\x17\n\x04name\x18\x03 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x1e\n\nsubscripts\x18\x04 \x03(\x03R\nsubscripts\x12J\n\nparameters\x18\x05 \x03(\x0b\x32*.ommx.v1.SampledConstraint.ParametersEntryR\nparameters\x12%\n\x0b\x64\x65scription\x18\x06 \x01(\tH\x01R\x0b\x64\x65scription\x88\x01\x01\x12*\n\x0eremoved_reason\x18\x07 \x01(\tH\x02R\rremovedReason\x88\x01\x01\x12s\n\x19removed_reason_parameters\x18\x08 \x03(\x0b\x32\x37.ommx.v1.SampledConstraint.RemovedReasonParametersEntryR\x17removedReasonParameters\x12\x41\n\x10\x65valuated_values\x18\t \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\x0f\x65valuatedValues\x1a=\n\x0fParametersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x1aJ\n\x1cRemovedReasonParametersEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x42\x07\n\x05_nameB\x0e\n\x0c_descriptionB\x11\n\x0f_removed_reason"\xd2\x01\n\tSampleSet\x12\x36\n\nobjectives\x18\x01 \x01(\x0b\x32\x16.ommx.v1.SampledValuesR\nobjectives\x12O\n\x12\x64\x65\x63ision_variables\x18\x02 \x03(\x0b\x32 .ommx.v1.SampledDecisionVariableR\x11\x64\x65\x63isionVariables\x12<\n\x0b\x63onstraints\x18\x03 \x03(\x0b\x32\x1a.ommx.v1.SampledConstraintR\x0b\x63onstraintsBZ\n\x0b\x63om.ommx.v1B\x0eSampleSetProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
 )
 
 _globals = globals()
@@ -30,6 +30,8 @@ if not _descriptor._USE_C_DESCRIPTORS:
     _globals[
         "DESCRIPTOR"
     ]._serialized_options = b"\n\013com.ommx.v1B\016SampleSetProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1"
+    _globals["_SAMPLES_STATESENTRY"]._loaded_options = None
+    _globals["_SAMPLES_STATESENTRY"]._serialized_options = b"8\001"
     _globals["_SAMPLEDVALUES_VALUESENTRY"]._loaded_options = None
     _globals["_SAMPLEDVALUES_VALUESENTRY"]._serialized_options = b"8\001"
     _globals["_SAMPLEDCONSTRAINT_PARAMETERSENTRY"]._loaded_options = None
@@ -38,20 +40,22 @@ if not _descriptor._USE_C_DESCRIPTORS:
     _globals[
         "_SAMPLEDCONSTRAINT_REMOVEDREASONPARAMETERSENTRY"
     ]._serialized_options = b"8\001"
-    _globals["_STATES"]._serialized_start = 121
-    _globals["_STATES"]._serialized_end = 169
-    _globals["_SAMPLEDVALUES"]._serialized_start = 172
-    _globals["_SAMPLEDVALUES"]._serialized_end = 306
-    _globals["_SAMPLEDVALUES_VALUESENTRY"]._serialized_start = 249
-    _globals["_SAMPLEDVALUES_VALUESENTRY"]._serialized_end = 306
-    _globals["_SAMPLEDDECISIONVARIABLE"]._serialized_start = 309
-    _globals["_SAMPLEDDECISIONVARIABLE"]._serialized_end = 456
-    _globals["_SAMPLEDCONSTRAINT"]._serialized_start = 459
-    _globals["_SAMPLEDCONSTRAINT"]._serialized_end = 1124
-    _globals["_SAMPLEDCONSTRAINT_PARAMETERSENTRY"]._serialized_start = 943
-    _globals["_SAMPLEDCONSTRAINT_PARAMETERSENTRY"]._serialized_end = 1004
-    _globals["_SAMPLEDCONSTRAINT_REMOVEDREASONPARAMETERSENTRY"]._serialized_start = 1006
-    _globals["_SAMPLEDCONSTRAINT_REMOVEDREASONPARAMETERSENTRY"]._serialized_end = 1080
-    _globals["_SAMPLESET"]._serialized_start = 1127
-    _globals["_SAMPLESET"]._serialized_end = 1337
+    _globals["_SAMPLES"]._serialized_start = 122
+    _globals["_SAMPLES"]._serialized_end = 260
+    _globals["_SAMPLES_STATESENTRY"]._serialized_start = 187
+    _globals["_SAMPLES_STATESENTRY"]._serialized_end = 260
+    _globals["_SAMPLEDVALUES"]._serialized_start = 263
+    _globals["_SAMPLEDVALUES"]._serialized_end = 397
+    _globals["_SAMPLEDVALUES_VALUESENTRY"]._serialized_start = 340
+    _globals["_SAMPLEDVALUES_VALUESENTRY"]._serialized_end = 397
+    _globals["_SAMPLEDDECISIONVARIABLE"]._serialized_start = 400
+    _globals["_SAMPLEDDECISIONVARIABLE"]._serialized_end = 547
+    _globals["_SAMPLEDCONSTRAINT"]._serialized_start = 550
+    _globals["_SAMPLEDCONSTRAINT"]._serialized_end = 1215
+    _globals["_SAMPLEDCONSTRAINT_PARAMETERSENTRY"]._serialized_start = 1034
+    _globals["_SAMPLEDCONSTRAINT_PARAMETERSENTRY"]._serialized_end = 1095
+    _globals["_SAMPLEDCONSTRAINT_REMOVEDREASONPARAMETERSENTRY"]._serialized_start = 1097
+    _globals["_SAMPLEDCONSTRAINT_REMOVEDREASONPARAMETERSENTRY"]._serialized_end = 1171
+    _globals["_SAMPLESET"]._serialized_start = 1218
+    _globals["_SAMPLESET"]._serialized_end = 1428
 # @@protoc_insertion_point(module_scope)

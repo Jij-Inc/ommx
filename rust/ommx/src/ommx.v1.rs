@@ -628,13 +628,13 @@ impl Relaxation {
         }
     }
 }
-/// List of states
+/// A map from sample ID to state
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct States {
-    #[prost(message, repeated, tag = "1")]
-    pub states: ::prost::alloc::vec::Vec<State>,
+pub struct Samples {
+    #[prost(map = "uint64, message", tag = "1")]
+    pub states: ::std::collections::HashMap<u64, State>,
 }
 /// A map from sample IDs to sampled values
 #[non_exhaustive]

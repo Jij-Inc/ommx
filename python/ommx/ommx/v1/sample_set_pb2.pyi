@@ -16,26 +16,49 @@ import typing
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
-class States(google.protobuf.message.Message):
-    """List of states"""
+class Samples(google.protobuf.message.Message):
+    """A map from sample ID to state"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class StatesEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        @property
+        def value(self) -> ommx.v1.solution_pb2.State: ...
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: ommx.v1.solution_pb2.State | None = ...,
+        ) -> None: ...
+        def HasField(
+            self, field_name: typing.Literal["value", b"value"]
+        ) -> builtins.bool: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
 
     STATES_FIELD_NUMBER: builtins.int
     @property
     def states(
         self,
-    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
-        ommx.v1.solution_pb2.State
+    ) -> google.protobuf.internal.containers.MessageMap[
+        builtins.int, ommx.v1.solution_pb2.State
     ]: ...
     def __init__(
         self,
         *,
-        states: collections.abc.Iterable[ommx.v1.solution_pb2.State] | None = ...,
+        states: collections.abc.Mapping[builtins.int, ommx.v1.solution_pb2.State]
+        | None = ...,
     ) -> None: ...
     def ClearField(self, field_name: typing.Literal["states", b"states"]) -> None: ...
 
-global___States = States
+global___Samples = Samples
 
 @typing.final
 class SampledValues(google.protobuf.message.Message):
