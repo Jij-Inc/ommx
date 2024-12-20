@@ -425,25 +425,19 @@ impl Evaluate for Instance {
             .collect::<Result<_>>()?;
 
         let objectives = self.objective().evaluate_samples(samples)?;
+        let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
             .iter()
             .map(|d| -> Result<_> {
-                let values: SampledValues = samples
-                    .iter()
-                    .map(|(sample_id, state)| {
-                        let value = state.entries.get(&d.id).copied().with_context(|| {
-                            format!(
-                                "Variable id ({}) is not found in the {sample_id}-th sample",
-                                d.id
-                            )
-                        })?;
-                        Ok((*sample_id, value))
-                    })
-                    .collect::<Result<_>>()?;
+                let samples = if let Some(value) = transposed.remove(&d.id) {
+                    value
+                } else {
+                    todo!()
+                };
                 Ok(SampledDecisionVariable {
                     decision_variable: Some(d.clone()),
-                    samples: Some(values),
+                    samples: Some(samples),
                 })
             })
             .collect::<Result<_>>()?;
