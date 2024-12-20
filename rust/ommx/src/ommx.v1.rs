@@ -633,16 +633,44 @@ impl Relaxation {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Samples {
-    #[prost(map = "uint64, message", tag = "1")]
-    pub states: ::std::collections::HashMap<u64, State>,
+    #[prost(message, repeated, tag = "1")]
+    pub entries: ::prost::alloc::vec::Vec<samples::Entry>,
+}
+/// Nested message and enum types in `Samples`.
+pub mod samples {
+    /// Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Entry {
+        /// State of the sample
+        #[prost(message, optional, tag = "1")]
+        pub state: ::core::option::Option<super::State>,
+        /// IDs of the sample
+        #[prost(uint64, repeated, tag = "2")]
+        pub ids: ::prost::alloc::vec::Vec<u64>,
+    }
 }
 /// A map from sample IDs to sampled values
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SampledValues {
-    #[prost(map = "uint64, double", tag = "1")]
-    pub values: ::std::collections::HashMap<u64, f64>,
+    #[prost(message, repeated, tag = "1")]
+    pub entries: ::prost::alloc::vec::Vec<sampled_values::Entry>,
+}
+/// Nested message and enum types in `SampledValues`.
+pub mod sampled_values {
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct Entry {
+        #[prost(double, tag = "1")]
+        pub value: f64,
+        /// IDs of the sample
+        #[prost(uint64, repeated, tag = "2")]
+        pub ids: ::prost::alloc::vec::Vec<u64>,
+    }
 }
 /// A pair of decision variable description and its sampled values
 #[non_exhaustive]

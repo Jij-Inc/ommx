@@ -48,14 +48,13 @@ impl Evaluate for Function {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut values = HashMap::new();
         let mut ids = BTreeSet::new();
-        for (sample_id, state) in samples.iter() {
-            let (value, mut used_ids) = self.evaluate(state)?;
-            values.insert(*sample_id, value);
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
             ids.append(&mut used_ids);
-        }
-        Ok((SampledValues { values }, ids))
+            Ok(value)
+        })?;
+        Ok((out, ids))
     }
 }
 
@@ -94,14 +93,13 @@ impl Evaluate for Linear {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut values = HashMap::new();
         let mut ids = BTreeSet::new();
-        for (sample_id, state) in samples.iter() {
-            let (value, mut used_ids) = self.evaluate(state)?;
-            values.insert(*sample_id, value);
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
             ids.append(&mut used_ids);
-        }
-        Ok((SampledValues { values }, ids))
+            Ok(value)
+        })?;
+        Ok((out, ids))
     }
 }
 
@@ -184,14 +182,13 @@ impl Evaluate for Quadratic {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut values = HashMap::new();
         let mut ids = BTreeSet::new();
-        for (sample_id, state) in samples.iter() {
-            let (value, mut used_ids) = self.evaluate(state)?;
-            values.insert(*sample_id, value);
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
             ids.append(&mut used_ids);
-        }
-        Ok((SampledValues { values }, ids))
+            Ok(value)
+        })?;
+        Ok((out, ids))
     }
 }
 
@@ -247,14 +244,13 @@ impl Evaluate for Polynomial {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut values = HashMap::new();
         let mut ids = BTreeSet::new();
-        for (sample_id, state) in samples.iter() {
-            let (value, mut used_ids) = self.evaluate(state)?;
-            values.insert(*sample_id, value);
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
             ids.append(&mut used_ids);
-        }
-        Ok((SampledValues { values }, ids))
+            Ok(value)
+        })?;
+        Ok((out, ids))
     }
 }
 
@@ -414,8 +410,7 @@ impl Evaluate for Instance {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut feasible: HashMap<u64, bool> =
-            samples.states.keys().map(|id| (*id, true)).collect();
+        let mut feasible: HashMap<u64, bool> = samples.ids().map(|id| (*id, true)).collect();
         let mut used_ids = BTreeSet::new();
         let mut constraints = Vec::new();
         for c in &self.constraints {
@@ -462,6 +457,8 @@ impl Evaluate for Instance {
 
 #[cfg(test)]
 mod tests {
+    use crate::v1::samples;
+
     use super::*;
     use approx::*;
     use maplit::*;
@@ -679,7 +676,7 @@ mod tests {
         fn evaluate_samples((instance, state) in instance_with_state()) {
             let (solution, ids1) = instance.evaluate(&state).unwrap();
 
-            let samples = Samples { states: hashmap! { 0 => state.clone() } };
+            let samples = Samples { entries: vec![samples::Entry { state: Some(state.clone()), ids: vec![0] }] };
             let (sample_set, ids2) = instance.evaluate_samples(&samples).unwrap();
 
             prop_assert_eq!(ids1, ids2);

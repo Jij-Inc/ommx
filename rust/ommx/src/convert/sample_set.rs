@@ -1,51 +1,98 @@
 use crate::v1::{SampleSet, SampledValues, Samples, Solution, State};
 use anyhow::{bail, Context, Result};
+use ordered_float::OrderedFloat;
 use std::collections::HashMap;
 
-impl FromIterator<(u64, f64)> for SampledValues {
-    fn from_iter<I: IntoIterator<Item = (u64, f64)>>(iter: I) -> Self {
+impl From<HashMap<OrderedFloat<f64>, Vec<u64>>> for SampledValues {
+    fn from(map: HashMap<OrderedFloat<f64>, Vec<u64>>) -> Self {
         Self {
-            values: iter.into_iter().collect(),
+            entries: map
+                .into_iter()
+                .map(|(value, ids)| {
+                    let value = value.into_inner();
+                    crate::v1::sampled_values::Entry { value, ids }
+                })
+                .collect(),
         }
     }
 }
 
-impl IntoIterator for SampledValues {
-    type Item = (u64, f64);
-    type IntoIter = std::collections::hash_map::IntoIter<u64, f64>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.values.into_iter()
+impl FromIterator<(u64, f64)> for SampledValues {
+    fn from_iter<I: IntoIterator<Item = (u64, f64)>>(iter: I) -> Self {
+        let mut map: HashMap<OrderedFloat<f64>, Vec<u64>> = HashMap::new();
+        for (k, v) in iter {
+            map.entry(OrderedFloat(v)).or_default().push(k);
+        }
+        map.into()
     }
 }
 
 impl SampledValues {
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &f64)> {
-        self.values.iter()
+        self.entries
+            .iter()
+            .flat_map(|v| v.ids.iter().map(|id| (id, &v.value)))
     }
 
     pub fn get(&self, sample_id: u64) -> Option<f64> {
-        self.values.get(&sample_id).cloned()
+        for entry in &self.entries {
+            if entry.ids.contains(&sample_id) {
+                return Some(entry.value);
+            }
+        }
+        None
     }
 }
 
 impl Samples {
+    pub fn ids(&self) -> impl Iterator<Item = &u64> {
+        self.entries.iter().flat_map(|v| v.ids.iter())
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &State)> {
-        self.states.iter()
+        self.entries.iter().flat_map(|v| {
+            v.ids.iter().map(move |id| {
+                (
+                    id,
+                    v.state
+                        .as_ref()
+                        .expect("ommx.v1.Samples.Entry must has state. Broken Data."),
+                )
+            })
+        })
     }
 
     /// Transpose `sample_id -> decision_variable_id -> value` to `decision_variable_id -> sample_id -> value`
     pub fn transpose(&self) -> HashMap<u64, SampledValues> {
-        let mut out = HashMap::new();
+        let mut map: HashMap<u64, HashMap<OrderedFloat<f64>, Vec<u64>>> = HashMap::new();
         for (sample_id, state) in self.iter() {
-            for (decision_variable_id, value) in state.entries.iter() {
-                out.entry(*decision_variable_id)
-                    .or_insert_with(SampledValues::default)
-                    .values
-                    .insert(*sample_id, *value);
+            for (decision_variable_id, value) in &state.entries {
+                map.entry(*decision_variable_id)
+                    .or_default()
+                    .entry(OrderedFloat(*value))
+                    .or_default()
+                    .push(*sample_id);
             }
         }
-        out
+        map.into_iter().map(|(k, v)| (k, v.into())).collect()
+    }
+
+    pub fn map(&self, mut f: impl FnMut(&State) -> Result<f64>) -> Result<SampledValues> {
+        Ok(SampledValues {
+            entries: self
+                .entries
+                .iter()
+                .map(|v| {
+                    Ok(crate::v1::sampled_values::Entry {
+                        value: f(v
+                            .state
+                            .as_ref()
+                            .context("ommx.v1.Samples.Entry must has state. Broken Data.")?)?,
+                        ids: v.ids.clone(),
+                    })
+                })
+                .collect::<Result<_>>()?,
+        })
     }
 }
 

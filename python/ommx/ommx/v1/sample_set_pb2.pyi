@@ -22,41 +22,51 @@ class Samples(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class StatesEntry(google.protobuf.message.Message):
+    class Entry(google.protobuf.message.Message):
+        """Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry."""
+
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        KEY_FIELD_NUMBER: builtins.int
-        VALUE_FIELD_NUMBER: builtins.int
-        key: builtins.int
+        STATE_FIELD_NUMBER: builtins.int
+        IDS_FIELD_NUMBER: builtins.int
         @property
-        def value(self) -> ommx.v1.solution_pb2.State: ...
+        def state(self) -> ommx.v1.solution_pb2.State:
+            """State of the sample"""
+
+        @property
+        def ids(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+            builtins.int
+        ]:
+            """IDs of the sample"""
+
         def __init__(
             self,
             *,
-            key: builtins.int = ...,
-            value: ommx.v1.solution_pb2.State | None = ...,
+            state: ommx.v1.solution_pb2.State | None = ...,
+            ids: collections.abc.Iterable[builtins.int] | None = ...,
         ) -> None: ...
         def HasField(
-            self, field_name: typing.Literal["value", b"value"]
+            self, field_name: typing.Literal["state", b"state"]
         ) -> builtins.bool: ...
         def ClearField(
-            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+            self, field_name: typing.Literal["ids", b"ids", "state", b"state"]
         ) -> None: ...
 
-    STATES_FIELD_NUMBER: builtins.int
+    ENTRIES_FIELD_NUMBER: builtins.int
     @property
-    def states(
+    def entries(
         self,
-    ) -> google.protobuf.internal.containers.MessageMap[
-        builtins.int, ommx.v1.solution_pb2.State
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___Samples.Entry
     ]: ...
     def __init__(
         self,
         *,
-        states: collections.abc.Mapping[builtins.int, ommx.v1.solution_pb2.State]
-        | None = ...,
+        entries: collections.abc.Iterable[global___Samples.Entry] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["states", b"states"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
 global___Samples = Samples
 
@@ -67,36 +77,43 @@ class SampledValues(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     @typing.final
-    class ValuesEntry(google.protobuf.message.Message):
+    class Entry(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-        KEY_FIELD_NUMBER: builtins.int
         VALUE_FIELD_NUMBER: builtins.int
-        key: builtins.int
+        IDS_FIELD_NUMBER: builtins.int
         value: builtins.float
+        @property
+        def ids(
+            self,
+        ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
+            builtins.int
+        ]:
+            """IDs of the sample"""
+
         def __init__(
             self,
             *,
-            key: builtins.int = ...,
             value: builtins.float = ...,
+            ids: collections.abc.Iterable[builtins.int] | None = ...,
         ) -> None: ...
         def ClearField(
-            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+            self, field_name: typing.Literal["ids", b"ids", "value", b"value"]
         ) -> None: ...
 
-    VALUES_FIELD_NUMBER: builtins.int
+    ENTRIES_FIELD_NUMBER: builtins.int
     @property
-    def values(
+    def entries(
         self,
-    ) -> google.protobuf.internal.containers.ScalarMap[
-        builtins.int, builtins.float
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___SampledValues.Entry
     ]: ...
     def __init__(
         self,
         *,
-        values: collections.abc.Mapping[builtins.int, builtins.float] | None = ...,
+        entries: collections.abc.Iterable[global___SampledValues.Entry] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["values", b"values"]) -> None: ...
+    def ClearField(self, field_name: typing.Literal["entries", b"entries"]) -> None: ...
 
 global___SampledValues = SampledValues
 

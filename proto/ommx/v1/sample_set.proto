@@ -8,12 +8,24 @@ import "ommx/v1/solution.proto";
 
 // A map from sample ID to state
 message Samples {
-  map<uint64, State> states = 1;
+  // Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+  message Entry {
+    // State of the sample
+    State state = 1;
+    // IDs of the sample
+    repeated uint64 ids = 2;
+  }
+  repeated Entry entries = 1;
 }
 
 // A map from sample IDs to sampled values
 message SampledValues {
-  map<uint64, double> values = 1;
+  message Entry {
+    double value = 1;
+    // IDs of the sample
+    repeated uint64 ids = 2;
+  }
+  repeated Entry entries = 1;
 }
 
 // A pair of decision variable description and its sampled values
