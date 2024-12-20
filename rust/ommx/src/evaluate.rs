@@ -268,7 +268,9 @@ impl Evaluate for Constraint {
                 subscripts: self.subscripts.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
-                ..Default::default()
+                dual_variable: None,
+                removed_reason: None,
+                removed_reason_parameters: Default::default(),
             },
             used_ids,
         ))
@@ -283,7 +285,18 @@ impl Evaluate for Constraint {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        todo!()
+        let evaluated_values = self.function().evaluate_samples(samples)?;
+        Ok(SampledConstraint {
+            id: self.id,
+            evaluated_values: Some(evaluated_values),
+            name: self.name.clone(),
+            subscripts: self.subscripts.clone(),
+            parameters: self.parameters.clone(),
+            description: self.description.clone(),
+            equality: self.equality,
+            removed_reason: None,
+            removed_reason_parameters: Default::default(),
+        })
     }
 }
 
@@ -310,7 +323,14 @@ impl Evaluate for RemovedConstraint {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        todo!()
+        let mut evaluated = self
+            .constraint
+            .as_ref()
+            .expect("RemovedConstraint does not contain constraint")
+            .evaluate_samples(samples)?;
+        evaluated.removed_reason = Some(self.removed_reason.clone());
+        evaluated.removed_reason_parameters = self.removed_reason_parameters.clone();
+        Ok(evaluated)
     }
 }
 
