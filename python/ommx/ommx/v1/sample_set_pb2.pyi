@@ -111,7 +111,7 @@ class SampledDecisionVariable(google.protobuf.message.Message):
 global___SampledDecisionVariable = SampledDecisionVariable
 
 @typing.final
-class SampledConstraints(google.protobuf.message.Message):
+class SampledConstraint(google.protobuf.message.Message):
     """Evaluated constraint for samples"""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -267,7 +267,7 @@ class SampledConstraints(google.protobuf.message.Message):
         self, oneof_group: typing.Literal["_removed_reason", b"_removed_reason"]
     ) -> typing.Literal["removed_reason"] | None: ...
 
-global___SampledConstraints = SampledConstraints
+global___SampledConstraint = SampledConstraint
 
 @typing.final
 class SampleSet(google.protobuf.message.Message):
@@ -287,20 +287,21 @@ class SampleSet(google.protobuf.message.Message):
         global___SampledDecisionVariable
     ]: ...
     @property
-    def constraints(self) -> global___SampledConstraints: ...
+    def constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___SampledConstraint
+    ]: ...
     def __init__(
         self,
         *,
         objectives: global___SampledValues | None = ...,
         decision_variables: collections.abc.Iterable[global___SampledDecisionVariable]
         | None = ...,
-        constraints: global___SampledConstraints | None = ...,
+        constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
     ) -> None: ...
     def HasField(
-        self,
-        field_name: typing.Literal[
-            "constraints", b"constraints", "objectives", b"objectives"
-        ],
+        self, field_name: typing.Literal["objectives", b"objectives"]
     ) -> builtins.bool: ...
     def ClearField(
         self,

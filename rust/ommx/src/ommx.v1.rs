@@ -658,7 +658,7 @@ pub struct SampledDecisionVariable {
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SampledConstraints {
+pub struct SampledConstraint {
     /// Constraint ID
     #[prost(uint64, tag = "1")]
     pub id: u64,
@@ -697,6 +697,6 @@ pub struct SampleSet {
     pub objectives: ::core::option::Option<SampledValues>,
     #[prost(message, repeated, tag = "2")]
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
-    #[prost(message, optional, tag = "3")]
-    pub constraints: ::core::option::Option<SampledConstraints>,
+    #[prost(message, repeated, tag = "3")]
+    pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
 }

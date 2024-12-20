@@ -23,7 +23,7 @@ message SampledDecisionVariable {
 }
 
 // Evaluated constraint for samples
-message SampledConstraints {
+message SampledConstraint {
   // Constraint ID
   uint64 id = 1;
 
@@ -55,5 +55,5 @@ message SampledConstraints {
 message SampleSet {
   SampledValues objectives = 1;
   repeated SampledDecisionVariable decision_variables = 2;
-  SampledConstraints constraints = 3;
+  repeated SampledConstraint constraints = 3;
 }
