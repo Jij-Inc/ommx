@@ -98,6 +98,11 @@ tasks:
       - markdown-code-runner python/ommx-pyscipopt-adapter/README.md
       - pyright python/ommx-pyscipopt-adapter/
 
+  test_openjij_adapter:
+    cmds:
+      - pytest -vv --doctest-modules python/ommx-openjij-adapter/
+      - pyright python/ommx-openjij-adapter/
+
   doc_python:
     cmds:
       - task: doc_python_sdk
