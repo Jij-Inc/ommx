@@ -6,6 +6,7 @@ on:
       - python-*
     branches:
       - main
+      - python-release-fix
   workflow_dispatch:
 
 jobs:
