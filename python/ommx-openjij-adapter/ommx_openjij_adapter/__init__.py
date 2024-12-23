@@ -15,6 +15,8 @@ def sample_qubo_sa(instance: Instance, *, num_reads: int = 1) -> Samples:
     You can convert a problem to QUBO via [`ommx.v1.Instance.penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.penalty_method) or other corresponding method.
     """
     q, c = instance.as_qubo_format()
+    if instance.sense == Instance.MAXIMIZE:
+        q = {key: -val for key, val in q.items()}
     sampler = oj.SASampler()
     response = sampler.sample_qubo(q, num_reads=num_reads)  # type: ignore
 
