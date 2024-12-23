@@ -92,21 +92,24 @@ class InstanceBase(ABC):
 
     @property
     def decision_variables(self) -> DataFrame:
-        return DataFrame(
-            v._as_pandas_entry() for v in self.get_decision_variables()
-        ).set_index("id")
+        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def constraints(self) -> DataFrame:
-        return DataFrame(
-            c._as_pandas_entry() for c in self.get_constraints()
-        ).set_index("id")
+        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def removed_constraints(self) -> DataFrame:
-        return DataFrame(
-            rc._as_pandas_entry() for rc in self.get_removed_constraints()
-        ).set_index("id")
+        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
 
 class UserAnnotationBase(ABC):
@@ -673,9 +676,10 @@ class ParametricInstance(InstanceBase):
 
     @property
     def parameters(self) -> DataFrame:
-        return DataFrame(p._as_pandas_entry() for p in self.get_parameters()).set_index(
-            "id"
-        )
+        df = DataFrame(p._as_pandas_entry() for p in self.get_parameters())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
         """
@@ -878,15 +882,18 @@ class Solution(UserAnnotationBase):
 
     @property
     def decision_variables(self) -> DataFrame:
-        return DataFrame(
+        df = DataFrame(
             DecisionVariable(v)._as_pandas_entry()
             | {"value": self.raw.state.entries[v.id]}
             for v in self.raw.decision_variables
-        ).set_index("id")
+        )
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def constraints(self) -> DataFrame:
-        return DataFrame(
+        df = DataFrame(
             {
                 "id": c.id,
                 "equality": _equality(c.equality),
@@ -905,7 +912,10 @@ class Solution(UserAnnotationBase):
                 for key, value in c.removed_reason_parameters.items()
             }
             for c in self.raw.evaluated_constraints
-        ).set_index("id")
+        )
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def extract_decision_variables(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -2381,6 +2391,10 @@ class SampleSet:
     @property
     def sample_ids(self) -> list[int]:
         return [id for id, _ in self.objectives]
+
+    @property
+    def decision_variables(self) -> DataFrame:
+        raise NotImplementedError
 
     def extract_decision_variables(
         self, name: str, sample_id: int
