@@ -2379,6 +2379,14 @@ class SampleSet:
             out += entry.ids
         return out
 
+    @property
+    def objective(self) -> dict[int, float]:
+        out = {}
+        for entry in self.raw.objectives.entries:
+            for id in entry.ids:
+                out[id] = entry.value
+        return out
+
     def extract_decision_variables(
         self, name: str, sample_id: int
     ) -> dict[tuple[int, ...], float]:

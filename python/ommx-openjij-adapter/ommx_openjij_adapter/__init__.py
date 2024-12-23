@@ -27,6 +27,9 @@ def sample_qubo_sa(instance: Instance, *, num_reads: int = 1) -> Samples:
         state = State(entries=zip(response.variables, sample))  # type: ignore
         # `num_occurrences` is encoded into sample ID list.
         # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
-        ids = [sample_id + j for j in range(response.record.num_occurrences[i])]
+        ids = []
+        for _ in range(response.record.num_occurrences[i]):
+            ids.append(sample_id)
+            sample_id += 1
         entries.append(Samples.SamplesEntry(state=state, ids=ids))
     return Samples(entries=entries)
