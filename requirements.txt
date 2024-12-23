@@ -46,6 +46,10 @@ decorator==5.1.1
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
+dimod==0.12.18
+    # via
+    #   jij-cimod
+    #   openjij
 docutils==0.20.1
     # via
     #   myst-parser
@@ -76,6 +80,8 @@ ipython==8.30.0
     #   myst-nb
 jedi==0.19.2
     # via ipython
+jij-cimod==1.6.2
+    # via openjij
 jinja2==3.1.4
     # via
     #   jupyter-book
@@ -159,19 +165,28 @@ networkx==3.4.2
 numpy==1.26.4
     # via
     #   contourpy
+    #   dimod
+    #   jij-cimod
     #   matplotlib
     #   ommx
+    #   openjij
     #   pandas
     #   pyarrow
+    #   scipy
 ommx==1.6.0rc1
     # via
     #   ommx-book (pyproject.toml)
+    #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-pyscipopt-adapter==1.6.0rc1
+ommx-openjij-adapter==1.6.0rc2
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==1.6.0rc1
+ommx-pyscipopt-adapter==1.6.0rc2
     # via ommx-book (pyproject.toml)
+ommx-python-mip-adapter==1.6.0rc2
+    # via ommx-book (pyproject.toml)
+openjij==0.9.2
+    # via ommx-openjij-adapter
 packaging==24.2
     # via
     #   ipykernel
@@ -248,12 +263,18 @@ referencing==0.35.1
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.32.3
-    # via sphinx
+requests==2.31.0
+    # via
+    #   openjij
+    #   sphinx
 rpds-py==0.22.3
     # via
     #   jsonschema
     #   referencing
+scipy==1.11.4
+    # via
+    #   jij-cimod
+    #   openjij
 setuptools==75.6.0
     # via sphinx-togglebutton
 six==1.17.0
@@ -340,6 +361,7 @@ typing-extensions==4.12.2
     #   ipython
     #   myst-nb
     #   ommx
+    #   openjij
     #   pydata-sphinx-theme
     #   sqlalchemy
 tzdata==2024.2
