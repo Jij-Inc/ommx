@@ -4,6 +4,7 @@ package ommx.v1;
 
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
+import "ommx/v1/instance.proto";
 import "ommx/v1/solution.proto";
 
 // A map from sample ID to state
@@ -67,6 +68,9 @@ message SampledConstraint {
 
   // IDs of decision variables used to evaluate this constraint
   repeated uint64 used_decision_variable_ids = 10;
+
+  // Feasibility of each sample
+  map<uint64, bool> feasible = 11;
 }
 
 // Output of the sampling process.
@@ -77,4 +81,7 @@ message SampleSet {
 
   // Feasibility of each sample
   map<uint64, bool> feasible = 4;
+
+  // Minimize or Maximize
+  Instance.Sense sense = 5;
 }

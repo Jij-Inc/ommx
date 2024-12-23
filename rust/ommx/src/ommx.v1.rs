@@ -721,6 +721,9 @@ pub struct SampledConstraint {
     /// IDs of decision variables used to evaluate this constraint
     #[prost(uint64, repeated, tag = "10")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    /// Feasibility of each sample
+    #[prost(map = "uint64, bool", tag = "11")]
+    pub feasible: ::std::collections::HashMap<u64, bool>,
 }
 /// Output of the sampling process.
 #[non_exhaustive]
@@ -736,4 +739,7 @@ pub struct SampleSet {
     /// Feasibility of each sample
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
+    /// Minimize or Maximize
+    #[prost(enumeration = "instance::Sense", tag = "5")]
+    pub sense: i32,
 }

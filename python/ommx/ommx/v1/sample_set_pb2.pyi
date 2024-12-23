@@ -10,6 +10,7 @@ import google.protobuf.internal.containers
 import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
+import ommx.v1.instance_pb2
 import ommx.v1.solution_pb2
 import typing
 
@@ -212,6 +213,24 @@ class SampledConstraint(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class FeasibleEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.bool
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.bool = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
     NAME_FIELD_NUMBER: builtins.int
@@ -222,6 +241,7 @@ class SampledConstraint(google.protobuf.message.Message):
     REMOVED_REASON_PARAMETERS_FIELD_NUMBER: builtins.int
     EVALUATED_VALUES_FIELD_NUMBER: builtins.int
     USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
+    FEASIBLE_FIELD_NUMBER: builtins.int
     id: builtins.int
     """Constraint ID"""
     equality: ommx.v1.constraint_pb2.Equality.ValueType
@@ -259,6 +279,12 @@ class SampledConstraint(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """IDs of decision variables used to evaluate this constraint"""
 
+    @property
+    def feasible(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
+        """Feasibility of each sample"""
+
     def __init__(
         self,
         *,
@@ -273,6 +299,7 @@ class SampledConstraint(google.protobuf.message.Message):
         | None = ...,
         evaluated_values: global___SampledValues | None = ...,
         used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
+        feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -308,6 +335,8 @@ class SampledConstraint(google.protobuf.message.Message):
             b"equality",
             "evaluated_values",
             b"evaluated_values",
+            "feasible",
+            b"feasible",
             "id",
             b"id",
             "name",
@@ -367,6 +396,9 @@ class SampleSet(google.protobuf.message.Message):
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
+    SENSE_FIELD_NUMBER: builtins.int
+    sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
+    """Minimize or Maximize"""
     @property
     def objectives(self) -> global___SampledValues: ...
     @property
@@ -395,6 +427,7 @@ class SampleSet(google.protobuf.message.Message):
         | None = ...,
         constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
         feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
+        sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing.Literal["objectives", b"objectives"]
@@ -410,6 +443,8 @@ class SampleSet(google.protobuf.message.Message):
             b"feasible",
             "objectives",
             b"objectives",
+            "sense",
+            b"sense",
         ],
     ) -> None: ...
 

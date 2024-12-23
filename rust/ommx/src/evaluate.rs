@@ -1,10 +1,10 @@
 use crate::v1::{
-    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint,
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
     Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
     SampledValues, Samples, Solution, State,
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Evaluate with a [State]
@@ -289,6 +289,18 @@ impl Evaluate for Constraint {
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
         let (evaluated_values, used_ids) = self.function().evaluate_samples(samples)?;
+        let feasible: HashMap<u64, bool> = evaluated_values
+            .iter()
+            .map(|(sample_id, value)| {
+                if self.equality() == Equality::EqualToZero {
+                    return Ok((*sample_id, value.abs() < 1e-6));
+                }
+                if self.equality() == Equality::LessThanOrEqualToZero {
+                    return Ok((*sample_id, *value < 1e-6));
+                }
+                bail!("Unsupported equality: {:?}", self.equality());
+            })
+            .collect::<Result<_>>()?;
         Ok((
             SampledConstraint {
                 id: self.id,
@@ -299,6 +311,7 @@ impl Evaluate for Constraint {
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
                 equality: self.equality,
+                feasible,
                 removed_reason: None,
                 removed_reason_parameters: Default::default(),
             },
@@ -449,6 +462,7 @@ impl Evaluate for Instance {
                 objectives: Some(objectives),
                 constraints,
                 feasible,
+                sense: self.sense,
             },
             used_ids,
         ))
