@@ -71,6 +71,10 @@ tasks:
     cmds:
       - pip install -ve "python/ommx-pyscipopt-adapter[dev]"
 
+  install_openjij_adapter:
+    cmds:
+      - pip install -ve "python/ommx-openjij-adapter[dev]"
+
   format_python:
     cmds:
       - ruff format
@@ -80,6 +84,7 @@ tasks:
       - task: test_python_sdk
       - task: test_python_mip_adapter
       - task: test_pyscipopt_adapter
+      - task: test_openjij_adapter
 
   test_python_sdk:
     cmds:
