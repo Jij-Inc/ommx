@@ -16,5 +16,5 @@ dependencies = [
     "ommx-pyscipopt-adapter==1.6.0rc2",
     "ommx-python-mip-adapter==1.6.0rc2",
     "ommx-openjij-adapter==1.6.0rc2",
-    "ommx==1.6.0rc1",
+    "ommx==1.6.0rc2",
 ]

@@ -173,7 +173,7 @@ numpy==1.26.4
     #   pandas
     #   pyarrow
     #   scipy
-ommx==1.6.0rc1
+ommx==1.6.0rc2
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-openjij-adapter
