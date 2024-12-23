@@ -2389,10 +2389,42 @@ class SampleSet:
     def summary(self) -> DataFrame:
         df = DataFrame(
             {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
-            for id, value in self.objectives
-        ).sort_values("objective")
-        if not df.empty:
-            df = df.set_index("sample_id")
+            for id, value in self.objectives.items()
+        )
+        if df.empty:
+            return df
+
+        return df.sort_values(
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+        ).set_index("sample_id")
+
+    @property
+    def summary_with_constraints(self) -> DataFrame:
+        def _constraint_label(c: _SampledConstraint) -> str:
+            name = ""
+            if c.HasField("name"):
+                name += c.name
+            else:
+                return f"{c.id}"
+            if c.subscripts:
+                name += f"{c.subscripts}"
+            if c.parameters:
+                name += f"{c.parameters}"
+            return name
+
+        df = DataFrame(
+            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            | {_constraint_label(c): c.feasible[id] for c in self.raw.constraints}
+            for id, value in self.objectives.items()
+        )
+
+        if df.empty:
+            return df
+        df = df.sort_values(
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+        ).set_index("sample_id")
         return df
 
     @property
@@ -2400,12 +2432,12 @@ class SampleSet:
         return dict(self.raw.feasible)
 
     @property
-    def objectives(self) -> SampledValues:
-        return SampledValues(self.raw.objectives)
+    def objectives(self) -> dict[int, float]:
+        return dict(SampledValues(self.raw.objectives))
 
     @property
     def sample_ids(self) -> list[int]:
-        return [id for id, _ in self.objectives]
+        return self.summary.index.tolist()
 
     @property
     def decision_variables(self) -> DataFrame:
@@ -2436,7 +2468,8 @@ class SampleSet:
                 f"removed_reason.{key}": value
                 for key, value in c.removed_reason_parameters.items()
             }
-            | dict(SampledValues(c.evaluated_values))
+            | {f"value.{id}": value for id, value in SampledValues(c.evaluated_values)}
+            | {f"feasible.{id}": value for id, value in c.feasible.items()}
             for c in self.raw.constraints
         )
         if not df.empty:
