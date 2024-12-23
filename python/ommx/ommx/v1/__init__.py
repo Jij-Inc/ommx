@@ -50,6 +50,8 @@ __all__ = [
     "Optimality",
     "Relaxation",
     "Bound",
+    # Utility
+    "SampledValues",
 ]
 
 
@@ -2373,19 +2375,12 @@ class SampleSet:
         return self.raw.SerializeToString()
 
     @property
-    def sample_ids(self) -> list[int]:
-        out = []
-        for entry in self.raw.objectives.entries:
-            out += entry.ids
-        return out
+    def objectives(self) -> SampledValues:
+        return SampledValues(self.raw.objectives)
 
     @property
-    def objective(self) -> dict[int, float]:
-        out = {}
-        for entry in self.raw.objectives.entries:
-            for id in entry.ids:
-                out[id] = entry.value
-        return out
+    def sample_ids(self) -> list[int]:
+        return [id for id, _ in self.objectives]
 
     def extract_decision_variables(
         self, name: str, sample_id: int
@@ -2407,14 +2402,7 @@ class SampleSet:
             if v.HasField("substituted_value"):
                 out[key] = v.substituted_value
                 continue
-
-            samples = sampled_decision_variable.samples
-            for entries in samples.entries:
-                if sample_id in entries.ids:
-                    out[key] = entries.value
-                    break
-            else:
-                raise ValueError(f"Sample ID {sample_id} not found for {v}")
+            out[key] = SampledValues(sampled_decision_variable.samples)[sample_id]
         return out
 
     def extract_constraints(
@@ -2430,11 +2418,21 @@ class SampleSet:
             key = tuple(c.subscripts)
             if key in out:
                 raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
-
-            for entry in c.evaluated_values.entries:
-                if sample_id in entry.ids:
-                    out[key] = entry.value
-                    break
-            else:
-                raise ValueError(f"Sample ID {sample_id} not found for {c}")
+            out[key] = SampledValues(c.evaluated_values)[sample_id]
         return out
+
+
+@dataclass
+class SampledValues:
+    raw: _SampledValues
+
+    def __iter__(self):
+        for entry in self.raw.entries:
+            for id in entry.ids:
+                yield id, entry.value
+
+    def __getitem__(self, sample_id: int) -> float:
+        for entry in self.raw.entries:
+            if sample_id in entry.ids:
+                return entry.value
+        raise KeyError(f"Sample ID {sample_id} not found")
