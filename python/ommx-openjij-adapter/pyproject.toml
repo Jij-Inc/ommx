@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_openjij_adapter"
-version = "1.6.0rc2"
+version = "1.6.0rc3"
 
 description = "OMMX Adapter for OpenJij."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
