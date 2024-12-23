@@ -77,6 +77,11 @@ jobs:
           task install_pyscipopt_adapter
           task test_pyscipopt_adapter
 
+      - name: Test ommx-openjij-adapter
+        run: |
+          task install_openjij_adapter
+          task test_openjij_adapter
+
       - name: Run notebooks
         if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
         run: |
