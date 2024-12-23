@@ -47,6 +47,7 @@ runs:
         pip install "ruff >= 0.7.0, < 0.8.0"
         pip install pytest-github-actions-annotate-failures
         pip install "twine == 5.1.1"  # Please keep in sync with https://github.com/pypa/gh-action-pypi-publish/
+        pip install build
 
     - name: Install uv
       uses: astral-sh/setup-uv@v3
