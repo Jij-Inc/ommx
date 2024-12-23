@@ -3,7 +3,7 @@ from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
-from pandas import DataFrame, NA
+from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
@@ -2386,6 +2386,20 @@ class SampleSet:
         return self.raw.SerializeToString()
 
     @property
+    def summary(self) -> DataFrame:
+        df = DataFrame(
+            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            for id, value in self.objectives
+        ).sort_values("objective")
+        if not df.empty:
+            df = df.set_index("sample_id")
+        return df
+
+    @property
+    def feasible(self) -> dict[int, bool]:
+        return dict(self.raw.feasible)
+
+    @property
     def objectives(self) -> SampledValues:
         return SampledValues(self.raw.objectives)
 
@@ -2473,6 +2487,9 @@ class SampleSet:
 class SampledValues:
     raw: _SampledValues
 
+    def as_series(self) -> Series:
+        return Series(dict(self))
+
     def __iter__(self):
         for entry in self.raw.entries:
             for id in entry.ids:
@@ -2483,3 +2500,6 @@ class SampledValues:
             if sample_id in entry.ids:
                 return entry.value
         raise KeyError(f"Sample ID {sample_id} not found")
+
+    def __repr__(self) -> str:
+        return self.as_series().__repr__()
