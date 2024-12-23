@@ -22,7 +22,11 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
-from .sample_set_pb2 import SampleSet as _SampleSet, Samples
+from .sample_set_pb2 import (
+    SampleSet as _SampleSet,
+    Samples,
+    SampledValues as _SampledValues,
+)
 
 from .. import _ommx_rust
 
@@ -2367,3 +2371,62 @@ class SampleSet:
 
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
+
+    @property
+    def sample_ids(self) -> list[int]:
+        out = []
+        for entry in self.raw.objectives.entries:
+            out += entry.ids
+        return out
+
+    def extract_decision_variables(
+        self, name: str, sample_id: int
+    ) -> dict[tuple[int, ...], float]:
+        """
+        Extract sampled decision variable values for a given name and sample ID.
+        """
+        out = {}
+        for sampled_decision_variable in self.raw.decision_variables:
+            v = sampled_decision_variable.decision_variable
+            if v.name != name:
+                continue
+            key = tuple(v.subscripts)
+            if key in out:
+                raise ValueError(
+                    f"Duplicate decision variable subscript: {v.subscripts}"
+                )
+
+            if v.HasField("substituted_value"):
+                out[key] = v.substituted_value
+                continue
+
+            samples = sampled_decision_variable.samples
+            for entries in samples.entries:
+                if sample_id in entries.ids:
+                    out[key] = entries.value
+                    break
+            else:
+                raise ValueError(f"Sample ID {sample_id} not found for {v}")
+        return out
+
+    def extract_constraints(
+        self, name: str, sample_id: int
+    ) -> dict[tuple[int, ...], float]:
+        """
+        Extract evaluated constraint violations for a given constraint name and sample ID.
+        """
+        out = {}
+        for c in self.raw.constraints:
+            if c.name != name:
+                continue
+            key = tuple(c.subscripts)
+            if key in out:
+                raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
+
+            for entry in c.evaluated_values.entries:
+                if sample_id in entry.ids:
+                    out[key] = entry.value
+                    break
+            else:
+                raise ValueError(f"Sample ID {sample_id} not found for {c}")
+        return out
