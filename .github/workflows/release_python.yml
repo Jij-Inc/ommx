@@ -83,7 +83,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Build wheel
-        run: build --sdist --outdir ./dist ./python/ommx-${{ matrix.name }}-adapter
+        run: python -m build --sdist --outdir ./dist ./python/ommx-${{ matrix.name }}-adapter
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
