@@ -26,6 +26,7 @@ from .sample_set_pb2 import (
     SampleSet as _SampleSet,
     Samples,
     SampledValues as _SampledValues,
+    SampledConstraint as _SampledConstraint,
 )
 
 from .. import _ommx_rust
@@ -2394,7 +2395,39 @@ class SampleSet:
 
     @property
     def decision_variables(self) -> DataFrame:
-        raise NotImplementedError
+        df = DataFrame(
+            DecisionVariable(v.decision_variable)._as_pandas_entry()
+            | {id: value for id, value in SampledValues(v.samples)}
+            for v in self.raw.decision_variables
+        )
+        if not df.empty:
+            return df.set_index("id")
+        return df
+
+    @property
+    def constraints(self) -> DataFrame:
+        df = DataFrame(
+            {
+                "id": c.id,
+                "equality": _equality(c.equality),
+                "used_ids": set(c.used_decision_variable_ids),
+                "name": c.name if c.HasField("name") else NA,
+                "subscripts": c.subscripts,
+                "description": c.description if c.HasField("description") else NA,
+                "removed_reason": c.removed_reason
+                if c.HasField("removed_reason")
+                else NA,
+            }
+            | {
+                f"removed_reason.{key}": value
+                for key, value in c.removed_reason_parameters.items()
+            }
+            | dict(SampledValues(c.evaluated_values))
+            for c in self.raw.constraints
+        )
+        if not df.empty:
+            return df.set_index("id")
+        return df
 
     def extract_decision_variables(
         self, name: str, sample_id: int
