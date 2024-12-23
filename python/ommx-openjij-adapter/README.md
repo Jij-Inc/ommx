@@ -1,0 +1,3 @@
+OMMX Adapter for OpenJij
+=========================
+

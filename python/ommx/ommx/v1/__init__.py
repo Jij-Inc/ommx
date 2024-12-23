@@ -3,7 +3,7 @@ from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
-from pandas import DataFrame, NA
+from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
@@ -22,6 +22,12 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
+from .sample_set_pb2 import (
+    SampleSet as _SampleSet,
+    Samples,
+    SampledValues as _SampledValues,
+    SampledConstraint as _SampledConstraint,
+)
 
 from .. import _ommx_rust
 
@@ -30,6 +36,7 @@ __all__ = [
     "ParametricInstance",
     "Solution",
     "Constraint",
+    "SampleSet",
     # Function and its bases
     "DecisionVariable",
     "Parameter",
@@ -39,10 +46,13 @@ __all__ = [
     "Function",
     # Imported from protobuf
     "State",
+    "Samples",
     "Parameters",
     "Optimality",
     "Relaxation",
     "Bound",
+    # Utility
+    "SampledValues",
 ]
 
 
@@ -83,21 +93,24 @@ class InstanceBase(ABC):
 
     @property
     def decision_variables(self) -> DataFrame:
-        return DataFrame(
-            v._as_pandas_entry() for v in self.get_decision_variables()
-        ).set_index("id")
+        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def constraints(self) -> DataFrame:
-        return DataFrame(
-            c._as_pandas_entry() for c in self.get_constraints()
-        ).set_index("id")
+        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def removed_constraints(self) -> DataFrame:
-        return DataFrame(
-            rc._as_pandas_entry() for rc in self.get_removed_constraints()
-        ).set_index("id")
+        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
 
 class UserAnnotationBase(ABC):
@@ -591,6 +604,26 @@ class Instance(InstanceBase, UserAnnotationBase):
             instance.as_parametric_instance().to_bytes()
         )
 
+    def evaluate_samples(
+        self, samples: Samples | Mapping[int, State] | list[State]
+    ) -> SampleSet:
+        """
+        Evaluate the instance with multiple states.
+        """
+        if isinstance(samples, list):
+            samples = {i: state for i, state in enumerate(samples)}
+        if not isinstance(samples, Samples):
+            # Do not compress the samples
+            samples = Samples(
+                entries=[
+                    Samples.SamplesEntry(state=state, ids=[i])
+                    for i, state in samples.items()
+                ]
+            )
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
+        return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase):
@@ -644,9 +677,10 @@ class ParametricInstance(InstanceBase):
 
     @property
     def parameters(self) -> DataFrame:
-        return DataFrame(p._as_pandas_entry() for p in self.get_parameters()).set_index(
-            "id"
-        )
+        df = DataFrame(p._as_pandas_entry() for p in self.get_parameters())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
         """
@@ -849,15 +883,18 @@ class Solution(UserAnnotationBase):
 
     @property
     def decision_variables(self) -> DataFrame:
-        return DataFrame(
+        df = DataFrame(
             DecisionVariable(v)._as_pandas_entry()
             | {"value": self.raw.state.entries[v.id]}
             for v in self.raw.decision_variables
-        ).set_index("id")
+        )
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def constraints(self) -> DataFrame:
-        return DataFrame(
+        df = DataFrame(
             {
                 "id": c.id,
                 "equality": _equality(c.equality),
@@ -876,7 +913,10 @@ class Solution(UserAnnotationBase):
                 for key, value in c.removed_reason_parameters.items()
             }
             for c in self.raw.evaluated_constraints
-        ).set_index("id")
+        )
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def extract_decision_variables(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -2330,3 +2370,169 @@ class RemovedConstraint:
                 for key, value in self.removed_reason_parameters.items()
             }
         )
+
+
+@dataclass
+class SampleSet:
+    raw: _SampleSet
+
+    @staticmethod
+    def from_bytes(data: bytes) -> SampleSet:
+        new = SampleSet(_SampleSet())
+        new.raw.ParseFromString(data)
+        return new
+
+    def to_bytes(self) -> bytes:
+        return self.raw.SerializeToString()
+
+    @property
+    def summary(self) -> DataFrame:
+        df = DataFrame(
+            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            for id, value in self.objectives.items()
+        )
+        if df.empty:
+            return df
+
+        return df.sort_values(
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+        ).set_index("sample_id")
+
+    @property
+    def summary_with_constraints(self) -> DataFrame:
+        def _constraint_label(c: _SampledConstraint) -> str:
+            name = ""
+            if c.HasField("name"):
+                name += c.name
+            else:
+                return f"{c.id}"
+            if c.subscripts:
+                name += f"{c.subscripts}"
+            if c.parameters:
+                name += f"{c.parameters}"
+            return name
+
+        df = DataFrame(
+            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            | {_constraint_label(c): c.feasible[id] for c in self.raw.constraints}
+            for id, value in self.objectives.items()
+        )
+
+        if df.empty:
+            return df
+        df = df.sort_values(
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+        ).set_index("sample_id")
+        return df
+
+    @property
+    def feasible(self) -> dict[int, bool]:
+        return dict(self.raw.feasible)
+
+    @property
+    def objectives(self) -> dict[int, float]:
+        return dict(SampledValues(self.raw.objectives))
+
+    @property
+    def sample_ids(self) -> list[int]:
+        return self.summary.index.tolist()
+
+    @property
+    def decision_variables(self) -> DataFrame:
+        df = DataFrame(
+            DecisionVariable(v.decision_variable)._as_pandas_entry()
+            | {id: value for id, value in SampledValues(v.samples)}
+            for v in self.raw.decision_variables
+        )
+        if not df.empty:
+            return df.set_index("id")
+        return df
+
+    @property
+    def constraints(self) -> DataFrame:
+        df = DataFrame(
+            {
+                "id": c.id,
+                "equality": _equality(c.equality),
+                "used_ids": set(c.used_decision_variable_ids),
+                "name": c.name if c.HasField("name") else NA,
+                "subscripts": c.subscripts,
+                "description": c.description if c.HasField("description") else NA,
+                "removed_reason": c.removed_reason
+                if c.HasField("removed_reason")
+                else NA,
+            }
+            | {
+                f"removed_reason.{key}": value
+                for key, value in c.removed_reason_parameters.items()
+            }
+            | {f"value.{id}": value for id, value in SampledValues(c.evaluated_values)}
+            | {f"feasible.{id}": value for id, value in c.feasible.items()}
+            for c in self.raw.constraints
+        )
+        if not df.empty:
+            return df.set_index("id")
+        return df
+
+    def extract_decision_variables(
+        self, name: str, sample_id: int
+    ) -> dict[tuple[int, ...], float]:
+        """
+        Extract sampled decision variable values for a given name and sample ID.
+        """
+        out = {}
+        for sampled_decision_variable in self.raw.decision_variables:
+            v = sampled_decision_variable.decision_variable
+            if v.name != name:
+                continue
+            key = tuple(v.subscripts)
+            if key in out:
+                raise ValueError(
+                    f"Duplicate decision variable subscript: {v.subscripts}"
+                )
+
+            if v.HasField("substituted_value"):
+                out[key] = v.substituted_value
+                continue
+            out[key] = SampledValues(sampled_decision_variable.samples)[sample_id]
+        return out
+
+    def extract_constraints(
+        self, name: str, sample_id: int
+    ) -> dict[tuple[int, ...], float]:
+        """
+        Extract evaluated constraint violations for a given constraint name and sample ID.
+        """
+        out = {}
+        for c in self.raw.constraints:
+            if c.name != name:
+                continue
+            key = tuple(c.subscripts)
+            if key in out:
+                raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
+            out[key] = SampledValues(c.evaluated_values)[sample_id]
+        return out
+
+
+@dataclass
+class SampledValues:
+    raw: _SampledValues
+
+    def as_series(self) -> Series:
+        return Series(dict(self))
+
+    def __iter__(self):
+        for entry in self.raw.entries:
+            for id in entry.ids:
+                yield id, entry.value
+
+    def __getitem__(self, sample_id: int) -> float:
+        for entry in self.raw.entries:
+            if sample_id in entry.ids:
+                return entry.value
+        raise KeyError(f"Sample ID {sample_id} not found")
+
+    def __repr__(self) -> str:
+        return self.as_series().__repr__()

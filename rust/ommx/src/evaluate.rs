@@ -1,23 +1,31 @@
 use crate::v1::{
     function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
     EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
-    Relaxation, RemovedConstraint, Solution, State,
+    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
+    SampledValues, Samples, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Evaluate with a [State]
 pub trait Evaluate {
     type Output;
+    type SampledOutput;
+
     /// Evaluate to return the output with used variable ids
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)>;
 
     /// Partially evaluate the function to return the used variable ids
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>>;
+
+    /// Evaluate for each sample
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)>;
 }
 
 impl Evaluate for Function {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let out = match &self.function {
             Some(FunctionEnum::Constant(c)) => (*c, BTreeSet::new()),
@@ -38,10 +46,22 @@ impl Evaluate for Function {
             None => BTreeSet::new(),
         })
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut ids = BTreeSet::new();
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
+            ids.append(&mut used_ids);
+            Ok(value)
+        })?;
+        Ok((out, ids))
+    }
 }
 
 impl Evaluate for Linear {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let mut sum = self.constant;
         let mut used_ids = BTreeSet::new();
@@ -71,10 +91,22 @@ impl Evaluate for Linear {
         }
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut ids = BTreeSet::new();
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
+            ids.append(&mut used_ids);
+            Ok(value)
+        })?;
+        Ok((out, ids))
+    }
 }
 
 impl Evaluate for Quadratic {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let (mut sum, mut used_ids) = if let Some(linear) = &self.linear {
             linear.evaluate(solution)?
@@ -148,10 +180,22 @@ impl Evaluate for Quadratic {
         }
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut ids = BTreeSet::new();
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
+            ids.append(&mut used_ids);
+            Ok(value)
+        })?;
+        Ok((out, ids))
+    }
 }
 
 impl Evaluate for Polynomial {
     type Output = f64;
+    type SampledOutput = SampledValues;
+
     fn evaluate(&self, solution: &State) -> Result<(f64, BTreeSet<u64>)> {
         let mut sum = 0.0;
         let mut used_ids = BTreeSet::new();
@@ -198,10 +242,21 @@ impl Evaluate for Polynomial {
             .collect();
         Ok(used)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut ids = BTreeSet::new();
+        let out = samples.map(|s| {
+            let (value, mut used_ids) = self.evaluate(s)?;
+            ids.append(&mut used_ids);
+            Ok(value)
+        })?;
+        Ok((out, ids))
+    }
 }
 
 impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
+    type SampledOutput = SampledConstraint;
 
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let (evaluated_value, used_ids) = self.function().evaluate(solution)?;
@@ -216,7 +271,9 @@ impl Evaluate for Constraint {
                 subscripts: self.subscripts.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
-                ..Default::default()
+                dual_variable: None,
+                removed_reason: None,
+                removed_reason_parameters: Default::default(),
             },
             used_ids,
         ))
@@ -229,10 +286,43 @@ impl Evaluate for Constraint {
         };
         f.partial_evaluate(state)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let (evaluated_values, used_ids) = self.function().evaluate_samples(samples)?;
+        let feasible: HashMap<u64, bool> = evaluated_values
+            .iter()
+            .map(|(sample_id, value)| {
+                if self.equality() == Equality::EqualToZero {
+                    return Ok((*sample_id, value.abs() < 1e-6));
+                }
+                if self.equality() == Equality::LessThanOrEqualToZero {
+                    return Ok((*sample_id, *value < 1e-6));
+                }
+                bail!("Unsupported equality: {:?}", self.equality());
+            })
+            .collect::<Result<_>>()?;
+        Ok((
+            SampledConstraint {
+                id: self.id,
+                evaluated_values: Some(evaluated_values),
+                used_decision_variable_ids: used_ids.iter().cloned().collect(),
+                name: self.name.clone(),
+                subscripts: self.subscripts.clone(),
+                parameters: self.parameters.clone(),
+                description: self.description.clone(),
+                equality: self.equality,
+                feasible,
+                removed_reason: None,
+                removed_reason_parameters: Default::default(),
+            },
+            used_ids,
+        ))
+    }
 }
 
 impl Evaluate for RemovedConstraint {
     type Output = EvaluatedConstraint;
+    type SampledOutput = SampledConstraint;
 
     fn evaluate(&self, solution: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let (mut out, used_ids) = self
@@ -251,10 +341,22 @@ impl Evaluate for RemovedConstraint {
             .context("RemovedConstraint does not contain constraint")?
             .partial_evaluate(state)
     }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let (mut evaluated, used_ids) = self
+            .constraint
+            .as_ref()
+            .expect("RemovedConstraint does not contain constraint")
+            .evaluate_samples(samples)?;
+        evaluated.removed_reason = Some(self.removed_reason.clone());
+        evaluated.removed_reason_parameters = self.removed_reason_parameters.clone();
+        Ok((evaluated, used_ids))
+    }
 }
 
 impl Evaluate for Instance {
     type Output = Solution;
+    type SampledOutput = SampleSet;
 
     fn evaluate(&self, state: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let mut used_ids = BTreeSet::new();
@@ -264,17 +366,8 @@ impl Evaluate for Instance {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
             // Only check non-removed constraints for feasibility
-            if c.equality == Equality::EqualToZero as i32 {
-                // FIXME: Add a way to specify the tolerance
-                if c.evaluated_value.abs() > 1e-6 {
-                    feasible = false;
-                }
-            } else if c.equality == Equality::LessThanOrEqualToZero as i32 {
-                if c.evaluated_value > 1e-6 {
-                    feasible = false;
-                }
-            } else {
-                bail!("Unsupported equality: {:?}", c.equality);
+            if feasible {
+                feasible = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
@@ -327,6 +420,52 @@ impl Evaluate for Instance {
             used.append(&mut new);
         }
         Ok(used)
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+        let mut feasible: HashMap<u64, bool> = samples.ids().map(|id| (*id, true)).collect();
+        let mut used_ids = BTreeSet::new();
+        let mut constraints = Vec::new();
+        for c in &self.constraints {
+            let (evaluated, mut ids) = c.evaluate_samples(samples)?;
+            used_ids.append(&mut ids);
+            for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
+                if !feasible_ {
+                    feasible.insert(sample_id, false);
+                }
+            }
+            constraints.push(evaluated);
+        }
+        for c in &self.removed_constraints {
+            let (v, mut ids) = c.evaluate_samples(samples)?;
+            used_ids.append(&mut ids);
+            constraints.push(v);
+        }
+
+        let (objectives, mut ids) = self.objective().evaluate_samples(samples)?;
+        used_ids.append(&mut ids);
+        let mut transposed = samples.transpose();
+        let decision_variables: Vec<SampledDecisionVariable> = self
+            .decision_variables
+            .iter()
+            .map(|d| -> Result<_> {
+                Ok(SampledDecisionVariable {
+                    decision_variable: Some(d.clone()),
+                    samples: transposed.remove(&d.id),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok((
+            SampleSet {
+                decision_variables,
+                objectives: Some(objectives),
+                constraints,
+                feasible,
+                sense: self.sense,
+            },
+            used_ids,
+        ))
     }
 }
 
@@ -541,6 +680,20 @@ mod tests {
             prop_assert_eq!(solution.decision_variable_ids(), solution1.decision_variable_ids());
             prop_assert_eq!(solution.constraint_ids(), solution1.constraint_ids());
             prop_assert_eq!(solution.state, solution1.state);
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn evaluate_samples((instance, state) in instance_with_state()) {
+            let (solution, ids1) = instance.evaluate(&state).unwrap();
+
+            let mut samples = Samples::default();
+            samples.add_sample(0, state);
+            let (sample_set, ids2) = instance.evaluate_samples(&samples).unwrap();
+
+            prop_assert_eq!(ids1, ids2);
+            prop_assert_eq!(solution, sample_set.get(0).unwrap());
         }
     }
 }

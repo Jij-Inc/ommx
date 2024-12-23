@@ -1,0 +1,87 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/constraint.proto";
+import "ommx/v1/decision_variables.proto";
+import "ommx/v1/instance.proto";
+import "ommx/v1/solution.proto";
+
+// A map from sample ID to state
+message Samples {
+  // Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+  // Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
+  message SamplesEntry {
+    // State of the sample
+    State state = 1;
+    // IDs of the sample
+    repeated uint64 ids = 2;
+  }
+  repeated SamplesEntry entries = 1;
+}
+
+// A map from sample IDs to sampled values
+message SampledValues {
+  // Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct.
+  message SampledValuesEntry {
+    double value = 1;
+    // IDs of the sample
+    repeated uint64 ids = 2;
+  }
+  repeated SampledValuesEntry entries = 1;
+}
+
+// A pair of decision variable description and its sampled values
+message SampledDecisionVariable {
+  DecisionVariable decision_variable = 1;
+  // Sampled values of decision variable. This becomes `None` if the decision variable is not sampled.
+  optional SampledValues samples = 2;
+}
+
+// Evaluated constraint for samples
+message SampledConstraint {
+  // Constraint ID
+  uint64 id = 1;
+
+  Equality equality = 2;
+
+  // Name of the constraint.
+  optional string name = 3;
+
+  // Integer parameters of the constraint.
+  repeated int64 subscripts = 4;
+
+  // Key-value parameters of the constraint.
+  map<string, string> parameters = 5;
+
+  // Detail human-readable description of the constraint.
+  optional string description = 6;
+
+  // Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+  optional string removed_reason = 7;
+
+  // Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+  map<string, string> removed_reason_parameters = 8;
+
+  // Evaluated values of constraint for each sample
+  SampledValues evaluated_values = 9;
+
+  // IDs of decision variables used to evaluate this constraint
+  repeated uint64 used_decision_variable_ids = 10;
+
+  // Feasibility of each sample
+  map<uint64, bool> feasible = 11;
+}
+
+// Output of the sampling process.
+message SampleSet {
+  SampledValues objectives = 1;
+  repeated SampledDecisionVariable decision_variables = 2;
+  repeated SampledConstraint constraints = 3;
+
+  // Feasibility of each sample
+  map<uint64, bool> feasible = 4;
+
+  // Minimize or Maximize
+  Instance.Sense sense = 5;
+}
