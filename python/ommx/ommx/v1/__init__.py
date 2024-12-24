@@ -624,6 +624,59 @@ class Instance(InstanceBase, UserAnnotationBase):
         samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
+    def relax_constraint(self, constraint_id: int, reason: str, **parameters):
+        """
+        Remove a constraint from the instance. The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+
+        :param constraint_id: The ID of the constraint to remove.
+        :param reason: The reason why the constraint is removed.
+        :param parameters: Additional parameters to describe the reason.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[(sum(x) == 3).set_id(1)],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> instance.get_constraints()
+            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+
+            >>> instance.relax_constraint(1, "manual relaxation")
+            >>> instance.get_constraints()
+            []
+            >>> instance.get_removed_constraints()
+            [RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=manual relaxation)]
+
+            >>> instance.restore_constraint(1)
+            >>> instance.get_constraints()
+            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+            >>> instance.get_removed_constraints()
+            []
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.relax_constraint(constraint_id, reason, parameters)
+        self.raw.ParseFromString(instance.to_bytes())
+
+    def restore_constraint(self, constraint_id: int):
+        """
+        Restore a removed constraint to the instance.
+
+        :param constraint_id: The ID of the constraint to restore.
+
+        Note that this drops the removed reason and associated parameters. See :py:meth:`relax_constraint` for details.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.restore_constraint(constraint_id)
+        self.raw.ParseFromString(instance.to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase):
