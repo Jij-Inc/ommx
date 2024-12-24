@@ -56,4 +56,7 @@ message ParametricInstance {
 
   // Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
   repeated RemovedConstraint removed_constraints = 8;
+
+  // When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+  map<uint64, Function> decision_variable_dependency = 9;
 }

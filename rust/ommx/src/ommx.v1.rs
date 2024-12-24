@@ -381,6 +381,9 @@ pub struct Instance {
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
     pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -486,6 +489,9 @@ pub struct ParametricInstance {
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
     pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.

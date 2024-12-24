@@ -128,6 +128,28 @@ class ParametricInstance(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing.final
+    class DecisionVariableDependencyEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        @property
+        def value(self) -> ommx.v1.function_pb2.Function: ...
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: ommx.v1.function_pb2.Function | None = ...,
+        ) -> None: ...
+        def HasField(
+            self, field_name: typing.Literal["value", b"value"]
+        ) -> builtins.bool: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
@@ -136,6 +158,7 @@ class ParametricInstance(google.protobuf.message.Message):
     SENSE_FIELD_NUMBER: builtins.int
     CONSTRAINT_HINTS_FIELD_NUMBER: builtins.int
     REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
+    DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it."""
     @property
@@ -183,6 +206,14 @@ class ParametricInstance(google.protobuf.message.Message):
     ]:
         """Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`."""
 
+    @property
+    def decision_variable_dependency(
+        self,
+    ) -> google.protobuf.internal.containers.MessageMap[
+        builtins.int, ommx.v1.function_pb2.Function
+    ]:
+        """When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value."""
+
     def __init__(
         self,
         *,
@@ -199,6 +230,10 @@ class ParametricInstance(google.protobuf.message.Message):
         constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
         removed_constraints: collections.abc.Iterable[
             ommx.v1.constraint_pb2.RemovedConstraint
+        ]
+        | None = ...,
+        decision_variable_dependency: collections.abc.Mapping[
+            builtins.int, ommx.v1.function_pb2.Function
         ]
         | None = ...,
     ) -> None: ...
@@ -220,6 +255,8 @@ class ParametricInstance(google.protobuf.message.Message):
             b"constraint_hints",
             "constraints",
             b"constraints",
+            "decision_variable_dependency",
+            b"decision_variable_dependency",
             "decision_variables",
             b"decision_variables",
             "description",
