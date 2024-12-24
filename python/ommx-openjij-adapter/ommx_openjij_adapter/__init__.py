@@ -63,7 +63,7 @@ def sample_qubo_sa(
     :param reinitialize_state: if true reinitialize state for each run
     :param seed: seed for Monte Carlo algorithm
     """
-    q = instance.as_qubo_format()
+    q, _offset = instance.as_qubo_format()
     sampler = oj.SASampler()
     response = sampler.sample_qubo(
         q,  # type: ignore
