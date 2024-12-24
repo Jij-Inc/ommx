@@ -635,6 +635,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         Examples
         =========
 
+        Relax constraint, and restore it.
+
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
@@ -659,6 +661,41 @@ class Instance(InstanceBase, UserAnnotationBase):
             [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
             >>> instance.get_removed_constraints()
             []
+
+        Evaluate relaxed instance, and show :py:attr:`~Solution.feasible_unrelaxed`.
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[
+            ...         (x[0] + x[1] == 2).set_id(0),
+            ...         (x[1] + x[2] == 2).set_id(1),
+            ...     ],
+            ...     sense=Instance.MINIMIZE,
+            ... )
+
+            For x0=0, x1=1, x2=1
+            - x0 + x1 == 2 is not feasible
+            - x1 + x2 == 2 is feasible
+
+            >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
+            >>> solution.feasible
+            False
+            >>> solution.feasible_unrelaxed
+            False
+
+            Relax the constraint: x0 + x1 == 2
+
+            >>> instance.relax_constraint(0, "testing")
+            >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
+            >>> solution.feasible
+            True
+            >>> solution.feasible_unrelaxed
+            False
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
