@@ -997,6 +997,10 @@ class Solution(UserAnnotationBase):
         return self.raw.feasible
 
     @property
+    def feasible_unrelaxed(self) -> bool:
+        return self.raw.feasible_unrelaxed
+
+    @property
     def optimality(self) -> Optimality.ValueType:
         return self.raw.optimality
 
@@ -2388,15 +2392,20 @@ class SampleSet:
     @property
     def summary(self) -> DataFrame:
         df = DataFrame(
-            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            {
+                "sample_id": id,
+                "objective": value,
+                "feasible": self.raw.feasible[id],
+                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+            }
             for id, value in self.objectives.items()
         )
         if df.empty:
             return df
 
         return df.sort_values(
-            by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "feasible_unrelaxed", "objective"],
+            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
 
     @property
@@ -2414,7 +2423,12 @@ class SampleSet:
             return name
 
         df = DataFrame(
-            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            {
+                "sample_id": id,
+                "objective": value,
+                "feasible": self.raw.feasible[id],
+                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+            }
             | {_constraint_label(c): c.feasible[id] for c in self.raw.constraints}
             for id, value in self.objectives.items()
         )
@@ -2422,14 +2436,18 @@ class SampleSet:
         if df.empty:
             return df
         df = df.sort_values(
-            by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "feasible_unrelaxed", "objective"],
+            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
         return df
 
     @property
     def feasible(self) -> dict[int, bool]:
         return dict(self.raw.feasible)
+
+    @property
+    def feasible_unrelaxed(self) -> dict[int, bool]:
+        return dict(self.raw.feasible_unrelaxed)
 
     @property
     def objectives(self) -> dict[int, float]:
