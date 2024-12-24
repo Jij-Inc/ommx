@@ -29,7 +29,7 @@ cffi==1.15.1
     # via mip
 charset-normalizer==3.4.0
     # via requests
-click==8.1.7
+click==8.1.8
     # via
     #   jupyter-book
     #   jupyter-cache
@@ -74,7 +74,7 @@ importlib-metadata==8.5.0
     #   myst-nb
 ipykernel==6.29.5
     # via myst-nb
-ipython==8.30.0
+ipython==8.31.0
     # via
     #   ipykernel
     #   myst-nb
@@ -82,7 +82,7 @@ jedi==0.19.2
     # via ipython
 jij-cimod==1.6.2
     # via openjij
-jinja2==3.1.4
+jinja2==3.1.5
     # via
     #   jupyter-book
     #   myst-parser
@@ -145,7 +145,7 @@ myst-parser==2.0.0
     # via
     #   jupyter-book
     #   myst-nb
-nbclient==0.10.1
+nbclient==0.10.2
     # via
     #   jupyter-cache
     #   myst-nb
@@ -208,9 +208,9 @@ platformdirs==4.3.6
     # via jupyter-core
 prompt-toolkit==3.0.48
     # via ipython
-protobuf==5.29.1
+protobuf==5.29.2
     # via ommx
-psutil==6.1.0
+psutil==6.1.1
     # via ipykernel
 ptyprocess==0.7.0
     # via pexpect
@@ -226,7 +226,7 @@ pybtex-docutils==1.0.3
     # via sphinxcontrib-bibtex
 pycparser==2.22
     # via cffi
-pydata-sphinx-theme==0.16.0
+pydata-sphinx-theme==0.16.1
     # via sphinx-book-theme
 pygments==2.18.0
     # via
@@ -368,7 +368,7 @@ tzdata==2024.2
     # via pandas
 uc-micro-py==1.0.3
     # via linkify-it-py
-urllib3==2.2.3
+urllib3==2.3.0
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit

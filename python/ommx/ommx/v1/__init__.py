@@ -624,6 +624,96 @@ class Instance(InstanceBase, UserAnnotationBase):
         samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
+    def relax_constraint(self, constraint_id: int, reason: str, **parameters):
+        """
+        Remove a constraint from the instance. The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+
+        :param constraint_id: The ID of the constraint to remove.
+        :param reason: The reason why the constraint is removed.
+        :param parameters: Additional parameters to describe the reason.
+
+        Examples
+        =========
+
+        Relax constraint, and restore it.
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[(sum(x) == 3).set_id(1)],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> instance.get_constraints()
+            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+
+            >>> instance.relax_constraint(1, "manual relaxation")
+            >>> instance.get_constraints()
+            []
+            >>> instance.get_removed_constraints()
+            [RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=manual relaxation)]
+
+            >>> instance.restore_constraint(1)
+            >>> instance.get_constraints()
+            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+            >>> instance.get_removed_constraints()
+            []
+
+        Evaluate relaxed instance, and show :py:attr:`~Solution.feasible_unrelaxed`.
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[
+            ...         (x[0] + x[1] == 2).set_id(0),
+            ...         (x[1] + x[2] == 2).set_id(1),
+            ...     ],
+            ...     sense=Instance.MINIMIZE,
+            ... )
+
+            For x0=0, x1=1, x2=1
+            - x0 + x1 == 2 is not feasible
+            - x1 + x2 == 2 is feasible
+
+            >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
+            >>> solution.feasible
+            False
+            >>> solution.feasible_unrelaxed
+            False
+
+            Relax the constraint: x0 + x1 == 2
+
+            >>> instance.relax_constraint(0, "testing")
+            >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
+            >>> solution.feasible
+            True
+            >>> solution.feasible_unrelaxed
+            False
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.relax_constraint(constraint_id, reason, parameters)
+        self.raw.ParseFromString(instance.to_bytes())
+
+    def restore_constraint(self, constraint_id: int):
+        """
+        Restore a removed constraint to the instance.
+
+        :param constraint_id: The ID of the constraint to restore.
+
+        Note that this drops the removed reason and associated parameters. See :py:meth:`relax_constraint` for details.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.restore_constraint(constraint_id)
+        self.raw.ParseFromString(instance.to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase):
@@ -995,6 +1085,10 @@ class Solution(UserAnnotationBase):
     @property
     def feasible(self) -> bool:
         return self.raw.feasible
+
+    @property
+    def feasible_unrelaxed(self) -> bool:
+        return self.raw.feasible_unrelaxed
 
     @property
     def optimality(self) -> Optimality.ValueType:
@@ -2388,15 +2482,20 @@ class SampleSet:
     @property
     def summary(self) -> DataFrame:
         df = DataFrame(
-            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            {
+                "sample_id": id,
+                "objective": value,
+                "feasible": self.raw.feasible[id],
+                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+            }
             for id, value in self.objectives.items()
         )
         if df.empty:
             return df
 
         return df.sort_values(
-            by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "feasible_unrelaxed", "objective"],
+            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
 
     @property
@@ -2414,7 +2513,12 @@ class SampleSet:
             return name
 
         df = DataFrame(
-            {"sample_id": id, "objective": value, "feasible": self.raw.feasible[id]}
+            {
+                "sample_id": id,
+                "objective": value,
+                "feasible": self.raw.feasible[id],
+                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+            }
             | {_constraint_label(c): c.feasible[id] for c in self.raw.constraints}
             for id, value in self.objectives.items()
         )
@@ -2422,14 +2526,18 @@ class SampleSet:
         if df.empty:
             return df
         df = df.sort_values(
-            by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "feasible_unrelaxed", "objective"],
+            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
         return df
 
     @property
     def feasible(self) -> dict[int, bool]:
         return dict(self.raw.feasible)
+
+    @property
+    def feasible_unrelaxed(self) -> dict[int, bool]:
+        return dict(self.raw.feasible_unrelaxed)
 
     @property
     def objectives(self) -> dict[int, float]:

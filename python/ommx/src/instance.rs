@@ -4,6 +4,7 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
+use std::collections::HashMap;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -51,6 +52,20 @@ impl Instance {
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(self.0.evaluate_samples(&samples.0)?.0))
+    }
+
+    pub fn relax_constraint(
+        &mut self,
+        constraint_id: u64,
+        removed_reason: String,
+        removed_reason_parameters: HashMap<String, String>,
+    ) -> Result<()> {
+        self.0
+            .relax_constraint(constraint_id, removed_reason, removed_reason_parameters)
+    }
+
+    pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
+        self.0.restore_constraint(constraint_id)
     }
 }
 

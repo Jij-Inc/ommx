@@ -122,13 +122,16 @@ class Solution(google.protobuf.message.Message):
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
+    FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     OPTIMALITY_FIELD_NUMBER: builtins.int
     RELAXATION_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
-    """Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+    """Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
     If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
     """
+    feasible_unrelaxed: builtins.bool
+    """Feasibility of the solution for both remaining and removed constraints."""
     optimality: global___Optimality.ValueType
     """The optimality of the solution."""
     relaxation: global___Relaxation.ValueType
@@ -161,6 +164,7 @@ class Solution(google.protobuf.message.Message):
         ]
         | None = ...,
         feasible: builtins.bool = ...,
+        feasible_unrelaxed: builtins.bool = ...,
         optimality: global___Optimality.ValueType = ...,
         relaxation: global___Relaxation.ValueType = ...,
     ) -> None: ...
@@ -176,6 +180,8 @@ class Solution(google.protobuf.message.Message):
             b"evaluated_constraints",
             "feasible",
             b"feasible",
+            "feasible_unrelaxed",
+            b"feasible_unrelaxed",
             "objective",
             b"objective",
             "optimality",
