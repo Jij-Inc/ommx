@@ -81,6 +81,14 @@ impl Samples {
         })
     }
 
+    pub fn states_mut(&mut self) -> impl Iterator<Item = &mut State> {
+        self.entries.iter_mut().map(|v| {
+            v.state
+                .as_mut()
+                .expect("ommx.v1.Samples.Entry must has state. Broken Data.")
+        })
+    }
+
     /// Transpose `sample_id -> decision_variable_id -> value` to `decision_variable_id -> sample_id -> value`
     pub fn transpose(&self) -> HashMap<u64, SampledValues> {
         let mut map: HashMap<u64, HashMap<OrderedFloat<f64>, Vec<u64>>> = HashMap::new();
@@ -112,15 +120,6 @@ impl Samples {
                 })
                 .collect::<Result<_>>()?,
         })
-    }
-
-    pub fn map_state(&mut self, mut f: impl FnMut(&mut State) -> Result<()>) -> Result<()> {
-        for v in &mut self.entries {
-            f(v.state
-                .as_mut()
-                .context("ommx.v1.Samples.Entry must has state. Broken Data.")?)?;
-        }
-        Ok(())
     }
 }
 

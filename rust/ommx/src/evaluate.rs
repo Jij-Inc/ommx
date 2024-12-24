@@ -466,11 +466,10 @@ impl Evaluate for Instance {
 
         // Reconstruct decision variable values
         let mut samples = samples.clone();
-        samples.map_state(|s| {
-            let mut new = eval_dependencies(&self.decision_variable_dependency, s)?;
+        for state in samples.states_mut() {
+            let mut new = eval_dependencies(&self.decision_variable_dependency, state)?;
             used_ids.append(&mut new);
-            Ok(())
-        })?;
+        }
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
