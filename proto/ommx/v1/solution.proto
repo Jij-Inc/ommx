@@ -36,9 +36,12 @@ message Solution {
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
 
-  // Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+  // Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
   // If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
   bool feasible = 5;
+
+  // Feasibility of the solution for both remaining and removed constraints.
+  bool feasible_unrelaxed = 8;
 
   // The optimality of the solution.
   Optimality optimality = 6;

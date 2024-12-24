@@ -510,10 +510,13 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+    /// Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
     /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
     #[prost(bool, tag = "5")]
     pub feasible: bool,
+    /// Feasibility of the solution for both remaining and removed constraints.
+    #[prost(bool, tag = "8")]
+    pub feasible_unrelaxed: bool,
     /// The optimality of the solution.
     #[prost(enumeration = "Optimality", tag = "6")]
     pub optimality: i32,
