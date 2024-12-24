@@ -263,6 +263,9 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
+        if self.sense() == Sense::Maximize {
+            bail!("PUBO format is only for minimization problems.");
+        }
         if !self
             .objective()
             .used_decision_variable_ids()
@@ -596,6 +599,9 @@ mod tests {
 
         #[test]
         fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
             let pubo = instance.as_pubo_format().unwrap();
             for (_, c) in pubo {
                 prop_assert!(c.abs() > f64::EPSILON);
@@ -604,6 +610,9 @@ mod tests {
 
         #[test]
         fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);

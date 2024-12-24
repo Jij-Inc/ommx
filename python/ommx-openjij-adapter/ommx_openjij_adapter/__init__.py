@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ommx.v1 import Instance, State, Samples
 import openjij as oj
 
@@ -62,6 +64,10 @@ def sample_qubo_sa(
     :param sparse: use sparse matrix or not.
     :param reinitialize_state: if true reinitialize state for each run
     :param seed: seed for Monte Carlo algorithm
+
+    Note that this is a simple wrapper function for `openjij.SASampler.sample_qubo` method.
+    For more advanced usage, you can use `ommx.v1.Instance.as_qubo_format` to get QUBO matrix,
+    and use OpenJij manually, and convert the `openjij.Response` via `response_to_samples` function.
     """
     q, _offset = instance.as_qubo_format()
     sampler = oj.SASampler()
