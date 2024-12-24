@@ -413,6 +413,45 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return Instance.from_bytes(out)
 
+    def as_minimization_problem(self):
+        """
+        Convert the instance to a minimization problem.
+
+        If the instance is already a minimization problem, this does nothing.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i) for i in range(3)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(x),
+            ...     constraints=[sum(x) == 1],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> instance.sense == Instance.MAXIMIZE
+            True
+            >>> instance.objective
+            Function(x0 + x1 + x2)
+
+            Convert to a minimization problem
+
+            >>> instance.as_minimization_problem()
+            >>> instance.sense == Instance.MINIMIZE
+            True
+            >>> instance.objective
+            Function(-x0 - x1 - x2)
+
+        """
+        if self.raw.sense == Instance.MINIMIZE:
+            return
+        self.raw.sense = Instance.MINIMIZE
+        obj = -self.objective
+        self.raw.objective.CopyFrom(obj.raw)
+
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
         Convert unconstrained quadratic instance to PyQUBO-style format.

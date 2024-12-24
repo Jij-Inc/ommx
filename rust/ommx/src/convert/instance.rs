@@ -283,6 +283,17 @@ impl Instance {
         Ok(out)
     }
 
+    /// Convert the instance into a minimization problem.
+    ///
+    /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
+    pub fn as_minimization_problem(&mut self) {
+        if self.sense() == Sense::Minimize {
+            return;
+        }
+        self.sense = Sense::Minimize as i32;
+        self.objective = Some(-self.objective().into_owned());
+    }
+
     /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
     ///
     /// Before calling this method, you should check that this instance is suitable for QUBO:
@@ -294,6 +305,9 @@ impl Instance {
     /// - The degree of the objective is at most 2.
     ///
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+        if self.sense() == Sense::Maximize {
+            bail!("QUBO format is only for minimization problems.");
+        }
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
