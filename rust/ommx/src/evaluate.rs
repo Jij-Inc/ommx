@@ -425,7 +425,7 @@ impl Evaluate for Instance {
             let mut new = constraints.partial_evaluate(state)?;
             used.append(&mut new);
         }
-        for (_id, d) in &mut self.decision_variable_dependency {
+        for d in self.decision_variable_dependency.values_mut() {
             let mut new = d.partial_evaluate(state)?;
             used.append(&mut new);
         }
@@ -467,7 +467,7 @@ impl Evaluate for Instance {
         // Reconstruct decision variable values
         let mut samples = samples.clone();
         for state in samples.states_mut() {
-            let mut new = eval_dependencies(&self.decision_variable_dependency, state)?;
+            let mut new = eval_dependencies(&self.decision_variable_dependency, state?)?;
             used_ids.append(&mut new);
         }
         let mut transposed = samples.transpose();
@@ -501,13 +501,13 @@ fn eval_dependencies(
     dependencies: &HashMap<u64, Function>,
     state: &mut State,
 ) -> Result<BTreeSet<u64>> {
-    let mut bucket: Vec<_> = dependencies.into_iter().collect();
+    let mut bucket: Vec<_> = dependencies.iter().collect();
     let mut last_size = bucket.len();
     let mut not_evaluated = Vec::new();
     let mut used_ids = BTreeSet::new();
     loop {
         while let Some((id, f)) = bucket.pop() {
-            match f.evaluate(&state) {
+            match f.evaluate(state) {
                 Ok((value, mut used)) => {
                     state.entries.insert(*id, value);
                     used_ids.append(&mut used);

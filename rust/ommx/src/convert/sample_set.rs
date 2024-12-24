@@ -81,11 +81,11 @@ impl Samples {
         })
     }
 
-    pub fn states_mut(&mut self) -> impl Iterator<Item = &mut State> {
+    pub fn states_mut(&mut self) -> impl Iterator<Item = Result<&mut State>> {
         self.entries.iter_mut().map(|v| {
             v.state
                 .as_mut()
-                .expect("ommx.v1.Samples.Entry must has state. Broken Data.")
+                .context("ommx.v1.Samples.Entry must has state. Broken Data.")
         })
     }
 
