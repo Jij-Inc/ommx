@@ -26,18 +26,6 @@ def response_to_samples(response: oj.Response) -> Samples:
     return Samples(entries=entries)
 
 
-def as_qubo_format(instance: Instance) -> dict[tuple[int, int], float]:
-    """
-    Convert `ommx.v1.Instance` to QUBO format (dict of (i, j) -> float) with negation if the instance is a maximization problem.
-
-    Same to `Instance.as_qubo_format`, this function does not convert non-QUBO problem into QUBO. It just converts the QUBO problem to the QUBO format.
-    """
-    q, c = instance.as_qubo_format()
-    if instance.sense == Instance.MAXIMIZE:
-        q = {key: -val for key, val in q.items()}
-    return q
-
-
 def sample_qubo_sa(
     instance: Instance, *, num_reads: int = 1, seed: Optional[int] = None
 ) -> Samples:
@@ -49,10 +37,11 @@ def sample_qubo_sa(
     - Every decision variables are binary
     - No constraint
     - Objective function is quadratic
+    - Minimization problem
 
     You can convert a problem to QUBO via [`ommx.v1.Instance.penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.penalty_method) or other corresponding method.
     """
-    q = as_qubo_format(instance)
+    q = instance.as_qubo_format()
     sampler = oj.SASampler()
     response = sampler.sample_qubo(q, num_reads=num_reads, seed=seed)  # type: ignore
     return response_to_samples(response)
