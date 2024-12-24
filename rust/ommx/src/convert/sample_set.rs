@@ -113,6 +113,15 @@ impl Samples {
                 .collect::<Result<_>>()?,
         })
     }
+
+    pub fn map_state(&mut self, mut f: impl FnMut(&mut State) -> Result<()>) -> Result<()> {
+        for v in &mut self.entries {
+            f(v.state
+                .as_mut()
+                .context("ommx.v1.Samples.Entry must has state. Broken Data.")?)?;
+        }
+        Ok(())
+    }
 }
 
 impl SampleSet {
