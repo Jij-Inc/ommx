@@ -1,29 +1,18 @@
 from ommx.v1 import Instance, State, Samples
 import openjij as oj
+from typing import Optional
 
 
-def sample_qubo_sa(instance: Instance, *, num_reads: int = 1) -> Samples:
+def response_to_samples(response: oj.Response) -> Samples:
     """
-    Sampling QUBO with Simulated Annealing (SA) by [`openjij.SASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler)
-
-    Note that input `instance` must be a QUBO (Quadratic Unconstrained Binary Optimization) problem, i.e.
-
-    - Every decision variables are binary
-    - No constraint
-    - Objective function is quadratic
-
-    You can convert a problem to QUBO via [`ommx.v1.Instance.penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.penalty_method) or other corresponding method.
+    Convert OpenJij's `Response` to `ommx.v1.Samples`
     """
-    q, c = instance.as_qubo_format()
-    if instance.sense == Instance.MAXIMIZE:
-        q = {key: -val for key, val in q.items()}
-    sampler = oj.SASampler()
-    response = sampler.sample_qubo(q, num_reads=num_reads)  # type: ignore
-
     # Filling into ommx.v1.Samples
     # Since OpenJij does not issue the sample ID, we need to generate it in the responsibility of this OMMX Adapter
     sample_id = 0
     entries = []
+
+    num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
         state = State(entries=zip(response.variables, sample))  # type: ignore
@@ -35,3 +24,35 @@ def sample_qubo_sa(instance: Instance, *, num_reads: int = 1) -> Samples:
             sample_id += 1
         entries.append(Samples.SamplesEntry(state=state, ids=ids))
     return Samples(entries=entries)
+
+
+def as_qubo_format(instance: Instance) -> dict[tuple[int, int], float]:
+    """
+    Convert `ommx.v1.Instance` to QUBO format (dict of (i, j) -> float) with negation if the instance is a maximization problem.
+
+    Same to `Instance.as_qubo_format`, this function does not convert non-QUBO problem into QUBO. It just converts the QUBO problem to the QUBO format.
+    """
+    q, c = instance.as_qubo_format()
+    if instance.sense == Instance.MAXIMIZE:
+        q = {key: -val for key, val in q.items()}
+    return q
+
+
+def sample_qubo_sa(
+    instance: Instance, *, num_reads: int = 1, seed: Optional[int] = None
+) -> Samples:
+    """
+    Sampling QUBO with Simulated Annealing (SA) by [`openjij.SASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler)
+
+    Note that input `instance` must be a QUBO (Quadratic Unconstrained Binary Optimization) problem, i.e.
+
+    - Every decision variables are binary
+    - No constraint
+    - Objective function is quadratic
+
+    You can convert a problem to QUBO via [`ommx.v1.Instance.penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.penalty_method) or other corresponding method.
+    """
+    q = as_qubo_format(instance)
+    sampler = oj.SASampler()
+    response = sampler.sample_qubo(q, num_reads=num_reads, seed=seed)  # type: ignore
+    return response_to_samples(response)
