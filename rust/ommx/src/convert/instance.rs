@@ -169,6 +169,7 @@ impl Instance {
             parameters,
             constraint_hints: self.constraint_hints,
             removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
         })
     }
 
@@ -204,6 +205,7 @@ impl Instance {
             parameters: vec![parameter],
             constraint_hints: self.constraint_hints,
             removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
         })
     }
 
