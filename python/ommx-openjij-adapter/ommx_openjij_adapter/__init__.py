@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from ommx.v1 import Instance, State, Samples
 import openjij as oj
 
