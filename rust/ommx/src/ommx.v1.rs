@@ -736,9 +736,12 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
-    /// Feasibility of each sample
+    /// Feasibility for remaining constraints of each sample. Removed constraints are not included.
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
+    /// Feasibility for both remaining and removed constraints of each sample.
+    #[prost(map = "uint64, bool", tag = "6")]
+    pub feasible_unrelaxed: ::std::collections::HashMap<u64, bool>,
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,

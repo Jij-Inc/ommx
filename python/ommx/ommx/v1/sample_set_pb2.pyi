@@ -392,10 +392,29 @@ class SampleSet(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class FeasibleUnrelaxedEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.bool
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.bool = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     OBJECTIVES_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
+    FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """Minimize or Maximize"""
@@ -417,7 +436,13 @@ class SampleSet(google.protobuf.message.Message):
     def feasible(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """Feasibility of each sample"""
+        """Feasibility for remaining constraints of each sample. Removed constraints are not included."""
+
+    @property
+    def feasible_unrelaxed(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
+        """Feasibility for both remaining and removed constraints of each sample."""
 
     def __init__(
         self,
@@ -427,6 +452,8 @@ class SampleSet(google.protobuf.message.Message):
         | None = ...,
         constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
         feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
+        feasible_unrelaxed: collections.abc.Mapping[builtins.int, builtins.bool]
+        | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
     ) -> None: ...
     def HasField(
@@ -441,6 +468,8 @@ class SampleSet(google.protobuf.message.Message):
             b"decision_variables",
             "feasible",
             b"feasible",
+            "feasible_unrelaxed",
+            b"feasible_unrelaxed",
             "objectives",
             b"objectives",
             "sense",
