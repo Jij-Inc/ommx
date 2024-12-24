@@ -158,6 +158,12 @@ impl SampleSet {
                     sample_id
                 )
             })?,
+            feasible_unrelaxed: *self.feasible_unrelaxed.get(&sample_id).with_context(|| {
+                format!(
+                    "SampleSet lacks unrelaxed feasibility for sample with ID={}",
+                    sample_id
+                )
+            })?,
             evaluated_constraints,
             optimality: Default::default(),
             relaxation: Default::default(),
