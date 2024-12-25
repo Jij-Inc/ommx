@@ -18,6 +18,7 @@ parts:
       - file: ommx_message/function
       - file: ommx_message/instance
       - file: ommx_message/solution
+      - file: ommx_message/parametric_instance
   - caption: "OMMX Artifact"
     chapters:
       - file: ommx_artifact/architecture
