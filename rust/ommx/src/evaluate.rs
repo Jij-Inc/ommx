@@ -536,6 +536,18 @@ mod tests {
     use proptest::prelude::*;
 
     #[test]
+    fn test_eval_dependencies() {
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        eval_dependencies(&dependencies, &mut state).unwrap();
+        assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
+        assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+    }
+
+    #[test]
     fn linear_partial_evaluate() {
         let mut linear = Linear::new([(1, 1.0), (2, 2.0), (3, 3.0), (4, 4.0)].into_iter(), 5.0);
         let state = State {
