@@ -13,7 +13,7 @@ impl Substitute for Function {
     type Output = Function;
     fn substitute(&self, replacements: &HashMap<u64, Function>) -> Result<Self::Output> {
         if replacements.is_empty() {
-            return Ok(self.clone().into());
+            return Ok(self.clone());
         }
         let mut out = Function::zero();
         for (ids, coefficient) in self {
