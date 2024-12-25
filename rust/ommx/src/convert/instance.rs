@@ -347,7 +347,7 @@ impl Instance {
     pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<()> {
         let v = self
             .decision_variables
-            .iter_mut()
+            .iter()
             .find(|dv| dv.id == decision_variable_id)
             .with_context(|| format!("Decision variable ID {} not found", decision_variable_id))?;
         if v.kind() != Kind::Integer {
@@ -360,10 +360,13 @@ impl Instance {
             .bound
             .as_ref()
             .with_context(|| format!("Bound is not defined: ID={}", decision_variable_id))?;
-        let u_l = bound.upper - bound.lower;
+        // Bound of integer may be non-integer value
+        let upper = bound.upper.floor();
+        let lower = bound.lower.ceil();
+        let u_l = upper - lower;
         ensure!(
             u_l > 0.0,
-            "Upper bound must be greater than lower bound: ID={}, lower={}, upper={}",
+            "No feasible integer found in the bound: ID={}, lower={}, upper={}",
             decision_variable_id,
             bound.lower,
             bound.upper
@@ -376,13 +379,13 @@ impl Instance {
             .map(|id| id + 1)
             .expect("At least one decision variable here");
 
-        let mut f = Function::zero();
+        let mut f = Function::from(lower);
         for i in 0..n {
             let id = id_base + i as u64;
             f = f + Linear::single_term(
                 id,
                 if i == n - 1 {
-                    2.0f64.powi(i as i32) - u_l
+                    u_l - 2.0f64.powi(i as i32) + 1.0
                 } else {
                     2.0f64.powi(i as i32)
                 },
@@ -401,6 +404,9 @@ impl Instance {
         }
         self.decision_variable_dependency
             .insert(decision_variable_id, f);
+
+        // TODO: substitute objective and constraints
+
         Ok(())
     }
 }
@@ -588,7 +594,10 @@ impl AbsDiffEq for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::Parameters;
+    use crate::{
+        v1::{Parameters, State},
+        Evaluate,
+    };
 
     proptest! {
         #[test]
@@ -682,6 +691,50 @@ mod tests {
                 prop_assert!(ids.0 <= ids.1);
                 prop_assert!(c.abs() > f64::EPSILON);
             }
+        }
+
+        #[test]
+        fn log_encoding(lower in -10.0_f64..10.0, upper in -10.0_f64..10.0) {
+            if lower.ceil() >= upper.floor() {
+                return Ok(());
+            }
+            let mut instance = Instance::default();
+            instance.decision_variables.push(DecisionVariable {
+                id: 0,
+                name: Some("x".to_string()),
+                kind: Kind::Integer as i32,
+                bound: Some(crate::v1::Bound { lower, upper }),
+                ..Default::default()
+            });
+            instance.log_encoding(0).unwrap();
+            instance.validate().unwrap();
+
+            // Coefficient of the log encoding decision variables should be positive except for the constant term
+            for (ids, coefficient) in instance.decision_variable_dependency.get(&0).unwrap().into_iter() {
+                if !ids.is_empty() {
+                    prop_assert!(coefficient > 0.0);
+                }
+            }
+
+            let aux_bits = instance
+                .decision_variables
+                .iter()
+                .filter_map(|dv| {
+                    if dv.name == Some("ommx.log_encoding".to_string()) {
+                        Some(dv.id)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), lower.ceil());
+
+            let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), upper.floor());
         }
     }
 }
