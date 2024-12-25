@@ -390,6 +390,7 @@ impl Evaluate for Instance {
                 state.entries.insert(v.id, value);
             }
         }
+        eval_dependencies(&self.decision_variable_dependency, &mut state)?;
         Ok((
             Solution {
                 decision_variables: self.decision_variables.clone(),
@@ -424,12 +425,18 @@ impl Evaluate for Instance {
             let mut new = constraints.partial_evaluate(state)?;
             used.append(&mut new);
         }
+        for d in self.decision_variable_dependency.values_mut() {
+            let mut new = d.partial_evaluate(state)?;
+            used.append(&mut new);
+        }
         Ok(used)
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
         let mut feasible: HashMap<u64, bool> = samples.ids().map(|id| (*id, true)).collect();
         let mut used_ids = BTreeSet::new();
+
+        // Constraints
         let mut constraints = Vec::new();
         for c in &self.constraints {
             let (evaluated, mut ids) = c.evaluate_samples(samples)?;
@@ -453,8 +460,16 @@ impl Evaluate for Instance {
             constraints.push(v);
         }
 
+        // Objective
         let (objectives, mut ids) = self.objective().evaluate_samples(samples)?;
         used_ids.append(&mut ids);
+
+        // Reconstruct decision variable values
+        let mut samples = samples.clone();
+        for state in samples.states_mut() {
+            let mut new = eval_dependencies(&self.decision_variable_dependency, state?)?;
+            used_ids.append(&mut new);
+        }
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
@@ -481,12 +496,72 @@ impl Evaluate for Instance {
     }
 }
 
+// FIXME: This would be better by using a topological sort
+fn eval_dependencies(
+    dependencies: &HashMap<u64, Function>,
+    state: &mut State,
+) -> Result<BTreeSet<u64>> {
+    let mut bucket: Vec<_> = dependencies.iter().collect();
+    let mut last_size = bucket.len();
+    let mut not_evaluated = Vec::new();
+    let mut used_ids = BTreeSet::new();
+    loop {
+        while let Some((id, f)) = bucket.pop() {
+            match f.evaluate(state) {
+                Ok((value, mut used)) => {
+                    state.entries.insert(*id, value);
+                    used_ids.append(&mut used);
+                }
+                Err(_) => {
+                    not_evaluated.push((id, f));
+                }
+            }
+        }
+        if not_evaluated.is_empty() {
+            return Ok(used_ids);
+        }
+        if last_size == not_evaluated.len() {
+            bail!("Cannot evaluate any dependent variables.");
+        }
+        last_size = not_evaluated.len();
+        bucket.append(&mut not_evaluated);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::*;
     use maplit::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn test_eval_dependencies() {
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        eval_dependencies(&dependencies, &mut state).unwrap();
+        assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
+        assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+
+        // circular dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+
+        // non-existing dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+    }
 
     #[test]
     fn linear_partial_evaluate() {
