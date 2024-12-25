@@ -545,6 +545,22 @@ mod tests {
         eval_dependencies(&dependencies, &mut state).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+
+        // circular dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+
+        // non-existing dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
     }
 
     #[test]
