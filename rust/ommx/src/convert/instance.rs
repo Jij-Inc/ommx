@@ -1,9 +1,10 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+    DecisionVariable, Equality, Function, Instance, Linear, Parameter, ParametricInstance,
+    RemovedConstraint,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
 use maplit::hashmap;
 use num::Zero;
@@ -340,6 +341,67 @@ impl Instance {
             }
         }
         Ok((quad, constant))
+    }
+
+    /// Encode an integer decision variable into binary decision variables.
+    pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<()> {
+        let v = self
+            .decision_variables
+            .iter_mut()
+            .find(|dv| dv.id == decision_variable_id)
+            .with_context(|| format!("Decision variable ID {} not found", decision_variable_id))?;
+        if v.kind() != Kind::Integer {
+            bail!(
+                "The decision variable is not an integer type: ID={}",
+                decision_variable_id
+            );
+        }
+        let bound = v
+            .bound
+            .as_ref()
+            .with_context(|| format!("Bound is not defined: ID={}", decision_variable_id))?;
+        let u_l = bound.upper - bound.lower;
+        ensure!(
+            u_l > 0.0,
+            "Upper bound must be greater than lower bound: ID={}, lower={}, upper={}",
+            decision_variable_id,
+            bound.lower,
+            bound.upper
+        );
+
+        let n = (u_l + 1.0).log2().ceil() as usize;
+        let id_base = self
+            .defined_ids()
+            .last()
+            .map(|id| id + 1)
+            .expect("At least one decision variable here");
+
+        let mut f = Function::zero();
+        for i in 0..n {
+            let id = id_base + i as u64;
+            f = f + Linear::single_term(
+                id,
+                if i == n - 1 {
+                    2.0f64.powi(i as i32) - u_l
+                } else {
+                    2.0f64.powi(i as i32)
+                },
+            );
+            self.decision_variables.push(DecisionVariable {
+                id,
+                name: Some("ommx.log_encoding".to_string()),
+                subscripts: vec![decision_variable_id as i64, i as i64],
+                kind: Kind::Binary as i32,
+                bound: Some(crate::v1::Bound {
+                    lower: 0.0,
+                    upper: 1.0,
+                }),
+                ..Default::default()
+            });
+        }
+        self.decision_variable_dependency
+            .insert(decision_variable_id, f);
+        Ok(())
     }
 }
 
