@@ -1,9 +1,10 @@
 use crate::v1::{
     decision_variable::Kind,
     instance::{Description, Sense},
-    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+    DecisionVariable, Equality, Function, Instance, Linear, Parameter, ParametricInstance,
+    RemovedConstraint,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
 use maplit::hashmap;
 use num::Zero;
@@ -341,6 +342,73 @@ impl Instance {
         }
         Ok((quad, constant))
     }
+
+    /// Encode an integer decision variable into binary decision variables.
+    pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<()> {
+        let v = self
+            .decision_variables
+            .iter()
+            .find(|dv| dv.id == decision_variable_id)
+            .with_context(|| format!("Decision variable ID {} not found", decision_variable_id))?;
+        if v.kind() != Kind::Integer {
+            bail!(
+                "The decision variable is not an integer type: ID={}",
+                decision_variable_id
+            );
+        }
+        let bound = v
+            .bound
+            .as_ref()
+            .with_context(|| format!("Bound is not defined: ID={}", decision_variable_id))?;
+        // Bound of integer may be non-integer value
+        let upper = bound.upper.floor();
+        let lower = bound.lower.ceil();
+        let u_l = upper - lower;
+        ensure!(
+            u_l > 0.0,
+            "No feasible integer found in the bound: ID={}, lower={}, upper={}",
+            decision_variable_id,
+            bound.lower,
+            bound.upper
+        );
+
+        let n = (u_l + 1.0).log2().ceil() as usize;
+        let id_base = self
+            .defined_ids()
+            .last()
+            .map(|id| id + 1)
+            .expect("At least one decision variable here");
+
+        let mut f = Function::from(lower);
+        for i in 0..n {
+            let id = id_base + i as u64;
+            f = f + Linear::single_term(
+                id,
+                if i == n - 1 {
+                    u_l - 2.0f64.powi(i as i32) + 1.0
+                } else {
+                    2.0f64.powi(i as i32)
+                },
+            );
+            self.decision_variables.push(DecisionVariable {
+                id,
+                name: Some("ommx.log_encoding".to_string()),
+                subscripts: vec![decision_variable_id as i64, i as i64],
+                kind: Kind::Binary as i32,
+                bound: Some(crate::v1::Bound {
+                    lower: 0.0,
+                    upper: 1.0,
+                }),
+                ..Default::default()
+            });
+        }
+        self.decision_variable_dependency
+            .insert(decision_variable_id, f);
+
+        // TODO: substitute objective and constraints
+
+        Ok(())
+    }
 }
 
 fn arbitrary_instance(
@@ -526,7 +594,10 @@ impl AbsDiffEq for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::Parameters;
+    use crate::{
+        v1::{Parameters, State},
+        Evaluate,
+    };
 
     proptest! {
         #[test]
@@ -620,6 +691,50 @@ mod tests {
                 prop_assert!(ids.0 <= ids.1);
                 prop_assert!(c.abs() > f64::EPSILON);
             }
+        }
+
+        #[test]
+        fn log_encoding(lower in -10.0_f64..10.0, upper in -10.0_f64..10.0) {
+            if lower.ceil() >= upper.floor() {
+                return Ok(());
+            }
+            let mut instance = Instance::default();
+            instance.decision_variables.push(DecisionVariable {
+                id: 0,
+                name: Some("x".to_string()),
+                kind: Kind::Integer as i32,
+                bound: Some(crate::v1::Bound { lower, upper }),
+                ..Default::default()
+            });
+            instance.log_encoding(0).unwrap();
+            instance.validate().unwrap();
+
+            // Coefficient of the log encoding decision variables should be positive except for the constant term
+            for (ids, coefficient) in instance.decision_variable_dependency.get(&0).unwrap().into_iter() {
+                if !ids.is_empty() {
+                    prop_assert!(coefficient > 0.0);
+                }
+            }
+
+            let aux_bits = instance
+                .decision_variables
+                .iter()
+                .filter_map(|dv| {
+                    if dv.name == Some("ommx.log_encoding".to_string()) {
+                        Some(dv.id)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), lower.ceil());
+
+            let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
+            let (solution, _) = instance.evaluate(&state).unwrap();
+            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), upper.floor());
         }
     }
 }
