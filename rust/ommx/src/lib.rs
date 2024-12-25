@@ -145,8 +145,10 @@ pub mod random;
 // Internal modules
 mod convert;
 mod evaluate;
+mod substitute;
 
 pub use evaluate::Evaluate;
+pub use substitute::Substitute;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
