@@ -2,10 +2,16 @@ use crate::v1::{
     function::{self, Function as FunctionEnum},
     Function, Linear, Polynomial, Quadratic,
 };
+use anyhow::Result;
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::{collections::BTreeSet, fmt, iter::*, ops::*};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt,
+    iter::*,
+    ops::*,
+};
 
 use super::sorted_ids::SortedIds;
 
@@ -150,6 +156,29 @@ impl Function {
             Some(FunctionEnum::Polynomial(poly)) => poly.get_constant(),
             None => 0.0,
         }
+    }
+
+    /// Substitute decision variable with a function
+    ///
+    /// For example, `x = f(y, z, ...)` into `g(x, y, z, ...)` yielding `g(f(y, z), y, z, ...)`.
+    ///
+    pub fn substitute(&self, replacements: &HashMap<u64, Self>) -> Result<Self> {
+        if replacements.is_empty() {
+            return Ok(self.clone());
+        }
+        let mut out = Function::zero();
+        for (ids, coefficient) in self {
+            let mut v = Function::from(coefficient);
+            for id in ids.iter() {
+                if let Some(replacement) = replacements.get(id) {
+                    v = v * replacement.clone();
+                } else {
+                    v = v * Linear::single_term(*id, 1.0);
+                }
+            }
+            out = out + v;
+        }
+        Ok(out)
     }
 }
 
