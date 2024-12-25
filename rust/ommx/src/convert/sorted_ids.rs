@@ -73,6 +73,10 @@ impl SortedIds {
     pub fn empty() -> Self {
         Self(Vec::new())
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &u64> {
+        self.0.iter()
+    }
 }
 
 impl Add for SortedIds {

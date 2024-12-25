@@ -783,4 +783,23 @@ mod tests {
             prop_assert_eq!(solution, sample_set.get(0).unwrap());
         }
     }
+
+    proptest! {
+        #[test]
+        fn substitute((f, mut g, mut s) in pair_with_state!(Function)) {
+            // Determine ID to be substituted
+            let ids = f.used_decision_variable_ids();
+            let Some(id) = ids.iter().next().cloned() else { return Ok(()) };
+            g.partial_evaluate(&State { entries: hashmap!{ id => 1.0 }}).unwrap();
+            let substituted = f.substitute(&hashmap!{ id => g.clone() }).unwrap();
+
+            let (g_value, _) = g.evaluate(&s).unwrap();
+            s.entries.insert(id, g_value);
+
+            let (f_value, _) = f.evaluate(&s).unwrap();
+            let (substituted_value, _) = substituted.evaluate(&s).unwrap();
+
+            prop_assert!(abs_diff_eq!(f_value, substituted_value, epsilon = 1e-9));
+        }
+    }
 }
