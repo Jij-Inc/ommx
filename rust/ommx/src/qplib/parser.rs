@@ -28,8 +28,6 @@ pub struct QplibFile {
     pub bs_non_zeroes: Vec<HashMap<usize, f64>>,
     pub constr_lower_cs: Vec<f64>,
     pub constr_upper_cs: Vec<f64>,
-    pub gte_idx: Vec<usize>,
-    pub lte_idx: Vec<usize>,
     pub lower_bounds: Vec<f64>,
     pub upper_bounds: Vec<f64>,
 
@@ -103,14 +101,12 @@ impl QplibFile {
 
         let infinity_threshold = cursor.next_parse()?;
 
-        let (constr_lower_cs, gte_idx, constr_upper_cs, lte_idx) = match ckind {
-            C::None | C::Box => (vec![], vec![], vec![], vec![]),
+        let (constr_lower_cs, constr_upper_cs) = match ckind {
+            C::None | C::Box => (vec![], vec![]),
             _ => {
                 let lower_cs = cursor.collect_list(num_constraints)?;
-                let (lower_cs_idx, lower_cs) = prune_constraints(lower_cs, infinity_threshold);
                 let upper_cs = cursor.collect_list(num_constraints)?;
-                let (upper_cs_idx, upper_cs) = prune_constraints(upper_cs, infinity_threshold);
-                (lower_cs, lower_cs_idx, upper_cs, upper_cs_idx)
+                (lower_cs, upper_cs)
             }
         };
 
@@ -167,8 +163,6 @@ impl QplibFile {
             bs_non_zeroes,
             constr_lower_cs,
             constr_upper_cs,
-            gte_idx,
-            lte_idx,
             lower_bounds,
             upper_bounds,
             infinity_threshold,
@@ -382,33 +376,6 @@ fn integer_to_binary(
         }
     }
     vars
-}
-
-/// Prunes constraints that use infinity as a marker value.
-///
-/// ## Context / Long explanation:
-///
-/// Qplib and its format assumes, for simplicity, that all constraints are in
-/// the form `c_l <= expr <= c_u`. When a problem has to define a constraint
-/// that is only `expr <= c_u`, for example, they set `c_l` to infinity.
-///
-/// Ommx, however, only allows constraints to be `<= 0` or `= 0`. The first step
-/// in handlign this is splitting the constraint into into `expr <= c_u` and
-/// `expr >= c_l`. Mathematically, we don't need special handling for this and
-/// can just split _all_ constraints into both kinds. But we choose to check
-/// this so the number of trivial constraints passed on is greatly reduced.
-/// Later handling will be responsible for transforming constraints into a `<=
-/// 0` form.
-///
-/// The intent here to reduce the size of the instance by not adding the full
-/// `c_l` and `c_u` lists, removing all infinties. For problems with lots of
-/// constraints which only have one rhs, this should be a significant reduction
-/// in overall memory footprint
-fn prune_constraints(cs: Vec<f64>, infinity: f64) -> (Vec<usize>, Vec<f64>) {
-    cs.into_iter()
-        .enumerate()
-        .filter(|(_, c)| c.abs() != infinity)
-        .unzip()
 }
 
 struct FileCursor<T: Iterator<Item = String>> {
@@ -775,9 +742,11 @@ Minimize # minimize the objective function
         assert_eq!(parsed.infinity_threshold, 1.0E+20_f64);
 
         assert_eq!(parsed.constr_lower_cs, vec![1., 1.], "constr_lower_cs");
-        assert_eq!(parsed.gte_idx, vec![0, 1], "gte_idx");
-        assert!(parsed.constr_upper_cs.is_empty(), "constr_upper_cs");
-        assert!(parsed.lte_idx.is_empty(), "lte_idx");
+        assert_eq!(
+            parsed.constr_upper_cs,
+            vec![parsed.infinity_threshold, parsed.infinity_threshold],
+            "constr_upper_cs"
+        );
 
         assert_eq!(parsed.lower_bounds, vec![0., 0., 0.], "lower_bounds");
         assert_eq!(parsed.upper_bounds, vec![1., 2., 1.], "upper_bounds");
