@@ -1,14 +1,15 @@
-use std::{io::Read, path::Path};
+use prost::Message;
+use std::path::Path;
 
+mod convert;
 mod parser;
 
-use parser::*;
+use parser::QplibFile;
 
 /// Reads and parses the file at the given path as a gzipped MPS file.
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, QplibParseError> {
-    let data = Qplib::from_file(path)?;
-    // TODO
-    // convert::convert(data)
+    let data = QplibFile::from_file(path)?;
+    convert::convert(data)
 }
 
 pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, QplibParseError> {

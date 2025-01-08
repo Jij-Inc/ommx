@@ -70,7 +70,7 @@ fn convert_dvars(mps: &Mps) -> (Vec<v1::DecisionVariable>, HashMap<ColumnName, u
             let id = i as u64;
             name_id_map.insert(var_name.clone(), id);
             dvars.push(v1::DecisionVariable {
-                id: i as u64,
+                id,
                 kind,
                 bound: Some(bound),
                 name: Some(var_name.0.clone()),

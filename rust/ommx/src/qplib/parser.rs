@@ -1,6 +1,7 @@
-use crate::error::QplibParseError;
+use super::QplibParseError;
 use std::collections::HashMap;
 use std::{
+    fmt::Display,
     fs,
     io::{self, BufRead, Read},
     path::Path,
@@ -205,6 +206,12 @@ impl QplibFile {
 #[derive(Default, Debug)]
 pub struct ProblemType(ProbObjKind, ProbVarKind, ProbConstrKind);
 
+impl Display for ProblemType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}{}", self.0, self.1, self.2)
+    }
+}
+
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub enum ProbObjKind {
     Linear,
@@ -212,6 +219,18 @@ pub enum ProbObjKind {
     ConcaveOrConvex, // convex if minimization; concave if maximization
     #[default]
     Quadratic, // generic case
+}
+
+impl Display for ProbObjKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c = match self {
+            ProbObjKind::Linear => 'L',
+            ProbObjKind::DiagonalC => 'D',
+            ProbObjKind::ConcaveOrConvex => 'C',
+            ProbObjKind::Quadratic => 'Q',
+        };
+        write!(f, "{c}")
+    }
 }
 
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
@@ -224,6 +243,19 @@ pub enum ProbVarKind {
     General,
 }
 
+impl Display for ProbVarKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c = match self {
+            ProbVarKind::Continuous => 'C',
+            ProbVarKind::Binary => 'B',
+            ProbVarKind::Mixed => 'M',
+            ProbVarKind::Integer => 'I',
+            ProbVarKind::General => 'G',
+        };
+        write!(f, "{c}")
+    }
+}
+
 #[derive(Clone, Copy, Default, Debug, PartialEq)]
 pub enum ProbConstrKind {
     None,
@@ -233,6 +265,20 @@ pub enum ProbConstrKind {
     Convex,
     #[default]
     Quadratic,
+}
+
+impl Display for ProbConstrKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let c = match self {
+            ProbConstrKind::None => 'N',
+            ProbConstrKind::Box => 'B',
+            ProbConstrKind::Linear => 'L',
+            ProbConstrKind::DiagonalConvex => 'D',
+            ProbConstrKind::Convex => 'C',
+            ProbConstrKind::Quadratic => 'Q',
+        };
+        write!(f, "{c}")
+    }
 }
 
 impl FromStr for ProblemType {
@@ -346,11 +392,13 @@ fn integer_to_binary(
 /// the form `c_l <= expr <= c_u`. When a problem has to define a constraint
 /// that is only `expr <= c_u`, for example, they set `c_l` to infinity.
 ///
-/// Ommx, however, only allows constraints to be `<= 0` or `>= 0`. The first
-/// step in handlign this is splitting the constraint into into `expr <= c_u`
-/// and `expr >= c_l`. Mathematically, we don't need special handling for this
-/// and can just split _all_ constraints into both kinds. But we choose to check
+/// Ommx, however, only allows constraints to be `<= 0` or `= 0`. The first step
+/// in handlign this is splitting the constraint into into `expr <= c_u` and
+/// `expr >= c_l`. Mathematically, we don't need special handling for this and
+/// can just split _all_ constraints into both kinds. But we choose to check
 /// this so the number of trivial constraints passed on is greatly reduced.
+/// Later handling will be responsible for transforming constraints into a `<=
+/// 0` form.
 ///
 /// The intent here to reduce the size of the instance by not adding the full
 /// `c_l` and `c_u` lists, removing all infinties. For problems with lots of
