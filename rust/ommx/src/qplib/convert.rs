@@ -106,17 +106,18 @@ fn convert_constraints(qplib: &QplibFile) -> Vec<v1::Constraint> {
         constr_names,
         ..
     } = qplib;
+    // a dummy default coefficient map for when constraints are only linear
+    let default_q = HashMap::default();
+    // our output Vec.
     // technically num_constraints is only a lower bound on the capacity
     // required as one Qplib constraint might equal 2 ommx constraints.
     let mut constraints = Vec::with_capacity(*num_constraints);
-    for (i, (qs, bs, &lower_c, &upper_c)) in izip!(
-        qs_non_zeroes,
-        bs_non_zeroes,
-        constr_lower_cs,
-        constr_upper_cs
-    )
-    .enumerate()
+
+    for (i, (bs, &lower_c, &upper_c)) in
+        izip!(bs_non_zeroes, constr_lower_cs, constr_upper_cs).enumerate()
     {
+        // if the problem has only linear constraints, qs_non_zeroes will be empty
+        let qs = qs_non_zeroes.get(i).unwrap_or(&default_q);
         let mut quadratic = to_quadratic(qs);
         let mut linear = to_linear(bs);
         let name = constr_names

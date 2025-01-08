@@ -1,0 +1,44 @@
+! ---------------
+! example problem
+! ---------------
+MIPBAND # problem name
+QML # problem is a mixed-integer quadratic program
+Minimize # minimize the objective function
+3 # variables
+2 # general linear constraints
+5 # nonzeros in lower triangle of Q^0
+1 1 2.0 5 lines row & column index & value of nonzero in lower triangle Q^0
+2 1 -1.0 |
+2 2 2.0 |
+3 2 -1.0 |
+3 3 2.0 |
+-0.2 default value for entries in b_0
+1 # non default entries in b_0
+2 -0.4 1 line of index & value of non-default values in b_0
+0.0 value of q^0
+4 # nonzeros in vectors b^i (i=1,...,m)
+1 1 1.0 4 lines constraint, index & value of nonzero in b^i (i=1,...,m)
+1 2 1.0 |
+2 1 1.0 |
+2 3 1.0 |
+1.0E+20 infinity
+1.0 default value for entries in c_l
+0 # non default entries in c_l
+1.0E+20 default value for entries in c_u
+0 # non default entries in c_u
+0.0 default value for entries in l
+0 # non default entries in l
+1.0 default value for entries in u
+1 # non default entries in u
+2 2.0 1 line of non-default indices and values in u
+0 default variable type is continuous
+1 # non default variable types
+3 2 variable 3 is binary
+1.0 default value for initial values for x
+0 # non default entries in x
+0.0 default value for initial values for y
+0 # non default entries in y
+0.0 default value for initial values for z
+0 # non default entries in z
+0 # non default names for variables
+0 # non default names for constraints
