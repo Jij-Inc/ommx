@@ -4,7 +4,7 @@ use std::path::Path;
 mod convert;
 mod parser;
 
-use parser::QplibFile;
+pub use parser::QplibFile;
 
 /// Reads and parses the file at the given path as a gzipped MPS file.
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, QplibParseError> {
