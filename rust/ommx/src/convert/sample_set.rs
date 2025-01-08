@@ -81,6 +81,14 @@ impl Samples {
         })
     }
 
+    pub fn states_mut(&mut self) -> impl Iterator<Item = Result<&mut State>> {
+        self.entries.iter_mut().map(|v| {
+            v.state
+                .as_mut()
+                .context("ommx.v1.Samples.Entry must has state. Broken Data.")
+        })
+    }
+
     /// Transpose `sample_id -> decision_variable_id -> value` to `decision_variable_id -> sample_id -> value`
     pub fn transpose(&self) -> HashMap<u64, SampledValues> {
         let mut map: HashMap<u64, HashMap<OrderedFloat<f64>, Vec<u64>>> = HashMap::new();
@@ -155,6 +163,12 @@ impl SampleSet {
             feasible: *self.feasible.get(&sample_id).with_context(|| {
                 format!(
                     "SampleSet lacks feasibility for sample with ID={}",
+                    sample_id
+                )
+            })?,
+            feasible_unrelaxed: *self.feasible_unrelaxed.get(&sample_id).with_context(|| {
+                format!(
+                    "SampleSet lacks unrelaxed feasibility for sample with ID={}",
                     sample_id
                 )
             })?,

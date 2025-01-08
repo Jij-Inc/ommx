@@ -79,8 +79,11 @@ message SampleSet {
   repeated SampledDecisionVariable decision_variables = 2;
   repeated SampledConstraint constraints = 3;
 
-  // Feasibility of each sample
+  // Feasibility for remaining constraints of each sample. Removed constraints are not included.
   map<uint64, bool> feasible = 4;
+
+  // Feasibility for both remaining and removed constraints of each sample.
+  map<uint64, bool> feasible_unrelaxed = 6;
 
   // Minimize or Maximize
   Instance.Sense sense = 5;

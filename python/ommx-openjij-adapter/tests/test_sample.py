@@ -29,6 +29,7 @@ def test_maximize():
         constraints=[],
         sense=Instance.MAXIMIZE,
     )
+    instance.as_minimization_problem()
     samples = adapter.sample_qubo_sa(instance, num_reads=1)
     sample_set = instance.evaluate_samples(samples)
 

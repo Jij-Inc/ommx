@@ -371,9 +371,13 @@ impl Evaluate for Instance {
             }
             evaluated_constraints.push(c);
         }
+        let mut feasible_unrelaxed = feasible;
         for c in &self.removed_constraints {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
+            if feasible_unrelaxed {
+                feasible_unrelaxed = c.is_feasible(1e-6)?;
+            }
             evaluated_constraints.push(c);
         }
 
@@ -386,12 +390,14 @@ impl Evaluate for Instance {
                 state.entries.insert(v.id, value);
             }
         }
+        eval_dependencies(&self.decision_variable_dependency, &mut state)?;
         Ok((
             Solution {
                 decision_variables: self.decision_variables.clone(),
                 state: Some(state),
                 evaluated_constraints,
                 feasible,
+                feasible_unrelaxed,
                 objective,
                 optimality: Optimality::Unspecified.into(),
                 relaxation: Relaxation::Unspecified.into(),
@@ -419,12 +425,18 @@ impl Evaluate for Instance {
             let mut new = constraints.partial_evaluate(state)?;
             used.append(&mut new);
         }
+        for d in self.decision_variable_dependency.values_mut() {
+            let mut new = d.partial_evaluate(state)?;
+            used.append(&mut new);
+        }
         Ok(used)
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
         let mut feasible: HashMap<u64, bool> = samples.ids().map(|id| (*id, true)).collect();
         let mut used_ids = BTreeSet::new();
+
+        // Constraints
         let mut constraints = Vec::new();
         for c in &self.constraints {
             let (evaluated, mut ids) = c.evaluate_samples(samples)?;
@@ -436,14 +448,28 @@ impl Evaluate for Instance {
             }
             constraints.push(evaluated);
         }
+        let mut feasible_unrelaxed = feasible.clone();
         for c in &self.removed_constraints {
             let (v, mut ids) = c.evaluate_samples(samples)?;
             used_ids.append(&mut ids);
+            for (sample_id, feasible_) in v.is_feasible(1e-6)? {
+                if !feasible_ {
+                    feasible_unrelaxed.insert(sample_id, false);
+                }
+            }
             constraints.push(v);
         }
 
+        // Objective
         let (objectives, mut ids) = self.objective().evaluate_samples(samples)?;
         used_ids.append(&mut ids);
+
+        // Reconstruct decision variable values
+        let mut samples = samples.clone();
+        for state in samples.states_mut() {
+            let mut new = eval_dependencies(&self.decision_variable_dependency, state?)?;
+            used_ids.append(&mut new);
+        }
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
             .decision_variables
@@ -462,10 +488,43 @@ impl Evaluate for Instance {
                 objectives: Some(objectives),
                 constraints,
                 feasible,
+                feasible_unrelaxed,
                 sense: self.sense,
             },
             used_ids,
         ))
+    }
+}
+
+// FIXME: This would be better by using a topological sort
+fn eval_dependencies(
+    dependencies: &HashMap<u64, Function>,
+    state: &mut State,
+) -> Result<BTreeSet<u64>> {
+    let mut bucket: Vec<_> = dependencies.iter().collect();
+    let mut last_size = bucket.len();
+    let mut not_evaluated = Vec::new();
+    let mut used_ids = BTreeSet::new();
+    loop {
+        while let Some((id, f)) = bucket.pop() {
+            match f.evaluate(state) {
+                Ok((value, mut used)) => {
+                    state.entries.insert(*id, value);
+                    used_ids.append(&mut used);
+                }
+                Err(_) => {
+                    not_evaluated.push((id, f));
+                }
+            }
+        }
+        if not_evaluated.is_empty() {
+            return Ok(used_ids);
+        }
+        if last_size == not_evaluated.len() {
+            bail!("Cannot evaluate any dependent variables.");
+        }
+        last_size = not_evaluated.len();
+        bucket.append(&mut not_evaluated);
     }
 }
 
@@ -475,6 +534,34 @@ mod tests {
     use approx::*;
     use maplit::*;
     use proptest::prelude::*;
+
+    #[test]
+    fn test_eval_dependencies() {
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        eval_dependencies(&dependencies, &mut state).unwrap();
+        assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
+        assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+
+        // circular dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+
+        // non-existing dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+    }
 
     #[test]
     fn linear_partial_evaluate() {
@@ -694,6 +781,25 @@ mod tests {
 
             prop_assert_eq!(ids1, ids2);
             prop_assert_eq!(solution, sample_set.get(0).unwrap());
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn substitute((f, mut g, mut s) in pair_with_state!(Function)) {
+            // Determine ID to be substituted
+            let ids = f.used_decision_variable_ids();
+            let Some(id) = ids.iter().next().cloned() else { return Ok(()) };
+            g.partial_evaluate(&State { entries: hashmap!{ id => 1.0 }}).unwrap();
+            let substituted = f.substitute(&hashmap!{ id => g.clone() }).unwrap();
+
+            let (g_value, _) = g.evaluate(&s).unwrap();
+            s.entries.insert(id, g_value);
+
+            let (f_value, _) = f.evaluate(&s).unwrap();
+            let (substituted_value, _) = substituted.evaluate(&s).unwrap();
+
+            prop_assert!(abs_diff_eq!(f_value, substituted_value, epsilon = 1e-9));
         }
     }
 }

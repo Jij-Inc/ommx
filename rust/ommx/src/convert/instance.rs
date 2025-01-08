@@ -169,6 +169,7 @@ impl Instance {
             parameters,
             constraint_hints: self.constraint_hints,
             removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
         })
     }
 
@@ -204,6 +205,7 @@ impl Instance {
             parameters: vec![parameter],
             constraint_hints: self.constraint_hints,
             removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
         })
     }
 
@@ -263,6 +265,9 @@ impl Instance {
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
+        if self.sense() == Sense::Maximize {
+            bail!("PUBO format is only for minimization problems.");
+        }
         if !self
             .objective()
             .used_decision_variable_ids()
@@ -283,6 +288,17 @@ impl Instance {
         Ok(out)
     }
 
+    /// Convert the instance into a minimization problem.
+    ///
+    /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
+    pub fn as_minimization_problem(&mut self) {
+        if self.sense() == Sense::Minimize {
+            return;
+        }
+        self.sense = Sense::Minimize as i32;
+        self.objective = Some(-self.objective().into_owned());
+    }
+
     /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
     ///
     /// Before calling this method, you should check that this instance is suitable for QUBO:
@@ -294,6 +310,9 @@ impl Instance {
     /// - The degree of the objective is at most 2.
     ///
     pub fn as_qubo_format(&self) -> Result<(BTreeMap<BinaryIdPair, f64>, f64)> {
+        if self.sense() == Sense::Maximize {
+            bail!("QUBO format is only for minimization problems.");
+        }
         if !self.constraints.is_empty() {
             bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
         }
@@ -582,6 +601,9 @@ mod tests {
 
         #[test]
         fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
             let pubo = instance.as_pubo_format().unwrap();
             for (_, c) in pubo {
                 prop_assert!(c.abs() > f64::EPSILON);
@@ -590,6 +612,9 @@ mod tests {
 
         #[test]
         fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);

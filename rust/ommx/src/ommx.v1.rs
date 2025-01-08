@@ -381,6 +381,9 @@ pub struct Instance {
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
     pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -486,6 +489,9 @@ pub struct ParametricInstance {
     /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
     #[prost(message, repeated, tag = "8")]
     pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
@@ -510,10 +516,13 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
+    /// Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
     /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
     #[prost(bool, tag = "5")]
     pub feasible: bool,
+    /// Feasibility of the solution for both remaining and removed constraints.
+    #[prost(bool, tag = "8")]
+    pub feasible_unrelaxed: bool,
     /// The optimality of the solution.
     #[prost(enumeration = "Optimality", tag = "6")]
     pub optimality: i32,
@@ -736,9 +745,12 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
-    /// Feasibility of each sample
+    /// Feasibility for remaining constraints of each sample. Removed constraints are not included.
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
+    /// Feasibility for both remaining and removed constraints of each sample.
+    #[prost(map = "uint64, bool", tag = "6")]
+    pub feasible_unrelaxed: ::std::collections::HashMap<u64, bool>,
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,
