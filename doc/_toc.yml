@@ -24,6 +24,7 @@ parts:
   - caption: "OMMX Ecosystem"
     chapters:
       - file: ommx_ecosystem/links
+      - file: ommx_ecosystem/adapter
   - caption: "API Reference"
     chapters:
       - url: https://jij-inc.github.io/ommx/protobuf.html
