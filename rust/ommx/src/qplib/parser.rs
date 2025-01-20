@@ -1,4 +1,4 @@
-use super::QplibParseError;
+use super::{ParseErrorReason, QplibParseError};
 use std::collections::HashMap;
 use std::{
     fmt::Display,
@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 
-pub type Result<T> = std::result::Result<T, QplibParseError>;
+use anyhow::{Context, Result};
 
 #[derive(Default, Debug)]
 pub struct QplibFile {
@@ -49,7 +49,9 @@ pub struct QplibFile {
 
 impl QplibFile {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let f = fs::File::open(path)?;
+        let path = path.as_ref();
+        let f = fs::File::open(path)
+            .with_context(|| format!("Failed to read file {}", path.display()))?;
         Self::from_reader(f)
     }
 
@@ -70,7 +72,7 @@ impl QplibFile {
             .split_whitespace()
             .next()
             .map(|s| s.to_string())
-            .ok_or(QplibParseError::InvalidLine(cursor.line_num))?;
+            .ok_or(QplibParseError::invalid_line(cursor.line_num))?;
         let ProblemType(okind, vkind, ckind) = cursor.next_parse()?;
         let sense = cursor.next_parse()?;
         let num_vars = cursor.next_parse()?;
@@ -276,10 +278,10 @@ impl Display for ProbConstrKind {
 }
 
 impl FromStr for ProblemType {
-    type Err = QplibParseError;
+    type Err = ParseErrorReason;
 
-    fn from_str(s: &str) -> Result<Self> {
-        let err_out = || QplibParseError::InvalidProblemType(s.to_owned());
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let err_out = || ParseErrorReason::InvalidProblemType(s.to_owned());
         let mut chars = s.chars();
         let ((o, v), c) = chars
             .next()
@@ -322,13 +324,13 @@ pub enum ObjSense {
 }
 
 impl FromStr for ObjSense {
-    type Err = QplibParseError;
+    type Err = ParseErrorReason;
 
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "minimize" => Ok(Self::Minimize),
             "maximize" => Ok(Self::Maximize),
-            _ => Err(QplibParseError::InvalidObjSense(s.to_owned())),
+            _ => Err(ParseErrorReason::InvalidObjSense(s.to_owned())),
         }
     }
 }
@@ -342,14 +344,14 @@ pub enum VarType {
 }
 
 impl FromStr for VarType {
-    type Err = QplibParseError;
+    type Err = ParseErrorReason;
 
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "0" => Ok(VarType::Continuous),
             "1" => Ok(VarType::Integer),
             "2" => Ok(VarType::Binary),
-            _ => Err(QplibParseError::InvalidVarType(s.to_owned())),
+            _ => Err(ParseErrorReason::InvalidVarType(s.to_owned())),
         }
     }
 }
@@ -403,16 +405,16 @@ where
                 return Ok(s);
             }
         }
-        Err(QplibParseError::UnexpectedEndOfFile(self.line_num))
+        Err(QplibParseError::unexpected_eof(self.line_num).into())
     }
 
     fn parse_or_err_with_line<T, E>(&self, raw: &str) -> Result<T>
     where
         T: FromStr<Err = E>,
-        E: Into<QplibParseError>,
+        E: Into<ParseErrorReason>,
     {
         raw.parse::<T>()
-            .map_err(|e| e.into().with_line(self.line_num))
+            .map_err(|e| e.into().with_line(self.line_num).into())
     }
 
     /// Consumes the next line and tries to parse the first value
@@ -420,13 +422,13 @@ where
     fn next_parse<T, E>(&mut self) -> Result<T>
     where
         T: FromStr<Err = E>,
-        E: Into<QplibParseError>,
+        E: Into<ParseErrorReason>,
     {
         let line = self.expect_next()?;
         let val = line
             .split_whitespace()
             .next()
-            .ok_or(QplibParseError::InvalidLine(self.line_num))?;
+            .ok_or(QplibParseError::invalid_line(self.line_num))?;
         self.parse_or_err_with_line(val)
     }
 
@@ -450,12 +452,12 @@ where
         &mut self,
         // number of "segments" to split line into.
         segments: usize,
-        f: impl Fn(Vec<String>) -> Result<(K, V)>,
+        f: impl Fn(Vec<String>) -> Result<(K, V), ParseErrorReason>,
     ) -> Result<HashMap<K, V>>
     where
         K: Eq + std::hash::Hash,
         V: FromStr<Err = E>,
-        QplibParseError: From<E>,
+        ParseErrorReason: From<E>,
     {
         let num = self.next_parse()?;
         let mut out = HashMap::with_capacity(num);
@@ -475,7 +477,7 @@ where
     fn collect_i_val<V, E>(&mut self) -> Result<HashMap<usize, V>>
     where
         V: FromStr<Err = E>,
-        QplibParseError: From<E>,
+        ParseErrorReason: From<E>,
     {
         self.consume_map(2, |parts| {
             let key = parts[0].parse::<usize>()? - 1;
@@ -511,7 +513,7 @@ where
         size: usize,
         // number of "segments" to split line into.
         segments: usize,
-        f: impl Fn(Vec<String>) -> Result<(usize, K, f64)>,
+        f: impl Fn(Vec<String>) -> Result<(usize, K, f64), ParseErrorReason>,
     ) -> Result<Vec<HashMap<K, f64>>>
     where
         K: Eq + std::hash::Hash + Clone,
@@ -566,7 +568,7 @@ where
     fn collect_list<V, E>(&mut self, size: usize) -> Result<Vec<V>>
     where
         V: FromStr<Err = E> + Clone,
-        E: Into<QplibParseError>,
+        E: Into<ParseErrorReason>,
     {
         let default: V = self.next_parse()?;
         let mut out = vec![default; size];
