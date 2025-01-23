@@ -6,6 +6,7 @@ mod evaluate;
 mod instance;
 mod message;
 mod mps;
+mod qplib;
 
 pub use artifact::*;
 pub use builder::*;
@@ -15,6 +16,7 @@ pub use evaluate::*;
 pub use instance::*;
 pub use message::*;
 pub use mps::*;
+pub use qplib::*;
 
 use pyo3::prelude::*;
 
@@ -58,6 +60,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(write_mps_file, m)?)?;
+
+    // Qplib
+    m.add_function(wrap_pyfunction!(load_qplib_bytes, m)?)?;
 
     // Dataset
     m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
