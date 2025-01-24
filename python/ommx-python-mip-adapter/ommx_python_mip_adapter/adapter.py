@@ -49,6 +49,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         if relax:
             self.model.relax()
             self._relax = True
+        else:
+            self._relax = False
 
 
     @staticmethod
@@ -68,6 +70,46 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         return self.model
 
     def decode(self, data: mip.Model) -> Solution:
+        """Convert optimized Python-MIP model and ommx.v1.Instance to ommx.v1.Solution.
+
+        This method is intended to be used if the model has been acquired with
+        `solver_input` for futher adjustment of the solver parameters, and
+        separately solve.
+
+        Note that alterations to the model may make the decoding process
+        incompatible -- decoding will only work if the model still describes
+        effectively the same problem as the OMMX instance used to create the
+        adapter.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
+
+            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> w = [11, 15, 20, 35, 10, 33]
+            >>> x = [DecisionVariable.binary(i) for i in range(6)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(p[i] * x[i] for i in range(6)),
+            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> adapter = OMMXPythonMIPAdapter(instance)
+            >>> model = adapter.solver_input
+            >>> # ... some modification of model's parameters
+            >>> model.optimize()
+            <OptimizationStatus.OPTIMAL: 0>
+
+            >>> solution = adapter.decode(model)
+            >>> solution.raw.objective
+            41.0
+
+        """
         # TODO check if `optimize()` has been called
 
         if data.status == mip.OptimizationStatus.INFEASIBLE:
