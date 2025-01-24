@@ -42,13 +42,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         else:
             self.model.verbose = 0
 
-        self.set_decision_variables()
-        self.set_objective()
-        self.set_constraints()
+        self._set_decision_variables()
+        self._set_objective()
+        self._set_constraints()
 
         if relax:
             self.model.relax()
-            self.relax = True
+            self._relax = True
 
 
     @staticmethod
@@ -65,19 +65,26 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
     @property
     def solver_input(self) -> mip.Model:
-        pass
+        return self.model
 
-    def decode(self, model: mip.Model) -> Solution:
+    def decode(self, data: mip.Model) -> Solution:
         # TODO check if `optimize()` has been called
 
-        if model.status == mip.OptimizationStatus.INFEASIBLE:
-            return Result(infeasible=Infeasible())
+        if data.status == mip.OptimizationStatus.INFEASIBLE:
+            raise OMMXPythonMIPAdapterError(
+                "Model was infeasible"
+            )
+            # return Result(infeasible=Infeasible())
 
-        if model.status == mip.OptimizationStatus.UNBOUNDED:
-            return Result(unbounded=Unbounded())
+        if data.status == mip.OptimizationStatus.UNBOUNDED:
+            raise OMMXPythonMIPAdapterError(
+                "Model was unbounded"
+            )
+            # return Result(unbounded=Unbounded())
+
         state = State(
             entries={
-                var.id: model.var_by_name(str(var.id)).x  # type: ignore
+                var.id: data.var_by_name(str(var.id)).x  # type: ignore
                 for var in self.instance.raw.decision_variables
             }
         )
@@ -85,7 +92,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         solution = self.instance.evaluate(state)
 
         dual_variables = {}
-        for constraint in model.constrs:
+        for constraint in data.constrs:
             pi = constraint.pi
             if pi is not None:
                 id = int(constraint.name)
@@ -95,10 +102,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             if id in dual_variables:
                 constraint.dual_variable = dual_variables[id]
 
-        if model.status == mip.OptimizationStatus.OPTIMAL:
+        if data.status == mip.OptimizationStatus.OPTIMAL:
             solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
-            if self.relax:
+            if self._relax:
                 solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
         return solution
 
@@ -108,7 +115,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         This is not reversible.
         """
-        self.relax = True
+        self._relax = True
         self.model.relax()
 
 
