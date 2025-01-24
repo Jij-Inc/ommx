@@ -82,13 +82,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             )
             # return Result(unbounded=Unbounded())
 
-        state = State(
-            entries={
-                var.id: data.var_by_name(str(var.id)).x  # type: ignore
-                for var in self.instance.raw.decision_variables
-            }
-        )
-
+        state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)
 
         dual_variables = {}
@@ -108,6 +102,51 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             if self._relax:
                 solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
         return solution
+
+    def decode_to_state(self, data: mip.Model) -> State:
+        """
+        Create an ommx.v1.State from an optimized Python-MIP Model.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
+
+            >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
+            >>> from ommx.v1 import Instance, DecisionVariable
+
+            >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
+            >>> ommx_instance = Instance.from_components(
+            ...     decision_variables=[x1],
+            ...     objective=x1,
+            ...     constraints=[],
+            ...     sense=Instance.MINIMIZE,
+            ... )
+            >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
+            >>> model = adapter.solver_input
+            >>> model.optimize()
+            <OptimizationStatus.OPTIMAL: 0>
+
+            >>> ommx_state = adapter.decode_to_state(model)
+            >>> ommx_state.entries
+            {1: 0.0}
+        """
+        if not (
+            data.status == mip.OptimizationStatus.OPTIMAL
+            or data.status == mip.OptimizationStatus.FEASIBLE
+        ):
+            raise OMMXPythonMIPAdapterError(
+                " The model's `status` must be `OPTIMAL` or `FEASIBLE`."
+            )
+
+        return State(
+            entries={
+                var.id: data.var_by_name(str(var.id)).x  # type: ignore
+                for var in self.instance.raw.decision_variables
+            }
+        )
 
     def relax(self):
         """
