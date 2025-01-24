@@ -147,8 +147,7 @@ class OMMXSCIPAdapter:
                     continue
                 else:
                     raise OMMXPySCIPOptAdapterError(
-                        f"Infeasible constant constraint was found:"
-                        f"id: {constraint.id}"
+                        f"Infeasible constant constraint was found:id: {constraint.id}"
                     )
             else:
                 raise OMMXPySCIPOptAdapterError(

@@ -2589,7 +2589,7 @@ class SampleSet:
 
     @property
     def sample_ids(self) -> list[int]:
-        return self.summary.index.tolist()
+        return self.summary.index.tolist()  # type: ignore[attr-defined]
 
     @property
     def decision_variables(self) -> DataFrame:
