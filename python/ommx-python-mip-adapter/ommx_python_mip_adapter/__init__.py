@@ -5,6 +5,7 @@ from .python_mip_to_ommx import (
     model_to_state,
     model_to_solution,
 )
+from .adapter import OMMXPythonMIPAdapter
 
 __all__ = [
     "instance_to_model",
@@ -13,5 +14,6 @@ __all__ = [
     "model_to_solution",
     "PythonMIPBuilder",
     "OMMXInstanceBuilder",
+    "OMMXPythonMIPAdapter",
     "solve",
 ]
