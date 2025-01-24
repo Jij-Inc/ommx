@@ -162,11 +162,11 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         )
 
     def _set_objective(self):
-        self.model.objective = self.as_lin_expr(self.instance.raw.objective)  # type: ignore
+        self.model.objective = self._as_lin_expr(self.instance.raw.objective)  # type: ignore
 
     def _set_constraints(self):
         for constraint in self.instance.raw.constraints:
-            lin_expr = self.as_lin_expr(constraint.function)
+            lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
             elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
