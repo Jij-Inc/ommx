@@ -117,6 +117,24 @@ impl Parameters {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+pub struct Solution(ommx::v1::Solution);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Solution {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::Solution::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
 pub struct Samples(ommx::v1::Samples);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
