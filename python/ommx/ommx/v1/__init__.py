@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
-from typing_extensions import deprecated, TypeAlias
+from typing_extensions import deprecated, TypeAlias, Union
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
@@ -58,7 +58,7 @@ __all__ = [
     "ToSamples",
 ]
 
-ToState: TypeAlias = State | Mapping[int, float]
+ToState: TypeAlias = Union[State, Mapping[int, float]]
 """
 Type alias for convertible types to :class:`State`.
 """
@@ -70,7 +70,7 @@ def to_state(state: ToState) -> State:
     return State(entries=state)
 
 
-ToSamples: TypeAlias = Samples | Mapping[int, ToState] | list[ToState]
+ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], list[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
 """
@@ -2561,7 +2561,7 @@ class SampleSet:
     .. doctest::
 
         >>> sample_set = instance.evaluate_samples(samples)
-        >>> sample_set.summary
+        >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
                    objective  feasible  feasible_unrelaxed
         sample_id                                         
         1                3.0      True                True
@@ -2576,7 +2576,7 @@ class SampleSet:
         >>> solution = sample_set.get(sample_id=0)
         >>> solution.objective
         1.0
-        >>> solution.decision_variables
+        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
         0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
@@ -2590,7 +2590,7 @@ class SampleSet:
         >>> solution = sample_set.best_feasible()
         >>> solution.objective
         3.0
-        >>> solution.decision_variables
+        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
         0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
