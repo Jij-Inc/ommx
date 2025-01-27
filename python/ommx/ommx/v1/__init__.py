@@ -55,6 +55,7 @@ __all__ = [
     "SampledValues",
     # Type Alias
     "ToState",
+    "ToSamples",
 ]
 
 ToState: TypeAlias = State | Mapping[int, float]
