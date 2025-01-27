@@ -1,6 +1,6 @@
 use crate::v1::{
-    sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet, SampledValues, Samples,
-    Solution, State,
+    instance::Sense, sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet,
+    SampledValues, Samples, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use ordered_float::OrderedFloat;
@@ -132,17 +132,24 @@ impl Samples {
 }
 
 impl SampleSet {
-    pub fn num_samples(&self) -> Result<usize> {
-        let objectives = self
-            .objectives
+    fn objectives(&self) -> Result<&SampledValues> {
+        self.objectives
             .as_ref()
-            .context("SampleSet lacks objectives")?;
+            .context("SampleSet lacks objectives")
+    }
+
+    pub fn num_samples(&self) -> Result<usize> {
+        let objectives = self.objectives()?;
         ensure!(
             objectives.len() == self.feasible.len()
                 && objectives.len() == self.feasible_unrelaxed.len(),
             "SampleSet has inconsistent number of objectives and feasibility"
         );
         Ok(objectives.len())
+    }
+
+    pub fn sample_ids(&self) -> BTreeSet<u64> {
+        self.feasible.keys().cloned().collect()
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
@@ -161,10 +168,7 @@ impl SampleSet {
 
     /// Find the best ID in terms of the total objective value.
     fn best(&self, ids: impl Iterator<Item = u64>) -> Result<u64> {
-        let objectives = self
-            .objectives
-            .as_ref()
-            .context("SampleSet lacks objectives")?;
+        let objectives = self.objectives()?;
         let obj = ids
             .map(|id| {
                 Ok((
@@ -175,8 +179,15 @@ impl SampleSet {
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
+        let sense = Sense::try_from(self.sense).context("Invalid sense")?;
         obj.iter()
-            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .min_by(|(_, a), (_, b)| {
+                if sense == Sense::Minimize {
+                    a.total_cmp(b)
+                } else {
+                    b.total_cmp(a)
+                }
+            })
             .map(|(id, _)| *id)
             .context("No feasible solution found in SampleSet")
     }
@@ -224,14 +235,9 @@ impl SampleSet {
 
         Ok(Solution {
             state: Some(state),
-            objective: self
-                .objectives
-                .as_ref()
-                .context("SampleSet lacks objectives")?
-                .get(sample_id)
-                .with_context(|| {
-                    format!("SampleSet lacks objective for sample with ID={}", sample_id)
-                })?,
+            objective: self.objectives()?.get(sample_id).with_context(|| {
+                format!("SampleSet lacks objective for sample with ID={}", sample_id)
+            })?,
             decision_variables,
             feasible: *self.feasible.get(&sample_id).with_context(|| {
                 format!(

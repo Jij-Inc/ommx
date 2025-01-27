@@ -176,6 +176,10 @@ impl SampleSet {
         Ok(self.0.num_samples()?)
     }
 
+    pub fn sample_ids(&self) -> BTreeSet<u64> {
+        self.0.sample_ids()
+    }
+
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
         self.0.feasible_ids()
     }
