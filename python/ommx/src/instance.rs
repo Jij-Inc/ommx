@@ -167,4 +167,8 @@ impl SampleSet {
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
     }
+
+    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
+        Ok(self.0.get(sample_id).map(Solution)?)
+    }
 }
