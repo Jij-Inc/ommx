@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, Iterable, overload, Mapping
+from typing import Optional, Iterable, overload, Mapping, TypeAlias
 from typing_extensions import deprecated
 from datetime import datetime
 from dataclasses import dataclass, field
@@ -53,7 +53,20 @@ __all__ = [
     "Bound",
     # Utility
     "SampledValues",
+    # Type Alias
+    "ToState",
 ]
+
+ToState: TypeAlias = State | Mapping[int, float]
+"""
+Type alias for convertible types to :class:`State`.
+"""
+
+
+def to_state(state: ToState) -> State:
+    if isinstance(state, State):
+        return state
+    return State(entries=state)
 
 
 class InstanceBase(ABC):
@@ -402,19 +415,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
-    def evaluate(self, state: State | Mapping[int, float]) -> Solution:
-        if not isinstance(state, State):
-            state = State(entries=state)
+    def evaluate(self, state: ToState) -> Solution:
         out, _ = _ommx_rust.evaluate_instance(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Solution.from_bytes(out)
 
-    def partial_evaluate(self, state: State | Mapping[int, float]) -> Instance:
-        if not isinstance(state, State):
-            state = State(entries=state)
+    def partial_evaluate(self, state: ToState) -> Instance:
         out, _ = _ommx_rust.partial_evaluate_instance(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Instance.from_bytes(out)
 
@@ -1529,7 +1538,7 @@ class Linear(AsConstraint):
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the linear function with the given state.
 
@@ -1558,13 +1567,11 @@ class Linear(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_linear(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_linear(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Linear, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Linear, set]:
         """
         Partially evaluate the linear function with the given state.
 
@@ -1585,10 +1592,8 @@ class Linear(AsConstraint):
             (Linear(19), {2})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_linear(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Linear.from_bytes(new), used_ids
 
@@ -1696,7 +1701,7 @@ class Quadratic(AsConstraint):
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the quadratic function with the given state.
 
@@ -1724,13 +1729,11 @@ class Quadratic(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_quadratic(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_quadratic(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Quadratic, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Quadratic, set]:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -1752,10 +1755,8 @@ class Quadratic(AsConstraint):
             (Quadratic(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_quadratic(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Quadratic.from_bytes(new), used_ids
 
@@ -1901,7 +1902,7 @@ class Polynomial(AsConstraint):
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the polynomial with the given state.
 
@@ -1929,15 +1930,11 @@ class Polynomial(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         return _ommx_rust.evaluate_polynomial(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Polynomial, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Polynomial, set]:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -1959,10 +1956,8 @@ class Polynomial(AsConstraint):
             (Polynomial(9*x2*x3 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_polynomial(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Polynomial.from_bytes(new), used_ids
 
@@ -2117,7 +2112,7 @@ class Function(AsConstraint):
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the function with the given state.
 
@@ -2145,13 +2140,11 @@ class Function(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_function(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_function(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Function, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Function, set]:
         """
         Partially evaluate the function with the given state.
 
@@ -2173,10 +2166,8 @@ class Function(AsConstraint):
             (Function(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_function(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Function.from_bytes(new), used_ids
 
