@@ -2512,6 +2512,28 @@ class RemovedConstraint:
 
 @dataclass
 class SampleSet:
+    """
+    The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+
+    - Similar to :class:`Solution` rather than :class:`solution_pb2.State`.
+      This class contains the sampled values of decision variables with the objective value, constraint violations,
+      feasibility, and metadata of constraints and decision variables.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + 2*x[1] + 3*x[2],
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+    """
+
     raw: _SampleSet
 
     @staticmethod
