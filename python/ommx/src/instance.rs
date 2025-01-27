@@ -171,4 +171,8 @@ impl SampleSet {
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
         Ok(self.0.get(sample_id).map(Solution)?)
     }
+
+    pub fn num_samples(&self) -> PyResult<usize> {
+        Ok(self.0.num_samples()?)
+    }
 }

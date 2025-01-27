@@ -2,7 +2,7 @@ use crate::v1::{
     sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet, SampledValues, Samples,
     Solution, State,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use ordered_float::OrderedFloat;
 use std::collections::{BTreeSet, HashMap};
 
@@ -44,6 +44,14 @@ impl SampledValues {
             }
         }
         None
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.iter().map(|v| v.ids.len()).sum()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 
@@ -124,6 +132,19 @@ impl Samples {
 }
 
 impl SampleSet {
+    pub fn num_samples(&self) -> Result<usize> {
+        let objectives = self
+            .objectives
+            .as_ref()
+            .context("SampleSet lacks objectives")?;
+        ensure!(
+            objectives.len() == self.feasible.len()
+                && objectives.len() == self.feasible_unrelaxed.len(),
+            "SampleSet has inconsistent number of objectives and feasibility"
+        );
+        Ok(objectives.len())
+    }
+
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
         self.feasible
             .iter()
