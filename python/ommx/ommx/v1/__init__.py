@@ -2667,6 +2667,27 @@ class SampleSet:
             out[key] = SampledValues(c.evaluated_values)[sample_id]
         return out
 
+    def get(self, sample_id: int) -> Solution:
+        """
+        Get a sample for a given ID as a solution format
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).get(sample_id)
+        return Solution.from_bytes(solution.to_bytes())
+
+    def best_feasible(self) -> Solution:
+        """
+        Get the best feasible solution
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible()
+        return Solution.from_bytes(solution.to_bytes())
+
+    def best_feasible_unrelaxed(self) -> Solution:
+        """
+        Get the best feasible solution without relaxation
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible_unrelaxed()
+        return Solution.from_bytes(solution.to_bytes())
+
 
 @dataclass
 class SampledValues:
