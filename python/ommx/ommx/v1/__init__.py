@@ -69,6 +69,26 @@ def to_state(state: ToState) -> State:
     return State(entries=state)
 
 
+ToSamples: TypeAlias = Samples | Mapping[int, ToState] | list[ToState]
+"""
+Type alias for convertible types to :class:`Samples`.
+"""
+
+
+def to_samples(samples: ToSamples) -> Samples:
+    if isinstance(samples, list):
+        samples = {i: state for i, state in enumerate(samples)}
+    if not isinstance(samples, Samples):
+        # Do not compress the samples
+        samples = Samples(
+            entries=[
+                Samples.SamplesEntry(state=to_state(state), ids=[i])
+                for i, state in samples.items()
+            ]
+        )
+    return samples
+
+
 class InstanceBase(ABC):
     @abstractmethod
     def get_decision_variables(self) -> list[DecisionVariable]: ...
@@ -657,24 +677,14 @@ class Instance(InstanceBase, UserAnnotationBase):
             instance.as_parametric_instance().to_bytes()
         )
 
-    def evaluate_samples(
-        self, samples: Samples | Mapping[int, State] | list[State]
-    ) -> SampleSet:
+    def evaluate_samples(self, samples: ToSamples) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
-        if isinstance(samples, list):
-            samples = {i: state for i, state in enumerate(samples)}
-        if not isinstance(samples, Samples):
-            # Do not compress the samples
-            samples = Samples(
-                entries=[
-                    Samples.SamplesEntry(state=state, ids=[i])
-                    for i, state in samples.items()
-                ]
-            )
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
+        samples_ = _ommx_rust.Samples.from_bytes(
+            to_samples(samples).SerializeToString()
+        )
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
