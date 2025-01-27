@@ -106,6 +106,31 @@ impl<Base: ImageBuilder> Builder<Base> {
         Ok(())
     }
 
+    pub fn add_parametric_instance(
+        &mut self,
+        instance: v1::ParametricInstance,
+        annotations: InstanceAnnotations,
+    ) -> Result<()> {
+        let blob = instance.encode_to_vec();
+        self.0.add_layer(
+            media_types::v1_parametric_instance(),
+            &blob,
+            annotations.into(),
+        )?;
+        Ok(())
+    }
+
+    pub fn add_sample_set(
+        &mut self,
+        sample_set: v1::SampleSet,
+        annotations: InstanceAnnotations,
+    ) -> Result<()> {
+        let blob = sample_set.encode_to_vec();
+        self.0
+            .add_layer(media_types::v1_sample_set(), &blob, annotations.into())?;
+        Ok(())
+    }
+
     pub fn add_config(&mut self, config: Config) -> Result<()> {
         let blob = serde_json::to_string_pretty(&config)?;
         self.0
