@@ -2707,7 +2707,9 @@ class SampleSet:
         """
         Get the best feasible solution without relaxation
         """
-        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible_unrelaxed()
+        solution = _ommx_rust.SampleSet.from_bytes(
+            self.to_bytes()
+        ).best_feasible_unrelaxed()
         return Solution.from_bytes(solution.to_bytes())
 
 
