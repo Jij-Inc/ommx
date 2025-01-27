@@ -2513,15 +2513,26 @@ class RemovedConstraint:
 
 @dataclass
 class SampleSet:
-    """
+    r"""
     The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
 
     - Similar to :class:`Solution` rather than :class:`solution_pb2.State`.
       This class contains the sampled values of decision variables with the objective value, constraint violations,
       feasibility, and metadata of constraints and decision variables.
+    - This class is usually created via :meth:`Instance.evaluate_samples`.
 
     Examples
     =========
+
+    Let's consider a simple optimization problem:
+
+    .. math::
+
+        \begin{align*}
+            \max &\quad x_1 + 2 x_2 + 3 x_3 \\
+            \text{s.t.} &\quad x_1 + x_2 + x_3 = 1 \\
+            &\quad x_1, x_2, x_3 \in \{0, 1\}
+        \end{align*}
 
     .. doctest::
 
@@ -2532,6 +2543,60 @@ class SampleSet:
         ...     constraints=[sum(x) == 1],
         ...     sense=Instance.MAXIMIZE,
         ... )
+
+    with three samples:
+
+    .. doctest::
+
+        >>> samples = {
+        ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+        ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+        ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+        ... } # ^ sample ID
+
+    Note that this will be done by sampling-based solvers, but we do it manually here.
+    We can evaluate the samples with via :meth:`Instance.evaluate_samples`:
+
+    .. doctest::
+
+        >>> sample_set = instance.evaluate_samples(samples)
+        >>> sample_set.summary
+                   objective  feasible  feasible_unrelaxed
+        sample_id                                         
+        1                3.0      True                True
+        0                1.0      True                True
+        2                3.0     False               False
+
+    The :attr:`summary` attribute shows the objective value, feasibility, and unrelaxed feasibility of each sample.
+    You can get each samples by :meth:`get` as a :class:`Solution` format:
+
+    .. doctest::
+
+        >>> solution = sample_set.get(sample_id=0)
+        >>> solution.objective
+        1.0
+        >>> solution.decision_variables
+              kind  lower  upper  name subscripts description substituted_value  value
+        id
+        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+
+    :meth:`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+
+    .. doctest::
+
+        >>> solution = sample_set.best_feasible()
+        >>> solution.objective
+        3.0
+        >>> solution.decision_variables
+              kind  lower  upper  name subscripts description substituted_value  value
+        id                                                                            
+        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+
+    Of course, the sample of smallest objective value is returned for minimization problems.
 
     """
 
@@ -2604,6 +2669,14 @@ class SampleSet:
 
     @property
     def feasible_unrelaxed(self) -> dict[int, bool]:
+        """
+        Feasibility in terms of the original constraints without relaxation.
+
+        The relaxation of the problem is represented by the :attr:`Instance.removed_constraints`.
+        For each `sample_id`, this property shows whether the sample is feasible
+        both for the :attr:`Instance.constraints` and :attr:`Instance.removed_constraints`.
+        On the other hand, :attr:`feasible` shows the feasibility only for the :attr:`Instance.constraints`.
+        """
         return dict(self.raw.feasible_unrelaxed)
 
     @property
