@@ -249,7 +249,7 @@ impl<Base: Image> Artifact<Base> {
         } else {
             SolutionAnnotations::default()
         };
-        return Ok((solution, annotations));
+        Ok((solution, annotations))
     }
 
     pub fn get_sample_set(
@@ -268,7 +268,7 @@ impl<Base: Image> Artifact<Base> {
         } else {
             Default::default()
         };
-        return Ok((sample_set, annotations));
+        Ok((sample_set, annotations))
     }
 
     pub fn get_instance(&mut self, digest: &Digest) -> Result<(v1::Instance, InstanceAnnotations)> {
@@ -284,7 +284,7 @@ impl<Base: Image> Artifact<Base> {
         } else {
             InstanceAnnotations::default()
         };
-        return Ok((instance, annotations));
+        Ok((instance, annotations))
     }
 
     pub fn get_parametric_instance(
@@ -303,7 +303,7 @@ impl<Base: Image> Artifact<Base> {
         } else {
             InstanceAnnotations::default()
         };
-        return Ok((instance, annotations));
+        Ok((instance, annotations))
     }
 
     pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::State)>> {
