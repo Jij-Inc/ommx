@@ -4,7 +4,7 @@ use crate::v1::{
 };
 use anyhow::{bail, Context, Result};
 use ordered_float::OrderedFloat;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 impl From<HashMap<OrderedFloat<f64>, Vec<u64>>> for SampledValues {
     fn from(map: HashMap<OrderedFloat<f64>, Vec<u64>>) -> Self {
@@ -124,6 +124,58 @@ impl Samples {
 }
 
 impl SampleSet {
+    pub fn feasible_ids(&self) -> BTreeSet<u64> {
+        self.feasible
+            .iter()
+            .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
+            .collect()
+    }
+
+    pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
+        self.feasible_unrelaxed
+            .iter()
+            .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
+            .collect()
+    }
+
+    /// Find the best ID in terms of the total objective value.
+    fn best(&self, ids: impl Iterator<Item = u64>) -> Result<u64> {
+        let objectives = self
+            .objectives
+            .as_ref()
+            .context("SampleSet lacks objectives")?;
+        let obj = ids
+            .map(|id| {
+                Ok((
+                    id,
+                    objectives
+                        .get(id)
+                        .context(format!("SampleSet lacks objective for sample ID={id}"))?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        obj.iter()
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(id, _)| *id)
+            .context("No feasible solution found in SampleSet")
+    }
+
+    pub fn best_feasible_id(&self) -> Result<u64> {
+        self.best(self.feasible_ids().into_iter())
+    }
+
+    pub fn best_feasible_unrelaxed_id(&self) -> Result<u64> {
+        self.best(self.feasible_unrelaxed_ids().into_iter())
+    }
+
+    pub fn best_feasible(&self) -> Result<Solution> {
+        self.get(self.best_feasible_id()?)
+    }
+
+    pub fn best_feasible_unrelaxed(&self) -> Result<Solution> {
+        self.get(self.best_feasible_unrelaxed_id()?)
+    }
+
     pub fn get(&self, sample_id: u64) -> Result<Solution> {
         let mut decision_variables = Vec::new();
         let mut state = State::default();
