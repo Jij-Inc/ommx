@@ -16,7 +16,7 @@ from ._ommx_rust import (
     ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
     ArtifactDirBuilder as _ArtifactDirBuilder,
 )
-from .v1 import Instance, Solution
+from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
 
 class ArtifactBase(ABC):
@@ -315,6 +315,54 @@ class Artifact:
                 descriptor.annotations["org.ommx.v1.solution.end"]
             )
         return solution
+
+    @property
+    def parametric_instance(self) -> ParametricInstance:
+        """
+        Take the first parametric instance layer in the artifact
+
+        - If the artifact does not have a parametric instance layer, it raises an :py:exc:`ValueError`.
+        - For multiple parametric instance layers, use :py:meth:`Artifact.get_parametric_instance` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.parametric-instance":
+                return self.get_parametric_instance(desc)
+        else:
+            raise ValueError("Parametric instance layer not found")
+
+    def get_parametric_instance(self, descriptor: Descriptor) -> ParametricInstance:
+        """
+        Get an parametric instance from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.parametric-instance"
+        blob = self.get_blob(descriptor)
+        instance = ParametricInstance.from_bytes(blob)
+        # TODO
+        return instance
+
+    @property
+    def sample_set(self) -> SampleSet:
+        """
+        Take the first sample set layer in the artifact
+
+        - If the artifact does not have a sample set layer, it raises an :py:exc:`ValueError`.
+        - For multiple sample set layers, use :py:meth:`Artifact.get_sample_set` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.sample-set":
+                return self.get_sample_set(desc)
+        else:
+            raise ValueError("Sample set layer not found")
+
+    def get_sample_set(self, descriptor: Descriptor) -> SampleSet:
+        """
+        Get a sample set from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.sample-set"
+        blob = self.get_blob(descriptor)
+        sample_set = SampleSet.from_bytes(blob)
+        # TODO
+        return sample_set
 
     def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
         """
