@@ -4,7 +4,7 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -174,5 +174,21 @@ impl SampleSet {
 
     pub fn num_samples(&self) -> PyResult<usize> {
         Ok(self.0.num_samples()?)
+    }
+
+    pub fn feasible_ids(&self) -> BTreeSet<u64> {
+        self.0.feasible_ids()
+    }
+
+    pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
+        self.0.feasible_unrelaxed_ids()
+    }
+
+    pub fn best_feasible(&self) -> PyResult<Solution> {
+        Ok(self.0.best_feasible().map(Solution)?)
+    }
+
+    pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
+        Ok(self.0.best_feasible_unrelaxed().map(Solution)?)
     }
 }
