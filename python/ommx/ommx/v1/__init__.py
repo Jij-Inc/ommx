@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import Optional, Iterable, overload, Mapping, TypeAlias
-from typing_extensions import deprecated
+from typing import Optional, Iterable, overload, Mapping
+from typing_extensions import deprecated, TypeAlias
 from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
