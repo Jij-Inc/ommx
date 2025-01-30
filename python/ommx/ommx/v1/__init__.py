@@ -189,6 +189,58 @@ class UserAnnotationBase(ABC):
         }
 
 
+def str_annotation_property(name: str, doc: str | None = None):
+    def getter(self):
+        return self._annotations.get(f"{self._namespace}.{name}")
+
+    def setter(self, value: str):
+        self._annotations[f"{self._namespace}.{name}"] = value
+
+    return property(getter, setter, doc=doc)
+
+
+def str_list_annotation_property(name: str, doc: str | None = None):
+    def getter(self):
+        value = self._annotations.get(f"{self._namespace}.{name}")
+        if value:
+            return value.split(",")
+        else:
+            return []
+
+    def setter(self, value: list[str]):
+        self._annotations[f"{self._namespace}.{name}"] = ",".join(value)
+
+    return property(getter, setter, doc=doc)
+
+
+def int_annotation_property(name: str, doc: str | None = None):
+    def getter(self):
+        value = self._annotations.get(f"{self._namespace}.{name}")
+        if value:
+            return int(value)
+        else:
+            return None
+
+    def setter(self, value: int):
+        self._annotations[f"{self._namespace}.{name}"] = str(value)
+
+    return property(getter, setter, doc=doc)
+
+
+def datetime_annotation_property(name: str, doc: str | None = None):
+    def getter(self):
+        value = self._annotations.get(f"{self._namespace}.{name}")
+        if value:
+            return datetime.fromisoformat(value)
+        else:
+            return None
+
+    def setter(self, value: datetime):
+        self._annotations[f"{self._namespace}.{name}"] = value.isoformat()
+
+    return property(getter, setter, doc=doc)
+
+
 @dataclass
 class Instance(InstanceBase, UserAnnotationBase):
     """
@@ -235,38 +287,39 @@ class Instance(InstanceBase, UserAnnotationBase):
     """The raw protobuf message."""
 
     # Annotations
-    title: Optional[str] = None
-    """
-    The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
-    """
-    created: Optional[datetime] = None
-    """
-    The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
-    """
-    authors: list[str] = field(default_factory=list)
-    """
-    Authors of this instance. This is stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact.
-    """
-    license: Optional[str] = None
-    """
-    License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact.
-    """
-    dataset: Optional[str] = None
-    """
-    Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact.
-    """
-    num_variables: Optional[int] = None
-    """
-    Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact.
-    """
-    num_constraints: Optional[int] = None
-    """
-    Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact.
-    """
     annotations: dict[str, str] = field(default_factory=dict)
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
+    _namespace = "org.ommx.v1.instance"
+    title = str_annotation_property(
+        "title",
+        "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.",
+    )
+    license = str_annotation_property(
+        "license",
+        "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact.",
+    )
+    dataset = str_annotation_property(
+        "dataset",
+        "Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact.",
+    )
+    authors = str_list_annotation_property(
+        "authors",
+        "Authors of this instance, stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact.",
+    )
+    num_variables = int_annotation_property(
+        "variables",
+        "Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact.",
+    )
+    num_constraints = int_annotation_property(
+        "constraints",
+        "Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact.",
+    )
+    created = datetime_annotation_property(
+        "created",
+        "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.",
+    )
 
     @property
     def _annotations(self) -> dict[str, str]:
