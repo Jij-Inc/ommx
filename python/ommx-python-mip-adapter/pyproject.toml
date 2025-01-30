@@ -37,7 +37,7 @@ dev = [
     "numpy",
     "pyright",
     "pytest",
-    "ruff >= 0.7.0, < 0.10.0",
+    "ruff >= 0.9.0, < 0.10.0",
     "sphinx",
     "sphinx-autoapi",
     "sphinx_fontawesome",
