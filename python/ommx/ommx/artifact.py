@@ -269,28 +269,9 @@ class Artifact:
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         assert descriptor.media_type == "application/org.ommx.v1.solution"
-
         blob = self.get_blob(descriptor)
         solution = Solution.from_bytes(blob)
         solution.annotations = descriptor.annotations
-        if "org.ommx.v1.solution.instance" in descriptor.annotations:
-            solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
-        if "org.ommx.v1.solution.solver" in descriptor.annotations:
-            solution.solver = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.solver"]
-            )
-        if "org.ommx.v1.solution.parameters" in descriptor.annotations:
-            solution.parameters = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.parameters"]
-            )
-        if "org.ommx.v1.solution.start" in descriptor.annotations:
-            solution.start = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.start"]
-            )
-        if "org.ommx.v1.solution.end" in descriptor.annotations:
-            solution.end = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.end"]
-            )
         return solution
 
     @property
@@ -669,20 +650,7 @@ class ArtifactBuilder:
 
         """
         blob = solution.to_bytes()
-        annotations = solution.annotations.copy()
-        if solution.instance:
-            annotations["org.ommx.v1.solution.instance"] = solution.instance
-        if solution.solver:
-            annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
-        if solution.parameters:
-            annotations["org.ommx.v1.solution.parameters"] = json.dumps(
-                solution.parameters
-            )
-        if solution.start:
-            annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
-        if solution.end:
-            annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
-        return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
+        return self.add_layer("application/org.ommx.v1.solution", blob, solution.annotations)
 
     def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
         """

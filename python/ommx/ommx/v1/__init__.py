@@ -5,6 +5,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
+import json
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -237,6 +238,19 @@ def datetime_annotation_property(name: str):
 
     def setter(self, value: datetime):
         self._annotations[f"{self._namespace}.{name}"] = value.isoformat()
+
+    return property(getter, setter)
+
+def json_annotation_property(name: str):
+    def getter(self):
+        value = self._annotations.get(f"{self._namespace}.{name}")
+        if value:
+            return json.loads(value)
+        else:
+            return None
+
+    def setter(self, value: dict):
+        self._annotations[f"{self._namespace}.{name}"] = json.dumps(value)
 
     return property(getter, setter)
 
@@ -1021,37 +1035,23 @@ class Solution(UserAnnotationBase):
     raw: _Solution
     """The raw protobuf message."""
 
-    instance: Optional[str] = None
+    _namespace = "org.ommx.v1.solution"
+    instance = str_annotation_property("instance")
     """
     The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
 
     This ``Solution`` is the solution of the mathematical programming problem described by the instance.
     """
-
-    solver: Optional[object] = None
-    """
-    The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact.
-    """
-
-    parameters: Optional[object] = None
-    """
-    The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact.
-    """
-
-    start: Optional[datetime] = None
-    """
-    When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact.
-    """
-
-    end: Optional[datetime] = None
-    """
-    When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact.
-    """
-
+    solver = json_annotation_property("solver")
+    """The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact."""
+    parameters = json_annotation_property("parameters")
+    """The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact."""
+    start = datetime_annotation_property("start")
+    """When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact."""
+    end = datetime_annotation_property("end")
+    """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
-    """
-    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
-    """
+    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
 
     @property
     def _annotations(self) -> dict[str, str]:
