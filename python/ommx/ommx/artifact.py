@@ -295,7 +295,7 @@ class Artifact:
         assert descriptor.media_type == "application/org.ommx.v1.parametric-instance"
         blob = self.get_blob(descriptor)
         instance = ParametricInstance.from_bytes(blob)
-        # TODO
+        instance.annotations = descriptor.annotations
         return instance
 
     @property
@@ -319,7 +319,7 @@ class Artifact:
         assert descriptor.media_type == "application/org.ommx.v1.sample-set"
         blob = self.get_blob(descriptor)
         sample_set = SampleSet.from_bytes(blob)
-        # TODO
+        sample_set.annotations = descriptor.annotations
         return sample_set
 
     def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
@@ -650,7 +650,9 @@ class ArtifactBuilder:
 
         """
         blob = solution.to_bytes()
-        return self.add_layer("application/org.ommx.v1.solution", blob, solution.annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.solution", blob, solution.annotations
+        )
 
     def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
         """
