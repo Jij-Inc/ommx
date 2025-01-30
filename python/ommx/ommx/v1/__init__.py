@@ -192,65 +192,65 @@ class UserAnnotationBase(ABC):
 
 def str_annotation_property(name: str):
     def getter(self):
-        return self._annotations.get(f"{self._namespace}.{name}")
+        return self._annotations.get(f"{self.annotation_namespace}.{name}")
 
     def setter(self, value: str):
-        self._annotations[f"{self._namespace}.{name}"] = value
+        self._annotations[f"{self.annotation_namespace}.{name}"] = value
 
     return property(getter, setter)
 
 
 def str_list_annotation_property(name: str):
     def getter(self):
-        value = self._annotations.get(f"{self._namespace}.{name}")
+        value = self._annotations.get(f"{self.annotation_namespace}.{name}")
         if value:
             return value.split(",")
         else:
             return []
 
     def setter(self, value: list[str]):
-        self._annotations[f"{self._namespace}.{name}"] = ",".join(value)
+        self._annotations[f"{self.annotation_namespace}.{name}"] = ",".join(value)
 
     return property(getter, setter)
 
 
 def int_annotation_property(name: str):
     def getter(self):
-        value = self._annotations.get(f"{self._namespace}.{name}")
+        value = self._annotations.get(f"{self.annotation_namespace}.{name}")
         if value:
             return int(value)
         else:
             return None
 
     def setter(self, value: int):
-        self._annotations[f"{self._namespace}.{name}"] = str(value)
+        self._annotations[f"{self.annotation_namespace}.{name}"] = str(value)
 
     return property(getter, setter)
 
 
 def datetime_annotation_property(name: str):
     def getter(self):
-        value = self._annotations.get(f"{self._namespace}.{name}")
+        value = self._annotations.get(f"{self.annotation_namespace}.{name}")
         if value:
             return datetime.fromisoformat(value)
         else:
             return None
 
     def setter(self, value: datetime):
-        self._annotations[f"{self._namespace}.{name}"] = value.isoformat()
+        self._annotations[f"{self.annotation_namespace}.{name}"] = value.isoformat()
 
     return property(getter, setter)
 
 def json_annotation_property(name: str):
     def getter(self):
-        value = self._annotations.get(f"{self._namespace}.{name}")
+        value = self._annotations.get(f"{self.annotation_namespace}.{name}")
         if value:
             return json.loads(value)
         else:
             return None
 
     def setter(self, value: dict):
-        self._annotations[f"{self._namespace}.{name}"] = json.dumps(value)
+        self._annotations[f"{self.annotation_namespace}.{name}"] = json.dumps(value)
 
     return property(getter, setter)
 
@@ -305,7 +305,7 @@ class Instance(InstanceBase, UserAnnotationBase):
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
-    _namespace = "org.ommx.v1.instance"
+    annotation_namespace = "org.ommx.v1.instance"
     title = str_annotation_property("title")
     "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
     license = str_annotation_property("license")
@@ -1035,7 +1035,7 @@ class Solution(UserAnnotationBase):
     raw: _Solution
     """The raw protobuf message."""
 
-    _namespace = "org.ommx.v1.solution"
+    annotation_namespace = "org.ommx.v1.solution"
     instance = str_annotation_property("instance")
     """
     The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
