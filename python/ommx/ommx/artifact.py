@@ -6,7 +6,6 @@ import pandas
 import numpy
 from dataclasses import dataclass
 from pathlib import Path
-from dateutil import parser
 from abc import ABC, abstractmethod
 
 from ._ommx_rust import (

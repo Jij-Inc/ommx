@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated, TypeAlias, Union
 from datetime import datetime
+from dateutil import parser
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
@@ -232,7 +233,7 @@ def datetime_annotation_property(name: str):
     def getter(self):
         value = self._annotations.get(f"{self.annotation_namespace}.{name}")
         if value:
-            return datetime.fromisoformat(value)
+            return parser.isoparse(value)
         else:
             return None
 
