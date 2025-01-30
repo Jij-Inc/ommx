@@ -27,7 +27,14 @@ from .sample_set_pb2 import (
     SampledValues as _SampledValues,
     SampledConstraint as _SampledConstraint,
 )
-from .annotation import *
+from .annotation import (
+    UserAnnotationBase,
+    str_annotation_property,
+    str_list_annotation_property,
+    datetime_annotation_property,
+    json_annotation_property,
+    int_annotation_property,
+)
 
 from .. import _ommx_rust
 
