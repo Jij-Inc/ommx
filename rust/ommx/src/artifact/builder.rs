@@ -18,6 +18,8 @@ use std::{
 use url::Url;
 use uuid::Uuid;
 
+use super::{ParametricInstanceAnnotations, SampleSetAnnotations};
+
 /// Build [Artifact]
 pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
 
@@ -109,7 +111,7 @@ impl<Base: ImageBuilder> Builder<Base> {
     pub fn add_parametric_instance(
         &mut self,
         instance: v1::ParametricInstance,
-        annotations: InstanceAnnotations,
+        annotations: ParametricInstanceAnnotations,
     ) -> Result<()> {
         let blob = instance.encode_to_vec();
         self.0.add_layer(
@@ -123,7 +125,7 @@ impl<Base: ImageBuilder> Builder<Base> {
     pub fn add_sample_set(
         &mut self,
         sample_set: v1::SampleSet,
-        annotations: InstanceAnnotations,
+        annotations: SampleSetAnnotations,
     ) -> Result<()> {
         let blob = sample_set.encode_to_vec();
         self.0
