@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from typing import Optional
-from dataclasses import dataclass
 
 import mip
 
-from ommx.adapter import SolverAdapter
+from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import Result, Infeasible, Unbounded, Relaxation
@@ -89,8 +88,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             Solve it
 
-            >>> solution = OMMXPythonMIPAdapter.solve(instance) # TODO decide between Solution / Result
-            >>> # solution = result.solution
+            >>> solution = OMMXPythonMIPAdapter.solve(instance)
 
             Check output
 
@@ -105,7 +103,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution.objective
             41.0
-            >>> solution.evaluated_constraints[0].evaluated_value
+            >>> solution.raw.evaluated_constraints[0].evaluated_value
             -1.0
 
         Infeasible Problem
@@ -113,7 +111,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx_python_mip_adapter import OMMXPythoMIPAdapter
+                >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
                 >>> instance = Instance.from_components(
@@ -123,17 +121,17 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
-                >>> result = OMMXPythonMIPAdapter.solve(instance) # TODO Solution/Result
-                >>> # assert result.HasField("infeasible") is True
-                >>> # assert result.HasField("unbounded") is False
-                >>> # assert result.HasField("solution") is False
+                >>> OMMXPythonMIPAdapter.solve(instance)
+                Traceback (most recent call last):
+                    ...
+                ommx.adapter.InfeasibleDetected: Model was infeasible
 
         Unbounded Problem
 
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx_python_mip_adapter import OMMXPythoMIPAdapter
+                >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)
                 >>> instance = Instance.from_components(
@@ -143,17 +141,17 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
-                >>> result = OMMXPythonMIPAdapter.solve(instance) # TODO Solution/Result
-                >>> # assert result.HasField("unbounded") is True
-                >>> # assert result.HasField("infeasible") is False
-                >>> # assert result.HasField("solution") is False
+                >>> OMMXPythonMIPAdapter.solve(instance)
+                Traceback (most recent call last):
+                    ...
+                ommx.adapter.UnboundedDetected: Model was unbounded
 
         Dual variable
 
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx_python_mip_adapter import OMMXPythoMIPAdapter
+                >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.continuous(0, lower=0, upper=1)
                 >>> y = DecisionVariable.continuous(1, lower=0, upper=1)
@@ -164,8 +162,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
-                >>> solution = OMMXPythonMIPAdapter.solve(instance) # TODO .solution
-                >>> solution.evaluated_constraints[0].dual_variable
+                >>> solution = OMMXPythonMIPAdapter.solve(instance)
+                >>> solution.raw.evaluated_constraints[0].dual_variable
                 1.0
 
         """
@@ -224,16 +222,14 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         # TODO check if `optimize()` has been called
 
         if data.status == mip.OptimizationStatus.INFEASIBLE:
-            raise OMMXPythonMIPAdapterError(
+            raise InfeasibleDetected(
                 "Model was infeasible"
             )
-            # return Result(infeasible=Infeasible())
 
         if data.status == mip.OptimizationStatus.UNBOUNDED:
-            raise OMMXPythonMIPAdapterError(
+            raise UnboundedDetected(
                 "Model was unbounded"
             )
-            # return Result(unbounded=Unbounded())
 
         state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)

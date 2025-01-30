@@ -31,3 +31,10 @@ class SolverAdapter(ABC):
     @abstractmethod
     def decode(self, data: SolverOutput) -> Solution:
         pass
+
+
+class InfeasibleDetected(Exception):
+    pass
+
+class UnboundedDetected(Exception):
+    pass
