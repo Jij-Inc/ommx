@@ -227,41 +227,71 @@ impl<Base: Image> Artifact<Base> {
             .collect())
     }
 
-    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::State, SolutionAnnotations)> {
+    pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_types::v1_solution()
-                || desc.digest() != &digest.to_string()
-            {
-                continue;
+            if desc.digest() == &digest.to_string() {
+                return Ok((desc, blob));
             }
-            let solution = v1::State::decode(blob.as_slice())?;
-            let annotations = if let Some(annotations) = desc.annotations() {
-                annotations.clone().into()
-            } else {
-                SolutionAnnotations::default()
-            };
-            return Ok((solution, annotations));
         }
-        // TODO: Seek from other artifacts
-        bail!("Solution of digest {} not found", digest)
+        bail!("Layer of digest {} not found", digest)
+    }
+
+    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::State, SolutionAnnotations)> {
+        let (desc, blob) = self.get_layer(digest)?;
+        ensure!(
+            desc.media_type() == &media_types::v1_solution(),
+            "Layer {digest} is not an ommx.v1.Solution: {}",
+            desc.media_type()
+        );
+        Ok((
+            v1::State::decode(blob.as_slice())?,
+            SolutionAnnotations::from_descriptor(&desc),
+        ))
+    }
+
+    pub fn get_sample_set(
+        &mut self,
+        digest: &Digest,
+    ) -> Result<(v1::SampleSet, SampleSetAnnotations)> {
+        let (desc, blob) = self.get_layer(digest)?;
+        ensure!(
+            desc.media_type() == &media_types::v1_sample_set(),
+            "Layer {digest} is not an ommx.v1.SampleSet: {}",
+            desc.media_type()
+        );
+        Ok((
+            v1::SampleSet::decode(blob.as_slice())?,
+            SampleSetAnnotations::from_descriptor(&desc),
+        ))
     }
 
     pub fn get_instance(&mut self, digest: &Digest) -> Result<(v1::Instance, InstanceAnnotations)> {
-        for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_types::v1_instance()
-                || desc.digest() != &digest.to_string()
-            {
-                continue;
-            }
-            let instance = v1::Instance::decode(blob.as_slice())?;
-            let annotations = if let Some(annotations) = desc.annotations() {
-                annotations.clone().into()
-            } else {
-                InstanceAnnotations::default()
-            };
-            return Ok((instance, annotations));
-        }
-        bail!("Instance of digest {} not found", digest)
+        let (desc, blob) = self.get_layer(digest)?;
+        ensure!(
+            desc.media_type() == &media_types::v1_instance(),
+            "Layer {digest} is not an ommx.v1.Instance: {}",
+            desc.media_type()
+        );
+        Ok((
+            v1::Instance::decode(blob.as_slice())?,
+            InstanceAnnotations::from_descriptor(&desc),
+        ))
+    }
+
+    pub fn get_parametric_instance(
+        &mut self,
+        digest: &Digest,
+    ) -> Result<(v1::ParametricInstance, ParametricInstanceAnnotations)> {
+        let (desc, blob) = self.get_layer(digest)?;
+        ensure!(
+            desc.media_type() == &media_types::v1_parametric_instance(),
+            "Layer {digest} is not an ommx.v1.ParametricInstance: {}",
+            desc.media_type()
+        );
+        Ok((
+            v1::ParametricInstance::decode(blob.as_slice())?,
+            ParametricInstanceAnnotations::from_descriptor(&desc),
+        ))
     }
 
     pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::State)>> {

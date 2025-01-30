@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated, TypeAlias, Union
-from datetime import datetime
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
@@ -27,6 +26,14 @@ from .sample_set_pb2 import (
     Samples,
     SampledValues as _SampledValues,
     SampledConstraint as _SampledConstraint,
+)
+from .annotation import (
+    UserAnnotationBase,
+    str_annotation_property,
+    str_list_annotation_property,
+    datetime_annotation_property,
+    json_annotation_property,
+    int_annotation_property,
 )
 
 from .. import _ommx_rust
@@ -147,48 +154,6 @@ class InstanceBase(ABC):
         return df
 
 
-class UserAnnotationBase(ABC):
-    @property
-    @abstractmethod
-    def _annotations(self) -> dict[str, str]: ...
-
-    def add_user_annotation(
-        self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        self._annotations[annotation_namespace + key] = value
-
-    def add_user_annotations(
-        self,
-        annotations: dict[str, str],
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        for key, value in annotations.items():
-            self.add_user_annotation(
-                key, value, annotation_namespace=annotation_namespace
-            )
-
-    def get_user_annotation(
-        self, key: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return self._annotations[annotation_namespace + key]
-
-    def get_user_annotations(
-        self, *, annotation_namespace: str = "org.ommx.user."
-    ) -> dict[str, str]:
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return {
-            key[len(annotation_namespace) :]: value
-            for key, value in self._annotations.items()
-            if key.startswith(annotation_namespace)
-        }
-
-
 @dataclass
 class Instance(InstanceBase, UserAnnotationBase):
     """
@@ -235,38 +200,25 @@ class Instance(InstanceBase, UserAnnotationBase):
     """The raw protobuf message."""
 
     # Annotations
-    title: Optional[str] = None
-    """
-    The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
-    """
-    created: Optional[datetime] = None
-    """
-    The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
-    """
-    authors: list[str] = field(default_factory=list)
-    """
-    Authors of this instance. This is stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact.
-    """
-    license: Optional[str] = None
-    """
-    License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact.
-    """
-    dataset: Optional[str] = None
-    """
-    Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact.
-    """
-    num_variables: Optional[int] = None
-    """
-    Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact.
-    """
-    num_constraints: Optional[int] = None
-    """
-    Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact.
-    """
     annotations: dict[str, str] = field(default_factory=dict)
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
+    annotation_namespace = "org.ommx.v1.instance"
+    title = str_annotation_property("title")
+    "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
+    license = str_annotation_property("license")
+    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact."
+    dataset = str_annotation_property("dataset")
+    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact."
+    authors = str_list_annotation_property("authors")
+    "Authors of this instance, stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact."
+    num_variables = int_annotation_property("variables")
+    "Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact."
+    num_constraints = int_annotation_property("constraints")
+    "Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact."
+    created = datetime_annotation_property("created")
+    "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -780,12 +732,33 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
 @dataclass
-class ParametricInstance(InstanceBase):
+class ParametricInstance(InstanceBase, UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
     """
 
     raw: _ParametricInstance
+
+    annotations: dict[str, str] = field(default_factory=dict)
+    annotation_namespace = "org.ommx.v1.parametric-instance"
+    title = str_annotation_property("title")
+    "The title of the instance, stored as ``org.ommx.v1.parametric-instance.title`` annotation in OMMX artifact."
+    license = str_annotation_property("license")
+    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.parametric-instance.license`` annotation in OMMX artifact."
+    dataset = str_annotation_property("dataset")
+    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.parametric-instance.dataset`` annotation in OMMX artifact."
+    authors = str_list_annotation_property("authors")
+    "Authors of this instance, stored as ``org.ommx.v1.parametric-instance.authors`` annotation in OMMX artifact."
+    num_variables = int_annotation_property("variables")
+    "Number of variables in this instance, stored as ``org.ommx.v1.parametric-instance.variables`` annotation in OMMX artifact."
+    num_constraints = int_annotation_property("constraints")
+    "Number of constraints in this instance, stored as ``org.ommx.v1.parametric-instance.constraints`` annotation in OMMX artifact."
+    created = datetime_annotation_property("created")
+    "The creation date of the instance, stored as ``org.ommx.v1.parametric-instance.created`` annotation in RFC3339 format in OMMX artifact."
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     @staticmethod
     def from_bytes(data: bytes) -> ParametricInstance:
@@ -982,37 +955,23 @@ class Solution(UserAnnotationBase):
     raw: _Solution
     """The raw protobuf message."""
 
-    instance: Optional[str] = None
+    annotation_namespace = "org.ommx.v1.solution"
+    instance = str_annotation_property("instance")
     """
     The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
 
     This ``Solution`` is the solution of the mathematical programming problem described by the instance.
     """
-
-    solver: Optional[object] = None
-    """
-    The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact.
-    """
-
-    parameters: Optional[object] = None
-    """
-    The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact.
-    """
-
-    start: Optional[datetime] = None
-    """
-    When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact.
-    """
-
-    end: Optional[datetime] = None
-    """
-    When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact.
-    """
-
+    solver = json_annotation_property("solver")
+    """The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact."""
+    parameters = json_annotation_property("parameters")
+    """The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact."""
+    start = datetime_annotation_property("start")
+    """When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact."""
+    end = datetime_annotation_property("end")
+    """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
-    """
-    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
-    """
+    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -2513,7 +2472,7 @@ class RemovedConstraint:
 
 
 @dataclass
-class SampleSet:
+class SampleSet(UserAnnotationBase):
     r"""
     The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
 
@@ -2602,6 +2561,24 @@ class SampleSet:
     """
 
     raw: _SampleSet
+
+    annotation_namespace = "org.ommx.v1.sample-set"
+    instance = str_annotation_property("instance")
+    """The digest of the instance layer, stored as ``org.ommx.v1.sample-set.instance`` annotation in OMMX artifact."""
+    solver = json_annotation_property("solver")
+    """The solver which generated this sample set, stored as ``org.ommx.v1.sample-set.solver`` annotation as a JSON in OMMX artifact."""
+    parameters = json_annotation_property("parameters")
+    """The parameters used in the optimization, stored as ``org.ommx.v1.sample-set.parameters`` annotation as a JSON in OMMX artifact."""
+    start = datetime_annotation_property("start")
+    """When the optimization started, stored as ``org.ommx.v1.sample-set.start`` annotation in RFC3339 format in OMMX artifact."""
+    end = datetime_annotation_property("end")
+    """When the optimization ended, stored as ``org.ommx.v1.sample-set.end`` annotation in RFC3339 format in OMMX artifact."""
+    annotations: dict[str, str] = field(default_factory=dict)
+    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     @staticmethod
     def from_bytes(data: bytes) -> SampleSet:

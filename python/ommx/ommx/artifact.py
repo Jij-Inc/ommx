@@ -6,7 +6,6 @@ import pandas
 import numpy
 from dataclasses import dataclass
 from pathlib import Path
-from dateutil import parser
 from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
@@ -16,7 +15,7 @@ from ._ommx_rust import (
     ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
     ArtifactDirBuilder as _ArtifactDirBuilder,
 )
-from .v1 import Instance, Solution
+from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
 
 class ArtifactBase(ABC):
@@ -248,32 +247,9 @@ class Artifact:
 
         """
         assert descriptor.media_type == "application/org.ommx.v1.instance"
-
         blob = self.get_blob(descriptor)
         instance = Instance.from_bytes(blob)
         instance.annotations = descriptor.annotations
-        if "org.ommx.v1.instance.created" in instance.annotations:
-            instance.created = parser.isoparse(
-                instance.annotations["org.ommx.v1.instance.created"]
-            )
-        if "org.ommx.v1.instance.title" in instance.annotations:
-            instance.title = instance.annotations["org.ommx.v1.instance.title"]
-        if "org.ommx.v1.instance.authors" in instance.annotations:
-            instance.authors = instance.annotations[
-                "org.ommx.v1.instance.authors"
-            ].split(",")
-        if "org.ommx.v1.instance.license" in instance.annotations:
-            instance.license = instance.annotations["org.ommx.v1.instance.license"]
-        if "org.ommx.v1.instance.dataset" in instance.annotations:
-            instance.dataset = instance.annotations["org.ommx.v1.instance.dataset"]
-        if "org.ommx.v1.instance.variables" in instance.annotations:
-            instance.num_variables = int(
-                instance.annotations["org.ommx.v1.instance.variables"]
-            )
-        if "org.ommx.v1.instance.constraints" in instance.annotations:
-            instance.num_constraints = int(
-                instance.annotations["org.ommx.v1.instance.constraints"]
-            )
         return instance
 
     @property
@@ -292,29 +268,58 @@ class Artifact:
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         assert descriptor.media_type == "application/org.ommx.v1.solution"
-
         blob = self.get_blob(descriptor)
         solution = Solution.from_bytes(blob)
         solution.annotations = descriptor.annotations
-        if "org.ommx.v1.solution.instance" in descriptor.annotations:
-            solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
-        if "org.ommx.v1.solution.solver" in descriptor.annotations:
-            solution.solver = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.solver"]
-            )
-        if "org.ommx.v1.solution.parameters" in descriptor.annotations:
-            solution.parameters = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.parameters"]
-            )
-        if "org.ommx.v1.solution.start" in descriptor.annotations:
-            solution.start = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.start"]
-            )
-        if "org.ommx.v1.solution.end" in descriptor.annotations:
-            solution.end = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.end"]
-            )
         return solution
+
+    @property
+    def parametric_instance(self) -> ParametricInstance:
+        """
+        Take the first parametric instance layer in the artifact
+
+        - If the artifact does not have a parametric instance layer, it raises an :py:exc:`ValueError`.
+        - For multiple parametric instance layers, use :py:meth:`Artifact.get_parametric_instance` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.parametric-instance":
+                return self.get_parametric_instance(desc)
+        else:
+            raise ValueError("Parametric instance layer not found")
+
+    def get_parametric_instance(self, descriptor: Descriptor) -> ParametricInstance:
+        """
+        Get an parametric instance from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.parametric-instance"
+        blob = self.get_blob(descriptor)
+        instance = ParametricInstance.from_bytes(blob)
+        instance.annotations = descriptor.annotations
+        return instance
+
+    @property
+    def sample_set(self) -> SampleSet:
+        """
+        Take the first sample set layer in the artifact
+
+        - If the artifact does not have a sample set layer, it raises an :py:exc:`ValueError`.
+        - For multiple sample set layers, use :py:meth:`Artifact.get_sample_set` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.sample-set":
+                return self.get_sample_set(desc)
+        else:
+            raise ValueError("Sample set layer not found")
+
+    def get_sample_set(self, descriptor: Descriptor) -> SampleSet:
+        """
+        Get a sample set from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.sample-set"
+        blob = self.get_blob(descriptor)
+        sample_set = SampleSet.from_bytes(blob)
+        sample_set.annotations = descriptor.annotations
+        return sample_set
 
     def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
         """
@@ -600,24 +605,18 @@ class ArtifactBuilder:
 
         """
         blob = instance.to_bytes()
-        annotations = instance.annotations.copy()
-        if instance.created:
-            annotations["org.ommx.v1.instance.created"] = instance.created.isoformat()
-        if instance.title:
-            annotations["org.ommx.v1.instance.title"] = instance.title
-        if instance.authors:
-            annotations["org.ommx.v1.instance.authors"] = ",".join(instance.authors)
-        if instance.license:
-            annotations["org.ommx.v1.instance.license"] = instance.license
-        if instance.dataset:
-            annotations["org.ommx.v1.instance.dataset"] = instance.dataset
-        if instance.num_variables:
-            annotations["org.ommx.v1.instance.variables"] = str(instance.num_variables)
-        if instance.num_constraints:
-            annotations["org.ommx.v1.instance.constraints"] = str(
-                instance.num_constraints
-            )
-        return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.instance", blob, instance.annotations
+        )
+
+    def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
+        """
+        Add a parametric instance to the artifact with annotations
+        """
+        blob = instance.to_bytes()
+        return self.add_layer(
+            "application/org.ommx.v1.parametric-instance", blob, instance.annotations
+        )
 
     def add_solution(self, solution: Solution) -> Descriptor:
         """
@@ -652,20 +651,18 @@ class ArtifactBuilder:
 
         """
         blob = solution.to_bytes()
-        annotations = solution.annotations.copy()
-        if solution.instance:
-            annotations["org.ommx.v1.solution.instance"] = solution.instance
-        if solution.solver:
-            annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
-        if solution.parameters:
-            annotations["org.ommx.v1.solution.parameters"] = json.dumps(
-                solution.parameters
-            )
-        if solution.start:
-            annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
-        if solution.end:
-            annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
-        return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.solution", blob, solution.annotations
+        )
+
+    def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
+        """
+        Add a sample set to the artifact with annotations
+        """
+        blob = sample_set.to_bytes()
+        return self.add_layer(
+            "application/org.ommx.v1.sample-set", blob, sample_set.annotations
+        )
 
     def add_ndarray(
         self,
