@@ -516,10 +516,18 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
-    /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
+    /// \[Deprecated\] This field is deprecated from Python SDK 1.7.0 because it is replaced by `feasible_relaxed`.
+    ///
+    /// Note that the meaning of `feasible` field in SDK changes from Python SDK 1.7.0.
+    /// It becomes an alias for `feasible_unrelaxed` rather than `feasible_relaxed`.
+    #[deprecated]
     #[prost(bool, tag = "5")]
     pub feasible: bool,
+    /// Feasibility of the solution for remaining constraints.
+    ///
+    /// This is optional due to the backward compatibility. If this field is NULL, the deprecated `feasible` field is used.
+    #[prost(bool, optional, tag = "9")]
+    pub feasible_relaxed: ::core::option::Option<bool>,
     /// Feasibility of the solution for both remaining and removed constraints.
     #[prost(bool, tag = "8")]
     pub feasible_unrelaxed: bool,
@@ -745,12 +753,20 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
-    /// Feasibility for remaining constraints of each sample. Removed constraints are not included.
+    /// \[Deprecated\] This field has been introduced in Python SDK 1.6.0 to represent
+    /// the feasibility of remaining (non-removed) constraints of each sample.
+    /// This field is deprecated from Python SDK 1.7.0 because it is replaced by `feasible_relaxed`.
+    ///
+    /// Note that the meaning of `feasible` field in SDK changes from Python SDK 1.7.0.
+    /// It becomes an alias for `feasible_unrelaxed` rather than `feasible_relaxed`.
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
     /// Feasibility for both remaining and removed constraints of each sample.
     #[prost(map = "uint64, bool", tag = "6")]
     pub feasible_unrelaxed: ::std::collections::HashMap<u64, bool>,
+    /// Feasibility for remaining (non-removed) constraints of each sample.
+    #[prost(map = "uint64, bool", tag = "7")]
+    pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,

@@ -239,12 +239,12 @@ impl SampleSet {
                 format!("SampleSet lacks objective for sample with ID={}", sample_id)
             })?,
             decision_variables,
-            feasible: *self.feasible.get(&sample_id).with_context(|| {
+            feasible_relaxed: Some(*self.feasible.get(&sample_id).with_context(|| {
                 format!(
                     "SampleSet lacks feasibility for sample with ID={}",
                     sample_id
                 )
-            })?,
+            })?),
             feasible_unrelaxed: *self.feasible_unrelaxed.get(&sample_id).with_context(|| {
                 format!(
                     "SampleSet lacks unrelaxed feasibility for sample with ID={}",
@@ -252,8 +252,7 @@ impl SampleSet {
                 )
             })?,
             evaluated_constraints,
-            optimality: Default::default(),
-            relaxation: Default::default(),
+            ..Default::default()
         })
     }
 }

@@ -361,17 +361,17 @@ impl Evaluate for Instance {
     fn evaluate(&self, state: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
         let mut used_ids = BTreeSet::new();
         let mut evaluated_constraints = Vec::new();
-        let mut feasible = true;
+        let mut feasible_relaxed = true;
         for c in &self.constraints {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
             // Only check non-removed constraints for feasibility
-            if feasible {
-                feasible = c.is_feasible(1e-6)?;
+            if feasible_relaxed {
+                feasible_relaxed = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
-        let mut feasible_unrelaxed = feasible;
+        let mut feasible_unrelaxed = feasible_relaxed;
         for c in &self.removed_constraints {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
@@ -396,11 +396,12 @@ impl Evaluate for Instance {
                 decision_variables: self.decision_variables.clone(),
                 state: Some(state),
                 evaluated_constraints,
-                feasible,
+                feasible_relaxed: Some(feasible_relaxed),
                 feasible_unrelaxed,
                 objective,
                 optimality: Optimality::Unspecified.into(),
                 relaxation: Relaxation::Unspecified.into(),
+                ..Default::default()
             },
             used_ids,
         ))
@@ -433,7 +434,8 @@ impl Evaluate for Instance {
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
-        let mut feasible: HashMap<u64, bool> = samples.ids().map(|id| (*id, true)).collect();
+        let mut feasible_relaxed: HashMap<u64, bool> =
+            samples.ids().map(|id| (*id, true)).collect();
         let mut used_ids = BTreeSet::new();
 
         // Constraints
@@ -443,12 +445,12 @@ impl Evaluate for Instance {
             used_ids.append(&mut ids);
             for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
                 if !feasible_ {
-                    feasible.insert(sample_id, false);
+                    feasible_relaxed.insert(sample_id, false);
                 }
             }
             constraints.push(evaluated);
         }
-        let mut feasible_unrelaxed = feasible.clone();
+        let mut feasible_unrelaxed = feasible_relaxed.clone();
         for c in &self.removed_constraints {
             let (v, mut ids) = c.evaluate_samples(samples)?;
             used_ids.append(&mut ids);
@@ -487,9 +489,10 @@ impl Evaluate for Instance {
                 decision_variables,
                 objectives: Some(objectives),
                 constraints,
-                feasible,
+                feasible_relaxed,
                 feasible_unrelaxed,
                 sense: self.sense,
+                feasible: Default::default(), // Deprecated
             },
             used_ids,
         ))
