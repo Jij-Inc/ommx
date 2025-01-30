@@ -605,14 +605,18 @@ class ArtifactBuilder:
 
         """
         blob = instance.to_bytes()
-        return self.add_layer("application/org.ommx.v1.instance", blob, instance.annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.instance", blob, instance.annotations
+        )
 
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
         """
         Add a parametric instance to the artifact with annotations
         """
         blob = instance.to_bytes()
-        return self.add_layer("application/org.ommx.v1.parametric-instance", blob, instance.annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.parametric-instance", blob, instance.annotations
+        )
 
     def add_solution(self, solution: Solution) -> Descriptor:
         """
@@ -656,7 +660,9 @@ class ArtifactBuilder:
         Add a sample set to the artifact with annotations
         """
         blob = sample_set.to_bytes()
-        return self.add_layer("application/org.ommx.v1.sample-set", blob, sample_set.annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.sample-set", blob, sample_set.annotations
+        )
 
     def add_ndarray(
         self,
