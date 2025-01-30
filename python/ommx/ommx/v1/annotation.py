@@ -111,4 +111,3 @@ def json_annotation_property(name: str):
         self._annotations[f"{self.annotation_namespace}.{name}"] = json.dumps(value)
 
     return property(getter, setter)
-
