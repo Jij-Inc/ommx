@@ -56,7 +56,7 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Create `ommx.v1.Solution` from Optimized `mip.Model`
+# Create `ommx.v1.Solution` from the `mip.Model`
 ommx_solution = OMMXPythonMIPAdapter.solve(ommx_instance)
 
 print(ommx_solution)
