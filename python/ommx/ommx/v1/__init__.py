@@ -2668,17 +2668,30 @@ class SampleSet(UserAnnotationBase):
 
     @property
     def feasible(self) -> dict[int, bool]:
+        """
+        Feasibility in terms of the original constraints, an alias to :attr:`feasible_unrelaxed`.
+        """
         return dict(self.raw.feasible)
+
+    @property
+    def feasible_relaxed(self) -> dict[int, bool]:
+        """
+        Feasibility in terms of the remaining (non-removed) constraints.
+
+        For each `sample_id`, this property shows whether the sample is feasible for the all :attr:`Instance.constraints`
+        """
+        if len(self.raw.feasible_relaxed) > 0:
+            return dict(self.raw.feasible_relaxed)
+        else:
+            return self.feasible
 
     @property
     def feasible_unrelaxed(self) -> dict[int, bool]:
         """
         Feasibility in terms of the original constraints without relaxation.
 
-        The relaxation of the problem is represented by the :attr:`Instance.removed_constraints`.
         For each `sample_id`, this property shows whether the sample is feasible
-        both for the :attr:`Instance.constraints` and :attr:`Instance.removed_constraints`.
-        On the other hand, :attr:`feasible` shows the feasibility only for the :attr:`Instance.constraints`.
+        both for the all :attr:`Instance.constraints` and all :attr:`Instance.removed_constraints`.
         """
         return dict(self.raw.feasible_unrelaxed)
 
