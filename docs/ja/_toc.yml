@@ -4,6 +4,10 @@
 format: jb-book
 root: introduction
 parts:
+  - caption: "Switch Language"
+    chapters:
+      - url: https://jij-inc.github.io/ommx/en/
+        title: "English"
   - caption: "Concept"
     chapters:
       - file: concept/architecture
