@@ -30,15 +30,15 @@ jobs:
 
       - name: Build Jupyter Book
         run: |
-          jupyter-book build doc
-          ERROR_LOGS=$(find doc/_build -type f -name "*.err.log")
+          jupyter-book build docs/ja
+          ERROR_LOGS=$(find docs/ja/_build -type f -name "*.err.log")
           if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do echo "[ERROR LOG] $log" && cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-jupyter-book
-          path: ./doc/_build/html
+          name: doc-jupyter-book-ja
+          path: ./docs/ja/_build/html
           retention-days: 30
 
   protobuf:
@@ -125,11 +125,19 @@ jobs:
     needs: [jupyter-book, protobuf, rust, python]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Redirect HTML
+        run: |
+          mkdir doc
+          mv docs/redirect/* doc/
+
       - name: Download HTML of JupyterBook
         uses: actions/download-artifact@v4
         with:
-          name: doc-jupyter-book
-          path: ./doc
+          name: doc-jupyter-book-ja
+          path: ./doc/ja
 
       - name: Download HTML of protobuf
         uses: actions/download-artifact@v4

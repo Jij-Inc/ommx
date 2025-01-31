@@ -4,31 +4,31 @@ version: "3"
 
 tasks:
   # Documents
-  build_book:
+  build_book_ja:
     cmds:
-      - jupyter-book build doc
+      - jupyter-book build docs/ja
 
-  build_book_all:
+  build_book_ja_all:
     cmds:
-      - jupyter-book build doc --all
+      - jupyter-book build docs/ja --all
 
-  open_book:
+  open_book_ja:
     cmds:
-      - python -m webbrowser file:///$(pwd)/doc/_build/html/index.html
+      - python -m webbrowser file:///$(pwd)/docs/ja/_build/html/index.html
 
-  book:
+  book_ja:
     cmds:
-      - task: build_book
-      - task: open_book
+      - task: build_book_ja
+      - task: open_book_ja
 
-  book_all:
+  book_ja_all:
     cmds:
-      - task: build_book_all
-      - task: open_book
+      - task: build_book_ja_all
+      - task: open_book_ja
 
-  watch_build_book:
+  watch_build_book_ja:
     cmds:
-      - fswatch -o doc/**/*.ipynb | xargs -n1 -I{} jupyter-book build doc
+      - fswatch -o docs/ja/**/*.ipynb | xargs -n1 -I{} jupyter-book build docs/ja
 
   doc_rust:
     cmds:
@@ -138,4 +138,4 @@ tasks:
   pip_compile:
     cmds:
       - uv pip compile pyproject.toml -o ../requirements.txt
-    dir: doc/
+    dir: docs/
