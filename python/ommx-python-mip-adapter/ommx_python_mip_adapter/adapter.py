@@ -7,7 +7,7 @@ import mip
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
 from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import Result, Infeasible, Unbounded, Relaxation
+from ommx.v1.solution_pb2 import Relaxation
 
 from .exception import OMMXPythonMIPAdapterError
 

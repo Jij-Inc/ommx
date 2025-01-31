@@ -7,8 +7,7 @@ from mip.exceptions import ParameterNotAvailable
 from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1 import Instance, DecisionVariable, Solution
+from ommx.v1 import Instance, DecisionVariable
 
 from .exception import OMMXPythonMIPAdapterError
 
