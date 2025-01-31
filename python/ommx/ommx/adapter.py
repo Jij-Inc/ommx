@@ -6,6 +6,7 @@ from ommx.v1 import Instance, Solution
 SolverInput = Any
 SolverOutput = Any
 
+
 class SolverAdapter(ABC):
     """
     An abstract interface for Adapters, defining how solvers should be used with OMMX.
@@ -35,6 +36,7 @@ class SolverAdapter(ABC):
 
 class InfeasibleDetected(Exception):
     pass
+
 
 class UnboundedDetected(Exception):
     pass
