@@ -101,6 +101,14 @@ tasks:
     cmds:
       - pip install -ve "python/ommx-openjij-adapter[dev]"
 
+  install:
+    cmds:
+      - task: install_python_sdk
+      - task: install_pyscipopt_adapter
+      - task: install_openjij_adapter
+      # Skip because Python-MIP is not available on macOS
+      # - task: install_python_mip_adapter
+
   format_python:
     cmds:
       - ruff format
