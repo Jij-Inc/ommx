@@ -27,5 +27,5 @@ python/**/dist/
 python/**/*.egg-info/
 python/**/*.so
 
-# Doc
-doc/_build/
+# JupyterBook, Sphinx
+_build/
