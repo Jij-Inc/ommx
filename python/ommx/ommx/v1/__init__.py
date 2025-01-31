@@ -1107,10 +1107,35 @@ class Solution(UserAnnotationBase):
 
     @property
     def feasible(self) -> bool:
-        return self.raw.feasible
+        """
+        Feasibility of the solution in terms of all constraints, including :py:attr:`~Instance.removed_constraints`.
+
+        This is an alias for :py:attr:`~Solution.feasible_unrelaxed`.
+
+        Compatibility
+        -------------
+        The meaning of this property has changed from Python SDK 1.7.0.
+        Previously, this property represents the feasibility of the remaining constraints only, i.e. excluding relaxed constraints.
+        From Python SDK 1.7.0, this property represents the feasibility of all constraints, including relaxed constraints.
+        """
+        return self.feasible_unrelaxed
+
+    @property
+    def feasible_relaxed(self) -> bool:
+        """
+        Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
+        """
+        # For compatibility: object created by 1.6.0 only contains `feasible` field and does not contain `feasible_relaxed` field.
+        if self.raw.HasField("feasible_relaxed"):
+            return self.raw.feasible_relaxed
+        else:
+            return self.raw.feasible
 
     @property
     def feasible_unrelaxed(self) -> bool:
+        """
+        Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+        """
         return self.raw.feasible_unrelaxed
 
     @property
