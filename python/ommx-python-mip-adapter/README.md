@@ -56,11 +56,10 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Convert from `ommx.v1.Instance` to `mip.Model`
 # Create `ommx.v1.Solution` from Optimized `mip.Model`
 ommx_solution = OMMXPythonMIPAdapter.solve(ommx_instance)
 
-print(ommx_state)
+print(ommx_solution)
 ```
 
 You can get `ommx.v1.Instance` from a Python-MIP model as the following:
