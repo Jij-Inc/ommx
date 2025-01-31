@@ -4,7 +4,7 @@ use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -117,6 +117,24 @@ impl Parameters {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+pub struct Solution(ommx::v1::Solution);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Solution {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::Solution::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
 pub struct Samples(ommx::v1::Samples);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -148,5 +166,33 @@ impl SampleSet {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+    }
+
+    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
+        Ok(self.0.get(sample_id).map(Solution)?)
+    }
+
+    pub fn num_samples(&self) -> PyResult<usize> {
+        Ok(self.0.num_samples()?)
+    }
+
+    pub fn sample_ids(&self) -> BTreeSet<u64> {
+        self.0.sample_ids()
+    }
+
+    pub fn feasible_ids(&self) -> BTreeSet<u64> {
+        self.0.feasible_ids()
+    }
+
+    pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
+        self.0.feasible_unrelaxed_ids()
+    }
+
+    pub fn best_feasible(&self) -> PyResult<Solution> {
+        Ok(self.0.best_feasible().map(Solution)?)
+    }
+
+    pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
+        Ok(self.0.best_feasible_unrelaxed().map(Solution)?)
     }
 }

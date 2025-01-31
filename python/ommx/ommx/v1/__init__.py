@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
-from typing_extensions import deprecated
-from datetime import datetime
+from typing_extensions import deprecated, TypeAlias, Union
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
@@ -28,6 +27,14 @@ from .sample_set_pb2 import (
     SampledValues as _SampledValues,
     SampledConstraint as _SampledConstraint,
 )
+from .annotation import (
+    UserAnnotationBase,
+    str_annotation_property,
+    str_list_annotation_property,
+    datetime_annotation_property,
+    json_annotation_property,
+    int_annotation_property,
+)
 
 from .. import _ommx_rust
 
@@ -53,7 +60,41 @@ __all__ = [
     "Bound",
     # Utility
     "SampledValues",
+    # Type Alias
+    "ToState",
+    "ToSamples",
 ]
+
+ToState: TypeAlias = Union[State, Mapping[int, float]]
+"""
+Type alias for convertible types to :class:`State`.
+"""
+
+
+def to_state(state: ToState) -> State:
+    if isinstance(state, State):
+        return state
+    return State(entries=state)
+
+
+ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], list[ToState]]
+"""
+Type alias for convertible types to :class:`Samples`.
+"""
+
+
+def to_samples(samples: ToSamples) -> Samples:
+    if isinstance(samples, list):
+        samples = {i: state for i, state in enumerate(samples)}
+    if not isinstance(samples, Samples):
+        # Do not compress the samples
+        samples = Samples(
+            entries=[
+                Samples.SamplesEntry(state=to_state(state), ids=[i])
+                for i, state in samples.items()
+            ]
+        )
+    return samples
 
 
 class InstanceBase(ABC):
@@ -113,48 +154,6 @@ class InstanceBase(ABC):
         return df
 
 
-class UserAnnotationBase(ABC):
-    @property
-    @abstractmethod
-    def _annotations(self) -> dict[str, str]: ...
-
-    def add_user_annotation(
-        self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        self._annotations[annotation_namespace + key] = value
-
-    def add_user_annotations(
-        self,
-        annotations: dict[str, str],
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        for key, value in annotations.items():
-            self.add_user_annotation(
-                key, value, annotation_namespace=annotation_namespace
-            )
-
-    def get_user_annotation(
-        self, key: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return self._annotations[annotation_namespace + key]
-
-    def get_user_annotations(
-        self, *, annotation_namespace: str = "org.ommx.user."
-    ) -> dict[str, str]:
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return {
-            key[len(annotation_namespace) :]: value
-            for key, value in self._annotations.items()
-            if key.startswith(annotation_namespace)
-        }
-
-
 @dataclass
 class Instance(InstanceBase, UserAnnotationBase):
     """
@@ -201,38 +200,25 @@ class Instance(InstanceBase, UserAnnotationBase):
     """The raw protobuf message."""
 
     # Annotations
-    title: Optional[str] = None
-    """
-    The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact.
-    """
-    created: Optional[datetime] = None
-    """
-    The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact.
-    """
-    authors: list[str] = field(default_factory=list)
-    """
-    Authors of this instance. This is stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact.
-    """
-    license: Optional[str] = None
-    """
-    License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact.
-    """
-    dataset: Optional[str] = None
-    """
-    Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact.
-    """
-    num_variables: Optional[int] = None
-    """
-    Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact.
-    """
-    num_constraints: Optional[int] = None
-    """
-    Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact.
-    """
     annotations: dict[str, str] = field(default_factory=dict)
     """
     Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
     """
+    annotation_namespace = "org.ommx.v1.instance"
+    title = str_annotation_property("title")
+    "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
+    license = str_annotation_property("license")
+    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact."
+    dataset = str_annotation_property("dataset")
+    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact."
+    authors = str_list_annotation_property("authors")
+    "Authors of this instance, stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact."
+    num_variables = int_annotation_property("variables")
+    "Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact."
+    num_constraints = int_annotation_property("constraints")
+    "Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact."
+    created = datetime_annotation_property("created")
+    "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -402,19 +388,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
-    def evaluate(self, state: State | Mapping[int, float]) -> Solution:
-        if not isinstance(state, State):
-            state = State(entries=state)
+    def evaluate(self, state: ToState) -> Solution:
         out, _ = _ommx_rust.evaluate_instance(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Solution.from_bytes(out)
 
-    def partial_evaluate(self, state: State | Mapping[int, float]) -> Instance:
-        if not isinstance(state, State):
-            state = State(entries=state)
+    def partial_evaluate(self, state: ToState) -> Instance:
         out, _ = _ommx_rust.partial_evaluate_instance(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Instance.from_bytes(out)
 
@@ -648,24 +630,14 @@ class Instance(InstanceBase, UserAnnotationBase):
             instance.as_parametric_instance().to_bytes()
         )
 
-    def evaluate_samples(
-        self, samples: Samples | Mapping[int, State] | list[State]
-    ) -> SampleSet:
+    def evaluate_samples(self, samples: ToSamples) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
-        if isinstance(samples, list):
-            samples = {i: state for i, state in enumerate(samples)}
-        if not isinstance(samples, Samples):
-            # Do not compress the samples
-            samples = Samples(
-                entries=[
-                    Samples.SamplesEntry(state=state, ids=[i])
-                    for i, state in samples.items()
-                ]
-            )
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        samples_ = _ommx_rust.Samples.from_bytes(samples.SerializeToString())
+        samples_ = _ommx_rust.Samples.from_bytes(
+            to_samples(samples).SerializeToString()
+        )
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
@@ -760,12 +732,33 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
 @dataclass
-class ParametricInstance(InstanceBase):
+class ParametricInstance(InstanceBase, UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
     """
 
     raw: _ParametricInstance
+
+    annotations: dict[str, str] = field(default_factory=dict)
+    annotation_namespace = "org.ommx.v1.parametric-instance"
+    title = str_annotation_property("title")
+    "The title of the instance, stored as ``org.ommx.v1.parametric-instance.title`` annotation in OMMX artifact."
+    license = str_annotation_property("license")
+    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.parametric-instance.license`` annotation in OMMX artifact."
+    dataset = str_annotation_property("dataset")
+    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.parametric-instance.dataset`` annotation in OMMX artifact."
+    authors = str_list_annotation_property("authors")
+    "Authors of this instance, stored as ``org.ommx.v1.parametric-instance.authors`` annotation in OMMX artifact."
+    num_variables = int_annotation_property("variables")
+    "Number of variables in this instance, stored as ``org.ommx.v1.parametric-instance.variables`` annotation in OMMX artifact."
+    num_constraints = int_annotation_property("constraints")
+    "Number of constraints in this instance, stored as ``org.ommx.v1.parametric-instance.constraints`` annotation in OMMX artifact."
+    created = datetime_annotation_property("created")
+    "The creation date of the instance, stored as ``org.ommx.v1.parametric-instance.created`` annotation in RFC3339 format in OMMX artifact."
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     @staticmethod
     def from_bytes(data: bytes) -> ParametricInstance:
@@ -962,37 +955,23 @@ class Solution(UserAnnotationBase):
     raw: _Solution
     """The raw protobuf message."""
 
-    instance: Optional[str] = None
+    annotation_namespace = "org.ommx.v1.solution"
+    instance = str_annotation_property("instance")
     """
     The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
 
     This ``Solution`` is the solution of the mathematical programming problem described by the instance.
     """
-
-    solver: Optional[object] = None
-    """
-    The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact.
-    """
-
-    parameters: Optional[object] = None
-    """
-    The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact.
-    """
-
-    start: Optional[datetime] = None
-    """
-    When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact.
-    """
-
-    end: Optional[datetime] = None
-    """
-    When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact.
-    """
-
+    solver = json_annotation_property("solver")
+    """The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact."""
+    parameters = json_annotation_property("parameters")
+    """The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact."""
+    start = datetime_annotation_property("start")
+    """When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact."""
+    end = datetime_annotation_property("end")
+    """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
     annotations: dict[str, str] = field(default_factory=dict)
-    """
-    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible.
-    """
+    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
 
     @property
     def _annotations(self) -> dict[str, str]:
@@ -1529,7 +1508,7 @@ class Linear(AsConstraint):
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the linear function with the given state.
 
@@ -1558,13 +1537,11 @@ class Linear(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_linear(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_linear(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Linear, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Linear, set]:
         """
         Partially evaluate the linear function with the given state.
 
@@ -1585,10 +1562,8 @@ class Linear(AsConstraint):
             (Linear(19), {2})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_linear(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Linear.from_bytes(new), used_ids
 
@@ -1696,7 +1671,7 @@ class Quadratic(AsConstraint):
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the quadratic function with the given state.
 
@@ -1724,13 +1699,11 @@ class Quadratic(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_quadratic(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_quadratic(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Quadratic, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Quadratic, set]:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -1752,10 +1725,8 @@ class Quadratic(AsConstraint):
             (Quadratic(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_quadratic(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Quadratic.from_bytes(new), used_ids
 
@@ -1901,7 +1872,7 @@ class Polynomial(AsConstraint):
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the polynomial with the given state.
 
@@ -1929,15 +1900,11 @@ class Polynomial(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         return _ommx_rust.evaluate_polynomial(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Polynomial, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Polynomial, set]:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -1959,10 +1926,8 @@ class Polynomial(AsConstraint):
             (Polynomial(9*x2*x3 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_polynomial(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Polynomial.from_bytes(new), used_ids
 
@@ -2117,7 +2082,7 @@ class Function(AsConstraint):
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: State | Mapping[int, float]) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> tuple[float, set]:
         """
         Evaluate the function with the given state.
 
@@ -2145,13 +2110,11 @@ class Function(AsConstraint):
             RuntimeError: Variable id (2) is not found in the solution
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
-        return _ommx_rust.evaluate_function(self.to_bytes(), state.SerializeToString())
+        return _ommx_rust.evaluate_function(
+            self.to_bytes(), to_state(state).SerializeToString()
+        )
 
-    def partial_evaluate(
-        self, state: State | Mapping[int, float]
-    ) -> tuple[Function, set]:
+    def partial_evaluate(self, state: ToState) -> tuple[Function, set]:
         """
         Partially evaluate the function with the given state.
 
@@ -2173,10 +2136,8 @@ class Function(AsConstraint):
             (Function(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        if not isinstance(state, State):
-            state = State(entries=state)
         new, used_ids = _ommx_rust.partial_evaluate_function(
-            self.to_bytes(), state.SerializeToString()
+            self.to_bytes(), to_state(state).SerializeToString()
         )
         return Function.from_bytes(new), used_ids
 
@@ -2511,8 +2472,113 @@ class RemovedConstraint:
 
 
 @dataclass
-class SampleSet:
+class SampleSet(UserAnnotationBase):
+    r"""
+    The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+
+    - Similar to :class:`Solution` rather than :class:`solution_pb2.State`.
+      This class contains the sampled values of decision variables with the objective value, constraint violations,
+      feasibility, and metadata of constraints and decision variables.
+    - This class is usually created via :meth:`Instance.evaluate_samples`.
+
+    Examples
+    =========
+
+    Let's consider a simple optimization problem:
+
+    .. math::
+
+        \begin{align*}
+            \max &\quad x_1 + 2 x_2 + 3 x_3 \\
+            \text{s.t.} &\quad x_1 + x_2 + x_3 = 1 \\
+            &\quad x_1, x_2, x_3 \in \{0, 1\}
+        \end{align*}
+
+    .. doctest::
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + 2*x[1] + 3*x[2],
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+    with three samples:
+
+    .. doctest::
+
+        >>> samples = {
+        ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+        ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+        ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+        ... } # ^ sample ID
+
+    Note that this will be done by sampling-based solvers, but we do it manually here.
+    We can evaluate the samples with via :meth:`Instance.evaluate_samples`:
+
+    .. doctest::
+
+        >>> sample_set = instance.evaluate_samples(samples)
+        >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
+                   objective  feasible  feasible_unrelaxed
+        sample_id                                         
+        1                3.0      True                True
+        0                1.0      True                True
+        2                3.0     False               False
+
+    The :attr:`summary` attribute shows the objective value, feasibility, and unrelaxed feasibility of each sample.
+    You can get each samples by :meth:`get` as a :class:`Solution` format:
+
+    .. doctest::
+
+        >>> solution = sample_set.get(sample_id=0)
+        >>> solution.objective
+        1.0
+        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper  name subscripts description substituted_value  value
+        id
+        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+
+    :meth:`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+
+    .. doctest::
+
+        >>> solution = sample_set.best_feasible()
+        >>> solution.objective
+        3.0
+        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper  name subscripts description substituted_value  value
+        id                                                                            
+        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+
+    Of course, the sample of smallest objective value is returned for minimization problems.
+
+    """
+
     raw: _SampleSet
+
+    annotation_namespace = "org.ommx.v1.sample-set"
+    instance = str_annotation_property("instance")
+    """The digest of the instance layer, stored as ``org.ommx.v1.sample-set.instance`` annotation in OMMX artifact."""
+    solver = json_annotation_property("solver")
+    """The solver which generated this sample set, stored as ``org.ommx.v1.sample-set.solver`` annotation as a JSON in OMMX artifact."""
+    parameters = json_annotation_property("parameters")
+    """The parameters used in the optimization, stored as ``org.ommx.v1.sample-set.parameters`` annotation as a JSON in OMMX artifact."""
+    start = datetime_annotation_property("start")
+    """When the optimization started, stored as ``org.ommx.v1.sample-set.start`` annotation in RFC3339 format in OMMX artifact."""
+    end = datetime_annotation_property("end")
+    """When the optimization ended, stored as ``org.ommx.v1.sample-set.end`` annotation in RFC3339 format in OMMX artifact."""
+    annotations: dict[str, str] = field(default_factory=dict)
+    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
+
+    @property
+    def _annotations(self) -> dict[str, str]:
+        return self.annotations
 
     @staticmethod
     def from_bytes(data: bytes) -> SampleSet:
@@ -2581,6 +2647,14 @@ class SampleSet:
 
     @property
     def feasible_unrelaxed(self) -> dict[int, bool]:
+        """
+        Feasibility in terms of the original constraints without relaxation.
+
+        The relaxation of the problem is represented by the :attr:`Instance.removed_constraints`.
+        For each `sample_id`, this property shows whether the sample is feasible
+        both for the :attr:`Instance.constraints` and :attr:`Instance.removed_constraints`.
+        On the other hand, :attr:`feasible` shows the feasibility only for the :attr:`Instance.constraints`.
+        """
         return dict(self.raw.feasible_unrelaxed)
 
     @property
@@ -2589,7 +2663,7 @@ class SampleSet:
 
     @property
     def sample_ids(self) -> list[int]:
-        return self.summary.index.tolist()
+        return self.summary.index.tolist()  # type: ignore[attr-defined]
 
     @property
     def decision_variables(self) -> DataFrame:
@@ -2666,6 +2740,29 @@ class SampleSet:
                 raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
             out[key] = SampledValues(c.evaluated_values)[sample_id]
         return out
+
+    def get(self, sample_id: int) -> Solution:
+        """
+        Get a sample for a given ID as a solution format
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).get(sample_id)
+        return Solution.from_bytes(solution.to_bytes())
+
+    def best_feasible(self) -> Solution:
+        """
+        Get the best feasible solution
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible()
+        return Solution.from_bytes(solution.to_bytes())
+
+    def best_feasible_unrelaxed(self) -> Solution:
+        """
+        Get the best feasible solution without relaxation
+        """
+        solution = _ommx_rust.SampleSet.from_bytes(
+            self.to_bytes()
+        ).best_feasible_unrelaxed()
+        return Solution.from_bytes(solution.to_bytes())
 
 
 @dataclass
