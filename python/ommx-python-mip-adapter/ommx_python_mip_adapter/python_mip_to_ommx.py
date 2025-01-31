@@ -150,4 +150,3 @@ def model_to_instance(model: mip.Model) -> Instance:
     """
     builder = OMMXInstanceBuilder(model)
     return builder.build()
-

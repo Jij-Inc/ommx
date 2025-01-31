@@ -51,7 +51,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         else:
             self._relax = False
 
-
     @staticmethod
     def solve(
         ommx_instance: Instance,
@@ -172,10 +171,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         model.optimize(relax=relax)
         return adapter.decode(model)
 
-
     @property
     def solver_input(self) -> mip.Model:
-        """ The Python-MIP model generated from this OMMX instance """
+        """The Python-MIP model generated from this OMMX instance"""
         return self.model
 
     def decode(self, data: mip.Model) -> Solution:
@@ -222,14 +220,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         # TODO check if `optimize()` has been called
 
         if data.status == mip.OptimizationStatus.INFEASIBLE:
-            raise InfeasibleDetected(
-                "Model was infeasible"
-            )
+            raise InfeasibleDetected("Model was infeasible")
 
         if data.status == mip.OptimizationStatus.UNBOUNDED:
-            raise UnboundedDetected(
-                "Model was unbounded"
-            )
+            raise UnboundedDetected("Model was unbounded")
 
         state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)
@@ -305,7 +299,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         self._relax = True
         self.model.relax()
-
 
     def _set_decision_variables(self):
         for var in self.instance.raw.decision_variables:
