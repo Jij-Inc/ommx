@@ -125,6 +125,14 @@ jobs:
     needs: [jupyter-book, protobuf, rust, python]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Redirect HTML
+        run: |
+          mkdir doc
+          cp docs/redirect/* doc/
+
       - name: Download HTML of JupyterBook
         uses: actions/download-artifact@v4
         with:
