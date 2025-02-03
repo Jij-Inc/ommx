@@ -760,6 +760,7 @@ pub struct SampleSet {
     /// Note that the meaning of `feasible` field in SDK changes from Python SDK 1.7.0.
     /// It becomes an alias for `feasible_unrelaxed` rather than `feasible_relaxed`.
     #[prost(map = "uint64, bool", tag = "4")]
+    #[deprecated]
     pub feasible: ::std::collections::HashMap<u64, bool>,
     /// Feasibility for both remaining and removed constraints of each sample.
     #[prost(map = "uint64, bool", tag = "6")]
