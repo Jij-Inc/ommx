@@ -1,6 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable
+from ommx.v1.solution_pb2 import Optimality
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
@@ -58,3 +59,17 @@ def test_integration_milp():
 
     assert ommx_state.entries[1] == pytest.approx(3)
     assert ommx_state.entries[2] == pytest.approx(3)
+
+
+def test_solution_optimality():
+    x = DecisionVariable.integer(1, lower=0, upper=5)
+    y = DecisionVariable.integer(1, lower=0, upper=5)
+    ommx_instance = Instance.from_components(
+        decision_variables=[x, y],
+        objective=x + y,
+        constraints=[],
+        sense=Instance.MAXIMIZE,
+    )
+
+    solution = OMMXPythonMIPAdapter.solve(ommx_instance)
+    assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
