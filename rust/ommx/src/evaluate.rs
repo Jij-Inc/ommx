@@ -371,12 +371,12 @@ impl Evaluate for Instance {
             }
             evaluated_constraints.push(c);
         }
-        let mut feasible_unrelaxed = feasible_relaxed;
+        let mut feasible = feasible_relaxed;
         for c in &self.removed_constraints {
             let (c, used_ids_) = c.evaluate(state)?;
             used_ids.extend(used_ids_);
-            if feasible_unrelaxed {
-                feasible_unrelaxed = c.is_feasible(1e-6)?;
+            if feasible {
+                feasible = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
@@ -397,7 +397,7 @@ impl Evaluate for Instance {
                 state: Some(state),
                 evaluated_constraints,
                 feasible_relaxed: Some(feasible_relaxed),
-                feasible_unrelaxed,
+                feasible,
                 objective,
                 optimality: Optimality::Unspecified.into(),
                 relaxation: Relaxation::Unspecified.into(),
@@ -450,13 +450,13 @@ impl Evaluate for Instance {
             }
             constraints.push(evaluated);
         }
-        let mut feasible_unrelaxed = feasible_relaxed.clone();
+        let mut feasible = feasible_relaxed.clone();
         for c in &self.removed_constraints {
             let (v, mut ids) = c.evaluate_samples(samples)?;
             used_ids.append(&mut ids);
             for (sample_id, feasible_) in v.is_feasible(1e-6)? {
                 if !feasible_ {
-                    feasible_unrelaxed.insert(sample_id, false);
+                    feasible.insert(sample_id, false);
                 }
             }
             constraints.push(v);
@@ -490,7 +490,7 @@ impl Evaluate for Instance {
                 objectives: Some(objectives),
                 constraints,
                 feasible_relaxed,
-                feasible_unrelaxed,
+                feasible,
                 sense: self.sense,
                 ..Default::default()
             },

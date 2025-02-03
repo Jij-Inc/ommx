@@ -140,18 +140,26 @@ impl SampleSet {
 
     pub fn feasible_relaxed(&self) -> &HashMap<u64, bool> {
         if self.feasible_relaxed.is_empty() {
-            #[allow(deprecated)]
             &self.feasible
         } else {
             &self.feasible_relaxed
         }
     }
 
+    pub fn feasible_unrelaxed(&self) -> &HashMap<u64, bool> {
+        if self.feasible_relaxed.is_empty() {
+            #[allow(deprecated)]
+            &self.feasible_unrelaxed
+        } else {
+            &self.feasible
+        }
+    }
+
     pub fn num_samples(&self) -> Result<usize> {
         let objectives = self.objectives()?;
         ensure!(
-            objectives.len() == self.feasible_relaxed.len()
-                && objectives.len() == self.feasible_unrelaxed.len(),
+            objectives.len() == self.feasible_relaxed().len()
+                && objectives.len() == self.feasible_unrelaxed().len(),
             "SampleSet has inconsistent number of objectives and feasibility"
         );
         Ok(objectives.len())
@@ -169,7 +177,7 @@ impl SampleSet {
     }
 
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.feasible_unrelaxed
+        self.feasible_unrelaxed()
             .iter()
             .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
             .collect()
@@ -256,7 +264,7 @@ impl SampleSet {
                     )
                 },
             )?),
-            feasible_unrelaxed: *self.feasible_unrelaxed.get(&sample_id).with_context(|| {
+            feasible: *self.feasible_unrelaxed().get(&sample_id).with_context(|| {
                 format!(
                     "SampleSet lacks unrelaxed feasibility for sample with ID={}",
                     sample_id
