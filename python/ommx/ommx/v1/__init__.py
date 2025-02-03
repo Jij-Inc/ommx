@@ -1136,7 +1136,10 @@ class Solution(UserAnnotationBase):
         """
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
-        return self.raw.feasible_unrelaxed
+        if self.raw.HasField("feasible_relaxed"):
+            return self.raw.feasible
+        else:
+            return self.raw.feasible_unrelaxed
 
     @property
     def optimality(self) -> Optimality.ValueType:
@@ -2690,7 +2693,7 @@ class SampleSet(UserAnnotationBase):
         if len(self.raw.feasible_relaxed) > 0:
             return dict(self.raw.feasible_relaxed)
         else:
-            return self.feasible
+            return dict(self.raw.feasible)
 
     @property
     def feasible_unrelaxed(self) -> dict[int, bool]:
@@ -2700,7 +2703,12 @@ class SampleSet(UserAnnotationBase):
         For each `sample_id`, this property shows whether the sample is feasible
         both for the all :attr:`Instance.constraints` and all :attr:`Instance.removed_constraints`.
         """
-        return dict(self.raw.feasible_unrelaxed)
+        if len(self.raw.feasible_relaxed) > 0:
+            # After 1.7.0
+            return dict(self.raw.feasible)
+        else:
+            # Before 1.7.0
+            return dict(self.raw.feasible_unrelaxed)
 
     @property
     def objectives(self) -> dict[int, float]:
