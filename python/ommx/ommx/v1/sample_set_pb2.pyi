@@ -455,19 +455,23 @@ class SampleSet(google.protobuf.message.Message):
     def feasible(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """[Deprecated] This field has been introduced in Python SDK 1.6.0 to represent
-        the feasibility of remaining (non-removed) constraints of each sample.
-        This field is deprecated from Python SDK 1.7.0 because it is replaced by `feasible_relaxed`.
+        """Feasibility for *both* remaining and removed constraints of each sample.
 
-        Note that the meaning of `feasible` field in SDK changes from Python SDK 1.7.0.
-        It becomes an alias for `feasible_unrelaxed` rather than `feasible_relaxed`.
+        The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
+        In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+        i.e. removed constraints (introduced in 1.6.0) are not considered.
+        After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+        The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
         """
 
     @property
     def feasible_unrelaxed(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """Feasibility for both remaining and removed constraints of each sample."""
+        """[Deprecated] This field has been introduced in Python SDK 1.6.0 to represent
+        the feasibility of all constraints of each sample.
+        The `feasible` field is used in this sense after Python SDK 1.7.0.
+        """
 
     @property
     def feasible_relaxed(

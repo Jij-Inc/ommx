@@ -128,18 +128,22 @@ class Solution(google.protobuf.message.Message):
     RELAXATION_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
-    """[Deprecated] This field is deprecated from Python SDK 1.7.0 because it is replaced by `feasible_relaxed`.
+    """The feasibility of the solution for all, remaining and removed constraints.
 
-    Note that the meaning of `feasible` field in SDK changes from Python SDK 1.7.0.
-    It becomes an alias for `feasible_unrelaxed` rather than `feasible_relaxed`.
+    The feasibility for the remaining constraints is represented by the `feasible_relaxed` field.
     """
     feasible_relaxed: builtins.bool
-    """Feasibility of the solution for remaining constraints.
+    """Feasibility of the solution for remaining constraints, ignoring removed constraints.
 
-    This is optional due to the backward compatibility. If this field is NULL, the deprecated `feasible` field is used.
+    This is optional due to the backward compatibility.
+    If this field is NULL, the `feasible` field represents relaxed feasibility,
+    and the deprecated `feasible_unrelaxed` field represents the feasibility including removed constraints.
     """
     feasible_unrelaxed: builtins.bool
-    """Feasibility of the solution for both remaining and removed constraints."""
+    """[DEPRECATED] Feasibility of the solution for all constraints.
+    This field has been introduced in Python SDK 1.6.0 and deprecated in 1.7.0.
+    The feasibility in this sense is represented by the `feasible` field after 1.7.0.
+    """
     optimality: global___Optimality.ValueType
     """The optimality of the solution."""
     relaxation: global___Relaxation.ValueType
