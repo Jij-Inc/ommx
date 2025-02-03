@@ -699,7 +699,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             - x1 + x2 == 2 is feasible
 
             >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
-            >>> solution.feasible
+            >>> solution.feasible_relaxed
             False
             >>> solution.feasible_unrelaxed
             False
@@ -708,7 +708,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             >>> instance.relax_constraint(0, "testing")
             >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
-            >>> solution.feasible
+            >>> solution.feasible_relaxed
             True
             >>> solution.feasible_unrelaxed
             False
