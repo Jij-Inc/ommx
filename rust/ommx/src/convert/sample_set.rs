@@ -138,10 +138,19 @@ impl SampleSet {
             .context("SampleSet lacks objectives")
     }
 
+    pub fn feasible_relaxed(&self) -> &HashMap<u64, bool> {
+        if self.feasible_relaxed.is_empty() {
+            #[allow(deprecated)]
+            &self.feasible
+        } else {
+            &self.feasible_relaxed
+        }
+    }
+
     pub fn num_samples(&self) -> Result<usize> {
         let objectives = self.objectives()?;
         ensure!(
-            objectives.len() == self.feasible.len()
+            objectives.len() == self.feasible_relaxed.len()
                 && objectives.len() == self.feasible_unrelaxed.len(),
             "SampleSet has inconsistent number of objectives and feasibility"
         );
@@ -149,11 +158,11 @@ impl SampleSet {
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.feasible.keys().cloned().collect()
+        self.feasible_relaxed().keys().cloned().collect()
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.feasible
+        self.feasible_relaxed()
             .iter()
             .filter_map(|(id, is_feasible)| is_feasible.then_some(*id))
             .collect()
@@ -239,12 +248,14 @@ impl SampleSet {
                 format!("SampleSet lacks objective for sample with ID={}", sample_id)
             })?,
             decision_variables,
-            feasible_relaxed: Some(*self.feasible.get(&sample_id).with_context(|| {
-                format!(
-                    "SampleSet lacks feasibility for sample with ID={}",
-                    sample_id
-                )
-            })?),
+            feasible_relaxed: Some(*self.feasible_relaxed().get(&sample_id).with_context(
+                || {
+                    format!(
+                        "SampleSet lacks feasibility for sample with ID={}",
+                        sample_id
+                    )
+                },
+            )?),
             feasible_unrelaxed: *self.feasible_unrelaxed.get(&sample_id).with_context(|| {
                 format!(
                     "SampleSet lacks unrelaxed feasibility for sample with ID={}",

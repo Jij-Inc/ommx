@@ -492,7 +492,7 @@ impl Evaluate for Instance {
                 feasible_relaxed,
                 feasible_unrelaxed,
                 sense: self.sense,
-                feasible: Default::default(), // Deprecated
+                ..Default::default()
             },
             used_ids,
         ))
