@@ -258,6 +258,7 @@ pub struct ConstraintHints {
     /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
     #[prost(message, repeated, tag = "2")]
     pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
+    /// SOS1 constraint: at most one of x_1, ..., x_n can be non-zero.
     #[prost(message, repeated, tag = "3")]
     pub sos1_constraints: ::prost::alloc::vec::Vec<Sos1>,
 }

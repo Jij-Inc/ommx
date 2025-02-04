@@ -37,7 +37,9 @@ class ConstraintHints(google.protobuf.message.Message):
         self,
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.sos1_pb2.SOS1
-    ]: ...
+    ]:
+        """SOS1 constraint: at most one of x_1, ..., x_n can be non-zero."""
+
     def __init__(
         self,
         *,
