@@ -16,6 +16,10 @@ permissions:
 jobs:
   jupyter-book:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        lang: [ja, en]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,15 +34,15 @@ jobs:
 
       - name: Build Jupyter Book
         run: |
-          jupyter-book build docs/ja
-          ERROR_LOGS=$(find docs/ja/_build -type f -name "*.err.log")
+          jupyter-book build docs/${{ matrix.lang }}
+          ERROR_LOGS=$(find docs/${{ matrix.lang}}/_build -type f -name "*.err.log")
           if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do echo "[ERROR LOG] $log" && cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-jupyter-book-ja
-          path: ./docs/ja/_build/html
+          name: doc-jupyter-book-${{ matrix.lang }}
+          path: ./docs/${{ matrix.lang }}/_build/html
           retention-days: 30
 
   protobuf:
@@ -133,11 +137,17 @@ jobs:
           mkdir doc
           mv docs/redirect/* doc/
 
-      - name: Download HTML of JupyterBook
+      - name: Download HTML of JupyterBook (ja)
         uses: actions/download-artifact@v4
         with:
           name: doc-jupyter-book-ja
           path: ./doc/ja
+
+      - name: Download HTML of JupyterBook (en)
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-jupyter-book-en
+          path: ./doc/en
 
       - name: Download HTML of protobuf
         uses: actions/download-artifact@v4

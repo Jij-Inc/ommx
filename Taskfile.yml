@@ -30,6 +30,32 @@ tasks:
     cmds:
       - fswatch -o docs/ja/**/*.ipynb | xargs -n1 -I{} jupyter-book build docs/ja
 
+  build_book_en:
+    cmds:
+      - jupyter-book build docs/en
+
+  build_book_en_all:
+    cmds:
+      - jupyter-book build docs/en --all
+
+  open_book_en:
+    cmds:
+      - python -m webbrowser file:///$(pwd)/docs/en/_build/html/index.html
+
+  book_en:
+    cmds:
+      - task: build_book_en
+      - task: open_book_en
+
+  book_en_all:
+    cmds:
+      - task: build_book_en_all
+      - task: open_book_en
+
+  watch_build_book_en:
+    cmds:
+      - fswatch -o docs/en/**/*.ipynb | xargs -n1 -I{} jupyter-book build docs/en
+
   doc_rust:
     cmds:
       - cargo doc --no-deps -p ommx
@@ -74,6 +100,14 @@ tasks:
   install_openjij_adapter:
     cmds:
       - pip install -ve "python/ommx-openjij-adapter[dev]"
+
+  install:
+    cmds:
+      - task: install_python_sdk
+      - task: install_pyscipopt_adapter
+      - task: install_openjij_adapter
+      # Skip because Python-MIP is not available on macOS
+      # - task: install_python_mip_adapter
 
   format_python:
     cmds:

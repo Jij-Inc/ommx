@@ -410,11 +410,30 @@ class SampleSet(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class FeasibleRelaxedEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        value: builtins.bool
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: builtins.bool = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     OBJECTIVES_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
+    FEASIBLE_RELAXED_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
     """Minimize or Maximize"""
@@ -436,13 +455,29 @@ class SampleSet(google.protobuf.message.Message):
     def feasible(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """Feasibility for remaining constraints of each sample. Removed constraints are not included."""
+        """Feasibility for *both* remaining and removed constraints of each sample.
+
+        The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
+        In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+        i.e. removed constraints (introduced in 1.6.0) are not considered.
+        After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+        The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
+        """
 
     @property
     def feasible_unrelaxed(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """Feasibility for both remaining and removed constraints of each sample."""
+        """[Deprecated] This field has been introduced in Python SDK 1.6.0 to represent
+        the feasibility of all constraints of each sample.
+        The `feasible` field is used in this sense after Python SDK 1.7.0.
+        """
+
+    @property
+    def feasible_relaxed(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
+        """Feasibility for remaining (non-removed) constraints of each sample."""
 
     def __init__(
         self,
@@ -453,6 +488,8 @@ class SampleSet(google.protobuf.message.Message):
         constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
         feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
         feasible_unrelaxed: collections.abc.Mapping[builtins.int, builtins.bool]
+        | None = ...,
+        feasible_relaxed: collections.abc.Mapping[builtins.int, builtins.bool]
         | None = ...,
         sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
     ) -> None: ...
@@ -468,6 +505,8 @@ class SampleSet(google.protobuf.message.Message):
             b"decision_variables",
             "feasible",
             b"feasible",
+            "feasible_relaxed",
+            b"feasible_relaxed",
             "feasible_unrelaxed",
             b"feasible_unrelaxed",
             "objectives",

@@ -34,6 +34,7 @@ fn main() -> Result<()> {
 
     let mut cfg = Config::new();
     cfg.type_attribute(".", "#[non_exhaustive]");
+    cfg.field_attribute("SampleSet.feasible_unrelaxed", "#[deprecated]");
     cfg.out_dir(&out).compile_protos(&protos, &[proto_root])?;
 
     std::process::Command::new("rustfmt")
