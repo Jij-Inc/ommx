@@ -6,7 +6,6 @@ from ommx.v1 import Constraint, Instance, DecisionVariable, Solution
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
 from ommx.v1.constraint_hints_pb2 import ConstraintHints
-from ommx.v1.sos1_pb2 import SOS1
 
 from .exception import OMMXPySCIPOptAdapterError
 
