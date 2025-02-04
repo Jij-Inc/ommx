@@ -194,7 +194,9 @@ class OMMXSCIPAdapter:
         return self._model
 
 
-def instance_to_model(instance: Instance) -> pyscipopt.Model:
+def instance_to_model(
+    instance: Instance, enabled_hints: Optional[set[Hint]] = None
+) -> pyscipopt.Model:
     """
     Convert ommx.v1.Instance to pyscipopt.Model.
 
@@ -224,7 +226,7 @@ def instance_to_model(instance: Instance) -> pyscipopt.Model:
 
     """
 
-    builder = OMMXSCIPAdapter(instance)
+    builder = OMMXSCIPAdapter(instance, enabled_hints)
     return builder.build()
 
 
