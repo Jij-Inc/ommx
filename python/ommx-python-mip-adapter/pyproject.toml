@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "1.6.1"
+version = "1.7.0"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
