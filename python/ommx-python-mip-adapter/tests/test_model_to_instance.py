@@ -1,9 +1,8 @@
 import mip
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx.v1.solution_pb2 import Optimality
 
-import ommx_python_mip_adapter as adapter
+from ommx_python_mip_adapter import model_to_instance
 
 
 def test_milp():
@@ -44,7 +43,7 @@ def test_milp():
     model.add_constr(-7 * x1 + 8 * x3 - 9 <= 0)  # type: ignore
     model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)  # type: ignore
 
-    ommx_instance = adapter.model_to_instance(model).raw
+    ommx_instance = model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.MINIMIZE
 
@@ -152,7 +151,7 @@ def test_no_objective_model():
     model.add_constr(1 * x1 + 2 * x2 - 5 == 0)  # type: ignore
     model.add_constr(4 * x1 + 3 * x2 - 10 == 0)  # type: ignore
 
-    ommx_instance = adapter.model_to_instance(model).raw
+    ommx_instance = model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.MAXIMIZE
 
@@ -201,19 +200,3 @@ def test_no_objective_model():
     constraint2_term_x3 = constraint2.function.linear.terms[1]
     assert constraint2_term_x3.id == 1
     assert constraint2_term_x3.coefficient == 3
-
-
-def test_solution_optimality():
-    x = DecisionVariable.integer(1, lower=0, upper=5)
-    y = DecisionVariable.integer(1, lower=0, upper=5)
-    ommx_instance = Instance.from_components(
-        decision_variables=[x, y],
-        objective=x + y,
-        constraints=[],
-        sense=Instance.MAXIMIZE,
-    )
-
-    model = adapter.instance_to_model(ommx_instance)
-    model.optimize()
-    solution = adapter.model_to_solution(model, ommx_instance)
-    assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL

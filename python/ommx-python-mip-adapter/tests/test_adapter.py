@@ -7,7 +7,7 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
 from ommx.v1 import Instance, DecisionVariable
 
-import ommx_python_mip_adapter as adapter
+from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
@@ -24,7 +24,7 @@ def test_error_not_suppoerted_decision_variable():
         sense=Instance.MINIMIZE,
     )
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
-        adapter.instance_to_model(ommx_instance)
+        OMMXPythonMIPAdapter(ommx_instance)
     assert "Not supported decision variable" in str(e.value)
 
 
@@ -40,7 +40,7 @@ def test_error_nonlinear_objective():
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
-        adapter.instance_to_model(ommx_instance)
+        OMMXPythonMIPAdapter(ommx_instance)
     assert "The function must be either `constant` or `linear`." in str(e.value)
 
 
@@ -64,7 +64,7 @@ def test_error_nonlinear_constraint():
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
-        adapter.instance_to_model(ommx_instance)
+        OMMXPythonMIPAdapter(ommx_instance)
     assert "The function must be either `constant` or `linear`." in str(e.value)
 
 
@@ -86,5 +86,5 @@ def test_error_not_supported_constraint_equality():
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
-        adapter.instance_to_model(ommx_instance)
+        OMMXPythonMIPAdapter(ommx_instance)
     assert "Not supported constraint equality" in str(e.value)

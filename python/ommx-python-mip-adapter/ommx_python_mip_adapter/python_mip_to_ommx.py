@@ -7,8 +7,7 @@ from mip.exceptions import ParameterNotAvailable
 from ommx.v1.constraint_pb2 import Constraint, Equality
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1 import Instance, DecisionVariable, Solution
+from ommx.v1 import Instance, DecisionVariable
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -150,105 +149,3 @@ def model_to_instance(model: mip.Model) -> Instance:
     """
     builder = OMMXInstanceBuilder(model)
     return builder.build()
-
-
-def model_to_state(
-    model: mip.Model,
-    instance: Instance,
-) -> State:
-    """
-    The function to create ommx.v1.State from optimized Python-MIP Model.
-
-    Examples
-    =========
-
-    .. doctest::
-
-        The following example of solving an unconstrained linear optimization problem with x1 as the objective function.
-
-        >>> import ommx_python_mip_adapter as adapter
-        >>> from ommx.v1 import Instance, DecisionVariable
-
-        >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
-        >>> ommx_instance = Instance.from_components(
-        ...     decision_variables=[x1],
-        ...     objective=x1,
-        ...     constraints=[],
-        ...     sense=Instance.MINIMIZE,
-        ... )
-        >>> model = adapter.instance_to_model(ommx_instance)
-        >>> model.optimize()
-        <OptimizationStatus.OPTIMAL: 0>
-
-        >>> ommx_state = adapter.model_to_state(model, ommx_instance)
-        >>> ommx_state.entries
-        {1: 0.0}
-    """
-    if not (
-        model.status == mip.OptimizationStatus.OPTIMAL
-        or model.status == mip.OptimizationStatus.FEASIBLE
-    ):
-        raise OMMXPythonMIPAdapterError(
-            "`model.status` must be `OPTIMAL` or `FEASIBLE`."
-        )
-
-    return State(
-        entries={
-            var.id: model.var_by_name(str(var.id)).x  # type: ignore
-            for var in instance.raw.decision_variables
-        }
-    )
-
-
-def model_to_solution(
-    model: mip.Model,
-    instance: Instance,
-) -> Solution:
-    """
-    Convert optimized Python-MIP model and ommx.v1.Instance to ommx.v1.Solution.
-
-    Examples
-    =========
-
-    .. doctest::
-
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> from ommx_python_mip_adapter import instance_to_model, model_to_solution
-
-        >>> p = [10, 13, 18, 31, 7, 15]
-        >>> w = [11, 15, 20, 35, 10, 33]
-        >>> x = [DecisionVariable.binary(i) for i in range(6)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(p[i] * x[i] for i in range(6)),
-        ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-
-        >>> model = instance_to_model(instance)
-        >>> model.optimize()
-        <OptimizationStatus.OPTIMAL: 0>
-
-        >>> solution = model_to_solution(model, instance)
-        >>> solution.raw.objective
-        41.0
-
-    """
-    state = model_to_state(model, instance)
-    solution = instance.evaluate(state)
-
-    dual_variables = {}
-    for constraint in model.constrs:
-        pi = constraint.pi
-        if pi is not None:
-            id = int(constraint.name)
-            dual_variables[id] = pi
-    for constraint in solution.raw.evaluated_constraints:
-        id = constraint.id
-        if id in dual_variables:
-            constraint.dual_variable = dual_variables[id]
-
-    if model.status == mip.OptimizationStatus.OPTIMAL:
-        solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
-
-    return solution
