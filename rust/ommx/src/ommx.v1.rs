@@ -237,6 +237,18 @@ pub struct OneHot {
     #[prost(uint64, repeated, tag = "2")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
+/// A message representing a one-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Sos1 {
+    /// The IDs of the original constraints.
+    #[prost(uint64, repeated, tag = "1")]
+    pub constraint_ids: ::prost::alloc::vec::Vec<u64>,
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+}
 /// A constraint hint is an additional inforomation to be used by solver to gain performance.
 /// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
 #[non_exhaustive]
@@ -246,6 +258,8 @@ pub struct ConstraintHints {
     /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
     #[prost(message, repeated, tag = "2")]
     pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
+    #[prost(message, repeated, tag = "3")]
+    pub sos1_constraints: ::prost::alloc::vec::Vec<Sos1>,
 }
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]

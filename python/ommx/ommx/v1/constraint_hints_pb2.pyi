@@ -9,6 +9,7 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.message
 import ommx.v1.one_hot_pb2
+import ommx.v1.sos1_pb2
 import typing
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
@@ -22,6 +23,7 @@ class ConstraintHints(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
     ONE_HOT_CONSTRAINTS_FIELD_NUMBER: builtins.int
+    SOS1_CONSTRAINTS_FIELD_NUMBER: builtins.int
     @property
     def one_hot_constraints(
         self,
@@ -30,14 +32,27 @@ class ConstraintHints(google.protobuf.message.Message):
     ]:
         """One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`."""
 
+    @property
+    def sos1_constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.sos1_pb2.SOS1
+    ]: ...
     def __init__(
         self,
         *,
         one_hot_constraints: collections.abc.Iterable[ommx.v1.one_hot_pb2.OneHot]
         | None = ...,
+        sos1_constraints: collections.abc.Iterable[ommx.v1.sos1_pb2.SOS1] | None = ...,
     ) -> None: ...
     def ClearField(
-        self, field_name: typing.Literal["one_hot_constraints", b"one_hot_constraints"]
+        self,
+        field_name: typing.Literal[
+            "one_hot_constraints",
+            b"one_hot_constraints",
+            "sos1_constraints",
+            b"sos1_constraints",
+        ],
     ) -> None: ...
 
 global___ConstraintHints = ConstraintHints

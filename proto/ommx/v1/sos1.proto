@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+// A message representing a one-hot constraint.
+message SOS1 {
+  // The IDs of the original constraints.
+  repeated uint64 constraint_ids = 1;
+  // The list of ids of decision variables that are constrained to be one-hot.
+  repeated uint64 decision_variables = 2;
+}
