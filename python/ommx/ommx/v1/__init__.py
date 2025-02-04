@@ -699,7 +699,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             - x1 + x2 == 2 is feasible
 
             >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
-            >>> solution.feasible
+            >>> solution.feasible_relaxed
             False
             >>> solution.feasible_unrelaxed
             False
@@ -708,7 +708,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             >>> instance.relax_constraint(0, "testing")
             >>> solution = instance.evaluate({0: 0, 1: 1, 2: 1})
-            >>> solution.feasible
+            >>> solution.feasible_relaxed
             True
             >>> solution.feasible_unrelaxed
             False
@@ -1107,11 +1107,39 @@ class Solution(UserAnnotationBase):
 
     @property
     def feasible(self) -> bool:
-        return self.raw.feasible
+        """
+        Feasibility of the solution in terms of all constraints, including :py:attr:`~Instance.removed_constraints`.
+
+        This is an alias for :py:attr:`~Solution.feasible_unrelaxed`.
+
+        Compatibility
+        -------------
+        The meaning of this property has changed from Python SDK 1.7.0.
+        Previously, this property represents the feasibility of the remaining constraints only, i.e. excluding relaxed constraints.
+        From Python SDK 1.7.0, this property represents the feasibility of all constraints, including relaxed constraints.
+        """
+        return self.feasible_unrelaxed
+
+    @property
+    def feasible_relaxed(self) -> bool:
+        """
+        Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
+        """
+        # For compatibility: object created by 1.6.0 only contains `feasible` field and does not contain `feasible_relaxed` field.
+        if self.raw.HasField("feasible_relaxed"):
+            return self.raw.feasible_relaxed
+        else:
+            return self.raw.feasible
 
     @property
     def feasible_unrelaxed(self) -> bool:
-        return self.raw.feasible_unrelaxed
+        """
+        Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
+        """
+        if self.raw.HasField("feasible_relaxed"):
+            return self.raw.feasible
+        else:
+            return self.raw.feasible_unrelaxed
 
     @property
     def optimality(self) -> Optimality.ValueType:
@@ -2521,13 +2549,14 @@ class SampleSet(UserAnnotationBase):
 
         >>> sample_set = instance.evaluate_samples(samples)
         >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
-                   objective  feasible  feasible_unrelaxed
-        sample_id                                         
-        1                3.0      True                True
-        0                1.0      True                True
-        2                3.0     False               False
+                   objective  feasible
+        sample_id                     
+        1                3.0      True
+        0                1.0      True
+        2                3.0     False
 
-    The :attr:`summary` attribute shows the objective value, feasibility, and unrelaxed feasibility of each sample.
+    The :attr:`summary` attribute shows the objective value, feasibility of each sample.
+    Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
     You can get each samples by :meth:`get` as a :class:`Solution` format:
 
     .. doctest::
@@ -2591,12 +2620,12 @@ class SampleSet(UserAnnotationBase):
 
     @property
     def summary(self) -> DataFrame:
+        feasible = self.feasible
         df = DataFrame(
             {
                 "sample_id": id,
                 "objective": value,
-                "feasible": self.raw.feasible[id],
-                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+                "feasible": feasible[id],
             }
             for id, value in self.objectives.items()
         )
@@ -2604,8 +2633,8 @@ class SampleSet(UserAnnotationBase):
             return df
 
         return df.sort_values(
-            by=["feasible", "feasible_unrelaxed", "objective"],
-            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
 
     @property
@@ -2622,12 +2651,12 @@ class SampleSet(UserAnnotationBase):
                 name += f"{c.parameters}"
             return name
 
+        feasible = self.feasible
         df = DataFrame(
             {
                 "sample_id": id,
                 "objective": value,
-                "feasible": self.raw.feasible[id],
-                "feasible_unrelaxed": self.raw.feasible_unrelaxed[id],
+                "feasible": feasible[id],
             }
             | {_constraint_label(c): c.feasible[id] for c in self.raw.constraints}
             for id, value in self.objectives.items()
@@ -2636,26 +2665,50 @@ class SampleSet(UserAnnotationBase):
         if df.empty:
             return df
         df = df.sort_values(
-            by=["feasible", "feasible_unrelaxed", "objective"],
-            ascending=[False, False, self.raw.sense == Instance.MINIMIZE],
+            by=["feasible", "objective"],
+            ascending=[False, self.raw.sense == Instance.MINIMIZE],
         ).set_index("sample_id")
         return df
 
     @property
     def feasible(self) -> dict[int, bool]:
-        return dict(self.raw.feasible)
+        """
+        Feasibility in terms of the original constraints, an alias to :attr:`feasible_unrelaxed`.
+
+        Compatibility
+        -------------
+        The meaning of this property has changed from Python SDK 1.7.0.
+        Previously, this property represents the feasibility of the remaining constraints only, i.e. excluding relaxed constraints.
+        From Python SDK 1.7.0, this property represents the feasibility of all constraints, including relaxed constraints.
+        """
+        return self.feasible_unrelaxed
+
+    @property
+    def feasible_relaxed(self) -> dict[int, bool]:
+        """
+        Feasibility in terms of the remaining (non-removed) constraints.
+
+        For each `sample_id`, this property shows whether the sample is feasible for the all :attr:`Instance.constraints`
+        """
+        if len(self.raw.feasible_relaxed) > 0:
+            return dict(self.raw.feasible_relaxed)
+        else:
+            return dict(self.raw.feasible)
 
     @property
     def feasible_unrelaxed(self) -> dict[int, bool]:
         """
         Feasibility in terms of the original constraints without relaxation.
 
-        The relaxation of the problem is represented by the :attr:`Instance.removed_constraints`.
         For each `sample_id`, this property shows whether the sample is feasible
-        both for the :attr:`Instance.constraints` and :attr:`Instance.removed_constraints`.
-        On the other hand, :attr:`feasible` shows the feasibility only for the :attr:`Instance.constraints`.
+        both for the all :attr:`Instance.constraints` and all :attr:`Instance.removed_constraints`.
         """
-        return dict(self.raw.feasible_unrelaxed)
+        if len(self.raw.feasible_relaxed) > 0:
+            # After 1.7.0
+            return dict(self.raw.feasible)
+        else:
+            # Before 1.7.0
+            return dict(self.raw.feasible_unrelaxed)
 
     @property
     def objectives(self) -> dict[int, float]:
