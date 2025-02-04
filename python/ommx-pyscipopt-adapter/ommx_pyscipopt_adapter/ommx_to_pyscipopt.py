@@ -177,7 +177,7 @@ class OMMXSCIPAdapter:
                 name = f"sos1_{bid}"
             else:
                 name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-            vars = sos1.decision_variables
+            vars = [self._varname_to_var[str(v)] for v in sos1.decision_variables]
             self._model.addConsSOS1(vars, name=name)
 
     def build(self) -> pyscipopt.Model:
