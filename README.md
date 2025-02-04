@@ -1,6 +1,7 @@
 # OMMX
 
-[![Document](https://img.shields.io/badge/OMMX-Document-blue)](https://jij-inc.github.io/ommx/)
+[![Book/en](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en)
+[![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja)
 [![Discord-EN](https://img.shields.io/badge/Discord-English-default?logo=Discord)](https://discord.gg/aGfCmnJp)
 [![Discord-JP](https://img.shields.io/badge/Discord-日本語-default?logo=Discord)](https://discord.gg/ckAgHqE3)
 
