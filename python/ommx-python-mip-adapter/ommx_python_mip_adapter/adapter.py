@@ -24,7 +24,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
     ):
         """
         :param ommx_instance: The ommx.v1.Instance to solve.
-        :param relax: Set to true is integer relaxation will be applied to this model. NOTE: setting this flag does not itself apply the relaxation. It merely sets metadata so the decoding process can know about it. When optimizing the model without using `OMMXPythonMIPAdapter.solve` you must still pass the relaxation flag to Python-MIP manually.
+        :param relax: Applies integer relaxation globally to this model using Python-MIP's `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`.
         :param solver_name: Passes a specific solver name to the Python-MIP model. Defaults to `CBC`.
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
@@ -53,6 +53,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self._set_constraints()
 
         if relax:
+            self.model.relax()
             self._relax = True
         else:
             self._relax = False
