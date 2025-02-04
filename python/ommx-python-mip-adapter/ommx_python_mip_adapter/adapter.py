@@ -22,6 +22,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         solver: Optional[mip.Solver] = None,
         verbose: bool = False,
     ):
+        """
+        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param relax: Set to true is integer relaxation will be applied to this model. NOTE: setting this flag does not itself apply the relaxation. It merely sets metadata so the decoding process can know about it. When optimizing the model without using `OMMXPythonMIPAdapter.solve` you must still pass the relaxation flag to Python-MIP manually.
+        :param solver_name: Passes a specific solver name to the Python-MIP model. Defaults to `CBC`.
+        :param solver: Passes a specific solver to the Python-MIP model.
+        :param verbose: If True, enable Python-MIP's verbose mode
+        """
         if ommx_instance.raw.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
         elif ommx_instance.raw.sense == Instance.MINIMIZE:
@@ -59,7 +66,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Solve the given ommx.v1.Instance using Python-MIP, returning a ommx.v1.Solution.
 
-        :param instance: The ommx.v1.Instance to solve.
+        :param ommx_instance: The ommx.v1.Instance to solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
         :param verbose: If True, enable Python-MIP's verbose mode
 
@@ -297,7 +304,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 for var in self.instance.raw.decision_variables
             }
         )
-
 
     def _set_decision_variables(self):
         for var in self.instance.raw.decision_variables:
