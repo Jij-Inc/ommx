@@ -46,7 +46,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self._set_constraints()
 
         if relax:
-            self.model.relax()
             self._relax = True
         else:
             self._relax = False
@@ -61,7 +60,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         Solve the given ommx.v1.Instance using Python-MIP, returning a ommx.v1.Solution.
 
         :param instance: The ommx.v1.Instance to solve.
-        :param relax: If True, relax all integer variables to continuous variables by calling `Model.relax() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.relax>`_ of Python-MIP.
+        :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
         :param verbose: If True, enable Python-MIP's verbose mode
 
         Examples
@@ -188,6 +187,14 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         effectively the same problem as the OMMX instance used to create the
         adapter.
 
+        When creating the solution, this method reflects the `relax` flag used
+        in this adapter's constructor. The solution's `relaxation` metadata will
+        be set _only_ if `relax=True` was passed to the constructor. There is no
+        way for this adapter to get relaxation information from Python-MIP
+        directly. If relaxing the model separately after obtaining it with
+        `solver_input`, you must set `solution.raw.relaxation` yourself if you
+        care about this value.
+
         Examples
         =========
 
@@ -242,8 +249,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         if data.status == mip.OptimizationStatus.OPTIMAL:
             solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
 
-            if self._relax:
-                solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
+        if self._relax:
+            solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
         return solution
 
     def decode_to_state(self, data: mip.Model) -> State:
@@ -291,14 +298,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             }
         )
 
-    def relax(self):
-        """
-        Enables relaxation of integer to continuous in the Python-MIP model.
-
-        This is not reversible.
-        """
-        self._relax = True
-        self.model.relax()
 
     def _set_decision_variables(self):
         for var in self.instance.raw.decision_variables:
