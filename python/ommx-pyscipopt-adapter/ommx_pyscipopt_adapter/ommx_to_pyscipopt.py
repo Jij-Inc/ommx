@@ -5,6 +5,8 @@ import pyscipopt
 from ommx.v1 import Constraint, Instance, DecisionVariable, Solution
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
+from ommx.v1.constraint_hints_pb2 import ConstraintHints
+from ommx.v1.sos1_pb2 import SOS1
 
 from .exception import OMMXPySCIPOptAdapterError
 
@@ -129,6 +131,7 @@ class OMMXSCIPAdapter:
 
     def _set_constraints(self):
         ommx_constraints = self._ommx_instance.constraints
+        ommx_hints: ConstraintHints = self._ommx_instance.constraint_hints
 
         for constraint in ommx_constraints:
             if constraint.function.HasField("linear"):
@@ -167,6 +170,11 @@ class OMMXSCIPAdapter:
                 )
 
             self._model.addCons(constr_expr, name=str(constraint.id))
+
+        for sos1 in ommx_hints.sos1_constraints:
+            name = f"sos1_{'_'.join(map(str, sos1.constraint_ids))}"
+            vars = sos1.decision_variables
+            self._model.addConsSOS1(vars, name=name)
 
     def build(self) -> pyscipopt.Model:
         self._set_decision_variables()
