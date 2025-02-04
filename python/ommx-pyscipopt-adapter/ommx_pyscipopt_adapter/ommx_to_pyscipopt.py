@@ -1,4 +1,5 @@
 import math
+from typing import Literal, Optional
 
 import pyscipopt
 
@@ -10,11 +11,15 @@ from ommx.v1.constraint_hints_pb2 import ConstraintHints
 from .exception import OMMXPySCIPOptAdapterError
 
 
+Hint = Literal["SOS1"]
+
+
 class OMMXSCIPAdapter:
-    def __init__(self, instance: Instance):
+    def __init__(self, instance: Instance, enabled_hints: Optional[set[Hint]] = None):
         self._ommx_instance = instance.raw
         self._model = pyscipopt.Model()
         self._model.hideOutput()
+        self._enabled_hints = enabled_hints
 
     def _set_decision_variables(self):
         ommx_objective = self._ommx_instance.objective
@@ -170,15 +175,16 @@ class OMMXSCIPAdapter:
 
             self._model.addCons(constr_expr, name=str(constraint.id))
 
-        for sos1 in ommx_hints.sos1_constraints:
-            bid = sos1.binary_constraint_id
-            big_m_ids = sos1.big_m_constraint_ids
-            if len(big_m_ids) == 0:
-                name = f"sos1_{bid}"
-            else:
-                name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-            vars = [self._varname_to_var[str(v)] for v in sos1.decision_variables]
-            self._model.addConsSOS1(vars, name=name)
+        if self._enabled_hints is None or "SOS1" in self._enabled_hints:
+            for sos1 in ommx_hints.sos1_constraints:
+                bid = sos1.binary_constraint_id
+                big_m_ids = sos1.big_m_constraint_ids
+                if len(big_m_ids) == 0:
+                    name = f"sos1_{bid}"
+                else:
+                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
+                vars = [self._varname_to_var[str(v)] for v in sos1.decision_variables]
+                self._model.addConsSOS1(vars, name=name)
 
     def build(self) -> pyscipopt.Model:
         self._set_decision_variables()
