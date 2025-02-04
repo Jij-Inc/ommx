@@ -171,7 +171,12 @@ class OMMXSCIPAdapter:
             self._model.addCons(constr_expr, name=str(constraint.id))
 
         for sos1 in ommx_hints.sos1_constraints:
-            name = f"sos1_{'_'.join(map(str, sos1.constraint_ids))}"
+            bid = sos1.binary_constraint_id
+            big_m_ids = sos1.big_m_constraint_ids
+            if len(big_m_ids) == 0:
+                name = f"sos1_{bid}"
+            else:
+                name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
             vars = sos1.decision_variables
             self._model.addConsSOS1(vars, name=name)
 

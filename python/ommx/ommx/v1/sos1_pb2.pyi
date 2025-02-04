@@ -18,13 +18,16 @@ class SOS1(google.protobuf.message.Message):
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
-    CONSTRAINT_IDS_FIELD_NUMBER: builtins.int
+    BINARY_CONSTRAINT_ID_FIELD_NUMBER: builtins.int
+    BIG_M_CONSTRAINT_IDS_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
+    binary_constraint_id: builtins.int
+    """The ID of the SOS1 constraint on binary variables."""
     @property
-    def constraint_ids(
+    def big_m_constraint_ids(
         self,
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """The IDs of the original constraints."""
+        """The IDs of the big-M constraint on non-binary variables."""
 
     @property
     def decision_variables(
@@ -35,14 +38,17 @@ class SOS1(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        constraint_ids: collections.abc.Iterable[builtins.int] | None = ...,
+        binary_constraint_id: builtins.int = ...,
+        big_m_constraint_ids: collections.abc.Iterable[builtins.int] | None = ...,
         decision_variables: collections.abc.Iterable[builtins.int] | None = ...,
     ) -> None: ...
     def ClearField(
         self,
         field_name: typing.Literal[
-            "constraint_ids",
-            b"constraint_ids",
+            "big_m_constraint_ids",
+            b"big_m_constraint_ids",
+            "binary_constraint_id",
+            b"binary_constraint_id",
             "decision_variables",
             b"decision_variables",
         ],

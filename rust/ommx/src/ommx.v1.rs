@@ -242,11 +242,14 @@ pub struct OneHot {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Sos1 {
-    /// The IDs of the original constraints.
-    #[prost(uint64, repeated, tag = "1")]
-    pub constraint_ids: ::prost::alloc::vec::Vec<u64>,
-    /// The list of ids of decision variables that are constrained to be one-hot.
+    /// The ID of the SOS1 constraint on binary variables.
+    #[prost(uint64, tag = "1")]
+    pub binary_constraint_id: u64,
+    /// The IDs of the big-M constraint on non-binary variables.
     #[prost(uint64, repeated, tag = "2")]
+    pub big_m_constraint_ids: ::prost::alloc::vec::Vec<u64>,
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "3")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
 /// A constraint hint is an additional inforomation to be used by solver to gain performance.
