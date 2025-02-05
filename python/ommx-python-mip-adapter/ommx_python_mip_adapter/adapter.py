@@ -65,7 +65,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
     ) -> Solution:
         """
-        Solve the given ommx.v1.Instance using Python-MIP, returning a ommx.v1.Solution.
+        Solve the given ommx.v1.Instance using Python-MIP, returning an ommx.v1.Solution.
 
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.

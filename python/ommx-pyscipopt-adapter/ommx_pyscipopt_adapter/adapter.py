@@ -23,6 +23,92 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     @staticmethod
     def solve(ommx_instance: Instance) -> Solution:
+        """
+        Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
+
+        :param ommx_instance: The ommx.v1.Instance to solve.
+
+        Examples
+        =========
+
+        KnapSack Problem
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx.v1.solution_pb2 import Optimality
+            >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> w = [11, 15, 20, 35, 10, 33]
+            >>> x = [DecisionVariable.binary(i) for i in range(6)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(p[i] * x[i] for i in range(6)),
+            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            Solve it
+
+            >>> solution = OMMXPySCIPOptAdapter.solve(instance)
+
+            Check output
+
+            >>> sorted([(id, value) for id, value in solution.state.entries.items()])
+            [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
+            >>> solution.feasible
+            True
+            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+
+            p[0] + p[3] = 41
+            w[0] + w[3] = 46 <= 47
+
+            >>> solution.objective
+            41.0
+            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            -1.0
+
+        Infeasible Problem
+
+        .. doctest::
+
+                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+                >>> x = DecisionVariable.integer(0, upper=3, lower=0)
+                >>> instance = Instance.from_components(
+                ...     decision_variables=[x],
+                ...     objective=x,
+                ...     constraints=[x >= 4],
+                ...     sense=Instance.MAXIMIZE,
+                ... )
+
+                >>> OMMXPySCIPOptAdapter.solve(instance)
+                Traceback (most recent call last):
+                    ...
+                ommx.adapter.InfeasibleDetected: Model was infeasible
+
+        Unbounded Problem
+
+        .. doctest::
+
+                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+                >>> x = DecisionVariable.integer(0, lower=0)
+                >>> instance = Instance.from_components(
+                ...     decision_variables=[x],
+                ...     objective=x,
+                ...     constraints=[],
+                ...     sense=Instance.MAXIMIZE,
+                ... )
+
+                >>> OMMXPySCIPOptAdapter.solve(instance)
+                Traceback (most recent call last):
+                    ...
+                ommx.adapter.UnboundedDetected: Model was unbounded
+        """
         adapter = OMMXPySCIPOptAdapter(ommx_instance)
         model = adapter.solver_input
         model.optimize()
@@ -30,6 +116,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     @property
     def solver_input(self) -> pyscipopt.Model:
+        """The PySCIPOpt model generated from this OMMX instance"""
         return self.model
 
     def decode(self, data: pyscipopt.Model) -> Solution:
@@ -120,6 +207,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> ommx_state = adapter.decode_to_state(model)
             >>> ommx_state.entries
             {1: -0.0}
+
         """
         if data.getStatus() == "unknown":
             raise OMMXPySCIPOptAdapterError(
@@ -145,7 +233,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.decision_variables:
+        for var in self.instance.raw.decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:
