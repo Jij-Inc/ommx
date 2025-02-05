@@ -137,7 +137,22 @@ class OMMXSCIPAdapter:
         ommx_constraints = self._ommx_instance.constraints
         ommx_hints: ConstraintHints = self._ommx_instance.constraint_hints
 
+        excluded = set()
+        if self._enabled_hints is None or "SOS1" in self._enabled_hints:
+            for sos1 in ommx_hints.sos1_constraints:
+                bid = sos1.binary_constraint_id
+                excluded.add(bid)
+                big_m_ids = sos1.big_m_constraint_ids
+                if len(big_m_ids) == 0:
+                    name = f"sos1_{bid}"
+                else:
+                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
+                vars = [self._varname_to_var[str(v)] for v in sos1.decision_variables]
+                self._model.addConsSOS1(vars, name=name)
+
         for constraint in ommx_constraints:
+            if constraint.id in excluded:
+                continue
             if constraint.function.HasField("linear"):
                 expr = self._make_linear_expr(constraint.function)
             elif constraint.function.HasField("quadratic"):
@@ -174,17 +189,6 @@ class OMMXSCIPAdapter:
                 )
 
             self._model.addCons(constr_expr, name=str(constraint.id))
-
-        if self._enabled_hints is None or "SOS1" in self._enabled_hints:
-            for sos1 in ommx_hints.sos1_constraints:
-                bid = sos1.binary_constraint_id
-                big_m_ids = sos1.big_m_constraint_ids
-                if len(big_m_ids) == 0:
-                    name = f"sos1_{bid}"
-                else:
-                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-                vars = [self._varname_to_var[str(v)] for v in sos1.decision_variables]
-                self._model.addConsSOS1(vars, name=name)
 
     def build(self) -> pyscipopt.Model:
         self._set_decision_variables()
