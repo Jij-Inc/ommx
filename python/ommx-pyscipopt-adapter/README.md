@@ -13,7 +13,7 @@ pip install ommx-pyscipopt-adapter
 SCIP can be used through `ommx-pyscipopt-adapter` by using the following:
 
 ```python markdown-code-runner
-import ommx_pyscipopt_adapter as adapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 from ommx.v1 import Instance, DecisionVariable
 
 x1 = DecisionVariable.integer(1, lower=0, upper=5)
