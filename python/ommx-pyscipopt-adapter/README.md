@@ -24,13 +24,10 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Convert from `ommx.v1.Instance` to `pyscipopt.Model`
-model = adapter.instance_to_model(ommx_instance)
-model.optimize()
-# Create `ommx.v1.State` from Optimized `pyscipopt.Model`
-ommx_state = adapter.model_to_state(model, ommx_instance)
+# Create `ommx.v1.Solution` from the `pyscipot.Model`
+ommx_solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
 
-print(ommx_state)
+print(ommx_solution)
 ```
 
 ## Reference
