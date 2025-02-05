@@ -82,7 +82,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
-            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
             >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
@@ -104,7 +104,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             True
             >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
 
-            p[0] + p[3] = 41
+            p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
 
             >>> solution.objective
