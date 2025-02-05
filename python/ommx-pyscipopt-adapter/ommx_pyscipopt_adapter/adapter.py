@@ -214,6 +214,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 "The model may not be optimized. [status: unknown]"
             )
 
+        if data.getStatus() == "infeasible":
+            raise InfeasibleDetected("Model was infeasible")
+
+        if data.getStatus() == "unbounded":
+            raise UnboundedDetected("Model was unbounded")
+
         # NOTE: It is assumed that getBestSol will return an error
         #       if there is no feasible solution.
         try:

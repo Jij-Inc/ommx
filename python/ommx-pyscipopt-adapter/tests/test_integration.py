@@ -1,8 +1,7 @@
 import pytest
 
 from ommx_pyscipopt_adapter import (
-    instance_to_model,
-    model_to_state,
+    OMMXPySCIPOptAdapter
 )
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
@@ -22,9 +21,10 @@ def test_integration_lp(generater):
     #     A @ x = b    (A: regular matrix, b: constant vector)
     instance = generater.get_v1_instance()
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
     expected = generater.get_v1_state()
 
     actual_entries = state.entries
@@ -58,10 +58,10 @@ def test_integration_milp():
         sense=Instance.MINIMIZE,
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(3)
@@ -81,9 +81,10 @@ def test_integration_binary():
         sense=Instance.MINIMIZE,
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(1)
@@ -103,9 +104,10 @@ def test_integration_maximize():
         sense=Instance.MAXIMIZE,
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(0)
@@ -130,13 +132,12 @@ def test_integration_constant_objective():
         sense=Instance.MINIMIZE,
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-
-    # chack objective
+    # check objective
     assert model.getObjVal() == 0
-
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] + actual_entries[2] == pytest.approx(5)
@@ -164,9 +165,10 @@ def test_integration_quadratic_objective():
         constraints=[x1 + x2 == 4],
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(2)
@@ -201,9 +203,10 @@ def test_integration_quadratic_constraint():
         ],
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(7)
@@ -237,10 +240,10 @@ def test_integration_feasible_constant_constraint():
         sense=Instance.MINIMIZE,
     )
 
-    model = instance_to_model(instance)
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
     model.optimize()
-
-    state = model_to_state(model, instance)
+    state = adapter.decode_to_state(model)
 
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(3)
