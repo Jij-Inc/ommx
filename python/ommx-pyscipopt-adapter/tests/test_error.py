@@ -110,7 +110,7 @@ def test_error_infeasible_model():
         ],
         sense=Instance.MINIMIZE,
     )
-    with pytest.raises(InfeasibleDetected) as e:
+    with pytest.raises(InfeasibleDetected):
         OMMXPySCIPOptAdapter.solve(ommx_instance)
 
 
