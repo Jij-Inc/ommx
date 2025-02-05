@@ -108,7 +108,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             w[0] + w[3] = 46 <= 47
 
             >>> solution.objective
-            41.0
+            42.0
             >>> solution.raw.evaluated_constraints[0].evaluated_value
             -1.0
 
@@ -211,7 +211,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> from ommx.v1 import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
-            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
             >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
@@ -229,7 +229,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution = adapter.decode(model)
             >>> solution.raw.objective
-            41.0
+            42.0
 
         """
         # TODO check if `optimize()` has been called

@@ -139,7 +139,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
             >>> from ommx.v1 import Instance, DecisionVariable
 
-            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
             >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
@@ -156,7 +156,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> solution = adapter.decode(model)
             >>> solution.raw.objective
-            41.0
+            42.0
 
         """
 
