@@ -188,7 +188,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         This method is intended to be used if the model has been acquired with
         `solver_input` for futher adjustment of the solver parameters, and
-        separately solve.
+        separately optimizing the model.
 
         Note that alterations to the model may make the decoding process
         incompatible -- decoding will only work if the model still describes

@@ -3,9 +3,10 @@ from __future__ import annotations
 import pyscipopt
 import math
 
-from ommx.adapter import SolverAdapter
+from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
 from ommx.v1.function_pb2 import Function
+from ommx.v1.solution_pb2 import State, Optimality
 
 from .exception import OMMXPySCIPOptAdapterError
 
@@ -22,14 +23,126 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     @staticmethod
     def solve(ommx_instance: Instance) -> Solution:
-        pass
+        adapter = OMMXPySCIPOptAdapter(ommx_instance)
+        model = adapter.solver_input
+        model.optimize()
+        return adapter.decode(model)
 
     @property
     def solver_input(self) -> pyscipopt.Model:
-        pass
+        return self.model
 
     def decode(self, data: pyscipopt.Model) -> Solution:
-        pass
+        """Convert optimized pyscipopt.Model and ommx.v1.Instance to ommx.v1.Solution.
+
+        This method is intended to be used if the model has been acquired with
+        `solver_input` for futher adjustment of the solver parameters, and
+        separately optimizing the model.
+
+        Note that alterations to the model may make the decoding process
+        incompatible -- decoding will only work if the model still describes
+        effectively the same problem as the OMMX instance used to create the
+        adapter.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+            >>> from ommx.v1 import Instance, DecisionVariable
+
+            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> w = [11, 15, 20, 35, 10, 33]
+            >>> x = [DecisionVariable.binary(i) for i in range(6)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(p[i] * x[i] for i in range(6)),
+            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> adapter = OMMXPySCIPOptAdapter(instance)
+            >>> model = adapter.solver_input
+            >>> # ... some modification of model's parameters
+            >>> model.optimize()
+
+            >>> solution = adapter.decode(model)
+            >>> solution.raw.objective
+            41.0
+
+        """
+
+        # there appears to be no enum for this in pyscipopt
+        if data.getStatus() == "infeasible":
+            raise InfeasibleDetected("Model was infeasible")
+
+        if data.getStatus() == "unbounded":
+            raise UnboundedDetected("Model was unbounded")
+
+        # TODO: Add the feature to store dual variables in `solution`.
+
+        state = self.decode_to_state(data)
+        solution = self.instance.evaluate(state)
+
+        if (
+            data.getStatus() == "optimal"
+        ):  # pyscipopt does not appear to have an enum or constant for this
+            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+
+        return solution
+
+    def decode_to_state(self, data: pyscipopt.Model) -> State:
+        """
+        Create an ommx.v1.State from an optimized PySCIPOpt Model.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            The following example shows how to solve an unconstrained linear optimization problem with `x1` as the objective function.
+
+            >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+            >>> from ommx.v1 import Instance, DecisionVariable
+
+            >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
+            >>> ommx_instance = Instance.from_components(
+            ...     decision_variables=[x1],
+            ...     objective=x1,
+            ...     constraints=[],
+            ...     sense=Instance.MINIMIZE,
+            ... )
+            >>> adapter = OMMXPySCIPOptAdapter(ommx_instance)
+            >>> model = adapter.solver_input
+            >>> model.optimize()
+
+            >>> ommx_state = adapter.decode_to_state(model)
+            >>> ommx_state.entries
+            {1: -0.0}
+        """
+        if data.getStatus() == "unknown":
+            raise OMMXPySCIPOptAdapterError(
+                "The model may not be optimized. [status: unknown]"
+            )
+
+        # NOTE: It is assumed that getBestSol will return an error
+        #       if there is no feasible solution.
+        try:
+            sol = data.getBestSol()
+            # NOTE recreating the map instead of using `self.varname_map`, as
+            # this is probably more robust.
+            varname_map = {var.name: var for var in data.getVars()}
+            return State(
+                entries={
+                    var.id: sol[varname_map[str(var.id)]]
+                    for var in self.instance.raw.decision_variables
+                }
+            )
+        except Exception:
+            raise OMMXPySCIPOptAdapterError(
+                f"There is no feasible solution. [status: {data.getStatus()}]"
+            )
 
     def _set_decision_variables(self):
         for var in self.instance.decision_variables:
