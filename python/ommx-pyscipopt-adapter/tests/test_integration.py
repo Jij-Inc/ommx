@@ -1,8 +1,6 @@
 import pytest
 
-from ommx_pyscipopt_adapter import (
-    OMMXPySCIPOptAdapter
-)
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
 from ommx.testing import SingleFeasibleLPGenerator, DataType
