@@ -8,9 +8,6 @@ parts:
     chapters:
       - url: https://jij-inc.github.io/ommx/en/
         title: "English"
-  - caption: "Concept"
-    chapters:
-      - file: concept/architecture
   - caption: "Tutorial"
     chapters:
       - file: tutorial/solve_with_ommx_adapter
