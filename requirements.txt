@@ -173,17 +173,17 @@ numpy==1.26.4
     #   pandas
     #   pyarrow
     #   scipy
-ommx==1.6.0
+ommx==1.7.0
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-openjij-adapter==1.6.0
+ommx-openjij-adapter==1.7.0
     # via ommx-book (pyproject.toml)
-ommx-pyscipopt-adapter==1.6.0
+ommx-pyscipopt-adapter==1.7.0
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==1.6.0
+ommx-python-mip-adapter==1.7.0
     # via ommx-book (pyproject.toml)
 openjij==0.9.2
     # via ommx-openjij-adapter
@@ -276,7 +276,9 @@ scipy==1.11.4
     #   jij-cimod
     #   openjij
 setuptools==75.6.0
-    # via sphinx-togglebutton
+    # via
+    #   sphinx-togglebutton
+    #   sphinxcontrib-bibtex
 six==1.17.0
     # via
     #   pybtex
@@ -358,7 +360,6 @@ traitlets==5.14.3
     #   nbformat
 typing-extensions==4.12.2
     # via
-    #   ipython
     #   myst-nb
     #   ommx
     #   openjij
