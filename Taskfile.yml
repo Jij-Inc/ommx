@@ -28,7 +28,7 @@ tasks:
 
   watch_build_book_ja:
     cmds:
-      - fswatch -o docs/ja/**/*.ipynb | xargs -n1 -I{} jupyter-book build docs/ja
+      - fswatch -o $(find docs/ja/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/ja
 
   build_book_en:
     cmds:
@@ -54,7 +54,7 @@ tasks:
 
   watch_build_book_en:
     cmds:
-      - fswatch -o docs/en/**/*.ipynb | xargs -n1 -I{} jupyter-book build docs/en
+      - fswatch -o $(find docs/en/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/en
 
   doc_rust:
     cmds:

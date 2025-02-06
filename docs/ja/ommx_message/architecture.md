@@ -1,5 +1,5 @@
-OMMX Message Design
-====================
+OMMX Messageの設計
+==================
 
 OMMX Messageはソフトウェア間でのデータの交換を行うためのデータ形式です。
 
