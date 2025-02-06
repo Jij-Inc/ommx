@@ -68,14 +68,22 @@ message Instance {
 OMMXが実現するソフトウェア間のデータ交換。
 ```
 
-より詳しい設計思想については [OMMX Messageの設計](./ommx_message/architecture.md) を参照してください。
+より詳しい設計については [OMMX Messageの設計](./ommx_message/architecture.md) を参照してください。
 
 ### OMMX Artifact
 
-また、人間同士のデータ交換を実現するため、OMMXはOMMX Artifactを提供します。OMMX Artifactは、OMMX Messageと関連メタデータを含む、OCI Artifact準拠のコンテナベースパッケージ形式です。これにより、OMMXユーザーはOMMX SDKを用いてOMMX Artifactを作成し、一般的なコンテナ基盤を活用してデータの管理・共有を効率的に行うことができます。
+OMMX Artifactは人間同士のデータ交換のために設計されたメタデータ付きのパッケージ形式です。これはコンテナ（Dockerなどのこと）の標準化団体である [OCI (Open Container Initiative)](https://opencontainers.org/) によって定義された OCI Artifactをベースにしています。OCIの標準化ではコンテナというのは通常のTarアーカイブによって実現され、コンテナの中身であるファイルと共に実行するコマンド等のメタデータが保存されています。これを汎用のパッケージ形式として利用するための仕様が OCI Artifact です。
+
+OCI Artifactではレイヤーという単位でパッケージの中身を管理します。一つのコンテナには複数のレイヤーとManifest（目録）と呼ばれるメタデータが含まれます。コンテナを読み込むときはまずManifestを確認し、その情報を元にレイヤーを読み込むことで必要なデータを取り出します。各レイヤーはバイナリデータ（BLOB）として保存されていますが [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml) がメタデータとして付与されています。例えばPDFファイルを保存するときは `application/pdf` というMedia Typeが付与されているので、OCI Artifactを読み出すソフトウェアはそのMedia Typeを見てPDFファイルであることを認識します。
+
+OMMXではOMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersとしてシリアライズしたバイナリを含んだOCI ArtifactをOMMX Artifactと呼称しています。正確に言えばOMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactはOCI Artifactの一種として扱うことができます。
+
+パッケージ形式としてOCI Artifactを利用する利点は、これが全く正規のコンテナとして扱えることです。つまり[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布が行えます。多くのコンテナと同様に、数GBになるようなベンチマークセットを不特定多数に対して配布することが容易です。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
 
 ```{figure} ./assets/introduction_03.png
 :alt: OMMX MessageとOMMX Artifactの関係を表す図
 
 OMMXが実現する人間同士のデータ交換。
 ```
+
+より詳しい設計については [OMMX Artifactの設計](./ommx_artifact/architecture.md) を参照してください。
