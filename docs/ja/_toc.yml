@@ -32,6 +32,7 @@ parts:
         title: "OMMX Python-MIP Adapter"
   - caption: "Release Note"
     chapters:
+      - file: release_note/ommx-1.8.0
       - file: release_note/ommx-1.7.0
       - file: release_note/ommx-1.6.0
       - file: release_note/ommx-1.5.0
