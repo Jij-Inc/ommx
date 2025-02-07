@@ -65,7 +65,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         verbose: bool = False,
     ) -> Solution:
         """
-        Solve the given ommx.v1.Instance using Python-MIP, returning a ommx.v1.Solution.
+        Solve the given ommx.v1.Instance using Python-MIP, returning an ommx.v1.Solution.
 
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param relax: If True, relax all integer variables to continuous variables by using the `relax` parameter in Python-MIP's `Model.optimize() <https://docs.python-mip.com/en/latest/classes.html#mip.Model.optimize>`.
@@ -82,7 +82,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
-            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
             >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
@@ -104,11 +104,11 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             True
             >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
 
-            p[0] + p[3] = 41
+            p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
 
             >>> solution.objective
-            41.0
+            42.0
             >>> solution.raw.evaluated_constraints[0].evaluated_value
             -1.0
 
@@ -188,7 +188,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         This method is intended to be used if the model has been acquired with
         `solver_input` for futher adjustment of the solver parameters, and
-        separately solve.
+        separately optimizing the model.
 
         Note that alterations to the model may make the decoding process
         incompatible -- decoding will only work if the model still describes
@@ -211,7 +211,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> from ommx.v1 import Instance, DecisionVariable
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
-            >>> p = [10, 13, 18, 31, 7, 15]
+            >>> p = [10, 13, 18, 32, 7, 15]
             >>> w = [11, 15, 20, 35, 10, 33]
             >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
@@ -229,7 +229,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution = adapter.decode(model)
             >>> solution.raw.objective
-            41.0
+            42.0
 
         """
         # TODO check if `optimize()` has been called

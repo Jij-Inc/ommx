@@ -1,7 +1,7 @@
 from ommx.v1 import Instance, DecisionVariable
 from ommx.v1.solution_pb2 import Optimality
 
-import ommx_pyscipopt_adapter as adapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 
 def test_solution_optimality():
@@ -14,7 +14,5 @@ def test_solution_optimality():
         sense=Instance.MAXIMIZE,
     )
 
-    model = adapter.instance_to_model(ommx_instance)
-    model.optimize()
-    solution = adapter.model_to_solution(model, ommx_instance)
+    solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
     assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
