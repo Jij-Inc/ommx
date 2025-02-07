@@ -534,11 +534,22 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible. Note that this is the feasibility of the solution, not the problem.
-    /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
+    /// The feasibility of the solution for all, remaining and removed constraints.
+    ///
+    /// The feasibility for the remaining constraints is represented by the `feasible_relaxed` field.
     #[prost(bool, tag = "5")]
     pub feasible: bool,
-    /// Feasibility of the solution for both remaining and removed constraints.
+    /// Feasibility of the solution for remaining constraints, ignoring removed constraints.
+    ///
+    /// This is optional due to the backward compatibility.
+    /// If this field is NULL, the `feasible` field represents relaxed feasibility,
+    /// and the deprecated `feasible_unrelaxed` field represents the feasibility including removed constraints.
+    #[prost(bool, optional, tag = "9")]
+    pub feasible_relaxed: ::core::option::Option<bool>,
+    /// \[DEPRECATED\] Feasibility of the solution for all constraints.
+    /// This field has been introduced in Python SDK 1.6.0 and deprecated in 1.7.0.
+    /// The feasibility in this sense is represented by the `feasible` field after 1.7.0.
+    #[deprecated]
     #[prost(bool, tag = "8")]
     pub feasible_unrelaxed: bool,
     /// The optimality of the solution.
@@ -763,12 +774,24 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
-    /// Feasibility for remaining constraints of each sample. Removed constraints are not included.
+    /// Feasibility for *both* remaining and removed constraints of each sample.
+    ///
+    /// The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
+    /// In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+    /// i.e. removed constraints (introduced in 1.6.0) are not considered.
+    /// After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+    /// The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
-    /// Feasibility for both remaining and removed constraints of each sample.
+    /// \[Deprecated\] This field has been introduced in Python SDK 1.6.0 to represent
+    /// the feasibility of all constraints of each sample.
+    /// The `feasible` field is used in this sense after Python SDK 1.7.0.
     #[prost(map = "uint64, bool", tag = "6")]
+    #[deprecated]
     pub feasible_unrelaxed: ::std::collections::HashMap<u64, bool>,
+    /// Feasibility for remaining (non-removed) constraints of each sample.
+    #[prost(map = "uint64, bool", tag = "7")]
+    pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
     /// Minimize or Maximize
     #[prost(enumeration = "instance::Sense", tag = "5")]
     pub sense: i32,
