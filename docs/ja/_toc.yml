@@ -22,6 +22,7 @@ parts:
       - file: ommx_message/function
       - file: ommx_message/instance
       - file: ommx_message/solution
+      - file: ommx_message/parametric_instance
       - file: ommx_message/sample_set
   - caption: "OMMX Artifact"
     chapters:
