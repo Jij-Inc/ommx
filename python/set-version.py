@@ -35,7 +35,7 @@ def update_version(pyproject_path: Path, new_version: str):
 
     pyproject_data["project"]["version"] = new_version  # type: ignore
     # Update the version of the OMMX dependency
-    for dep in pyproject_data["project"]["dependencies"]: # type: ignore
+    for dep in pyproject_data["project"]["dependencies"]:  # type: ignore
         if re.match(r"ommx\s*>=\s*\d+\.\d+\.\d+,\s*<\s*\d+\.\d+\.\d+", dep):
             new_dep = re.sub(r"\d+\.\d+\.\d+", new_version, dep, count=1)
             pyproject_data["project"]["dependencies"].remove(dep)  # type: ignore
