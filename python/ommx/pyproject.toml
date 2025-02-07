@@ -5,52 +5,52 @@ build-backend = "maturin"
 [project]
 name = "ommx"
 
-version = "1.8.1"
+version = "1.8.2"
 description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
 classifiers = [
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Rust",
-    "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
-    "License :: OSI Approved :: Apache Software License",
-    "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Rust",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: MIT License",
 ]
 
 requires-python = ">=3.9"
 dependencies = [
-    "numpy>=1.23.0, <3.0.0",
-    "pandas>=2.0.0, <3.0.0",
-    "protobuf>=5.26.1, <6.0.0",
-    "pyarrow>=16.0.0, <20.0.0",
-    "python-dateutil>=2.9.0, <3.0.0",
-    "typing-extensions >= 4.12.2, < 5.0.0",
+  "numpy>=1.23.0, <3.0.0",
+  "pandas>=2.0.0, <3.0.0",
+  "protobuf>=5.26.1, <6.0.0",
+  "pyarrow>=16.0.0, <20.0.0",
+  "python-dateutil>=2.9.0, <3.0.0",
+  "typing-extensions >= 4.12.2, < 5.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "jupyter-book>=1.0.3",
-    "jupyterlab",
-    "matplotlib",
-    "mypy-protobuf",
-    "mypy>=0.910",
-    "nbconvert>=7.16.4",
-    "networkx",
-    "pyright",
-    "pytest",
-    "ruff >= 0.9.0, < 0.10.0",
-    "sphinx",
-    "sphinx-autoapi",
-    "sphinx_fontawesome",
-    "sphinx_rtd_theme",
-    "tomlkit",
-    "types-protobuf>=0.1.14",
+  "jupyter-book>=1.0.3",
+  "jupyterlab",
+  "matplotlib",
+  "mypy-protobuf",
+  "mypy>=0.910",
+  "nbconvert>=7.16.4",
+  "networkx",
+  "pyright",
+  "pytest",
+  "ruff >= 0.9.0, < 0.10.0",
+  "sphinx",
+  "sphinx-autoapi",
+  "sphinx_fontawesome",
+  "sphinx_rtd_theme",
+  "tomlkit",
+  "types-protobuf>=0.1.14",
 ]
 
 [project.urls]
@@ -63,3 +63,10 @@ features = ["pyo3/extension-module"]
 
 [tool.ruff.lint]
 per-file-ignores = { "*_pb2.py" = ["ALL"] }
+
+[tool.uv]
+cache-keys = [
+  { file = "pyproject.toml" },
+  { file = "Cargo.toml" },
+  { file = "ommx/**/*.rs" },
+]
