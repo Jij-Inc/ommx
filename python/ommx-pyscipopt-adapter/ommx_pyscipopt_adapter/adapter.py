@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal, Optional
 
 import pyscipopt
 import math
@@ -7,13 +8,20 @@ from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
+from ommx.v1.constraint_hints_pb2 import ConstraintHints
 
 from .exception import OMMXPySCIPOptAdapterError
 
 
+Hint = Literal["OneHot", "SOS1"]
+
+
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    def __init__(self, ommx_instance: Instance):
+    def __init__(
+        self, ommx_instance: Instance, enabled_hints: Optional[set[Hint]] = None
+    ):
         self.instance = ommx_instance
+        self.enabled_hints = enabled_hints
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
@@ -313,7 +321,24 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         pass
 
     def _set_constraints(self):
+        ommx_hints: ConstraintHints = self.instance.raw.constraint_hints
+
+        excluded = set()
+        if self.enabled_hints is None or "SOS1" in self.enabled_hints:
+            for sos1 in ommx_hints.sos1_constraints:
+                bid = sos1.binary_constraint_id
+                excluded.add(bid)
+                big_m_ids = sos1.big_m_constraint_ids
+                if len(big_m_ids) == 0:
+                    name = f"sos1_{bid}"
+                else:
+                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
+                vars = [self.varname_map[str(v)] for v in sos1.decision_variables]
+                self.model.addConsSOS1(vars, name=name)
+
         for constraint in self.instance.raw.constraints:
+            if constraint.id in excluded:
+                continue
             if constraint.function.HasField("linear"):
                 expr = self._make_linear_expr(constraint.function)
             elif constraint.function.HasField("quadratic"):
