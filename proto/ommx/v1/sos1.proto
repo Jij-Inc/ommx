@@ -2,7 +2,9 @@ syntax = "proto3";
 
 package ommx.v1;
 
-// A message representing a sos1 constraint.
+// A message representing a [Spcial Ordered Set constraint of Type 1](https://en.wikipedia.org/wiki/Special_ordered_set#Types) (SOS1).
+// SOS1 constraint on non-negative variables x_1, ..., x_n
+// requires that at most one of x_i can be non-zero.
 message SOS1 {
   // The ID of the SOS1 constraint on binary variables.
   uint64 binary_constraint_id = 1;

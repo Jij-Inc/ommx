@@ -14,7 +14,10 @@ DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class SOS1(google.protobuf.message.Message):
-    """A message representing a sos1 constraint."""
+    """A message representing a [Spcial Ordered Set constraint of Type 1](https://en.wikipedia.org/wiki/Special_ordered_set#Types) (SOS1).
+    SOS1 constraint on non-negative variables x_1, ..., x_n
+    requires that at most one of x_i can be non-zero.
+    """
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 

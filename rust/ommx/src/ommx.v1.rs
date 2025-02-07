@@ -237,7 +237,9 @@ pub struct OneHot {
     #[prost(uint64, repeated, tag = "2")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
-/// A message representing a sos1 constraint.
+/// A message representing a [Spcial Ordered Set constraint of Type 1](<https://en.wikipedia.org/wiki/Special_ordered_set#Types>) (SOS1).
+/// SOS1 constraint on non-negative variables x_1, ..., x_n
+/// requires that at most one of x_i can be non-zero.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
