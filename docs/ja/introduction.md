@@ -20,11 +20,11 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）とは、実務で
 
 これらのデータの交換における問題を解決するため、OMMXが開発されました。OMMXは次の4つのコンポーネントで構成されています
 
-- [OMMX Message](./ommx_message/architecture.md)
+- OMMX Message
     
     ソフトウェア間でデータを交換するための、プログラミング言語やOSによらないデータ形式
     
-- [OMMX Artifact](./ommx_artifact/architecture.md)
+- OMMX Artifact
     
     人間同士でデータを交換するための、メタデータ付きパッケージ形式
     
@@ -68,8 +68,6 @@ message Instance {
 OMMXが実現するソフトウェア間のデータ交換。
 ```
 
-より詳しい設計については [OMMX Messageの設計](./ommx_message/architecture.md) を参照してください。
-
 ### OMMX Artifact
 
 OMMX Artifactは人間同士のデータ交換のために設計されたメタデータ付きのパッケージ形式です。これはコンテナ（Dockerなどのこと）の標準化団体である [OCI (Open Container Initiative)](https://opencontainers.org/) によって定義された OCI Artifactをベースにしています。OCIの標準化ではコンテナというのは通常のTarアーカイブによって実現され、コンテナの中身であるファイルと共に実行するコマンド等のメタデータが保存されています。これを汎用のパッケージ形式として利用するための仕様が OCI Artifact です。
@@ -85,5 +83,3 @@ OMMXではOMMX Messageのそれぞれに対して `application/org.ommx.v1.insta
 
 OMMXが実現する人間同士のデータ交換。
 ```
-
-より詳しい設計については [OMMX Artifactの設計](./ommx_artifact/architecture.md) を参照してください。
