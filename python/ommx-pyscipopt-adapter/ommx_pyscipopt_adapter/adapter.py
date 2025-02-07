@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal
 
 import pyscipopt
 import math
@@ -7,13 +8,25 @@ from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
+from ommx.v1.constraint_hints_pb2 import ConstraintHints
 
 from .exception import OMMXPySCIPOptAdapterError
 
 
+HintMode = Literal["disabled", "auto", "forced"]
+
+
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    def __init__(self, ommx_instance: Instance):
+    use_sos1: HintMode
+
+    def __init__(
+        self,
+        ommx_instance: Instance,
+        *,
+        use_sos1: Literal["disabled", "auto", "forced"] = "auto",
+    ):
         self.instance = ommx_instance
+        self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
@@ -22,7 +35,11 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self._set_constraints()
 
     @staticmethod
-    def solve(ommx_instance: Instance) -> Solution:
+    def solve(
+        ommx_instance: Instance,
+        *,
+        use_sos1: Literal["disabled", "auto", "forced"] = "auto",
+    ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
 
@@ -109,7 +126,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = OMMXPySCIPOptAdapter(ommx_instance)
+        adapter = OMMXPySCIPOptAdapter(ommx_instance, use_sos1=use_sos1)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -313,7 +330,30 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         pass
 
     def _set_constraints(self):
+        ommx_hints: ConstraintHints = self.instance.raw.constraint_hints
+
+        excluded = set()
+
+        if self.use_sos1 != "disabled":
+            if self.use_sos1 == "force" and len(ommx_hints.sos1_constraints) == 0:
+                raise OMMXPySCIPOptAdapterError(
+                    "No SOS1 constraints were found, but `use_sos1` is set to `force`."
+                )
+
+            for sos1 in ommx_hints.sos1_constraints:
+                bid = sos1.binary_constraint_id
+                excluded.add(bid)
+                big_m_ids = sos1.big_m_constraint_ids
+                if len(big_m_ids) == 0:
+                    name = f"sos1_{bid}"
+                else:
+                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
+                vars = [self.varname_map[str(v)] for v in sos1.decision_variables]
+                self.model.addConsSOS1(vars, name=name)
+
         for constraint in self.instance.raw.constraints:
+            if constraint.id in excluded:
+                continue
             if constraint.function.HasField("linear"):
                 expr = self._make_linear_expr(constraint.function)
             elif constraint.function.HasField("quadratic"):
