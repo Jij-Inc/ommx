@@ -14,7 +14,7 @@ DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
 @typing.final
 class SOS1(google.protobuf.message.Message):
-    """A message representing a one-hot constraint."""
+    """A message representing a sos1 constraint."""
 
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 

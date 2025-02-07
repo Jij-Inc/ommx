@@ -237,7 +237,7 @@ pub struct OneHot {
     #[prost(uint64, repeated, tag = "2")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
-/// A message representing a one-hot constraint.
+/// A message representing a sos1 constraint.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
