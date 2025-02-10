@@ -91,7 +91,9 @@ tasks:
 
   install_python_mip_adapter:
     cmds:
-      - pip install -ve "python/ommx-python-mip-adapter[dev]"
+      # Since python-mip for Apple Silicon is not available on PyPI, we need to install it from the source.
+      - pip install --no-deps -ve "python/ommx-python-mip-adapter[dev]"
+      - pip install git+https://github.com/coin-or/python-mip.git
 
   install_pyscipopt_adapter:
     cmds:
@@ -106,8 +108,7 @@ tasks:
       - task: install_python_sdk
       - task: install_pyscipopt_adapter
       - task: install_openjij_adapter
-      # Skip because Python-MIP is not available on macOS
-      # - task: install_python_mip_adapter
+      - task: install_python_mip_adapter
 
   format_python:
     cmds:
