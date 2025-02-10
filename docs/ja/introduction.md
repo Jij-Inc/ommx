@@ -12,9 +12,9 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最
 数理最適化のワークフロー。
 ```
 
-例えばデータの分析では標準的なデータサイエンスのツールである `pandas` や `matplotlib`、定式化ではモデラーと呼ばれる `jijmodeling` や `JuMP` のような数理最適化専用のツール、最適化本体では `Gurobi` や `SCIP` などのソルバーが使われます。これらのソフトウェアはそれぞれにとって都合のいいデータ形式を扱うため、相互に運用するにはデータの変換が必要となります。このような変換は使うツールが増えるほどに組み合わせ的に複雑化していきます。もし標準となるデータ形式が一つ存在すれば、それぞれのツールごとに標準データ形式との相互変換さえ用意すればどのツールとも連携できるようになり、全体として大幅な効率化が期待できます。
+例えば、データ分析では標準的なデータサイエンスのツールである `pandas` や `matplotlib`が、定式化ではモデラーと呼ばれる `jijmodeling` や `JuMP` のような数理最適化専用のツールが、最適化の実行には `Gurobi` や `SCIP` などのソルバーが、それぞれ使われます。これらのソフトウェアは、それぞれにとって都合の良いデータ形式を扱うため、相互に運用するにはデータの変換が必要となります。そのため、このような変換は使うツールが増えるほどに組み合わせ的に複雑化していきます。もし標準となるデータ形式が一つ存在すれば、それぞれのツールごとに標準データ形式との相互変換を用意するだけで、どのツールとも連携できるようになり、全体として大幅な効率化が期待できます。
 
-加えてこれらの作業は複数人で分担して行われることが一般的で、担当者間でデータが受け渡せる必要があります。人間同士のデータのやり取りにおいて重要になるのが、そのデータが何を表しているのか・何のために作ったデータなのかを記述するためのメタデータです。例えば、ある最適化問題のインスタンスを解いた結果がファイルとして保存されている時、そのファイルがどの問題をどのソルバーでどのような設定で解いたものが記述されていなければ、そのファイルを別の用途に使うことは出来ません。これを解決するためにメタデータを付与することが必要ですが、そのメタデータの形式が統一されていないと、データのやり取りが困難になります。
+加えて、これらの作業は複数人で分担して行われることが一般的であるため、担当者間でデータを受け渡せる必要があります。人間同士がデータをやり取りする際に重要になるのは、そのデータが何を表し、何のために作られたのかを記述するメタデータです。例えば、ある最適化問題のインスタンスを解いた結果がファイルとして保存されている時、そのファイルに「どの問題を」「どのソルバーで」「どのような設定で」解いたかが記載されていなければ、そのファイルに保存されている情報を別の用途に使うことは出来ません。これを解決するためにはメタデータを付与することが必要ですが、そのメタデータの形式が統一されていなければ、データのやり取りが困難になります。
 
 ## OMMXを構成する要素
 
@@ -39,10 +39,10 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最
 
 ### OMMX Message
 
-OMMX Messageはソフトウェア間でデータを交換することを目的として設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を使って定義することでプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題 ([`ommx.v1.Instance`](./ommx_message/instance.ipynb)) や解 ([`ommx.v1.Solution`](./ommx_message/solution.ipynb)) のデータを表現するためのスキーマを定義します。
-Protocol Buffersの機能によってほとんどの実用的なプログラミング言語に対してOMMX Messageを利用するためのライブラリを自動生成することができ、特にPythonとRustに対してはOMMX SDKの一部として提供されています。
+OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題 ([`ommx.v1.Instance`](./ommx_message/instance.ipynb)) や解 ([`ommx.v1.Solution`](./ommx_message/solution.ipynb)) のデータなどを表現するためのスキーマを定義します。
+さらに、Protocol Buffersの機能により、ほとんどの実用的なプログラミング言語に対してOMMX Messageを利用するためのライブラリを自動生成することができ、特にPythonとRust向けのライブラリはOMMX SDKの一部として提供されています。
 
-`ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば `ommx.v1.Instance` は次のようなフィールドを持ちます（簡単のためにいくつかを省略しています）:
+`ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば、 `ommx.v1.Instance` は次のようなフィールドを持ちます（簡単のために、一部省略しています）:
 
 ```protobuf
 message Instance {
@@ -57,9 +57,9 @@ message Instance {
 }
 ```
 
-決定変数を表すMessage `ommx.v1.DecisionVariable` や目的関数や制約条件として使うための数学的な関数を表すための `ommx.v1.Function` などのMessageが `ommx.v1` という名前空間の元で定義されています。OMMXで定義されているMessageのリストが [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html) にまとまっています。
+`Instance`をはじめ、決定変数を表すMessage `ommx.v1.DecisionVariable` や目的関数や制約条件として使うための数学的な関数を表すための `ommx.v1.Function` などのMessageが `ommx.v1` という名前空間の元で定義されています。OMMXで定義されているMessageの一覧は、 [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html) にまとめられています。
 
-一部のソルバーは直接 `ommx.v1.Instance` で定義されたデータを読み込むことができますが、そうでないソルバーに対してはOMMX Adapterを使ってOMMX Messageをソルバーが扱える形式に変換します。必要になったソフトウェアに対してOMMX Adapterを作成することでOMMXと連携出来る他のソフトウェアと容易に連携できます。
+一部のソルバーは直接 `ommx.v1.Instance` で定義されたデータを読み込むことができますが、そうでないソルバーに対しては、OMMX Adapterを使ってOMMX Messageをソルバーが扱える形式に変換します。必要になったソフトウェアに対してOMMX Adapterを作成することで、OMMXと連携可能な他のソフトウェアと容易にデータ連携を実現できます。
 
 ```{figure} ./assets/introduction_02.png
 :alt: OMMX MessageとOMMX Adapterの関係を表す図
@@ -70,13 +70,13 @@ OMMXが実現するソフトウェア間のデータ交換。
 
 ### OMMX Artifact
 
-OMMX Artifactは人間同士のデータ交換のために設計されたメタデータ付きのパッケージ形式です。これはコンテナ（Dockerなどのこと）の標準化団体である [OCI (Open Container Initiative)](https://opencontainers.org/) によって定義された OCI Artifactをベースにしています。OCIの標準化ではコンテナというのは通常のTarアーカイブによって実現され、コンテナの中身であるファイルと共に実行するコマンド等のメタデータが保存されています。これを汎用のパッケージ形式として利用するための仕様が OCI Artifact です。
+OMMX Artifactは、人間同士のデータ交換のために設計された、メタデータ付きパッケージ形式です。これは、コンテナ（Dockerなどのこと）の標準化団体である [OCI (Open Container Initiative)](https://opencontainers.org/) によって定義された OCI Artifactをベースにしています。OCIの標準化では、コンテナは通常のTarアーカイブによって実現され、コンテナの中身であるファイルと共に実行するコマンド等のメタデータが保存されています。これを汎用のパッケージ形式として利用するための仕様が OCI Artifact です。
 
-OCI Artifactではレイヤーという単位でパッケージの中身を管理します。一つのコンテナには複数のレイヤーとManifest（目録）と呼ばれるメタデータが含まれます。コンテナを読み込むときはまずManifestを確認し、その情報を元にレイヤーを読み込むことで必要なデータを取り出します。各レイヤーはバイナリデータ（BLOB）として保存されていますが [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml) がメタデータとして付与されています。例えばPDFファイルを保存するときは `application/pdf` というMedia Typeが付与されているので、OCI Artifactを読み出すソフトウェアはそのMedia Typeを見てPDFファイルであることを認識します。
+OCI Artifactでは、パッケージの中身をレイヤーという単位で管理します。一つのコンテナには複数のレイヤーとManifest（目録）と呼ばれるメタデータが含まれます。コンテナを読み込むときは、まずManifestを確認し、その情報に基づいて各レイヤーを読み込むことで、必要なデータを取り出します。各レイヤーはバイナリデータ（BLOB）として保存され、 [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml) がメタデータとして付与されています。例えば、PDFファイルを保存する場合、 `application/pdf` というMedia Typeが付与されているため、OCI Artifactを読み込むソフトウェアはこのMedia Typeを見て、それがPDFファイルであると認識します。
 
-OMMXではOMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersとしてシリアライズしたバイナリを含んだOCI ArtifactをOMMX Artifactと呼称しています。正確に言えばOMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactはOCI Artifactの一種として扱うことができます。
+OMMXでは、OMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersでシリアライズしたバイナリを含むOCI ArtifactをOMMX Artifactと呼称しています。厳密に言えば、OMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactをOCI Artifactの一種として扱うことができます。
 
-パッケージ形式としてOCI Artifactを利用する利点は、これが全く正規のコンテナとして扱えることです。つまり[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布が行えます。多くのコンテナと同様に、数GBになるようなベンチマークセットを不特定多数に対して配布することが容易です。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
+OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
 
 ```{figure} ./assets/introduction_03.png
 :alt: OMMX MessageとOMMX Artifactの関係を表す図
