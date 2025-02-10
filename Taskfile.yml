@@ -144,26 +144,12 @@ tasks:
 
   doc_python:
     cmds:
-      - task: doc_python_sdk
-      - task: doc_python_mip_adapter
-
-  doc_python_sdk:
-    cmds:
       - sphinx-build -b html source build
     dir: python/ommx/docs
 
-  doc_python_mip_adapter:
+  open_doc_python:
     cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx-python-mip-adapter/docs
-
-  open_doc_python_sdk:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/python/ommx/docs/build/index.html
-
-  open_doc_python_mip_adapter:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/python/ommx-python-mip-adapter/docs/build/index.html
+      - python -m webbrowser file:///$(pwd)/python/ommx/docs/build/autoapi/index.html
 
   stubgen:
     cmds:
