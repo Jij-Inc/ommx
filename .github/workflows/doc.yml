@@ -99,30 +99,16 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Install dependencies
-        run: |
-          pip install "python/ommx[dev]"
-          pip install "python/ommx-python-mip-adapter[dev]"
+        run: task install
 
       - name: Build Python documentation
-        run: |
-          sphinx-build -b html ./python/ommx/docs/source ./python/ommx/docs/build
+        run: task doc_python
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-python-ommx
-          path: ./python/ommx/docs/build
-          retention-days: 30
-
-      - name: Build Python documentation
-        run: |
-          sphinx-build -b html ./python/ommx-python-mip-adapter/docs/source ./python/ommx-python-mip-adapter/docs/build
-
-      - name: Upload HTML
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-python-ommx-python-mip-adapter
-          path: ./python/ommx-python-mip-adapter/docs/build
+          name: doc-python
+          path: ./docs/api_reference/_build/html
           retention-days: 30
 
   package:
@@ -164,14 +150,8 @@ jobs:
       - name: Download HTML of python
         uses: actions/download-artifact@v4
         with:
-          name: doc-python-ommx
+          name: doc-python
           path: ./doc/python/ommx
-
-      - name: Download HTML of python
-        uses: actions/download-artifact@v4
-        with:
-          name: doc-python-ommx-python-mip-adapter
-          path: ./doc/python/ommx-python-mip-adapter
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
