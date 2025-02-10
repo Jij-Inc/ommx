@@ -102,7 +102,7 @@ jobs:
         run: task install
 
       - name: Build Python documentation
-        run: task doc_python
+        run: task api_reference:build
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
