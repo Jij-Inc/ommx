@@ -144,12 +144,12 @@ tasks:
 
   doc_python:
     cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx/docs
+      - sphinx-build -b html . _build/html
+    dir: docs/api_reference
 
   open_doc_python:
     cmds:
-      - python -m webbrowser file:///$(pwd)/python/ommx/docs/build/autoapi/index.html
+      - python -m webbrowser file:///$(pwd)/docs/api_reference/_build/html/autoapi/index.html
 
   stubgen:
     cmds:
