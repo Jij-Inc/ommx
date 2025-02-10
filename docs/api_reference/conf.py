@@ -16,7 +16,7 @@ copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
 here = Path(__file__).parent
-python_root = here.parent.parent / "python" # ${REPO_ROOT}/python
+python_root = here.parent.parent / "python"  # ${REPO_ROOT}/python
 pyproject_toml = tomlkit.loads((python_root / "ommx" / "pyproject.toml").read_text())
 version = str(pyproject_toml["project"]["version"])  # type: ignore
 release = version
