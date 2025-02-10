@@ -2,6 +2,11 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3"
 
+includes:
+  api_reference:
+    taskfile: docs/api_reference/Taskfile.yml
+    dir: docs/api_reference
+
 tasks:
   # Documents
   build_book_ja:
@@ -142,15 +147,6 @@ tasks:
     cmds:
       - pytest -vv --doctest-modules python/ommx-openjij-adapter/
       - pyright python/ommx-openjij-adapter/
-
-  doc_python:
-    cmds:
-      - sphinx-build -b html . _build/html
-    dir: docs/api_reference
-
-  open_doc_python:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/docs/api_reference/_build/html/autoapi/index.html
 
   stubgen:
     cmds:

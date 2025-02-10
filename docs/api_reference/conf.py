@@ -31,6 +31,7 @@ extensions = [
     "sphinx_rtd_theme",
     "sphinx_fontawesome",
     "autoapi.extension",
+    "myst_parser",
 ]
 source_suffix = {
     ".rst": "restructuredtext",
