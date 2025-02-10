@@ -9,6 +9,7 @@ import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
+import ommx.v1.constraint_hints_pb2
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
@@ -169,12 +170,37 @@ class Instance(google.protobuf.message.Message):
             self, oneof_group: typing.Literal["_name", b"_name"]
         ) -> typing.Literal["name"] | None: ...
 
+    @typing.final
+    class DecisionVariableDependencyEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.int
+        @property
+        def value(self) -> ommx.v1.function_pb2.Function: ...
+        def __init__(
+            self,
+            *,
+            key: builtins.int = ...,
+            value: ommx.v1.function_pb2.Function | None = ...,
+        ) -> None: ...
+        def HasField(
+            self, field_name: typing.Literal["value", b"value"]
+        ) -> builtins.bool: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     OBJECTIVE_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
     SENSE_FIELD_NUMBER: builtins.int
     PARAMETERS_FIELD_NUMBER: builtins.int
+    CONSTRAINT_HINTS_FIELD_NUMBER: builtins.int
+    REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
+    DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it.
 
@@ -209,6 +235,26 @@ class Instance(google.protobuf.message.Message):
     def parameters(self) -> global___Parameters:
         """Parameters used when instantiating this instance"""
 
+    @property
+    def constraint_hints(self) -> ommx.v1.constraint_hints_pb2.ConstraintHints:
+        """Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...)."""
+
+    @property
+    def removed_constraints(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.constraint_pb2.RemovedConstraint
+    ]:
+        """Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`."""
+
+    @property
+    def decision_variable_dependency(
+        self,
+    ) -> google.protobuf.internal.containers.MessageMap[
+        builtins.int, ommx.v1.function_pb2.Function
+    ]:
+        """When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value."""
+
     def __init__(
         self,
         *,
@@ -222,12 +268,23 @@ class Instance(google.protobuf.message.Message):
         | None = ...,
         sense: global___Instance.Sense.ValueType = ...,
         parameters: global___Parameters | None = ...,
+        constraint_hints: ommx.v1.constraint_hints_pb2.ConstraintHints | None = ...,
+        removed_constraints: collections.abc.Iterable[
+            ommx.v1.constraint_pb2.RemovedConstraint
+        ]
+        | None = ...,
+        decision_variable_dependency: collections.abc.Mapping[
+            builtins.int, ommx.v1.function_pb2.Function
+        ]
+        | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "constraint_hints",
+            b"constraint_hints",
             "description",
             b"description",
             "objective",
@@ -241,8 +298,12 @@ class Instance(google.protobuf.message.Message):
         field_name: typing.Literal[
             "_parameters",
             b"_parameters",
+            "constraint_hints",
+            b"constraint_hints",
             "constraints",
             b"constraints",
+            "decision_variable_dependency",
+            b"decision_variable_dependency",
             "decision_variables",
             b"decision_variables",
             "description",
@@ -251,6 +312,8 @@ class Instance(google.protobuf.message.Message):
             b"objective",
             "parameters",
             b"parameters",
+            "removed_constraints",
+            b"removed_constraints",
             "sense",
             b"sense",
         ],

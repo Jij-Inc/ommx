@@ -1,8 +1,20 @@
 use super::MpsWriteError;
 use crate::{mps::ObjSense, v1};
-use anyhow::Result;
-use std::{borrow::Cow, io::Write};
+use std::{collections::HashMap, io::Write};
 
+pub(crate) const OBJ_NAME: &str = "OBJ";
+pub(crate) const CONSTR_PREFIX: &str = "OMMX_CONSTR_";
+pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
+
+/// Writes out the instance in MPS format to the specified `Write`r.
+///
+/// This function does not automatically Gzip the output -- that is the
+/// responsibility of the Write implementation.
+///
+/// Only linear problems are supported.
+///
+/// Metadata like problem descriptions and variable/constraint names are not
+/// preserved.
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
@@ -77,7 +89,6 @@ impl IntorgTracker {
 
 fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
-    let obj_name = "OBJ";
     let mut marker_tracker = IntorgTracker::default();
     for dvar in instance.decision_variables.iter() {
         let id = dvar.id;
@@ -88,13 +99,13 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
             _ => marker_tracker.intend(out)?,
         }
         // write obj function entry
-        write_col_entry(id, &var_name, obj_name, instance.objective.as_ref(), out)
+        write_col_entry(id, &var_name, OBJ_NAME, instance.objective().as_ref(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
             // It assumes we're dealing with constraints, but here we change the
             // error type so the message is clearer with the objective function
             .map_err(|err| {
-                if let MpsWriteError::InvalidConstraintType(a, b) = err {
-                    MpsWriteError::InvalidObjectiveType(a, b)
+                if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
+                    MpsWriteError::InvalidObjectiveType { degree }
                 } else {
                     panic!() // we know this can't happen
                 }
@@ -102,7 +113,7 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
         // write entries of this var's column for each constraint
         for constr in instance.constraints.iter() {
             let row_name = constr_name(constr);
-            write_col_entry(id, &var_name, &row_name, constr.function.as_ref(), out)?;
+            write_col_entry(id, &var_name, &row_name, constr.function().as_ref(), out)?;
         }
     }
     // print final INTEND
@@ -119,64 +130,47 @@ fn write_col_entry<W: Write>(
     var_id: u64,
     var_name: &str,
     row_name: &str,
-    func: Option<&v1::Function>,
+    func: &v1::Function,
     out: &mut W,
 ) -> Result<(), MpsWriteError> {
-    let Some(v1::Function {
-        function: Some(func),
-    }) = &func
-    else {
-        return Ok(());
-    };
-    match func {
-        v1::function::Function::Linear(v1::Linear { terms, .. }) => {
-            // search for current id in terms. If present and coefficient not 0, write entry
-            for term in terms {
-                if term.id == var_id && term.coefficient != 0.0 {
-                    let coeff = term.coefficient;
-                    writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
-                }
+    if let Some(v1::Linear { terms, .. }) = func.clone().as_linear() {
+        // search for current id in terms. If present and coefficient not 0, write entry
+        for term in terms {
+            if term.id == var_id && term.coefficient != 0.0 {
+                let coeff = term.coefficient;
+                writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
             }
         }
-        v1::function::Function::Constant(_) => {
-            return Err(MpsWriteError::constant_constraint(row_name))
-        }
-        v1::function::Function::Quadratic(_) => {
-            return Err(MpsWriteError::quadratic_constraint(row_name))
-        }
-        v1::function::Function::Polynomial(_) => {
-            return Err(MpsWriteError::polynomial_constraint(row_name))
-        }
+    } else {
+        return Err(MpsWriteError::InvalidConstraintType {
+            name: row_name.to_string(),
+            degree: func.degree(),
+        });
     }
     Ok(())
 }
 
 fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
+    // write out a RHS entry for the objective function if a non-zero constant is present
+    if let Some(v1::Linear { constant, .. }) = instance.objective().into_owned().as_linear() {
+        if constant != 0.0 {
+            let rhs = -constant;
+            writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
+        }
+    }
     for constr in instance.constraints.iter() {
-        let Some(v1::Function {
-            function: Some(func),
-        }) = &constr.function
-        else {
-            continue;
-        };
         let name = constr_name(constr);
-        match func {
-            v1::function::Function::Linear(v1::Linear { constant, .. }) => {
-                if *constant != 0.0 {
-                    let rhs = -constant;
-                    writeln!(out, "  RHS1    {name}   {rhs}")?;
-                }
+        if let Some(v1::Linear { constant, .. }) = constr.function().into_owned().as_linear() {
+            if constant != 0.0 {
+                let rhs = -constant;
+                writeln!(out, "  RHS1    {name}   {rhs}")?;
             }
-            v1::function::Function::Constant(_) => {
-                return Err(MpsWriteError::constant_constraint(name))
-            }
-            v1::function::Function::Quadratic(_) => {
-                return Err(MpsWriteError::quadratic_constraint(name))
-            }
-            v1::function::Function::Polynomial(_) => {
-                return Err(MpsWriteError::polynomial_constraint(name))
-            }
+        } else {
+            return Err(MpsWriteError::InvalidConstraintType {
+                name: name.to_string(),
+                degree: constr.function().degree(),
+            });
         }
     }
     Ok(())
@@ -184,7 +178,16 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
 
 fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
-    for dvar in instance.decision_variables.iter() {
+    // build an id -> dvar map as the vec is not guaranteed to be in order
+    let var_by_id: HashMap<_, _> = instance
+        .decision_variables
+        .iter()
+        .map(|var| (var.id, var))
+        .collect();
+    for dvar_id in instance.used_decision_variable_ids().into_iter() {
+        let dvar = var_by_id
+            .get(&dvar_id)
+            .ok_or(MpsWriteError::InvalidVariableId(dvar_id))?;
         let name = dvar_name(dvar);
         if let Some(bound) = &dvar.bound {
             let (low_kind, up_kind) = match dvar.kind {
@@ -200,20 +203,16 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
     Ok(())
 }
 
-/// Either returns a borrowed name of the constraint if present or
-/// generates a name based on the id.
-fn constr_name(constr: &v1::Constraint) -> Cow<str> {
-    match &constr.name {
-        Some(name) => Cow::Borrowed(name),
-        None => Cow::Owned(format!("constr_id{}", constr.id)),
-    }
+/// Generates a name for the constraint based on its ID.
+///
+/// The constraint's name is ignored, if present.
+fn constr_name(constr: &v1::Constraint) -> String {
+    format!("{CONSTR_PREFIX}{}", constr.id)
 }
 
-/// Either returns a borrowed name of the decision variable if present or
-/// generates a name based on the id.
-fn dvar_name(dvar: &v1::DecisionVariable) -> Cow<str> {
-    match &dvar.name {
-        Some(name) => Cow::Borrowed(name),
-        None => Cow::Owned(format!("dvar_id{}", dvar.id)),
-    }
+/// Generates a name for the decision variable based on its ID.
+///
+/// The decision variable's name is ignored, if present.
+fn dvar_name(dvar: &v1::DecisionVariable) -> String {
+    format!("{VAR_PREFIX}{}", dvar.id)
 }

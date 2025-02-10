@@ -167,6 +167,32 @@ pub struct EvaluatedConstraint {
     /// This is optional because not all solvers support to evaluate dual variables.
     #[prost(double, optional, tag = "8")]
     pub dual_variable: ::core::option::Option<f64>,
+    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(string, optional, tag = "10")]
+    pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(map = "string, string", tag = "11")]
+    pub removed_reason_parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+}
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RemovedConstraint {
+    /// The removed constraint
+    #[prost(message, optional, tag = "1")]
+    pub constraint: ::core::option::Option<Constraint>,
+    /// Short reason why the constraint was removed.
+    ///
+    /// This should be the name of method, function or application which remove the constraint.
+    #[prost(string, tag = "2")]
+    pub removed_reason: ::prost::alloc::string::String,
+    /// Arbitrary key-value parameters representing why the constraint was removed.
+    ///
+    /// This should be human-readable and can be used for debugging.
+    #[prost(map = "string, string", tag = "3")]
+    pub removed_reason_parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
 }
 /// Equality of a constraint.
 #[non_exhaustive]
@@ -198,6 +224,48 @@ impl Equality {
             _ => None,
         }
     }
+}
+/// A message representing a one-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OneHot {
+    /// The ID of the constraint.
+    #[prost(uint64, tag = "1")]
+    pub constraint_id: u64,
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+}
+/// A message representing a [Spcial Ordered Set constraint of Type 1](<https://en.wikipedia.org/wiki/Special_ordered_set#Types>) (SOS1).
+/// SOS1 constraint on non-negative variables x_1, ..., x_n
+/// requires that at most one of x_i can be non-zero.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Sos1 {
+    /// The ID of the SOS1 constraint on binary variables.
+    #[prost(uint64, tag = "1")]
+    pub binary_constraint_id: u64,
+    /// The IDs of the big-M constraint on non-binary variables.
+    #[prost(uint64, repeated, tag = "2")]
+    pub big_m_constraint_ids: ::prost::alloc::vec::Vec<u64>,
+    /// The list of ids of decision variables that are constrained to be one-hot.
+    #[prost(uint64, repeated, tag = "3")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+}
+/// A constraint hint is an additional inforomation to be used by solver to gain performance.
+/// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ConstraintHints {
+    /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+    #[prost(message, repeated, tag = "2")]
+    pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
+    /// SOS1 constraint: at most one of x_1, ..., x_n can be non-zero.
+    #[prost(message, repeated, tag = "3")]
+    pub sos1_constraints: ::prost::alloc::vec::Vec<Sos1>,
 }
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]
@@ -327,6 +395,15 @@ pub struct Instance {
     /// Parameters used when instantiating this instance
     #[prost(message, optional, tag = "6")]
     pub parameters: ::core::option::Option<Parameters>,
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    #[prost(message, optional, tag = "7")]
+    pub constraint_hints: ::core::option::Option<ConstraintHints>,
+    /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
+    #[prost(message, repeated, tag = "8")]
+    pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -426,6 +503,15 @@ pub struct ParametricInstance {
     /// The sense of this problem, i.e. minimize the objective or maximize it.
     #[prost(enumeration = "instance::Sense", tag = "6")]
     pub sense: i32,
+    /// Constraint hints to be used by solver to gain performance. They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
+    #[prost(message, optional, tag = "7")]
+    pub constraint_hints: ::core::option::Option<ConstraintHints>,
+    /// Constraints removed via preprocessing. These are restored when evaluated into `ommx.v1.Solution`.
+    #[prost(message, repeated, tag = "8")]
+    pub removed_constraints: ::prost::alloc::vec::Vec<RemovedConstraint>,
+    /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
+    #[prost(map = "uint64, message", tag = "9")]
+    pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
@@ -450,10 +536,24 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
-    /// Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
-    /// If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
+    /// The feasibility of the solution for all, remaining and removed constraints.
+    ///
+    /// The feasibility for the remaining constraints is represented by the `feasible_relaxed` field.
     #[prost(bool, tag = "5")]
     pub feasible: bool,
+    /// Feasibility of the solution for remaining constraints, ignoring removed constraints.
+    ///
+    /// This is optional due to the backward compatibility.
+    /// If this field is NULL, the `feasible` field represents relaxed feasibility,
+    /// and the deprecated `feasible_unrelaxed` field represents the feasibility including removed constraints.
+    #[prost(bool, optional, tag = "9")]
+    pub feasible_relaxed: ::core::option::Option<bool>,
+    /// \[DEPRECATED\] Feasibility of the solution for all constraints.
+    /// This field has been introduced in Python SDK 1.6.0 and deprecated in 1.7.0.
+    /// The feasibility in this sense is represented by the `feasible` field after 1.7.0.
+    #[deprecated]
+    #[prost(bool, tag = "8")]
+    pub feasible_unrelaxed: bool,
     /// The optimality of the solution.
     #[prost(enumeration = "Optimality", tag = "6")]
     pub optimality: i32,
@@ -567,4 +667,134 @@ impl Relaxation {
             _ => None,
         }
     }
+}
+/// A map from sample ID to state
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Samples {
+    #[prost(message, repeated, tag = "1")]
+    pub entries: ::prost::alloc::vec::Vec<samples::SamplesEntry>,
+}
+/// Nested message and enum types in `Samples`.
+pub mod samples {
+    /// Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
+    /// Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct SamplesEntry {
+        /// State of the sample
+        #[prost(message, optional, tag = "1")]
+        pub state: ::core::option::Option<super::State>,
+        /// IDs of the sample
+        #[prost(uint64, repeated, tag = "2")]
+        pub ids: ::prost::alloc::vec::Vec<u64>,
+    }
+}
+/// A map from sample IDs to sampled values
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledValues {
+    #[prost(message, repeated, tag = "1")]
+    pub entries: ::prost::alloc::vec::Vec<sampled_values::SampledValuesEntry>,
+}
+/// Nested message and enum types in `SampledValues`.
+pub mod sampled_values {
+    /// Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct.
+    #[non_exhaustive]
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, ::prost::Message)]
+    pub struct SampledValuesEntry {
+        #[prost(double, tag = "1")]
+        pub value: f64,
+        /// IDs of the sample
+        #[prost(uint64, repeated, tag = "2")]
+        pub ids: ::prost::alloc::vec::Vec<u64>,
+    }
+}
+/// A pair of decision variable description and its sampled values
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledDecisionVariable {
+    #[prost(message, optional, tag = "1")]
+    pub decision_variable: ::core::option::Option<DecisionVariable>,
+    /// Sampled values of decision variable. This becomes `None` if the decision variable is not sampled.
+    #[prost(message, optional, tag = "2")]
+    pub samples: ::core::option::Option<SampledValues>,
+}
+/// Evaluated constraint for samples
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledConstraint {
+    /// Constraint ID
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(enumeration = "Equality", tag = "2")]
+    pub equality: i32,
+    /// Name of the constraint.
+    #[prost(string, optional, tag = "3")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Integer parameters of the constraint.
+    #[prost(int64, repeated, tag = "4")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the constraint.
+    #[prost(map = "string, string", tag = "5")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Detail human-readable description of the constraint.
+    #[prost(string, optional, tag = "6")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(string, optional, tag = "7")]
+    pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    #[prost(map = "string, string", tag = "8")]
+    pub removed_reason_parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Evaluated values of constraint for each sample
+    #[prost(message, optional, tag = "9")]
+    pub evaluated_values: ::core::option::Option<SampledValues>,
+    /// IDs of decision variables used to evaluate this constraint
+    #[prost(uint64, repeated, tag = "10")]
+    pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    /// Feasibility of each sample
+    #[prost(map = "uint64, bool", tag = "11")]
+    pub feasible: ::std::collections::HashMap<u64, bool>,
+}
+/// Output of the sampling process.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampleSet {
+    #[prost(message, optional, tag = "1")]
+    pub objectives: ::core::option::Option<SampledValues>,
+    #[prost(message, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
+    #[prost(message, repeated, tag = "3")]
+    pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
+    /// Feasibility for *both* remaining and removed constraints of each sample.
+    ///
+    /// The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
+    /// In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+    /// i.e. removed constraints (introduced in 1.6.0) are not considered.
+    /// After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+    /// The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
+    #[prost(map = "uint64, bool", tag = "4")]
+    pub feasible: ::std::collections::HashMap<u64, bool>,
+    /// \[Deprecated\] This field has been introduced in Python SDK 1.6.0 to represent
+    /// the feasibility of all constraints of each sample.
+    /// The `feasible` field is used in this sense after Python SDK 1.7.0.
+    #[prost(map = "uint64, bool", tag = "6")]
+    #[deprecated]
+    pub feasible_unrelaxed: ::std::collections::HashMap<u64, bool>,
+    /// Feasibility for remaining (non-removed) constraints of each sample.
+    #[prost(map = "uint64, bool", tag = "7")]
+    pub feasible_relaxed: ::std::collections::HashMap<u64, bool>,
+    /// Minimize or Maximize
+    #[prost(enumeration = "instance::Sense", tag = "5")]
+    pub sense: i32,
 }

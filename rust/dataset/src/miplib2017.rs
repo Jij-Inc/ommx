@@ -19,7 +19,7 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         log::info!("Loading: {}", name);
-        let instance = match ommx::mps::load_reader(file) {
+        let instance = match ommx::mps::load_zipped_reader(file) {
             Ok(instance) => instance,
             Err(err) => {
                 log::warn!("Skip: Failed to load '{name}' with error: {err}");

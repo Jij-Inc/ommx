@@ -5,7 +5,7 @@ inputs:
   python-version:
     description: "Python version to setup"
     required: true
-    default: "3.8"
+    default: "3.9"
 
 runs:
   using: "composite"
@@ -44,8 +44,10 @@ runs:
     - name: Setup Python tools
       shell: bash
       run: |
-        pip install "ruff >= 0.7.0, < 0.8.0"
+        pip install "ruff >= 0.9.0, < 0.10.0"
         pip install pytest-github-actions-annotate-failures
+        pip install "twine >= 6.0.0, < 7.0.0"
+        pip install build
 
     - name: Install uv
       uses: astral-sh/setup-uv@v3

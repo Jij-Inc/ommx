@@ -18,7 +18,7 @@ from ommx.v1 import decision_variables_pb2 as ommx_dot_v1_dot_decision__variable
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x16ommx/v1/solution.proto\x12\x07ommx.v1\x1a\x18ommx/v1/constraint.proto\x1a ommx/v1/decision_variables.proto"z\n\x05State\x12\x35\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1b.ommx.v1.State.EntriesEntryR\x07\x65ntries\x1a:\n\x0c\x45ntriesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01"\xf1\x02\n\x08Solution\x12$\n\x05state\x18\x01 \x01(\x0b\x32\x0e.ommx.v1.StateR\x05state\x12\x1c\n\tobjective\x18\x02 \x01(\x01R\tobjective\x12H\n\x12\x64\x65\x63ision_variables\x18\x03 \x03(\x0b\x32\x19.ommx.v1.DecisionVariableR\x11\x64\x65\x63isionVariables\x12Q\n\x15\x65valuated_constraints\x18\x04 \x03(\x0b\x32\x1c.ommx.v1.EvaluatedConstraintR\x14\x65valuatedConstraints\x12\x1a\n\x08\x66\x65\x61sible\x18\x05 \x01(\x08R\x08\x66\x65\x61sible\x12\x33\n\noptimality\x18\x06 \x01(\x0e\x32\x13.ommx.v1.OptimalityR\noptimality\x12\x33\n\nrelaxation\x18\x07 \x01(\x0e\x32\x13.ommx.v1.RelaxationR\nrelaxation"\x0c\n\nInfeasible"\x0b\n\tUnbounded"\xc6\x01\n\x06Result\x12\x16\n\x05\x65rror\x18\x01 \x01(\tH\x00R\x05\x65rror\x12/\n\x08solution\x18\x02 \x01(\x0b\x32\x11.ommx.v1.SolutionH\x00R\x08solution\x12\x35\n\ninfeasible\x18\x03 \x01(\x0b\x32\x13.ommx.v1.InfeasibleH\x00R\ninfeasible\x12\x32\n\tunbounded\x18\x04 \x01(\x0b\x32\x12.ommx.v1.UnboundedH\x00R\tunboundedB\x08\n\x06result*\\\n\nOptimality\x12\x1a\n\x16OPTIMALITY_UNSPECIFIED\x10\x00\x12\x16\n\x12OPTIMALITY_OPTIMAL\x10\x01\x12\x1a\n\x16OPTIMALITY_NOT_OPTIMAL\x10\x02*C\n\nRelaxation\x12\x1a\n\x16RELAXATION_UNSPECIFIED\x10\x00\x12\x19\n\x15RELAXATION_LP_RELAXED\x10\x01\x42Y\n\x0b\x63om.ommx.v1B\rSolutionProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
+    b'\n\x16ommx/v1/solution.proto\x12\x07ommx.v1\x1a\x18ommx/v1/constraint.proto\x1a ommx/v1/decision_variables.proto"z\n\x05State\x12\x35\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1b.ommx.v1.State.EntriesEntryR\x07\x65ntries\x1a:\n\x0c\x45ntriesEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n\x05value\x18\x02 \x01(\x01R\x05value:\x02\x38\x01"\xe9\x03\n\x08Solution\x12$\n\x05state\x18\x01 \x01(\x0b\x32\x0e.ommx.v1.StateR\x05state\x12\x1c\n\tobjective\x18\x02 \x01(\x01R\tobjective\x12H\n\x12\x64\x65\x63ision_variables\x18\x03 \x03(\x0b\x32\x19.ommx.v1.DecisionVariableR\x11\x64\x65\x63isionVariables\x12Q\n\x15\x65valuated_constraints\x18\x04 \x03(\x0b\x32\x1c.ommx.v1.EvaluatedConstraintR\x14\x65valuatedConstraints\x12\x1a\n\x08\x66\x65\x61sible\x18\x05 \x01(\x08R\x08\x66\x65\x61sible\x12.\n\x10\x66\x65\x61sible_relaxed\x18\t \x01(\x08H\x00R\x0f\x66\x65\x61sibleRelaxed\x88\x01\x01\x12\x31\n\x12\x66\x65\x61sible_unrelaxed\x18\x08 \x01(\x08\x42\x02\x18\x01R\x11\x66\x65\x61sibleUnrelaxed\x12\x33\n\noptimality\x18\x06 \x01(\x0e\x32\x13.ommx.v1.OptimalityR\noptimality\x12\x33\n\nrelaxation\x18\x07 \x01(\x0e\x32\x13.ommx.v1.RelaxationR\nrelaxationB\x13\n\x11_feasible_relaxed"\x0c\n\nInfeasible"\x0b\n\tUnbounded"\xc6\x01\n\x06Result\x12\x16\n\x05\x65rror\x18\x01 \x01(\tH\x00R\x05\x65rror\x12/\n\x08solution\x18\x02 \x01(\x0b\x32\x11.ommx.v1.SolutionH\x00R\x08solution\x12\x35\n\ninfeasible\x18\x03 \x01(\x0b\x32\x13.ommx.v1.InfeasibleH\x00R\ninfeasible\x12\x32\n\tunbounded\x18\x04 \x01(\x0b\x32\x12.ommx.v1.UnboundedH\x00R\tunboundedB\x08\n\x06result*\\\n\nOptimality\x12\x1a\n\x16OPTIMALITY_UNSPECIFIED\x10\x00\x12\x16\n\x12OPTIMALITY_OPTIMAL\x10\x01\x12\x1a\n\x16OPTIMALITY_NOT_OPTIMAL\x10\x02*C\n\nRelaxation\x12\x1a\n\x16RELAXATION_UNSPECIFIED\x10\x00\x12\x19\n\x15RELAXATION_LP_RELAXED\x10\x01\x42Y\n\x0b\x63om.ommx.v1B\rSolutionProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
 )
 
 _globals = globals()
@@ -31,20 +31,24 @@ if not _descriptor._USE_C_DESCRIPTORS:
     ]._serialized_options = b"\n\013com.ommx.v1B\rSolutionProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1"
     _globals["_STATE_ENTRIESENTRY"]._loaded_options = None
     _globals["_STATE_ENTRIESENTRY"]._serialized_options = b"8\001"
-    _globals["_OPTIMALITY"]._serialized_start = 819
-    _globals["_OPTIMALITY"]._serialized_end = 911
-    _globals["_RELAXATION"]._serialized_start = 913
-    _globals["_RELAXATION"]._serialized_end = 980
+    _globals["_SOLUTION"].fields_by_name["feasible_unrelaxed"]._loaded_options = None
+    _globals["_SOLUTION"].fields_by_name[
+        "feasible_unrelaxed"
+    ]._serialized_options = b"\030\001"
+    _globals["_OPTIMALITY"]._serialized_start = 939
+    _globals["_OPTIMALITY"]._serialized_end = 1031
+    _globals["_RELAXATION"]._serialized_start = 1033
+    _globals["_RELAXATION"]._serialized_end = 1100
     _globals["_STATE"]._serialized_start = 95
     _globals["_STATE"]._serialized_end = 217
     _globals["_STATE_ENTRIESENTRY"]._serialized_start = 159
     _globals["_STATE_ENTRIESENTRY"]._serialized_end = 217
     _globals["_SOLUTION"]._serialized_start = 220
-    _globals["_SOLUTION"]._serialized_end = 589
-    _globals["_INFEASIBLE"]._serialized_start = 591
-    _globals["_INFEASIBLE"]._serialized_end = 603
-    _globals["_UNBOUNDED"]._serialized_start = 605
-    _globals["_UNBOUNDED"]._serialized_end = 616
-    _globals["_RESULT"]._serialized_start = 619
-    _globals["_RESULT"]._serialized_end = 817
+    _globals["_SOLUTION"]._serialized_end = 709
+    _globals["_INFEASIBLE"]._serialized_start = 711
+    _globals["_INFEASIBLE"]._serialized_end = 723
+    _globals["_UNBOUNDED"]._serialized_start = 725
+    _globals["_UNBOUNDED"]._serialized_end = 736
+    _globals["_RESULT"]._serialized_start = 739
+    _globals["_RESULT"]._serialized_end = 937
 # @@protoc_insertion_point(module_scope)

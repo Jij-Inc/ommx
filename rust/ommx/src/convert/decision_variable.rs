@@ -141,26 +141,26 @@ impl Arbitrary for Kind {
 }
 
 impl Arbitrary for DecisionVariable {
-    type Parameters = u64;
+    type Parameters = (u64, Kind);
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(max_id: Self::Parameters) -> Self::Strategy {
+    fn arbitrary_with((id, kind): Self::Parameters) -> Self::Strategy {
         let subscripts = prop_oneof![
             Just(Vec::<i64>::new()),
-            proptest::collection::vec(-(max_id as i64)..=(max_id as i64), 1..=3),
+            proptest::collection::vec(-10_i64..=10, 1..=3),
         ];
         let parameters = prop_oneof![
             Just(HashMap::<String, String>::new()),
-            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 1..=3),
+            proptest::collection::hash_map(".{0,3}", ".{0,3}", 1..=3),
         ];
         (
-            0..=max_id,
+            Just(id),
             Option::<Bound>::arbitrary(),
-            Option::<String>::arbitrary(),
-            Kind::arbitrary(),
+            proptest::option::of(".{0,3}"),
+            Just(kind),
             subscripts,
             parameters,
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
         )
             .prop_map(
                 |(id, bound, name, kind, subscripts, parameters, description)| DecisionVariable {
@@ -176,11 +176,23 @@ impl Arbitrary for DecisionVariable {
             )
             .boxed()
     }
+
+    fn arbitrary() -> Self::Strategy {
+        (Just(0), Kind::arbitrary())
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
+    }
 }
 
-pub fn arbitrary_decision_variables(ids: BTreeSet<u64>) -> BoxedStrategy<Vec<DecisionVariable>> {
+pub(super) fn arbitrary_decision_variables(
+    ids: BTreeSet<u64>,
+    kind_strategy: impl Strategy<Value = Kind> + 'static,
+) -> BoxedStrategy<Vec<DecisionVariable>> {
     (
-        proptest::collection::vec(DecisionVariable::arbitrary(), ids.len()),
+        proptest::collection::vec(
+            (Just(0), kind_strategy).prop_flat_map(DecisionVariable::arbitrary_with),
+            ids.len(),
+        ),
         Just(ids),
     )
         .prop_map(|(mut dvs, used_ids)| {

@@ -1,5 +1,5 @@
 # /// script
-# requires-python = ">=3.8"
+# requires-python = ">=3.9"
 # dependencies = [
 #   "tomlkit"
 # ]
@@ -26,6 +26,7 @@
 from pathlib import Path
 import tomlkit
 import argparse
+import re
 
 
 def update_version(pyproject_path: Path, new_version: str):
@@ -33,17 +34,50 @@ def update_version(pyproject_path: Path, new_version: str):
         pyproject_data = tomlkit.parse(file.read())
 
     pyproject_data["project"]["version"] = new_version  # type: ignore
+    # Update the version of the OMMX dependency
+    for dep in pyproject_data["project"]["dependencies"]:  # type: ignore
+        if re.match(r"ommx\s*>=\s*\d+\.\d+\.\d+,\s*<\s*\d+\.\d+\.\d+", dep):
+            new_dep = re.sub(r"\d+\.\d+\.\d+", new_version, dep, count=1)
+            pyproject_data["project"]["dependencies"].remove(dep)  # type: ignore
+            pyproject_data["project"]["dependencies"].insert(0, new_dep)  # type: ignore
 
     with open(pyproject_path, "w") as file:
         file.write(tomlkit.dumps(pyproject_data))
 
 
-def generrate_next_version(sdk: Path) -> str:
+def generate_next_version(sdk: Path) -> str:
     with open(sdk, "r") as file:
         pyproject_data = tomlkit.parse(file.read())
     current = str(pyproject_data["project"]["version"])  # type: ignore
-    major, minor, patch = current.split(".")
-    return f"{major}.{minor}.{int(patch) + 1}"
+    return next_version(current)
+
+
+def next_version(version: str) -> str:
+    """
+    Generate the next version from the given version string.
+
+    Args:
+        version (str): The version string (e.g., '1.2.3' or '1.2.3rc1').
+
+    Returns:
+        str: The next version string.
+    """
+    # Regular expression for parsing versions
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:rc(\d+))?$", version)
+    if not match:
+        raise ValueError(f"Invalid version format: {version}")
+
+    major, minor, patch, rc = match.groups()
+    major, minor, patch = int(major), int(minor), int(patch)
+
+    if rc is not None:
+        # If it is a release candidate, increment the rc number
+        rc = int(rc) + 1
+        return f"{major}.{minor}.{patch}rc{rc}"
+    else:
+        # Otherwise, increment the patch version
+        patch += 1
+        return f"{major}.{minor}.{patch}"
 
 
 def main():
@@ -59,6 +93,7 @@ def main():
         for name in [
             "ommx-pyscipopt-adapter",
             "ommx-python-mip-adapter",
+            "ommx-openjij-adapter",
             # Add new adapter here
         ]
     ]
@@ -66,7 +101,7 @@ def main():
     if args.version:
         new_version = args.version
     else:
-        new_version = generrate_next_version(sdk)
+        new_version = generate_next_version(sdk)
     print(new_version)
 
     for pyproject in [sdk] + adapters:

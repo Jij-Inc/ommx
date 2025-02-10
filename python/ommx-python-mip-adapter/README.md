@@ -45,7 +45,7 @@ pip install ommx-python-mip-adapter
 Python-MIP can be used through `ommx-python-mip-adapter` by using the following:
 
 ```python markdown-code-runner
-import ommx_python_mip_adapter as adapter
+from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx.v1 import Instance, DecisionVariable
 
 x1 = DecisionVariable.integer(1, lower=0, upper=5)
@@ -56,13 +56,10 @@ ommx_instance = Instance.from_components(
     sense=Instance.MINIMIZE,
 )
 
-# Convert from `ommx.v1.Instance` to `mip.Model`
-model = adapter.instance_to_model(ommx_instance)
-model.optimize()
-# Create `ommx.v1.State` from Optimized `mip.Model`
-ommx_state = adapter.model_to_state(model, ommx_instance)
+# Create `ommx.v1.Solution` from the `mip.Model`
+ommx_solution = OMMXPythonMIPAdapter.solve(ommx_instance)
 
-print(ommx_state)
+print(ommx_solution)
 ```
 
 You can get `ommx.v1.Instance` from a Python-MIP model as the following:

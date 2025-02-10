@@ -1,8 +1,11 @@
-use crate::v1::{Constraint, Equality, Function};
+use crate::v1::{
+    Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
+};
+use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 impl Constraint {
     pub fn function(&self) -> Cow<Function> {
@@ -11,6 +14,61 @@ impl Constraint {
             // Empty function is regarded as zero function
             None => Cow::Owned(Function::zero()),
         }
+    }
+}
+
+impl EvaluatedConstraint {
+    pub fn is_feasible(&self, atol: f64) -> Result<bool> {
+        ensure!(atol > 0.0, "atol must be positive");
+        if self.equality() == Equality::EqualToZero {
+            return Ok(self.evaluated_value.abs() < atol);
+        } else if self.equality() == Equality::LessThanOrEqualToZero {
+            return Ok(self.evaluated_value < atol);
+        }
+        bail!("Unsupported equality: {:?}", self.equality());
+    }
+}
+
+impl SampledConstraint {
+    pub fn is_feasible(&self, atol: f64) -> Result<HashMap<u64, bool>> {
+        ensure!(atol > 0.0, "atol must be positive");
+        let values = self
+            .evaluated_values
+            .as_ref()
+            .context("evaluated_values of SampledConstraints is lacked")?;
+        if self.equality() == Equality::EqualToZero {
+            return Ok(values
+                .iter()
+                .map(|(id, value)| (*id, value.abs() < atol))
+                .collect());
+        } else if self.equality() == Equality::LessThanOrEqualToZero {
+            return Ok(values
+                .iter()
+                .map(|(id, value)| (*id, *value < atol))
+                .collect());
+        }
+        bail!("Unsupported equality: {:?}", self.equality());
+    }
+
+    pub fn get(&self, sample_id: u64) -> Result<EvaluatedConstraint> {
+        Ok(EvaluatedConstraint {
+            id: self.id,
+            equality: self.equality,
+            evaluated_value: self
+                .evaluated_values
+                .as_ref()
+                .context("evaluated_values of SampledConstraints is lacked")?
+                .get(sample_id)
+                .context("SampledConstraint lacks evaluated value")?,
+            used_decision_variable_ids: self.used_decision_variable_ids.clone(),
+            name: self.name.clone(),
+            subscripts: self.subscripts.clone(),
+            parameters: self.parameters.clone(),
+            description: self.description.clone(),
+            removed_reason: self.removed_reason.clone(),
+            removed_reason_parameters: self.removed_reason_parameters.clone(),
+            dual_variable: None,
+        })
     }
 }
 
@@ -80,4 +138,31 @@ pub fn arbitrary_constraints(
             c
         })
         .boxed()
+}
+
+impl Arbitrary for RemovedConstraint {
+    type Parameters = <Constraint as Arbitrary>::Parameters;
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
+        (
+            Constraint::arbitrary_with(parameters),
+            ".{0,3}",
+            proptest::collection::hash_map(".{0,3}", ".{0,3}", 0..=2),
+        )
+            .prop_map(
+                |(constraint, removed_reason, removed_reason_parameters)| RemovedConstraint {
+                    constraint: Some(constraint),
+                    removed_reason,
+                    removed_reason_parameters,
+                },
+            )
+            .boxed()
+    }
+
+    fn arbitrary() -> Self::Strategy {
+        (0..10_usize, 0..5_u32, 0..10_u64)
+            .prop_flat_map(Self::arbitrary_with)
+            .boxed()
+    }
 }

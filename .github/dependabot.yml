@@ -24,3 +24,20 @@ updates:
       dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "pip"
+    directories:
+      - "doc/"
+      - "python/ommx/"
+      - "python/ommx-pyscipopt-adapter/"
+      - "python/ommx-python-mip-adapter/"
+      - "python/ommx-openjij-adapter/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-type: "all"
+    groups:
+      dependencies:
+        patterns:
+          - "*"

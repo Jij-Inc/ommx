@@ -2,10 +2,18 @@ use crate::v1::{
     function::{self, Function as FunctionEnum},
     Function, Linear, Polynomial, Quadratic,
 };
+use anyhow::Result;
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::{collections::BTreeSet, fmt, iter::*, ops::*};
+use std::{
+    collections::{BTreeSet, HashMap},
+    fmt,
+    iter::*,
+    ops::*,
+};
+
+use super::sorted_ids::SortedIds;
 
 impl Zero for Function {
     fn zero() -> Self {
@@ -77,10 +85,27 @@ impl FromIterator<((u64, u64), f64)> for Function {
     }
 }
 
-impl FromIterator<(Vec<u64>, f64)> for Function {
-    fn from_iter<I: IntoIterator<Item = (Vec<u64>, f64)>>(iter: I) -> Self {
+impl FromIterator<(SortedIds, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (SortedIds, f64)>>(iter: I) -> Self {
         let poly: Polynomial = iter.into_iter().collect();
         poly.into()
+    }
+}
+
+impl<'a> IntoIterator for &'a Function {
+    type Item = (SortedIds, f64);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match &self.function {
+            Some(FunctionEnum::Constant(c)) => Box::new(std::iter::once((SortedIds::empty(), *c))),
+            Some(FunctionEnum::Linear(linear)) => {
+                Box::new(linear.into_iter().map(|(id, c)| (id.into(), c)))
+            }
+            Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
+            Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
+            None => Box::new(std::iter::empty()),
+        }
     }
 }
 
@@ -120,6 +145,40 @@ impl Function {
             FunctionEnum::Quadratic(quadratic) => quadratic.as_constant(),
             FunctionEnum::Polynomial(poly) => poly.as_constant(),
         }
+    }
+
+    /// Get 0-th order term.
+    pub fn get_constant(&self) -> f64 {
+        match &self.function {
+            Some(FunctionEnum::Constant(c)) => *c,
+            Some(FunctionEnum::Linear(linear)) => linear.constant,
+            Some(FunctionEnum::Quadratic(quad)) => quad.get_constant(),
+            Some(FunctionEnum::Polynomial(poly)) => poly.get_constant(),
+            None => 0.0,
+        }
+    }
+
+    /// Substitute decision variable with a function
+    ///
+    /// For example, `x = f(y, z, ...)` into `g(x, y, z, ...)` yielding `g(f(y, z), y, z, ...)`.
+    ///
+    pub fn substitute(&self, replacements: &HashMap<u64, Self>) -> Result<Self> {
+        if replacements.is_empty() {
+            return Ok(self.clone());
+        }
+        let mut out = Function::zero();
+        for (ids, coefficient) in self {
+            let mut v = Function::from(coefficient);
+            for id in ids.iter() {
+                if let Some(replacement) = replacements.get(id) {
+                    v = v * replacement.clone();
+                } else {
+                    v = v * Linear::single_term(*id, 1.0);
+                }
+            }
+            out = out + v;
+        }
+        Ok(out)
     }
 }
 

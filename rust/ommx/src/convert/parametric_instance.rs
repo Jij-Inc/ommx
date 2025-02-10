@@ -4,6 +4,7 @@ use super::{
 };
 use crate::{
     v1::{
+        decision_variable::Kind,
         instance::{Description, Sense},
         Function, Instance, Parameters, ParametricInstance, State,
     },
@@ -21,7 +22,10 @@ impl From<Instance> for ParametricInstance {
             constraints,
             decision_variables,
             sense,
+            constraint_hints,
+            removed_constraints,
             parameters: _, // Drop previous parameters
+            decision_variable_dependency,
         }: Instance,
     ) -> Self {
         Self {
@@ -31,6 +35,9 @@ impl From<Instance> for ParametricInstance {
             decision_variables,
             sense,
             parameters: Default::default(),
+            constraint_hints,
+            removed_constraints,
+            decision_variable_dependency,
         }
     }
 }
@@ -79,6 +86,9 @@ impl ParametricInstance {
             decision_variables: self.decision_variables,
             sense: self.sense,
             parameters: Some(parameters),
+            constraint_hints: self.constraint_hints,
+            removed_constraints: self.removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
         })
     }
 
@@ -109,6 +119,49 @@ impl ParametricInstance {
     /// Defined parameter IDs. These IDs may not be used in the objective and constraints.
     pub fn defined_parameter_ids(&self) -> BTreeSet<u64> {
         self.parameters.iter().map(|p| p.id).collect()
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        self.validate_ids()?;
+        self.validate_constraint_ids()?;
+        Ok(())
+    }
+
+    pub fn validate_ids(&self) -> Result<()> {
+        let mut ids = BTreeSet::new();
+        for dv in &self.decision_variables {
+            if !ids.insert(dv.id) {
+                bail!("Duplicate decision variable ID: {}", dv.id);
+            }
+        }
+        for p in &self.parameters {
+            if !ids.insert(p.id) {
+                bail!("Duplicate parameter ID: {}", p.id);
+            }
+        }
+        let used_ids = self.used_ids()?;
+        if !used_ids.is_subset(&ids) {
+            let sub = used_ids.difference(&ids).collect::<BTreeSet<_>>();
+            bail!("Undefined ID is used: {:?}", sub);
+        }
+        Ok(())
+    }
+
+    pub fn validate_constraint_ids(&self) -> Result<()> {
+        let mut ids = BTreeSet::new();
+        for c in &self.constraints {
+            if !ids.insert(c.id) {
+                bail!("Duplicate constraint ID: {}", c.id);
+            }
+        }
+        for c in &self.removed_constraints {
+            if let Some(c) = c.constraint.as_ref() {
+                if !ids.insert(c.id) {
+                    bail!("Duplicate removed constraint ID: {}", c.id);
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -142,7 +195,10 @@ impl Arbitrary for ParametricInstance {
                             (
                                 Just(objective),
                                 Just(constraints),
-                                arbitrary_decision_variables(decision_variable_ids),
+                                arbitrary_decision_variables(
+                                    decision_variable_ids,
+                                    Kind::arbitrary(),
+                                ),
                                 arbitrary_parameters(parameter_ids),
                                 Option::<Description>::arbitrary(),
                                 Sense::arbitrary(),
@@ -163,6 +219,7 @@ impl Arbitrary for ParametricInstance {
                                             description,
                                             sense: sense as i32,
                                             parameters,
+                                            ..Default::default()
                                         }
                                     },
                                 )
@@ -209,14 +266,8 @@ mod tests {
         }
 
         #[test]
-        fn test_ids(pi in ParametricInstance::arbitrary()) {
-            let dv_ids = pi.defined_decision_variable_ids();
-            let p_ids = pi.defined_parameter_ids();
-            prop_assert!(dv_ids.is_disjoint(&p_ids));
-
-            let all_ids: BTreeSet<u64> = dv_ids.union(&p_ids).cloned().collect();
-            let used_ids = pi.used_ids().unwrap();
-            prop_assert!(used_ids.is_subset(&all_ids));
+        fn validate(pi in ParametricInstance::arbitrary()) {
+            pi.validate().unwrap();
         }
     }
 }

@@ -413,12 +413,17 @@ impl State {
 impl Mps {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let f = fs::File::open(path)?;
-        Self::from_reader(f)
+        Self::from_zipped_reader(f)
     }
 
-    pub fn from_reader(reader: impl Read) -> Result<Self> {
+    pub fn from_zipped_reader(reader: impl Read) -> Result<Self> {
         let buf = flate2::read::GzDecoder::new(reader);
         let buf = io::BufReader::new(buf);
+        Self::from_lines(buf.lines().map_while(|x| x.ok()))
+    }
+
+    pub fn from_raw_reader(reader: impl Read) -> Result<Self> {
+        let buf = io::BufReader::new(reader);
         Self::from_lines(buf.lines().map_while(|x| x.ok()))
     }
 

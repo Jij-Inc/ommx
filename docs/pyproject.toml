@@ -1,0 +1,20 @@
+# This pyproject.toml is designed to reproduce the binder or Colab environment of the OMMX book rather than development environment.
+# This means the unreleased API cannot be used in the book build with this pyproject.toml.
+# To write the book with the latest API, you should use the pyproject.toml in the `python/ommx` directory.
+[project]
+name = "ommx-book"
+version = "0.1.0"
+description = "Jupyter Book for OMMX"
+requires-python = ">=3.9, <3.13"
+
+# These dependencies must be published ones.
+dependencies = [
+    "jupyter-book>=1.0.3",
+    "matplotlib>=3.9.4",
+    "nbconvert>=7.16.4",
+    "networkx>=3.2.1",
+    "ommx-pyscipopt-adapter>=1.8.0",
+    "ommx-python-mip-adapter>=1.8.0",
+    "ommx-openjij-adapter>=1.8.0",
+    "ommx>=1.8.0",
+]

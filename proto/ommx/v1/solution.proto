@@ -36,9 +36,22 @@ message Solution {
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
 
-  // Whether the solution is feasible. Note that this is the feasiblity of the solution, not the problem.
-  // If the problem is infeasible, i.e. when the solver proves that all solution of the problem are infeasible, `Infeasible` message should be used.
+  // The feasibility of the solution for all, remaining and removed constraints.
+  //
+  // The feasibility for the remaining constraints is represented by the `feasible_relaxed` field.
   bool feasible = 5;
+
+  // Feasibility of the solution for remaining constraints, ignoring removed constraints.
+  //
+  // This is optional due to the backward compatibility.
+  // If this field is NULL, the `feasible` field represents relaxed feasibility,
+  // and the deprecated `feasible_unrelaxed` field represents the feasibility including removed constraints.
+  optional bool feasible_relaxed = 9;
+
+  // [DEPRECATED] Feasibility of the solution for all constraints.
+  // This field has been introduced in Python SDK 1.6.0 and deprecated in 1.7.0.
+  // The feasibility in this sense is represented by the `feasible` field after 1.7.0.
+  bool feasible_unrelaxed = 8 [deprecated = true];
 
   // The optimality of the solution.
   Optimality optimality = 6;

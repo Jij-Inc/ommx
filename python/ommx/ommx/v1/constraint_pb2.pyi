@@ -188,6 +188,24 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             self, field_name: typing.Literal["key", b"key", "value", b"value"]
         ) -> None: ...
 
+    @typing.final
+    class RemovedReasonParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
     ID_FIELD_NUMBER: builtins.int
     EQUALITY_FIELD_NUMBER: builtins.int
     EVALUATED_VALUE_FIELD_NUMBER: builtins.int
@@ -197,6 +215,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     NAME_FIELD_NUMBER: builtins.int
     DESCRIPTION_FIELD_NUMBER: builtins.int
     DUAL_VARIABLE_FIELD_NUMBER: builtins.int
+    REMOVED_REASON_FIELD_NUMBER: builtins.int
+    REMOVED_REASON_PARAMETERS_FIELD_NUMBER: builtins.int
     id: builtins.int
     equality: global___Equality.ValueType
     evaluated_value: builtins.float
@@ -209,6 +229,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     """Value for the Lagrangian dual variable of this constraint.
     This is optional because not all solvers support to evaluate dual variables.
     """
+    removed_reason: builtins.str
+    """Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint."""
     @property
     def used_decision_variable_ids(
         self,
@@ -227,6 +249,12 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
         """Key-value parameters of the constraint."""
 
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint."""
+
     def __init__(
         self,
         *,
@@ -239,6 +267,9 @@ class EvaluatedConstraint(google.protobuf.message.Message):
         name: builtins.str | None = ...,
         description: builtins.str | None = ...,
         dual_variable: builtins.float | None = ...,
+        removed_reason: builtins.str | None = ...,
+        removed_reason_parameters: collections.abc.Mapping[builtins.str, builtins.str]
+        | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -249,12 +280,16 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"_dual_variable",
             "_name",
             b"_name",
+            "_removed_reason",
+            b"_removed_reason",
             "description",
             b"description",
             "dual_variable",
             b"dual_variable",
             "name",
             b"name",
+            "removed_reason",
+            b"removed_reason",
         ],
     ) -> builtins.bool: ...
     def ClearField(
@@ -266,6 +301,8 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"_dual_variable",
             "_name",
             b"_name",
+            "_removed_reason",
+            b"_removed_reason",
             "description",
             b"description",
             "dual_variable",
@@ -280,6 +317,10 @@ class EvaluatedConstraint(google.protobuf.message.Message):
             b"name",
             "parameters",
             b"parameters",
+            "removed_reason",
+            b"removed_reason",
+            "removed_reason_parameters",
+            b"removed_reason_parameters",
             "subscripts",
             b"subscripts",
             "used_decision_variable_ids",
@@ -298,5 +339,77 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     def WhichOneof(
         self, oneof_group: typing.Literal["_name", b"_name"]
     ) -> typing.Literal["name"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_removed_reason", b"_removed_reason"]
+    ) -> typing.Literal["removed_reason"] | None: ...
 
 global___EvaluatedConstraint = EvaluatedConstraint
+
+@typing.final
+class RemovedConstraint(google.protobuf.message.Message):
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class RemovedReasonParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    CONSTRAINT_FIELD_NUMBER: builtins.int
+    REMOVED_REASON_FIELD_NUMBER: builtins.int
+    REMOVED_REASON_PARAMETERS_FIELD_NUMBER: builtins.int
+    removed_reason: builtins.str
+    """Short reason why the constraint was removed.
+
+    This should be the name of method, function or application which remove the constraint.
+    """
+    @property
+    def constraint(self) -> global___Constraint:
+        """The removed constraint"""
+
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Arbitrary key-value parameters representing why the constraint was removed.
+
+        This should be human-readable and can be used for debugging.
+        """
+
+    def __init__(
+        self,
+        *,
+        constraint: global___Constraint | None = ...,
+        removed_reason: builtins.str = ...,
+        removed_reason_parameters: collections.abc.Mapping[builtins.str, builtins.str]
+        | None = ...,
+    ) -> None: ...
+    def HasField(
+        self, field_name: typing.Literal["constraint", b"constraint"]
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "constraint",
+            b"constraint",
+            "removed_reason",
+            b"removed_reason",
+            "removed_reason_parameters",
+            b"removed_reason_parameters",
+        ],
+    ) -> None: ...
+
+global___RemovedConstraint = RemovedConstraint

@@ -6,7 +6,6 @@ import pandas
 import numpy
 from dataclasses import dataclass
 from pathlib import Path
-from dateutil import parser
 from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
@@ -16,7 +15,7 @@ from ._ommx_rust import (
     ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
     ArtifactDirBuilder as _ArtifactDirBuilder,
 )
-from .v1 import Instance, Solution
+from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
 
 class ArtifactBase(ABC):
@@ -248,32 +247,9 @@ class Artifact:
 
         """
         assert descriptor.media_type == "application/org.ommx.v1.instance"
-
         blob = self.get_blob(descriptor)
         instance = Instance.from_bytes(blob)
         instance.annotations = descriptor.annotations
-        if "org.ommx.v1.instance.created" in instance.annotations:
-            instance.created = parser.isoparse(
-                instance.annotations["org.ommx.v1.instance.created"]
-            )
-        if "org.ommx.v1.instance.title" in instance.annotations:
-            instance.title = instance.annotations["org.ommx.v1.instance.title"]
-        if "org.ommx.v1.instance.authors" in instance.annotations:
-            instance.authors = instance.annotations[
-                "org.ommx.v1.instance.authors"
-            ].split(",")
-        if "org.ommx.v1.instance.license" in instance.annotations:
-            instance.license = instance.annotations["org.ommx.v1.instance.license"]
-        if "org.ommx.v1.instance.dataset" in instance.annotations:
-            instance.dataset = instance.annotations["org.ommx.v1.instance.dataset"]
-        if "org.ommx.v1.instance.variables" in instance.annotations:
-            instance.num_variables = int(
-                instance.annotations["org.ommx.v1.instance.variables"]
-            )
-        if "org.ommx.v1.instance.constraints" in instance.annotations:
-            instance.num_constraints = int(
-                instance.annotations["org.ommx.v1.instance.constraints"]
-            )
         return instance
 
     @property
@@ -292,28 +268,58 @@ class Artifact:
 
     def get_solution(self, descriptor: Descriptor) -> Solution:
         assert descriptor.media_type == "application/org.ommx.v1.solution"
-
         blob = self.get_blob(descriptor)
         solution = Solution.from_bytes(blob)
-        if "org.ommx.v1.solution.instance" in descriptor.annotations:
-            solution.instance = descriptor.annotations["org.ommx.v1.solution.instance"]
-        if "org.ommx.v1.solution.solver" in descriptor.annotations:
-            solution.solver = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.solver"]
-            )
-        if "org.ommx.v1.solution.parameters" in descriptor.annotations:
-            solution.parameters = json.loads(
-                descriptor.annotations["org.ommx.v1.solution.parameters"]
-            )
-        if "org.ommx.v1.solution.start" in descriptor.annotations:
-            solution.start = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.start"]
-            )
-        if "org.ommx.v1.solution.end" in descriptor.annotations:
-            solution.end = parser.isoparse(
-                descriptor.annotations["org.ommx.v1.solution.end"]
-            )
+        solution.annotations = descriptor.annotations
         return solution
+
+    @property
+    def parametric_instance(self) -> ParametricInstance:
+        """
+        Take the first parametric instance layer in the artifact
+
+        - If the artifact does not have a parametric instance layer, it raises an :py:exc:`ValueError`.
+        - For multiple parametric instance layers, use :py:meth:`Artifact.get_parametric_instance` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.parametric-instance":
+                return self.get_parametric_instance(desc)
+        else:
+            raise ValueError("Parametric instance layer not found")
+
+    def get_parametric_instance(self, descriptor: Descriptor) -> ParametricInstance:
+        """
+        Get an parametric instance from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.parametric-instance"
+        blob = self.get_blob(descriptor)
+        instance = ParametricInstance.from_bytes(blob)
+        instance.annotations = descriptor.annotations
+        return instance
+
+    @property
+    def sample_set(self) -> SampleSet:
+        """
+        Take the first sample set layer in the artifact
+
+        - If the artifact does not have a sample set layer, it raises an :py:exc:`ValueError`.
+        - For multiple sample set layers, use :py:meth:`Artifact.get_sample_set` instead.
+        """
+        for desc in self.layers:
+            if desc.media_type == "application/org.ommx.v1.sample-set":
+                return self.get_sample_set(desc)
+        else:
+            raise ValueError("Sample set layer not found")
+
+    def get_sample_set(self, descriptor: Descriptor) -> SampleSet:
+        """
+        Get a sample set from the artifact
+        """
+        assert descriptor.media_type == "application/org.ommx.v1.sample-set"
+        blob = self.get_blob(descriptor)
+        sample_set = SampleSet.from_bytes(blob)
+        sample_set.annotations = descriptor.annotations
+        return sample_set
 
     def get_ndarray(self, descriptor: Descriptor) -> numpy.ndarray:
         """
@@ -570,48 +576,102 @@ class ArtifactBuilder:
     def add_instance(self, instance: Instance) -> Descriptor:
         """
         Add an instance to the artifact with annotations
+
+        Example
+        ========
+
+        >>> from ommx.v1 import Instance
+        >>> instance = Instance.empty()
+
+        Set annotations into the instance itself
+        >>> instance.title = "test instance"
+        >>> instance.add_user_annotation("author", "Alice")
+
+        Add the instance to the artifact
+        >>> builder = ArtifactBuilder.temp()
+        >>> desc = builder.add_instance(instance)
+        >>> print(desc.annotations['org.ommx.v1.instance.title'])
+        test instance
+        >>> print(desc.annotations['org.ommx.user.author'])
+        Alice
+        >>> artifact = builder.build()
+
+        Load the instance from the artifact by :py:meth:`Artifact.get_instance`
+        >>> instance2 = artifact.get_instance(desc)
+        >>> print(instance2.title)
+        test instance
+        >>> print(instance2.get_user_annotations())
+        {'author': 'Alice'}
+
         """
         blob = instance.to_bytes()
-        annotations = instance.annotations.copy()
-        if instance.created:
-            annotations["org.ommx.v1.instance.created"] = instance.created.isoformat()
-        if instance.title:
-            annotations["org.ommx.v1.instance.title"] = instance.title
-        if instance.authors:
-            annotations["org.ommx.v1.instance.authors"] = ",".join(instance.authors)
-        if instance.license:
-            annotations["org.ommx.v1.instance.license"] = instance.license
-        if instance.dataset:
-            annotations["org.ommx.v1.instance.dataset"] = instance.dataset
-        if instance.num_variables:
-            annotations["org.ommx.v1.instance.variables"] = str(instance.num_variables)
-        if instance.num_constraints:
-            annotations["org.ommx.v1.instance.constraints"] = str(
-                instance.num_constraints
-            )
-        return self.add_layer("application/org.ommx.v1.instance", blob, annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.instance", blob, instance.annotations
+        )
+
+    def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
+        """
+        Add a parametric instance to the artifact with annotations
+        """
+        blob = instance.to_bytes()
+        return self.add_layer(
+            "application/org.ommx.v1.parametric-instance", blob, instance.annotations
+        )
 
     def add_solution(self, solution: Solution) -> Descriptor:
         """
         Add a solution to the artifact with annotations
+
+        Example
+        ========
+
+        >>> from ommx.v1 import Instance, Solution
+        >>> instance = Instance.empty()
+        >>> solution = instance.evaluate({})
+
+        Add the instance to the artifact first
+        >>> builder = ArtifactBuilder.temp()
+        >>> instance_desc = builder.add_instance(instance)
+
+        Set annotations into the solution itself
+        >>> solution.instance = instance_desc.digest
+        >>> solution.solver = "manual"
+        >>> solution.add_user_annotation("title", "test solution")
+        >>> _desc = builder.add_solution(solution)
+        >>> artifact = builder.build()
+
+        Load the solution from the artifact by :py:meth:`Artifact.get_solution`
+        >>> solution2 = artifact.get_solution(_desc)
+        >>> print(solution2.instance)
+        sha256:...
+        >>> print(solution2.solver)
+        manual
+        >>> print(solution2.get_user_annotations())
+        {'title': 'test solution'}
+
         """
         blob = solution.to_bytes()
-        annotations = solution.annotations.copy()
-        if solution.instance:
-            annotations["org.ommx.v1.solution.instance"] = solution.instance
-        if solution.solver:
-            annotations["org.ommx.v1.solution.solver"] = json.dumps(solution.solver)
-        if solution.parameters:
-            annotations["org.ommx.v1.solution.parameters"] = json.dumps(
-                solution.parameters
-            )
-        if solution.start:
-            annotations["org.ommx.v1.solution.start"] = solution.start.isoformat()
-        if solution.end:
-            annotations["org.ommx.v1.solution.end"] = solution.end.isoformat()
-        return self.add_layer("application/org.ommx.v1.solution", blob, annotations)
+        return self.add_layer(
+            "application/org.ommx.v1.solution", blob, solution.annotations
+        )
 
-    def add_ndarray(self, array: numpy.ndarray, /, **annotations: str) -> Descriptor:
+    def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
+        """
+        Add a sample set to the artifact with annotations
+        """
+        blob = sample_set.to_bytes()
+        return self.add_layer(
+            "application/org.ommx.v1.sample-set", blob, sample_set.annotations
+        )
+
+    def add_ndarray(
+        self,
+        array: numpy.ndarray,
+        /,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
+    ) -> Descriptor:
         """
         Add a numpy ndarray to the artifact with npy format
 
@@ -647,10 +707,19 @@ class ArtifactBuilder:
         f = io.BytesIO()
         numpy.save(f, array)
         blob = f.getvalue()
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.numpy", blob, annotations)
 
-    def add_dataframe(self, df: pandas.DataFrame, /, **annotations: str) -> Descriptor:
+    def add_dataframe(
+        self,
+        df: pandas.DataFrame,
+        /,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
+    ) -> Descriptor:
         """
         Add a pandas DataFrame to the artifact with parquet format
 
@@ -678,12 +747,28 @@ class ArtifactBuilder:
         >>> df2 = artifact.get_dataframe(layer)
         >>> assert df.equals(df2)
 
+        You can use another namespace for annotations via `annotation_namespace` argument.
+
+        >>> builder = ArtifactBuilder.temp()
+        >>> desc = builder.add_dataframe(df, annotation_namespace="org.ommx.user2.", title="test_dataframe")
+        >>> print(desc.annotations)
+        {'org.ommx.user2.title': 'test_dataframe'}
+
         """
         blob = df.to_parquet()
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/vnd.apache.parquet", blob, annotations)
 
-    def add_json(self, obj, /, **annotations: str) -> Descriptor:
+    def add_json(
+        self,
+        obj,
+        /,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+        **annotations: str,
+    ) -> Descriptor:
         """
         Add a JSON object to the artifact
 
@@ -710,7 +795,9 @@ class ArtifactBuilder:
 
         """
         blob = json.dumps(obj).encode("utf-8")
-        annotations = {"org.ommx.user." + k: v for k, v in annotations.items()}
+        if not annotation_namespace.endswith("."):
+            annotation_namespace += "."
+        annotations = {annotation_namespace + k: v for k, v in annotations.items()}
         return self.add_layer("application/json", blob, annotations)
 
     def add_layer(

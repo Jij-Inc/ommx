@@ -130,14 +130,14 @@ impl Arbitrary for Parameter {
         ];
         let parameters = prop_oneof![
             Just(HashMap::<String, String>::new()),
-            proptest::collection::hash_map(String::arbitrary(), String::arbitrary(), 1..=3),
+            proptest::collection::hash_map(".{0,3}", ".{0,3}", 1..=3),
         ];
         (
             0..=max_id,
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
             subscripts,
             parameters,
-            Option::<String>::arbitrary(),
+            proptest::option::of(".{0,3}"),
         )
             .prop_map(
                 |(id, name, subscripts, parameters, description)| Parameter {

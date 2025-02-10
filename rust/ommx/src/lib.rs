@@ -140,6 +140,7 @@ pub use prost::Message;
 pub mod artifact;
 pub mod dataset;
 pub mod mps;
+pub mod qplib;
 pub mod random;
 
 // Internal modules

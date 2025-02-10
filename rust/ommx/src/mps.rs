@@ -57,13 +57,24 @@ mod convert;
 mod parser;
 mod to_mps;
 
+#[cfg(test)]
+mod tests;
+
 use parser::*;
 
-pub fn load_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
-    let mps_data = Mps::from_reader(reader)?;
+/// Reads and parses the reader as a gzipped MPS file.
+pub fn load_zipped_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::from_zipped_reader(reader)?;
     convert::convert(mps_data)
 }
 
+/// Reads and parses the reader as an _uncompressed_ MPS file.
+pub fn load_raw_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::from_raw_reader(reader)?;
+    convert::convert(mps_data)
+}
+
+/// Reads and parses the file at the given path as a gzipped MPS file.
 pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_file(path)?;
     convert::convert(mps_data)
@@ -74,6 +85,14 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
     Ok(instance.encode_to_vec())
 }
 
+/// Writes out the instance as an MPS file to the specified path.
+///
+/// This function automatically Gzips the output.
+///
+/// Only linear problems are supported.
+///
+/// Metadata like problem descriptions and variable/constraint names are not
+/// preserved.
 pub fn write_file(
     instance: &crate::v1::Instance,
     out_path: impl AsRef<Path>,
@@ -122,28 +141,14 @@ pub enum MpsParseError {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
+    #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]
+    InvalidConstraintType { name: String, degree: u32 },
+    #[error( "MPS format does not support nonlinear objective: Objective function has {degree}-degree term")]
+    InvalidObjectiveType { degree: u32 },
     #[error(
-        "Unsupported equation in MPS output: Constraint {0} was {1}, but only linear functions are supported"
+        "Invalid variable ID: Functions in Instance used a variable id {0} that doesn't exist"
     )]
-    InvalidConstraintType(String, String),
-    #[error(
-        "Unsupported equation in MPS output: Objective function was {1}, but only linear functions are supported"
-    )]
-    InvalidObjectiveType(String, String),
+    InvalidVariableId(u64),
     #[error(transparent)]
     Io(#[from] std::io::Error),
-}
-
-impl MpsWriteError {
-    fn constant_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Constant"))
-    }
-
-    fn quadratic_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Quadratic"))
-    }
-
-    fn polynomial_constraint(name: impl ToString) -> Self {
-        MpsWriteError::InvalidConstraintType(name.to_string(), String::from("Polynomial"))
-    }
 }

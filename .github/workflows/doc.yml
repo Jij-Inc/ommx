@@ -13,36 +13,36 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
   jupyter-book:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        lang: [ja, en]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.9"
+          python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -r doc/requirements.txt
+      - name: Install OMMX Book dependencies
+        run: pip install -r requirements.txt
 
       - name: Build Jupyter Book
-        run: jupyter-book build doc
+        run: |
+          jupyter-book build docs/${{ matrix.lang }}
+          ERROR_LOGS=$(find docs/${{ matrix.lang}}/_build -type f -name "*.err.log")
+          if [ -n "$ERROR_LOGS" ]; then while IFS= read -r log; do echo "[ERROR LOG] $log" && cat "$log"; done <<< "$ERROR_LOGS" && exit 1; fi
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-jupyter-book
-          path: ./doc/_build/html
+          name: doc-jupyter-book-${{ matrix.lang }}
+          path: ./docs/${{ matrix.lang }}/_build/html
           retention-days: 30
 
   protobuf:
@@ -51,9 +51,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - uses: bufbuild/buf-setup-action@v1
-        with:
-          github_token: ${{ github.token }}
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Generate API docs
         run: buf generate --template buf.gen.docs.yaml
@@ -72,14 +71,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-
-      - name: Cache dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Check warnings in documents
         uses: actions-rs/cargo@v1
@@ -102,47 +95,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-
-      - name: Install dependencies
-        run: |
-          pip install "python/ommx[dev]"
-          pip install "python/ommx-python-mip-adapter[dev]"
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
 
       - name: Build Python documentation
-        run: |
-          sphinx-build -b html ./python/ommx/docs/source ./python/ommx/docs/build
+        run: task api_reference:build
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
-          name: doc-python-ommx
-          path: ./python/ommx/docs/build
-          retention-days: 30
-
-      - name: Build Python documentation
-        run: |
-          sphinx-build -b html ./python/ommx-python-mip-adapter/docs/source ./python/ommx-python-mip-adapter/docs/build
-
-      - name: Upload HTML
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-python-ommx-python-mip-adapter
-          path: ./python/ommx-python-mip-adapter/docs/build
+          name: doc-python
+          path: ./docs/api_reference/_build/html
           retention-days: 30
 
   package:
     needs: [jupyter-book, protobuf, rust, python]
     runs-on: ubuntu-latest
     steps:
-      - name: Download HTML of JupyterBook
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Redirect HTML
+        run: |
+          mkdir doc
+          mv docs/redirect/* doc/
+
+      - name: Download HTML of JupyterBook (ja)
         uses: actions/download-artifact@v4
         with:
-          name: doc-jupyter-book
-          path: ./doc
+          name: doc-jupyter-book-ja
+          path: ./doc/ja
+
+      - name: Download HTML of JupyterBook (en)
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-jupyter-book-en
+          path: ./doc/en
 
       - name: Download HTML of protobuf
         uses: actions/download-artifact@v4
@@ -159,14 +147,8 @@ jobs:
       - name: Download HTML of python
         uses: actions/download-artifact@v4
         with:
-          name: doc-python-ommx
+          name: doc-python
           path: ./doc/python/ommx
-
-      - name: Download HTML of python
-        uses: actions/download-artifact@v4
-        with:
-          name: doc-python-ommx-python-mip-adapter
-          path: ./doc/python/ommx-python-mip-adapter
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -176,6 +158,9 @@ jobs:
           retention-days: 30
 
   deploy:
+    concurrency:
+      group: "pages-deploy"
+      cancel-in-progress: true
     if: github.ref == 'refs/heads/main'
     needs: package
     environment:

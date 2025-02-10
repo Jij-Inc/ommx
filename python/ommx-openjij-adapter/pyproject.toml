@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ommx_openjij_adapter"
+version = "1.8.3"
+
+description = "OMMX Adapter for OpenJij."
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
+readme = "README.md"
+
+requires-python = ">=3.9, <3.13"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = ["ommx>=1.8.3,<2.0.0","openjij>=0.9.2"]
+
+[project.urls]
+Repository = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
+
+[project.optional-dependencies]
+dev = []

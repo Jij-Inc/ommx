@@ -2,7 +2,7 @@ import mip
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
 
-import ommx_python_mip_adapter as adapter
+from ommx_python_mip_adapter import model_to_instance
 
 
 def test_milp():
@@ -43,7 +43,7 @@ def test_milp():
     model.add_constr(-7 * x1 + 8 * x3 - 9 <= 0)  # type: ignore
     model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)  # type: ignore
 
-    ommx_instance = adapter.model_to_instance(model).raw
+    ommx_instance = model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.MINIMIZE
 
@@ -151,7 +151,7 @@ def test_no_objective_model():
     model.add_constr(1 * x1 + 2 * x2 - 5 == 0)  # type: ignore
     model.add_constr(4 * x1 + 3 * x2 - 10 == 0)  # type: ignore
 
-    ommx_instance = adapter.model_to_instance(model).raw
+    ommx_instance = model_to_instance(model).raw
 
     assert ommx_instance.sense == Instance.MAXIMIZE
 

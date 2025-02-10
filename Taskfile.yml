@@ -2,16 +2,64 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3"
 
+includes:
+  api_reference:
+    taskfile: docs/api_reference/Taskfile.yml
+    dir: docs/api_reference
+
 tasks:
   # Documents
-  install_doc:
+  build_book_ja:
     cmds:
-      - pip install -r requirements.txt
-      - pip install -r doc/requirements.txt
+      - jupyter-book build docs/ja
 
-  build_book:
+  build_book_ja_all:
     cmds:
-      - jupyter-book build doc
+      - jupyter-book build docs/ja --all
+
+  open_book_ja:
+    cmds:
+      - python -m webbrowser file:///$(pwd)/docs/ja/_build/html/index.html
+
+  book_ja:
+    cmds:
+      - task: build_book_ja
+      - task: open_book_ja
+
+  book_ja_all:
+    cmds:
+      - task: build_book_ja_all
+      - task: open_book_ja
+
+  watch_build_book_ja:
+    cmds:
+      - fswatch -o $(find docs/ja/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/ja
+
+  build_book_en:
+    cmds:
+      - jupyter-book build docs/en
+
+  build_book_en_all:
+    cmds:
+      - jupyter-book build docs/en --all
+
+  open_book_en:
+    cmds:
+      - python -m webbrowser file:///$(pwd)/docs/en/_build/html/index.html
+
+  book_en:
+    cmds:
+      - task: build_book_en
+      - task: open_book_en
+
+  book_en_all:
+    cmds:
+      - task: build_book_en_all
+      - task: open_book_en
+
+  watch_build_book_en:
+    cmds:
+      - fswatch -o $(find docs/en/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/en
 
   doc_rust:
     cmds:
@@ -48,11 +96,24 @@ tasks:
 
   install_python_mip_adapter:
     cmds:
+      # Since python-mip for Apple Silicon is not available on PyPI, we need to install it from the source.
+      - pip install git+https://github.com/coin-or/python-mip.git
       - pip install -ve "python/ommx-python-mip-adapter[dev]"
 
   install_pyscipopt_adapter:
     cmds:
       - pip install -ve "python/ommx-pyscipopt-adapter[dev]"
+
+  install_openjij_adapter:
+    cmds:
+      - pip install -ve "python/ommx-openjij-adapter[dev]"
+
+  install:
+    cmds:
+      - task: install_python_sdk
+      - task: install_pyscipopt_adapter
+      - task: install_openjij_adapter
+      - task: install_python_mip_adapter
 
   format_python:
     cmds:
@@ -63,6 +124,7 @@ tasks:
       - task: test_python_sdk
       - task: test_python_mip_adapter
       - task: test_pyscipopt_adapter
+      - task: test_openjij_adapter
 
   test_python_sdk:
     cmds:
@@ -81,21 +143,16 @@ tasks:
       - markdown-code-runner python/ommx-pyscipopt-adapter/README.md
       - pyright python/ommx-pyscipopt-adapter/
 
-  doc_python:
+  test_openjij_adapter:
     cmds:
-      - task: doc_python_sdk
-      - task: doc_python_mip_adapter
-
-  doc_python_sdk:
-    cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx/docs
-
-  doc_python_mip_adapter:
-    cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx-python-mip-adapter/docs
+      - pytest -vv --doctest-modules python/ommx-openjij-adapter/
+      - pyright python/ommx-openjij-adapter/
 
   stubgen:
     cmds:
       - cargo run --bin stub_gen --features=stub_gen
+
+  pip_compile:
+    cmds:
+      - uv pip compile pyproject.toml -o ../requirements.txt
+    dir: docs/
