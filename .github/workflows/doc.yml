@@ -98,9 +98,6 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Install dependencies
-        run: task install
-
       - name: Build Python documentation
         run: task api_reference:build
 
