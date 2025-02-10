@@ -8,28 +8,18 @@ parts:
     chapters:
       - url: https://jij-inc.github.io/ommx/en/
         title: "English"
-  - caption: "Concept"
-    chapters:
-      - file: concept/architecture
   - caption: "Tutorial"
     chapters:
       - file: tutorial/solve_with_ommx_adapter
       - file: tutorial/tsp_sampling_with_openjij_adapter
       - file: tutorial/download_miplib_instance
-  - caption: "OMMX Message"
+  - caption: "User Guide"
     chapters:
-      - file: ommx_message/architecture
-      - file: ommx_message/function
-      - file: ommx_message/instance
-      - file: ommx_message/solution
-      - file: ommx_message/sample_set
-  - caption: "OMMX Artifact"
-    chapters:
-      - file: ommx_artifact/architecture
-  - caption: "OMMX Ecosystem"
-    chapters:
-      - file: ommx_ecosystem/links
-      - file: ommx_ecosystem/solver_adapter_guide
+      - file: user_guide/function
+      - file: user_guide/instance
+      - file: user_guide/solution
+      - file: user_guide/sample_set
+      - file: user_guide/solver_adapter
   - caption: "API Reference"
     chapters:
       - url: https://jij-inc.github.io/ommx/protobuf.html
