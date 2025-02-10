@@ -7,35 +7,23 @@
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
-# Design
-
-OMMX introduces two specification to solve the problem of data exchange in optimization field:
-
-- Protocol buffers based data schema called [OMMX Message](./MESSAGE.md). This helps to store the optimization models and their solutions in language and framework agnostic way.
-- OCI Artifact based packaging and distribution specification called [OMMX Artifact](./ARTIFACT.md). This helps to store your data with metadata and to exchange them with others as a container image.
-
 # Tutorial
 
-| Notebook | Open in Binder | Open in Colab |
-|:---------|:---------------|:--------------|
-| [OMMX Message](./notebooks/message.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fmessage.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/message.ipynb) |
-| [OMMX Artifact](./notebooks/artifact.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fartifact.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/artifact.ipynb) |
-| [Cookbook](./notebooks/cookbook.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fcookbook.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/cookbook.ipynb) |
-| [Create OMMX Adapters](./notebooks/create_adapter.ipynb) | [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/Jij-Inc/ommx/main?labpath=notebooks%2Fcreate_adapter.ipynb) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Jij-Inc/ommx/blob/main/notebooks/create_adapter.ipynb) |
+## English
 
+| Title | Jupyter Book |
+|:------|:-------------|
+| Solving Optimization Problems with OMMX Adapter | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/solve_with_ommx_adapter.html) |
+| Sampling from QUBO with OMMX Adapter | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/tsp_sampling_with_openjij_adapter.html) |
+| Downloading a MIPLIB Instance | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/download_miplib_instance.html) |
 
-To run the notebooks locally, you need to install required packages listed in [requirements.txt](./requirements.txt)
+## 日本語
 
-```bash
-# Optional: create a virtual environment
-python -m venv .venv && source .venv/bin/activate
-
-# Install required packages (including Jupyter)
-pip install -r requirements.txt
-
-# Start Jupyter
-jupyter lab
-```
+| タイトル | Jupyter Book |
+|:------|:-------------|
+| OMMX Adapterで最適化問題を解く | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/solve_with_ommx_adapter.html) |
+| OMMX AdapterでQUBOからサンプリングする | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/tsp_sampling_with_openjij_adapter.html) |
+| MIPLIBインスタンスをダウンロードする | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/download_miplib_instance.html) |
 
 # API Reference
 
