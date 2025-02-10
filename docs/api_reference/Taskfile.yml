@@ -1,0 +1,19 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  build:
+    desc: "Build the API Reference of OMMX Python SDK"
+    cmds:
+      - uv run sphinx-build -b html . _build/html
+
+  open:
+    desc: "Open the API Reference on the browser"
+    cmds:
+      - uv run python -m webbrowser file:///$(pwd)/_build/html/autoapi/index.html
+
+  pip_compile:
+    desc: "Compile requirements.txt for depolyment to readthedocs"
+    cmds:
+      - uv pip compile pyproject.toml -o requirements.txt
