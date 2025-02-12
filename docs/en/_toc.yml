@@ -15,6 +15,7 @@ parts:
     chapters:
       - file: tutorial/solve_with_ommx_adapter
       - file: tutorial/tsp_sampling_with_openjij_adapter
+      - file: tutorial/share_in_ommx_artifact
       - file: tutorial/download_miplib_instance
   - caption: "User Guide"
     chapters:
