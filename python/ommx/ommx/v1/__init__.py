@@ -735,6 +735,41 @@ class Instance(InstanceBase, UserAnnotationBase):
 class ParametricInstance(InstanceBase, UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
+
+    Examples
+    =========
+
+    Create an instance for KnapSack Problem with parameters
+
+    .. doctest::
+
+        >>> from ommx.v1 import ParametricInstance, DecisionVariable, Parameter
+
+        Decision variables
+
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(6)]
+
+        Profit and weight of items as parameters
+
+        >>> p = [Parameter.new(id=i+6, name="Profit", subscripts=[i]) for i in range(6)]
+        >>> w = [Parameter.new(id=i+12, name="Weight", subscripts=[i]) for i in range(6)]
+        >>> W = Parameter.new(id=18, name="Capacity")
+
+        Objective and constraint
+
+        >>> objective = sum(p[i] * x[i] for i in range(6))
+        >>> constraint = sum(w[i] * x[i] for i in range(6)) <= W
+
+        Compose as an instance
+
+        >>> instance = ParametricInstance.from_components(
+        ...     decision_variables=x,
+        ...     parameters=p + w + [W],
+        ...     objective=objective,
+        ...     constraints=[constraint],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
     """
 
     raw: _ParametricInstance
@@ -766,7 +801,11 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
         """
         return ParametricInstance.from_components(
-            objective=0, constraints=[], sense=Instance.MINIMIZE, decision_variables=[], parameters=[]
+            objective=0,
+            constraints=[],
+            sense=Instance.MINIMIZE,
+            decision_variables=[],
+            parameters=[],
         )
 
     @staticmethod
@@ -934,6 +973,23 @@ class Parameter(VariableBase):
     """
 
     raw: _Parameter
+
+    @staticmethod
+    def new(
+        id: int,
+        *,
+        name: Optional[str] = None,
+        subscripts: Iterable[int] = [],
+        description: Optional[str] = None,
+    ):
+        return Parameter(
+            _Parameter(
+                id=id,
+                name=name,
+                subscripts=subscripts,
+                description=description,
+            )
+        )
 
     @staticmethod
     def from_bytes(data: bytes) -> Parameter:
