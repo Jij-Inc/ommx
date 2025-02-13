@@ -762,13 +762,20 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
 
         Compose as an instance
 
-        >>> instance = ParametricInstance.from_components(
+        >>> parametric_instance = ParametricInstance.from_components(
         ...     decision_variables=x,
         ...     parameters=p + w + [W],
         ...     objective=objective,
         ...     constraints=[constraint],
         ...     sense=Instance.MAXIMIZE,
         ... )
+
+        Substitute parameters to get an instance
+
+        >>> p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
+        >>> w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
+        >>> W_value = { W.id: 47 }
+        >>> instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
 
     """
 
