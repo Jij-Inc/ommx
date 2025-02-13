@@ -2,6 +2,11 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 version: "3"
 
+includes:
+  api_reference:
+    taskfile: docs/api_reference/Taskfile.yml
+    dir: docs/api_reference
+
 tasks:
   # Documents
   build_book_ja:
@@ -91,6 +96,8 @@ tasks:
 
   install_python_mip_adapter:
     cmds:
+      # Since python-mip for Apple Silicon is not available on PyPI, we need to install it from the source.
+      - pip install git+https://github.com/coin-or/python-mip.git
       - pip install -ve "python/ommx-python-mip-adapter[dev]"
 
   install_pyscipopt_adapter:
@@ -106,8 +113,7 @@ tasks:
       - task: install_python_sdk
       - task: install_pyscipopt_adapter
       - task: install_openjij_adapter
-      # Skip because Python-MIP is not available on macOS
-      # - task: install_python_mip_adapter
+      - task: install_python_mip_adapter
 
   format_python:
     cmds:
@@ -141,29 +147,6 @@ tasks:
     cmds:
       - pytest -vv --doctest-modules python/ommx-openjij-adapter/
       - pyright python/ommx-openjij-adapter/
-
-  doc_python:
-    cmds:
-      - task: doc_python_sdk
-      - task: doc_python_mip_adapter
-
-  doc_python_sdk:
-    cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx/docs
-
-  doc_python_mip_adapter:
-    cmds:
-      - sphinx-build -b html source build
-    dir: python/ommx-python-mip-adapter/docs
-
-  open_doc_python_sdk:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/python/ommx/docs/build/index.html
-
-  open_doc_python_mip_adapter:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/python/ommx-python-mip-adapter/docs/build/index.html
 
   stubgen:
     cmds:
