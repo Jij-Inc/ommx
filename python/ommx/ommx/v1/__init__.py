@@ -761,6 +761,49 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         return self.annotations
 
     @staticmethod
+    def empty() -> ParametricInstance:
+        """
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
+        """
+        return ParametricInstance.from_components(
+            objective=0, constraints=[], sense=Instance.MINIMIZE, decision_variables=[], parameters=[]
+        )
+
+    @staticmethod
+    def from_components(
+        *,
+        objective: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | _Function,
+        constraints: Iterable[Constraint | _Constraint],
+        sense: _Instance.Sense.ValueType,
+        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
+        parameters: Iterable[Parameter | _Parameter],
+        description: Optional[_Instance.Description] = None,
+    ) -> ParametricInstance:
+        return ParametricInstance(
+            _ParametricInstance(
+                description=description,
+                decision_variables=[
+                    v.raw if isinstance(v, DecisionVariable) else v
+                    for v in decision_variables
+                ],
+                objective=as_function(objective),
+                constraints=[
+                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                ],
+                sense=sense,
+                parameters=[
+                    p.raw if isinstance(p, Parameter) else p for p in parameters
+                ],
+            )
+        )
+
+    @staticmethod
     def from_bytes(data: bytes) -> ParametricInstance:
         raw = _ParametricInstance()
         raw.ParseFromString(data)
