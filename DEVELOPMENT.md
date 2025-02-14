@@ -49,7 +49,7 @@ ruff format ../python
 ### Generate API reference
 
 ```shell
-sphinx-build -b html ./python/ommx/docs/source ./python/ommx/docs/build
+task api_reference:build
 ```
 
 ### Release to PyPI
@@ -73,3 +73,61 @@ cargo run --bin protogen
 
 1. Push a new Git tag named `rust-x.y.z`, then the GitHub Actions will release to crates.io
 2. Create a GitHub release.
+
+Taskfile.yml
+------------
+
+### Purpose and Usage
+
+`Taskfile.yml` is used to define and manage various development tasks in a standardized way. It helps automate repetitive tasks, making the development process more efficient.
+
+### Common Tasks
+
+Here are some common tasks that can be executed using `Taskfile.yml`:
+
+- **Building Documentation**: 
+  ```shell
+  task build_book_ja
+  task build_book_en
+  ```
+
+- **Running Tests**: 
+  ```shell
+  task test_python
+  ```
+
+- **Generating Code from `.proto` Files**: 
+  ```shell
+  task protogen
+  ```
+
+### Dependencies
+
+To use `Taskfile.yml`, you need to have the following dependencies installed:
+
+- `task`: A task runner for defining and running tasks.
+- `fswatch`: A file change monitor that triggers tasks when files are modified.
+
+Read the Docs Settings
+----------------------
+
+### Configuration Files
+
+The Read the Docs configuration files are:
+
+- `.readthedocs.yaml`
+- `docs/en/.readthedocs.yaml`
+- `docs/ja/.readthedocs.yaml`
+
+### Purpose
+
+These configuration files are used to build and deploy documentation to Read the Docs. They specify the settings and dependencies required for the documentation build process.
+
+### Updating Settings
+
+To update the Read the Docs settings, follow these steps:
+
+1. Open the relevant `.readthedocs.yaml` file.
+2. Modify the settings as needed.
+3. Commit and push the changes to the repository.
+4. The documentation will be automatically rebuilt and deployed with the new settings.
