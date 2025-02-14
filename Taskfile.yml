@@ -6,60 +6,14 @@ includes:
   api_reference:
     taskfile: docs/api_reference/Taskfile.yml
     dir: docs/api_reference
+  book_ja:
+    taskfile: docs/ja/Taskfile.yml
+    dir: docs/ja
+  book_en:
+    taskfile: docs/en/Taskfile.yml
+    dir: docs/en
 
 tasks:
-  # Documents
-  build_book_ja:
-    cmds:
-      - jupyter-book build docs/ja
-
-  build_book_ja_all:
-    cmds:
-      - jupyter-book build docs/ja --all
-
-  open_book_ja:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/docs/ja/_build/html/index.html
-
-  book_ja:
-    cmds:
-      - task: build_book_ja
-      - task: open_book_ja
-
-  book_ja_all:
-    cmds:
-      - task: build_book_ja_all
-      - task: open_book_ja
-
-  watch_build_book_ja:
-    cmds:
-      - fswatch -o $(find docs/ja/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/ja
-
-  build_book_en:
-    cmds:
-      - jupyter-book build docs/en
-
-  build_book_en_all:
-    cmds:
-      - jupyter-book build docs/en --all
-
-  open_book_en:
-    cmds:
-      - python -m webbrowser file:///$(pwd)/docs/en/_build/html/index.html
-
-  book_en:
-    cmds:
-      - task: build_book_en
-      - task: open_book_en
-
-  book_en_all:
-    cmds:
-      - task: build_book_en_all
-      - task: open_book_en
-
-  watch_build_book_en:
-    cmds:
-      - fswatch -o $(find docs/en/ -name "*.ipynb" -or -name "*.md") | xargs -n1 -I{} jupyter-book build docs/en
 
   doc_rust:
     cmds:
