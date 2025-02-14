@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "1.8.1"
+version = "1.8.4"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
@@ -19,13 +19,9 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
 ]
-dependencies = [
-    "ommx >= 1.4.0, < 2.0.0",
-
-    # FIXME: This project requires latest version of Python-MIP (will be 1.16.0?), which does not release yet.
-    #        https://github.com/coin-or/python-mip/issues/384
-    "mip >= 1.15.0, < 2.0.0",
-]
+# FIXME: This project requires latest version of Python-MIP (will be 1.16.0?), which does not release yet.
+#        https://github.com/coin-or/python-mip/issues/384
+dependencies = ["ommx >= 1.8.4, < 2.0.0","mip >= 1.15.0, < 2.0.0"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
@@ -38,9 +34,4 @@ dev = [
     "pyright",
     "pytest",
     "ruff >= 0.9.0, < 0.10.0",
-    "sphinx",
-    "sphinx-autoapi",
-    "sphinx_fontawesome",
-    "sphinx_rtd_theme",
-    "tomlkit",
 ]

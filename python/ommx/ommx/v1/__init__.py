@@ -735,6 +735,48 @@ class Instance(InstanceBase, UserAnnotationBase):
 class ParametricInstance(InstanceBase, UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
+
+    Examples
+    =========
+
+    Create an instance for KnapSack Problem with parameters
+
+    .. doctest::
+
+        >>> from ommx.v1 import ParametricInstance, DecisionVariable, Parameter
+
+        Decision variables
+
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(6)]
+
+        Profit and weight of items as parameters
+
+        >>> p = [Parameter.new(id=i+6, name="Profit", subscripts=[i]) for i in range(6)]
+        >>> w = [Parameter.new(id=i+12, name="Weight", subscripts=[i]) for i in range(6)]
+        >>> W = Parameter.new(id=18, name="Capacity")
+
+        Objective and constraint
+
+        >>> objective = sum(p[i] * x[i] for i in range(6))
+        >>> constraint = sum(w[i] * x[i] for i in range(6)) <= W
+
+        Compose as an instance
+
+        >>> parametric_instance = ParametricInstance.from_components(
+        ...     decision_variables=x,
+        ...     parameters=p + w + [W],
+        ...     objective=objective,
+        ...     constraints=[constraint],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        Substitute parameters to get an instance
+
+        >>> p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
+        >>> w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
+        >>> W_value = { W.id: 47 }
+        >>> instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
+
     """
 
     raw: _ParametricInstance
@@ -759,6 +801,53 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
     @property
     def _annotations(self) -> dict[str, str]:
         return self.annotations
+
+    @staticmethod
+    def empty() -> ParametricInstance:
+        """
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
+        """
+        return ParametricInstance.from_components(
+            objective=0,
+            constraints=[],
+            sense=Instance.MINIMIZE,
+            decision_variables=[],
+            parameters=[],
+        )
+
+    @staticmethod
+    def from_components(
+        *,
+        objective: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | _Function,
+        constraints: Iterable[Constraint | _Constraint],
+        sense: _Instance.Sense.ValueType,
+        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
+        parameters: Iterable[Parameter | _Parameter],
+        description: Optional[_Instance.Description] = None,
+    ) -> ParametricInstance:
+        return ParametricInstance(
+            _ParametricInstance(
+                description=description,
+                decision_variables=[
+                    v.raw if isinstance(v, DecisionVariable) else v
+                    for v in decision_variables
+                ],
+                objective=as_function(objective),
+                constraints=[
+                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                ],
+                sense=sense,
+                parameters=[
+                    p.raw if isinstance(p, Parameter) else p for p in parameters
+                ],
+            )
+        )
 
     @staticmethod
     def from_bytes(data: bytes) -> ParametricInstance:
@@ -891,6 +980,23 @@ class Parameter(VariableBase):
     """
 
     raw: _Parameter
+
+    @staticmethod
+    def new(
+        id: int,
+        *,
+        name: Optional[str] = None,
+        subscripts: Iterable[int] = [],
+        description: Optional[str] = None,
+    ):
+        return Parameter(
+            _Parameter(
+                id=id,
+                name=name,
+                subscripts=subscripts,
+                description=description,
+            )
+        )
 
     @staticmethod
     def from_bytes(data: bytes) -> Parameter:
