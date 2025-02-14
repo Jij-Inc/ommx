@@ -22,6 +22,7 @@ parts:
       - file: user_guide/architecture
       - file: user_guide/function
       - file: user_guide/instance
+      - file: user_guide/parametric_instance
       - file: user_guide/solution
       - file: user_guide/sample_set
       - file: user_guide/solver_adapter
