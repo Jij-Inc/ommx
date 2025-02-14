@@ -1,0 +1,2 @@
+class OMMXGurobipyAdapterError(Exception):
+    pass

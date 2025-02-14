@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ommx-gurobipy-adapter"
+version = "1.8.4"
+description = "An adapter for the Gurobipy from OMMX."
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "gurobipy>=12.0.1",
+    "ommx>=1.8.3",
+]
+
+[project.urls]
+Repository = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
+
+[project.optional-dependencies]
+dev = ["markdown-code-runner", "pyright", "pytest", "ruff"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+]
