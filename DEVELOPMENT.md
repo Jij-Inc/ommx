@@ -157,8 +157,8 @@ Read the Docs deployments
 
 There are three different Read the Docs deployments for this project:
 
-* **API Reference**: This deployment builds and deploys the API reference documentation for the OMMX Python SDK. The configuration for this deployment can be found in the `.readthedocs.yaml` file.
-* **Japanese Jupyter Book**: This deployment builds and deploys the Japanese version of the Jupyter Book. The configuration for this deployment can be found in the `docs/ja/.readthedocs.yaml` file.
-* **English Jupyter Book**: This deployment builds and deploys the English version of the Jupyter Book. The configuration for this deployment can be found in the `docs/en/.readthedocs.yaml` file.
+* [**API Reference**](https://readthedocs.org/projects/ommx/): This deployment builds and deploys the API reference documentation for the OMMX Python SDK. The configuration for this deployment can be found in the `.readthedocs.yaml` file.
+* [**Japanese Jupyter Book**](https://readthedocs.org/projects/ommx-ja-book/): This deployment builds and deploys the Japanese version of the Jupyter Book. The configuration for this deployment can be found in the `docs/ja/.readthedocs.yaml` file.
+* [**English Jupyter Book**](https://readthedocs.org/projects/ommx-en-book/): This deployment builds and deploys the English version of the Jupyter Book. The configuration for this deployment can be found in the `docs/en/.readthedocs.yaml` file.
 
 These deployments ensure that the documentation is always up-to-date and accessible to users in different languages.
