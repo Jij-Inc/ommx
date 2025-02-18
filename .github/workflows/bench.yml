@@ -24,6 +24,5 @@ jobs:
         run: cargo codspeed run
         token: ${{ secrets.CODSPEED_TOKEN }}
     - name: Inspect target dir
-      continue-on-error: true
-      run: find target -type d -name 'report'
+      run: ls -R
 
