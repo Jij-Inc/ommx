@@ -1118,14 +1118,10 @@ wheels = [
 
 [[package]]
 name = "mip"
-version = "1.15.0"
-source = { registry = "https://pypi.org/simple" }
+version = "1.16rc1.dev2+g0ccb811"
+source = { git = "https://github.com/coin-or/python-mip.git#0ccb81115543e737ab74a4f1309891ce5650c8d5" }
 dependencies = [
     { name = "cffi" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/30/84/41ebb2db20fbc199768c317ee8238d50b55fd6ffaa4c17e2cb94f0d03152/mip-1.15.0.tar.gz", hash = "sha256:7f6f0381cfe2c52c1b8640203da2cb56974b26e23950ddfb1a76b37d916f197e", size = 24569566 }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/c9/d4ba71d5d73cf57596b8637ab20eda547c6cde296860f6b6192568809e70/mip-1.15.0-py3-none-any.whl", hash = "sha256:9a48c993ddc9a48591a59e4a1221b400eb1e35fc087052085774360330bb9226", size = 15269834 },
 ]
 
 [[package]]
@@ -1436,22 +1432,14 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "markdown-code-runner" },
-    { name = "numpy" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "ruff" },
+    { name = "mip" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "markdown-code-runner", marker = "extra == 'dev'" },
     { name = "mip", specifier = ">=1.15.0,<2.0.0" },
-    { name = "numpy", marker = "extra == 'dev'" },
+    { name = "mip", marker = "extra == 'dev'", git = "https://github.com/coin-or/python-mip.git" },
     { name = "ommx", editable = "python/ommx" },
-    { name = "pyright", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0,<0.10.0" },
 ]
 
 [[package]]
