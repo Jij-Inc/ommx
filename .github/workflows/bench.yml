@@ -23,10 +23,22 @@ jobs:
       with:
         run: cargo codspeed run
         token: ${{ secrets.CODSPEED_TOKEN }}
-    - name: Create Artifact Tarball
-      run: tar -caf codspeed.tar.gz --directory=target codspeed
-    - name: Upload Artifact
+
+  report:
+    name: Take Benchmark Report in GitHub Runners
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Environment
+      uses: ./.github/actions/setup-test-environment
+    - name: Run Benchmarks
+      run: cargo bench
+    - name: Collects Benchmark Results
+      run: |
+        find target/criterion -type d -name report | cut -d/ -f2- >reports.txt
+        tar caf criterion.tar.gz --directory target -T reports.txt
+    - name: Upload Benchmark Results
       uses: actions/upload-artifact@v4
       with:
-        name: codspeed
-        path: codspeed.tar.gz
+        name: criterion
+        path: criterion.tar.gz
