@@ -1350,6 +1350,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "jupyterlab" },
+    { name = "markdown-code-runner" },
     { name = "matplotlib" },
     { name = "mypy" },
     { name = "mypy-protobuf" },
@@ -1363,6 +1364,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "jupyterlab", marker = "extra == 'dev'" },
+    { name = "markdown-code-runner", marker = "extra == 'dev'" },
     { name = "matplotlib", marker = "extra == 'dev'" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=0.910" },
     { name = "mypy-protobuf", marker = "extra == 'dev'" },
@@ -1403,22 +1405,10 @@ dependencies = [
     { name = "pyscipopt" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "markdown-code-runner" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
-    { name = "markdown-code-runner", marker = "extra == 'dev'" },
     { name = "ommx", editable = "python/ommx" },
-    { name = "pyright", marker = "extra == 'dev'" },
     { name = "pyscipopt", specifier = ">=5.1.0,<6.0.0" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
 ]
 
 [[package]]

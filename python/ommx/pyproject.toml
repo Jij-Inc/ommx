@@ -36,6 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "jupyterlab",
+  "markdown-code-runner",
   "matplotlib",
   "mypy-protobuf",
   "mypy>=0.910",
