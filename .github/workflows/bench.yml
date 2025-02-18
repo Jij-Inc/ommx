@@ -25,5 +25,5 @@ jobs:
         token: ${{ secrets.CODSPEED_TOKEN }}
     - name: Inspect target dir
       continue-on-error: true
-      run: ls -R target/criterion*
+      run: find target -type d -name 'report'
 
