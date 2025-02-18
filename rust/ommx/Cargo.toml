@@ -7,11 +7,11 @@ edition.workspace = true
 license.workspace = true
 
 # crate-specific settings for publishing
-description   = "Open Mathematical prograMming eXchange (OMMX)"
+description = "Open Mathematical prograMming eXchange (OMMX)"
 documentation = "https://docs.rs/ommx/"
-repository    = "https://github.com/Jij-Inc/ommx"
-keywords      = ["optimization", "ommx"]
-categories    = ["data-structures", "mathematics", "science"]
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx"]
+categories = ["data-structures", "mathematics", "science"]
 
 [dependencies]
 anyhow.workspace = true
@@ -44,6 +44,11 @@ uuid.workspace = true
 [dev-dependencies]
 colored.workspace = true
 indoc.workspace = true
+criterion.workspace = true
 
 [build-dependencies]
 built.workspace = true
+
+[[bench]]
+name = "evaluate_bench"
+harness = false

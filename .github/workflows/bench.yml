@@ -1,0 +1,26 @@
+name: CodSpeed
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup Environment
+      uses: ./.github/actions/setup-test-environment
+    - name: Install cargo-codspeed
+      run: cargo install cargo-codspeed --locked
+    - name: Build CodSpeed Benchmark Target(s)
+      run: cargo codspeed build
+    - name: Run the benchmarks
+      uses: CodSpeedHQ/action@v3
+      with:
+        run: cargo codspeed run
+        token: ${{ secrets.CODSPEED_TOKEN }}
+
