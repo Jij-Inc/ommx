@@ -23,4 +23,7 @@ jobs:
       with:
         run: cargo codspeed run
         token: ${{ secrets.CODSPEED_TOKEN }}
+    - name: Inspect target dir
+      continue-on-error: true
+      run: ls -R target/criterion*
 
