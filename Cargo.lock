@@ -1485,6 +1485,7 @@ dependencies = [
  "clap",
  "codspeed-criterion-compat",
  "colored",
+ "criterion",
  "csv",
  "derive_more",
  "directories",

@@ -1,4 +1,8 @@
+#[cfg(feature = "codspeed")]
+use codspeed as criterion;
+
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+
 use ommx::{
     v1::{Linear, State},
     Evaluate,
