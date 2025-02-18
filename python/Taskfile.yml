@@ -1,0 +1,36 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+includes:
+  ommx:
+    taskfile: ommx/Taskfile.yml
+    dir: ommx
+  ommx-openjij-adapter:
+    taskfile: ommx-openjij-adapter/Taskfile.yml
+    dir: ommx-openjij-adapter
+  ommx-python-mip-adapter:
+    taskfile: ommx-python-mip-adapter/Taskfile.yml
+    dir: ommx-python-mip-adapter
+  ommx-pyscipopt-adapter:
+    taskfile: ommx-pyscipopt-adapter/Taskfile.yml
+    dir: ommx-pyscipopt-adapter
+
+tasks:
+  sync:
+    desc: Setup Python development environment
+    cmds:
+      - uv sync --extra dev
+
+  format:
+    desc: Format Python code
+    cmds:
+      - uv run ruff format
+
+  test:
+    desc: Run tests for OMMX Python SDK
+    cmds:
+      - task: ommx:test
+      - task: ommx-openjij-adapter:test
+      - task: ommx-python-mip-adapter:test
+      - task: ommx-pyscipopt-adapter:test

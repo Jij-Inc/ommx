@@ -1,0 +1,25 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: test
+
+  test:
+    desc: Run tests for OMMX Python SDK
+    cmds:
+      - task: pytest
+      - task: pyright
+
+  pytest:
+    desc: Run pytest for OMMX Python SDK
+    cmds:
+      - uv run pytest -vv --doctest-modules python/ommx
+    dir: ../.. # Doctest users ${repo_root}/data/
+
+  pyright:
+    desc: Type check OMMX Python SDK
+    cmds:
+      - uv run pyright
