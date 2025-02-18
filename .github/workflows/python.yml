@@ -62,9 +62,9 @@ jobs:
         run: task python:test
 
       - name: Run notebooks
-        if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
+        if: ${{ github.actor != 'dependabot[bot]' }}
         run: |
-          jupyter nbconvert --to notebook --execute notebooks/*.ipynb
+          uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
           OMMX_BASIC_AUTH_DOMAIN: ghcr.io
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
