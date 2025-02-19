@@ -34,3 +34,8 @@ tasks:
       - task: ommx-openjij-adapter:test
       - task: ommx-python-mip-adapter:test
       - task: ommx-pyscipopt-adapter:test
+
+  set-version:
+    desc: Set the version for the project
+    cmds:
+      - uv run set-version.py {{.ARGS}}
