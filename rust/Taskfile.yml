@@ -1,0 +1,24 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  doc:
+    desc: Generate and Open documentation for Rust SDK
+    cmds:
+      - cargo doc --no-deps -p ommx {{.ARGS}}
+
+  test:
+    desc: Run tests for Rust SDK
+    cmds:
+      - cargo test -p ommx {{.ARGS}}
+
+  check:
+    desc: Run check for Rust SDK
+    cmds:
+      - cargo check -p ommx {{.ARGS}}
+
+  clippy:
+    desc: Run clippy for Rust SDK
+    cmds:
+      - cargo clippy {{.ARGS}}

@@ -15,23 +15,14 @@ includes:
   python:
     taskfile: python/Taskfile.yml
     dir: python
+  rust:
+    taskfile: rust/Taskfile.yml
+    dir: rust
   proto:
     taskfile: proto/Taskfile.yml
     dir: proto
 
 tasks:
-  doc_rust:
-    cmds:
-      - cargo doc --no-deps -p ommx
-
-  doc_rust_open:
-    cmds:
-      - cargo doc --no-deps --open -p ommx
-
-  stubgen:
-    cmds:
-      - cargo run --bin stub_gen --features=stub_gen
-
   pip_compile:
     cmds:
       - uv pip compile pyproject.toml -o ../requirements.txt

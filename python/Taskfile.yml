@@ -56,3 +56,8 @@ tasks:
     desc: Set the version for all Python projects
     cmds:
       - uv run set-version.py {{.ARGS}}
+
+  stubgen:
+    desc: Generate stubs files for Rust extension
+    cmds:
+      - cargo run --bin stub_gen --features=stub_gen
