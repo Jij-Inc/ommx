@@ -59,7 +59,8 @@ Code Map
 
 ### Setup development environment
 
-TBW: Install `protoc` and `buf`
+- Install [buf](https://buf.build/docs/cli/installation/)
+- Install [protoc](https://grpc.io/docs/protoc-installation/)
 
 ### Generate Rust and Python codes from `*.proto`
 
@@ -83,7 +84,7 @@ Install [rustup](https://www.rust-lang.org/tools/install):
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-`cargo` automatically setup everything when it will be called.
+`cargo` will setup everything when it is called.
 
 ### Run tests
 
@@ -115,12 +116,15 @@ There are two mechanism to keep the version of `main` branch is kept latest:
 
 [`python/`](./python/)
 ----------------------
-- OMMX Python SDK and adapter sub-projects
-  - [`python/ommx/`](./python/ommx/): OMMX Python SDK
-  - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
-  - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
-  - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
-- Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
+
+| Name | PyPI |
+|:---- |:---- |
+| [OMMX Python SDK](./python/ommx) | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) |
+| [OMMX Python-MIP Adapter](./python/ommx-python-mip-adapter) | [![ommx-python-mip-adapter](https://img.shields.io/pypi/v/ommx-python-mip-adapter)](https://pypi.org/project/ommx-python-mip-adapter/) |
+| [OMMX PySCIPOpt Adapter](./python/ommx-pyscipopt-adapter) | [![ommx-pyscipopt-adapter](https://img.shields.io/pypi/v/ommx-pyscipopt-adapter)](https://pypi.org/project/ommx-pyscipopt-adapter/) |
+| [OMMX OpenJij Adapter](./python/ommx-openjij-adapter) | [![ommx-openjij-adapter](https://img.shields.io/pypi/v/ommx-openjij-adapter)](https://pypi.org/project/ommx-openjij-adapter/) |
+
+Python packages are managed by [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
 
 ### Setup development environment
 
