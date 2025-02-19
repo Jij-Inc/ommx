@@ -3,17 +3,23 @@
 version: "3"
 
 tasks:
+  default:
+    desc: "Build and Open the API Reference of Python SDK"
+    cmds:
+      - task: build
+      - task: open
+
   build:
-    desc: "Build the API Reference of OMMX Python SDK"
+    desc: "Build the API Reference of Python SDK"
     cmds:
       - uv run sphinx-build -b html . _build/html
 
   open:
-    desc: "Open the API Reference on the browser"
+    desc: "Open the API Reference of Python SDK"
     cmds:
       - uv run python -m webbrowser file:///$(pwd)/_build/html/autoapi/index.html
 
   pip_compile:
-    desc: "Compile requirements.txt for depolyment to readthedocs"
+    desc: "Compile pyproject.toml into requirements.txt for Read the Docs"
     cmds:
       - uv pip compile pyproject.toml -o requirements.txt
