@@ -39,7 +39,6 @@ dev = [
   "markdown-code-runner",
   "matplotlib",
   "mypy-protobuf",
-  "mypy>=0.910",
   "networkx",
   "pyright",
   "pytest",
