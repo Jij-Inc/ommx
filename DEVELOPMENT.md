@@ -113,28 +113,6 @@ There are two mechanism to keep the version of `main` branch is kept latest:
 - When Rust SDK is released, the patch version is automatically bumped up via a Pull Request.
 - When a pull request contains breaking change, `cargo-semver-check` on GitHub Action will fail. So, this pull request should be merged with bumping up the version.
 
-[`docs/`](./docs/)
--------------------
-
-| Directory | Description | GitHub Pages  | Read the Docs |
-|:----------|:------------|:--------------|:--------------|
-| [`docs/en/`](./docs/en/) | English version of Jupyter Book | [![Book/en](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en) | [![RTD](https://readthedocs.org/projects/ommx-en-book/badge/?version=latest)](https://ommx-en-book.readthedocs.io/en/latest/?badge=latest) |
-| [`docs/ja/`](./docs/ja/) | Japanese version of Jupyter Book | [![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja) | [![RTD](https://readthedocs.org/projects/ommx-ja-book/badge/?version=latest)](https://ommx-ja-book.readthedocs.io/ja/latest/?badge=latest) |
-| [`docs/api_reference/`](./docs/api_reference/) | API Reference of Python SDK and adapters | [![API Reference](https://img.shields.io/badge/API%20Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html) | [![RTD](https://readthedocs.org/projects/ommx/badge/?version=latest)](https://ommx.readthedocs.io/en/latest/?badge=latest) |
-
-### Build and open the book
-
-```shell
-task book_en
-task book_ja
-```
-
-### Build and open the API Reference
-
-```shell
-task api_reference
-```
-
 [`python/`](./python/)
 ----------------------
 - OMMX Python SDK and adapter sub-projects
@@ -160,10 +138,15 @@ This command lets `uv` create a venv and install the required packages including
 task python:test
 ```
 
-### Update version
+### Versioning
+
+The version of Python SDK is [semantic versioning](https://semver.org/).
+Note that the version of Python SDK is independent from the schema version `ommx.v1` and that of Rust SDK.
+
+To update the version of Python SDK to `x.y.z`, run:
 
 ```shell
-task python:set-version -- 1.8.5
+task python:set-version -- x.y.z
 ```
 
 > [!NOTE]
@@ -172,4 +155,29 @@ task python:set-version -- 1.8.5
 
 ### Release Python SDK and adapters
 
-TBW
+The Python SDK and adapters are released to [PyPI](https://pypi.org/) from the [GitHub Actions workflow](https://github.com/Jij-Inc/ommx/actions/workflows/release_python.yml). What you have to do is just to push a tag in a format `python-x.y.z`. Be sure that actual version is determined by `pyproject.toml` not by the tag name.
+
+- The patch version is automatically bumped up via a Pull Request when Python SDK is released.
+- Different from Rust SDK, there is no automatic semver check for Python SDK. So, you have to manually update the version number.
+
+[`docs/`](./docs/)
+-------------------
+
+| Directory | Description | GitHub Pages  | Read the Docs |
+|:----------|:------------|:--------------|:--------------|
+| [`docs/en/`](./docs/en/) | English version of Jupyter Book | [![Book/en](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en) | [![RTD](https://readthedocs.org/projects/ommx-en-book/badge/?version=latest)](https://ommx-en-book.readthedocs.io/en/latest/?badge=latest) |
+| [`docs/ja/`](./docs/ja/) | Japanese version of Jupyter Book | [![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja) | [![RTD](https://readthedocs.org/projects/ommx-ja-book/badge/?version=latest)](https://ommx-ja-book.readthedocs.io/ja/latest/?badge=latest) |
+| [`docs/api_reference/`](./docs/api_reference/) | API Reference of Python SDK and adapters | [![API Reference](https://img.shields.io/badge/API%20Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html) | [![RTD](https://readthedocs.org/projects/ommx/badge/?version=latest)](https://ommx.readthedocs.io/en/latest/?badge=latest) |
+
+### Build and open the book
+
+```shell
+task book_en
+task book_ja
+```
+
+### Build and open the API Reference
+
+```shell
+task api_reference
+```
