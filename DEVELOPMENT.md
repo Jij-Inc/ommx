@@ -50,115 +50,88 @@ task: Available tasks for this project:
 > e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
 
 Code Map
----------
-- [`proto/`](./proto/)
-  - OMMX Message schema is defined in `*.proto` files under this directory.
-  - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml).
-  - Run `task proto` to generate Rust and Python codes from `*.proto`.
+========
 
-- [`python/`](./python/)
-  - OMMX Python SDK and adapter sub-projects
-    - [`python/ommx/`](./python/ommx/): OMMX Python SDK
-    - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
-    - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
-    - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
-  - Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
-
-- [`rust/`](./rust/)
-  - OMMX Rust SDK and sub tools written in Rust
-    - [`rust/ommx/`](./rust/ommx/): OMMX Rust SDK
-    - [`rust/protogen/`](./rust/protogen/): Rust code generator from `*.proto`
-    - [`rust/dataset/`](./rust/dataset/): CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017
-  - Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
-
-- [`docs/`](./docs/)
-  - API Reference of Python SDK, and Jupyter Book for tutorials
-    - [`docs/en/`](./docs/en/): English version of Jupyter Book
-    - [`docs/ja/`](./docs/ja/): Japanese version of Jupyter Book
-    - [`docs/api_reference/`](./docs/api_reference/): API Reference of Python SDK and adapters
-
-OMMX Python SDK
-----------------
-[![PyPI - Version](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/)
+[`proto/`](./proto/)
+--------------------
+- OMMX Message schema is defined in `*.proto` files under this directory.
+- Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml).
 
 ### Setup development environment
 
-OMMX Python SDK is Rust/Python mixed project. You need to install Rust and Python development tools.
+TBW: Install `protoc` and `buf`
 
-#### Install Rust
-
-See the [official guide](https://www.rust-lang.org/tools/install) for details.
-
-#### virtualenv for Python
+### Generate Rust and Python codes from `*.proto`
 
 ```shell
-python -m venv .venv
-source .venv/bin/activate
-task install
+task proto
 ```
 
-TODO: Another Python development tools like `poetry` or `rye`
-
-### Generate Python codes from `*.proto`
-
-```shell
-task protogen_python
-```
-
-### Generate API reference
-
-```shell
-task api_reference:build
-```
-
-### Release to PyPI
-
-[!IMPORTANT] The version of `ommx` and the adapters should be in sync.
-1. Update version in `python/ommx/pyproject.toml`
-2. Update version in `python/ommx-python-mip-adapter/project.toml` 
-3. Push Git tag with `python-x.y.z`, then the GitHub Actions will release to PyPI
-
-OMMX Rust SDK
---------------
-[![Crates.io Version](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx)
-
-### Generate Rust codes from `*.proto`
-
-```shell
-task protogen_rust
-```
-
-### Release to crates.io
-
-1. Push a new Git tag named `rust-x.y.z`, then the GitHub Actions will release to crates.io
-2. Create a GitHub release.
-
-Read the Docs Settings
+[`python/`](./python/)
 ----------------------
+- OMMX Python SDK and adapter sub-projects
+  - [`python/ommx/`](./python/ommx/): OMMX Python SDK
+  - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
+  - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
+  - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
+- Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
 
-### Configuration Files
+### Setup development environment
 
-The Read the Docs configuration files are:
+TBW: Install `uv`
 
-- `.readthedocs.yaml`
-- `docs/en/.readthedocs.yaml`
-- `docs/ja/.readthedocs.yaml`
+### Setup development environment
 
-### Purpose
+```shell
+task python:sync
+```
 
-These configuration files are used to build and deploy documentation to Read the Docs. They specify the settings and dependencies required for the documentation build process.
+### Run tests
 
-### Updating Settings
+```shell
+task python:test
+```
 
-To update the Read the Docs settings, follow these steps:
+### Update version
 
-1. Open the relevant `.readthedocs.yaml` file.
-2. Modify the settings as needed.
-3. Commit and push the changes to the repository.
-4. The documentation will be automatically rebuilt and deployed with the new settings.
+```shell
+task python:set-version -- 1.8.5
+```
 
-Read the Docs deployments
---------------------------
+### Release Python SDK and adapters
+
+TBW
+
+[`rust/`](./rust/)
+-------------------
+- OMMX Rust SDK and sub tools written in Rust
+  - [`rust/ommx/`](./rust/ommx/): OMMX Rust SDK
+  - [`rust/protogen/`](./rust/protogen/): Rust code generator from `*.proto`
+  - [`rust/dataset/`](./rust/dataset/): CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017
+- Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
+
+### Setup development environment
+
+TBW: Install `rustup`
+
+### Run tests
+
+```shell
+task rust:test
+```
+
+### Release Rust SDK
+
+TBW
+
+[`docs/`](./docs/)
+-------------------
+- API Reference of Python SDK, and Jupyter Book for tutorials
+  - [`docs/en/`](./docs/en/): English version of Jupyter Book
+  - [`docs/ja/`](./docs/ja/): Japanese version of Jupyter Book
+  - [`docs/api_reference/`](./docs/api_reference/): API Reference of Python SDK and adapters
+
+### Read the Docs deployments
 
 There are three different Read the Docs deployments for this project:
 
