@@ -70,11 +70,12 @@ task proto
 
 [`rust/`](./rust/)
 -------------------
-- OMMX Rust SDK and sub tools written in Rust
-  - [`rust/ommx/`](./rust/ommx/): OMMX Rust SDK
-  - [`rust/protogen/`](./rust/protogen/): Rust code generator from `*.proto`
-  - [`rust/dataset/`](./rust/dataset/): CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017
-- Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
+
+| Directory | crates.io | Description |
+|:----------|:---------:|:------------|
+| [`rust/ommx/`](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | OMMX Rust SDK |
+| [`rust/protogen/`](./rust/protogen/) | Not for release | Rust code generator from `*.proto` |
+| [`rust/dataset/`](./rust/dataset/) | Not for release | CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017 |
 
 ### Setup development environment
 
@@ -144,7 +145,7 @@ task python:test
 
 ### Versioning
 
-The version of Python SDK is [semantic versioning](https://semver.org/).
+The OMMX Python SDK and adapters are versioned together with [semantic versioning](https://semver.org/).
 Note that the version of Python SDK is independent from the schema version `ommx.v1` and that of Rust SDK.
 
 To update the version of Python SDK to `x.y.z`, run:
@@ -153,9 +154,7 @@ To update the version of Python SDK to `x.y.z`, run:
 task python:set-version -- x.y.z
 ```
 
-> [!NOTE]
-> The version number is shared among all Python projects, `ommx` and other adapters.
-> Above command sets the version number to `1.8.5` for all Python projects simultaneously.
+This will bump up the all versions of Python SDK and adapters and its dependencies.
 
 ### Release Python SDK and adapters
 
