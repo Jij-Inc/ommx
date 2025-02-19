@@ -1,76 +1,77 @@
 README for Developers of OMMX
 ==============================
 
+Taskfile
+---------
+This project uses [Taskfile](https://taskfile.dev/#/) to manage development tasks. See https://taskfile.dev/installation/ for installation.
+You can get a list of available tasks by running `task -l` in the root directory of the project like below:
+
+```text
+$ task -l
+task: Available tasks for this project:
+* api_reference:build:                       Build the API Reference of Python SDK
+* api_reference:default:                     Build and Open the API Reference of Python SDK      (aliases: api_reference)
+* api_reference:open:                        Open the API Reference of Python SDK
+* api_reference:pip_compile:                 Compile pyproject.toml into requirements.txt for Read the Docs
+* book_en:build:                             Build the book in docs/en
+* book_en:default:                           Build and open the book in docs/en      (aliases: book_en)
+* book_en:open:                              Open the book in docs/en
+* book_en:watch:                             Watch the book in docs/en
+* book_ja:build:                             Build the book in docs/ja
+* book_ja:default:                           Build and open the book in docs/ja      (aliases: book_ja)
+* book_ja:open:                              Open the book in docs/ja
+* book_ja:watch:                             Watch the book in docs/ja
+* proto:default:                             Generate code from Protobuf definitions      (aliases: proto)
+* proto:python:                              Generate Python code from Protobuf definitions
+* proto:rust:                                Generate Rust code from Protobuf definitions
+* python:default:                            Sync and Run tests for all Python projects      (aliases: python)
+* python:doc:                                Build and Open API reference documentation
+* python:format:                             Format Python code
+* python:ommx-openjij-adapter:test:          Run tests for OMMX OpenJij Adapter
+* python:ommx-pyscipopt-adapter:test:        Run tests for OMMX PySCIPOpt Adapter
+* python:ommx-python-mip-adapter:test:       Run tests for OMMX Python-MIP Adapter
+* python:ommx:pyright:                       Type check OMMX Python SDK
+* python:ommx:pytest:                        Run pytest for OMMX Python SDK
+* python:ommx:test:                          Run tests for OMMX Python SDK
+* python:set-version:                        Set the version for all Python projects
+* python:stubgen:                            Generate stubs files for Rust extension
+* python:sync:                               Setup Python development environment, Rebuild Python SDK
+* python:test:                               Run tests for all Python projects
+* rust:check:                                Run check for Rust SDK
+* rust:clippy:                               Run clippy for Rust SDK
+* rust:doc:                                  Generate and Open documentation for Rust SDK
+* rust:test:                                 Run tests for Rust SDK
+```
+
+::: tip
+When you run `task` command, it will automatically detect the `Taskfile.yml` from current directory or parent directories.
+If you run `task` command on `proto/` directory, `proto/Taskfile.yml` is used, i.e. commands only defined there are available.
+Each sub-directory `Taskfile.yml` are included in the parent `Taskfile.yml`,
+e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
+:::
+
 Code map
 --------
 
 - [`proto/`](./proto/)
-  - `*.proto` files defining OMMX Messages
+  - OMMX Message schema is defined in `*.proto` files under this directory.
   - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml)
-- [`python/ommx/`](./python/ommx/)
-  - OMMX Python SDK
-  - Managed by `pip`, see its configuration in [`pyproject.toml`](./python/ommx/pyproject.toml)
+  - Defined tasks:
+
+    ```shell
+    task proto         # Run proto:python and proto:rust
+    task proto:python  # Generate Python code from *.proto
+    task proto:rust    # Generate Rust code from *.proto
+    ```
+
+- [`python/`](./python/)
+  - OMMX Python SDK and adapter sub-projects
+  - Managed by `uv`, see its configuration in [`pyproject.toml`](./python/ommx/pyproject.toml)
 - [`rust/ommx/`](./rust/ommx/)
   - OMMX Rust SDK
   - Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
 - [`rust/protogen/`](./rust/protogen/)
   - Rust code generator from `*.proto`. Used by `cargo run --bin protogen`. This is used only for development, and not published to crates.io.
-
-Taskfile.yml
-------------
-
-### Purpose and Usage
-
-`Taskfile.yml` is used to define and manage various development tasks in a standardized way. It helps automate repetitive tasks, making the development process more efficient.
-
-### Common Tasks
-
-Here are some common tasks that can be executed using `Taskfile.yml`:
-
-- **Building Documentation**: 
-  ```shell
-  task build_book_ja
-  task build_book_en
-  ```
-
-- **Running Tests**: 
-  ```shell
-  task install
-  task test_python
-  ```
-
-- **Generating Code from `.proto` Files**: 
-  ```shell
-  task protogen
-  ```
-
-### Dependencies
-
-To use `Taskfile.yml`, you need to have the following dependencies installed:
-
-- `task`: A task runner for defining and running tasks.
-- `fswatch`: (Optional) A file change monitor that triggers tasks when files are modified.
-
-### Listing available tasks
-
-To see a list of all available tasks defined in `Taskfile.yml`, you can run the following command:
-
-```shell
-task -l
-```
-
-This command will display a list of all tasks that can be executed, along with their descriptions. For example:
-
-```shell
-task: Available tasks for this project:
-* build_book_ja: Build the Japanese Jupyter Book
-* build_book_en: Build the English Jupyter Book
-* protogen: Generate code from .proto files
-* test_python: Run all Python tests
-* install: Install all necessary dependencies
-```
-
-This will help you quickly identify and execute the tasks you need for development.
 
 OMMX Python SDK
 ----------------
