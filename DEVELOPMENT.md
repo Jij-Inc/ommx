@@ -54,23 +54,23 @@ Code map
 
 - [`proto/`](./proto/)
   - OMMX Message schema is defined in `*.proto` files under this directory.
-  - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml)
-  - Defined tasks:
-
-    ```shell
-    task proto         # Run proto:python and proto:rust
-    task proto:python  # Generate Python code from *.proto
-    task proto:rust    # Generate Rust code from *.proto
-    ```
+  - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml).
+  - Run `task proto` to generate Rust and Python codes from `*.proto`.
 
 - [`python/`](./python/)
   - OMMX Python SDK and adapter sub-projects
-  - Managed by `uv`, see its configuration in [`pyproject.toml`](./python/ommx/pyproject.toml)
-- [`rust/ommx/`](./rust/ommx/)
-  - OMMX Rust SDK
+    - [`python/ommx/`](./python/ommx/): OMMX Python SDK
+    - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
+    - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
+    - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
+  - Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
+
+- [`rust/`](./rust/)
+  - OMMX Rust SDK and sub tools written in Rust
+    - [`rust/ommx/`](./rust/ommx/): OMMX Rust SDK
+    - [`rust/protogen/`](./rust/protogen/): Rust code generator from `*.proto`
+    - [`rust/dataset/`](./rust/dataset/): CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017
   - Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
-- [`rust/protogen/`](./rust/protogen/)
-  - Rust code generator from `*.proto`. Used by `cargo run --bin protogen`. This is used only for development, and not published to crates.io.
 
 OMMX Python SDK
 ----------------
