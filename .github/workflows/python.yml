@@ -35,7 +35,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate stub file
-        run: task stubgen
+        run: task python:stubgen
 
       - name: Check updated
         run: |
