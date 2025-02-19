@@ -49,9 +49,8 @@ task: Available tasks for this project:
 > Each sub-directory `Taskfile.yml` are included in the parent `Taskfile.yml`,
 > e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
 
-Code map
---------
-
+Code Map
+---------
 - [`proto/`](./proto/)
   - OMMX Message schema is defined in `*.proto` files under this directory.
   - Managed by [`buf`](https://buf.build/docs/introduction), see its configuration in [`buf.yaml`](./proto/buf.yaml).
@@ -71,6 +70,12 @@ Code map
     - [`rust/protogen/`](./rust/protogen/): Rust code generator from `*.proto`
     - [`rust/dataset/`](./rust/dataset/): CLI tool for creating and uploading OMMX Artifact for dataset, e.g. MIPLIB2017
   - Managed by `cargo`, see its configuration in the workspace [`Cargo.toml`](./Cargo.toml)
+
+- [`docs/`](./docs/)
+  - API Reference of Python SDK, and Jupyter Book for tutorials
+    - [`docs/en/`](./docs/en/): English version of Jupyter Book
+    - [`docs/ja/`](./docs/ja/): Japanese version of Jupyter Book
+    - [`docs/api_reference/`](./docs/api_reference/): API Reference of Python SDK and adapters
 
 OMMX Python SDK
 ----------------
