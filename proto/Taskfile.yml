@@ -14,7 +14,6 @@ tasks:
     cmds:
       - task: rust
       - task: python
-      - task: _python:format
 
   rust:
     desc: Generate Rust code from Protobuf definitions
@@ -25,3 +24,4 @@ tasks:
     desc: Generate Python code from Protobuf definitions
     cmds:
       - buf generate --template buf.gen.python.yaml
+      - task: _python:format
