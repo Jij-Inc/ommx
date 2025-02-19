@@ -67,41 +67,6 @@ TBW: Install `protoc` and `buf`
 task proto
 ```
 
-[`python/`](./python/)
-----------------------
-- OMMX Python SDK and adapter sub-projects
-  - [`python/ommx/`](./python/ommx/): OMMX Python SDK
-  - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
-  - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
-  - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
-- Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
-
-### Setup development environment
-
-TBW: Install `uv`
-
-### Setup development environment
-
-```shell
-task python:sync
-```
-
-### Run tests
-
-```shell
-task python:test
-```
-
-### Update version
-
-```shell
-task python:set-version -- 1.8.5
-```
-
-### Release Python SDK and adapters
-
-TBW
-
 [`rust/`](./rust/)
 -------------------
 - OMMX Rust SDK and sub tools written in Rust
@@ -112,13 +77,25 @@ TBW
 
 ### Setup development environment
 
-TBW: Install `rustup`
+Install [rustup](https://www.rust-lang.org/tools/install):
+
+```shell
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+`cargo` automatically setup everything when it will be called.
 
 ### Run tests
 
 ```shell
 task rust:test
 ```
+
+Note that this only tests the Rust SDK, not the Rust codes in Python SDK.
+
+### Versioning
+
+TBW
 
 ### Release Rust SDK
 
@@ -145,3 +122,42 @@ task book_ja
 ```shell
 task api_reference
 ```
+
+[`python/`](./python/)
+----------------------
+- OMMX Python SDK and adapter sub-projects
+  - [`python/ommx/`](./python/ommx/): OMMX Python SDK
+  - [`python/ommx-python-mip-adapter/`](./python/ommx-python-mip-adapter/): OMMX Python-MIP Adapter
+  - [`python/ommx-pyscipopt-adapter/`](./python/ommx-pyscipopt-adapter/): OMMX PySCIPOpt Adapter
+  - [`python/ommx-openjij-adapter/`](./python/ommx-openjij-adapter/): OMMX OpenJij Adapter
+- Managed by `uv`, see its configuration in workspace [`pyproject.toml`](./pyproject.toml)
+
+### Setup development environment
+
+First, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and Rust toolchain as above, then run:
+
+```shell
+task python:sync
+```
+
+This command lets `uv` create a venv and install the required packages including the OMMX Python SDK and adapters.
+
+### Run tests
+
+```shell
+task python:test
+```
+
+### Update version
+
+```shell
+task python:set-version -- 1.8.5
+```
+
+> [!NOTE]
+> The version number is shared among all Python projects, `ommx` and other adapters.
+> Above command sets the version number to `1.8.5` for all Python projects simultaneously.
+
+### Release Python SDK and adapters
+
+TBW
