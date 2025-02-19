@@ -95,11 +95,23 @@ Note that this only tests the Rust SDK, not the Rust codes in Python SDK.
 
 ### Versioning
 
-TBW
+The version of Rust SDK is [semantic versioning](https://semver.org/).
+Note that the version of Rust SDK is independent from the schema version `ommx.v1` and that of Python SDK.
+
+```shell
+task rust:set-version -- 2.0.0
+```
+
+Note that this requires [cargo-edit](https://github.com/killercup/cargo-edit).
 
 ### Release Rust SDK
 
-TBW
+The Rust SDK is released to [crates.io](https://crates.io/) from the [GitHub Actions workflow](https://github.com/Jij-Inc/ommx/actions/workflows/release_rust.yml). What you have to do is just to push a tag in a format `rust-x.y.z`. Be sure that actual version is determined by `Cargo.toml` not by the tag name.
+
+There are two mechanism to keep the version of `main` branch is kept latest:
+
+- When Rust SDK is released, the patch version is automatically bumped up via a Pull Request.
+- When a pull request contains breaking change, `cargo-semver-check` on GitHub Action will fail. So, this pull request should be merged with bumping up the version.
 
 [`docs/`](./docs/)
 -------------------

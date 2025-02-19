@@ -22,3 +22,8 @@ tasks:
     desc: Run clippy for Rust SDK
     cmds:
       - cargo clippy {{.ARGS}}
+
+  set-version:
+    desc: Set version for Rust SDK
+    cmds:
+      - cargo set-version {{.ARGS}}
