@@ -43,12 +43,11 @@ task: Available tasks for this project:
 * rust:test:                                 Run tests for Rust SDK
 ```
 
-::: tip
-When you run `task` command, it will automatically detect the `Taskfile.yml` from current directory or parent directories.
-If you run `task` command on `proto/` directory, `proto/Taskfile.yml` is used, i.e. commands only defined there are available.
-Each sub-directory `Taskfile.yml` are included in the parent `Taskfile.yml`,
-e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
-:::
+> [!NOTE]
+> When you run `task` command, it will automatically detect the `Taskfile.yml` from current directory or parent directories.
+> If you run `task` command on `proto/` directory, `proto/Taskfile.yml` is used, i.e. commands only defined there are available.
+> Each sub-directory `Taskfile.yml` are included in the parent `Taskfile.yml`,
+> e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
 
 Code map
 --------
