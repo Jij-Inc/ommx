@@ -1300,7 +1300,7 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "jupyterlab" },
     { name = "markdown-code-runner" },
@@ -1311,27 +1311,29 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
     { name = "tomlkit" },
-    { name = "types-protobuf" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "jupyterlab", marker = "extra == 'dev'" },
-    { name = "markdown-code-runner", marker = "extra == 'dev'" },
-    { name = "matplotlib", marker = "extra == 'dev'" },
-    { name = "mypy-protobuf", marker = "extra == 'dev'" },
-    { name = "networkx", marker = "extra == 'dev'" },
     { name = "numpy", specifier = ">=1.23.0,<3.0.0" },
     { name = "pandas", specifier = ">=2.0.0,<3.0.0" },
     { name = "protobuf", specifier = ">=5.26.1,<6.0.0" },
     { name = "pyarrow", specifier = ">=16.0.0,<20.0.0" },
-    { name = "pyright", marker = "extra == 'dev'" },
-    { name = "pytest", marker = "extra == 'dev'" },
     { name = "python-dateutil", specifier = ">=2.9.0,<3.0.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0,<0.10.0" },
-    { name = "tomlkit", marker = "extra == 'dev'", specifier = ">=0.13.2" },
-    { name = "types-protobuf", marker = "extra == 'dev'", specifier = ">=0.1.14" },
     { name = "typing-extensions", specifier = ">=4.12.2,<5.0.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "jupyterlab", specifier = ">=4.3.5" },
+    { name = "markdown-code-runner", specifier = ">=2.1.0" },
+    { name = "matplotlib", specifier = ">=3.9.4" },
+    { name = "mypy-protobuf", specifier = ">=3.6.0" },
+    { name = "networkx", specifier = ">=3.2.1" },
+    { name = "pyright", specifier = ">=1.1.394" },
+    { name = "pytest", specifier = ">=8.3.4" },
+    { name = "ruff", specifier = ">=0.9.6" },
+    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
