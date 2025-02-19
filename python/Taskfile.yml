@@ -16,9 +16,26 @@ includes:
     taskfile: ommx-pyscipopt-adapter/Taskfile.yml
     dir: ommx-pyscipopt-adapter
 
+  # For python:doc task
+  api_reference:
+    taskfile: ../docs/api_reference/Taskfile.yml
+    dir: ../docs/api_reference
+    internal: true
+
 tasks:
+  default:
+    desc: Sync and Run tests for all Python projects
+    cmds:
+      - task: sync
+      - task: test
+
+  doc:
+    desc: Build and Open API reference documentation
+    cmds:
+      - task: api_reference
+
   sync:
-    desc: Setup Python development environment
+    desc: Setup Python development environment, Rebuild Python SDK
     cmds:
       - uv sync --extra dev
 
@@ -28,7 +45,7 @@ tasks:
       - uv run ruff format
 
   test:
-    desc: Run tests for OMMX Python SDK
+    desc: Run tests for all Python projects
     cmds:
       - task: ommx:test
       - task: ommx-openjij-adapter:test
@@ -36,6 +53,6 @@ tasks:
       - task: ommx-pyscipopt-adapter:test
 
   set-version:
-    desc: Set the version for the project
+    desc: Set the version for all Python projects
     cmds:
       - uv run set-version.py {{.ARGS}}
