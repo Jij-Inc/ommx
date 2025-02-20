@@ -9,7 +9,7 @@ fn bench_linear(c: &mut Criterion) {
     let mut sum_partial = c.benchmark_group("sum-partial");
     for n in (1..=5).map(|n| n * 2000) {
         sum_partial.bench_with_input(
-            BenchmarkId::new("sum-partial", format!("{n:03}")),
+            BenchmarkId::new("sum-partial", format!("{n:05}")),
             &n,
             |b, n| {
                 b.iter(|| {
@@ -26,7 +26,7 @@ fn bench_linear(c: &mut Criterion) {
     let mut sum_total = c.benchmark_group("sum-total");
     for n in (1..=5).map(|n| n * 2000) {
         sum_total.bench_with_input(
-            BenchmarkId::new("sum-total", format!("{n:03}")),
+            BenchmarkId::new("sum-total", format!("{n:05}")),
             &n,
             |b, n| {
                 b.iter(|| {
