@@ -13,8 +13,6 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
-[features]
-codspeed = []
 
 [dependencies]
 anyhow.workspace = true
@@ -48,7 +46,6 @@ uuid.workspace = true
 colored.workspace = true
 indoc.workspace = true
 criterion.workspace = true
-codspeed = { workspace = true }
 
 [build-dependencies]
 built.workspace = true
