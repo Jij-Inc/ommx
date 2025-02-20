@@ -25,3 +25,8 @@ tasks:
     cmds:
       - buf generate --template buf.gen.python.yaml
       - task: _python:format
+
+  doc:
+    desc: Generate documentation from Protobuf definitions
+    cmds:
+      - buf generate --template buf.gen.docs.yaml
