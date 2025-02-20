@@ -403,10 +403,17 @@ impl Instance {
             });
         }
         self.decision_variable_dependency
-            .insert(decision_variable_id, f);
+            .insert(decision_variable_id, f.clone());
 
-        // TODO: substitute objective and constraints
-
+        let replacement = hashmap! { decision_variable_id => f };
+        if let Some(obj) = self.objective.as_mut() {
+            *obj = obj.substitute(&replacement)?;
+        }
+        for c in &mut self.constraints {
+            if let Some(f) = c.function.as_mut() {
+                *f = f.substitute(&replacement)?;
+            }
+        }
         Ok(())
     }
 }
