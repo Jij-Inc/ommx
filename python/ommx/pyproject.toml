@@ -60,6 +60,6 @@ per-file-ignores = { "*_pb2.py" = ["ALL"] }
 [tool.uv]
 cache-keys = [
   { file = "pyproject.toml" },
-  { file = "Cargo.toml" },
-  { file = "ommx/**/*.rs" },
+  { file = "../../Cargo.lock" },
+  { file = "src/**/*.rs" },
 ]
