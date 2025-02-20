@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 
 use ommx::{
     v1::{Linear, State},
@@ -12,12 +12,9 @@ fn bench_linear(c: &mut Criterion) {
             BenchmarkId::new("sum-partial", format!("{n:05}")),
             &n,
             |b, n| {
-                b.iter(|| {
-                    partial_eval_with(
-                        black_box(&State::default()),
-                        black_box(&mut Linear::new((0..*n).map(|i| (i, 1.0)), 0.0)),
-                    );
-                })
+                let state = State::default();
+                let mut lin = Linear::new((0..*n).map(|i| (i, 1.0)), 0.0);
+                b.iter(|| lin.partial_evaluate(&state))
             },
         );
     }
@@ -29,24 +26,14 @@ fn bench_linear(c: &mut Criterion) {
             BenchmarkId::new("sum-total", format!("{n:05}")),
             &n,
             |b, n| {
-                b.iter(|| {
-                    partial_eval_with(
-                        black_box(&{
-                            let mut state = State::default();
-                            state.entries = (0..*n).map(|i| (i, i as f64)).collect();
-                            state
-                        }),
-                        black_box(&mut Linear::new((0..*n).map(|i| (i, 1.0)), 0.0)),
-                    );
-                })
+                let mut state = State::default();
+                state.entries = (0..*n).map(|i| (i, i as f64)).collect();
+                let mut lin = Linear::new((0..*n).map(|i| (i, 1.0)), 0.0);
+                b.iter(|| lin.partial_evaluate(&state))
             },
         );
     }
     sum_total.finish();
-}
-
-fn partial_eval_with<E: Evaluate>(state: &State, item: &mut E) {
-    let _ = item.partial_evaluate(state);
 }
 
 criterion_group!(eval_benches, bench_linear);
