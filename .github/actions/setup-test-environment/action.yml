@@ -10,6 +10,13 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Though buf does not need protoc due to remote plugin support, it is still required for Rust/prost
+    - name: Setup protobuf compiler
+      uses: arduino/setup-protoc@v3
+      with:
+        version: "26.1"
+        repo-token: ${{ github.token }}
+
     - name: Setup buf
       uses: bufbuild/buf-setup-action@v1
       with:
