@@ -60,6 +60,8 @@ per-file-ignores = { "*_pb2.py" = ["ALL"] }
 [tool.uv]
 cache-keys = [
   { file = "pyproject.toml" },
-  { file = "../../Cargo.lock" },
   { file = "src/**/*.rs" },
+  # Python SDK should be rebuilt when Rust SDK is updated.
+  { file = "../../Cargo.lock" },
+  { file = "../../rust/ommx/src/**/*.rs" },
 ]
