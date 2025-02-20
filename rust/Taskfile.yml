@@ -6,24 +6,24 @@ tasks:
   doc:
     desc: Generate and Open documentation for Rust SDK
     cmds:
-      - cargo doc --no-deps -p ommx {{.ARGS}}
+      - cargo doc --no-deps -p ommx {{.CLI_ARGS}}
 
   test:
     desc: Run tests for Rust SDK
     cmds:
-      - cargo test -p ommx {{.ARGS}}
+      - cargo test -p ommx {{.CLI_ARGS}}
 
   check:
     desc: Run check for Rust SDK
     cmds:
-      - cargo check -p ommx {{.ARGS}}
+      - cargo check -p ommx {{.CLI_ARGS}}
 
   clippy:
     desc: Run clippy for Rust SDK
     cmds:
-      - cargo clippy {{.ARGS}}
+      - cargo clippy {{.CLI_ARGS}}
 
   set-version:
     desc: Set version for Rust SDK
     cmds:
-      - cargo set-version {{.ARGS}}
+      - cargo set-version {{.CLI_ARGS}}

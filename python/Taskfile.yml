@@ -55,7 +55,7 @@ tasks:
   set-version:
     desc: Set the version for all Python projects
     cmds:
-      - uv run set-version.py {{.ARGS}}
+      - uv run set-version.py {{.CLI_ARGS}}
 
   stubgen:
     desc: Generate stubs files for Rust extension
