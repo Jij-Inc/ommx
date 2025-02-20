@@ -31,10 +31,10 @@ pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usiz
             // A
             linear.terms.push(Term {
                 id: id as u64,
-                coefficient: rng.gen_range(-1.0..1.0),
+                coefficient: rng.random_range(-1.0..1.0),
             });
             // -b
-            linear.constant = rng.gen_range(-1.0..1.0);
+            linear.constant = rng.random_range(-1.0..1.0);
         }
         instance.constraints.push(Constraint {
             id: constraint_id as u64,
@@ -48,7 +48,7 @@ pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usiz
         // c
         objective.terms.push(Term {
             id: id as u64,
-            coefficient: rng.gen_range(-1.0..1.0),
+            coefficient: rng.random_range(-1.0..1.0),
         });
     }
     instance.objective = Some(objective.into());
