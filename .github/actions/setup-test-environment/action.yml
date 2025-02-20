@@ -13,7 +13,7 @@ runs:
     - name: Setup protobuf compiler
       uses: arduino/setup-protoc@v3
       with:
-        version: "26.1"
+        version: "29.3"
         repo-token: ${{ github.token }}
 
     - name: Setup buf
@@ -46,7 +46,6 @@ runs:
       shell: bash
       run: |
         pip install "ruff >= 0.9.0, < 0.10.0"
-        pip install "mypy-protobuf >= 3.6.0"
         pip install pytest-github-actions-annotate-failures
         pip install "twine >= 6.0.0, < 7.0.0"
         pip install build
