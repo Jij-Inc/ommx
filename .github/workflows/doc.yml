@@ -55,14 +55,13 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Generate API docs
-        run: buf generate --template buf.gen.docs.yaml
-        working-directory: proto
+        run: task proto:doc
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4
         with:
           name: doc-protobuf
-          path: ./doc
+          path: ./proto/protobuf.html
           retention-days: 30
 
   rust:

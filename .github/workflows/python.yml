@@ -17,11 +17,8 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Install dependencies
-        run: task install_python_sdk
-
       - name: Regenerate python bindings
-        run: task protogen_python
+        run: task proto:python
 
       - name: Check updated
         run: |
@@ -38,7 +35,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Regenerate stub file
-        run: task stubgen
+        run: task python:stubgen
 
       - name: Check updated
         run: |
@@ -59,33 +56,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install ommx
-        run: task install_python_sdk
+        run: task python:sync
 
-      - name: Test ommx
-        if: always()
-        run: task test_python_sdk
-
-      # FIXME: Python-MIP does not support Python 3.12
-      - name: Test ommx-python-mip-adapter
-        if: ${{ matrix.python-version != '3.12' }}
-        run: |
-          task install_python_mip_adapter
-          task test_python_mip_adapter
-
-      - name: Test ommx-pyscipopt-adapter
-        run: |
-          task install_pyscipopt_adapter
-          task test_pyscipopt_adapter
-
-      - name: Test ommx-openjij-adapter
-        run: |
-          task install_openjij_adapter
-          task test_openjij_adapter
+      - name: Test
+        run: task python:test
 
       - name: Run notebooks
-        if: ${{ github.actor != 'dependabot[bot]' && matrix.python-version != '3.12' }}
+        if: ${{ github.actor != 'dependabot[bot]' }}
         run: |
-          jupyter nbconvert --to notebook --execute notebooks/*.ipynb
+          uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
           OMMX_BASIC_AUTH_DOMAIN: ghcr.io
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}

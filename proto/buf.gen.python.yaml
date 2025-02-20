@@ -1,9 +1,6 @@
-version: v1
-managed:
-  enabled: true
+version: v2
 plugins:
-  - name: python
+  - remote: buf.build/protocolbuffers/python:v26.1
     out: ../python/ommx
-
-  - plugin: mypy
+  - remote: buf.build/community/nipunn1313-mypy:v3.6.0
     out: ../python/ommx

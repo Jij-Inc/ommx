@@ -1,0 +1,32 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+includes:
+  _python:
+    taskfile: ../python/Taskfile.yml
+    dir: ../python
+    internal: true
+
+tasks:
+  default:
+    desc: Generate code from Protobuf definitions
+    cmds:
+      - task: rust
+      - task: python
+
+  rust:
+    desc: Generate Rust code from Protobuf definitions
+    cmds:
+      - cargo run --bin protogen
+
+  python:
+    desc: Generate Python code from Protobuf definitions
+    cmds:
+      - buf generate --template buf.gen.python.yaml
+      - task: _python:format
+
+  doc:
+    desc: Generate documentation from Protobuf definitions
+    cmds:
+      - buf generate --template buf.gen.docs.yaml

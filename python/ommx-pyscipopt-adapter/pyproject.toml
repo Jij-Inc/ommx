@@ -18,11 +18,8 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License",
     "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["ommx >= 1.8.4, < 2.0.0","PySCIPOpt >= 5.1.0, < 6.0.0"]
+dependencies = ["ommx >= 1.8.4, < 2.0.0", "PySCIPOpt >= 5.1.0, < 6.0.0"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
-
-[project.optional-dependencies]
-dev = ["markdown-code-runner", "pyright", "pytest", "ruff"]

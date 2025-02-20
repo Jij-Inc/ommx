@@ -10,6 +10,7 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Though buf does not need protoc due to remote plugin support, it is still required for Rust/prost
     - name: Setup protobuf compiler
       uses: arduino/setup-protoc@v3
       with:
@@ -41,6 +42,7 @@ runs:
         python-version: ${{ inputs.python-version }}
         cache: "pip"
 
+    # Possibly these should be installed via `uv sync`, but it requires rebuilding `ommx`, which is too slow
     - name: Setup Python tools
       shell: bash
       run: |

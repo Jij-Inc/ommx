@@ -18,7 +18,7 @@ from ommx.v1 import sos1_pb2 as ommx_dot_v1_dot_sos1__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x1eommx/v1/constraint_hints.proto\x12\x07ommx.v1\x1a\x15ommx/v1/one_hot.proto\x1a\x12ommx/v1/sos1.proto"\x8c\x01\n\x0f\x43onstraintHints\x12?\n\x13one_hot_constraints\x18\x02 \x03(\x0b\x32\x0f.ommx.v1.OneHotR\x11oneHotConstraints\x12\x38\n\x10sos1_constraints\x18\x03 \x03(\x0b\x32\r.ommx.v1.SOS1R\x0fsos1ConstraintsB`\n\x0b\x63om.ommx.v1B\x14\x43onstraintHintsProtoP\x01\xa2\x02\x03OXX\xaa\x02\x07Ommx.V1\xca\x02\x07Ommx\\V1\xe2\x02\x13Ommx\\V1\\GPBMetadata\xea\x02\x08Ommx::V1b\x06proto3'
+    b'\n\x1eommx/v1/constraint_hints.proto\x12\x07ommx.v1\x1a\x15ommx/v1/one_hot.proto\x1a\x12ommx/v1/sos1.proto"\x8c\x01\n\x0f\x43onstraintHints\x12?\n\x13one_hot_constraints\x18\x02 \x03(\x0b\x32\x0f.ommx.v1.OneHotR\x11oneHotConstraints\x12\x38\n\x10sos1_constraints\x18\x03 \x03(\x0b\x32\r.ommx.v1.SOS1R\x0fsos1Constraintsb\x06proto3'
 )
 
 _globals = globals()
@@ -27,10 +27,7 @@ _builder.BuildTopDescriptorsAndMessages(
     DESCRIPTOR, "ommx.v1.constraint_hints_pb2", _globals
 )
 if not _descriptor._USE_C_DESCRIPTORS:
-    _globals["DESCRIPTOR"]._loaded_options = None
-    _globals[
-        "DESCRIPTOR"
-    ]._serialized_options = b"\n\013com.ommx.v1B\024ConstraintHintsProtoP\001\242\002\003OXX\252\002\007Ommx.V1\312\002\007Ommx\\V1\342\002\023Ommx\\V1\\GPBMetadata\352\002\010Ommx::V1"
+    DESCRIPTOR._loaded_options = None
     _globals["_CONSTRAINTHINTS"]._serialized_start = 87
     _globals["_CONSTRAINTHINTS"]._serialized_end = 227
 # @@protoc_insertion_point(module_scope)

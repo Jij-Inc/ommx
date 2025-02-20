@@ -1,0 +1,63 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+includes:
+  ommx:
+    taskfile: ommx/Taskfile.yml
+    dir: ommx
+  ommx-openjij-adapter:
+    taskfile: ommx-openjij-adapter/Taskfile.yml
+    dir: ommx-openjij-adapter
+  ommx-python-mip-adapter:
+    taskfile: ommx-python-mip-adapter/Taskfile.yml
+    dir: ommx-python-mip-adapter
+  ommx-pyscipopt-adapter:
+    taskfile: ommx-pyscipopt-adapter/Taskfile.yml
+    dir: ommx-pyscipopt-adapter
+
+  # For python:doc task
+  api_reference:
+    taskfile: ../docs/api_reference/Taskfile.yml
+    dir: ../docs/api_reference
+    internal: true
+
+tasks:
+  default:
+    desc: Sync and Run tests for all Python projects
+    cmds:
+      - task: sync
+      - task: test
+
+  doc:
+    desc: Build and Open API reference documentation
+    cmds:
+      - task: api_reference
+
+  sync:
+    desc: Setup Python development environment, Rebuild Python SDK
+    cmds:
+      - uv sync --all-extras
+
+  format:
+    desc: Format Python code
+    cmds:
+      - uv run ruff format
+
+  test:
+    desc: Run tests for all Python projects
+    cmds:
+      - task: ommx:test
+      - task: ommx-openjij-adapter:test
+      - task: ommx-python-mip-adapter:test
+      - task: ommx-pyscipopt-adapter:test
+
+  set-version:
+    desc: Set the version for all Python projects
+    cmds:
+      - uv run set-version.py {{.CLI_ARGS}}
+
+  stubgen:
+    desc: Generate stubs files for Rust extension
+    cmds:
+      - cargo run --bin stub_gen --features=stub_gen
