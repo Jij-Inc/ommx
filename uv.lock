@@ -1375,7 +1375,7 @@ dependencies = [
     { name = "ommx" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "mip" },
 ]
@@ -1383,9 +1383,11 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "mip", specifier = ">=1.15.0,<2.0.0" },
-    { name = "mip", marker = "extra == 'dev'", git = "https://github.com/coin-or/python-mip.git" },
     { name = "ommx", editable = "python/ommx" },
 ]
+
+[package.metadata.requires-dev]
+dev = [{ name = "mip", git = "https://github.com/coin-or/python-mip.git" }]
 
 [[package]]
 name = "openjij"

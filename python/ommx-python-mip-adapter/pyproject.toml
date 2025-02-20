@@ -31,5 +31,5 @@ dependencies = ["ommx >= 1.8.4, < 2.0.0", "mip >= 1.15.0, < 2.0.0"]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["mip @ git+https://github.com/coin-or/python-mip.git"]
