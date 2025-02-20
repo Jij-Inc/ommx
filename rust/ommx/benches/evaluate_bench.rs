@@ -7,8 +7,7 @@ use ommx::{
 
 fn bench_linear(c: &mut Criterion) {
     let mut sum_partial = c.benchmark_group("sum-partial");
-    for n in 1..=10 {
-        let n = n * 10;
+    for n in (1..=5).map(|n| n * 2000) {
         sum_partial.bench_with_input(
             BenchmarkId::new("sum-partial", format!("{n:03}")),
             &n,
@@ -25,8 +24,7 @@ fn bench_linear(c: &mut Criterion) {
     sum_partial.finish();
 
     let mut sum_total = c.benchmark_group("sum-total");
-    for n in 1..=10 {
-        let n = n * 10;
+    for n in (1..=5).map(|n| n * 2000) {
         sum_total.bench_with_input(
             BenchmarkId::new("sum-total", format!("{n:03}")),
             &n,
