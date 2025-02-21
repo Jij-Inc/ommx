@@ -1,4 +1,4 @@
-//! Random generation and [`proptest`] support for OMMX Message structs
+//! Random generation and [`mod@proptest`] support for OMMX Message structs
 //!
 //! Random Generation
 //! -----------------
@@ -21,6 +21,14 @@
 //! ```
 //!
 //! [`InstanceParameters`] and [`LinearParameters`] are used to specify the size of the generated components.
+//!
+//! Proptest Support
+//! ----------------
+//!
+//! This modules implements [`Arbitrary`] trait for the most of structs in [`crate::v1`] module.
+//! In addition, there are several helper functions, e.g. [`arbitrary_coefficient`] or [`arbitrary_decision_variables`],
+//! for property-based testing by the users of this crate.
+//! See [proptest book](https://proptest-rs.github.io/proptest/intro.html) for the details.
 //!
 
 use proptest::{
