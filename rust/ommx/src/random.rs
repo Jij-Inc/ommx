@@ -7,11 +7,13 @@ use proptest::{
 };
 
 mod decision_variable;
+mod function;
 mod linear;
 mod polynomial;
 mod quadratic;
 
 pub use decision_variable::*;
+pub use function::*;
 pub use linear::*;
 pub use polynomial::*;
 pub use quadratic::*;

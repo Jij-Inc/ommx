@@ -1,6 +1,6 @@
 use super::{constraint::arbitrary_constraints, parameter::arbitrary_parameters};
 use crate::{
-    random::arbitrary_decision_variables,
+    random::{arbitrary_decision_variables, FunctionParameters},
     v1::{
         decision_variable::Kind,
         instance::{Description, Sense},
@@ -171,8 +171,19 @@ impl Arbitrary for ParametricInstance {
         (num_constraints, num_terms, max_degree, max_id): Self::Parameters,
     ) -> Self::Strategy {
         (
-            proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
-            arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+            proptest::option::of(Function::arbitrary_with(FunctionParameters {
+                num_terms,
+                max_degree,
+                max_id,
+            })),
+            arbitrary_constraints(
+                num_constraints,
+                FunctionParameters {
+                    num_terms,
+                    max_degree,
+                    max_id,
+                },
+            ),
         )
             .prop_flat_map(|(objective, constraints)| {
                 let mut used_ids = objective

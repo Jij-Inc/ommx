@@ -1,5 +1,8 @@
-use crate::v1::{
-    Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
+use crate::{
+    random::FunctionParameters,
+    v1::{
+        Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
+    },
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -112,8 +115,19 @@ impl Arbitrary for Constraint {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
+        let FunctionParameters {
+            num_terms,
+            max_degree,
+            max_id,
+        } = FunctionParameters::default();
+        (0..=num_terms, 0..=max_degree, 0..=max_id)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                Self::arbitrary_with(FunctionParameters {
+                    num_terms,
+                    max_degree,
+                    max_id,
+                })
+            })
             .boxed()
     }
 }
@@ -161,8 +175,19 @@ impl Arbitrary for RemovedConstraint {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
+        let FunctionParameters {
+            num_terms,
+            max_degree,
+            max_id,
+        } = FunctionParameters::default();
+        (0..=num_terms, 0..=max_degree, 0..=max_id)
+            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+                Self::arbitrary_with(FunctionParameters {
+                    num_terms,
+                    max_degree,
+                    max_id,
+                })
+            })
             .boxed()
     }
 }

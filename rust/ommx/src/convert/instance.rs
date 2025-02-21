@@ -1,5 +1,5 @@
 use crate::{
-    random::arbitrary_decision_variables,
+    random::{arbitrary_decision_variables, FunctionParameters},
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind,
@@ -351,8 +351,19 @@ fn arbitrary_instance(
     kind_strategy: impl Strategy<Value = Kind> + 'static + Clone,
 ) -> BoxedStrategy<Instance> {
     (
-        proptest::option::of(Function::arbitrary_with((num_terms, max_degree, max_id))),
-        arbitrary_constraints(num_constraints, (num_terms, max_degree, max_id)),
+        proptest::option::of(Function::arbitrary_with(FunctionParameters {
+            num_terms,
+            max_degree,
+            max_id,
+        })),
+        arbitrary_constraints(
+            num_constraints,
+            FunctionParameters {
+                num_terms,
+                max_degree,
+                max_id,
+            },
+        ),
     )
         .prop_flat_map(move |(objective, constraints)| {
             let mut used_ids = objective

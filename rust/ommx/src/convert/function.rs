@@ -1,5 +1,4 @@
 use crate::{
-    random::{arbitrary_coefficient, LinearParameters, PolynomialParameters, QuadraticParameters},
     sorted_ids::SortedIds,
     v1::{
         function::{self, Function as FunctionEnum},
@@ -9,7 +8,6 @@ use crate::{
 use anyhow::Result;
 use approx::AbsDiffEq;
 use num::Zero;
-use proptest::prelude::*;
 use std::{
     collections::{BTreeSet, HashMap},
     fmt,
@@ -305,42 +303,6 @@ impl Product for Function {
     }
 }
 
-impl Arbitrary for Function {
-    type Parameters = (usize, u32, u64);
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
-        let linear = if max_degree >= 1 {
-            Linear::arbitrary_with(LinearParameters { num_terms, max_id })
-        } else {
-            arbitrary_coefficient().prop_map(Linear::from).boxed()
-        };
-        let quad = if max_degree >= 2 {
-            Quadratic::arbitrary_with(QuadraticParameters { num_terms, max_id })
-        } else {
-            linear.clone().prop_map(Quadratic::from).boxed()
-        };
-        prop_oneof![
-            arbitrary_coefficient().prop_map(Function::from),
-            linear.prop_map(Function::from),
-            quad.prop_map(Function::from),
-            Polynomial::arbitrary_with(PolynomialParameters {
-                num_terms,
-                max_degree,
-                max_id
-            })
-            .prop_map(Function::from),
-        ]
-        .boxed()
-    }
-
-    fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
-    }
-}
-
 impl AbsDiffEq for Function {
     type Epsilon = f64;
 
@@ -412,36 +374,38 @@ impl fmt::Display for Function {
 
 #[cfg(test)]
 mod tests {
+    use crate::random::FunctionParameters;
+
     use super::*;
 
     test_algebraic!(Function);
 
     proptest! {
         #[test]
-        fn test_as_linear_roundtrip(f in Function::arbitrary_with((5, 1, 10))) {
+        fn test_as_linear_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = f.clone().as_linear().unwrap();
             // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
             prop_assert!(f.abs_diff_eq(&Function::from(linear), 1e-10));
         }
 
         #[test]
-        fn test_as_constant_roundtrip(f in Function::arbitrary_with((5, 0, 10))) {
+        fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 0,  max_id: 10})) {
             let c = f.clone().as_constant().unwrap();
             prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
         }
 
         #[test]
-        fn test_max_degree_0(f in Function::arbitrary_with((5, 0, 10))) {
+        fn test_max_degree_0(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 0, max_id: 10})) {
             prop_assert!(f.degree() == 0);
         }
 
         #[test]
-        fn test_max_degree_1(f in Function::arbitrary_with((5, 1, 10))) {
+        fn test_max_degree_1(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             prop_assert!(f.degree() <= 1);
         }
 
         #[test]
-        fn test_max_degree_2(f in Function::arbitrary_with((5, 2, 10))) {
+        fn test_max_degree_2(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 2, max_id: 10})) {
             prop_assert!(f.degree() <= 2);
         }
 
