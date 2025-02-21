@@ -12,6 +12,7 @@ mod function;
 mod instance;
 mod linear;
 mod parameter;
+mod parametric_instance;
 mod polynomial;
 mod quadratic;
 mod state;
@@ -21,6 +22,7 @@ pub use decision_variable::*;
 pub use function::*;
 pub use linear::*;
 pub use parameter::*;
+pub use parametric_instance::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
