@@ -52,16 +52,15 @@
 //!
 //! ### Examples
 //!
-//! - Create an artifact as a file with an instance created by [`random::random_lp`]
+//! - Create an artifact as a file with an instance created by [`random_deterministic`] function
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_lp};
-//!   use rand::SeedableRng;
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random_deterministic};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
-//!   let lp = random_lp(&mut rand::thread_rng(), 5, 7);
+//!   let lp = random_deterministic((7, 5, 1, 5));
 //!
 //!   // Builder for creating an artifact as a file (e.g. `random_lp_instance.ommx`)
 //!   let mut builder = Builder::new_archive_unnamed("random_lp_instance.ommx".into())?;
@@ -81,12 +80,12 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_lp};
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random_deterministic};
 //!   use rand::SeedableRng;
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
-//!   let lp = random_lp(&mut rand::thread_rng(), 5, 7);
+//!   let lp = random_deterministic((7, 5, 1, 5));
 //!
 //!   // Builder for creating an artifact in local registry
 //!   let mut builder = Builder::new(
@@ -141,13 +140,14 @@ pub mod artifact;
 pub mod dataset;
 pub mod mps;
 pub mod qplib;
-pub mod random;
 
 // Internal modules
 mod convert;
 mod evaluate;
+mod random;
 
 pub use evaluate::Evaluate;
+pub use random::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
