@@ -1,5 +1,5 @@
 use crate::{
-    random::{arbitrary_coefficient, LinearParameters, QuadraticParameters},
+    random::{arbitrary_coefficient, LinearParameters, PolynomialParameters, QuadraticParameters},
     sorted_ids::SortedIds,
     v1::{
         function::{self, Function as FunctionEnum},
@@ -324,7 +324,12 @@ impl Arbitrary for Function {
             arbitrary_coefficient().prop_map(Function::from),
             linear.prop_map(Function::from),
             quad.prop_map(Function::from),
-            Polynomial::arbitrary_with((num_terms, max_degree, max_id)).prop_map(Function::from),
+            Polynomial::arbitrary_with(PolynomialParameters {
+                num_terms,
+                max_degree,
+                max_id
+            })
+            .prop_map(Function::from),
         ]
         .boxed()
     }
