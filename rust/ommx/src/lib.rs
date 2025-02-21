@@ -56,11 +56,11 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_deterministic};
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::{random_deterministic, InstanceParameters}};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
-//!   let lp = random_deterministic((7, 5, 1, 5));
+//!   let lp = random_deterministic(InstanceParameters{ num_constraints: 7, num_terms: 5, max_degree: 1, max_id: 10 });
 //!
 //!   // Builder for creating an artifact as a file (e.g. `random_lp_instance.ommx`)
 //!   let mut builder = Builder::new_archive_unnamed("random_lp_instance.ommx".into())?;
@@ -80,11 +80,11 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_deterministic};
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::{random_deterministic, InstanceParameters}};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
-//!   let lp = random_deterministic((7, 5, 1, 5));
+//!   let lp = random_deterministic(InstanceParameters{ num_constraints: 7, num_terms: 5, max_degree: 1, max_id: 10 });
 //!
 //!   // Builder for creating an artifact in local registry
 //!   let mut builder = Builder::new(

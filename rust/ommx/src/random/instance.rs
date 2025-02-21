@@ -9,9 +9,24 @@ use crate::{
 use proptest::prelude::*;
 
 impl Instance {
+    /// Arbitrary LP problem, i.e. linear objective and constraints with continuous decision variables.
     pub fn arbitrary_lp() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..10_usize, 0..=1_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
+        let InstanceParameters {
+            num_constraints,
+            num_terms,
+            max_id,
+            ..
+        } = Default::default();
+        (0..=num_constraints, 0..num_terms, 0..=max_id)
+            .prop_flat_map(|(num_constraints, num_terms, max_id)| {
+                arbitrary_instance(
+                    num_constraints,
+                    num_terms,
+                    1,
+                    max_id,
+                    Just(Kind::Continuous),
+                )
+            })
             .boxed()
     }
 
@@ -46,12 +61,36 @@ impl Instance {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct InstanceParameters {
+    pub num_constraints: usize,
+    pub num_terms: usize,
+    pub max_degree: u32,
+    pub max_id: u64,
+}
+
+impl Default for InstanceParameters {
+    fn default() -> Self {
+        Self {
+            num_constraints: 5,
+            num_terms: 5,
+            max_degree: 3,
+            max_id: 10,
+        }
+    }
+}
+
 impl Arbitrary for Instance {
-    type Parameters = (usize, usize, u32, u64);
+    type Parameters = InstanceParameters;
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(
-        (num_constraints, num_terms, max_degree, max_id): Self::Parameters,
+        InstanceParameters {
+            num_constraints,
+            num_terms,
+            max_degree,
+            max_id,
+        }: Self::Parameters,
     ) -> Self::Strategy {
         arbitrary_instance(
             num_constraints,
@@ -63,8 +102,27 @@ impl Arbitrary for Instance {
     }
 
     fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..10_usize, 0..4_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
+        let InstanceParameters {
+            num_constraints,
+            num_terms,
+            max_degree,
+            max_id,
+        } = Default::default();
+        (
+            0..=num_constraints,
+            0..=num_terms,
+            0..=max_degree,
+            0..=max_id,
+        )
+            .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
+                arbitrary_instance(
+                    num_constraints,
+                    num_terms,
+                    max_degree,
+                    max_id,
+                    Kind::arbitrary(),
+                )
+            })
             .boxed()
     }
 }

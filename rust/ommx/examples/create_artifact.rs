@@ -3,8 +3,7 @@ use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
     artifact::{Builder, InstanceAnnotations},
-    random::random_deterministic,
-    v1::Instance,
+    random::{random_deterministic, InstanceParameters},
 };
 use std::path::Path;
 use url::Url;
@@ -19,7 +18,12 @@ fn main() -> Result<()> {
         .parse_default_env()
         .init();
 
-    let lp: Instance = random_deterministic((7, 5, 1, 5));
+    let lp = random_deterministic(InstanceParameters {
+        num_constraints: 7,
+        num_terms: 5,
+        max_degree: 1,
+        max_id: 10,
+    });
 
     // "data" directory is at the root of the repository
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
