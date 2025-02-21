@@ -1,7 +1,10 @@
-use crate::v1::{
-    decision_variable::Kind,
-    instance::{Description, Sense},
-    Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+use crate::{
+    random::arbitrary_decision_variables,
+    v1::{
+        decision_variable::Kind,
+        instance::{Description, Sense},
+        Equality, Function, Instance, Parameter, ParametricInstance, RemovedConstraint,
+    },
 };
 use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
@@ -15,7 +18,6 @@ use std::{
 
 use super::{
     constraint::arbitrary_constraints,
-    decision_variable::arbitrary_decision_variables,
     sorted_ids::{BinaryIdPair, BinaryIds},
 };
 

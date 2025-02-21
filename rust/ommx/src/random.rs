@@ -6,9 +6,11 @@ use proptest::{
     test_runner::TestRunner,
 };
 
+mod decision_variable;
 mod linear;
 mod quadratic;
 
+pub use decision_variable::*;
 pub use linear::*;
 pub use quadratic::*;
 
