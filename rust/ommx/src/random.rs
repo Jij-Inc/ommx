@@ -1,57 +1,85 @@
-//! Randomly generate OMMX components for benchmarking and testing
+//! Random generation and [`mod@proptest`] support for OMMX Message structs
+//!
+//! Random Generation
+//! -----------------
+//! The messages like [`crate::v1::Instance`] and [`crate::v1::Linear`] can be generated randomly via [`Arbitrary`] trait
+//! using [`random`] and [`random_deterministic`] functions.
+//!
+//! ```rust
+//! use ommx::{v1, random::*};
+//!
+//! // Linear function with random coefficients
+//! let linear: v1::Linear = random_deterministic(LinearParameters { num_terms: 5, max_id: 10 });
+//!
+//! // LP instance
+//! let instance: v1::Instance = random_deterministic(InstanceParameters {
+//!   num_constraints: 7,
+//!   num_terms: 5,
+//!   max_degree: 1,
+//!   max_id: 10
+//! });
+//! ```
+//!
+//! [`InstanceParameters`] and [`LinearParameters`] are used to specify the size of the generated components.
+//!
+//! Proptest Support
+//! ----------------
+//!
+//! This modules implements [`Arbitrary`] trait for the most of structs in [`crate::v1`] module.
+//! In addition, there are several helper functions, e.g. [`arbitrary_coefficient`] or [`arbitrary_decision_variables`],
+//! for property-based testing by the users of this crate.
+//! See [proptest book](https://proptest-rs.github.io/proptest/intro.html) for the details.
+//!
 
-use crate::v1::{
-    self, decision_variable::Kind, linear::Term, Bound, Constraint, DecisionVariable, Equality,
+use proptest::{
+    prelude::*,
+    strategy::{Strategy, ValueTree},
+    test_runner::TestRunner,
 };
-use rand::Rng;
 
-/// Create a random linear programming (LP) instance in a form of `min c^T x` subject to `Ax = b` and `x >= 0` with continuous variables `x`.
-pub fn random_lp(rng: &mut impl Rng, num_variables: usize, num_constraints: usize) -> v1::Instance {
-    let decision_variables = (0..num_variables)
-        .map(|i| DecisionVariable {
-            id: i as u64,
-            kind: Kind::Continuous as i32,
-            name: Some("x".into()),
-            subscripts: vec![i as i64],
-            bound: Some(Bound {
-                lower: 0.0,
-                upper: f64::INFINITY,
-            }),
-            ..Default::default()
-        })
-        .collect();
-    let mut instance = v1::Instance {
-        sense: v1::instance::Sense::Minimize as i32,
-        decision_variables,
-        ..Default::default()
-    };
-    for constraint_id in 0..num_constraints {
-        let mut linear = v1::Linear::default();
-        for id in 0..num_variables {
-            // A
-            linear.terms.push(Term {
-                id: id as u64,
-                coefficient: rng.gen_range(-1.0..1.0),
-            });
-            // -b
-            linear.constant = rng.gen_range(-1.0..1.0);
-        }
-        instance.constraints.push(Constraint {
-            id: constraint_id as u64,
-            equality: Equality::EqualToZero as i32,
-            function: Some(linear.into()),
-            ..Default::default()
-        });
-    }
-    let mut objective = v1::Linear::default();
-    for id in 0..num_variables {
-        // c
-        objective.terms.push(Term {
-            id: id as u64,
-            coefficient: rng.gen_range(-1.0..1.0),
-        });
-    }
-    instance.objective = Some(objective.into());
+mod constraint;
+mod decision_variable;
+mod function;
+mod instance;
+mod linear;
+mod parameter;
+mod parametric_instance;
+mod polynomial;
+mod quadratic;
+mod state;
 
-    instance
+pub use constraint::*;
+pub use decision_variable::*;
+pub use function::*;
+pub use instance::*;
+pub use linear::*;
+pub use parameter::*;
+pub use parametric_instance::*;
+pub use polynomial::*;
+pub use quadratic::*;
+
+/// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
+pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
+    let strategy = T::arbitrary_with(parameters);
+    let config = proptest::test_runner::Config::default();
+    let mut runner = proptest::test_runner::TestRunner::new_with_rng(config, rng);
+    let tree = strategy
+        .new_tree(&mut runner)
+        .expect("Failed to create a new tree");
+    tree.current()
+}
+
+/// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`] in a deterministic way.
+pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
+    let strategy = T::arbitrary_with(parameters);
+    let mut runner = TestRunner::deterministic();
+    let tree = strategy
+        .new_tree(&mut runner)
+        .expect("Failed to create a new tree");
+    tree.current()
+}
+
+/// Strategy for generating arbitrary coefficients.
+pub fn arbitrary_coefficient() -> BoxedStrategy<f64> {
+    prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -1.0..1.0].boxed()
 }
