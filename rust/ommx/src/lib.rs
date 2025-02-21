@@ -56,7 +56,7 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random_deterministic};
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_deterministic};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
@@ -80,7 +80,7 @@
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
-//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random_deterministic};
+//!   use ommx::{artifact::{Builder, InstanceAnnotations}, random::random_deterministic};
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact

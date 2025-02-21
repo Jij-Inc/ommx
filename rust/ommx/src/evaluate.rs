@@ -534,6 +534,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random::*;
     use approx::*;
     use maplit::*;
     use proptest::prelude::*;
