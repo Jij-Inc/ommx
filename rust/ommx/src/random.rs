@@ -9,6 +9,7 @@ use proptest::{
 mod constraint;
 mod decision_variable;
 mod function;
+mod instance;
 mod linear;
 mod parameter;
 mod polynomial;
