@@ -1,5 +1,5 @@
 use crate::{
-    random::{arbitrary_coefficient, LinearParameters},
+    random::{arbitrary_coefficient, LinearParameters, QuadraticParameters},
     v1::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
@@ -317,7 +317,7 @@ impl Arbitrary for Function {
             arbitrary_coefficient().prop_map(Linear::from).boxed()
         };
         let quad = if max_degree >= 2 {
-            Quadratic::arbitrary_with((num_terms, max_id))
+            Quadratic::arbitrary_with(QuadraticParameters { num_terms, max_id })
         } else {
             linear.clone().prop_map(Quadratic::from).boxed()
         };

@@ -1,10 +1,6 @@
-use crate::{
-    random::{arbitrary_coefficient, LinearParameters},
-    v1::{Linear, Polynomial, Quadratic},
-};
+use crate::v1::{Linear, Polynomial, Quadratic};
 use approx::AbsDiffEq;
 use num::Zero;
-use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -250,32 +246,6 @@ impl Mul<f64> for Quadratic {
 
 impl_mul_inverse!(f64, Quadratic);
 impl_neg_by_mul!(Quadratic);
-
-impl Arbitrary for Quadratic {
-    type Parameters = (usize /* num_terms */, u64 /* max id */);
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
-        let terms = proptest::collection::vec(
-            ((0..=max_id, 0..=max_id), arbitrary_coefficient()),
-            num_terms,
-        );
-        let linear = Linear::arbitrary_with(LinearParameters { num_terms, max_id });
-        (terms, linear)
-            .prop_map(|(terms, linear)| {
-                let mut quad: Quadratic = terms.into_iter().collect();
-                quad.linear = Some(linear);
-                quad
-            })
-            .boxed()
-    }
-
-    fn arbitrary() -> Self::Strategy {
-        (0..5_usize, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
-    }
-}
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Quadratic {
