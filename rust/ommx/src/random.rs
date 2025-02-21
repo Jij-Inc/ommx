@@ -13,6 +13,7 @@ mod linear;
 mod parameter;
 mod polynomial;
 mod quadratic;
+mod state;
 
 pub use constraint::*;
 pub use decision_variable::*;
