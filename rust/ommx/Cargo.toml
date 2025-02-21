@@ -7,11 +7,11 @@ edition.workspace = true
 license.workspace = true
 
 # crate-specific settings for publishing
-description   = "Open Mathematical prograMming eXchange (OMMX)"
+description = "Open Mathematical prograMming eXchange (OMMX)"
 documentation = "https://docs.rs/ommx/"
-repository    = "https://github.com/Jij-Inc/ommx"
-keywords      = ["optimization", "ommx"]
-categories    = ["data-structures", "mathematics", "science"]
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx"]
+categories = ["data-structures", "mathematics", "science"]
 
 [dependencies]
 anyhow.workspace = true
@@ -33,8 +33,6 @@ ocipkg.workspace = true
 ordered-float = "4.6.0"
 proptest.workspace = true
 prost.workspace = true
-rand.workspace = true
-rand_xoshiro.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
