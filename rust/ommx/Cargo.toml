@@ -13,7 +13,6 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
-
 [dependencies]
 anyhow.workspace = true
 approx.workspace = true
@@ -34,8 +33,6 @@ ocipkg.workspace = true
 ordered-float = "4.6.0"
 proptest.workspace = true
 prost.workspace = true
-rand.workspace = true
-rand_xoshiro.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

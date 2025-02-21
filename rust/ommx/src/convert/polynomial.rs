@@ -1,14 +1,16 @@
-use crate::v1::{Linear, Monomial, Polynomial, Quadratic};
+use crate::{
+    sorted_ids::SortedIds,
+    v1::{Linear, Monomial, Polynomial, Quadratic},
+};
 use approx::AbsDiffEq;
 use num::Zero;
-use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     ops::{Add, Mul},
 };
 
-use super::{arbitrary_coefficient, format::format_polynomial, sorted_ids::SortedIds};
+use super::format::format_polynomial;
 
 impl Zero for Polynomial {
     fn zero() -> Self {
@@ -205,28 +207,6 @@ impl_mul_inverse!(Linear, Polynomial);
 impl_mul_inverse!(Quadratic, Polynomial);
 impl_neg_by_mul!(Polynomial);
 
-impl Arbitrary for Polynomial {
-    type Parameters = (usize, u32, u64);
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
-        let terms = proptest::collection::vec(
-            (
-                SortedIds::arbitrary_with((max_degree, max_id)),
-                arbitrary_coefficient(),
-            ),
-            num_terms,
-        );
-        terms.prop_map(|terms| terms.into_iter().collect()).boxed()
-    }
-
-    fn arbitrary() -> Self::Strategy {
-        (0..10_usize, 0..5_u32, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
-    }
-}
-
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Polynomial {
     type Epsilon = f64;
@@ -257,6 +237,8 @@ impl fmt::Display for Polynomial {
 
 #[cfg(test)]
 mod tests {
+    use crate::random::PolynomialParameters;
+
     test_algebraic!(super::Polynomial);
 
     #[test]
@@ -271,13 +253,13 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_as_linear(p in super::Polynomial::arbitrary_with((5, 1, 10))) {
+        fn test_as_linear(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = p.clone().as_linear().unwrap();
             prop_assert_eq!(p, super::Polynomial::from(linear));
         }
 
         #[test]
-        fn test_as_constant(p in super::Polynomial::arbitrary_with((5, 0, 10))) {
+        fn test_as_constant(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 5, max_degree: 0, max_id: 10})) {
             let c = p.clone().as_constant().unwrap();
             prop_assert_eq!(p, super::Polynomial::from(c));
         }
