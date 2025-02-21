@@ -10,6 +10,7 @@ mod constraint;
 mod decision_variable;
 mod function;
 mod linear;
+mod parameter;
 mod polynomial;
 mod quadratic;
 
@@ -17,6 +18,7 @@ pub use constraint::*;
 pub use decision_variable::*;
 pub use function::*;
 pub use linear::*;
+pub use parameter::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
