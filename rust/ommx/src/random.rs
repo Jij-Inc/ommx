@@ -9,10 +9,10 @@
 //! use ommx::{v1, random::*};
 //!
 //! // Linear function with random coefficients
-//! let linear = random_deterministic(LinearParameters { num_terms: 5, max_id: 10 });
+//! let linear: v1::Linear = random_deterministic(LinearParameters { num_terms: 5, max_id: 10 });
 //!
 //! // LP instance
-//! let instance = random_deterministic(InstanceParameters {
+//! let instance: v1::Instance = random_deterministic(InstanceParameters {
 //!   num_constraints: 7,
 //!   num_terms: 5,
 //!   max_degree: 1,
