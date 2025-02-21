@@ -52,7 +52,7 @@
 //!
 //! ### Examples
 //!
-//! - Create an artifact as a file with an instance created by [`random_deterministic`] function
+//! - Create an artifact as a file with an instance created by [`random::random_deterministic`] function
 //!
 //!   ```no_run
 //!   use ocipkg::ImageName;
