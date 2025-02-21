@@ -1,6 +1,6 @@
-use super::{constraint::arbitrary_constraints, parameter::arbitrary_parameters};
+use super::parameter::arbitrary_parameters;
 use crate::{
-    random::{arbitrary_decision_variables, FunctionParameters},
+    random::{arbitrary_constraints, arbitrary_decision_variables, FunctionParameters},
     v1::{
         decision_variable::Kind,
         instance::{Description, Sense},

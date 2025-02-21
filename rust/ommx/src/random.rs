@@ -6,12 +6,14 @@ use proptest::{
     test_runner::TestRunner,
 };
 
+mod constraint;
 mod decision_variable;
 mod function;
 mod linear;
 mod polynomial;
 mod quadratic;
 
+pub use constraint::*;
 pub use decision_variable::*;
 pub use function::*;
 pub use linear::*;
