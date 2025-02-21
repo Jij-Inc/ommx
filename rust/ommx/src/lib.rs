@@ -81,7 +81,6 @@
 //!   ```no_run
 //!   use ocipkg::ImageName;
 //!   use ommx::{artifact::{Builder, InstanceAnnotations}, random_deterministic};
-//!   use rand::SeedableRng;
 //!
 //!   # fn main() -> anyhow::Result<()> {
 //!   // Create random LP instance to be saved into an artifact
