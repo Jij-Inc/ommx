@@ -1,6 +1,9 @@
-use crate::v1::{
-    function::{self, Function as FunctionEnum},
-    Function, Linear, Polynomial, Quadratic,
+use crate::{
+    random::{arbitrary_coefficient, LinearParameters},
+    v1::{
+        function::{self, Function as FunctionEnum},
+        Function, Linear, Polynomial, Quadratic,
+    },
 };
 use anyhow::Result;
 use approx::AbsDiffEq;
@@ -309,11 +312,9 @@ impl Arbitrary for Function {
 
     fn arbitrary_with((num_terms, max_degree, max_id): Self::Parameters) -> Self::Strategy {
         let linear = if max_degree >= 1 {
-            Linear::arbitrary_with((num_terms, max_id))
+            Linear::arbitrary_with(LinearParameters { num_terms, max_id })
         } else {
-            super::arbitrary_coefficient()
-                .prop_map(Linear::from)
-                .boxed()
+            arbitrary_coefficient().prop_map(Linear::from).boxed()
         };
         let quad = if max_degree >= 2 {
             Quadratic::arbitrary_with((num_terms, max_id))
@@ -321,7 +322,7 @@ impl Arbitrary for Function {
             linear.clone().prop_map(Quadratic::from).boxed()
         };
         prop_oneof![
-            super::arbitrary_coefficient().prop_map(Function::from),
+            arbitrary_coefficient().prop_map(Function::from),
             linear.prop_map(Function::from),
             quad.prop_map(Function::from),
             Polynomial::arbitrary_with((num_terms, max_degree, max_id)).prop_map(Function::from),

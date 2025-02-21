@@ -3,7 +3,7 @@ use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
     artifact::{Builder, InstanceAnnotations},
-    random_deterministic,
+    random::random_deterministic,
     v1::Instance,
 };
 use std::path::Path;

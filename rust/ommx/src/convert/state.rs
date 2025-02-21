@@ -1,4 +1,4 @@
-use crate::v1::State;
+use crate::{random::arbitrary_coefficient, v1::State};
 use proptest::prelude::*;
 use std::collections::HashMap;
 
@@ -30,7 +30,7 @@ impl Arbitrary for State {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with((size, max_id): Self::Parameters) -> Self::Strategy {
-        proptest::collection::hash_map(0..=max_id, super::arbitrary_coefficient(), 0..=size)
+        proptest::collection::hash_map(0..=max_id, arbitrary_coefficient(), 0..=size)
             .prop_map(Self::from)
             .boxed()
     }

@@ -139,14 +139,13 @@ pub mod artifact;
 pub mod dataset;
 pub mod mps;
 pub mod qplib;
+pub mod random;
 
 // Internal modules
 mod convert;
 mod evaluate;
-mod random;
 
 pub use evaluate::Evaluate;
-pub use random::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {

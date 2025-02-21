@@ -1,10 +1,13 @@
 //! Randomly generate OMMX components for benchmarking and testing
 
 use proptest::{
-    arbitrary::Arbitrary,
+    prelude::*,
     strategy::{Strategy, ValueTree},
     test_runner::TestRunner,
 };
+
+mod linear;
+pub use linear::*;
 
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
 pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
@@ -25,4 +28,8 @@ pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
         .new_tree(&mut runner)
         .expect("Failed to create a new tree");
     tree.current()
+}
+
+pub fn arbitrary_coefficient() -> BoxedStrategy<f64> {
+    prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -1.0..1.0].boxed()
 }

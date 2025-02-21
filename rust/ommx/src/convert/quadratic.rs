@@ -1,4 +1,7 @@
-use crate::v1::{Linear, Polynomial, Quadratic};
+use crate::{
+    random::{arbitrary_coefficient, LinearParameters},
+    v1::{Linear, Polynomial, Quadratic},
+};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
@@ -8,7 +11,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::{arbitrary_coefficient, format::format_polynomial, sorted_ids::SortedIds};
+use super::{format::format_polynomial, sorted_ids::SortedIds};
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -257,7 +260,7 @@ impl Arbitrary for Quadratic {
             ((0..=max_id, 0..=max_id), arbitrary_coefficient()),
             num_terms,
         );
-        let linear = Linear::arbitrary_with((num_terms, max_id));
+        let linear = Linear::arbitrary_with(LinearParameters { num_terms, max_id });
         (terms, linear)
             .prop_map(|(terms, linear)| {
                 let mut quad: Quadratic = terms.into_iter().collect();

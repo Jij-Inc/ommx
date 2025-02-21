@@ -582,7 +582,7 @@ mod tests {
 
     fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
         (
-            proptest::collection::vec(crate::convert::arbitrary_coefficient(), ids.len()),
+            proptest::collection::vec(arbitrary_coefficient(), ids.len()),
             Just(ids),
         )
             .prop_map(|(coefficients, ids)| {

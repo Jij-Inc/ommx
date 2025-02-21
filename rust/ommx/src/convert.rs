@@ -162,9 +162,3 @@ mod sample_set;
 mod solution;
 mod sorted_ids;
 mod state;
-
-use proptest::prelude::*;
-
-pub(crate) fn arbitrary_coefficient() -> BoxedStrategy<f64> {
-    prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -1.0..1.0].boxed()
-}

@@ -1,4 +1,7 @@
-use crate::v1::{Linear, Monomial, Polynomial, Quadratic};
+use crate::{
+    random::arbitrary_coefficient,
+    v1::{Linear, Monomial, Polynomial, Quadratic},
+};
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
@@ -8,7 +11,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::{arbitrary_coefficient, format::format_polynomial, sorted_ids::SortedIds};
+use super::{format::format_polynomial, sorted_ids::SortedIds};
 
 impl Zero for Polynomial {
     fn zero() -> Self {
