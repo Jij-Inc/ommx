@@ -1,5 +1,6 @@
 use crate::{
     random::{arbitrary_coefficient, LinearParameters, QuadraticParameters},
+    sorted_ids::SortedIds,
     v1::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
@@ -15,8 +16,6 @@ use std::{
     iter::*,
     ops::*,
 };
-
-use super::sorted_ids::SortedIds;
 
 impl Zero for Function {
     fn zero() -> Self {

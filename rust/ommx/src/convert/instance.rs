@@ -1,5 +1,6 @@
 use crate::{
     random::arbitrary_decision_variables,
+    sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind,
         instance::{Description, Sense},
@@ -16,10 +17,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
 };
 
-use super::{
-    constraint::arbitrary_constraints,
-    sorted_ids::{BinaryIdPair, BinaryIds},
-};
+use super::constraint::arbitrary_constraints;
 
 impl Instance {
     pub fn objective(&self) -> Cow<Function> {

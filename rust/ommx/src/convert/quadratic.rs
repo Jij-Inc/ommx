@@ -1,4 +1,7 @@
-use crate::v1::{Linear, Polynomial, Quadratic};
+use crate::{
+    sorted_ids::SortedIds,
+    v1::{Linear, Polynomial, Quadratic},
+};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -7,7 +10,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::{format::format_polynomial, sorted_ids::SortedIds};
+use super::format::format_polynomial;
 
 impl Zero for Quadratic {
     fn zero() -> Self {

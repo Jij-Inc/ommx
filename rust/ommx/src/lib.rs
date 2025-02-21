@@ -144,6 +144,7 @@ pub mod random;
 // Internal modules
 mod convert;
 mod evaluate;
+mod sorted_ids;
 
 pub use evaluate::Evaluate;
 

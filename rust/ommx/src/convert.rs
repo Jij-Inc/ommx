@@ -160,5 +160,4 @@ mod polynomial;
 mod quadratic;
 mod sample_set;
 mod solution;
-mod sorted_ids;
 mod state;
