@@ -27,16 +27,17 @@ impl Arbitrary for Quadratic {
         (0..=num_terms)
             .prop_flat_map(move |num_quad| {
                 let num_linear = num_terms - num_quad;
-                let terms = proptest::collection::vec(
-                    ((0..=max_id, 0..=max_id), arbitrary_coefficient_nonzero()),
+                let quad = proptest::collection::hash_map(
+                    arbitrary_key(max_id),
+                    arbitrary_coefficient_nonzero(),
                     num_quad,
                 );
                 let linear = Linear::arbitrary_with(LinearParameters {
                     num_terms: num_linear,
                     max_id,
                 });
-                (terms, linear).prop_map(|(terms, linear)| {
-                    let mut quad: Quadratic = terms.into_iter().collect();
+                (quad, linear).prop_map(|(quad, linear)| {
+                    let mut quad: Quadratic = quad.into_iter().collect();
                     quad.linear = Some(linear);
                     quad
                 })
@@ -52,6 +53,11 @@ impl Arbitrary for Quadratic {
             })
             .boxed()
     }
+}
+
+/// Generates a pair of ID `(i, j)` where `i <= j <= max_id`.
+fn arbitrary_key(max_id: u64) -> impl Strategy<Value = (u64, u64)> {
+    (0..=max_id).prop_flat_map(move |id1| (id1..=max_id).prop_map(move |id2| (id1, id2)))
 }
 
 #[cfg(test)]
