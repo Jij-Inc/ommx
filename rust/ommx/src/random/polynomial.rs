@@ -1,6 +1,8 @@
 use crate::{random::arbitrary_coefficient, sorted_ids::SortedIds, v1::Polynomial};
 use proptest::prelude::*;
 
+use super::num_terms_and_max_id;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PolynomialParameters {
     pub num_terms: usize,
@@ -45,8 +47,8 @@ impl Arbitrary for Polynomial {
             max_degree,
             max_id,
         } = Self::Parameters::default();
-        (0..=num_terms, 0..=max_degree, 0..=max_id)
-            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+        (0..=max_degree, num_terms_and_max_id(num_terms, max_id))
+            .prop_flat_map(|(max_degree, (num_terms, max_id))| {
                 Self::arbitrary_with(PolynomialParameters {
                     num_terms,
                     max_degree,

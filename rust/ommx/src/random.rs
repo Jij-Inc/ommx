@@ -89,3 +89,11 @@ pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
         .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
         .boxed()
 }
+
+// Only samples where `num_terms <= max_id + 1`
+fn num_terms_and_max_id(num_terms: usize, max_id: u64) -> impl Strategy<Value = (usize, u64)> {
+    (0..=max_id).prop_flat_map(move |max_id| {
+        let max_num_terms = std::cmp::min(max_id as usize + 1, num_terms);
+        (0..=max_num_terms).prop_map(move |num_terms| (num_terms, max_id))
+    })
+}

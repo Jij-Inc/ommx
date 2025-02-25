@@ -8,6 +8,8 @@ use crate::{
 };
 use proptest::prelude::*;
 
+use super::num_terms_and_max_id;
+
 impl Instance {
     /// Arbitrary LP problem, i.e. linear objective and constraints with continuous decision variables.
     pub fn arbitrary_lp() -> BoxedStrategy<Self> {
@@ -17,8 +19,8 @@ impl Instance {
             max_id,
             ..
         } = Default::default();
-        (0..=num_constraints, 0..num_terms, 0..=max_id)
-            .prop_flat_map(|(num_constraints, num_terms, max_id)| {
+        (0..=num_constraints, num_terms_and_max_id(num_terms, max_id))
+            .prop_flat_map(|(num_constraints, (num_terms, max_id))| {
                 arbitrary_instance(
                     num_constraints,
                     num_terms,
@@ -31,8 +33,8 @@ impl Instance {
     }
 
     pub fn arbitrary_binary() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..10_usize, 0..=4_u32, 0..10_u64)
-            .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
+        (0..10_usize, 0..=4_u32, num_terms_and_max_id(5, 10))
+            .prop_flat_map(|(num_constraints, max_degree, (num_terms, max_id))| {
                 arbitrary_instance(
                     num_constraints,
                     num_terms,
@@ -45,16 +47,16 @@ impl Instance {
     }
 
     pub fn arbitrary_binary_unconstrained() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..=4_u32, 0..10_u64)
-            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+        (0..=4_u32, num_terms_and_max_id(5, 10))
+            .prop_flat_map(|(max_degree, (num_terms, max_id))| {
                 arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
             })
             .boxed()
     }
 
     pub fn arbitrary_quadratic_binary_unconstrained() -> BoxedStrategy<Self> {
-        (0..10_usize, 0..=2_u32, 0..10_u64)
-            .prop_flat_map(|(num_terms, max_degree, max_id)| {
+        (0..=2_u32, num_terms_and_max_id(5, 10))
+            .prop_flat_map(|(max_degree, (num_terms, max_id))| {
                 arbitrary_instance(0, num_terms, max_degree, max_id, Just(Kind::Binary))
             })
             .boxed()
@@ -110,11 +112,10 @@ impl Arbitrary for Instance {
         } = Default::default();
         (
             0..=num_constraints,
-            0..=num_terms,
             0..=max_degree,
-            0..=max_id,
+            num_terms_and_max_id(num_terms, max_id),
         )
-            .prop_flat_map(|(num_constraints, num_terms, max_degree, max_id)| {
+            .prop_flat_map(|(num_constraints, max_degree, (num_terms, max_id))| {
                 arbitrary_instance(
                     num_constraints,
                     num_terms,

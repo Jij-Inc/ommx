@@ -1,4 +1,4 @@
-use super::{arbitrary_coefficient, LinearParameters};
+use super::{arbitrary_coefficient, num_terms_and_max_id, LinearParameters};
 use crate::v1::{Linear, Quadratic};
 use proptest::prelude::*;
 
@@ -40,8 +40,8 @@ impl Arbitrary for Quadratic {
 
     fn arbitrary() -> Self::Strategy {
         let QuadraticParameters { num_terms, max_id } = Self::Parameters::default();
-        (0..=num_terms, 0..=max_id)
-            .prop_flat_map(|(num_terms, max_id)| {
+        num_terms_and_max_id(num_terms, max_id)
+            .prop_flat_map(move |(num_terms, max_id)| {
                 Self::arbitrary_with(QuadraticParameters { num_terms, max_id })
             })
             .boxed()

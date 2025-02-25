@@ -1,7 +1,7 @@
 use crate::v1::Linear;
 use proptest::prelude::*;
 
-use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero};
+use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero, num_terms_and_max_id};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {
@@ -23,10 +23,10 @@ impl Arbitrary for Linear {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(LinearParameters { num_terms, max_id }: Self::Parameters) -> Self::Strategy {
-        // assert!(
-        //     num_terms <= max_id as usize + 1,
-        //     "num_terms({num_terms}) must be less than or equal to max_id({max_id}) + 1 to ensure unique ids"
-        // );
+        assert!(
+            num_terms <= max_id as usize + 1,
+            "num_terms({num_terms}) must be less than or equal to max_id({max_id}) + 1 to ensure unique ids"
+        );
         let ids = Just((0..=max_id).collect::<Vec<_>>()).prop_shuffle();
         let coefficients = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_terms);
         let constant = arbitrary_coefficient();
@@ -42,13 +42,9 @@ impl Arbitrary for Linear {
 
     fn arbitrary() -> Self::Strategy {
         let LinearParameters { num_terms, max_id } = Self::Parameters::default();
-        // Only samples where `num_terms <= max_id + 1`
-        (0..=max_id)
-            .prop_flat_map(move |max_id| {
-                let max_num_terms = std::cmp::min(max_id as usize + 1, num_terms);
-                (0..=max_num_terms).prop_flat_map(move |num_terms| {
-                    Self::arbitrary_with(LinearParameters { num_terms, max_id })
-                })
+        num_terms_and_max_id(num_terms, max_id)
+            .prop_flat_map(move |(num_terms, max_id)| {
+                Self::arbitrary_with(LinearParameters { num_terms, max_id })
             })
             .boxed()
     }
