@@ -6,6 +6,15 @@ use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero, num_terms_and_
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {
+    /// Number of non-zero terms in the linear function including the constant term.
+    ///
+    /// e.g. `x1 + x2 + 1` is 3 terms.
+    ///
+    /// ```rust
+    /// use ommx::{random::{LinearParameters, random_deterministic}, v1::Linear};
+    /// let lin: Linear = random_deterministic(LinearParameters { num_terms: 5, max_id: 10 });
+    /// assert_eq!(lin.into_iter().count(), 5);
+    /// ```
     pub num_terms: usize,
     pub max_id: u64,
 }
