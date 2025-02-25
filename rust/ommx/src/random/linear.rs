@@ -39,3 +39,15 @@ impl Arbitrary for Linear {
             .boxed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_arbitrary_linear(l in Linear::arbitrary_with(LinearParameters { num_terms: 5, max_id: 10 })) {
+            prop_assert!(l.terms.len() == 5);
+        }
+    }
+}
