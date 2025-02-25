@@ -123,7 +123,8 @@ impl<'a> IntoIterator for &'a Linear {
             self.terms
                 .iter()
                 .map(|term| (Some(term.id), term.coefficient))
-                .chain(std::iter::once((None, self.constant))),
+                .chain(std::iter::once((None, self.constant)))
+                .filter(|(_, c)| !c.is_zero()),
         )
     }
 }

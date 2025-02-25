@@ -1,4 +1,5 @@
 use crate::v1::Linear;
+use num::Zero;
 use proptest::prelude::*;
 
 use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero, num_terms_and_max_id};
@@ -27,15 +28,25 @@ impl Arbitrary for Linear {
             num_terms <= max_id as usize + 1,
             "num_terms({num_terms}) must be less than or equal to max_id({max_id}) + 1 to ensure unique ids"
         );
-        let ids = Just((0..=max_id).collect::<Vec<_>>()).prop_shuffle();
-        let coefficients = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_terms);
-        let constant = arbitrary_coefficient();
-        (ids, coefficients, constant)
-            .prop_map(|(ids, coefficients, constant)| {
-                Linear::new(
-                    coefficients.iter().zip(ids.iter()).map(|(&c, &id)| (id, c)),
-                    constant,
-                )
+        if num_terms == 0 {
+            return Just(Linear::zero()).boxed();
+        }
+        arbitrary_coefficient()
+            .prop_flat_map(move |constant| {
+                let num_linear = if constant.abs() > f64::EPSILON {
+                    num_terms - 1
+                } else {
+                    num_terms
+                };
+                let ids = Just((0..=max_id).collect::<Vec<_>>()).prop_shuffle();
+                let coefficients =
+                    proptest::collection::vec(arbitrary_coefficient_nonzero(), num_linear);
+                (ids, coefficients).prop_map(move |(ids, coefficients)| {
+                    Linear::new(
+                        coefficients.iter().zip(ids.iter()).map(|(&c, &id)| (id, c)),
+                        constant,
+                    )
+                })
             })
             .boxed()
     }
@@ -52,18 +63,19 @@ impl Arbitrary for Linear {
 
 #[cfg(test)]
 mod tests {
-    use crate::v1::linear::Term;
-
     use super::*;
 
     proptest! {
         #[test]
         fn test_arbitrary_linear(l in Linear::arbitrary_with(LinearParameters { num_terms: 5, max_id: 10 })) {
-            prop_assert!(l.terms.len() == 5);
-            for Term {id, coefficient} in l.terms {
-                prop_assert!(id <= 10);
-                prop_assert!(coefficient != 0.0);
+            let mut count = 0;
+            for (ids, _) in l.into_iter() {
+                for &id in ids.iter() {
+                    prop_assert!(id <= 10);
+                }
+                count += 1;
             }
+            prop_assert_eq!(count, 5);
         }
     }
 }
