@@ -11,6 +11,9 @@ from .exception import OMMXHighsAdapterError
 
 class OMMXHighsAdapter(SolverAdapter):
     def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
+        """
+        :param verbose: If True, enable HiGHS's console logging
+        """
         self.instance = ommx_instance
         self.model = highspy.Highs()
 
@@ -31,20 +34,92 @@ class OMMXHighsAdapter(SolverAdapter):
         """
         Solve the given ommx.v1.Instance using HiGHS, returning an ommx.v1.Solution.
 
-        Examples:
-            >>> from ommx_highs_adapter import OMMXHighsAdapter
+        :param verbose: If True, enable HiGHS's console logging
+
+        Examples
+        =========
+
+        Knapsack Problem
+
+        .. doctest::
+
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
+            >>> from ommx.v1.solution_pb2 import Optimality
+            >>> from ommx_highs_adapter import OMMXHighsAdapter
+
+            >>> p = [10, 13, 18, 32, 7, 15]
+            >>> w = [11, 15, 20, 35, 10, 33]
+            >>> x = [DecisionVariable.binary(i) for i in range(6)]
             >>> instance = Instance.from_components(
-            ...     decision_variables=[x1],
-            ...     objective=x1,
-            ...     constraints=[],
-            ...     sense=Instance.MINIMIZE
+            ...     decision_variables=x,
+            ...     objective=sum(p[i] * x[i] for i in range(6)),
+            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     sense=Instance.MAXIMIZE,
             ... )
+
+            Solve it
+
             >>> solution = OMMXHighsAdapter.solve(instance)
+
+            Check output
+
+            >>> sorted([(id, value) for id, value in solution.state.entries.items()])
+            [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
+            >>> solution.feasible
+            True
+            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+
+            p[0] + p[3] = 42
+            w[0] + w[3] = 46 <= 47
+
             >>> solution.objective
-            0.0
+            42.0
+            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            -1.0
+
+        Infeasible Problem
+
+        .. doctest::
+
+                >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx_highs_adapter import OMMXHighsAdapter
+
+                >>> x = DecisionVariable.integer(0, upper=3, lower=0)
+                >>> instance = Instance.from_components(
+                ...     decision_variables=[x],
+                ...     objective=x,
+                ...     constraints=[x >= 4],
+                ...     sense=Instance.MAXIMIZE,
+                ... )
+
+                >>> OMMXHighsAdapter.solve(instance)
+                Traceback (most recent call last):
+                    ...
+                ommx.adapter.InfeasibleDetected: Model was infeasible
         """
+        # TODO would have added an unbounded example/doctest above,
+        # but the same example used with pyscipopt isn't being correctly
+        # detected as unbounded by HiGHS (simply returned x=0 as the solution)
+        # requires further investigation
+        #
+        # the example for reference:
+        # ```
+        # >>> from ommx.v1 import Instance, DecisionVariable
+        # >>> from ommx_highs_adapter import OMMXHighsAdapter
+
+        # >>> x = DecisionVariable.integer(0, lower=0)
+        # >>> instance = Instance.from_components(
+        # ...     decision_variables=[x],
+        # ...     objective=x,
+        # ...     constraints=[],
+        # ...     sense=Instance.MAXIMIZE,
+        # ... )
+
+        # >>> OMMXHighsAdapter.solve(instance)
+        # Traceback (most recent call last):
+        #     ...
+        # ommx.adapter.UnboundedDetected: Model was unbounded
+        # ````
         adapter = OMMXHighsAdapter(ommx_instance, verbose=verbose)
         model = adapter.solver_input
         model.run()
@@ -52,9 +127,49 @@ class OMMXHighsAdapter(SolverAdapter):
 
     @property
     def solver_input(self) -> highspy.Highs:
+        """The HiGHS model generated from this OMMX instance"""
         return self.model
 
     def decode(self, data: highspy.Highs) -> Solution:
+        """Convert an optimized highspy.HiGHS based on this instance into an ommx.v1.Solution .
+
+        This method is intended to be used if the model has been acquired with
+        `solver_input` for futher adjustment of the solver parameters, and
+        separately optimizing the model.
+
+        Note that alterations to the model may make the decoding process
+        incompatible -- decoding will only work if the model still describes
+        effectively the same problem as the OMMX instance used to create the
+        adapter.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx_highs_adapter import OMMXHighsAdapter
+            >>> from ommx.v1 import Instance, DecisionVariable
+
+            >>> p = [10, 13, 18, 32, 7, 15]
+            >>> w = [11, 15, 20, 35, 10, 33]
+            >>> x = [DecisionVariable.binary(i) for i in range(6)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x,
+            ...     objective=sum(p[i] * x[i] for i in range(6)),
+            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+
+            >>> adapter = OMMXHighsAdapter(instance)
+            >>> model = adapter.solver_input
+            >>> # ... some modification of model's parameters
+            >>> model.run()
+            <HighsStatus.kOk: 0>
+
+            >>> solution = adapter.decode(model)
+            >>> solution.raw.objective
+            42.0
+        """
         # TODO check if model is optimized
         state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)
@@ -72,6 +187,35 @@ class OMMXHighsAdapter(SolverAdapter):
         return solution
 
     def decode_to_state(self, data: highspy.Highs) -> State:
+        """
+        Create an ommx.v1.State from an optimized HiGHS Model.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            The following example shows how to solve an unconstrained linear optimization problem with `x1` as the objective function.
+
+            >>> from ommx_highs_adapter import OMMXHighsAdapter
+            >>> from ommx.v1 import Instance, DecisionVariable
+
+            >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
+            >>> ommx_instance = Instance.from_components(
+            ...     decision_variables=[x1],
+            ...     objective=x1,
+            ...     constraints=[],
+            ...     sense=Instance.MINIMIZE,
+            ... )
+            >>> adapter = OMMXHighsAdapter(ommx_instance)
+            >>> model = adapter.solver_input
+            >>> model.run()
+            <HighsStatus.kOk: 0>
+            >>> ommx_state = adapter.decode_to_state(model)
+            >>> ommx_state.entries
+            {1: 0.0}
+
+        """
         status = data.getModelStatus()
         if status == highspy.HighsModelStatus.kNotset:
             raise OMMXHighsAdapterError("Model has not been optimized")
