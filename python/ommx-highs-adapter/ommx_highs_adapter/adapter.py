@@ -10,7 +10,7 @@ from .exception import OMMXHighsAdapterError
 
 
 class OMMXHighsAdapter(SolverAdapter):
-    def __init__(self, ommx_instance: Instance, *, verbose: bool =False):
+    def __init__(self, ommx_instance: Instance, *, verbose: bool = False):
         self.instance = ommx_instance
         self.model = highspy.Highs()
 
@@ -45,7 +45,7 @@ class OMMXHighsAdapter(SolverAdapter):
             >>> solution.objective
             0.0
         """
-        adapter = OMMXHighsAdapter(ommx_instance)
+        adapter = OMMXHighsAdapter(ommx_instance, verbose=verbose)
         model = adapter.solver_input
         model.run()
         return adapter.decode(model)
@@ -131,7 +131,7 @@ class OMMXHighsAdapter(SolverAdapter):
             )
         else:
             raise OMMXHighsAdapterError(
-                "The objective function must be either constant or linear"
+                "The function must be either `constant` or `linear`."
             )
 
     def _set_objective(self):
@@ -146,7 +146,7 @@ class OMMXHighsAdapter(SolverAdapter):
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.raw.sense}")
 
     def _set_constraints(self):
-        for constr in self.instance.constraints:
+        for constr in self.instance.raw.constraints:
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
@@ -169,5 +169,5 @@ class OMMXHighsAdapter(SolverAdapter):
                     self.model.addConstr(const_expr <= 0, str(constr.id))
                 else:
                     raise OMMXHighsAdapterError(
-                        f"Not supported equality: {constr.equality}"
+                        f"Unsupported constraint equality kind: {constr.equality}"
                     )
