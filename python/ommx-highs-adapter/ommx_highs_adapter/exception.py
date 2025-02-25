@@ -1,0 +1,2 @@
+class OMMXHighsAdapterError(Exception):
+    pass
