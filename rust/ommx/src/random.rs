@@ -83,3 +83,9 @@ pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
 pub fn arbitrary_coefficient() -> BoxedStrategy<f64> {
     prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -1.0..1.0].boxed()
 }
+
+pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
+    prop_oneof![Just(1.0), Just(-1.0), -1.0..1.0]
+        .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
+        .boxed()
+}

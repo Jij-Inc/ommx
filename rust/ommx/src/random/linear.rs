@@ -1,7 +1,7 @@
 use crate::v1::Linear;
 use proptest::prelude::*;
 
-use super::arbitrary_coefficient;
+use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {
@@ -23,10 +23,20 @@ impl Arbitrary for Linear {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(LinearParameters { num_terms, max_id }: Self::Parameters) -> Self::Strategy {
-        let terms = proptest::collection::vec((0..=max_id, arbitrary_coefficient()), num_terms);
+        // assert!(
+        //     num_terms <= max_id as usize + 1,
+        //     "num_terms({num_terms}) must be less than or equal to max_id({max_id}) + 1 to ensure unique ids"
+        // );
+        let ids = Just((0..=max_id).collect::<Vec<_>>()).prop_shuffle();
+        let coefficients = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_terms);
         let constant = arbitrary_coefficient();
-        (terms, constant)
-            .prop_map(|(terms, constant)| Linear::new(terms.into_iter(), constant))
+        (ids, coefficients, constant)
+            .prop_map(|(ids, coefficients, constant)| {
+                Linear::new(
+                    coefficients.iter().zip(ids.iter()).map(|(&c, &id)| (id, c)),
+                    constant,
+                )
+            })
             .boxed()
     }
 
@@ -42,12 +52,18 @@ impl Arbitrary for Linear {
 
 #[cfg(test)]
 mod tests {
+    use crate::v1::linear::Term;
+
     use super::*;
 
     proptest! {
         #[test]
         fn test_arbitrary_linear(l in Linear::arbitrary_with(LinearParameters { num_terms: 5, max_id: 10 })) {
             prop_assert!(l.terms.len() == 5);
+            for Term {id, coefficient} in l.terms {
+                prop_assert!(id <= 10);
+                prop_assert!(coefficient != 0.0);
+            }
         }
     }
 }
