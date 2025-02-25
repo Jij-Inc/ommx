@@ -42,9 +42,13 @@ impl Arbitrary for Linear {
 
     fn arbitrary() -> Self::Strategy {
         let LinearParameters { num_terms, max_id } = Self::Parameters::default();
-        (0..=num_terms, 0..=max_id)
-            .prop_flat_map(|(num_terms, max_id)| {
-                Self::arbitrary_with(LinearParameters { num_terms, max_id })
+        // Only samples where `num_terms <= max_id + 1`
+        (0..=max_id)
+            .prop_flat_map(move |max_id| {
+                let max_num_terms = std::cmp::min(max_id as usize + 1, num_terms);
+                (0..=max_num_terms).prop_flat_map(move |num_terms| {
+                    Self::arbitrary_with(LinearParameters { num_terms, max_id })
+                })
             })
             .boxed()
     }
