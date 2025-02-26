@@ -1,11 +1,11 @@
 //! # 二次関数の例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用して二次関数を作成し、操作する方法を示します。
 
+use maplit::hashmap;
 use ommx::v1::{Linear, Quadratic, State};
 use ommx::Evaluate;
 use prost::Message;
-use maplit::hashmap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== OMMXチュートリアル: 二次関数 ===\n");
@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 二次関数の評価
     let state: State = hashmap! { 1 => 2.0, 2 => 3.0 }.into();
-    
+
     let (value, used_ids) = quadratic2.evaluate(&state)?;
     println!("\n状態 x_1 = 2.0, x_2 = 3.0 での二次関数の値: {}", value);
     println!("使用された変数ID: {:?}", used_ids);
@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // シリアライズとデシリアライズ
     let mut buf = Vec::new();
     quadratic2.encode(&mut buf)?;
-    
+
     let decoded_quadratic = Quadratic::decode(buf.as_slice())?;
     println!("\nデシリアライズされた二次関数: {:?}", decoded_quadratic);
 

@@ -1,5 +1,5 @@
 //! # アーティファクトの例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用してアーティファクトを作成し、操作する方法を示します。
 
 use anyhow::Result;
@@ -9,8 +9,8 @@ use ommx::{
     random::{random_deterministic, InstanceParameters},
     v1::Instance,
 };
-use url::Url;
 use std::path::PathBuf;
+use url::Url;
 
 fn main() -> Result<()> {
     println!("=== OMMXチュートリアル: アーティファクト ===\n");
@@ -44,21 +44,26 @@ fn main() -> Result<()> {
     builder.add_instance(instance, annotations)?;
     builder.add_source(&Url::parse("https://github.com/Jij-Inc/ommx")?);
     builder.add_description("OMMXチュートリアル用のサンプルアーティファクト".to_string());
-    
+
     // アーティファクトのビルド
     let _artifact = builder.build()?;
-    println!("\nアーティファクトが正常に作成されました: {}", artifact_path.display());
+    println!(
+        "\nアーティファクトが正常に作成されました: {}",
+        artifact_path.display()
+    );
 
     // アーティファクトからの読み込み
     // 注意: 実際のアプリケーションでは、ここでアーティファクトを読み込んで使用します
     println!("\nアーティファクトからインスタンスを読み込むには、以下のようなコードを使用します:");
-    println!(r#"
+    println!(
+        r#"
     use ommx::artifact::Artifact;
     
     let artifact = Artifact::open_archive("/path/to/artifact.ommx")?;
     let instance = artifact.get_instance()?;
     println!("読み込まれたインスタンス: {{}}", instance);
-    "#);
+    "#
+    );
 
     Ok(())
 }

@@ -1,11 +1,11 @@
 //! # 線形関数の例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用して線形関数を作成し、操作する方法を示します。
 
+use maplit::hashmap;
 use ommx::v1::{Linear, State};
 use ommx::Evaluate;
 use prost::Message;
-use maplit::hashmap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== OMMXチュートリアル: 線形関数 ===\n");
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 線形関数の評価
     let state: State = hashmap! { 1 => 2.0, 2 => 3.0 }.into();
-    
+
     let (value, used_ids) = linear1.evaluate(&state)?;
     println!("\n状態 x_1 = 2.0, x_2 = 3.0 での線形関数の値: {}", value);
     println!("使用された変数ID: {:?}", used_ids);
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // シリアライズとデシリアライズ
     let mut buf = Vec::new();
     linear1.encode(&mut buf)?;
-    
+
     let decoded_linear = Linear::decode(buf.as_slice())?;
     println!("\nデシリアライズされた線形関数: {:?}", decoded_linear);
 

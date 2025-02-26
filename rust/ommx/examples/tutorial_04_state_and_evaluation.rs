@@ -1,11 +1,11 @@
 //! # 状態と評価の例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用して関数の評価と状態の操作を行う方法を示します。
 
-use ommx::v1::{Linear, State, Constraint, Equality, Function};
-use ommx::v1::function::Function as FunctionEnum;
-use ommx::Evaluate;
 use maplit::hashmap;
+use ommx::v1::function::Function as FunctionEnum;
+use ommx::v1::{Constraint, Equality, Function, Linear, State};
+use ommx::Evaluate;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== OMMXチュートリアル: 状態と評価 ===\n");
@@ -48,7 +48,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (evaluated_constraint, used_ids) = constraint.evaluate(&state1)?;
     println!("\n制約条件の評価結果: {:?}", evaluated_constraint);
     println!("使用された変数ID: {:?}", used_ids);
-    println!("制約条件は実行可能か: {}", evaluated_constraint.is_feasible(1e-6)?);
+    println!(
+        "制約条件は実行可能か: {}",
+        evaluated_constraint.is_feasible(1e-6)?
+    );
 
     Ok(())
 }

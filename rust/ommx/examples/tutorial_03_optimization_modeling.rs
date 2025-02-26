@@ -1,12 +1,10 @@
 //! # 最適化問題のモデリング例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用して最適化問題をモデリングする方法を示します。
 
 use ommx::v1::{
-    Bound, Constraint, DecisionVariable, Equality, Function, Instance, Linear,
-    decision_variable::Kind,
-    function::Function as FunctionEnum,
-    instance::Sense,
+    decision_variable::Kind, function::Function as FunctionEnum, instance::Sense, Bound,
+    Constraint, DecisionVariable, Equality, Function, Instance, Linear,
 };
 use prost::Message;
 
@@ -76,10 +74,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // シリアライズとデシリアライズ
     let mut buf = Vec::new();
     instance.encode(&mut buf)?;
-    
+
     let decoded_instance = Instance::decode(buf.as_slice())?;
     println!("\nデシリアライズされた最適化問題:");
-    println!("決定変数の数: {}", decoded_instance.decision_variables.len());
+    println!(
+        "決定変数の数: {}",
+        decoded_instance.decision_variables.len()
+    );
     println!("制約条件の数: {}", decoded_instance.constraints.len());
     println!("最適化の方向: {:?}", decoded_instance.sense);
 

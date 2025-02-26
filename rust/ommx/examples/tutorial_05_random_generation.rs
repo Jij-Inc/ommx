@@ -1,9 +1,9 @@
 //! # ランダム生成の例
-//! 
+//!
 //! このサンプルでは、OMMXのRust APIを使用してランダムな最適化問題を生成する方法を示します。
 
-use ommx::v1::{Linear, Instance, State};
-use ommx::random::{random_deterministic, LinearParameters, InstanceParameters};
+use ommx::random::{random_deterministic, InstanceParameters, LinearParameters};
+use ommx::v1::{Instance, Linear, State};
 use ommx::Evaluate;
 use std::collections::HashSet;
 
