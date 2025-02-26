@@ -1,4 +1,4 @@
-use super::{arbitrary_coefficient_nonzero, num_terms_and_max_id, LinearParameters};
+use super::{arbitrary_coefficient_nonzero, LinearParameters};
 use crate::v1::{Linear, Quadratic};
 use proptest::prelude::*;
 
@@ -44,12 +44,13 @@ impl QuadraticParameters {
     }
 
     pub fn smaller(&self) -> impl Strategy<Value = Self> {
-        (0..=self.max_id).prop_flat_map(move |max_id| {
+        (0..=self.max_id, Just(self.num_terms)).prop_flat_map(move |(max_id, num_terms)| {
             let small = Self {
                 max_id,
                 num_terms: 0,
             };
-            (0..=small.possible_max_terms()).prop_map(move |num_terms| Self { max_id, num_terms })
+            (0..=std::cmp::min(num_terms, small.possible_max_terms()))
+                .prop_map(move |num_terms| Self { max_id, num_terms })
         })
     }
 }
@@ -94,11 +95,9 @@ impl Arbitrary for Quadratic {
     }
 
     fn arbitrary() -> Self::Strategy {
-        let QuadraticParameters { num_terms, max_id } = Self::Parameters::default();
-        num_terms_and_max_id(num_terms, max_id)
-            .prop_flat_map(move |(num_terms, max_id)| {
-                Self::arbitrary_with(QuadraticParameters { num_terms, max_id })
-            })
+        Self::Parameters::default()
+            .smaller()
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }
