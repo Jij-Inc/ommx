@@ -136,7 +136,7 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
         .prop_map(move |ids| {
             ids.into_iter()
                 .map(|k| {
-                    let tuple = map_k_to_tuple_lexicographic(k, 2, max_id);
+                    let tuple = map_k_to_tuple(k, 2, max_id);
                     (tuple[0], tuple[1])
                 })
                 .collect()
@@ -145,24 +145,19 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
 }
 
 /// Introduce lex order for `(i1, i2, ..., iD)` to a unique integer `k` to use `unique_integers` strategy
-fn map_k_to_tuple_lexicographic(k: u64, dim: usize, n: u64) -> Vec<u64> {
+fn map_k_to_tuple(k: u64, dim: usize, n: u64) -> Vec<u64> {
     let mut result = Vec::with_capacity(dim);
     let mut remaining_k = k;
-    for _ in 0..dim {
-        let mut current_digit = 0;
+    for i in 0..dim {
+        let rdim = dim - i - 1;
+        let mut current_digit = result.last().copied().unwrap_or(0);
         loop {
-            let c = combinations(
-                n + dim as u64 - result.len() as u64 - 1 - current_digit,
-                dim - result.len() - 1,
-            );
-            if remaining_k < c {
+            let h = multi_choose(n - current_digit + 1, rdim);
+            if remaining_k < h {
                 break;
             }
-            remaining_k -= c;
+            remaining_k -= h;
             current_digit += 1;
-        }
-        if let Some(&last_digit) = result.last() {
-            current_digit += last_digit;
         }
         result.push(current_digit);
     }
@@ -233,5 +228,43 @@ mod tests {
     fn test_multichoose() {
         let n = 5;
         assert_eq!(multi_choose(n, 2), 5 * 6 / 2);
+    }
+
+    #[test]
+    fn test_map_k_to_tuple_2d() {
+        assert_eq!(map_k_to_tuple(0, 2, 3), vec![0, 0]);
+        assert_eq!(map_k_to_tuple(1, 2, 3), vec![0, 1]);
+        assert_eq!(map_k_to_tuple(2, 2, 3), vec![0, 2]);
+        assert_eq!(map_k_to_tuple(3, 2, 3), vec![0, 3]);
+        assert_eq!(map_k_to_tuple(4, 2, 3), vec![1, 1]);
+        assert_eq!(map_k_to_tuple(5, 2, 3), vec![1, 2]);
+        assert_eq!(map_k_to_tuple(6, 2, 3), vec![1, 3]);
+        assert_eq!(map_k_to_tuple(7, 2, 3), vec![2, 2]);
+        assert_eq!(map_k_to_tuple(8, 2, 3), vec![2, 3]);
+        assert_eq!(map_k_to_tuple(9, 2, 3), vec![3, 3]);
+    }
+
+    #[test]
+    fn test_map_k_to_tuple_3d() {
+        assert_eq!(map_k_to_tuple(0, 3, 3), vec![0, 0, 0]);
+        assert_eq!(map_k_to_tuple(1, 3, 3), vec![0, 0, 1]);
+        assert_eq!(map_k_to_tuple(2, 3, 3), vec![0, 0, 2]);
+        assert_eq!(map_k_to_tuple(3, 3, 3), vec![0, 0, 3]);
+        assert_eq!(map_k_to_tuple(4, 3, 3), vec![0, 1, 1]);
+        assert_eq!(map_k_to_tuple(5, 3, 3), vec![0, 1, 2]);
+        assert_eq!(map_k_to_tuple(6, 3, 3), vec![0, 1, 3]);
+        assert_eq!(map_k_to_tuple(7, 3, 3), vec![0, 2, 2]);
+        assert_eq!(map_k_to_tuple(8, 3, 3), vec![0, 2, 3]);
+        assert_eq!(map_k_to_tuple(9, 3, 3), vec![0, 3, 3]);
+        assert_eq!(map_k_to_tuple(10, 3, 3), vec![1, 1, 1]);
+        assert_eq!(map_k_to_tuple(11, 3, 3), vec![1, 1, 2]);
+        assert_eq!(map_k_to_tuple(12, 3, 3), vec![1, 1, 3]);
+        assert_eq!(map_k_to_tuple(13, 3, 3), vec![1, 2, 2]);
+        assert_eq!(map_k_to_tuple(14, 3, 3), vec![1, 2, 3]);
+        assert_eq!(map_k_to_tuple(15, 3, 3), vec![1, 3, 3]);
+        assert_eq!(map_k_to_tuple(16, 3, 3), vec![2, 2, 2]);
+        assert_eq!(map_k_to_tuple(17, 3, 3), vec![2, 2, 3]);
+        assert_eq!(map_k_to_tuple(18, 3, 3), vec![2, 3, 3]);
+        assert_eq!(map_k_to_tuple(19, 3, 3), vec![3, 3, 3]);
     }
 }
