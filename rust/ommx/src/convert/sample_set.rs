@@ -60,7 +60,7 @@ impl Samples {
         let entry = self
             .entries
             .iter_mut()
-            .find(|v| v.state.as_ref().map_or(false, |s| s == &state));
+            .find(|v| v.state.as_ref() == Some(&state));
         match entry {
             Some(entry) => entry.ids.push(sample_id),
             None => {
