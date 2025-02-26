@@ -51,7 +51,7 @@ impl Arbitrary for Linear {
                 let coefficients =
                     proptest::collection::vec(arbitrary_coefficient_nonzero(), num_linear);
                 (ids, coefficients).prop_map(move |(ids, coefficients)| {
-                    Linear::new(ids.into_iter().zip(coefficients.into_iter()), constant)
+                    Linear::new(ids.into_iter().zip(coefficients), constant)
                 })
             })
             .boxed()
