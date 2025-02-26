@@ -97,3 +97,73 @@ fn num_terms_and_max_id(num_terms: usize, max_id: u64) -> impl Strategy<Value = 
         (0..=max_num_terms).prop_map(move |num_terms| (num_terms, max_id))
     })
 }
+
+/// Generate a strategy for producing a vector of unique integers within a given range `min_id..=max_id`
+fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u64>> {
+    assert!(
+        min_id <= max_id,
+        "min_id({min_id}) must be less than or equal to max_id({max_id}) to ensure a valid range"
+    );
+    if size as u64 == max_id - min_id + 1 {
+        // Only one possible vector
+        return Just((min_id..=max_id).collect::<Vec<u64>>()).boxed();
+    }
+    assert!(
+        size <= (max_id - min_id) as usize + 1,
+        "size({size}) must be less than or equal to max_id({max_id}) - min_id({min_id}) + 1 to ensure unique ids"
+    );
+    if size == 0 {
+        return Just(Vec::new()).boxed();
+    }
+    (min_id..=(max_id - size as u64 + 1))
+        .prop_flat_map(move |head| {
+            if size == 1 {
+                return Just(vec![head]).boxed();
+            }
+            unique_integers(head + 1, max_id, size - 1)
+                .prop_map(move |mut tail| {
+                    tail.insert(0, head);
+                    tail
+                })
+                .boxed()
+        })
+        .boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[should_panic]
+    #[test]
+    fn test_unique_integers_panic_too_large_size() {
+        let _ = unique_integers(0, 1, 3);
+    }
+
+    #[should_panic]
+    #[test]
+    fn test_unique_integers_panic_invalid_range() {
+        let _ = unique_integers(1, 0, 1);
+    }
+
+    proptest! {
+        #[test]
+        fn test_unique_integers(ids in unique_integers(0, 5, 3)) {
+            prop_assert_eq!(ids.len(), 3);
+            prop_assert_eq!(ids.iter().cloned().collect::<std::collections::HashSet<_>>().len(), 3);
+            prop_assert!(ids.iter().all(|&id| id <= 5));
+        }
+    }
+
+    #[test]
+    fn test_unique_integers_recursion_limit() {
+        let size = 100000_usize;
+        let strategy = unique_integers(0, 10 * size as u64, size);
+        let mut runner = proptest::test_runner::TestRunner::deterministic();
+        let tree = strategy
+            .new_tree(&mut runner)
+            .expect("Failed to create a new tree");
+        let ids = tree.current();
+        println!("{:?}", ids);
+    }
+}

@@ -1,4 +1,4 @@
-use crate::v1::Linear;
+use crate::{random::unique_integers, v1::Linear};
 use num::Zero;
 use proptest::prelude::*;
 
@@ -47,7 +47,7 @@ impl Arbitrary for Linear {
                 } else {
                     num_terms
                 };
-                let ids = Just((0..=max_id).collect::<Vec<_>>()).prop_shuffle();
+                let ids = unique_integers(0, max_id, num_terms);
                 let coefficients =
                     proptest::collection::vec(arbitrary_coefficient_nonzero(), num_linear);
                 (ids, coefficients).prop_map(move |(ids, coefficients)| {
@@ -85,6 +85,11 @@ mod tests {
                 count += 1;
             }
             prop_assert_eq!(count, 5);
+        }
+
+        #[test]
+        fn test_max_num_terms(l in Linear::arbitrary_with(LinearParameters { num_terms: 11, max_id: 10 })) {
+            prop_assert_eq!(l.into_iter().count(), 11);
         }
     }
 }
