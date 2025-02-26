@@ -259,7 +259,7 @@ mod tests {
         }
 
         #[test]
-        fn test_as_constant(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 5, max_degree: 0, max_id: 10})) {
+        fn test_as_constant(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 1, max_degree: 0, max_id: 10})) {
             let c = p.clone().as_constant().unwrap();
             prop_assert_eq!(p, super::Polynomial::from(c));
         }
