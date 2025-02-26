@@ -134,17 +134,57 @@ fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u
 fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
     // Map `(i, j)` to a unique integer `k = i * (2 * n - i + 3) / 2 + j`
     unique_integers(0, (max_id + 1) * (max_id + 2) / 2 - 1, num_terms)
-        .prop_map(move |ids| ids.into_iter().map(|k| map_k_to_ij(k, max_id)).collect())
+        .prop_map(move |ids| {
+            ids.into_iter()
+                .map(|k| {
+                    let tuple = map_k_to_tuple_lexicographic(k, 2, max_id);
+                    (tuple[0], tuple[1])
+                })
+                .collect()
+        })
         .boxed()
 }
 
-fn map_k_to_ij(k: u64, n: u64) -> (u64, u64) {
-    let i = ((-2.0 * n as f64 - 3.0 + (((2.0 * n as f64 + 3.0).powi(2) - 8.0 * k as f64).sqrt()))
-        / -2.0)
-        .floor() as u64;
-    let start_k = i * (2 * n - i + 3) / 2;
-    let j = k - start_k + i;
-    (i, j)
+fn map_k_to_tuple_lexicographic(k: u64, dim: usize, n: u64) -> Vec<u64> {
+    let mut result = Vec::with_capacity(dim);
+    let mut remaining_k = k;
+    for _ in 0..dim {
+        let mut current_digit = 0;
+        loop {
+            let c = combinations(
+                n + dim as u64 - result.len() as u64 - 1 - current_digit,
+                dim - result.len() - 1,
+            );
+            if remaining_k < c {
+                break;
+            }
+            remaining_k -= c;
+            current_digit += 1;
+        }
+        if let Some(&last_digit) = result.last() {
+            current_digit += last_digit;
+        }
+        result.push(current_digit);
+    }
+    result
+}
+
+/// nCr (組み合わせ) を計算
+fn combinations(n: u64, r: usize) -> u64 {
+    if r as u64 > n {
+        return 0;
+    }
+    if r == 0 || r as u64 == n {
+        return 1;
+    }
+    if r > (n / 2) as usize {
+        return combinations(n, n as usize - r);
+    }
+    let mut res = 1;
+    for i in 0..r {
+        res = res * (n - i as u64) / (i as u64 + 1);
+    }
+    res
 }
 
 #[cfg(test)]
