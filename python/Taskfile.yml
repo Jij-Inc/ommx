@@ -17,7 +17,7 @@ includes:
     dir: ommx-pyscipopt-adapter
   ommx-highs-adapter:
     taskfile: ommx-highs-adapter/Taskfile.yml
-    dir: ommx-pyscipopt-adapter
+    dir: ommx-highs-adapter
 
   # For python:doc task
   api_reference:

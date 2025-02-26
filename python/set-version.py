@@ -94,6 +94,7 @@ def main():
             "ommx-pyscipopt-adapter",
             "ommx-python-mip-adapter",
             "ommx-openjij-adapter",
+            "ommx-highs-adapter",
             # Add new adapter here
         ]
     ]

@@ -1,6 +1,8 @@
 import highspy
 import numpy as np
 
+from highspy.highs import highs_linear_expression
+
 from ommx.v1 import Instance, DecisionVariable, Solution, Constraint
 from ommx.v1.solution_pb2 import State, Optimality
 from ommx.v1.function_pb2 import Function
@@ -263,6 +265,9 @@ class OMMXHighsAdapter(SolverAdapter):
         )
 
     def _linear_expr_conversion(self, ommx_func: Function):
+        # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
+        # before returning as the callers want to check whether the returned
+        # value is a constant float.
         if ommx_func.HasField("constant"):
             return ommx_func.constant
         elif ommx_func.HasField("linear"):
@@ -273,6 +278,7 @@ class OMMXHighsAdapter(SolverAdapter):
                 )
                 + ommx_func.linear.constant
             )
+
         else:
             raise OMMXHighsAdapterError(
                 "The function must be either `constant` or `linear`."
@@ -283,9 +289,9 @@ class OMMXHighsAdapter(SolverAdapter):
         if isinstance(obj, float):
             return
         if self.instance.raw.sense == Instance.MAXIMIZE:
-            self.model.maximize(obj)
+            self.model.maximize(highs_linear_expression(obj))
         elif self.instance.raw.sense == Instance.MINIMIZE:
-            self.model.minimize(obj)
+            self.model.minimize(highs_linear_expression(obj))
         else:
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.raw.sense}")
 
@@ -307,6 +313,7 @@ class OMMXHighsAdapter(SolverAdapter):
                         )
                     continue
             else:
+                const_expr = highs_linear_expression(const_expr)
                 if constr.equality == Constraint.EQUAL_TO_ZERO:
                     self.model.addConstr(const_expr == 0, str(constr.id))
                 elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
