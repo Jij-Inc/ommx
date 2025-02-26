@@ -1,5 +1,8 @@
 use super::{arbitrary_coefficient_nonzero, LinearParameters};
-use crate::v1::{Linear, Quadratic};
+use crate::{
+    random::unique_integer_pairs,
+    v1::{Linear, Quadratic},
+};
 use proptest::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -76,17 +79,14 @@ impl Arbitrary for Quadratic {
                     max_quad_terms = p.possible_max_quad_terms(),
                 );
 
-                let quad = proptest::collection::hash_map(
-                    arbitrary_key(p.max_id),
-                    arbitrary_coefficient_nonzero(),
-                    num_quad,
-                );
+                let pairs = unique_integer_pairs(p.max_id, num_quad);
+                let values = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_quad);
                 let linear = Linear::arbitrary_with(LinearParameters {
                     num_terms: num_linear,
                     max_id: p.max_id,
                 });
-                (quad, linear).prop_map(|(quad, linear)| {
-                    let mut quad: Quadratic = quad.into_iter().collect();
+                (pairs, values, linear).prop_map(|(pairs, values, linear)| {
+                    let mut quad: Quadratic = pairs.into_iter().zip(values).collect();
                     quad.linear = Some(linear);
                     quad
                 })
@@ -100,11 +100,6 @@ impl Arbitrary for Quadratic {
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
-}
-
-/// Generates a pair of ID `(i, j)` where `i <= j <= max_id`.
-fn arbitrary_key(max_id: u64) -> impl Strategy<Value = (u64, u64)> {
-    (0..=max_id).prop_flat_map(move |id1| (id1..=max_id).prop_map(move |id2| (id1, id2)))
 }
 
 #[cfg(test)]
@@ -122,6 +117,12 @@ mod tests {
                 count += 1;
             }
             prop_assert_eq!(count, 5);
+        }
+
+        // (10 + 1) * (10 + 2) / 2 + (10 + 1) = 66 + 11 = 77
+        #[test]
+        fn test_arbitrary_quadratic_full(q in Quadratic::arbitrary_with(QuadraticParameters { num_terms: 77, max_id: 10 })) {
+            prop_assert_eq!(q.into_iter().count(), 77);
         }
     }
 }

@@ -1,8 +1,8 @@
-use crate::{random::unique_integers, v1::Linear};
+use crate::v1::Linear;
 use num::Zero;
 use proptest::prelude::*;
 
-use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero, num_terms_and_max_id};
+use super::{arbitrary_coefficient, arbitrary_coefficient_nonzero, unique_integers};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {
@@ -25,6 +25,19 @@ impl Default for LinearParameters {
             num_terms: 5,
             max_id: 10,
         }
+    }
+}
+
+impl LinearParameters {
+    pub fn smaller(&self) -> impl Strategy<Value = Self> {
+        (0..=self.max_id, Just(self.num_terms)).prop_flat_map(move |(max_id, num_terms)| {
+            let small = Self {
+                max_id,
+                num_terms: 0,
+            };
+            (0..=std::cmp::min(num_terms, small.max_id as usize + 1))
+                .prop_map(move |num_terms| Self { max_id, num_terms })
+        })
     }
 }
 
@@ -58,11 +71,9 @@ impl Arbitrary for Linear {
     }
 
     fn arbitrary() -> Self::Strategy {
-        let LinearParameters { num_terms, max_id } = Self::Parameters::default();
-        num_terms_and_max_id(num_terms, max_id)
-            .prop_flat_map(move |(num_terms, max_id)| {
-                Self::arbitrary_with(LinearParameters { num_terms, max_id })
-            })
+        Self::Parameters::default()
+            .smaller()
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }

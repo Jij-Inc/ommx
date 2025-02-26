@@ -130,6 +130,23 @@ fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u
         .boxed()
 }
 
+/// Generate unique pairs of integers `(i, j)` where `i <= j <= max_id`
+fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
+    // Map `(i, j)` to a unique integer `k = i * (2 * n - i + 3) / 2 + j`
+    unique_integers(0, (max_id + 1) * (max_id + 2) / 2 - 1, num_terms)
+        .prop_map(move |ids| ids.into_iter().map(|k| map_k_to_ij(k, max_id)).collect())
+        .boxed()
+}
+
+fn map_k_to_ij(k: u64, n: u64) -> (u64, u64) {
+    let i = ((-2.0 * n as f64 - 3.0 + (((2.0 * n as f64 + 3.0).powi(2) - 8.0 * k as f64).sqrt()))
+        / -2.0)
+        .floor() as u64;
+    let start_k = i * (2 * n - i + 3) / 2;
+    let j = k - start_k + i;
+    (i, j)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
