@@ -28,7 +28,7 @@ impl Arbitrary for Function {
             );
         }
         let mut threshold = multi_choose(p.max_id + 1, 1) as usize;
-        if p.num_terms <= threshold {
+        if p.num_terms <= threshold && p.max_degree >= 1 {
             strategies.push(
                 Linear::arbitrary_with(LinearParameters {
                     num_terms: p.num_terms,
@@ -39,7 +39,7 @@ impl Arbitrary for Function {
             )
         }
         threshold += multi_choose(p.max_id + 1, 2) as usize;
-        if p.num_terms <= threshold {
+        if p.num_terms <= threshold && p.max_degree >= 2 {
             strategies.push(
                 Quadratic::arbitrary_with(QuadraticParameters {
                     num_terms: p.num_terms,
