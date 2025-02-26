@@ -1,0 +1,14 @@
+# https://taskfile.dev
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+version: "3"
+
+tasks:
+  default:
+    cmds:
+      - task: test
+
+  test:
+    desc: Run tests for OMMX Highs Adapter
+    cmds:
+      - uv run pytest -vv --doctest-modules
+      - uv run pyright
