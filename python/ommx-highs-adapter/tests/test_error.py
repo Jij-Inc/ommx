@@ -74,7 +74,7 @@ def test_error_unsupported_constraint_equality():
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Function(constant=0),
         constraints=[
-            Constraint(
+            _Constraint(
                 function=Function(
                     linear=Linear(terms=[Linear.Term(id=1, coefficient=2)])
                 ),
