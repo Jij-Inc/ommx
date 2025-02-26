@@ -47,14 +47,11 @@ impl Arbitrary for Linear {
                 } else {
                     num_terms
                 };
-                let ids = unique_integers(0, max_id, num_terms);
+                let ids = unique_integers(0, max_id, num_linear);
                 let coefficients =
                     proptest::collection::vec(arbitrary_coefficient_nonzero(), num_linear);
                 (ids, coefficients).prop_map(move |(ids, coefficients)| {
-                    Linear::new(
-                        coefficients.iter().zip(ids.iter()).map(|(&c, &id)| (id, c)),
-                        constant,
-                    )
+                    Linear::new(ids.into_iter().zip(coefficients.into_iter()), constant)
                 })
             })
             .boxed()
