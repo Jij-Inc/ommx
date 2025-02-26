@@ -1,4 +1,5 @@
 use crate::v1::Polynomial;
+use anyhow::{bail, Result};
 use num::Zero;
 use proptest::prelude::*;
 
@@ -30,6 +31,17 @@ impl PolynomialParameters {
             0
         };
         min..=max
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.num_terms > self.possible_max_terms() {
+            bail!(
+                "num_terms({num_terms}) must be less than or equal to the possible maximum number of terms({max_num_terms})",
+                num_terms = self.num_terms,
+                max_num_terms = self.possible_max_terms()
+            )
+        }
+        Ok(())
     }
 
     pub fn smaller(&self) -> impl Strategy<Value = Self> {
@@ -67,12 +79,7 @@ impl Arbitrary for Polynomial {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
-        assert!(
-            p.num_terms <= p.possible_max_terms(),
-            "num_terms({num_terms}) must be less than or equal to the possible maximum number of terms({max_num_terms})",
-            num_terms = p.num_terms,
-            max_num_terms = p.possible_max_terms()
-        );
+        p.validate().unwrap();
         if p.max_degree == 0 {
             if p.num_terms == 0 {
                 return Just(Polynomial::zero()).boxed();
