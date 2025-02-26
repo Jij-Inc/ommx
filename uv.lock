@@ -1390,7 +1390,7 @@ dev = [
 
 [[package]]
 name = "ommx-highs-adapter"
-version = "0.1.0"
+version = "1.8.4"
 source = { editable = "python/ommx-highs-adapter" }
 dependencies = [
     { name = "highspy" },
