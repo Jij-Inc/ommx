@@ -132,8 +132,7 @@ fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u
 
 /// Generate unique pairs of integers `(i, j)` where `i <= j <= max_id`
 fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
-    // Map `(i, j)` to a unique integer `k = i * (2 * n - i + 3) / 2 + j`
-    unique_integers(0, (max_id + 1) * (max_id + 2) / 2 - 1, num_terms)
+    unique_integers(0, multi_choose(max_id + 1, 2) - 1, num_terms)
         .prop_map(move |ids| {
             ids.into_iter()
                 .map(|k| {
@@ -145,6 +144,7 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
         .boxed()
 }
 
+/// Introduce lex order for `(i1, i2, ..., iD)` to a unique integer `k` to use `unique_integers` strategy
 fn map_k_to_tuple_lexicographic(k: u64, dim: usize, n: u64) -> Vec<u64> {
     let mut result = Vec::with_capacity(dim);
     let mut remaining_k = k;
@@ -169,7 +169,7 @@ fn map_k_to_tuple_lexicographic(k: u64, dim: usize, n: u64) -> Vec<u64> {
     result
 }
 
-/// nCr (組み合わせ) を計算
+/// nCr
 fn combinations(n: u64, r: usize) -> u64 {
     if r as u64 > n {
         return 0;
@@ -185,6 +185,11 @@ fn combinations(n: u64, r: usize) -> u64 {
         res = res * (n - i as u64) / (i as u64 + 1);
     }
     res
+}
+
+/// nHr
+fn multi_choose(n: u64, r: usize) -> u64 {
+    combinations(n + r as u64 - 1, r)
 }
 
 #[cfg(test)]
@@ -222,5 +227,11 @@ mod tests {
             .expect("Failed to create a new tree");
         let ids = tree.current();
         println!("{:?}", ids);
+    }
+
+    #[test]
+    fn test_multichoose() {
+        let n = 5;
+        assert_eq!(multi_choose(n, 2), 5 * 6 / 2);
     }
 }
