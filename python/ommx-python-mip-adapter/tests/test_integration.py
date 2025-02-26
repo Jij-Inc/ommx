@@ -63,7 +63,7 @@ def test_integration_milp():
 
 def test_solution_optimality():
     x = DecisionVariable.integer(1, lower=0, upper=5)
-    y = DecisionVariable.integer(1, lower=0, upper=5)
+    y = DecisionVariable.integer(2, lower=0, upper=5)
     ommx_instance = Instance.from_components(
         decision_variables=[x, y],
         objective=x + y,
