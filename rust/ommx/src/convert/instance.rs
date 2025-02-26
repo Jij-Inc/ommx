@@ -200,11 +200,7 @@ impl Instance {
         let index = self
             .removed_constraints
             .iter()
-            .position(|c| {
-                c.constraint
-                    .as_ref()
-                    .map_or(false, |c| c.id == constraint_id)
-            })
+            .position(|c| c.constraint.as_ref().is_some_and(|c| c.id == constraint_id))
             .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
         let c = self.removed_constraints.remove(index).constraint.unwrap();
         self.constraints.push(c);

@@ -26,7 +26,7 @@ impl Zero for Quadratic {
         self.columns.is_empty()
             && self.rows.is_empty()
             && self.values.is_empty()
-            && self.linear.as_ref().map_or(true, |l| l.is_zero())
+            && self.linear.as_ref().is_none_or(|l| l.is_zero())
     }
 }
 
