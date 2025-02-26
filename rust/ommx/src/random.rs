@@ -58,6 +58,8 @@ pub use parametric_instance::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
+use crate::sorted_ids::SortedIds;
+
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
 pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
     let strategy = T::arbitrary_with(parameters);
@@ -138,6 +140,23 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
                 .map(|k| {
                     let tuple = map_k_to_tuple(k, 2, max_id);
                     (tuple[0], tuple[1])
+                })
+                .collect()
+        })
+        .boxed()
+}
+
+fn unique_sorted_ids(
+    max_id: u64,
+    degree: usize,
+    num_terms: usize,
+) -> BoxedStrategy<Vec<SortedIds>> {
+    unique_integers(0, multi_choose(max_id + 1, degree) - 1, num_terms)
+        .prop_map(move |ids| {
+            ids.into_iter()
+                .map(|k| {
+                    let tuple = map_k_to_tuple(k, degree, max_id);
+                    SortedIds::new(tuple)
                 })
                 .collect()
         })
@@ -232,6 +251,7 @@ mod tests {
 
     #[test]
     fn test_map_k_to_tuple_2d() {
+        assert_eq!(multi_choose(3 + 1, 2), 10);
         assert_eq!(map_k_to_tuple(0, 2, 3), vec![0, 0]);
         assert_eq!(map_k_to_tuple(1, 2, 3), vec![0, 1]);
         assert_eq!(map_k_to_tuple(2, 2, 3), vec![0, 2]);
@@ -246,6 +266,7 @@ mod tests {
 
     #[test]
     fn test_map_k_to_tuple_3d() {
+        assert_eq!(multi_choose(3 + 1, 3), 20);
         assert_eq!(map_k_to_tuple(0, 3, 3), vec![0, 0, 0]);
         assert_eq!(map_k_to_tuple(1, 3, 3), vec![0, 0, 1]);
         assert_eq!(map_k_to_tuple(2, 3, 3), vec![0, 0, 2]);
