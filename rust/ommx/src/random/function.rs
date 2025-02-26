@@ -20,15 +20,14 @@ impl Arbitrary for Function {
         if p.num_terms == 0 {
             strategies.push(Just(Function::zero()).boxed());
         }
-        let mut threshold = 1;
-        if p.num_terms == threshold {
+        if p.num_terms == 1 {
             strategies.push(
                 arbitrary_coefficient_nonzero()
                     .prop_map(|c| Function::from(c))
                     .boxed(),
             );
         }
-        threshold += multi_choose(p.max_id + 1, 1) as usize;
+        let mut threshold = multi_choose(p.max_id + 1, 1) as usize;
         if p.num_terms <= threshold {
             strategies.push(
                 Linear::arbitrary_with(LinearParameters {
