@@ -3,7 +3,7 @@ use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
     artifact::{Builder, InstanceAnnotations},
-    random::{random_deterministic, InstanceParameters},
+    random::{random_deterministic, FunctionParameters, InstanceParameters},
 };
 use std::path::Path;
 use url::Url;
@@ -18,11 +18,16 @@ fn main() -> Result<()> {
         .parse_default_env()
         .init();
 
-    let lp = random_deterministic(InstanceParameters {
-        num_constraints: 7,
+    let linear_parameter = FunctionParameters {
         num_terms: 5,
         max_degree: 1,
         max_id: 10,
+    };
+    let lp = random_deterministic(InstanceParameters {
+        num_constraints: 7,
+        objective: linear_parameter,
+        constraint: linear_parameter,
+        kinds: vec![ommx::v1::decision_variable::Kind::Continuous],
     });
 
     // "data" directory is at the root of the repository

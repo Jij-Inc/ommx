@@ -85,19 +85,9 @@ impl Arbitrary for RemovedConstraint {
     }
 
     fn arbitrary() -> Self::Strategy {
-        let FunctionParameters {
-            num_terms,
-            max_degree,
-            max_id,
-        } = FunctionParameters::default();
-        (0..=num_terms, 0..=max_degree, 0..=max_id)
-            .prop_flat_map(|(num_terms, max_degree, max_id)| {
-                Self::arbitrary_with(FunctionParameters {
-                    num_terms,
-                    max_degree,
-                    max_id,
-                })
-            })
+        Self::Parameters::default()
+            .smaller()
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }

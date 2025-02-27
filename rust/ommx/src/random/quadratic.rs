@@ -1,49 +1,81 @@
-use super::{arbitrary_coefficient, LinearParameters};
-use crate::v1::{Linear, Quadratic};
+use super::arbitrary_coefficient_nonzero;
+use crate::{
+    random::{unique_integer_pairs, FunctionParameters},
+    v1::{Linear, Quadratic},
+};
+use num::Zero;
 use proptest::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct QuadraticParameters {
-    pub num_terms: usize,
-    pub max_id: u64,
-}
-
-impl Default for QuadraticParameters {
-    fn default() -> Self {
-        Self {
-            num_terms: 5,
-            max_id: 10,
-        }
-    }
-}
-
 impl Arbitrary for Quadratic {
-    type Parameters = QuadraticParameters;
+    type Parameters = FunctionParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(
-        QuadraticParameters { num_terms, max_id }: Self::Parameters,
-    ) -> Self::Strategy {
-        let terms = proptest::collection::vec(
-            ((0..=max_id, 0..=max_id), arbitrary_coefficient()),
-            num_terms,
+    fn arbitrary_with(mut p: Self::Parameters) -> Self::Strategy {
+        p.validate().unwrap();
+        assert!(
+            p.can_be_quadratic(),
+            "FunctionParameters ({p:?}) cannot be realized as a Quadratic",
         );
-        let linear = Linear::arbitrary_with(LinearParameters { num_terms, max_id });
-        (terms, linear)
-            .prop_map(|(terms, linear)| {
-                let mut quad: Quadratic = terms.into_iter().collect();
-                quad.linear = Some(linear);
-                quad
+        if p.num_terms == 0 {
+            return Just(Quadratic::zero()).boxed();
+        }
+        if p.max_degree < 2 {
+            return Linear::arbitrary_with(p)
+                .prop_map(|linear| linear.into())
+                .boxed();
+        }
+        p.max_degree = 2;
+        p.largest_degree_term_range()
+            .prop_flat_map(move |num_quad| {
+                let num_linear = p.num_terms - num_quad;
+                let pairs = unique_integer_pairs(p.max_id, num_quad);
+                let values = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_quad);
+                let linear = Linear::arbitrary_with(FunctionParameters {
+                    num_terms: num_linear,
+                    max_degree: 1,
+                    max_id: p.max_id,
+                });
+                (pairs, values, linear).prop_map(|(pairs, values, linear)| {
+                    let mut quad: Quadratic = pairs.into_iter().zip(values).collect();
+                    quad.linear = Some(linear);
+                    quad
+                })
             })
             .boxed()
     }
 
     fn arbitrary() -> Self::Strategy {
-        let QuadraticParameters { num_terms, max_id } = Self::Parameters::default();
-        (0..=num_terms, 0..=max_id)
-            .prop_flat_map(|(num_terms, max_id)| {
-                Self::arbitrary_with(QuadraticParameters { num_terms, max_id })
-            })
-            .boxed()
+        Self::Parameters {
+            max_degree: 2,
+            ..Default::default()
+        }
+        .smaller()
+        .prop_flat_map(Self::arbitrary_with)
+        .boxed()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_arbitrary_quadratic(q in Quadratic::arbitrary_with(FunctionParameters { num_terms: 5, max_degree: 2, max_id: 10 })) {
+            let mut count = 0;
+            for (ids, _) in q.into_iter() {
+                for &id in ids.iter() {
+                    prop_assert!(id <= 10);
+                }
+                count += 1;
+            }
+            prop_assert_eq!(count, 5);
+        }
+
+        // (10 + 1) * (10 + 2) / 2 + (10 + 1) = 66 + 11 = 77
+        #[test]
+        fn test_arbitrary_quadratic_full(q in Quadratic::arbitrary_with(FunctionParameters { num_terms: 77, max_degree: 2, max_id: 10 })) {
+            prop_assert_eq!(q.into_iter().count(), 77);
+        }
     }
 }
