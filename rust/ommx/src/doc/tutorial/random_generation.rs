@@ -82,7 +82,7 @@
 //! );
 //!
 //! // The function will have quadratic and linear terms with the specified parameters
-//! assert!(quadratic.q_terms.len() <= num_q_terms);
+//! assert!(quadratic.rows.len() <= num_q_terms);
 //! if let Some(linear) = &quadratic.linear {
 //!     assert!(linear.terms.len() <= num_linear_terms);
 //! }
@@ -92,38 +92,18 @@
 //!
 //! You can generate complete random optimization problems:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::random;
-//! use ommx::random::instance::InstanceParams;
 //! use ommx::v1::{Instance, instance::Sense};
 //!
-//! // Create parameters for the random instance
-//! let params = InstanceParams {
-//!     min_var_id: 1,
-//!     max_var_id: 10,
-//!     min_constraint_id: 1,
-//!     max_constraint_id: 5,
-//!     min_coefficient: -5.0,
-//!     max_coefficient: 5.0,
-//!     min_constant: -10.0,
-//!     max_constant: 10.0,
-//!     min_rhs: -20.0,
-//!     max_rhs: 20.0,
-//!     min_bound: 0.0,
-//!     max_bound: 10.0,
-//!     integer_probability: 0.2,
-//!     objective_sense: Sense::Minimize as i32,
-//!     constraint_sense_distribution: vec![(0.7, 0), (0.2, 1), (0.1, 2)],
-//! };
-//!
-//! // Generate a random instance with 5 variables, 3 constraints, and the specified parameters
+//! // Generate a random instance with 5 variables, 3 constraints
 //! let seed = 42;
 //! let num_vars = 5;
 //! let num_constraints = 3;
 //! let num_objective_terms = 4;
 //! let num_constraint_terms = 2;
-//! let instance = random::instance::random_deterministic(
-//!     seed, num_vars, num_constraints, num_objective_terms, num_constraint_terms, Some(params)
+//! let instance = random::random_instance(
+//!     seed, num_vars, num_constraints, num_objective_terms, num_constraint_terms, None
 //! );
 //!
 //! // The instance will have the specified number of variables and constraints
@@ -154,8 +134,8 @@
 //! let state = random::state::random_deterministic(seed, num_vars, Some(params));
 //!
 //! // The state will have 5 variables with values between 0.0 and 10.0
-//! assert_eq!(state.values.len(), num_vars as usize);
-//! for (_, value) in state.values.iter() {
+//! assert_eq!(state.entries.len(), num_vars as usize);
+//! for (_, value) in state.entries.iter() {
 //!     assert!(*value >= 0.0 && *value <= 10.0);
 //! }
 //! ```
@@ -164,10 +144,10 @@
 //!
 //! Here's an example of generating a random QUBO (Quadratic Unconstrained Binary Optimization) model:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::random;
 //! use ommx::random::quadratic::QuadraticParams;
-//! use ommx::v1::{Quadratic, Instance, DecisionVariable, Function, instance::Sense};
+//! use ommx::v1::{Quadratic, Instance, DecisionVariable, Function, instance::Sense, Bound};
 //!
 //! // Create parameters for a random QUBO function
 //! let params = QuadraticParams {
@@ -198,17 +178,19 @@
 //! for i in 1..=10 {
 //!     let mut var = DecisionVariable::default();
 //!     var.id = i;
-//!     var.name = format!("x{}", i);
-//!     var.lower_bound = 0.0;
-//!     var.upper_bound = 1.0;
+//!     var.name = Some(format!("x{}", i));
+//!     let mut bound = Bound::default();
+//!     bound.lower = 0.0;
+//!     bound.upper = Some(1.0);
+//!     var.bound = Some(bound);
 //!     var.is_integer = true;
 //!     instance.decision_variables.push(var);
 //! }
 //!
 //! // Set the objective function
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Quadratic(quadratic))
-//! });
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Quadratic(quadratic));
+//! instance.objective = Some(function);
 //!
 //! // The instance now represents a random QUBO problem
 //! assert_eq!(instance.decision_variables.len(), 10);

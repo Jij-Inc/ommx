@@ -15,9 +15,9 @@
 //! let state: State = hashmap! { 1 => 2.0, 2 => 3.0, 3 => 4.0 }.into();
 //!
 //! // Access values in the state
-//! assert_eq!(state.values.get(&1), Some(&2.0));
-//! assert_eq!(state.values.get(&2), Some(&3.0));
-//! assert_eq!(state.values.get(&3), Some(&4.0));
+//! assert_eq!(state.entries.get(&1), Some(&2.0));
+//! assert_eq!(state.entries.get(&2), Some(&3.0));
+//! assert_eq!(state.entries.get(&3), Some(&4.0));
 //! ```
 //!
 //! ## Evaluating Linear Functions
