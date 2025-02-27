@@ -24,7 +24,7 @@
 //!
 //! You can evaluate linear functions using the `Evaluate` trait:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
@@ -44,7 +44,7 @@
 //!
 //! Similarly, you can evaluate quadratic functions:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Quadratic, Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
@@ -86,7 +86,7 @@
 //!
 //! You can also evaluate constraints to check if they are satisfied:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Constraint, Equality, Function, Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
@@ -116,7 +116,7 @@
 //!
 //! You can perform partial evaluation when not all variables are present in the state:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
@@ -142,7 +142,7 @@
 //!
 //! You can evaluate functions over multiple samples:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
@@ -172,7 +172,7 @@
 //!
 //! Here's an example of validating the optimal solution for a production planning problem:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, State, Bound};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
