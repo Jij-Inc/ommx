@@ -137,10 +137,10 @@ pub use prost::Message;
 // Public modules
 pub mod artifact;
 pub mod dataset;
-pub mod doc;
 pub mod mps;
 pub mod qplib;
 pub mod random;
+pub mod tutorial;
 
 // Internal modules
 mod convert;

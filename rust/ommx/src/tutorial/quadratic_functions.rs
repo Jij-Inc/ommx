@@ -61,6 +61,34 @@
 //! quadratic.linear = Some(Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0);
 //! ```
 //!
+//! ### Method 3: Using multiplication syntax
+//!
+//! ```rust,no_run
+//! use ommx::v1::{Quadratic, Linear, Function};
+//! use ommx::convert::function::AsLinear;
+//!
+//! // Create linear functions for x1 and x2
+//! let x1 = Linear::single_term(1, 1.0);
+//! let x2 = Linear::single_term(2, 1.0);
+//!
+//! // Create a quadratic function using multiplication: x1^2 + 2*x1*x2 + 3*x2^2 + 4*x1 + 5*x2 + 6
+//! let x1_squared = &x1 * &x1;
+//! let x1_x2 = &x1 * &x2 * 2.0;
+//! let x2_squared = &x2 * &x2 * 3.0;
+//! let linear_part = &x1 * 4.0 + &x2 * 5.0 + 6.0;
+//!
+//! // Combine all terms
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Quadratic(
+//!     x1_squared + x1_x2 + x2_squared
+//! ));
+//!
+//! // Add the linear part
+//! if let Some(ommx::v1::function::Function::Quadratic(ref mut q)) = function.function {
+//!     q.linear = Some(linear_part);
+//! }
+//! ```
+//!
 //! ## Evaluating Quadratic Functions
 //!
 //! You can evaluate quadratic functions using the `Evaluate` trait:
@@ -133,6 +161,58 @@
 //!
 //! // Multiply a quadratic function by a scalar
 //! let quadratic_scaled = quadratic1.clone() * 2.0;
+//! ```
+//!
+//! ## Example: Creating a Quadratic Optimization Problem
+//!
+//! Here's an example of creating a quadratic optimization problem using multiplication syntax:
+//!
+//! ```rust,no_run
+//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Quadratic, Bound};
+//! use ommx::convert::function::AsLinear;
+//!
+//! // Create an optimization problem
+//! let mut instance = Instance::default();
+//!
+//! // Add decision variables: x1, x2
+//! let mut x1_var = DecisionVariable::default();
+//! x1_var.id = 1;
+//! x1_var.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! x1_var.bound = Some(bound1);
+//! instance.decision_variables.push(x1_var);
+//!
+//! let mut x2_var = DecisionVariable::default();
+//! x2_var.id = 2;
+//! x2_var.name = Some("x2".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! x2_var.bound = Some(bound2);
+//! instance.decision_variables.push(x2_var);
+//!
+//! // Create linear functions for x1 and x2
+//! let x1 = Linear::single_term(1, 1.0);
+//! let x2 = Linear::single_term(2, 1.0);
+//!
+//! // Create a quadratic objective function: 2*x1^2 + x1*x2 + 3*x2^2 - 4*x1 - 5*x2
+//! let x1_squared = &x1 * &x1 * 2.0;
+//! let x1_x2 = &x1 * &x2;
+//! let x2_squared = &x2 * &x2 * 3.0;
+//! let linear_part = &x1 * (-4.0) + &x2 * (-5.0);
+//!
+//! // Combine all terms
+//! let quadratic_obj = x1_squared + x1_x2 + x2_squared;
+//! let mut quadratic = quadratic_obj.as_quadratic().unwrap();
+//! quadratic.linear = Some(linear_part);
+//!
+//! // Set the objective function
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Quadratic(quadratic));
+//! instance.objective = Some(obj_function);
+//! instance.sense = ommx::v1::instance::Sense::Minimize as i32;
+//!
+//! // Now you have a quadratic optimization problem
 //! ```
 //!
 //! ## Serialization and Deserialization
