@@ -19,6 +19,11 @@ impl Arbitrary for Linear {
         if p.num_terms == 0 {
             return Just(Linear::zero()).boxed();
         }
+        if p.max_degree == 0 {
+            return arbitrary_coefficient_nonzero()
+                .prop_map(|constant| constant.into())
+                .boxed();
+        }
 
         let constant = if p.num_terms == 1 + p.possible_max_linear_terms() {
             arbitrary_coefficient_nonzero()

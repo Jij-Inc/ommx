@@ -19,6 +19,11 @@ impl Arbitrary for Quadratic {
         if p.num_terms == 0 {
             return Just(Quadratic::zero()).boxed();
         }
+        if p.max_degree < 2 {
+            return Linear::arbitrary_with(p)
+                .prop_map(|linear| linear.into())
+                .boxed();
+        }
         p.max_degree = 2;
         p.largest_degree_term_range()
             .prop_flat_map(move |num_quad| {
