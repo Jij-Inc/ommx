@@ -21,6 +21,7 @@ pub struct FunctionParameters {
 }
 
 impl FunctionParameters {
+    /// Evaluate possible max terms based on the `max_degree` and `max_id`.
     pub fn possible_max_terms(&self) -> usize {
         (0..=self.max_degree)
             .map(|d| multi_choose(self.max_id + 1, d as usize) as usize)
@@ -35,6 +36,27 @@ impl FunctionParameters {
         (self.max_id + 1) as usize
     }
 
+    pub fn can_be_linear(&self) -> bool {
+        self.num_terms <= 1 + self.possible_max_linear_terms()
+    }
+
+    pub fn can_be_quadratic(&self) -> bool {
+        self.num_terms <= 1 + self.possible_max_linear_terms() + self.possible_max_quad_terms()
+    }
+
+    /// Validate the `num_terms` can be realized with the given `max_degree` and `max_id`.
+    pub fn validate(&self) -> Result<()> {
+        if self.num_terms > self.possible_max_terms() {
+            bail!(
+                "num_terms({num_terms}) must be less than or equal to the possible maximum number of terms({max_num_terms})",
+                num_terms = self.num_terms,
+                max_num_terms = self.possible_max_terms()
+            )
+        }
+        Ok(())
+    }
+
+    /// Possible range for the largest degree term.
     pub fn largest_degree_term_range(&self) -> std::ops::RangeInclusive<usize> {
         let sub_max_terms = (0..self.max_degree)
             .map(|d| multi_choose(self.max_id + 1, d as usize) as usize)
@@ -57,17 +79,6 @@ impl FunctionParameters {
             0
         };
         min..=max
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        if self.num_terms > self.possible_max_terms() {
-            bail!(
-                "num_terms({num_terms}) must be less than or equal to the possible maximum number of terms({max_num_terms})",
-                num_terms = self.num_terms,
-                max_num_terms = self.possible_max_terms()
-            )
-        }
-        Ok(())
     }
 
     pub fn smaller(&self) -> impl Strategy<Value = Self> {
@@ -117,28 +128,14 @@ impl Arbitrary for Function {
                     .boxed(),
             );
         }
-        let mut threshold = multi_choose(p.max_id + 1, 1) as usize;
-        if p.num_terms <= threshold && p.max_degree >= 1 {
-            strategies.push(
-                Linear::arbitrary_with(FunctionParameters {
-                    num_terms: p.num_terms,
-                    max_degree: 1,
-                    max_id: p.max_id,
-                })
-                .prop_map(Function::from)
-                .boxed(),
-            )
+        if p.can_be_linear() {
+            strategies.push(Linear::arbitrary_with(p).prop_map(Function::from).boxed());
         }
-        threshold += multi_choose(p.max_id + 1, 2) as usize;
-        if p.num_terms <= threshold && p.max_degree >= 2 {
+        if p.can_be_quadratic() {
             strategies.push(
-                Quadratic::arbitrary_with(FunctionParameters {
-                    num_terms: p.num_terms,
-                    max_degree: 2,
-                    max_id: p.max_id,
-                })
-                .prop_map(Function::from)
-                .boxed(),
+                Quadratic::arbitrary_with(p)
+                    .prop_map(Function::from)
+                    .boxed(),
             )
         }
         strategies.push(

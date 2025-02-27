@@ -3,32 +3,29 @@ use crate::{
     random::{unique_integer_pairs, FunctionParameters},
     v1::{Linear, Quadratic},
 };
+use num::Zero;
 use proptest::prelude::*;
 
 impl Arbitrary for Quadratic {
     type Parameters = FunctionParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
+    fn arbitrary_with(mut p: Self::Parameters) -> Self::Strategy {
+        p.validate().unwrap();
         assert!(
-            p.num_terms <= p.possible_max_terms(),
-            "num_terms ({num_terms}) must be less than or equal to possible maximum ({possible_max_terms}) determined from max_id ({max_id})",
-            num_terms = p.num_terms,
-            max_id = p.max_id,
-            possible_max_terms = p.possible_max_terms()
+            p.can_be_quadratic(),
+            "FunctionParameters ({p:?}) cannot be realized as a Quadratic",
         );
-        p.linear_terms_range()
-            .prop_flat_map(move |num_linear| {
-                let num_quad = p.num_terms - num_linear;
-                assert!(
-                    num_quad <= p.possible_max_quad_terms(),
-                    "num_quad ({num_quad}) must be less than or equal to max_quad_terms({max_quad_terms})",
-                    max_quad_terms = p.possible_max_quad_terms(),
-                );
-
+        if p.num_terms == 0 {
+            return Just(Quadratic::zero()).boxed();
+        }
+        p.max_degree = 2;
+        p.largest_degree_term_range()
+            .prop_flat_map(move |num_quad| {
+                let num_linear = p.num_terms - num_quad;
                 let pairs = unique_integer_pairs(p.max_id, num_quad);
                 let values = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_quad);
-                let linear = Linear::arbitrary_with(FunctionParameters{
+                let linear = Linear::arbitrary_with(FunctionParameters {
                     num_terms: num_linear,
                     max_degree: 1,
                     max_id: p.max_id,
