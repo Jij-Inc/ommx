@@ -20,7 +20,7 @@
 //! });
 //! ```
 //!
-//! [`InstanceParameters`] and [`LinearParameters`] are used to specify the size of the generated components.
+//! [`InstanceParameters`] and [`FunctionParameters`] are used to specify the size of the generated components.
 //!
 //! Proptest Support
 //! ----------------
