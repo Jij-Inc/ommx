@@ -12,7 +12,7 @@
 //!
 //! You can create and save OMMX artifacts using the `Builder`:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Builder;
 //! use ommx::v1::{Linear, Instance};
 //! use std::path::Path;
@@ -37,7 +37,7 @@
 //!
 //! You can add metadata to artifacts to provide additional information:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
 //! use std::path::Path;
@@ -65,7 +65,7 @@
 //!
 //! You can push artifacts to an OCI registry:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
 //! use ocipkg::ImageName;
@@ -89,7 +89,7 @@
 //!
 //! You can load artifacts from files:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Artifact;
 //! use ommx::v1::Linear;
 //! use prost::Message;
@@ -112,7 +112,7 @@
 //!
 //! You can pull artifacts from an OCI registry:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Artifact;
 //! use ommx::v1::Linear;
 //! use prost::Message;
@@ -136,7 +136,7 @@
 //!
 //! Here's a complete example of saving and loading an optimization problem:
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::{Builder, Artifact};
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //! use prost::Message;
@@ -215,7 +215,7 @@
 //! By pushing artifacts to a registry, you can easily share your problems with collaborators
 //! or the wider community.
 //!
-//! ```rust,ignore
+//! ```rust,no_run
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Instance;
 //! use ocipkg::ImageName;
