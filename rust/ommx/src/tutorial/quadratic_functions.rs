@@ -81,7 +81,7 @@
 //!
 //! // Add linear part: 4*x1 + 5*x2 + 6
 //! let linear_part = x1.clone() * 4.0 + x2.clone() * 5.0 + 6.0;
-//! 
+//!
 //! // Create the final quadratic function with both quadratic and linear terms
 //! let mut quadratic = quadratic_terms;
 //! quadratic.linear = Some(linear_part);
