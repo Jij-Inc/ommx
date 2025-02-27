@@ -124,7 +124,7 @@ impl Arbitrary for Function {
         if p.num_terms == 1 {
             strategies.push(
                 arbitrary_coefficient_nonzero()
-                    .prop_map(|c| Function::from(c))
+                    .prop_map(Function::from)
                     .boxed(),
             );
         }

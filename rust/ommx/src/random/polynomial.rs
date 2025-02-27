@@ -15,7 +15,7 @@ impl Arbitrary for Polynomial {
                 return Just(Polynomial::zero()).boxed();
             }
             return arbitrary_coefficient_nonzero()
-                .prop_map(|c| Polynomial::from(c))
+                .prop_map(Polynomial::from)
                 .boxed();
         }
         p.largest_degree_term_range()
@@ -35,10 +35,7 @@ impl Arbitrary for Polynomial {
 
                 (ids, coefficients, sub)
                     .prop_map(|(ids, coefficients, sub)| {
-                        ids.into_iter()
-                            .zip(coefficients)
-                            .chain(sub.into_iter())
-                            .collect()
+                        ids.into_iter().zip(coefficients).chain(&sub).collect()
                     })
                     .boxed()
             })
