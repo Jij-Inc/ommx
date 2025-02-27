@@ -54,7 +54,6 @@ pub use function::*;
 pub use instance::*;
 pub use parameter::*;
 pub use parametric_instance::*;
-pub use quadratic::*;
 
 use crate::sorted_ids::SortedIds;
 

@@ -1,4 +1,4 @@
-use super::{arbitrary_coefficient_nonzero, multi_choose, QuadraticParameters};
+use super::{arbitrary_coefficient_nonzero, multi_choose};
 use crate::v1::{Function, Linear, Polynomial, Quadratic};
 use anyhow::{bail, Result};
 use num::Zero;
@@ -27,6 +27,14 @@ impl FunctionParameters {
             .sum()
     }
 
+    pub fn possible_max_quad_terms(&self) -> usize {
+        ((self.max_id + 2) * (self.max_id + 1) / 2) as usize
+    }
+
+    pub fn possible_max_linear_terms(&self) -> usize {
+        (self.max_id + 1) as usize
+    }
+
     pub fn largest_degree_term_range(&self) -> std::ops::RangeInclusive<usize> {
         let sub_max_terms = (0..self.max_degree)
             .map(|d| multi_choose(self.max_id + 1, d as usize) as usize)
@@ -35,6 +43,16 @@ impl FunctionParameters {
         let max = std::cmp::min(self.num_terms, largest_max_terms);
         let min = if self.num_terms >= sub_max_terms {
             self.num_terms - sub_max_terms
+        } else {
+            0
+        };
+        min..=max
+    }
+
+    pub fn linear_terms_range(&self) -> std::ops::RangeInclusive<usize> {
+        let max = std::cmp::min(self.num_terms, self.possible_max_linear_terms());
+        let min = if self.num_terms >= self.possible_max_quad_terms() {
+            self.num_terms - self.possible_max_quad_terms()
         } else {
             0
         };
@@ -114,8 +132,9 @@ impl Arbitrary for Function {
         threshold += multi_choose(p.max_id + 1, 2) as usize;
         if p.num_terms <= threshold && p.max_degree >= 2 {
             strategies.push(
-                Quadratic::arbitrary_with(QuadraticParameters {
+                Quadratic::arbitrary_with(FunctionParameters {
                     num_terms: p.num_terms,
+                    max_degree: 2,
                     max_id: p.max_id,
                 })
                 .prop_map(Function::from)

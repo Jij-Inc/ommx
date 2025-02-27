@@ -5,61 +5,8 @@ use crate::{
 };
 use proptest::prelude::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct QuadraticParameters {
-    pub num_terms: usize,
-    pub max_id: u64,
-}
-
-impl Default for QuadraticParameters {
-    fn default() -> Self {
-        Self {
-            num_terms: 5,
-            max_id: 10,
-        }
-    }
-}
-
-impl QuadraticParameters {
-    fn possible_max_quad_terms(&self) -> usize {
-        ((self.max_id + 2) * (self.max_id + 1) / 2) as usize
-    }
-
-    fn possible_max_linear_terms(&self) -> usize {
-        (self.max_id + 1) as usize
-    }
-
-    // Possible maximum of the number of terms
-    //
-    // Note that `Quadratic` is not a binary function, x1 * x1 and x1 are different terms.
-    fn possible_max_terms(&self) -> usize {
-        self.possible_max_quad_terms() + self.possible_max_linear_terms()
-    }
-
-    fn linear_terms_range(&self) -> std::ops::RangeInclusive<usize> {
-        let max = std::cmp::min(self.num_terms, self.possible_max_linear_terms());
-        let min = if self.num_terms >= self.possible_max_quad_terms() {
-            self.num_terms - self.possible_max_quad_terms()
-        } else {
-            0
-        };
-        min..=max
-    }
-
-    pub fn smaller(&self) -> impl Strategy<Value = Self> {
-        (0..=self.max_id, Just(self.num_terms)).prop_flat_map(move |(max_id, num_terms)| {
-            let small = Self {
-                max_id,
-                num_terms: 0,
-            };
-            (0..=std::cmp::min(num_terms, small.possible_max_terms()))
-                .prop_map(move |num_terms| Self { max_id, num_terms })
-        })
-    }
-}
-
 impl Arbitrary for Quadratic {
-    type Parameters = QuadraticParameters;
+    type Parameters = FunctionParameters;
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
@@ -109,7 +56,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_arbitrary_quadratic(q in Quadratic::arbitrary_with(QuadraticParameters { num_terms: 5, max_id: 10 })) {
+        fn test_arbitrary_quadratic(q in Quadratic::arbitrary_with(FunctionParameters { num_terms: 5, max_degree: 2, max_id: 10 })) {
             let mut count = 0;
             for (ids, _) in q.into_iter() {
                 for &id in ids.iter() {
@@ -122,7 +69,7 @@ mod tests {
 
         // (10 + 1) * (10 + 2) / 2 + (10 + 1) = 66 + 11 = 77
         #[test]
-        fn test_arbitrary_quadratic_full(q in Quadratic::arbitrary_with(QuadraticParameters { num_terms: 77, max_id: 10 })) {
+        fn test_arbitrary_quadratic_full(q in Quadratic::arbitrary_with(FunctionParameters { num_terms: 77, max_degree: 2, max_id: 10 })) {
             prop_assert_eq!(q.into_iter().count(), 77);
         }
     }
