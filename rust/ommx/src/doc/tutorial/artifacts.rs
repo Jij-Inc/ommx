@@ -132,7 +132,7 @@
 //! let reference = "localhost:5000/linear:latest";
 //! let image_name = ImageName::parse(reference).unwrap();
 //! let mut artifact = Artifact::from_remote(image_name).unwrap();
-//! let local_artifact = artifact.pull().unwrap();
+//! let mut local_artifact = artifact.pull().unwrap();
 //!
 //! // Get the instances from the artifact
 //! let instances = local_artifact.get_instances().unwrap();
