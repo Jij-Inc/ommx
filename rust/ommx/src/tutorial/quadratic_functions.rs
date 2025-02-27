@@ -61,36 +61,30 @@
 //! quadratic.linear = Some(Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0);
 //! ```
 //!
-//! ### Method 3: Creating quadratic terms (conceptually like multiplication)
+//! ### Method 3: Using multiplication syntax with clone()
 //!
 //! ```rust,no_run
 //! use ommx::v1::{Quadratic, Linear, Function};
 //!
-//! // Create a quadratic function that represents x1^2 + 2*x1*x2 + 3*x2^2 + 4*x1 + 5*x2 + 6
-//! let mut quadratic = Quadratic::default();
+//! // Create linear functions for x1 and x2
+//! let x1 = Linear::single_term(1, 1.0);
+//! let x2 = Linear::single_term(2, 1.0);
 //!
-//! // Add quadratic terms (conceptually like x1*x1, x1*x2, x2*x2)
-//! // Term: x1^2
-//! quadratic.rows.push(1);
-//! quadratic.columns.push(1);
-//! quadratic.values.push(1.0);
+//! // Create a quadratic function using multiplication: x1^2 + 2*x1*x2 + 3*x2^2 + 4*x1 + 5*x2 + 6
+//! // Use clone() to avoid consuming the original Linear objects
+//! let x1_squared = x1.clone() * x1.clone();
+//! let x1_x2 = x1.clone() * x2.clone() * 2.0;
+//! let x2_squared = x2.clone() * x2.clone() * 3.0;
 //!
-//! // Term: x1*x2 (with coefficient 2.0)
-//! quadratic.rows.push(1);
-//! quadratic.columns.push(2);
-//! quadratic.values.push(1.0);
-//! quadratic.rows.push(2);
-//! quadratic.columns.push(1);
-//! quadratic.values.push(1.0);
+//! // Combine all quadratic terms
+//! let quadratic_terms = x1_squared + x1_x2 + x2_squared;
 //!
-//! // Term: x2^2 (with coefficient 3.0)
-//! quadratic.rows.push(2);
-//! quadratic.columns.push(2);
-//! quadratic.values.push(3.0);
-//!
-//! // Add linear part (4*x1 + 5*x2 + 6)
-//! let linear = Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0;
-//! quadratic.linear = Some(linear);
+//! // Add linear part: 4*x1 + 5*x2 + 6
+//! let linear_part = x1.clone() * 4.0 + x2.clone() * 5.0 + 6.0;
+//! 
+//! // Create the final quadratic function with both quadratic and linear terms
+//! let mut quadratic = quadratic_terms;
+//! quadratic.linear = Some(linear_part);
 //!
 //! // Create a Function object from the quadratic
 //! let mut function = Function::default();
@@ -199,30 +193,24 @@
 //! instance.decision_variables.push(x2_var);
 //!
 //! // Create a quadratic objective function: 2*x1^2 + x1*x2 + 3*x2^2 - 4*x1 - 5*x2
-//! let mut quadratic = Quadratic::default();
+//! // First, create linear functions for x1 and x2
+//! let x1 = Linear::single_term(1, 1.0);
+//! let x2 = Linear::single_term(2, 1.0);
 //!
-//! // Add quadratic terms
-//! // Term: 2*x1^2
-//! quadratic.rows.push(1);
-//! quadratic.columns.push(1);
-//! quadratic.values.push(2.0);
+//! // Create quadratic terms using multiplication syntax with clone()
+//! let x1_squared = x1.clone() * x1.clone() * 2.0;  // 2*x1^2
+//! let x1_x2 = x1.clone() * x2.clone();             // x1*x2
+//! let x2_squared = x2.clone() * x2.clone() * 3.0;  // 3*x2^2
 //!
-//! // Term: x1*x2
-//! quadratic.rows.push(1);
-//! quadratic.columns.push(2);
-//! quadratic.values.push(0.5);
-//! quadratic.rows.push(2);
-//! quadratic.columns.push(1);
-//! quadratic.values.push(0.5);
-//!
-//! // Term: 3*x2^2
-//! quadratic.rows.push(2);
-//! quadratic.columns.push(2);
-//! quadratic.values.push(3.0);
+//! // Combine all quadratic terms
+//! let quadratic_terms = x1_squared + x1_x2 + x2_squared;
 //!
 //! // Add linear part: -4*x1 - 5*x2
-//! let linear = Linear::single_term(1, -4.0) + Linear::single_term(2, -5.0);
-//! quadratic.linear = Some(linear);
+//! let linear_part = x1.clone() * (-4.0) + x2.clone() * (-5.0);
+//!
+//! // Create the final quadratic function with both quadratic and linear terms
+//! let mut quadratic = quadratic_terms;
+//! quadratic.linear = Some(linear_part);
 //!
 //! // Set the objective function
 //! let mut obj_function = Function::default();
