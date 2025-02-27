@@ -1,10 +1,9 @@
 use crate::{
     random::{
         arbitrary_constraints, arbitrary_decision_variables, arbitrary_parameters,
-        FunctionParameters,
+        InstanceParameters,
     },
     v1::{
-        decision_variable::Kind,
         instance::{Description, Sense},
         Function, ParametricInstance,
     },
@@ -12,56 +11,26 @@ use crate::{
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
-pub struct ParametricInstanceParameters {
-    pub num_constraints: usize,
-    pub num_terms: usize,
-    pub max_degree: u32,
-    pub max_id: u64,
-}
-
-impl Default for ParametricInstanceParameters {
-    fn default() -> Self {
-        Self {
-            num_constraints: 5,
-            num_terms: 5,
-            max_degree: 2,
-            max_id: 10,
-        }
-    }
-}
-
 impl Arbitrary for ParametricInstance {
-    type Parameters = ParametricInstanceParameters;
+    type Parameters = InstanceParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(
-        ParametricInstanceParameters {
+    fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
+        p.validate().unwrap();
+        let InstanceParameters {
             num_constraints,
-            num_terms,
-            max_degree,
-            max_id,
-        }: Self::Parameters,
-    ) -> Self::Strategy {
+            objective,
+            constraint,
+            kinds,
+        } = p;
+
         (
-            proptest::option::of(Function::arbitrary_with(FunctionParameters {
-                num_terms,
-                max_degree,
-                max_id,
-            })),
-            arbitrary_constraints(
-                num_constraints,
-                FunctionParameters {
-                    num_terms,
-                    max_degree,
-                    max_id,
-                },
-            ),
+            Function::arbitrary_with(objective),
+            arbitrary_constraints(num_constraints, constraint),
+            Just(kinds),
         )
-            .prop_flat_map(|(objective, constraints)| {
-                let mut used_ids = objective
-                    .as_ref()
-                    .map(|f| f.used_decision_variable_ids())
-                    .unwrap_or_default();
+            .prop_flat_map(|(objective, constraints, kinds)| {
+                let mut used_ids = objective.used_decision_variable_ids();
                 for c in &constraints {
                     used_ids.extend(c.function().used_decision_variable_ids());
                 }
@@ -72,14 +41,11 @@ impl Arbitrary for ParametricInstance {
                     arbitrary_split(used_ids),
                 )
                     .prop_flat_map(
-                        |(objective, constraints, (decision_variable_ids, parameter_ids))| {
+                        move |(objective, constraints, (decision_variable_ids, parameter_ids))| {
                             (
                                 Just(objective),
                                 Just(constraints),
-                                arbitrary_decision_variables(
-                                    decision_variable_ids,
-                                    Kind::arbitrary(),
-                                ),
+                                arbitrary_decision_variables(decision_variable_ids, kinds.clone()),
                                 arbitrary_parameters(parameter_ids),
                                 Option::<Description>::arbitrary(),
                                 Sense::arbitrary(),
@@ -94,7 +60,7 @@ impl Arbitrary for ParametricInstance {
                                         sense,
                                     )| {
                                         ParametricInstance {
-                                            objective,
+                                            objective: Some(objective),
                                             constraints,
                                             decision_variables,
                                             description,
@@ -111,26 +77,9 @@ impl Arbitrary for ParametricInstance {
     }
 
     fn arbitrary() -> Self::Strategy {
-        let ParametricInstanceParameters {
-            num_constraints,
-            num_terms,
-            max_degree,
-            max_id,
-        } = ParametricInstanceParameters::default();
-        (
-            0..=num_constraints,
-            0..=num_terms,
-            0..=max_degree,
-            0..=max_id,
-        )
-            .prop_flat_map(move |(num_constraints, num_terms, max_degree, max_id)| {
-                Self::arbitrary_with(ParametricInstanceParameters {
-                    num_constraints,
-                    num_terms,
-                    max_degree,
-                    max_id,
-                })
-            })
+        Self::Parameters::default()
+            .smaller()
+            .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
 }

@@ -200,11 +200,7 @@ impl Instance {
         let index = self
             .removed_constraints
             .iter()
-            .position(|c| {
-                c.constraint
-                    .as_ref()
-                    .map_or(false, |c| c.id == constraint_id)
-            })
+            .position(|c| c.constraint.as_ref().is_some_and(|c| c.id == constraint_id))
             .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
         let c = self.removed_constraints.remove(index).constraint.unwrap();
         self.constraints.push(c);
@@ -362,7 +358,7 @@ impl AbsDiffEq for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::v1::Parameters;
+    use crate::{random::InstanceParameters, v1::Parameters};
     use proptest::prelude::*;
 
     proptest! {
@@ -437,7 +433,7 @@ mod tests {
         }
 
         #[test]
-        fn test_pubo(instance in Instance::arbitrary_binary_unconstrained()) {
+        fn test_pubo(instance in Instance::arbitrary_with(InstanceParameters::default_pubo())) {
             if instance.sense() == Sense::Maximize {
                 return Ok(());
             }
@@ -448,7 +444,7 @@ mod tests {
         }
 
         #[test]
-        fn test_qubo(instance in Instance::arbitrary_quadratic_binary_unconstrained()) {
+        fn test_qubo(instance in Instance::arbitrary_with(InstanceParameters::default_qubo())) {
             if instance.sense() == Sense::Maximize {
                 return Ok(());
             }
