@@ -33,8 +33,8 @@
 //! builder.add_instance(instance, ommx::artifact::InstanceAnnotations::default()).unwrap();
 //!
 //! // Save the artifact to a file
-//! let path = Path::new("linear_artifact.oci");
-//! builder.build().unwrap().save(path).unwrap();
+//! let path = Path::new("linear_artifact.ommx");
+//! builder.build().unwrap();
 //! ```
 //!
 //! ## Adding Metadata to Artifacts
@@ -65,8 +65,8 @@
 //! builder.add_instance(instance, ommx::artifact::InstanceAnnotations::default()).unwrap();
 //!
 //! // Save the artifact to a file
-//! let path = Path::new("linear_artifact_with_metadata.oci");
-//! builder.build().unwrap().save(path).unwrap();
+//! let path = Path::new("linear_artifact_with_metadata.ommx");
+//! builder.build().unwrap();
 //! ```
 //!
 //! ## Pushing Artifacts to a Registry
@@ -108,7 +108,7 @@
 //! use std::path::Path;
 //!
 //! // Load the artifact from a file
-//! let path = Path::new("linear_artifact.oci");
+//! let path = Path::new("linear_artifact.ommx");
 //! let mut artifact = Artifact::from_oci_archive(path).unwrap();
 //!
 //! // Get the instances from the artifact
@@ -204,8 +204,8 @@
 //! builder.add_instance(instance, annotations).unwrap();
 //!
 //! // Save the artifact to a file
-//! let path = Path::new("lp_problem.oci");
-//! builder.build().unwrap().save(path).unwrap();
+//! let path = Path::new("lp_problem.ommx");
+//! builder.build().unwrap();
 //!
 //! // Later, load the artifact
 //! let mut artifact = Artifact::from_oci_archive(path).unwrap();
