@@ -43,10 +43,13 @@ impl Arbitrary for Linear {
     }
 
     fn arbitrary() -> Self::Strategy {
-        Self::Parameters::default()
-            .smaller()
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
+        Self::Parameters {
+            max_degree: 1,
+            ..Default::default()
+        }
+        .smaller()
+        .prop_flat_map(Self::arbitrary_with)
+        .boxed()
     }
 }
 

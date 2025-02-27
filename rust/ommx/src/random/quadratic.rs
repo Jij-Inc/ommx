@@ -40,10 +40,13 @@ impl Arbitrary for Quadratic {
     }
 
     fn arbitrary() -> Self::Strategy {
-        Self::Parameters::default()
-            .smaller()
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
+        Self::Parameters {
+            max_degree: 2,
+            ..Default::default()
+        }
+        .smaller()
+        .prop_flat_map(Self::arbitrary_with)
+        .boxed()
     }
 }
 
