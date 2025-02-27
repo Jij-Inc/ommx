@@ -389,13 +389,13 @@ mod tests {
         }
 
         #[test]
-        fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 0,  max_id: 10})) {
+        fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0,  max_id: 10})) {
             let c = f.clone().as_constant().unwrap();
             prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
         }
 
         #[test]
-        fn test_max_degree_0(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 0, max_id: 10})) {
+        fn test_max_degree_0(f in Function::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0, max_id: 10})) {
             prop_assert!(f.degree() == 0);
         }
 
