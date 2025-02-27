@@ -6,17 +6,17 @@
 //! using [`random`] and [`random_deterministic`] functions.
 //!
 //! ```rust
-//! use ommx::{v1, random::*};
+//! use ommx::{v1::{Linear, Instance, decision_variable::Kind}, random::*};
 //!
 //! // Linear function with random coefficients
-//! let linear: v1::Linear = random_deterministic(LinearParameters { num_terms: 5, max_id: 10 });
+//! let linear: Linear = random_deterministic(FunctionParameters { num_terms: 5, max_degree: 1, max_id: 10 });
 //!
 //! // LP instance
-//! let instance: v1::Instance = random_deterministic(InstanceParameters {
+//! let instance: Instance = random_deterministic(InstanceParameters {
 //!   num_constraints: 7,
-//!   num_terms: 5,
-//!   max_degree: 1,
-//!   max_id: 10
+//!   objective: FunctionParameters { max_degree: 1, ..Default::default() },
+//!   constraint: FunctionParameters { max_degree: 1, ..Default::default() },
+//!   kinds: vec![Kind::Continuous],
 //! });
 //! ```
 //!

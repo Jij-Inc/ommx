@@ -9,58 +9,6 @@ use crate::{
 use anyhow::{bail, Result};
 use proptest::prelude::*;
 
-impl Instance {
-    /// Arbitrary LP problem, i.e. linear objective and constraints with continuous decision variables.
-    pub fn arbitrary_lp() -> BoxedStrategy<Self> {
-        let p = InstanceParameters {
-            num_constraints: 5,
-            objective: FunctionParameters {
-                num_terms: 5,
-                max_degree: 1,
-                max_id: 10,
-            },
-            constraint: FunctionParameters {
-                num_terms: 5,
-                max_degree: 1,
-                max_id: 10,
-            },
-            kinds: vec![Kind::Continuous],
-        };
-        p.smaller().prop_flat_map(Instance::arbitrary_with).boxed()
-    }
-
-    pub fn arbitrary_binary() -> BoxedStrategy<Self> {
-        let p = InstanceParameters {
-            kinds: vec![Kind::Binary],
-            ..Default::default()
-        };
-        p.smaller().prop_flat_map(Instance::arbitrary_with).boxed()
-    }
-
-    pub fn arbitrary_binary_unconstrained() -> BoxedStrategy<Self> {
-        let p = InstanceParameters {
-            num_constraints: 0,
-            kinds: vec![Kind::Binary],
-            ..Default::default()
-        };
-        p.smaller().prop_flat_map(Instance::arbitrary_with).boxed()
-    }
-
-    pub fn arbitrary_quadratic_binary_unconstrained() -> BoxedStrategy<Self> {
-        let p = InstanceParameters {
-            num_constraints: 0,
-            objective: FunctionParameters {
-                num_terms: 5,
-                max_degree: 2,
-                max_id: 10,
-            },
-            kinds: vec![Kind::Binary],
-            ..Default::default()
-        };
-        p.smaller().prop_flat_map(Instance::arbitrary_with).boxed()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InstanceParameters {
     pub num_constraints: usize,
@@ -82,6 +30,55 @@ impl Kind {
 }
 
 impl InstanceParameters {
+    /// Example parameter for LP problem, i.e. linear objective and constraints with continuous decision variables.
+    pub fn default_lp() -> Self {
+        Self {
+            num_constraints: 5,
+            objective: FunctionParameters {
+                num_terms: 5,
+                max_degree: 1,
+                max_id: 10,
+            },
+            constraint: FunctionParameters {
+                num_terms: 5,
+                max_degree: 1,
+                max_id: 10,
+            },
+            kinds: vec![Kind::Continuous],
+        }
+    }
+
+    /// Example parameter for binary problem
+    pub fn default_binary() -> Self {
+        Self {
+            kinds: vec![Kind::Binary],
+            ..Default::default()
+        }
+    }
+
+    /// Example parameter for binary problem without constraints
+    pub fn default_pubo() -> Self {
+        Self {
+            num_constraints: 0,
+            kinds: vec![Kind::Binary],
+            ..Default::default()
+        }
+    }
+
+    /// Example parameter for binary quadratic problem without constraints (QUBO)
+    pub fn default_qubo() -> Self {
+        Self {
+            num_constraints: 0,
+            objective: FunctionParameters {
+                num_terms: 5,
+                max_degree: 2,
+                max_id: 10,
+            },
+            kinds: vec![Kind::Binary],
+            ..Default::default()
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         self.objective.validate()?;
         self.constraint.validate()?;
