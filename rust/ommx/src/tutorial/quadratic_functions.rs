@@ -61,32 +61,40 @@
 //! quadratic.linear = Some(Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0);
 //! ```
 //!
-//! ### Method 3: Using multiplication syntax
+//! ### Method 3: Creating quadratic terms (conceptually like multiplication)
 //!
 //! ```rust,no_run
 //! use ommx::v1::{Quadratic, Linear, Function};
-//! use ommx::convert::function::AsLinear;
 //!
-//! // Create linear functions for x1 and x2
-//! let x1 = Linear::single_term(1, 1.0);
-//! let x2 = Linear::single_term(2, 1.0);
+//! // Create a quadratic function that represents x1^2 + 2*x1*x2 + 3*x2^2 + 4*x1 + 5*x2 + 6
+//! let mut quadratic = Quadratic::default();
 //!
-//! // Create a quadratic function using multiplication: x1^2 + 2*x1*x2 + 3*x2^2 + 4*x1 + 5*x2 + 6
-//! let x1_squared = &x1 * &x1;
-//! let x1_x2 = &x1 * &x2 * 2.0;
-//! let x2_squared = &x2 * &x2 * 3.0;
-//! let linear_part = &x1 * 4.0 + &x2 * 5.0 + 6.0;
+//! // Add quadratic terms (conceptually like x1*x1, x1*x2, x2*x2)
+//! // Term: x1^2
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(1.0);
 //!
-//! // Combine all terms
+//! // Term: x1*x2 (with coefficient 2.0)
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(1.0);
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(1.0);
+//!
+//! // Term: x2^2 (with coefficient 3.0)
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(3.0);
+//!
+//! // Add linear part (4*x1 + 5*x2 + 6)
+//! let linear = Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0;
+//! quadratic.linear = Some(linear);
+//!
+//! // Create a Function object from the quadratic
 //! let mut function = Function::default();
-//! function.function = Some(ommx::v1::function::Function::Quadratic(
-//!     x1_squared + x1_x2 + x2_squared
-//! ));
-//!
-//! // Add the linear part
-//! if let Some(ommx::v1::function::Function::Quadratic(ref mut q)) = function.function {
-//!     q.linear = Some(linear_part);
-//! }
+//! function.function = Some(ommx::v1::function::Function::Quadratic(quadratic));
 //! ```
 //!
 //! ## Evaluating Quadratic Functions
@@ -165,11 +173,10 @@
 //!
 //! ## Example: Creating a Quadratic Optimization Problem
 //!
-//! Here's an example of creating a quadratic optimization problem using multiplication syntax:
+//! Here's an example of creating a quadratic optimization problem:
 //!
 //! ```rust,no_run
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Quadratic, Bound};
-//! use ommx::convert::function::AsLinear;
 //!
 //! // Create an optimization problem
 //! let mut instance = Instance::default();
@@ -191,20 +198,31 @@
 //! x2_var.bound = Some(bound2);
 //! instance.decision_variables.push(x2_var);
 //!
-//! // Create linear functions for x1 and x2
-//! let x1 = Linear::single_term(1, 1.0);
-//! let x2 = Linear::single_term(2, 1.0);
-//!
 //! // Create a quadratic objective function: 2*x1^2 + x1*x2 + 3*x2^2 - 4*x1 - 5*x2
-//! let x1_squared = &x1 * &x1 * 2.0;
-//! let x1_x2 = &x1 * &x2;
-//! let x2_squared = &x2 * &x2 * 3.0;
-//! let linear_part = &x1 * (-4.0) + &x2 * (-5.0);
+//! let mut quadratic = Quadratic::default();
 //!
-//! // Combine all terms
-//! let quadratic_obj = x1_squared + x1_x2 + x2_squared;
-//! let mut quadratic = quadratic_obj.as_quadratic().unwrap();
-//! quadratic.linear = Some(linear_part);
+//! // Add quadratic terms
+//! // Term: 2*x1^2
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(2.0);
+//!
+//! // Term: x1*x2
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(0.5);
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(0.5);
+//!
+//! // Term: 3*x2^2
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(3.0);
+//!
+//! // Add linear part: -4*x1 - 5*x2
+//! let linear = Linear::single_term(1, -4.0) + Linear::single_term(2, -5.0);
+//! quadratic.linear = Some(linear);
 //!
 //! // Set the objective function
 //! let mut obj_function = Function::default();
