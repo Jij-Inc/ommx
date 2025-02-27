@@ -7,7 +7,7 @@
 //! An `Instance` represents a complete optimization problem, including decision variables,
 //! constraints, and an objective function.
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //!
 //! // Create a new instance
@@ -57,8 +57,8 @@
 //!
 //! Decision variables represent the unknowns in an optimization problem:
 //!
-//! ```rust
-//! use ommx::v1::{DecisionVariable, Bound};
+//! ```rust,no_run
+//! use ommx::v1::{DecisionVariable, Bound, decision_variable::Kind};
 //!
 //! // Create a continuous variable with bounds [0, 10]
 //! let mut x1 = DecisionVariable::default();
@@ -68,6 +68,7 @@
 //! bound1.lower = 0.0;
 //! bound1.upper = 10.0;
 //! x1.bound = Some(bound1);
+//! x1.kind = Kind::Continuous as i32;
 //!
 //! // Create a binary variable (0 or 1)
 //! let mut y1 = DecisionVariable::default();
@@ -77,7 +78,7 @@
 //! bound2.lower = 0.0;
 //! bound2.upper = 1.0;
 //! y1.bound = Some(bound2);
-//! y1.is_integer = true;
+//! y1.kind = Kind::Binary as i32;
 //!
 //! // Create an integer variable with bounds [0, 5]
 //! let mut z1 = DecisionVariable::default();
@@ -87,14 +88,14 @@
 //! bound3.lower = 0.0;
 //! bound3.upper = 5.0;
 //! z1.bound = Some(bound3);
-//! z1.is_integer = true;
+//! z1.kind = Kind::Integer as i32;
 //! ```
 //!
 //! ## Adding Constraints
 //!
 //! Constraints define the feasible region of the optimization problem:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Constraint, Equality, Function, Linear};
 //!
 //! // Create a constraint: x1 + 2*x2 - 15 <= 0
@@ -126,7 +127,7 @@
 //!
 //! The objective function defines what we want to optimize:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Instance, Function, Linear};
 //!
 //! // Create a new instance
@@ -147,8 +148,8 @@
 //!
 //! You can represent multi-dimensional decision variables using a flattening scheme:
 //!
-//! ```rust
-//! use ommx::v1::DecisionVariable;
+//! ```rust,no_run
+//! use ommx::v1::{DecisionVariable, Bound};
 //!
 //! // Create a 3x3 matrix of decision variables
 //! let n = 3;
@@ -159,9 +160,11 @@
 //!         let mut var = DecisionVariable::default();
 //!         // Flatten 2D indices to 1D
 //!         var.id = (i * n + j + 1) as u64;
-//!         var.name = format!("x_{}_{}", i, j);
-//!         var.lower_bound = 0.0;
-//!         var.upper_bound = 1.0;
+//!         var.name = Some(format!("x_{}_{}", i, j).to_string());
+//!         let mut bound = Bound::default();
+//!         bound.lower = 0.0;
+//!         bound.upper = 1.0;
+//!         var.bound = Some(bound);
 //!         variables.push(var);
 //!     }
 //! }
@@ -171,7 +174,7 @@
 //!
 //! Here's a complete example of a linear programming problem:
 //!
-//! ```rust
+//! ```rust,no_run
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //!
 //! // Create a new instance

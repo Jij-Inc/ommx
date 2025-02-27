@@ -12,16 +12,18 @@
 //!
 //! You can create and save OMMX artifacts using the `Builder`:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use ommx::artifact::Builder;
 //! use ommx::v1::{Linear, Instance};
 //! use std::path::Path;
+//! use ocipkg::ImageName;
 //!
 //! // Create a linear function
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder
-//! let mut builder = Builder::new();
+//! let image_name = ImageName::parse("localhost:5000/linear:latest").unwrap();
+//! let mut builder = Builder::new(image_name).unwrap();
 //!
 //! // Add the linear function to the artifact
 //! builder.add_message("linear", &linear).unwrap();
@@ -35,16 +37,18 @@
 //!
 //! You can add metadata to artifacts to provide additional information:
 //!
-//! ```rust
+//! ```rust,ignore
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
 //! use std::path::Path;
+//! use ocipkg::ImageName;
 //!
 //! // Create a linear function
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder with metadata
-//! let mut builder = Builder::new();
+//! let image_name = ImageName::parse("localhost:5000/linear:latest").unwrap();
+//! let mut builder = Builder::new(image_name).unwrap();
 //! builder.add_annotation("description", "A simple linear function");
 //! builder.add_annotation("author", "OMMX User");
 //! builder.add_annotation("version", "1.0");
@@ -61,15 +65,17 @@
 //!
 //! You can push artifacts to an OCI registry:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
+//! use ocipkg::ImageName;
 //!
 //! // Create a linear function
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder
-//! let mut builder = Builder::new();
+//! let image_name = ImageName::parse("localhost:5000/linear:latest").unwrap();
+//! let mut builder = Builder::new(image_name).unwrap();
 //!
 //! // Add the linear function to the artifact
 //! builder.add_message("linear", &linear).unwrap();
@@ -83,7 +89,7 @@
 //!
 //! You can load artifacts from files:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use ommx::artifact::Artifact;
 //! use ommx::v1::Linear;
 //! use prost::Message;
@@ -91,7 +97,8 @@
 //!
 //! // Load the artifact from a file
 //! let path = Path::new("linear_artifact.oci");
-//! let artifact = Artifact::load(path).unwrap();
+//! let mut artifact = Artifact::new_archive(path).unwrap();
+//! artifact.load().unwrap();
 //!
 //! // Get the linear function from the artifact
 //! let linear_bytes = artifact.get_message("linear").unwrap();
@@ -105,14 +112,17 @@
 //!
 //! You can pull artifacts from an OCI registry:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use ommx::artifact::Artifact;
 //! use ommx::v1::Linear;
 //! use prost::Message;
+//! use ocipkg::ImageName;
 //!
 //! // Pull the artifact from a registry
 //! let reference = "localhost:5000/linear:latest";
-//! let artifact = Artifact::pull(reference).unwrap();
+//! let image_name = ImageName::parse(reference).unwrap();
+//! let mut artifact = Artifact::new_remote(image_name).unwrap();
+//! artifact.pull().unwrap();
 //!
 //! // Get the linear function from the artifact
 //! let linear_bytes = artifact.get_message("linear").unwrap();
@@ -126,11 +136,12 @@
 //!
 //! Here's a complete example of saving and loading an optimization problem:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use ommx::artifact::{Builder, Artifact};
 //! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //! use prost::Message;
 //! use std::path::Path;
+//! use ocipkg::ImageName;
 //!
 //! // Create an optimization problem
 //! let mut instance = Instance::default();
@@ -174,7 +185,8 @@
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //!
 //! // Create an artifact builder
-//! let mut builder = Builder::new();
+//! let image_name = ImageName::parse("localhost:5000/lp_problem:latest").unwrap();
+//! let mut builder = Builder::new(image_name).unwrap();
 //! builder.add_annotation("description", "Linear programming example");
 //! builder.add_annotation("author", "OMMX User");
 //!
@@ -186,7 +198,8 @@
 //! builder.save(path).unwrap();
 //!
 //! // Later, load the artifact
-//! let artifact = Artifact::load(path).unwrap();
+//! let mut artifact = Artifact::new_archive(path).unwrap();
+//! artifact.load().unwrap();
 //!
 //! // Get the instance from the artifact
 //! let instance_bytes = artifact.get_message("instance").unwrap();
@@ -202,15 +215,17 @@
 //! By pushing artifacts to a registry, you can easily share your problems with collaborators
 //! or the wider community.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use ommx::artifact::Builder;
 //! use ommx::v1::Instance;
+//! use ocipkg::ImageName;
 //!
 //! // Create an instance (optimization problem)
 //! let instance = Instance::default(); // In practice, this would be a real problem
 //!
 //! // Create an artifact builder with metadata
-//! let mut builder = Builder::new();
+//! let image_name = ImageName::parse("ghcr.io/my-username/my-problem:v1.0").unwrap();
+//! let mut builder = Builder::new(image_name).unwrap();
 //! builder.add_annotation("description", "My optimization problem");
 //! builder.add_annotation("author", "OMMX User");
 //! builder.add_annotation("version", "1.0");

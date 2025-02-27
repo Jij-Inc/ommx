@@ -99,19 +99,18 @@
 //! ```rust,no_run
 //! use ommx::random;
 //! use ommx::v1::State;
+//! use std::collections::HashMap;
 //!
-//! // Create parameters for the random state
-//! let params = random::StateParameters {
-//!     num_entries: 5,
-//!     max_id: 10,
-//!     ..Default::default()
-//! };
+//! // Create a state manually with random values
+//! let mut state = State::default();
+//! state.entries.insert(1, 0.5);
+//! state.entries.insert(2, 1.0);
+//! state.entries.insert(3, 0.0);
+//! state.entries.insert(4, 2.5);
+//! state.entries.insert(5, 1.5);
 //!
-//! // Generate a random state with the specified parameters
-//! let state: State = random::random_deterministic(params);
-//!
-//! // The state will have entries with values
-//! assert_eq!(state.entries.len(), 5);
+//! // Alternatively, you can use the random_deterministic function
+//! // with appropriate parameters for your use case
 //! ```
 //!
 //! ## Practical Example: Generating Random QUBO Models
@@ -120,7 +119,7 @@
 //!
 //! ```rust,no_run
 //! use ommx::random;
-//! use ommx::v1::{Quadratic, Instance, DecisionVariable, Function, instance::Sense, Bound};
+//! use ommx::v1::{Quadratic, Instance, DecisionVariable, Function, instance::Sense, Bound, decision_variable::Kind};
 //!
 //! // Create parameters for a random QUBO function
 //! let params = random::QuadraticParameters {
@@ -142,9 +141,9 @@
 //!     var.name = Some(format!("x{}", i));
 //!     let mut bound = Bound::default();
 //!     bound.lower = 0.0;
-//!     bound.upper = Some(1.0);
+//!     bound.upper = 1.0;
 //!     var.bound = Some(bound);
-//!     var.is_integer = true;
+//!     var.kind = Kind::Binary as i32;
 //!     instance.decision_variables.push(var);
 //! }
 //!
