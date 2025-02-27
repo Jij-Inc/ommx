@@ -89,14 +89,6 @@ pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
         .boxed()
 }
 
-// Only samples where `num_terms <= max_id + 1`
-fn num_terms_and_max_id(num_terms: usize, max_id: u64) -> impl Strategy<Value = (usize, u64)> {
-    (0..=max_id).prop_flat_map(move |max_id| {
-        let max_num_terms = std::cmp::min(max_id as usize + 1, num_terms);
-        (0..=max_num_terms).prop_map(move |num_terms| (num_terms, max_id))
-    })
-}
-
 /// Generate a strategy for producing a vector of unique integers within a given range `min_id..=max_id`
 fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u64>> {
     assert!(

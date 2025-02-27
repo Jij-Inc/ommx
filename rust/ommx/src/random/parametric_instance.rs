@@ -12,8 +12,6 @@ use crate::{
 use proptest::prelude::*;
 use std::collections::BTreeSet;
 
-use super::num_terms_and_max_id;
-
 pub struct ParametricInstanceParameters {
     pub num_constraints: usize,
     pub num_terms: usize,
@@ -80,7 +78,7 @@ impl Arbitrary for ParametricInstance {
                                 Just(constraints),
                                 arbitrary_decision_variables(
                                     decision_variable_ids,
-                                    Kind::arbitrary(),
+                                    Kind::possibles(),
                                 ),
                                 arbitrary_parameters(parameter_ids),
                                 Option::<Description>::arbitrary(),
@@ -113,26 +111,7 @@ impl Arbitrary for ParametricInstance {
     }
 
     fn arbitrary() -> Self::Strategy {
-        let ParametricInstanceParameters {
-            num_constraints,
-            num_terms,
-            max_degree,
-            max_id,
-        } = ParametricInstanceParameters::default();
-        (
-            0..=num_constraints,
-            0..=max_degree,
-            num_terms_and_max_id(num_terms, max_id),
-        )
-            .prop_flat_map(move |(num_constraints, max_degree, (num_terms, max_id))| {
-                Self::arbitrary_with(ParametricInstanceParameters {
-                    num_constraints,
-                    num_terms,
-                    max_degree,
-                    max_id,
-                })
-            })
-            .boxed()
+        todo!()
     }
 }
 
