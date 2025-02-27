@@ -158,7 +158,7 @@
 //! c1.id = 1;
 //! c1.name = Some("c1".to_string());
 //! c1.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 + 2*x2 - 10
 //! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 10.0;
 //! let mut function = Function::default();

@@ -37,7 +37,7 @@
 //! constraint.id = 1;
 //! constraint.name = Some("constraint1".to_string());
 //! constraint.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 + 2*x2 - 15
 //! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
 //! let mut function = Function::default();
@@ -102,7 +102,7 @@
 //! constraint.id = 1;
 //! constraint.name = Some("constraint1".to_string());
 //! constraint.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 + 2*x2 - 15
 //! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
 //! let mut function = Function::default();
@@ -114,7 +114,7 @@
 //! eq_constraint.id = 2;
 //! eq_constraint.name = Some("constraint2".to_string());
 //! eq_constraint.equality = Equality::EqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 - x2 - 5
 //! let eq_linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, -1.0) - 5.0;
 //! let mut eq_function = Function::default();
@@ -200,7 +200,7 @@
 //! c1.id = 1;
 //! c1.name = Some("c1".to_string());
 //! c1.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 + 2*x2 - 10
 //! let linear_func1 = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 10.0;
 //! let mut function1 = Function::default();
@@ -213,7 +213,7 @@
 //! c2.id = 2;
 //! c2.name = Some("c2".to_string());
 //! c2.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: 3*x1 + x2 - 15
 //! let linear_func2 = Linear::single_term(1, 3.0) + Linear::single_term(2, 1.0) - 15.0;
 //! let mut function2 = Function::default();

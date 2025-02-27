@@ -51,24 +51,24 @@
 //!
 //! // Create a quadratic function `x1^2 + 2 x1 x2 + 3 x2^2 + 4 x1 + 5 x2 + 6`
 //! let mut quadratic = Quadratic::default();
-//! 
+//!
 //! // Add quadratic terms
 //! quadratic.rows.push(1);
 //! quadratic.columns.push(1);
 //! quadratic.values.push(1.0); // x1^2
-//! 
+//!
 //! quadratic.rows.push(1);
 //! quadratic.columns.push(2);
 //! quadratic.values.push(1.0); // x1*x2
-//! 
+//!
 //! quadratic.rows.push(2);
 //! quadratic.columns.push(1);
 //! quadratic.values.push(1.0); // x2*x1
-//! 
+//!
 //! quadratic.rows.push(2);
 //! quadratic.columns.push(2);
 //! quadratic.values.push(3.0); // x2^2
-//! 
+//!
 //! // Add linear part
 //! let linear = Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0;
 //! quadratic.linear = Some(linear);
@@ -96,7 +96,7 @@
 //! constraint.id = 1;
 //! constraint.name = Some("constraint1".to_string());
 //! constraint.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: x1 + 2*x2 - 15
 //! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
 //! let mut function = Function::default();
@@ -203,7 +203,7 @@
 //! c1.id = 1;
 //! c1.name = Some("resource".to_string());
 //! c1.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: 2*x1 + x2 - 100
 //! let linear_func1 = Linear::single_term(1, 2.0) + Linear::single_term(2, 1.0) - 100.0;
 //! let mut function1 = Function::default();
@@ -216,7 +216,7 @@
 //! c2.id = 2;
 //! c2.name = Some("demand_x1".to_string());
 //! c2.equality = Equality::LessThanOrEqualToZero as i32;
-//! 
+//!
 //! // Create a function for the constraint: -x1 + 10
 //! let linear_func2 = Linear::single_term(1, -1.0) + 10.0;
 //! let mut function2 = Function::default();
