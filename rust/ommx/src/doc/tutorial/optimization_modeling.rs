@@ -8,7 +8,7 @@
 //! constraints, and an objective function.
 //!
 //! ```rust
-//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, constraint::Sense};
+//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //!
 //! // Create a new instance
 //! let mut instance = Instance::default();
@@ -16,37 +16,40 @@
 //! // Add decision variables
 //! let mut x1 = DecisionVariable::default();
 //! x1.id = 1;
-//! x1.name = "x1".to_string();
-//! x1.lower_bound = 0.0;
-//! x1.upper_bound = 10.0;
+//! x1.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! bound1.upper = 10.0;
+//! x1.bound = Some(bound1);
 //! instance.decision_variables.push(x1);
 //!
 //! let mut x2 = DecisionVariable::default();
 //! x2.id = 2;
-//! x2.name = "x2".to_string();
-//! x2.lower_bound = 0.0;
-//! x2.upper_bound = 10.0;
+//! x2.name = Some("x2".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! bound2.upper = 10.0;
+//! x2.bound = Some(bound2);
 //! instance.decision_variables.push(x2);
 //!
-//! // Add constraints
+//! // Add constraints: x1 + 2*x2 - 15 <= 0
 //! let mut constraint = Constraint::default();
 //! constraint.id = 1;
-//! constraint.name = "constraint1".to_string();
-//! constraint.sense = Sense::LessThanOrEqual as i32;
-//! constraint.rhs = 15.0;
-//! constraint.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0)
-//!     ))
-//! });
+//! constraint.name = Some("constraint1".to_string());
+//! constraint.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 + 2*x2 - 15
+//! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Linear(linear_func));
+//! constraint.function = Some(function);
 //! instance.constraints.push(constraint);
 //!
 //! // Set objective function
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 3.0) + Linear::single_term(2, 4.0)
-//!     ))
-//! });
+//! let linear_obj = Linear::single_term(1, 3.0) + Linear::single_term(2, 4.0);
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Linear(linear_obj));
+//! instance.objective = Some(obj_function);
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //! ```
 //!
@@ -55,29 +58,35 @@
 //! Decision variables represent the unknowns in an optimization problem:
 //!
 //! ```rust
-//! use ommx::v1::DecisionVariable;
+//! use ommx::v1::{DecisionVariable, Bound};
 //!
 //! // Create a continuous variable with bounds [0, 10]
 //! let mut x1 = DecisionVariable::default();
 //! x1.id = 1;
-//! x1.name = "x1".to_string();
-//! x1.lower_bound = 0.0;
-//! x1.upper_bound = 10.0;
+//! x1.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! bound1.upper = 10.0;
+//! x1.bound = Some(bound1);
 //!
 //! // Create a binary variable (0 or 1)
 //! let mut y1 = DecisionVariable::default();
 //! y1.id = 2;
-//! y1.name = "y1".to_string();
-//! y1.lower_bound = 0.0;
-//! y1.upper_bound = 1.0;
+//! y1.name = Some("y1".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! bound2.upper = 1.0;
+//! y1.bound = Some(bound2);
 //! y1.is_integer = true;
 //!
 //! // Create an integer variable with bounds [0, 5]
 //! let mut z1 = DecisionVariable::default();
 //! z1.id = 3;
-//! z1.name = "z1".to_string();
-//! z1.lower_bound = 0.0;
-//! z1.upper_bound = 5.0;
+//! z1.name = Some("z1".to_string());
+//! let mut bound3 = Bound::default();
+//! bound3.lower = 0.0;
+//! bound3.upper = 5.0;
+//! z1.bound = Some(bound3);
 //! z1.is_integer = true;
 //! ```
 //!
@@ -86,31 +95,31 @@
 //! Constraints define the feasible region of the optimization problem:
 //!
 //! ```rust
-//! use ommx::v1::{Constraint, constraint::Sense, Function, Linear};
+//! use ommx::v1::{Constraint, Equality, Function, Linear};
 //!
-//! // Create a constraint: x1 + 2*x2 <= 15
+//! // Create a constraint: x1 + 2*x2 - 15 <= 0
 //! let mut constraint = Constraint::default();
 //! constraint.id = 1;
-//! constraint.name = "constraint1".to_string();
-//! constraint.sense = Sense::LessThanOrEqual as i32;
-//! constraint.rhs = 15.0;
-//! constraint.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0)
-//!     ))
-//! });
+//! constraint.name = Some("constraint1".to_string());
+//! constraint.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 + 2*x2 - 15
+//! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Linear(linear_func));
+//! constraint.function = Some(function);
 //!
-//! // Create an equality constraint: x1 - x2 = 5
+//! // Create an equality constraint: x1 - x2 - 5 = 0
 //! let mut eq_constraint = Constraint::default();
 //! eq_constraint.id = 2;
-//! eq_constraint.name = "constraint2".to_string();
-//! eq_constraint.sense = Sense::Equal as i32;
-//! eq_constraint.rhs = 5.0;
-//! eq_constraint.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, -1.0)
-//!     ))
-//! });
+//! eq_constraint.name = Some("constraint2".to_string());
+//! eq_constraint.equality = Equality::EqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 - x2 - 5
+//! let eq_linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, -1.0) - 5.0;
+//! let mut eq_function = Function::default();
+//! eq_function.function = Some(ommx::v1::function::Function::Linear(eq_linear_func));
+//! eq_constraint.function = Some(eq_function);
 //! ```
 //!
 //! ## Setting the Objective Function
@@ -124,11 +133,10 @@
 //! let mut instance = Instance::default();
 //!
 //! // Set a linear objective function: maximize 3*x1 + 4*x2
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 3.0) + Linear::single_term(2, 4.0)
-//!     ))
-//! });
+//! let linear_obj = Linear::single_term(1, 3.0) + Linear::single_term(2, 4.0);
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Linear(linear_obj));
+//! instance.objective = Some(obj_function);
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //!
 //! // For minimization, use:
@@ -164,7 +172,7 @@
 //! Here's a complete example of a linear programming problem:
 //!
 //! ```rust
-//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, constraint::Sense};
+//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //!
 //! // Create a new instance
 //! let mut instance = Instance::default();
@@ -172,48 +180,51 @@
 //! // Add decision variables: x1, x2
 //! let mut x1 = DecisionVariable::default();
 //! x1.id = 1;
-//! x1.name = "x1".to_string();
-//! x1.lower_bound = 0.0;
+//! x1.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! x1.bound = Some(bound1);
 //! instance.decision_variables.push(x1);
 //!
 //! let mut x2 = DecisionVariable::default();
 //! x2.id = 2;
-//! x2.name = "x2".to_string();
-//! x2.lower_bound = 0.0;
+//! x2.name = Some("x2".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! x2.bound = Some(bound2);
 //! instance.decision_variables.push(x2);
 //!
 //! // Add constraints:
-//! // x1 + 2*x2 <= 10
+//! // x1 + 2*x2 - 10 <= 0
 //! let mut c1 = Constraint::default();
 //! c1.id = 1;
-//! c1.name = "c1".to_string();
-//! c1.sense = Sense::LessThanOrEqual as i32;
-//! c1.rhs = 10.0;
-//! c1.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0)
-//!     ))
-//! });
+//! c1.name = Some("c1".to_string());
+//! c1.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 + 2*x2 - 10
+//! let linear_func1 = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 10.0;
+//! let mut function1 = Function::default();
+//! function1.function = Some(ommx::v1::function::Function::Linear(linear_func1));
+//! c1.function = Some(function1);
 //! instance.constraints.push(c1);
 //!
-//! // 3*x1 + x2 <= 15
+//! // 3*x1 + x2 - 15 <= 0
 //! let mut c2 = Constraint::default();
 //! c2.id = 2;
-//! c2.name = "c2".to_string();
-//! c2.sense = Sense::LessThanOrEqual as i32;
-//! c2.rhs = 15.0;
-//! c2.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 3.0) + Linear::single_term(2, 1.0)
-//!     ))
-//! });
+//! c2.name = Some("c2".to_string());
+//! c2.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: 3*x1 + x2 - 15
+//! let linear_func2 = Linear::single_term(1, 3.0) + Linear::single_term(2, 1.0) - 15.0;
+//! let mut function2 = Function::default();
+//! function2.function = Some(ommx::v1::function::Function::Linear(linear_func2));
+//! c2.function = Some(function2);
 //! instance.constraints.push(c2);
 //!
 //! // Set objective: maximize 4*x1 + 3*x2
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 4.0) + Linear::single_term(2, 3.0)
-//!     ))
-//! });
+//! let linear_obj = Linear::single_term(1, 4.0) + Linear::single_term(2, 3.0);
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Linear(linear_obj));
+//! instance.objective = Some(obj_function);
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //! ```

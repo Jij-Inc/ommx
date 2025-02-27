@@ -50,12 +50,28 @@
 //! use maplit::hashmap;
 //!
 //! // Create a quadratic function `x1^2 + 2 x1 x2 + 3 x2^2 + 4 x1 + 5 x2 + 6`
-//! let quadratic = Quadratic::builder()
-//!     .with_q_term(1, 1, 1.0)
-//!     .with_q_term(1, 2, 1.0)
-//!     .with_q_term(2, 2, 3.0)
-//!     .with_linear(Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0)
-//!     .build();
+//! let mut quadratic = Quadratic::default();
+//! 
+//! // Add quadratic terms
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(1.0); // x1^2
+//! 
+//! quadratic.rows.push(1);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(1.0); // x1*x2
+//! 
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(1);
+//! quadratic.values.push(1.0); // x2*x1
+//! 
+//! quadratic.rows.push(2);
+//! quadratic.columns.push(2);
+//! quadratic.values.push(3.0); // x2^2
+//! 
+//! // Add linear part
+//! let linear = Linear::single_term(1, 4.0) + Linear::single_term(2, 5.0) + 6.0;
+//! quadratic.linear = Some(linear);
 //!
 //! // Create a state `x1 = 2.0, x2 = 3.0`
 //! let state: State = hashmap! { 1 => 2.0, 2 => 3.0 }.into();
@@ -71,29 +87,29 @@
 //! You can also evaluate constraints to check if they are satisfied:
 //!
 //! ```rust
-//! use ommx::v1::{Constraint, constraint::Sense, Function, Linear, State};
+//! use ommx::v1::{Constraint, Equality, Function, Linear, State};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
 //!
-//! // Create a constraint: x1 + 2*x2 <= 15
+//! // Create a constraint: x1 + 2*x2 - 15 <= 0
 //! let mut constraint = Constraint::default();
 //! constraint.id = 1;
-//! constraint.name = "constraint1".to_string();
-//! constraint.sense = Sense::LessThanOrEqual as i32;
-//! constraint.rhs = 15.0;
-//! constraint.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0)
-//!     ))
-//! });
+//! constraint.name = Some("constraint1".to_string());
+//! constraint.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 + 2*x2 - 15
+//! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 15.0;
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Linear(linear_func));
+//! constraint.function = Some(function);
 //!
 //! // Create a state `x1 = 5.0, x2 = 4.0`
 //! let state: State = hashmap! { 1 => 5.0, 2 => 4.0 }.into();
 //!
 //! // Evaluate the constraint function with the state
 //! let (value, used_ids) = constraint.function.as_ref().unwrap().evaluate(&state).unwrap();
-//! // 5 + 2*4 = 13, which is <= 15, so the constraint is satisfied
-//! assert!(value <= constraint.rhs);
+//! // 5 + 2*4 - 15 = 13 - 15 = -2, which is <= 0, so the constraint is satisfied
+//! assert!(value <= 0.0);
 //! ```
 //!
 //! ## Partial Evaluation
@@ -157,7 +173,7 @@
 //! Here's an example of validating the optimal solution for a production planning problem:
 //!
 //! ```rust
-//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, constraint::Sense, State};
+//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, State, Bound};
 //! use ommx::Evaluate;
 //! use maplit::hashmap;
 //!
@@ -167,49 +183,52 @@
 //! // Add decision variables: x1, x2 (production quantities)
 //! let mut x1 = DecisionVariable::default();
 //! x1.id = 1;
-//! x1.name = "x1".to_string();
-//! x1.lower_bound = 0.0;
+//! x1.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! x1.bound = Some(bound1);
 //! instance.decision_variables.push(x1);
 //!
 //! let mut x2 = DecisionVariable::default();
 //! x2.id = 2;
-//! x2.name = "x2".to_string();
-//! x2.lower_bound = 0.0;
+//! x2.name = Some("x2".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! x2.bound = Some(bound2);
 //! instance.decision_variables.push(x2);
 //!
 //! // Add constraints:
-//! // Resource constraint: 2*x1 + x2 <= 100
+//! // Resource constraint: 2*x1 + x2 - 100 <= 0
 //! let mut c1 = Constraint::default();
 //! c1.id = 1;
-//! c1.name = "resource".to_string();
-//! c1.sense = Sense::LessThanOrEqual as i32;
-//! c1.rhs = 100.0;
-//! c1.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 2.0) + Linear::single_term(2, 1.0)
-//!     ))
-//! });
+//! c1.name = Some("resource".to_string());
+//! c1.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: 2*x1 + x2 - 100
+//! let linear_func1 = Linear::single_term(1, 2.0) + Linear::single_term(2, 1.0) - 100.0;
+//! let mut function1 = Function::default();
+//! function1.function = Some(ommx::v1::function::Function::Linear(linear_func1));
+//! c1.function = Some(function1);
 //! instance.constraints.push(c1);
 //!
-//! // Demand constraint: x1 >= 10
+//! // Demand constraint: x1 - 10 >= 0 (equivalent to -x1 + 10 <= 0)
 //! let mut c2 = Constraint::default();
 //! c2.id = 2;
-//! c2.name = "demand_x1".to_string();
-//! c2.sense = Sense::GreaterThanOrEqual as i32;
-//! c2.rhs = 10.0;
-//! c2.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0)
-//!     ))
-//! });
+//! c2.name = Some("demand_x1".to_string());
+//! c2.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: -x1 + 10
+//! let linear_func2 = Linear::single_term(1, -1.0) + 10.0;
+//! let mut function2 = Function::default();
+//! function2.function = Some(ommx::v1::function::Function::Linear(linear_func2));
+//! c2.function = Some(function2);
 //! instance.constraints.push(c2);
 //!
 //! // Set objective: maximize 5*x1 + 3*x2 (profit)
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 5.0) + Linear::single_term(2, 3.0)
-//!     ))
-//! });
+//! let linear_obj = Linear::single_term(1, 5.0) + Linear::single_term(2, 3.0);
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Linear(linear_obj));
+//! instance.objective = Some(obj_function);
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //!
 //! // Validate a proposed solution: x1 = 45, x2 = 10
@@ -219,11 +238,10 @@
 //! let mut all_constraints_satisfied = true;
 //! for constraint in &instance.constraints {
 //!     let (value, _) = constraint.function.as_ref().unwrap().evaluate(&solution).unwrap();
-//!     let satisfied = match constraint.sense {
-//!         s if s == Sense::LessThanOrEqual as i32 => value <= constraint.rhs,
-//!         s if s == Sense::GreaterThanOrEqual as i32 => value >= constraint.rhs,
-//!         s if s == Sense::Equal as i32 => (value - constraint.rhs).abs() < 1e-6,
-//!         _ => panic!("Unknown constraint sense"),
+//!     let satisfied = match constraint.equality {
+//!         e if e == Equality::LessThanOrEqualToZero as i32 => value <= 0.0,
+//!         e if e == Equality::EqualToZero as i32 => value.abs() < 1e-6,
+//!         _ => panic!("Unknown constraint equality"),
 //!     };
 //!     if !satisfied {
 //!         all_constraints_satisfied = false;
@@ -235,8 +253,8 @@
 //! let (obj_value, _) = instance.objective.as_ref().unwrap().evaluate(&solution).unwrap();
 //!
 //! // For this example, the solution x1 = 45, x2 = 10 should be feasible
-//! // 2*45 + 10 = 100 <= 100 (resource constraint)
-//! // 45 >= 10 (demand constraint)
+//! // 2*45 + 10 - 100 = 0 <= 0 (resource constraint)
+//! // -45 + 10 = -35 <= 0 (demand constraint)
 //! // Objective value = 5*45 + 3*10 = 225 + 30 = 255
 //! assert!(all_constraints_satisfied);
 //! assert_eq!(obj_value, 255.0);

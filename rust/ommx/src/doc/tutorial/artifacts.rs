@@ -10,10 +10,10 @@
 //!
 //! ## Creating and Saving Artifacts
 //!
-//! You can create and save OMMX artifacts using the `ArtifactBuilder`:
+//! You can create and save OMMX artifacts using the `Builder`:
 //!
 //! ```rust
-//! use ommx::artifact::ArtifactBuilder;
+//! use ommx::artifact::Builder;
 //! use ommx::v1::{Linear, Instance};
 //! use std::path::Path;
 //!
@@ -21,7 +21,7 @@
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder
-//! let mut builder = ArtifactBuilder::new();
+//! let mut builder = Builder::new();
 //!
 //! // Add the linear function to the artifact
 //! builder.add_message("linear", &linear).unwrap();
@@ -36,7 +36,7 @@
 //! You can add metadata to artifacts to provide additional information:
 //!
 //! ```rust
-//! use ommx::artifact::ArtifactBuilder;
+//! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
 //! use std::path::Path;
 //!
@@ -44,7 +44,7 @@
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder with metadata
-//! let mut builder = ArtifactBuilder::new();
+//! let mut builder = Builder::new();
 //! builder.add_annotation("description", "A simple linear function");
 //! builder.add_annotation("author", "OMMX User");
 //! builder.add_annotation("version", "1.0");
@@ -62,14 +62,14 @@
 //! You can push artifacts to an OCI registry:
 //!
 //! ```rust,no_run
-//! use ommx::artifact::ArtifactBuilder;
+//! use ommx::artifact::Builder;
 //! use ommx::v1::Linear;
 //!
 //! // Create a linear function
 //! let linear = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) + 3.0;
 //!
 //! // Create an artifact builder
-//! let mut builder = ArtifactBuilder::new();
+//! let mut builder = Builder::new();
 //!
 //! // Add the linear function to the artifact
 //! builder.add_message("linear", &linear).unwrap();
@@ -127,8 +127,8 @@
 //! Here's a complete example of saving and loading an optimization problem:
 //!
 //! ```rust,no_run
-//! use ommx::artifact::{ArtifactBuilder, Artifact};
-//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, constraint::Sense};
+//! use ommx::artifact::{Builder, Artifact};
+//! use ommx::v1::{Instance, DecisionVariable, Function, Linear, Constraint, Equality, Bound};
 //! use prost::Message;
 //! use std::path::Path;
 //!
@@ -138,40 +138,43 @@
 //! // Add decision variables: x1, x2
 //! let mut x1 = DecisionVariable::default();
 //! x1.id = 1;
-//! x1.name = "x1".to_string();
-//! x1.lower_bound = 0.0;
+//! x1.name = Some("x1".to_string());
+//! let mut bound1 = Bound::default();
+//! bound1.lower = 0.0;
+//! x1.bound = Some(bound1);
 //! instance.decision_variables.push(x1);
 //!
 //! let mut x2 = DecisionVariable::default();
 //! x2.id = 2;
-//! x2.name = "x2".to_string();
-//! x2.lower_bound = 0.0;
+//! x2.name = Some("x2".to_string());
+//! let mut bound2 = Bound::default();
+//! bound2.lower = 0.0;
+//! x2.bound = Some(bound2);
 //! instance.decision_variables.push(x2);
 //!
 //! // Add constraints:
-//! // x1 + 2*x2 <= 10
+//! // x1 + 2*x2 - 10 <= 0
 //! let mut c1 = Constraint::default();
 //! c1.id = 1;
-//! c1.name = "c1".to_string();
-//! c1.sense = Sense::LessThanOrEqual as i32;
-//! c1.rhs = 10.0;
-//! c1.function = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0)
-//!     ))
-//! });
+//! c1.name = Some("c1".to_string());
+//! c1.equality = Equality::LessThanOrEqualToZero as i32;
+//! 
+//! // Create a function for the constraint: x1 + 2*x2 - 10
+//! let linear_func = Linear::single_term(1, 1.0) + Linear::single_term(2, 2.0) - 10.0;
+//! let mut function = Function::default();
+//! function.function = Some(ommx::v1::function::Function::Linear(linear_func));
+//! c1.function = Some(function);
 //! instance.constraints.push(c1);
 //!
 //! // Set objective: maximize 4*x1 + 3*x2
-//! instance.objective = Some(Function {
-//!     function: Some(ommx::v1::function::Function::Linear(
-//!         Linear::single_term(1, 4.0) + Linear::single_term(2, 3.0)
-//!     ))
-//! });
+//! let linear_obj = Linear::single_term(1, 4.0) + Linear::single_term(2, 3.0);
+//! let mut obj_function = Function::default();
+//! obj_function.function = Some(ommx::v1::function::Function::Linear(linear_obj));
+//! instance.objective = Some(obj_function);
 //! instance.sense = ommx::v1::instance::Sense::Maximize as i32;
 //!
 //! // Create an artifact builder
-//! let mut builder = ArtifactBuilder::new();
+//! let mut builder = Builder::new();
 //! builder.add_annotation("description", "Linear programming example");
 //! builder.add_annotation("author", "OMMX User");
 //!
@@ -200,14 +203,14 @@
 //! or the wider community.
 //!
 //! ```rust,no_run
-//! use ommx::artifact::ArtifactBuilder;
+//! use ommx::artifact::Builder;
 //! use ommx::v1::Instance;
 //!
 //! // Create an instance (optimization problem)
 //! let instance = Instance::default(); // In practice, this would be a real problem
 //!
 //! // Create an artifact builder with metadata
-//! let mut builder = ArtifactBuilder::new();
+//! let mut builder = Builder::new();
 //! builder.add_annotation("description", "My optimization problem");
 //! builder.add_annotation("author", "OMMX User");
 //! builder.add_annotation("version", "1.0");
