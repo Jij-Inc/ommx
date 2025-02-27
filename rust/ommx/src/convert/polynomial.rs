@@ -237,7 +237,7 @@ impl fmt::Display for Polynomial {
 
 #[cfg(test)]
 mod tests {
-    use crate::random::PolynomialParameters;
+    use crate::random::FunctionParameters;
 
     test_algebraic!(super::Polynomial);
 
@@ -253,13 +253,13 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_as_linear(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
+        fn test_as_linear(p in super::Polynomial::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = p.clone().as_linear().unwrap();
             prop_assert_eq!(p, super::Polynomial::from(linear));
         }
 
         #[test]
-        fn test_as_constant(p in super::Polynomial::arbitrary_with(PolynomialParameters{ num_terms: 1, max_degree: 0, max_id: 10})) {
+        fn test_as_constant(p in super::Polynomial::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0, max_id: 10})) {
             let c = p.clone().as_constant().unwrap();
             prop_assert_eq!(p, super::Polynomial::from(c));
         }

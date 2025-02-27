@@ -1,6 +1,6 @@
-use super::{arbitrary_coefficient_nonzero, LinearParameters};
+use super::arbitrary_coefficient_nonzero;
 use crate::{
-    random::unique_integer_pairs,
+    random::{unique_integer_pairs, FunctionParameters},
     v1::{Linear, Quadratic},
 };
 use proptest::prelude::*;
@@ -81,8 +81,9 @@ impl Arbitrary for Quadratic {
 
                 let pairs = unique_integer_pairs(p.max_id, num_quad);
                 let values = proptest::collection::vec(arbitrary_coefficient_nonzero(), num_quad);
-                let linear = Linear::arbitrary_with(LinearParameters {
+                let linear = Linear::arbitrary_with(FunctionParameters{
                     num_terms: num_linear,
+                    max_degree: 1,
                     max_id: p.max_id,
                 });
                 (pairs, values, linear).prop_map(|(pairs, values, linear)| {

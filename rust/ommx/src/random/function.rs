@@ -1,14 +1,86 @@
-use crate::{
-    random::{
-        arbitrary_coefficient_nonzero, multi_choose, LinearParameters, PolynomialParameters,
-        QuadraticParameters,
-    },
-    v1::{Function, Linear, Polynomial, Quadratic},
-};
+use super::{arbitrary_coefficient_nonzero, multi_choose, QuadraticParameters};
+use crate::v1::{Function, Linear, Polynomial, Quadratic};
+use anyhow::{bail, Result};
 use num::Zero;
 use proptest::{prelude::*, strategy::Union};
 
-pub type FunctionParameters = PolynomialParameters;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionParameters {
+    /// Number of non-zero terms in the linear function including the constant term.
+    ///
+    /// e.g. `x1 + x2 + 1` is 3 terms.
+    ///
+    /// ```rust
+    /// use ommx::{random::{FunctionParameters, random_deterministic}, v1::Function};
+    /// let f: Function = random_deterministic(FunctionParameters { num_terms: 5, max_degree: 3, max_id: 10 });
+    /// assert_eq!(f.into_iter().count(), 5);
+    /// ```
+    pub num_terms: usize,
+    pub max_degree: u32,
+    pub max_id: u64,
+}
+
+impl FunctionParameters {
+    pub fn possible_max_terms(&self) -> usize {
+        (0..=self.max_degree)
+            .map(|d| multi_choose(self.max_id + 1, d as usize) as usize)
+            .sum()
+    }
+
+    pub fn largest_degree_term_range(&self) -> std::ops::RangeInclusive<usize> {
+        let sub_max_terms = (0..self.max_degree)
+            .map(|d| multi_choose(self.max_id + 1, d as usize) as usize)
+            .sum::<usize>();
+        let largest_max_terms = multi_choose(self.max_id + 1, self.max_degree as usize) as usize;
+        let max = std::cmp::min(self.num_terms, largest_max_terms);
+        let min = if self.num_terms >= sub_max_terms {
+            self.num_terms - sub_max_terms
+        } else {
+            0
+        };
+        min..=max
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.num_terms > self.possible_max_terms() {
+            bail!(
+                "num_terms({num_terms}) must be less than or equal to the possible maximum number of terms({max_num_terms})",
+                num_terms = self.num_terms,
+                max_num_terms = self.possible_max_terms()
+            )
+        }
+        Ok(())
+    }
+
+    pub fn smaller(&self) -> impl Strategy<Value = Self> {
+        (0..=self.max_id, 0..=self.max_degree, Just(self.num_terms)).prop_flat_map(
+            move |(max_id, max_degree, num_terms)| {
+                let small = Self {
+                    max_id,
+                    max_degree,
+                    num_terms: 0,
+                };
+                (0..=std::cmp::min(num_terms, small.possible_max_terms())).prop_map(
+                    move |num_terms| Self {
+                        max_id,
+                        num_terms,
+                        max_degree,
+                    },
+                )
+            },
+        )
+    }
+}
+
+impl Default for FunctionParameters {
+    fn default() -> Self {
+        Self {
+            num_terms: 5,
+            max_degree: 3,
+            max_id: 10,
+        }
+    }
+}
 
 impl Arbitrary for Function {
     type Parameters = FunctionParameters;
@@ -30,8 +102,9 @@ impl Arbitrary for Function {
         let mut threshold = multi_choose(p.max_id + 1, 1) as usize;
         if p.num_terms <= threshold && p.max_degree >= 1 {
             strategies.push(
-                Linear::arbitrary_with(LinearParameters {
+                Linear::arbitrary_with(FunctionParameters {
                     num_terms: p.num_terms,
+                    max_degree: 1,
                     max_id: p.max_id,
                 })
                 .prop_map(Function::from)

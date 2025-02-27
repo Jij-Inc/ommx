@@ -52,10 +52,8 @@ pub use constraint::*;
 pub use decision_variable::*;
 pub use function::*;
 pub use instance::*;
-pub use linear::*;
 pub use parameter::*;
 pub use parametric_instance::*;
-pub use polynomial::*;
 pub use quadratic::*;
 
 use crate::sorted_ids::SortedIds;
