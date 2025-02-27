@@ -11,18 +11,16 @@
 //! use ommx::random;
 //! use ommx::v1::Linear;
 //!
-//! // Generate a random linear function with seed 42
+//! // Generate a random linear function
 //! let linear: Linear = random::random_deterministic(random::LinearParameters {
 //!     num_terms: 5,
 //!     max_id: 10,
-//!     ..Default::default()
 //! });
 //!
 //! // The function will be the same every time with the same parameters
 //! let linear2: Linear = random::random_deterministic(random::LinearParameters {
 //!     num_terms: 5,
 //!     max_id: 10,
-//!     ..Default::default()
 //! });
 //! assert_eq!(linear, linear2);
 //! ```
@@ -39,18 +37,12 @@
 //! let params = random::LinearParameters {
 //!     num_terms: 5,
 //!     max_id: 10,
-//!     min_coefficient: -5.0,
-//!     max_coefficient: 5.0,
-//!     min_constant: -10.0,
-//!     max_constant: 10.0,
-//!     ..Default::default()
 //! };
 //!
 //! // Generate a random linear function with the specified parameters
 //! let linear: Linear = random::random_deterministic(params);
 //!
-//! // The function will have terms with coefficients between -5.0 and 5.0,
-//! // variable IDs between 1 and 10, and a constant between -10.0 and 10.0
+//! // The function will have terms with variable IDs between 1 and 10
 //! assert!(linear.terms.len() <= 5);
 //! ```
 //!
@@ -66,11 +58,6 @@
 //! let params = random::QuadraticParameters {
 //!     num_terms: 5,
 //!     max_id: 10,
-//!     min_coefficient: -5.0,
-//!     max_coefficient: 5.0,
-//!     min_constant: -10.0,
-//!     max_constant: 10.0,
-//!     ..Default::default()
 //! };
 //!
 //! // Generate a random quadratic function with the specified parameters
@@ -117,19 +104,14 @@
 //! let params = random::StateParameters {
 //!     num_entries: 5,
 //!     max_id: 10,
-//!     min_value: 0.0,
-//!     max_value: 10.0,
 //!     ..Default::default()
 //! };
 //!
 //! // Generate a random state with the specified parameters
 //! let state: State = random::random_deterministic(params);
 //!
-//! // The state will have entries with values between 0.0 and 10.0
+//! // The state will have entries with values
 //! assert_eq!(state.entries.len(), 5);
-//! for (_, value) in state.entries.iter() {
-//!     assert!(*value >= 0.0 && *value <= 10.0);
-//! }
 //! ```
 //!
 //! ## Practical Example: Generating Random QUBO Models
@@ -144,11 +126,6 @@
 //! let params = random::QuadraticParameters {
 //!     num_terms: 15,
 //!     max_id: 10,
-//!     min_coefficient: -5.0,
-//!     max_coefficient: 5.0,
-//!     min_constant: -10.0,
-//!     max_constant: 10.0,
-//!     ..Default::default()
 //! };
 //!
 //! // Generate a random quadratic function
