@@ -1,41 +1,50 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{
+    criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
+};
 
 use ommx::{
-    v1::{Linear, State},
+    random::{arbitrary_state, random_deterministic, sample_deterministic, FunctionParameters},
+    v1::{Linear, Quadratic},
     Evaluate,
 };
 
-fn bench_linear(c: &mut Criterion) {
-    let mut sum_partial = c.benchmark_group("sum-partial");
-    for n in (1..=5).map(|n| n * 2000) {
-        sum_partial.bench_with_input(
-            BenchmarkId::new("sum-partial", format!("{n:05}")),
-            &n,
-            |b, n| {
-                let state = State::default();
-                let mut lin = Linear::new((0..*n).map(|i| (i, 1.0)), 0.0);
-                b.iter(|| lin.partial_evaluate(&state))
-            },
-        );
-    }
-    sum_partial.finish();
+fn evaluate(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
 
-    let mut sum_total = c.benchmark_group("sum-total");
-    for n in (1..=5).map(|n| n * 2000) {
-        sum_total.bench_with_input(
-            BenchmarkId::new("sum-total", format!("{n:05}")),
-            &n,
-            |b, n| {
-                let mut state = State::default();
-                state.entries = (0..*n).map(|i| (i, i as f64)).collect();
-                let mut lin = Linear::new((0..*n).map(|i| (i, 1.0)), 0.0);
-                b.iter(|| lin.partial_evaluate(&state))
-            },
+    let mut eval_linear = c.benchmark_group("eval-linear");
+    eval_linear.plot_config(plot_config.clone());
+    for num_terms in [1, 10, 100, 1000, 10_000] {
+        let lin: Linear = random_deterministic(FunctionParameters {
+            num_terms,
+            max_degree: 1,
+            max_id: 10 * num_terms as u64,
+        });
+        let state = sample_deterministic(arbitrary_state(lin.used_decision_variable_ids()));
+        eval_linear.bench_with_input(
+            BenchmarkId::new("eval-linear", num_terms.to_string()),
+            &(lin, state),
+            |b, (lin, state)| b.iter(|| lin.evaluate(state)),
         );
     }
-    sum_total.finish();
+    eval_linear.finish();
+
+    let mut eval_quadratic = c.benchmark_group("eval-quadratic");
+    eval_quadratic.plot_config(plot_config.clone());
+    for num_terms in [1, 10, 100, 1000, 10_000] {
+        let quad: Quadratic = random_deterministic(FunctionParameters {
+            num_terms,
+            max_degree: 2,
+            max_id: 10 * num_terms as u64,
+        });
+        let state = sample_deterministic(arbitrary_state(quad.used_decision_variable_ids()));
+        eval_quadratic.bench_with_input(
+            BenchmarkId::new("eval-quadratic", num_terms.to_string()),
+            &(quad, state),
+            |b, (quad, state)| b.iter(|| quad.evaluate(state)),
+        );
+    }
+    eval_quadratic.finish();
 }
 
-criterion_group!(eval_benches, bench_linear);
-
+criterion_group!(eval_benches, evaluate);
 criterion_main!(eval_benches);
