@@ -6,6 +6,7 @@ use crate::{
         Function, Instance,
     },
 };
+use anyhow::{bail, Result};
 use proptest::prelude::*;
 
 impl Instance {
@@ -81,6 +82,15 @@ impl Kind {
 }
 
 impl InstanceParameters {
+    pub fn validate(&self) -> Result<()> {
+        self.objective.validate()?;
+        self.constraint.validate()?;
+        if self.kinds.is_empty() {
+            bail!("At least one kind of decision variable must be allowed");
+        }
+        Ok(())
+    }
+
     pub fn smaller(&self) -> BoxedStrategy<Self> {
         (
             0..=self.num_constraints,
@@ -115,20 +125,15 @@ impl Arbitrary for Instance {
     type Parameters = InstanceParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(
-        InstanceParameters {
+    fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
+        p.validate().unwrap();
+        let InstanceParameters {
             num_constraints,
             objective,
             constraint,
             kinds,
-        }: Self::Parameters,
-    ) -> Self::Strategy {
-        assert!(
-            !kinds.is_empty(),
-            "At least one kind of decision variable must be allowed"
-        );
-        objective.validate().unwrap();
-        constraint.validate().unwrap();
+        } = p;
+
         (
             Function::arbitrary_with(objective),
             arbitrary_constraints(num_constraints, constraint),
