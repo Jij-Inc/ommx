@@ -12,14 +12,16 @@
 //! use ommx::v1::Linear;
 //!
 //! // Generate a random linear function
-//! let linear: Linear = random::random_deterministic(random::LinearParameters {
+//! let linear: Linear = random::random_deterministic(random::FunctionParameters {
 //!     num_terms: 5,
+//!     max_degree: 1,
 //!     max_id: 10,
 //! });
 //!
 //! // The function will be the same every time with the same parameters
-//! let linear2: Linear = random::random_deterministic(random::LinearParameters {
+//! let linear2: Linear = random::random_deterministic(random::FunctionParameters {
 //!     num_terms: 5,
+//!     max_degree: 1,
 //!     max_id: 10,
 //! });
 //! assert_eq!(linear, linear2);
@@ -34,8 +36,9 @@
 //! use ommx::v1::Linear;
 //!
 //! // Create parameters for the random linear function
-//! let params = random::LinearParameters {
+//! let params = random::FunctionParameters {
 //!     num_terms: 5,
+//!     max_degree: 1,
 //!     max_id: 10,
 //! };
 //!
@@ -55,8 +58,9 @@
 //! use ommx::v1::Quadratic;
 //!
 //! // Create parameters for the random quadratic function
-//! let params = random::QuadraticParameters {
+//! let params = random::FunctionParameters {
 //!     num_terms: 5,
+//!     max_degree: 2,
 //!     max_id: 10,
 //! };
 //!
@@ -74,14 +78,20 @@
 //! ```rust,no_run
 //! use ommx::random;
 //! use ommx::v1::Instance;
+//! use ommx::v1::decision_variable::Kind;
 //!
 //! // Create parameters for the random instance
-//! let params = random::InstanceParameters {
-//!     num_constraints: 3,
+//! let linear_params = random::FunctionParameters {
 //!     num_terms: 5,
 //!     max_degree: 1,
 //!     max_id: 10,
-//!     ..Default::default()
+//! };
+//!
+//! let params = random::InstanceParameters {
+//!     num_constraints: 3,
+//!     objective: linear_params,
+//!     constraint: linear_params,
+//!     kinds: vec![Kind::Continuous],
 //! };
 //!
 //! // Generate a random instance with the specified parameters
@@ -122,8 +132,9 @@
 //! use ommx::v1::{Quadratic, Instance, DecisionVariable, Function, instance::Sense, Bound, decision_variable::Kind};
 //!
 //! // Create parameters for a random QUBO function
-//! let params = random::QuadraticParameters {
+//! let params = random::FunctionParameters {
 //!     num_terms: 15,
+//!     max_degree: 2,
 //!     max_id: 10,
 //! };
 //!
