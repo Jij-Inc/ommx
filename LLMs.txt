@@ -482,7 +482,7 @@ plt.show()
 
 
     
-![png](/tmp/tmp49z4ze9p/markdown/tsp_sampling_with_openjij_adapter_3_0.png)
+![png](/tmp/tmpusvnyd3q/markdown/tsp_sampling_with_openjij_adapter_3_0.png)
     
 
 
@@ -1678,7 +1678,7 @@ plt.show()
 
 
     
-![png](/tmp/tmp49z4ze9p/markdown/tsp_sampling_with_openjij_adapter_33_0.png)
+![png](/tmp/tmpusvnyd3q/markdown/tsp_sampling_with_openjij_adapter_33_0.png)
     
 
 
