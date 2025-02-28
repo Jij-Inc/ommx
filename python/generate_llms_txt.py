@@ -11,19 +11,21 @@ This script:
 import os
 import sys
 import yaml
-import subprocess
 import tempfile
 import re
 from pathlib import Path
+import nbformat
+from nbconvert import MarkdownExporter
 
 
-def run_command(cmd, cwd=None):
-    """Run a shell command and return its output."""
-    print(f"Running: {' '.join(cmd)}")
+def install_package(package_name):
+    """Install a Python package using uv add."""
+    import subprocess
+    cmd = ["uv", "add", "--dev", package_name]
+    print(f"Installing package: {package_name}")
     try:
         result = subprocess.run(
             cmd,
-            cwd=cwd,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -36,11 +38,23 @@ def run_command(cmd, cwd=None):
         sys.exit(1)
 
 
-def install_package(package_name):
-    """Install a Python package using uv add."""
-    cmd = ["uv", "add", "--dev", package_name]
-    print(f"Installing package: {package_name}")
-    return run_command(cmd)
+def convert_notebook_to_markdown(notebook_path, output_path):
+    """Convert a Jupyter notebook to markdown using nbconvert module."""
+    print(f"Converting {notebook_path} to {output_path}")
+    
+    # Read the notebook
+    with open(notebook_path, "r", encoding="utf-8") as f:
+        nb = nbformat.read(f, as_version=4)
+    
+    # Initialize MarkdownExporter
+    exporter = MarkdownExporter()
+    
+    # Convert notebook to markdown
+    body, _ = exporter.from_notebook_node(nb)
+    
+    # Write the output file
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(body)
 
 
 def convert_notebooks_to_markdown(notebook_dir, output_dir):
@@ -61,22 +75,9 @@ def convert_notebooks_to_markdown(notebook_dir, output_dir):
         # Get the filename without directory
         filename = notebook_path.name
         output_path = Path(output_dir) / filename.replace(".ipynb", ".md")
-
-        # Run nbconvert
-        cmd = [
-            "uv",
-            "run",
-            "jupyter",
-            "nbconvert",
-            "--to",
-            "markdown",
-            "--output",
-            str(output_path),
-            str(notebook_path),
-        ]
-        run_command(cmd)
-
-        print(f"Converted {notebook_path} to {output_path}")
+        
+        # Convert notebook to markdown
+        convert_notebook_to_markdown(notebook_path, output_path)
 
 
 def read_toc_file(toc_path):
@@ -145,17 +146,13 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 lines = content.split("\n")
                 if lines and lines[0].startswith("# "):
                     content = "\n".join(lines[1:])
-
-                # Exclude images and tables
+                
+                # Exclude images but keep tables
                 # Remove image markdown (```{figure} ... ```)
                 content = re.sub(r"```\{figure\}.*?```", "", content, flags=re.DOTALL)
                 # Remove inline images (![...](...)
                 content = re.sub(r"!\[.*?\]\(.*?\)", "", content)
-                # Remove tables (| ... |)
-                content = re.sub(r"^\|.*\|$", "", content, flags=re.MULTILINE)
-                # Remove HTML tables (<table>...</table>)
-                content = re.sub(r"<table>.*?</table>", "", content, flags=re.DOTALL)
-
+                
                 outfile.write(content)
                 outfile.write("\n\n")
 
@@ -170,7 +167,7 @@ def main():
     output_file = repo_root / "LLMs.txt"
 
     # Ensure required packages are installed
-    required_packages = ["pyyaml", "jupyter", "nbconvert"]
+    required_packages = ["pyyaml", "jupyter", "nbconvert", "nbformat"]
     for package in required_packages:
         install_package(package)
 

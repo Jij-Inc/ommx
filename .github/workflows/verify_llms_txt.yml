@@ -28,11 +28,8 @@ jobs:
 
       - name: Generate LLMs.txt
         run: |
-          # Make a copy of the original LLMs.txt file
-          cp LLMs.txt LLMs.txt.original
-          
           # Run the script to generate a new LLMs.txt file
           uv run python/generate_llms_txt.py
           
           # Compare the files using git diff
-          git diff --exit-code LLMs.txt.original LLMs.txt
+          git diff --exit-code LLMs.txt
