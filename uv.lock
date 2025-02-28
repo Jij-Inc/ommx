@@ -640,7 +640,7 @@ name = "ipykernel"
 version = "6.29.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "appnope", marker = "sys_platform == 'darwin'" },
+    { name = "appnope", marker = "platform_system == 'Darwin'" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython" },
@@ -1341,7 +1341,7 @@ wheels = [
 
 [[package]]
 name = "ommx"
-version = "1.8.4"
+version = "1.8.5"
 source = { editable = "python/ommx" }
 dependencies = [
     { name = "numpy" },
@@ -1390,7 +1390,7 @@ dev = [
 
 [[package]]
 name = "ommx-highs-adapter"
-version = "1.8.4"
+version = "1.8.5"
 source = { editable = "python/ommx-highs-adapter" }
 dependencies = [
     { name = "highspy" },
@@ -1407,7 +1407,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-openjij-adapter"
-version = "1.8.4"
+version = "1.8.5"
 source = { editable = "python/ommx-openjij-adapter" }
 dependencies = [
     { name = "ommx" },
@@ -1422,7 +1422,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-pyscipopt-adapter"
-version = "1.8.4"
+version = "1.8.5"
 source = { editable = "python/ommx-pyscipopt-adapter" }
 dependencies = [
     { name = "ommx" },
@@ -1437,7 +1437,7 @@ requires-dist = [
 
 [[package]]
 name = "ommx-python-mip-adapter"
-version = "1.8.4"
+version = "1.8.5"
 source = { editable = "python/ommx-python-mip-adapter" }
 dependencies = [
     { name = "mip" },
