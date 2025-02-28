@@ -534,6 +534,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::random::*;
     use approx::*;
     use maplit::*;
     use proptest::prelude::*;
@@ -578,18 +579,6 @@ mod tests {
         assert_eq!(linear.terms.len(), 1);
         assert_eq!(linear.terms[0].id, 4);
         assert_eq!(linear.terms[0].coefficient, 4.0);
-    }
-
-    fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
-        (
-            proptest::collection::vec(crate::convert::arbitrary_coefficient(), ids.len()),
-            Just(ids),
-        )
-            .prop_map(|(coefficients, ids)| {
-                let entries = ids.into_iter().zip(coefficients).collect();
-                State { entries }
-            })
-            .boxed()
     }
 
     macro_rules! pair_with_state {

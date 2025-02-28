@@ -1,6 +1,5 @@
+use crate::sorted_ids::SortedIds;
 use std::fmt;
-
-use super::sorted_ids::SortedIds;
 
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
     if let Some(precision) = f.precision() {

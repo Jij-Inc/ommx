@@ -1,15 +1,12 @@
 use crate::v1::{linear::Term, Linear, Quadratic};
 use approx::AbsDiffEq;
 use num::Zero;
-use proptest::prelude::*;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     iter::Sum,
     ops::*,
 };
-
-use super::arbitrary_coefficient;
 
 impl Zero for Linear {
     fn zero() -> Self {
@@ -126,7 +123,8 @@ impl<'a> IntoIterator for &'a Linear {
             self.terms
                 .iter()
                 .map(|term| (Some(term.id), term.coefficient))
-                .chain(std::iter::once((None, self.constant))),
+                .chain(std::iter::once((None, self.constant)))
+                .filter(|(_, c)| !c.is_zero()),
         )
     }
 }
@@ -213,25 +211,6 @@ impl Mul for Linear {
         let r = rhs.constant;
         quad.linear = Some(self * r + c * rhs - r * c);
         quad
-    }
-}
-
-impl Arbitrary for Linear {
-    type Parameters = (usize /* num_terms */, u64 /* Max ID */);
-    type Strategy = BoxedStrategy<Self>;
-
-    fn arbitrary_with((num_terms, max_id): Self::Parameters) -> Self::Strategy {
-        let terms = proptest::collection::vec((0..=max_id, arbitrary_coefficient()), num_terms);
-        let constant = arbitrary_coefficient();
-        (terms, constant)
-            .prop_map(|(terms, constant)| Linear::new(terms.into_iter(), constant))
-            .boxed()
-    }
-
-    fn arbitrary() -> Self::Strategy {
-        (0..5_usize, 0..10_u64)
-            .prop_flat_map(Self::arbitrary_with)
-            .boxed()
     }
 }
 

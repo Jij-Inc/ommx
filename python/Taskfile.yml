@@ -15,6 +15,9 @@ includes:
   ommx-pyscipopt-adapter:
     taskfile: ommx-pyscipopt-adapter/Taskfile.yml
     dir: ommx-pyscipopt-adapter
+  ommx-highs-adapter:
+    taskfile: ommx-highs-adapter/Taskfile.yml
+    dir: ommx-highs-adapter
 
   # For python:doc task
   api_reference:
@@ -51,6 +54,7 @@ tasks:
       - task: ommx-openjij-adapter:test
       - task: ommx-python-mip-adapter:test
       - task: ommx-pyscipopt-adapter:test
+      - task: ommx-highs-adapter:test
 
   set-version:
     desc: Set the version for all Python projects

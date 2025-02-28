@@ -3,9 +3,8 @@ use colored::Colorize;
 use ocipkg::ImageName;
 use ommx::{
     artifact::{Builder, InstanceAnnotations},
-    random::random_lp,
+    random::{random_deterministic, FunctionParameters, InstanceParameters},
 };
-use rand::SeedableRng;
 use std::path::Path;
 use url::Url;
 
@@ -19,8 +18,17 @@ fn main() -> Result<()> {
         .parse_default_env()
         .init();
 
-    let mut rng = rand_xoshiro::Xoshiro256StarStar::seed_from_u64(0);
-    let lp = random_lp(&mut rng, 5, 7);
+    let linear_parameter = FunctionParameters {
+        num_terms: 5,
+        max_degree: 1,
+        max_id: 10,
+    };
+    let lp = random_deterministic(InstanceParameters {
+        num_constraints: 7,
+        objective: linear_parameter,
+        constraint: linear_parameter,
+        kinds: vec![ommx::v1::decision_variable::Kind::Continuous],
+    });
 
     // "data" directory is at the root of the repository
     let manifest_root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
