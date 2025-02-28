@@ -28,19 +28,11 @@ jobs:
 
       - name: Generate LLMs.txt
         run: |
-          # Run the script to generate LLMs.txt
+          # Make a copy of the original LLMs.txt file
+          cp LLMs.txt LLMs.txt.original
+          
+          # Run the script to generate a new LLMs.txt file
           uv run python/generate_llms_txt.py
-          mv LLMs.txt LLMs.txt.generated
-
-      - name: Compare generated file with committed file
-        run: |
-          if [ ! -f "LLMs.txt" ]; then
-            echo "Error: LLMs.txt does not exist in the repository"
-            exit 1
-          fi
           
           # Compare the files using git diff
-          mv LLMs.txt.generated LLMs.txt.new
-          cp LLMs.txt LLMs.txt.old
-          mv LLMs.txt.new LLMs.txt
-          git diff --exit-code LLMs.txt.old LLMs.txt
+          git diff --exit-code LLMs.txt.original LLMs.txt
