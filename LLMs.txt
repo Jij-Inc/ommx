@@ -1831,12 +1831,12 @@ builder = ArtifactBuilder.new_archive_unnamed(filename)
 
 [`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors, allowing you to choose whether to manage it by name like a container or as an archive file. If you use a container registry to push and pull like a container, a name is required, but if you use an archive file, a name is not necessary. Here, we use `ArtifactBuilder.new_archive_unnamed` to manage it as an archive file.
 
-| Constructor | Description |
-| --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Manage by name like a container |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | Manage as both an archive file and a container |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | Manage as an archive file |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Determine the container name according to the GitHub Container Registry |
+
+
+
+
+
+
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
@@ -2049,15 +2049,15 @@ These instances have both dataset-level annotations and dataset-specific annotat
 
 There are seven dataset-wide annotations with dedicated properties:
 
-| Annotation                                    | Property          | Description                                               |
-|----------------------------------------------|-------------------|-----------------------------------------------------------|
-| `org.ommx.v1.instance.authors`               | `authors`         | The authors of the instance                              |
-| `org.ommx.v1.instance.constraints`           | `num_constraints` | The number of constraint conditions in the instance      |
-| `org.ommx.v1.instance.created`               | `created`         | The date of the instance was saved as an OMMX Artifact   |
-| `org.ommx.v1.instance.dataset`               | `dataset`         | The name of the dataset to which this instance belongs   |
-| `org.ommx.v1.instance.license`               | `license`         | The license of this dataset                              |
-| `org.ommx.v1.instance.title`                 | `title`           | The name of the instance                                 |
-| `org.ommx.v1.instance.variables`             | `num_variables`   | The total number of decision variables in the instance   |
+
+
+
+
+
+
+
+
+
 
 MIPLIB-specific annotations are prefixed with `org.ommx.miplib.*`.
 

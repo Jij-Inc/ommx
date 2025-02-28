@@ -9,7 +9,6 @@ This script:
 """
 
 import os
-import sys
 import yaml
 import tempfile
 import re
@@ -17,25 +16,6 @@ from pathlib import Path
 import nbformat
 from nbconvert import MarkdownExporter
 
-
-def install_package(package_name):
-    """Install a Python package using uv add."""
-    import subprocess
-    cmd = ["uv", "add", "--dev", package_name]
-    print(f"Installing package: {package_name}")
-    try:
-        result = subprocess.run(
-            cmd,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {' '.join(cmd)}")
-        print(f"Error output: {e.stderr}")
-        sys.exit(1)
 
 
 def convert_notebook_to_markdown(notebook_path, output_path):
@@ -147,11 +127,15 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 if lines and lines[0].startswith("# "):
                     content = "\n".join(lines[1:])
                 
-                # Exclude images but keep tables
+                # Exclude images and tables
                 # Remove image markdown (```{figure} ... ```)
                 content = re.sub(r"```\{figure\}.*?```", "", content, flags=re.DOTALL)
                 # Remove inline images (![...](...)
                 content = re.sub(r"!\[.*?\]\(.*?\)", "", content)
+                # Remove tables (| ... |)
+                content = re.sub(r'^\|.*\|$', '', content, flags=re.MULTILINE)
+                # Remove HTML tables (<table>...</table>)
+                content = re.sub(r'<table>.*?</table>', '', content, flags=re.DOTALL)
                 
                 outfile.write(content)
                 outfile.write("\n\n")
@@ -166,10 +150,6 @@ def main():
     toc_path = docs_dir / "_toc.yml"
     output_file = repo_root / "LLMs.txt"
 
-    # Ensure required packages are installed
-    required_packages = ["pyyaml", "jupyter", "nbconvert", "nbformat"]
-    for package in required_packages:
-        install_package(package)
 
     # Create temporary directories
     with tempfile.TemporaryDirectory() as temp_dir:
