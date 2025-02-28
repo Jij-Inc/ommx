@@ -148,9 +148,6 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 outfile.write("\n\n")
 
 
-
-
-
 def main():
     """Main function to generate the LLMs.txt file."""
     # Define paths
