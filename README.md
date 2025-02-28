@@ -8,14 +8,11 @@
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
-## For AI Assistants
-
-- [LLMs.txt](https://raw.githubusercontent.com/Jij-Inc/ommx/refs/heads/main/LLMs.txt) - Documentation formatted for AI assistants like ChatGPT (English)
-- [LLMs.txt](https://raw.githubusercontent.com/Jij-Inc/ommx/refs/heads/main/LLMs.txt) - ChatGPTなどのAIアシスタント向けにフォーマットされたドキュメント (英語)
-
 # Tutorial
 
 ## English
+
+- [LLMs.txt](https://raw.githubusercontent.com/Jij-Inc/ommx/refs/heads/main/LLMs.txt) - Documentation formatted for AI assistants like ChatGPT or NotebookLM.
 
 | Title | Jupyter Book |
 |:------|:-------------|
