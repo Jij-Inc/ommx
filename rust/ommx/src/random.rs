@@ -53,12 +53,21 @@ pub use decision_variable::*;
 pub use function::*;
 pub use instance::*;
 pub use parameter::*;
+pub use state::*;
 
 use crate::sorted_ids::SortedIds;
 
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
 pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
-    let strategy = T::arbitrary_with(parameters);
+    sample(rng, T::arbitrary_with(parameters))
+}
+
+/// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`] in a deterministic way.
+pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
+    sample_deterministic(T::arbitrary_with(parameters))
+}
+
+pub fn sample<T>(rng: proptest::test_runner::TestRng, strategy: impl Strategy<Value = T>) -> T {
     let config = proptest::test_runner::Config::default();
     let mut runner = proptest::test_runner::TestRunner::new_with_rng(config, rng);
     let tree = strategy
@@ -67,9 +76,7 @@ pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::
     tree.current()
 }
 
-/// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`] in a deterministic way.
-pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
-    let strategy = T::arbitrary_with(parameters);
+pub fn sample_deterministic<T>(strategy: impl Strategy<Value = T>) -> T {
     let mut runner = TestRunner::deterministic();
     let tree = strategy
         .new_tree(&mut runner)
