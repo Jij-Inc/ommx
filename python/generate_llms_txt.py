@@ -5,8 +5,7 @@ Script to generate a consolidated markdown file for AI assistants.
 This script:
 1. Converts Jupyter notebooks to markdown
 2. Concatenates markdown files based on TOC order
-3. Generates Python stub files for the ommx package
-4. Combines tutorials and API stubs into a single LLMs.txt file
+3. Creates a single LLMs.txt file with tutorial content
 """
 
 import os
@@ -14,7 +13,6 @@ import sys
 import yaml
 import subprocess
 import tempfile
-import shutil
 from pathlib import Path
 
 
@@ -150,60 +148,7 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 outfile.write("\n\n")
 
 
-def generate_python_stubs(output_dir):
-    """Generate Python stub files for the ommx package."""
-    os.makedirs(output_dir, exist_ok=True)
 
-    # Run pyright to generate stubs
-    cmd = ["uv", "run", "pyright", "--createstub", "ommx"]
-    run_command(cmd)
-
-    # Check if stubs were generated
-    stub_dir = "./typings/ommx"
-    if not os.path.exists(stub_dir):
-        print("Error: Stub files were not generated")
-        return False
-
-    # Copy stub files to output directory
-    for stub_file in Path(stub_dir).glob("**/*.pyi"):
-        relative_path = stub_file.relative_to(stub_dir)
-        dest_path = Path(output_dir) / relative_path
-
-        # Create output directory if it doesn't exist
-        os.makedirs(dest_path.parent, exist_ok=True)
-
-        # Copy the file
-        shutil.copy2(stub_file, dest_path)
-        print(f"Copied {stub_file} to {dest_path}")
-
-    return True
-
-
-def concatenate_api_stubs(stubs_dir, output_file):
-    """Concatenate API stub files into the output file."""
-    with open(output_file, "a") as outfile:
-        outfile.write("## API Reference\n\n")
-
-        # Find all stub files
-        stub_files = list(Path(stubs_dir).glob("**/*.pyi"))
-
-        if not stub_files:
-            outfile.write("No API stub files found.\n\n")
-            return
-
-        # Process each stub file
-        for stub_file in sorted(stub_files):
-            # Add a section header for the file
-            module_path = stub_file.relative_to(stubs_dir).with_suffix("")
-            module_name = str(module_path).replace("/", ".")
-            outfile.write(f"### {module_name}\n\n")
-
-            # Append the file content
-            with open(stub_file, "r") as infile:
-                content = infile.read()
-                outfile.write("```python\n")
-                outfile.write(content)
-                outfile.write("\n```\n\n")
 
 
 def main():
@@ -216,14 +161,13 @@ def main():
     output_file = repo_root / "LLMs.txt"
 
     # Ensure required packages are installed
-    required_packages = ["pyyaml", "jupyter", "nbconvert", "pyright"]
+    required_packages = ["pyyaml", "jupyter", "nbconvert"]
     for package in required_packages:
         install_package(package)
 
     # Create temporary directories
     with tempfile.TemporaryDirectory() as temp_dir:
         markdown_dir = Path(temp_dir) / "markdown"
-        stubs_dir = Path(temp_dir) / "stubs"
 
         # Convert notebooks to markdown
         convert_notebooks_to_markdown(notebook_dir, markdown_dir)
@@ -233,11 +177,6 @@ def main():
 
         # Concatenate markdown files
         concatenate_markdown_files(markdown_dir, ordered_files, output_file)
-
-        # Generate Python stubs
-        if generate_python_stubs(stubs_dir):
-            # Concatenate API stubs
-            concatenate_api_stubs(stubs_dir, output_file)
 
     print(f"Generated {output_file}")
 
