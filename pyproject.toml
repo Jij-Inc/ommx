@@ -3,3 +3,11 @@ ommx = { workspace = true }
 
 [tool.uv.workspace]
 members = ["python/ommx*"]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "nbconvert>=7.16.6",
+    "pyright>=1.1.394",
+    "pyyaml>=6.0.2",
+]
