@@ -1,8 +1,76 @@
 # OMMX Documentation for AI Assistants
 
-## Tutorial Content
+## Introduction
 
-### Solve With Ommx Adapter.Md
+### Introduction
+
+
+OMMX (Open Mathematical prograMming eXchange) is an open data format and SDK designed to simplify data exchange between software and people when applying mathematical optimization to real-world problems.
+
+## Data Exchange in Mathematical Optimization
+
+When applying mathematical optimization to practical use cases, a large amount of data is often generated, requiring both effective management and sharing. Unlike the research phase of optimization, the application phase is divided into multiple stages, each necessitating specialized tools. Consequently, data must be converted to formats appropriate for each tool, making the overall process increasingly complex. By establishing one common format, it becomes easier to integrate multiple tools through a single conversion path to and from that format.
+
+
+Moreover, these tasks are typically carried out by separate individuals and teams, requiring data handoffs. Metadata is critical in these handoffs to clarify the data’s meaning and intention. For example, if a solution file for an optimization problem lacks details regarding which problem was solved, which solver was used, or what settings were chosen, the file cannot be reused or validated effectively. Standardized metadata helps streamline collaboration and data handling.
+
+## Components of OMMX
+
+To address these data exchange challenges, OMMX was developed. It consists of four main components:
+
+- OMMX Message  
+  A data format, independent of programming languages and OS, for exchanging information among software
+
+- OMMX Artifact  
+  A package format with metadata that is convenient for exchanging data among people
+
+- OMMX SDK  
+  A framework for efficiently creating and manipulating OMMX Messages and OMMX Artifacts
+
+- OMMX Adapters  
+  Tools for converting between solver-specific formats and OMMX
+
+### OMMX Message
+
+OMMX Message is a data format defined with [Protocol Buffers](https://protobuf.dev/) to ensure language-agnostic and OS-independent data exchange. It encapsulates schemas for optimization problems ([`ommx.v1.Instance`](./ommx_message/instance.ipynb)) and solutions ([`ommx.v1.Solution`](./ommx_message/solution.ipynb)). Protocol Buffers allow automatic generation of libraries in many languages, which OMMX SDK provides, especially for Python and Rust.
+
+Data structures such as `ommx.v1.Instance` are called Messages, and each Message has multiple fields. For example, `ommx.v1.Instance` has the following fields (some are omitted for simplicity):
+
+```protobuf
+message Instance {
+  // Decision variables
+  repeated DecisionVariable decision_variables = 2;
+  // Objective function
+  Function objective = 3;
+  // Constraints
+  repeated Constraint constraints = 4;
+  // Maximization or minimization
+  Sense sense = 5;
+}
+```
+
+Messages such as `ommx.v1.DecisionVariable` representing decision variables and `ommx.v1.Function` representing mathematical functions used as objective functions and constraints are defined under the namespace `ommx.v1`. A list of Messages defined in OMMX is summarized in [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html).
+
+Some solvers can directly read `ommx.v1.Instance`. For those that cannot, OMMX Adapters can be used to convert OMMX Message data into formats the solvers can handle. This makes it simpler to integrate various tools that support OMMX.
+
+
+
+### OMMX Artifact
+
+OMMX Artifact is a metadata-rich package format based on the [OCI (Open Container Initiative)](https://opencontainers.org/) standard. An OCI Artifact manages its content as layers and a manifest, assigning a specific [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml) to each layer. OMMX defines its own Media Types (e.g., `application/org.ommx.v1.instance`), and when these formats are included in OCI Artifacts, they are called OMMX Artifacts.
+
+In OCI Artifact, the contents of the package are managed in units called layers. A single container contains multiple layers and metadata called a Manifest. When reading a container, the Manifest is first checked, and the necessary data is extracted by reading the layers based on that information. Each layer is saved as binary data (BLOB) with metadata called [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml). For example, when saving a PDF file, the Media Type `application/pdf` is attached, so software reading OCI Artifacts can recognize it as a PDF file by looking at the Media Type.
+
+One major benefit of OCI Artifact compatibility is that standard container registries, such as [DockerHub](https://hub.docker.com/) or [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry), can be used to store and distribute data. OMMX uses this mechanism to share large datasets like [MIPLIB 2017](https://miplib.zib.de/), made available at [GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017). For additional details, see [Download MIPLIB Instances](./tutorial/download_miplib_instance.md).
+
+
+
+
+## Concept
+
+## Tutorial
+
+### Solve With Ommx Adapter
 
 
 OMMX provides OMMX Adapter software to enable interoperability with existing mathematical optimization tools. By using OMMX Adapter, you can convert optimization problems expressed in OMMX schemas into formats acceptable to other optimization tools, and convert the resulting data from those tools back into OMMX schemas.
@@ -206,7 +274,7 @@ $$
 the left-hand side "value" is $-1$, indicating there is exactly 1 unit of slack under the capacity.
 
 
-### Tsp Sampling With Openjij Adapter.Md
+### Tsp Sampling With Openjij Adapter
 
 
 Here, we explain how to convert a problem to QUBO and perform sampling using the Traveling Salesman Problem as an example.
@@ -561,7 +629,7 @@ plt.show()
 
 
 
-### Share In Ommx Artifact.Md
+### Share In Ommx Artifact
 
 
 In mathematical optimization workflows, it is important to generate and manage a variety of data. Properly handling these data ensures reproducible computational results and allows teams to share information efficiently.
@@ -833,7 +901,7 @@ artifact.get_json(artifact.layers[3])
 ```
 
 
-### Download Miplib Instance.Md
+### Download Miplib Instance
 
 
 The OMMX repository provides mixed-integer programming benchmark instances from MIPLIB 2017 in OMMX Artifact format.
@@ -913,5 +981,1143 @@ import numpy as np
 best = float(instance.annotations["org.ommx.miplib.objective"])
 assert np.isclose(solution.objective, best)
 ```
+
+
+## User Guide
+
+### Function
+
+
+In mathematical optimization, functions are used to express objective functions and constraints. Specifically, OMMX handles polynomials and provides the following data structures in OMMX Message to represent polynomials.
+
+| Data Structure | Description |
+| --- | --- |
+| [ommx.v1.Linear](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Linear) | Linear function. Holds pairs of variable IDs and their coefficients |
+| [ommx.v1.Quadratic](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Quadratic) | Quadratic function. Holds pairs of variable ID pairs and their coefficients |
+| [ommx.v1.Polynomial](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Polynomial) | Polynomial. Holds pairs of variable ID combinations and their coefficients |
+| [ommx.v1.Function](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function) | One of the above or a constant |
+
+
+## Creating ommx.v1.Function
+In the Python SDK, there are two main approachs to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.v1.Linear` as follows.
+
+
+```python
+from ommx.v1 import Linear
+
+linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
+print(linear)
+```
+
+    Linear(x1 + 2*x2 + 3)
+
+
+In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms` and `constant` properties.
+
+
+```python
+print(f"{linear.terms=}, {linear.constant=}")
+```
+
+    linear.terms={(1,): 1.0, (2,): 2.0, (): 3.0}, linear.constant=3.0
+
+
+Another approach is to create from `ommx.v1.DecisionVariable`. `ommx.v1.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.v1.Linear`, you can first create decision variables using `ommx.v1.DecisionVariable` and then use them to create polynomials.
+
+
+```python
+from ommx.v1 import DecisionVariable
+
+x = DecisionVariable.binary(1, name="x")
+y = DecisionVariable.binary(2, name="y")
+
+linear = x + 2.0 * y + 3.0
+print(linear)
+```
+
+    Linear(x1 + 2*x2 + 3)
+
+
+Note that the polynomial data type retains only the ID of the decision variable and does not store additional information. In the above example, information passed to `DecisionVariable.binary` such as `x` and `y` is not carried over to `Linear`. This second method can create polynomials of any degree.
+
+
+```python
+q = x * x + x * y + y * y
+print(q)
+```
+
+    Quadratic(x1*x1 + x1*x2 + x2*x2)
+
+
+
+```python
+p = x * x * x + y * y
+print(p)
+```
+
+    Polynomial(x1*x1*x1 + x2*x2)
+
+
+`Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. However, since any of them can be used as objective functions or constraints, a Message called `Function` is provided, which can be any of the above or a constant.
+
+
+```python
+from ommx.v1 import Function
+
+# Constant
+print(Function(1.0))
+# Linear
+print(Function(linear))
+# Quadratic
+print(Function(q))
+# Polynomial
+print(Function(p))
+```
+
+    Function(1)
+    Function(x1 + 2*x2 + 3)
+    Function(x1*x1 + x1*x2 + x2*x2)
+    Function(x1*x1*x1 + x2*x2)
+
+
+## Substitution and Partial Evaluation of Decision Variables
+
+`Function` and other polynomials have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
+
+
+```python
+value, used_id = linear.evaluate({1: 1, 2: 0})
+print(f"{value=}, {used_id=}")
+```
+
+    value=4.0, used_id={1, 2}
+
+
+The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns the evaluated value and the IDs of the decision variables used. This is useful when you want to know which parts were used when evaluating against `ommx.v1.State`, which is the solution obtained by solving the optimization problem. `evaluate` returns an error if the necessary decision variable IDs are missing.
+
+
+```python
+try:
+    linear.evaluate({1: 1})
+except RuntimeError as e:
+    print(f"Error: {e}")
+```
+
+    Error: Variable id (2) is not found in the solution
+
+
+If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method. This takes the same arguments as `evaluate` but returns the decision variables without assigned values unevaluated.
+
+
+```python
+linear2, used_id = linear.partial_evaluate({1: 1})
+print(f"{linear2=}, {used_id=}")
+```
+
+    linear2=Linear(2*x2 + 4), used_id={1}
+
+
+The result of partial evaluation is a polynomial, so it is returned in the same type as the original polynomial.
+
+## Comparison of Coefficients
+
+`Function` and other polynomial types have an `almost_equal` function. This function determines whether the coefficients of the polynomial match within a specified error. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
+
+
+```python
+xx = (x + 1) * (x + 1)
+xx.almost_equal(x * x + 2 * x + 1)
+```
+
+
+
+
+    True
+
+
+
+
+### Instance
+
+
+[`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance) is a data structure for describing the optimization problem itself (mathematical model). It consists of the following components:
+
+- Decision variables ([`decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables))
+- Objective function ([`objective`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.objective))
+- Constraints ([`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints))
+- Maximization/Minimization ([`sense`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.sense))
+
+For example, let's consider a simple optimization problem:
+
+$$
+\begin{align}
+\max \quad & x + y \\
+\text{subject to} \quad & x y  = 0 \\
+& x, y \in \{0, 1\}
+\end{align}
+$$
+
+The corresponding `ommx.v1.Instance` is as follows.
+
+
+```python
+from ommx.v1 import Instance, DecisionVariable
+
+x = DecisionVariable.binary(1, name='x')
+y = DecisionVariable.binary(2, name='y')
+
+instance = Instance.from_components(
+    decision_variables=[x, y],
+    objective=x + y,
+    constraints=[x * y == 0],
+    sense=Instance.MAXIMIZE
+)
+```
+
+Each of these components has a corresponding property. The objective function is converted into the form of [`ommx.v1.Function`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function), as explained in the previous section.
+
+
+```python
+instance.objective
+```
+
+
+
+
+    Function(x1 + x2)
+
+
+
+`sense` is set to `Instance.MAXIMIZE` for maximization problems or `Instance.MINIMIZE` for minimization problems.
+
+
+```python
+instance.sense == Instance.MAXIMIZE
+```
+
+
+
+
+    True
+
+
+
+## Decision Variables
+
+Decision variables and constraints can be obtained in the form of [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html).
+
+
+```python
+instance.decision_variables
+```
+
+
+
+
+
+
+
+
+First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
+
+- `kind` specifies the type of decision variable, which can be Binary, Integer, Continuous, SemiInteger, or SemiContinuous.
+- `lower` and `upper` are the lower and upper bounds of the decision variable. For Binary variables, this range is $[0, 1]$.
+
+Additionally, OMMX is designed to handle metadata that may be needed when integrating mathematical optimization into practical data analysis. While this metadata does not affect the mathematical model itself, it is useful for data analysis and visualization.
+
+- `name` is a human-readable name for the decision variable. In OMMX, decision variables are always identified by ID, so this `name` may be duplicated. It is intended to be used in combination with `subscripts`, which is described later.
+- `description` is a more detailed explanation of the decision variable.
+- When dealing with many mathematical optimization problems, decision variables are often handled as multidimensional arrays. For example, it is common to consider constraints with subscripts like $x_i + y_i \leq 1, \forall i \in [1, N]$. In this case, `x` and `y` are the names of the decision variables, so they are stored in `name`, and the part corresponding to $i$ is stored in `subscripts`. `subscripts` is a list of integers, but if the subscript cannot be represented as an integer, there is a `parameters` property that allows storage in the form of `dict[str, str]`.
+
+If you need a list of [`ommx.v1.DecisionVariable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.DecisionVariable) directly, you can use the [`get_decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraints) method.
+
+
+```python
+for v in instance.get_decision_variables():
+    print(f"{v.id=}, {v.name=}")
+```
+
+    v.id=1, v.name='x'
+    v.id=2, v.name='y'
+
+
+To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable) method.
+
+
+```python
+x1 = instance.get_decision_variable(1)
+print(f"{x1.id=}, {x1.name=}")
+```
+
+    x1.id=1, x1.name='x'
+
+
+## Constraints
+Next, let's look at the constraints.
+
+
+```python
+instance.constraints
+```
+
+
+
+
+
+
+
+
+In OMMX, constraints are also managed by ID. This ID is independent of the decision variable ID. When you create a constraint like `x * y == 0`, a sequential number is automatically assigned. To manually set the ID, you can use the [`set_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.set_id) method.
+
+
+```python
+c = (x * y == 0).set_id(100)
+print(f"{c.id=}")
+```
+
+    c.id=100
+
+
+The essential information for constraints is `id` and `equality`. `equality` indicates whether the constraint is an equality constraint ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) or an inequality constraint ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
+
+Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. These can be set using the [`add_name`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_name), [`add_description`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_description), [`add_subscripts`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_subscripts), and [`add_parameters`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_parameters) methods.
+
+
+```python
+c = (x * y == 0).set_id(100).add_name("prod-zero")
+print(f"{c.id=}, {c.name=}")
+```
+
+    c.id=100, c.name='prod-zero'
+
+
+You can also use the [`get_constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraints) method to directly obtain a list of [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint). To obtain `ommx.v1.Constraint` by its the constraint ID, use the [`get_constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint) method.
+
+
+```python
+for c in instance.get_constraints():
+    print(c)
+```
+
+    Constraint(Function(x1*x2) == 0)
+
+
+
+### Parametric Instance
+
+
+[`ommx.v1.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.ParametricInstance) is a class that represents mathematical models similar to [`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance). It also supports parameters (via [`ommx.v1.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Parameter)) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.v1.Instance`. Because the resulting `ommx.v1.Instance` keeps the IDs of decision variables and constraints from `ommx.v1.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
+
+Consider the following knapsack problem.
+
+$$
+\begin{align*}
+\text{maximize} \quad & \sum_{i=1}^{N} p_i x_i \\
+\text{subject to} \quad & \sum_{i=1}^{N} w_i x_i \leq W \\
+& x_i \in \{0, 1\} \quad (i=1, 2, \ldots, N)
+\end{align*}
+$$
+
+Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.v1.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
+
+
+```python
+from ommx.v1 import ParametricInstance, DecisionVariable, Parameter, Instance
+
+N = 6
+x = [DecisionVariable.binary(id=i, name="x", subscripts=[i]) for i in range(N)]
+
+p = [Parameter.new(id=i+  N, name="Profit", subscripts=[i]) for i in range(N)]
+w = [Parameter.new(id=i+2*N, name="Weight", subscripts=[i]) for i in range(N)]
+W =  Parameter.new(id=  3*N, name="Capacity")
+```
+
+`ommx.v1.Parameter` also has an ID and uses the same numbering as `ommx.v1.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.v1.Function` or `ommx.v1.Constraint` objects.
+
+
+```python
+objective = sum(p[i] * x[i] for i in range(N))
+constraint = sum(w[i] * x[i] for i in range(N)) <= W
+```
+
+Now let’s combine these elements into an `ommx.v1.ParametricInstance` that represents the knapsack problem.
+
+
+```python
+parametric_instance = ParametricInstance.from_components(
+    decision_variables=x,
+    parameters=p + w + [W],
+    objective=objective,
+    constraints=[constraint],
+    sense=Instance.MAXIMIZE,
+)
+```
+
+Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables` and `constraints` properties. In addition, `ommx.v1.ParametricInstance` has a `parameters` property for viewing parameter information in a DataFrame.
+
+
+```python
+parametric_instance.parameters
+```
+
+
+
+
+
+
+
+
+Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.
+
+
+```python
+p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
+w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
+W_value = { W.id: 47 }
+
+instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
+```
+
+````{note}
+`ommx.v1.ParametricInstance` cannot handle parameters that change the number of decision variables or parameters (for example, a variable $N$). If you need this functionality, please use a more advanced modeler such as [JijModeling](https://jij-inc.github.io/JijModeling-Tutorials/ja/introduction.html).
+````
+
+
+### Solution
+
+
+OMMX has several structures that represent the solution of mathematical models.
+
+| Data Structure | Description |
+| --- | --- |
+| [`ommx.v1.State`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/solution_pb2/index.html#ommx.v1.solution_pb2.State) | Holds the solution value for the decision variable ID. The simplest representation of a solution. |
+| [`ommx.v1.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Solution) | A representation of the solution intended to be human-readable. In addition to the values of the decision variables and the evaluation values of the constraints, it also holds metadata for the decision variables and constraints added to the [`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance). |
+
+Most solvers are software designed to solve mathematical models, so they return minimal information equivalent to `ommx.v1.State`, but OMMX mainly handles `ommx.v1.Solution`, which allows users to easily check the optimization results.
+
+`ommx.v1.Solution` is generated by passing `ommx.v1.State` or equivalent `dict[int, float]` to the `ommx.v1.Instance.evaluate` method. Let's consider the simple optimization problem we saw in the previous section again:
+
+$$
+\begin{align}
+\max \quad & x + y \\
+\text{subject to} \quad & x y  = 0 \\
+& x, y \in \{0, 1\}
+\end{align}
+$$
+
+It is clear that this has a feasible solution $x = 1, y = 0$.
+
+
+```python
+from ommx.v1 import Instance, DecisionVariable
+
+# Create a simple instance
+x = DecisionVariable.binary(1, name='x')
+y = DecisionVariable.binary(2, name='y')
+
+instance = Instance.from_components(
+    decision_variables=[x, y],
+    objective=x + y,
+    constraints=[x * y == 0],
+    sense=Instance.MAXIMIZE
+)
+
+# Create a solution
+solution = instance.evaluate({1: 1, 2: 0})  # x=1, y=0
+```
+
+The generated `ommx.v1.Solution` inherits most of the information from the `ommx.v1.Instance`. Let's first look at the decision variables.
+
+
+```python
+solution.decision_variables
+```
+
+
+
+
+
+
+
+
+In addition to the required attributes—ID, `kind`, `lower`, and `upper`-it also inherits metadata such as `name`. Additionally, the `value` stores which was assigned in `evaluate`.  Similarly, the evaluation value is added to the constraints as `value`.
+
+
+```python
+solution.constraints
+```
+
+
+
+
+
+
+
+
+The `objective` property contains the value of the objective function, and the `feasible` property contains whether the constraints are satisfied.
+
+
+```python
+print(f"{solution.objective=}, {solution.feasible=}")
+```
+
+    solution.objective=1.0, solution.feasible=True
+
+
+Since $xy = 0$ when $x = 1, y = 0$, all constraints are satisfied, so `feasible` is `True`. The value of the objective function is $x + y = 1$.
+
+What happens in the case of an infeasible solution, $x = 1, y = 1$?
+
+
+```python
+solution11 = instance.evaluate({1: 1, 2: 1})  # x=1, y=1
+print(f"{solution11.objective=}, {solution11.feasible=}")
+```
+
+    solution11.objective=2.0, solution11.feasible=False
+
+
+`feasible = False` indicates that it is an infeasible solution.
+
+
+### Sample Set
+
+ommx.v1.SampleSet
+=================
+
+[`ommx.v1.Solution`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Solution) represents a single solution returned by a solver. However, some solvers, often called samplers, can return multiple solutions. To accommodate this, OMMX provides two data structures for representing multiple solutions:
+
+| Data Structure  | Description |
+|:---------------|:------------|
+| [`ommx.v1.Samples`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/sample_set_pb2/index.html#ommx.v1.sample_set_pb2.Samples) | A list of multiple solutions for decision variable IDs |
+| [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet) | Evaluations of objective and constraints with decision variables |
+
+`Samples` corresponds to `State` and `SampleSet` corresponds to `Solution`. This notebook explains how to use `SampleSet`.
+
+Creating a SampleSet
+--------------------
+
+Let's consider a simple optimization problem：
+
+$$
+\begin{align*}
+    \max &\quad x_1 + 2 x_2 + 3 x_3 \\
+    \text{s.t.} &\quad x_1 + x_2 + x_3 = 1 \\
+    &\quad x_1, x_2, x_3 \in \{0, 1\}
+\end{align*}
+$$
+
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+
+x = [DecisionVariable.binary(i) for i in range(3)]
+
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=x[0] + 2*x[1] + 3*x[2],
+    constraints=[sum(x) == 1],
+    sense=Instance.MAXIMIZE,
+)
+```
+
+Normally, solutions are provided by a solver, commonly referred to as a sampler, but for simplicity, we prepare them manually here. `ommx.v1.Samples` can hold multiple samples, each expressed as a set of values associated with decision variable IDs, similar to `ommx.v1.State`.
+
+Each sample is assigned an ID. Some samplers issue their own IDs for logging, so OMMX allows specifying sample IDs. If omitted, IDs are assigned sequentially starting from `0`.
+
+A helper function `ommx.v1.to_samples` can convert to `ommx.v1.Samples`.
+
+
+```python
+from ommx.v1 import to_samples
+from ommx.v1.sample_set_pb2 import Samples
+
+# When specifying Sample ID
+samples = to_samples({
+    0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+    1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+    2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+})# ^ sample ID
+assert isinstance(samples, Samples)
+
+# When automatically assigning Sample ID
+samples = to_samples([
+    {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+    {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+    {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+])
+assert isinstance(samples, Samples)
+```
+
+While `ommx.v1.Solution` is obtained via `Instance.evaluate`, `ommx.v1.SampleSet` can be obtained via `Instance.evaluate_samples`.
+
+
+```python
+sample_set = instance.evaluate_samples(samples)
+sample_set.summary
+```
+
+
+
+
+
+
+
+
+The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better bjective values (depending on whether `Instance.sense` is maximization or minimization) appear at the top.
+
+```{note}
+For clarity, we explicitly pass `ommx.v1.Samples` created by `to_samples` to `evaluate_samples`, but you can omit it because `to_samples` would be called automatically.
+```
+
+Extracting individual samples
+----------------------------
+You can use `SampleSet.get` to retrieve each sample as an `ommx.v1.Solution` by specifying the sample ID:
+
+
+```python
+from ommx.v1 import Solution
+
+solution = sample_set.get(sample_id=0)
+assert isinstance(solution, Solution)
+
+print(f"{solution.objective=}")
+solution.decision_variables
+```
+
+    solution.objective=1.0
+
+
+
+
+
+
+
+
+
+Retrieving the best solution
+---------------------------
+`SampleSet.best_feasible` returns the best feasible sample, meaning the one with the highest objective value among all feasible samples:
+
+
+```python
+solution = sample_set.best_feasible()
+
+print(f"{solution.objective=}")
+solution.decision_variables
+```
+
+    solution.objective=3.0
+
+
+
+
+
+
+
+
+
+Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
+
+
+```python
+sample_set_infeasible = instance.evaluate_samples([
+    {0: 1, 1: 1, 2: 0},  # Infeasible since x0 + x1 + x2 = 2
+    {0: 1, 1: 0, 2: 1},  # Infeasible since x0 + x1 + x2 = 2
+])
+
+# Every samples are infeasible
+display(sample_set_infeasible.summary)
+
+try:
+    sample_set_infeasible.best_feasible()
+    assert False # best_feasible() should raise RuntimeError
+except RuntimeError as e:
+    print(e)
+```
+
+
+
+
+
+    No feasible solution found in SampleSet
+
+
+```{note}
+OMMX does not provide a method to determine which infeasible solution is the best, as many different criteria can be considered. Implement it yourself if needed.
+```
+
+
+### Solver Adapter
+
+
+```{note}
+Currently, an implementation guide for the Adapter (OMMX Sampler Adapter) to execute Sampler from OMMX is also being prepared.
+```
+
+This document outlines the recommendations for implementing an Adapter (hereafter called OMMX Solver Adapter) to execute Solver from OMMX. By following the guidelines below when implementing the OMMX Solver Adapter, you can maintain a certain level of consistency with other OMMX Solver Adapters, providing a better user experience for users utilizing multiple OMMX Solver Adapters. Therefore, the OMMX community recommends adhering to the following content.
+
+## Recommendations
+
+- It is recommended that the adapter `OMMXxxxAdapter` for using Solver from OMMX inherits and implements the abstract base class `SolverAdapter`.
+    ```python
+    from ommx.ommx_adapter import SolverAdapter
+
+    class OMMXxxxAdapter(SolverAdapter):
+        ...
+    ``` 
+- The constructor of `OMMXxxxAdapter` should accept `ommx.v1.Instance` and perform the following processes:
+    - Generate the Solver’s input format (data and objects) from the `ommx.v1.Instance`.
+    - Generate any data necessary for `OMMXxxxAdapter.decode`.
+    ```python
+    class OMMXxxxAdapter(SolverAdapter):
+        def __init__(self, ommx_instance: ommx.v1.Instance):
+            ...
+    ```
+- The `OMMXxxxAdapter.solve` method should be provided as a static method for easily using Solver from OMMX.
+    - It is not necessary to implement all Solver parameters as arguments. Such use cases can be sufficiently achieved by directly using the `OMMXxxxAdapter` class.
+    ```python
+    class OMMXxxxAdapter(SolverAdapter):
+        ...
+        @staticmethod
+        def solve(ommx_instance: ommx.v1.Instance) -> ommx.v1.Solution:
+            ...
+    ```
+- The `OMMXxxxAdapter.solver_input` property should be provided as a property to obtain Solver's input format (data and objects) from OMMX.
+    ```python
+    class OMMXxxxAdapter(SolverAdapter):
+        ...
+        @property
+        def solver_input(self) -> SolverInput:
+            ...
+    ```
+- The `OMMXxxxAdapter.decode` method should be provided as a method to convert Solver's output format (data and objects) to `ommx.v1.Solution`.
+    ```python
+    class OMMXxxxAdapter(SolverAdapter):
+        ...
+        def decode(self, solver_output: SolverOutput) -> ommx.v1.Solution:
+            ...
+    ```
+- When defining arguments other than those in the methods implemented in `SolverAdapter`, use keyword-only arguments with default values
+    ```python
+    class OMMXxxxAdapter(SolverAdapter):
+        ...
+        def __init__(self, ommx_instance: ommx.v1.Instance, *, kwarg="default", ...):
+            ...
+    ```
+
+## Considerations
+
+Below are some items that, while not strongly recommended, may still be worth considering for implementation.
+
+- `OMMXxxxAdapter.decode_to_state` method: A method to convert Solver's output format (data and objects) to `ommx.v1.State`.
+    
+    ```python
+    from ommx.ommx_adapter import SolverAdapter
+    
+    class OMMXxxxAdapter(SolverAdapter):
+    	...
+    	def decode_to_state(self, data: SolverOutput) -> ommx.v1.State:
+    		...
+    ```
+    
+- `yyy_to_instance` function: A function to convert Solver's input format to `ommx.v1.Instance`.
+    
+    ```python
+    def xxx_to_instance(data: Any) -> ommmx.v1.Instance:
+    		...
+    ```
+    
+
+## User Experience Guaranteed by OMMX Solver Adapters that Meet the Recommendations
+
+OMMX Solver Adapters that meet the above recommendations can provide the following consistent user experiences.
+
+- For users who want to use Solver in a straightforward way—without worrying about its input/output or parameters—it's easy to run Solver using the common static method `solve`.
+    
+    ```python
+    from ommx_xxx_adapter import OMMXxxxAdapter
+    
+    ommx_solution = OMMXxxxAdapter.solve(ommx_instance)
+    ```
+    
+- For users who want to tune Solver can execute it by setting Solver parameters directly using the `OMMXxxxAdapter` class.
+
+    ```python
+    from ommx_xxx_adapter import OMMXxxxAdapter
+
+    adapter = OMMXxxxAdapter(ommx_instance)
+    solver_input = adapter.solver_input
+    
+    ... # Tune Solver here and execute to obtain solver_output
+    
+    ommx_solution = adapter.decode(solver_output)
+    ```
+
+
+## Release Note
+
+### Ommx-1.8.0
+
+
+[](https://github.com/Jij-Inc/ommx/releases/tag/python-1.8.0)
+
+Please refer to the GitHub Release for individual changes.
+
+⚠️ Includes breaking changes due to the addition of `SolverAdapter`.
+
+Summary
+--------
+- Added a new `SolverAdapter` abstract base class to serve as a common interface for adapters to different solvers.
+- `ommx-python-mip-adapter` and `ommx-pyscipopt-adapter` have been changed to use `SolverAdapter` according to the [adapter implementation guide](https://jij-inc.github.io/ommx/en/ommx_ecosystem/solver_adapter_guide.html)
+  - ⚠️ This is a breaking change. Code using these adapters will need to be updated.
+  - Other adapters will be updated in future versions. 
+
+# Solver Adapter 
+
+The introduction of the `SolverAdapter` base class aims to make the API for different adapters more consistent. `ommx-python-mip-adapter` and `ommx-pyscipopt-adapter` now use the `SolverAdapter` base class.
+
+Here is an example of the new Adapter interface to simply solve an OMMX instance.
+
+
+```python
+from ommx.v1 import Instance, DecisionVariable
+from ommx_python_mip_adapter import OMMXPythonMIPAdapter
+
+p = [10, 13, 18, 32, 7, 15]
+w = [11, 15, 20, 35, 10, 33]
+x = [DecisionVariable.binary(i) for i in range(6)]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=sum(p[i] * x[i] for i in range(6)),
+    constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+    sense=Instance.MAXIMIZE,
+)
+
+solution = OMMXPythonMIPAdapter.solve(instance)
+solution.objective
+```
+
+
+
+
+    42.0
+
+
+
+With the new update, the process looks the same as the above when using the `OMMXPySCIPOptAdapter` class instead.
+
+To replace the usage of `instance_to_model()` functions, you can instantiating an adapter and using `solver_input`. You can then apply any solver-specific parameters before optimizing manually, then calling `decode()` to obtain the OMMX solution.
+
+
+```python
+adapter = OMMXPythonMIPAdapter(instance)
+model = adapter.solver_input # in OMMXPythonMIPAdapter's case, this is a `mip.Model` object
+# modify model parameters here
+model.optimize() 
+solution = adapter.decode(model)
+solution.objective
+```
+
+
+
+
+    42.0
+
+
+
+
+### Ommx-1.7.0
+
+
+[](https://github.com/Jij-Inc/ommx/releases/tag/python-1.7.0)
+
+Please refer to the GitHub Release for individual changes.
+
+Summary
+--------
+- [English Jupyter Book](https://jij-inc.github.io/ommx/en/introduction.html)
+- QPLIB format parser
+- Several APIs have been added to `ommx.v1.SampleSet` and `ommx.v1.ParametricInstance`, and integration with OMMX Artifact has been added.
+  - For `ommx.v1.SampleSet`, please refer to the [new explanation page](https://jij-inc.github.io/ommx/en/ommx_message/sample_set.html)
+  - For support of OMMX Artifact, please refer to the API reference [ommx.artifact.Artifact](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact) and [ommx.artifact.ArtifactBuilder](https://jij-inc.github.io/ommx/python/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder).
+- Change in behavior of `{Solution, SampleSet}.feasible`
+
+QPLIB format parser
+---------------------------
+
+Following the MPS format, support for the QPLIB format parser has been added.
+
+
+```python
+import tempfile
+
+# Example problem from QPLIB
+#
+# Furini, Fabio, et al. "QPLIB: a library of quadratic programming instances." Mathematical Programming Computation 11 (2019): 237-265 pages 42 & 43
+# https://link.springer.com/article/10.1007/s12532-018-0147-4
+contents = """
+! ---------------
+! example problem
+! ---------------
+MIPBAND # problem name
+QML # problem is a mixed-integer quadratic program
+Minimize # minimize the objective function
+3 # variables
+2 # general linear constraints
+5 # nonzeros in lower triangle of Q^0
+1 1 2.0 5 lines row & column index & value of nonzero in lower triangle Q^0
+2 1 -1.0 |
+2 2 2.0 |
+3 2 -1.0 |
+3 3 2.0 |
+-0.2 default value for entries in b_0
+1 # non default entries in b_0
+2 -0.4 1 line of index & value of non-default values in b_0
+0.0 value of q^0
+4 # nonzeros in vectors b^i (i=1,...,m)
+1 1 1.0 4 lines constraint, index & value of nonzero in b^i (i=1,...,m)
+1 2 1.0 |
+2 1 1.0 |
+2 3 1.0 |
+1.0E+20 infinity
+1.0 default value for entries in c_l
+0 # non default entries in c_l
+1.0E+20 default value for entries in c_u
+0 # non default entries in c_u
+0.0 default value for entries in l
+0 # non default entries in l
+1.0 default value for entries in u
+1 # non default entries in u
+2 2.0 1 line of non-default indices and values in u
+0 default variable type is continuous
+1 # non default variable types
+3 2 variable 3 is binary
+1.0 default value for initial values for x
+0 # non default entries in x
+0.0 default value for initial values for y
+0 # non default entries in y
+0.0 default value for initial values for z
+0 # non default entries in z
+0 # non default names for variables
+0 # non default names for constraints"#;
+"""
+
+# Create a named temporary file
+with tempfile.NamedTemporaryFile(delete=False, suffix='.qplib') as temp_file:
+    temp_file.write(contents.encode())
+    qplib_sample_path = temp_file.name
+
+
+print(f"QPLIB sample file created at: {qplib_sample_path}")
+```
+
+    QPLIB sample file created at: /var/folders/d2/w6bymm4n7l3_pmcpv7jgt4f00000gn/T/tmpvd06t1rs.qplib
+
+
+
+```python
+from ommx import qplib
+
+# Load a QPLIB file
+instance = qplib.load_file(qplib_sample_path)
+
+# Display decision variables and constraints
+display(instance.decision_variables)
+display(instance.constraints)
+```
+
+
+
+
+
+
+
+
+
+Change in behavior of `{Solution, SampleSet}.feasible`
+---------------------
+
+- The behavior of `feasible` in `ommx.v1.Solution` and `ommx.v1.SampleSet` has been changed.
+  - The handling of `removed_constraints` introduced in Python SDK 1.6.0 has been changed. In 1.6.0, `feasible` ignored `removed_constraints`, but in 1.7.0, `feasible` now considers `removed_constraints`.
+  - Additionally, `feasible_relaxed` which explicitly ignores `removed_constraints` and `feasible_unrelaxed` which considers `removed_constraints` have been introduced. `feasible` is an alias for `feasible_unrelaxed`.
+
+
+To understand the behavior, let's consider the following simple optimization problem:
+
+$$
+\begin{align*}
+    \max &\quad x_0 + x_1 + x_2 \\
+    \text{s.t.} &\quad x_0 + x_1 \leq 1 \\
+                &\quad x_1 + x_2 \leq 1 \\
+    &\quad x_1, x_2, x_3 \in \{0, 1\}
+\end{align*}
+$$
+
+
+```python
+from ommx.v1 import DecisionVariable, Instance
+
+x = [DecisionVariable.binary(i) for i in range(3)]
+
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=sum(x),
+    constraints=[
+        (x[0] + x[1] <= 1).set_id(0),
+        (x[1] + x[2] <= 1).set_id(1),
+    ],
+    sense=Instance.MAXIMIZE,
+)
+instance.constraints
+```
+
+
+
+
+
+
+
+
+Next, we relax one of the constraints $x_0 + x_1 \leq 1$.
+
+
+```python
+instance.relax_constraint(constraint_id=0, reason="Manual relaxation")
+display(instance.constraints)
+display(instance.removed_constraints)
+```
+
+
+
+
+
+
+
+
+
+Now, $x_0 = 1, x_1 = 1, x_2 = 0$ is not a solution to the original problem, but it is a solution to the relaxed problem. Therefore, `feasible_relaxed` will be `True`, but `feasible_unrelaxed` will be `False`. Since `feasible` is an alias for `feasible_unrelaxed`, it will be `False`.
+
+
+```python
+solution = instance.evaluate({0: 1, 1: 1, 2: 0})
+print(f"{solution.feasible=}")
+print(f"{solution.feasible_relaxed=}")
+print(f"{solution.feasible_unrelaxed=}")
+```
+
+    solution.feasible=False
+    solution.feasible_relaxed=True
+    solution.feasible_unrelaxed=False
+
+
+
+### Ommx-1.6.0
+
+
+[](https://github.com/Jij-Inc/ommx/releases/tag/python-1.6.0)
+
+Summary
+--------
+
+- OMMX starts to support QUBO.
+  - New adapter package [ommx-openjij-adapter](https://pypi.org/project/ommx-openjij-adapter/) has been added.
+  - Please see new [tutorial page](https://jij-inc.github.io/ommx/en/tutorial/tsp_sampling_with_openjij_adapter.html)
+  - Several APIs are added for converting `ommx.v1.Instance` into QUBO format. Please see the above tutorial.
+- Python 3.8 support has been dropped due to its EOL
+
+
+### Ommx-1.5.0
+
+
+[](https://github.com/Jij-Inc/ommx/releases/tag/python-1.5.0)
+
+This notebook describes the new features. Please refer the GitHub release note for the detailed information.
+
+## Evaluation and Partial Evaluation
+
+From the first release of OMMX, `ommx.v1.Instance` supports `evaluate` method to produce `Solution` message
+
+
+```python
+from ommx.v1 import Instance, DecisionVariable
+
+# Create an instance of the OMMX API
+x = DecisionVariable.binary(1)
+y = DecisionVariable.binary(2)
+
+instance = Instance.from_components(
+    decision_variables=[x, y],
+    objective=x + y,
+    constraints=[x + y <= 1],
+    sense=Instance.MINIMIZE
+)
+solution = instance.evaluate({1: 1, 2: 0})
+```
+
+
+```python
+solution.decision_variables
+```
+
+
+
+
+
+
+
+
+From Python SDK 1.5.0, `Function` and its base classes, `Linear`, `Quadratic`, and `Polynomial` also support `evaluate` method:
+
+
+```python
+f = 2*x + 3*y
+value, used_ids = f.evaluate({1: 1, 2: 0})
+print(f"{value=}, {used_ids=}")
+```
+
+    value=2.0, used_ids={1, 2}
+
+
+This returns evaluated value of the function and used decision variable IDs. If some decision variables are lacking, the `evaluate` method raises an exception:
+
+
+```python
+try:
+    f.evaluate({3: 1})
+except RuntimeError as e:
+    print(e)
+```
+
+    Variable id (1) is not found in the solution
+
+
+In addition, there is `partial_evaluate` method
+
+
+```python
+f2, used_ids = f.partial_evaluate({1: 1})
+print(f"{f2=}, {used_ids=}")
+```
+
+    f2=Linear(3*x2 + 2), used_ids={1}
+
+
+This creates a new function by substituting `x = 1`. `partial_evaluate` is also added to `ommx.v1.Instance` class:
+
+
+```python
+new_instance = instance.partial_evaluate({1: 1})
+new_instance.objective
+```
+
+
+
+
+    Function(x2 + 1)
+
+
+
+This method will be useful for creating a problem with fixing specific decision variables.
 
 

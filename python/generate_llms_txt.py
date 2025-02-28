@@ -12,6 +12,7 @@ import os
 import yaml
 import tempfile
 import re
+import shutil
 from pathlib import Path
 import nbformat
 from nbconvert import MarkdownExporter
@@ -85,41 +86,57 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
     """Concatenate markdown files in the order specified by the TOC."""
     with open(output_file, "w") as outfile:
         outfile.write("# OMMX Documentation for AI Assistants\n\n")
-        outfile.write("## Tutorial Content\n\n")
 
-        # Get list of markdown files in the directory
-        markdown_files = [f for f in os.listdir(docs_dir) if f.endswith(".md")]
+        # Track current section for adding headers
+        current_section = None
 
         # Process files in TOC order
         for file_path in ordered_files:
-            # Skip files that are not tutorials
-            if not file_path.startswith("tutorial/"):
-                continue
+            # Extract the section (first directory in the path)
+            if "/" in file_path:
+                section = file_path.split("/")[0]
+            else:
+                section = "root"
 
-            # Extract the base filename
-            base_name = os.path.basename(file_path)
+            # Add section header if it's a new section
+            if section != current_section:
+                current_section = section
+                section_title = section.replace("_", " ").title()
+                if section == "root":
+                    section_title = "Introduction"
+                outfile.write(f"## {section_title}\n\n")
 
-            # Find the corresponding markdown file
-            matching_file = None
-            for md_file in markdown_files:
-                if md_file.startswith(base_name):
-                    matching_file = md_file
-                    break
+            # Extract the base filename without extension
+            if file_path.endswith(".md"):
+                base_name = os.path.basename(file_path[:-3])
+            else:
+                base_name = os.path.basename(file_path)
 
-            if not matching_file:
+            # Construct the path to the markdown file in the temporary directory
+            if "/" in file_path:
+                # For files in subdirectories
+                subdir = os.path.dirname(file_path)
+                md_path = os.path.join(docs_dir, f"{base_name}.md")
+                # Also try with the subdirectory
+                if not os.path.exists(md_path):
+                    md_path = os.path.join(docs_dir, subdir, f"{base_name}.md")
+            else:
+                # For files in the root directory
+                md_path = os.path.join(docs_dir, f"{base_name}.md")
+
+            # Check if the file exists
+            if not os.path.exists(md_path):
                 print(
-                    f"Warning: No matching file for {base_name} found in {docs_dir}, skipping"
+                    f"Warning: No matching file for {base_name} found at {md_path}, skipping"
                 )
                 continue
 
-            full_path = os.path.join(docs_dir, matching_file)
-
             # Add a section header for the file
-            section_name = base_name.replace("_", " ").title()
-            outfile.write(f"### {section_name}\n\n")
+            file_title = base_name.replace("_", " ").title()
+            outfile.write(f"### {file_title}\n\n")
 
             # Append the file content
-            with open(full_path, "r") as infile:
+            with open(md_path, "r") as infile:
                 content = infile.read()
                 # Remove the first heading (it's already in the section header)
                 lines = content.split("\n")
@@ -143,7 +160,7 @@ def main():
     # Define paths
     repo_root = Path(__file__).parent.parent
     docs_dir = repo_root / "docs" / "en"
-    notebook_dir = docs_dir / "tutorial"
+    notebook_dir = docs_dir  # Process all notebooks in docs/en, not just tutorial
     toc_path = docs_dir / "_toc.yml"
     output_file = repo_root / "LLMs.txt"
 
@@ -153,6 +170,13 @@ def main():
 
         # Convert notebooks to markdown
         convert_notebooks_to_markdown(notebook_dir, markdown_dir)
+
+        # Copy existing markdown files to the temporary directory
+        for md_file in docs_dir.glob("**/*.md"):
+            relative_path = md_file.relative_to(docs_dir)
+            target_path = markdown_dir / relative_path
+            os.makedirs(target_path.parent, exist_ok=True)
+            shutil.copy(md_file, target_path)
 
         # Read TOC file
         ordered_files = read_toc_file(toc_path)
