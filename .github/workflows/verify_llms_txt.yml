@@ -1,0 +1,63 @@
+name: Verify LLMs.txt
+
+on:
+  pull_request:
+    paths:
+      - 'python/generate_llms_txt.py'
+      - 'LLMs.txt'
+      - 'docs/en/**/*.ipynb'
+      - 'docs/en/_toc.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'python/generate_llms_txt.py'
+      - 'LLMs.txt'
+      - 'docs/en/**/*.ipynb'
+      - 'docs/en/_toc.yml'
+
+jobs:
+  verify-llms-txt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Generate LLMs.txt
+        run: |
+          python python/generate_llms_txt.py
+          mv LLMs.txt LLMs.txt.generated
+
+      - name: Compare generated file with committed file
+        run: |
+          if [ ! -f "LLMs.txt" ]; then
+            echo "Error: LLMs.txt does not exist in the repository"
+            exit 1
+          fi
+          
+          # Normalize temporary directory paths in both files
+          sed -i 's|/tmp/tmp[a-zA-Z0-9_]*/markdown|/tmp/normalized/markdown|g' LLMs.txt.generated
+          cp LLMs.txt LLMs.txt.original
+          sed -i 's|/tmp/tmp[a-zA-Z0-9_]*/markdown|/tmp/normalized/markdown|g' LLMs.txt.original
+          
+          # Compare the normalized files
+          diff LLMs.txt.original LLMs.txt.generated > diff_output.txt || true
+          
+          if [ -s diff_output.txt ]; then
+            echo "Error: Generated LLMs.txt differs from the committed version"
+            echo "Differences:"
+            cat diff_output.txt
+            exit 1
+          else
+            echo "Success: Generated LLMs.txt matches the committed version"
+          fi
