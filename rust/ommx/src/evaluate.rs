@@ -581,18 +581,6 @@ mod tests {
         assert_eq!(linear.terms[0].coefficient, 4.0);
     }
 
-    fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
-        (
-            proptest::collection::vec(arbitrary_coefficient(), ids.len()),
-            Just(ids),
-        )
-            .prop_map(|(coefficients, ids)| {
-                let entries = ids.into_iter().zip(coefficients).collect();
-                State { entries }
-            })
-            .boxed()
-    }
-
     macro_rules! pair_with_state {
         ($t:ty) => {
             (<$t>::arbitrary(), <$t>::arbitrary()).prop_flat_map(|(f, g)| {
