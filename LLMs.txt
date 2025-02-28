@@ -65,7 +65,7 @@ Below is an example code using the OMMX Python SDK to describe this problem inst
 
 
 ```python
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import Instance, DecisionVariable
 
 # Define decision variables
 x = [
