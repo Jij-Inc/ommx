@@ -534,10 +534,9 @@ mod tests {
         }
 
         #[test]
-        fn log_encoding(lower in -10.0_f64..10.0, upper in -10.0_f64..10.0) {
-            if lower.ceil() >= upper.floor() {
-                return Ok(());
-            }
+        fn log_encoding((lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
+            .prop_filter("At least one integer", |(lower, upper)| lower.ceil() <= upper.floor())
+        ) {
             let mut instance = Instance::default();
             instance.decision_variables.push(DecisionVariable {
                 id: 0,
@@ -575,6 +574,37 @@ mod tests {
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
             let (solution, _) = instance.evaluate(&state).unwrap();
             prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), upper.floor());
+        }
+
+        #[test]
+        fn log_encoding_substitute(
+            instance in Instance::arbitrary()
+                .prop_filter("Empty instance", |instance| !instance.used_decision_variable_ids().is_empty()),
+            (lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
+                .prop_filter("At least one integer", |(lower, upper)| lower.ceil() <= upper.floor()),
+        ) {
+            let ids = instance.used_decision_variable_ids();
+            for id in ids {
+                let mut instance = instance.clone();
+
+                // Rewrite the decision variable to be log-encoded as an integer type
+                for dv in &mut instance.decision_variables {
+                    if dv.id == id {
+                        dv.kind = Kind::Integer as i32;
+                        dv.bound = Some(crate::v1::Bound { lower, upper });
+                    }
+                }
+
+                instance.log_encoding(id).unwrap();
+
+                // Log-encoded decision variables should not be used in the objective function and constraints
+                let objective_ids = instance.objective.as_ref().unwrap().used_decision_variable_ids();
+                prop_assert!(!objective_ids.contains(&id), "{objective_ids:?}, {id}");
+                for constraint in &instance.constraints {
+                    let constraint_ids = constraint.function().used_decision_variable_ids();
+                    prop_assert!(!constraint_ids.contains(&id), "{constraint_ids:?}, {id}");
+                }
+            }
         }
     }
 }
