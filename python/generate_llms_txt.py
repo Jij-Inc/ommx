@@ -13,6 +13,7 @@ import sys
 import yaml
 import subprocess
 import tempfile
+import re
 from pathlib import Path
 
 
@@ -144,6 +145,17 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 lines = content.split("\n")
                 if lines and lines[0].startswith("# "):
                     content = "\n".join(lines[1:])
+                
+                # Exclude images and tables
+                # Remove image markdown (```{figure} ... ```)
+                content = re.sub(r'```\{figure\}.*?```', '', content, flags=re.DOTALL)
+                # Remove inline images (![...](...)
+                content = re.sub(r'!\[.*?\]\(.*?\)', '', content)
+                # Remove tables (| ... |)
+                content = re.sub(r'^\|.*\|$', '', content, flags=re.MULTILINE)
+                # Remove HTML tables (<table>...</table>)
+                content = re.sub(r'<table>.*?</table>', '', content, flags=re.DOTALL)
+                
                 outfile.write(content)
                 outfile.write("\n\n")
 

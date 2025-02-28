@@ -19,11 +19,7 @@ pip install ommx-pyscipopt-adapter
 
 ## Two Steps for Running the Optimization
 
-```{figure} ./assets/solve_with_ommx_adapter_01.png
-:alt: Flow for solving 0-1 Knapsack Problem via OMMX PySCIPOpt Adapter
 
-Flow for solving 0-1 Knapsack Problem with OMMX PySCIPOpt Adapter.
-```
 
 To solve the 0-1 Knapsack Problem through the OMMX PySCIPOpt Adapter, follow these two steps:
 
@@ -436,9 +432,7 @@ the left-hand side "value" is $-1$, indicating there is exactly 1 unit of slack 
 
 Here, we explain how to convert a problem to QUBO and perform sampling using the Traveling Salesman Problem as an example.
 
-```{figure} ./assets/taraimawashi_businessman.png
-[Illustration of a man in a suit](https://www.irasutoya.com/2017/03/blog-post_739.html)
-```
+
 
 The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. Let's consider the following city arrangement:
 
@@ -482,7 +476,7 @@ plt.show()
 
 
     
-![png](/tmp/tmpusvnyd3q/markdown/tsp_sampling_with_openjij_adapter_3_0.png)
+
     
 
 
@@ -1678,7 +1672,7 @@ plt.show()
 
 
     
-![png](/tmp/tmpusvnyd3q/markdown/tsp_sampling_with_openjij_adapter_33_0.png)
+
     
 
 
@@ -1837,12 +1831,12 @@ builder = ArtifactBuilder.new_archive_unnamed(filename)
 
 [`ArtifactBuilder`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder) has several constructors, allowing you to choose whether to manage it by name like a container or as an archive file. If you use a container registry to push and pull like a container, a name is required, but if you use an archive file, a name is not necessary. Here, we use `ArtifactBuilder.new_archive_unnamed` to manage it as an archive file.
 
-| Constructor | Description |
-| --- | --- |
-| [`ArtifactBuilder.new`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new) | Manage by name like a container |
-| [`ArtifactBuilder.new_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive) | Manage as both an archive file and a container |
-| [`ArtifactBuilder.new_archive_unnamed`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.new_archive_unnamed) | Manage as an archive file |
-| [`ArtifactBuilder.for_github`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder.for_github) | Determine the container name according to the GitHub Container Registry |
+
+
+
+
+
+
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
@@ -2055,15 +2049,15 @@ These instances have both dataset-level annotations and dataset-specific annotat
 
 There are seven dataset-wide annotations with dedicated properties:
 
-| Annotation                                    | Property          | Description                                               |
-|----------------------------------------------|-------------------|-----------------------------------------------------------|
-| `org.ommx.v1.instance.authors`               | `authors`         | The authors of the instance                              |
-| `org.ommx.v1.instance.constraints`           | `num_constraints` | The number of constraint conditions in the instance      |
-| `org.ommx.v1.instance.created`               | `created`         | The date of the instance was saved as an OMMX Artifact   |
-| `org.ommx.v1.instance.dataset`               | `dataset`         | The name of the dataset to which this instance belongs   |
-| `org.ommx.v1.instance.license`               | `license`         | The license of this dataset                              |
-| `org.ommx.v1.instance.title`                 | `title`           | The name of the instance                                 |
-| `org.ommx.v1.instance.variables`             | `num_variables`   | The total number of decision variables in the instance   |
+
+
+
+
+
+
+
+
+
 
 MIPLIB-specific annotations are prefixed with `org.ommx.miplib.*`.
 
