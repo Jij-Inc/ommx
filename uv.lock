@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.9, <3.13"
 resolution-markers = [
     "python_full_version < '3.11'",
@@ -14,14 +13,6 @@ members = [
     "ommx-openjij-adapter",
     "ommx-pyscipopt-adapter",
     "ommx-python-mip-adapter",
-]
-
-[manifest.dependency-groups]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
 ]
 
 [[package]]
@@ -1440,13 +1431,17 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "jupyter" },
     { name = "jupyterlab" },
     { name = "markdown-code-runner" },
     { name = "matplotlib" },
     { name = "mypy-protobuf" },
+    { name = "nbconvert" },
+    { name = "nbformat" },
     { name = "networkx" },
     { name = "pyright" },
     { name = "pytest" },
+    { name = "pyyaml" },
     { name = "ruff" },
     { name = "tomlkit" },
 ]
@@ -1463,13 +1458,17 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "jupyter", specifier = ">=1.1.1" },
     { name = "jupyterlab", specifier = ">=4.3.5" },
     { name = "markdown-code-runner", specifier = ">=2.1.0" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mypy-protobuf", specifier = ">=3.6.0" },
+    { name = "nbconvert", specifier = ">=7.16.6" },
+    { name = "nbformat", specifier = ">=5.9.2" },
     { name = "networkx", specifier = ">=3.2.1" },
     { name = "pyright", specifier = ">=1.1.394" },
     { name = "pytest", specifier = ">=8.3.4" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "ruff", specifier = ">=0.9.6" },
     { name = "tomlkit", specifier = ">=0.13.2" },
 ]

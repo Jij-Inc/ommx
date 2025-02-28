@@ -1,5 +1,2 @@
 [format]
 exclude = ["*.ipynb"]
-
-[lint]
-exclude = ["*.ipynb", "*.yml", "*.yaml"]

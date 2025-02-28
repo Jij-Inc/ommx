@@ -17,21 +17,20 @@ import nbformat
 from nbconvert import MarkdownExporter
 
 
-
 def convert_notebook_to_markdown(notebook_path, output_path):
     """Convert a Jupyter notebook to markdown using nbconvert module."""
     print(f"Converting {notebook_path} to {output_path}")
-    
+
     # Read the notebook
     with open(notebook_path, "r", encoding="utf-8") as f:
         nb = nbformat.read(f, as_version=4)
-    
+
     # Initialize MarkdownExporter
     exporter = MarkdownExporter()
-    
+
     # Convert notebook to markdown
     body, _ = exporter.from_notebook_node(nb)
-    
+
     # Write the output file
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(body)
@@ -55,7 +54,7 @@ def convert_notebooks_to_markdown(notebook_dir, output_dir):
         # Get the filename without directory
         filename = notebook_path.name
         output_path = Path(output_dir) / filename.replace(".ipynb", ".md")
-        
+
         # Convert notebook to markdown
         convert_notebook_to_markdown(notebook_path, output_path)
 
@@ -126,17 +125,17 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 lines = content.split("\n")
                 if lines and lines[0].startswith("# "):
                     content = "\n".join(lines[1:])
-                
+
                 # Exclude images and tables
                 # Remove image markdown (```{figure} ... ```)
                 content = re.sub(r"```\{figure\}.*?```", "", content, flags=re.DOTALL)
                 # Remove inline images (![...](...)
                 content = re.sub(r"!\[.*?\]\(.*?\)", "", content)
                 # Remove tables (| ... |)
-                content = re.sub(r'^\|.*\|$', '', content, flags=re.MULTILINE)
+                content = re.sub(r"^\|.*\|$", "", content, flags=re.MULTILINE)
                 # Remove HTML tables (<table>...</table>)
-                content = re.sub(r'<table>.*?</table>', '', content, flags=re.DOTALL)
-                
+                content = re.sub(r"<table>.*?</table>", "", content, flags=re.DOTALL)
+
                 outfile.write(content)
                 outfile.write("\n\n")
 
@@ -149,7 +148,6 @@ def main():
     notebook_dir = docs_dir / "tutorial"
     toc_path = docs_dir / "_toc.yml"
     output_file = repo_root / "LLMs.txt"
-
 
     # Create temporary directories
     with tempfile.TemporaryDirectory() as temp_dir:
