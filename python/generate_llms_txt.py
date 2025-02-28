@@ -126,15 +126,13 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
                 if lines and lines[0].startswith("# "):
                     content = "\n".join(lines[1:])
 
-                # Exclude images and tables
+                # Exclude images and div elements
                 # Remove image markdown (```{figure} ... ```)
                 content = re.sub(r"```\{figure\}.*?```", "", content, flags=re.DOTALL)
                 # Remove inline images (![...](...)
                 content = re.sub(r"!\[.*?\]\(.*?\)", "", content)
-                # Remove tables (| ... |)
-                content = re.sub(r"^\|.*\|$", "", content, flags=re.MULTILINE)
-                # Remove HTML tables (<table>...</table>)
-                content = re.sub(r"<table>.*?</table>", "", content, flags=re.DOTALL)
+                # Remove div elements (<div>...</div>)
+                content = re.sub(r"<div.*?>.*?</div>", "", content, flags=re.DOTALL)
 
                 outfile.write(content)
                 outfile.write("\n\n")
