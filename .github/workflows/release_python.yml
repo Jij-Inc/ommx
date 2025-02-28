@@ -144,6 +144,7 @@ jobs:
       - name: Bump version
         run: |
           echo "NEW_VERSION=$(uv run python/set-version.py)" >> $GITHUB_ENV
+          task python:sync
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
