@@ -35,6 +35,10 @@ jobs:
 
       - name: Generate LLMs.txt
         run: |
+          # Install required packages
+          uv add --dev pyyaml jupyter nbconvert
+          
+          # Run the script to generate LLMs.txt
           python python/generate_llms_txt.py
           mv LLMs.txt LLMs.txt.generated
 
