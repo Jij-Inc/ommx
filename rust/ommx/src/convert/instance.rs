@@ -2,8 +2,9 @@ use crate::{
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Parameter, ParametricInstance, RemovedConstraint,
+        Linear, Parameter, ParametricInstance, RemovedConstraint, State,
     },
+    Evaluate,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -310,13 +311,22 @@ impl Instance {
                 decision_variable_id
             );
         }
-        let bound = v
-            .bound
-            .as_ref()
-            .with_context(|| format!("Bound is not defined: ID={}", decision_variable_id))?;
+        let bound = v.bound.as_ref().with_context(|| {
+            format!(
+                "Bound must be set and finite for log-encoding: ID={}",
+                decision_variable_id
+            )
+        })?;
         // Bound of integer may be non-integer value
         let upper = bound.upper.floor();
         let lower = bound.lower.ceil();
+        if upper == lower {
+            // This variable can be fixed immediately
+            self.partial_evaluate(&State {
+                entries: hashmap! { decision_variable_id => lower },
+            })?;
+            return Ok(());
+        }
         let u_l = upper - lower;
         ensure!(
             u_l > 0.0,
@@ -547,6 +557,12 @@ mod tests {
             });
             instance.log_encoding(0).unwrap();
             instance.validate().unwrap();
+
+            if lower.ceil() == upper.floor() {
+                // The decision variable is fixed, and not log-encoded
+                prop_assert!(instance.decision_variable_dependency.get(&0).is_none());
+                return Ok(());
+            }
 
             // Coefficient of the log encoding decision variables should be positive except for the constant term
             for (ids, coefficient) in instance.decision_variable_dependency.get(&0).unwrap().into_iter() {
