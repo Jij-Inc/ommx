@@ -402,6 +402,9 @@ impl Instance {
                 }
             }
         }
+        for (_id, f) in self.decision_variable_dependency.iter_mut() {
+            *f = f.substitute(&replacement)?;
+        }
         self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
