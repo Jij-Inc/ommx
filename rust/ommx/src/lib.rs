@@ -150,6 +150,16 @@ mod sorted_ids;
 pub use evaluate::Evaluate;
 
 /// Module created from `ommx.v1` proto files
-pub mod v1 {
+mod proto {
     include!("ommx.v1.rs");
+}
+
+pub mod v1 {
+    pub use crate::proto::{
+        decision_variable, function, instance, linear, sampled_values, samples, Bound, Constraint,
+        ConstraintHints, DecisionVariable, Equality, EvaluatedConstraint, Function, Instance,
+        Linear, Monomial, Optimality, Parameter, Parameters, ParametricInstance, Polynomial,
+        Quadratic, Relaxation, RemovedConstraint, SampleSet, SampledConstraint,
+        SampledDecisionVariable, SampledValues, Samples, Solution, State,
+    };
 }
