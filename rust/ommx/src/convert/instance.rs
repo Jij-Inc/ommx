@@ -607,5 +607,17 @@ mod tests {
             let (upper_evaluated, _) = encoded.evaluate(&state).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
+
+        /// Compare the result of partial_evaluate and substitute with `Function::Constant`.
+        #[test]
+        fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
+            for id in instance.defined_ids() {
+                let mut partially_evaluated = instance.clone();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }).unwrap();
+                let mut substituted = instance.clone();
+                substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
+                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));
+            }
+        }
     }
 }
