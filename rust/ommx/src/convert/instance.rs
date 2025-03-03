@@ -574,27 +574,17 @@ mod tests {
                 bound: Some(crate::v1::Bound { lower, upper }),
                 ..Default::default()
             });
-            instance.log_encoding(0).unwrap();
+            let encoded = instance.log_encoding(0).unwrap();
+
+            // Test the ID of yielded decision variables are not duplicated
             instance.validate().unwrap();
 
-            if lower.ceil() == upper.floor() {
-                // The decision variable is fixed, and not log-encoded
-                prop_assert!(instance.decision_variable_dependency.get(&0).is_none());
-                return Ok(());
-            }
-
-            // Coefficient of the log encoding decision variables should be positive except for the constant term
-            for (ids, coefficient) in instance.decision_variable_dependency.get(&0).unwrap().into_iter() {
-                if !ids.is_empty() {
-                    prop_assert!(coefficient > 0.0);
-                }
-            }
-
+            // Get decision variables introduced for log-encoding
             let aux_bits = instance
                 .decision_variables
                 .iter()
                 .filter_map(|dv| {
-                    if dv.name == Some("ommx.log_encoding".to_string()) {
+                    if dv.name == Some("ommx.log_encoding".to_string()) && dv.subscripts[0] == 0 {
                         Some(dv.id)
                     } else {
                         None
@@ -602,44 +592,20 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
 
+            if lower.ceil() == upper.floor() {
+                // No need to encode
+                prop_assert_eq!(encoded.as_constant().unwrap(), lower.ceil());
+                prop_assert_eq!(aux_bits.len(), 0);
+                return Ok(());
+            }
+
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let (solution, _) = instance.evaluate(&state).unwrap();
-            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), lower.ceil());
+            let (lower_evaluated, _) = encoded.evaluate(&state).unwrap();
+            prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let (solution, _) = instance.evaluate(&state).unwrap();
-            prop_assert_eq!(*solution.state.unwrap().entries.get(&0).unwrap(), upper.floor());
-        }
-
-        #[test]
-        fn log_encoding_substitute(
-            instance in Instance::arbitrary()
-                .prop_filter("Empty instance", |instance| !instance.used_decision_variable_ids().is_empty()),
-            (lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
-                .prop_filter("At least one integer", |(lower, upper)| lower.ceil() <= upper.floor()),
-        ) {
-            let ids = instance.used_decision_variable_ids();
-            for id in ids {
-                let mut instance = instance.clone();
-
-                // Rewrite the decision variable to be log-encoded as an integer type
-                for dv in &mut instance.decision_variables {
-                    if dv.id == id {
-                        dv.kind = Kind::Integer as i32;
-                        dv.bound = Some(crate::v1::Bound { lower, upper });
-                    }
-                }
-
-                instance.log_encoding(id).unwrap();
-
-                // Log-encoded decision variables should not be used in the objective function and constraints
-                let objective_ids = instance.objective.as_ref().unwrap().used_decision_variable_ids();
-                prop_assert!(!objective_ids.contains(&id), "{objective_ids:?}, {id}");
-                for constraint in &instance.constraints {
-                    let constraint_ids = constraint.function().used_decision_variable_ids();
-                    prop_assert!(!constraint_ids.contains(&id), "{constraint_ids:?}, {id}");
-                }
-            }
+            let (upper_evaluated, _) = encoded.evaluate(&state).unwrap();
+            prop_assert_eq!(upper_evaluated, upper.floor());
         }
     }
 }
