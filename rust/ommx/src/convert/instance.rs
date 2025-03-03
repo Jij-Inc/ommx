@@ -2,9 +2,8 @@ use crate::{
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Parameter, ParametricInstance, RemovedConstraint, State,
+        Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
-    Evaluate,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -299,7 +298,23 @@ impl Instance {
     }
 
     /// Encode an integer decision variable into binary decision variables.
-    pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<()> {
+    ///
+    /// Note that this method does not substitute the yielded binary representation into the objective and constraints.
+    /// Call [`Instance::substitute`] with the returned [`Linear`] representation.
+    ///
+    /// Mutability
+    /// ----------
+    /// - This adds new binary decision variables introduced for binary encoding to the instance.
+    ///
+    /// Errors
+    /// ------
+    /// Returns [anyhow::Error] in the following cases:
+    ///
+    /// - The given decision variable ID is not found
+    /// - The specified decision variable is not an integer type.
+    /// - The bound of the decision variable is not set or not finite.
+    ///
+    pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<Linear> {
         let v = self
             .decision_variables
             .iter()
@@ -311,31 +326,32 @@ impl Instance {
                 decision_variable_id
             );
         }
+
         let bound = v.bound.as_ref().with_context(|| {
             format!(
                 "Bound must be set and finite for log-encoding: ID={}",
                 decision_variable_id
             )
         })?;
+
         // Bound of integer may be non-integer value
         let upper = bound.upper.floor();
         let lower = bound.lower.ceil();
-        if upper == lower {
-            // This variable can be fixed immediately
-            self.partial_evaluate(&State {
-                entries: hashmap! { decision_variable_id => lower },
-            })?;
-            return Ok(());
-        }
         let u_l = upper - lower;
         ensure!(
-            u_l > 0.0,
+            u_l >= 0.0,
             "No feasible integer found in the bound: ID={}, lower={}, upper={}",
             decision_variable_id,
             bound.lower,
             bound.upper
         );
 
+        // There is only one feasible integer, and no need to encode
+        if u_l == 0.0 {
+            return Ok(Linear::from(lower));
+        }
+
+        // Log-encoding
         let n = (u_l + 1.0).log2().ceil() as usize;
         let id_base = self
             .defined_ids()
@@ -343,17 +359,17 @@ impl Instance {
             .map(|id| id + 1)
             .expect("At least one decision variable here");
 
-        let mut f = Function::from(lower);
+        let mut terms = Vec::new();
         for i in 0..n {
             let id = id_base + i as u64;
-            f = f + Linear::single_term(
+            terms.push((
                 id,
                 if i == n - 1 {
                     u_l - 2.0f64.powi(i as i32) + 1.0
                 } else {
                     2.0f64.powi(i as i32)
                 },
-            );
+            ));
             self.decision_variables.push(DecisionVariable {
                 id,
                 name: Some("ommx.log_encoding".to_string()),
@@ -366,10 +382,11 @@ impl Instance {
                 ..Default::default()
             });
         }
-        self.decision_variable_dependency
-            .insert(decision_variable_id, f.clone());
+        Ok(Linear::new(terms.into_iter(), lower))
+    }
 
-        let replacement = hashmap! { decision_variable_id => f };
+    /// Substitute dependent decision variables with given [Function]s.
+    pub fn substitute(&mut self, replacement: HashMap<u64, Function>) -> Result<()> {
         if let Some(obj) = self.objective.as_mut() {
             *obj = obj.substitute(&replacement)?;
         }
@@ -378,6 +395,8 @@ impl Instance {
                 *f = f.substitute(&replacement)?;
             }
         }
+        // TODO others
+        self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
 }
