@@ -1,4 +1,5 @@
 use crate::{
+    macros::*,
     sorted_ids::SortedIds,
     v1::{Linear, Monomial, Polynomial, Quadratic},
 };
@@ -237,6 +238,7 @@ impl fmt::Display for Polynomial {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::random::FunctionParameters;
 
     test_algebraic!(super::Polynomial);

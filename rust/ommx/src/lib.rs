@@ -143,9 +143,22 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
-mod convert;
+mod constraint;
+mod decision_variable;
 mod evaluate;
+mod format;
+mod function;
+mod instance;
+mod linear;
+mod macros;
+mod parameter;
+mod parametric_instance;
+mod polynomial;
+mod quadratic;
+mod sample_set;
+mod solution;
 mod sorted_ids;
+mod state;
 
 pub use evaluate::Evaluate;
 
