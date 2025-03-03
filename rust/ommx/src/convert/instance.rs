@@ -395,7 +395,13 @@ impl Instance {
                 *f = f.substitute(&replacement)?;
             }
         }
-        // TODO others
+        for c in &mut self.removed_constraints {
+            if let Some(c) = &mut c.constraint {
+                if let Some(f) = c.function.as_mut() {
+                    *f = f.substitute(&replacement)?;
+                }
+            }
+        }
         self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
