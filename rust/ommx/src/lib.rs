@@ -137,6 +137,7 @@ pub use prost::Message;
 // Public modules
 pub mod artifact;
 pub mod dataset;
+pub mod error;
 pub mod mps;
 pub mod qplib;
 pub mod random;
