@@ -4,12 +4,15 @@
 [![Book/ja](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja)
 [![Discord-EN](https://img.shields.io/badge/Discord-English-default?logo=Discord)](https://discord.gg/aGfCmnJp)
 [![Discord-JP](https://img.shields.io/badge/Discord-日本語-default?logo=Discord)](https://discord.gg/ckAgHqE3)
+[![LLMs.txt](https://img.shields.io/badge/LLMs.txt-AI_Documentation-green)](https://raw.githubusercontent.com/Jij-Inc/ommx/refs/heads/main/LLMs.txt)
 
 Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers mathematical programming and optimization developers and reserchers.
 
 # Tutorial
 
 ## English
+
+- [LLMs.txt](https://raw.githubusercontent.com/Jij-Inc/ommx/refs/heads/main/LLMs.txt) - Documentation formatted for AI assistants like ChatGPT or NotebookLM.
 
 | Title | Jupyter Book |
 |:------|:-------------|
@@ -31,9 +34,9 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) about developing this project.
 
 ## Rust SDK
 
-| Crate name | crates.io | API Reference (stable) | API Reference (main) |
-|:----|:----|:----|:----|
-| [ommx](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) |
+| Crate name | crates.io | API Reference (stable) | API Reference (main) | Benchmark |
+|:----|:----|:----|:----|:----|
+| [ommx](./rust/ommx/) | [![ommx](https://img.shields.io/crates/v/ommx)](https://crates.io/crates/ommx) | [![docs.rs](https://docs.rs/ommx/badge.svg)](https://docs.rs/ommx) | [![main](https://img.shields.io/badge/docs-main-blue)](https://jij-inc.github.io/ommx/rust/ommx/index.html) | [![CodSpeed Badge](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/Jij-Inc/ommx) |
 
 ## Python SDK
 
