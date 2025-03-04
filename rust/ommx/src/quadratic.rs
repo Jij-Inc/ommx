@@ -1,4 +1,5 @@
 use crate::{
+    macros::*,
     sorted_ids::SortedIds,
     v1::{Linear, Polynomial, Quadratic},
 };
