@@ -147,7 +147,6 @@ mod constraint;
 mod decision_variable;
 mod evaluate;
 mod format;
-mod function;
 mod instance;
 mod linear;
 mod macros;
@@ -163,16 +162,10 @@ mod state;
 pub use evaluate::Evaluate;
 
 /// Module created from `ommx.v1` proto files
-mod proto {
+pub mod v1 {
     include!("ommx.v1.rs");
 }
 
-pub mod v1 {
-    pub use crate::proto::{
-        decision_variable, function, instance, linear, sampled_values, samples, Bound, Constraint,
-        ConstraintHints, DecisionVariable, Equality, EvaluatedConstraint, Function, Instance,
-        Linear, Monomial, Optimality, Parameter, Parameters, ParametricInstance, Polynomial,
-        Quadratic, Relaxation, RemovedConstraint, SampleSet, SampledConstraint,
-        SampledDecisionVariable, SampledValues, Samples, Solution, State,
-    };
+mod v1_ext {
+    mod function;
 }
