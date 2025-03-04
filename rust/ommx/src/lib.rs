@@ -147,6 +147,7 @@ mod constraint;
 mod decision_variable;
 mod evaluate;
 mod format;
+mod function;
 mod instance;
 mod linear;
 mod macros;
@@ -160,6 +161,7 @@ mod sorted_ids;
 mod state;
 
 pub use evaluate::Evaluate;
+pub use function::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
