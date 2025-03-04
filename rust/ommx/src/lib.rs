@@ -160,6 +160,7 @@ mod solution;
 mod sorted_ids;
 mod state;
 
+pub use constraint::*;
 pub use evaluate::Evaluate;
 pub use function::*;
 
@@ -169,5 +170,6 @@ pub mod v1 {
 }
 
 mod v1_ext {
+    mod constraint;
     mod function;
 }
