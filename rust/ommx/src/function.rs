@@ -1,4 +1,4 @@
-use crate::{error::Error, v1};
+use crate::{error::ParseError, v1};
 use std::fmt::Debug;
 
 /// Trait for a mathematical function up to polynomial
@@ -11,9 +11,9 @@ pub trait Function: Debug {
 }
 
 impl TryFrom<v1::Function> for Box<dyn Function> {
-    type Error = Error;
+    type Error = ParseError;
     fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
-        match value.function.ok_or(Error::UnsupportedV1Function)? {
+        match value.function.ok_or(ParseError::UnsupportedV1Function)? {
             v1::function::Function::Constant(c) => Ok(Box::new(c)),
             v1::function::Function::Linear(l) => Ok(Box::new(l)),
             v1::function::Function::Quadratic(q) => Ok(Box::new(q)),
