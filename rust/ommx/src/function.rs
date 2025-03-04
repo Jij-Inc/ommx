@@ -1,10 +1,12 @@
 use crate::{error::Error, v1};
 use std::fmt::Debug;
 
-/// Trait for a mathematical function.
+/// Trait for a mathematical function up to polynomial
 ///
 /// Note that this trait does not inherits `Add` or `Zero` to keep object-safety.
+///
 pub trait Function: Debug {
+    /// Degree of the polynomial for non-zero polynomials, and 0 for zero polynomials.
     fn degree(&self) -> u32;
 }
 
