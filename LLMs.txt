@@ -713,10 +713,6 @@ df = pd.DataFrame.from_dict(
 )
 ```
 
-    /Users/yuyanishimura/Development/2025_3_3/ommx/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py:30: UserWarning: linked SCIP 9.02 is not recommended for this version of PySCIPOpt - use version 9.2.1
-      self.model = pyscipopt.Model()
-
-
 
 ```python
 from myst_nb import glue
@@ -832,10 +828,10 @@ This `artifact` is the same as the one that will be explained in the next sectio
 
 
 ```python
-! ls -l $filename
+! ls $filename
 ```
 
-    -rw-r--r--@ 1 yuyanishimura  staff  11264  3  4 21:04 my_instance.ommx
+    my_instance.ommx
 
 
 Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
