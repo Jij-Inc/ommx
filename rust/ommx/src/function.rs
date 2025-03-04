@@ -1,23 +1,45 @@
-use crate::{error::Error, v1::State};
-use num::{One, Zero};
+use crate::{error::Error, v1};
 use std::fmt::Debug;
 
-pub trait Function: Debug + Clone + Zero + One {
-    fn degree(&self) -> usize;
-    fn evaluate(&self, state: &State) -> Result<f64, Error>;
-    fn partial_evaluate(&self, state: &State) -> Result<Self, Error>;
+/// Trait for a mathematical function.
+///
+/// Note that this trait does not inherits `Add` or `Zero` to keep object-safety.
+pub trait Function: Debug {
+    fn degree(&self) -> u32;
+}
+
+impl TryFrom<v1::Function> for Box<dyn Function> {
+    type Error = Error;
+    fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
+        match value.function.ok_or(Error::UnsupportedV1Function)? {
+            v1::function::Function::Constant(c) => Ok(Box::new(c)),
+            v1::function::Function::Linear(l) => Ok(Box::new(l)),
+            v1::function::Function::Quadratic(q) => Ok(Box::new(q)),
+            v1::function::Function::Polynomial(p) => Ok(Box::new(p)),
+        }
+    }
 }
 
 impl Function for f64 {
-    fn degree(&self) -> usize {
+    fn degree(&self) -> u32 {
         0
     }
+}
 
-    fn evaluate(&self, _state: &State) -> Result<f64, Error> {
-        Ok(*self)
+impl Function for v1::Linear {
+    fn degree(&self) -> u32 {
+        self.degree()
     }
+}
 
-    fn partial_evaluate(&self, _state: &State) -> Result<Self, Error> {
-        Ok(*self)
+impl Function for v1::Quadratic {
+    fn degree(&self) -> u32 {
+        self.degree()
+    }
+}
+
+impl Function for v1::Polynomial {
+    fn degree(&self) -> u32 {
+        self.degree()
     }
 }
