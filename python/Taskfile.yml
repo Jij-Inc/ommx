@@ -65,3 +65,8 @@ tasks:
     desc: Generate stubs files for Rust extension
     cmds:
       - cargo run --bin stub_gen --features=stub_gen
+
+  generate-llms-txt:
+    desc: Generate LLMs.txt
+    cmds:
+      - uv run generate_llms_txt.py
