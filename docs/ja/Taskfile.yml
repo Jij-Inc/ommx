@@ -6,7 +6,7 @@ tasks:
   build:
     desc: "Build the book in docs/ja"
     cmds:
-      - jupyter-book build .
+      - jupyter-book build . --warningiserror
 
   open:
     desc: "Open the book in docs/ja"

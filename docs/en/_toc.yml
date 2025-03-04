@@ -8,9 +8,6 @@ parts:
     chapters:
       - url: https://jij-inc.github.io/ommx/ja/
         title: "日本語"
-  - caption: "Concept"
-    chapters:
-      - file: concept/architecture
   - caption: "Tutorial"
     chapters:
       - file: tutorial/solve_with_ommx_adapter
@@ -19,7 +16,6 @@ parts:
       - file: tutorial/download_miplib_instance
   - caption: "User Guide"
     chapters:
-      - file: user_guide/architecture
       - file: user_guide/function
       - file: user_guide/instance
       - file: user_guide/parametric_instance
