@@ -181,10 +181,6 @@ from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-    /Users/yuyanishimura/Development/2025_3_3/ommx/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py:30: UserWarning: linked SCIP 9.02 is not recommended for this version of PySCIPOpt - use version 9.2.1
-      self.model = pyscipopt.Model()
-
-
 The variable `solution` is an `ommx.v1.Solution` object that holds the results returned by SCIP.
 
 ## Analyzing the Results
@@ -923,10 +919,6 @@ instance = dataset.miplib2017("air05")
 # Step 2: Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
-
-    /Users/yuyanishimura/Development/2025_3_3/ommx/python/ommx-pyscipopt-adapter/ommx_pyscipopt_adapter/adapter.py:30: UserWarning: linked SCIP 9.02 is not recommended for this version of PySCIPOpt - use version 9.2.1
-      self.model = pyscipopt.Model()
-
 
 This functionality makes it easy to run benchmark tests on multiple OMMX-compatible solvers using the same MIPLIB instances.
 
