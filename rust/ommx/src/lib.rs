@@ -140,6 +140,7 @@ pub mod dataset;
 pub mod mps;
 pub mod qplib;
 pub mod random;
+pub mod tutorial;
 
 // Internal modules
 mod convert;
