@@ -43,6 +43,7 @@ class SamplerAdapter(SolverAdapter):
     See the `implementation guide` for more details.
     .. _implementation guide: https://jij-inc.github.io/ommx/ommx_ecosystem/solver_adapter_guide.html
     """
+
     @staticmethod
     @abstractmethod
     def sample(ommx_instance: Instance) -> SampleSet:
@@ -56,7 +57,7 @@ class SamplerAdapter(SolverAdapter):
     @abstractmethod
     def decode_to_sampleset(self, data: SamplerOutput) -> SampleSet:
         pass
-    
+
     @classmethod
     def solve(cls, ommx_instance: Instance) -> Solution:
         return cls.sample(ommx_instance).best_feasible()
@@ -64,7 +65,7 @@ class SamplerAdapter(SolverAdapter):
     @property
     def solver_input(self) -> SamplerInput:
         return self.sampler_input
-    
+
     def decode(self, data: SamplerOutput) -> Solution:
         return self.decode_to_sampleset(data).best_feasible()
 
