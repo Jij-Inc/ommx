@@ -61,6 +61,7 @@ class SamplerAdapter(SolverAdapter):
     def solve(cls, ommx_instance: Instance) -> Solution:
         return cls.sample(ommx_instance).best_feasible()
 
+    @property
     def solver_input(self) -> SamplerInput:
         return self.sampler_input
     
