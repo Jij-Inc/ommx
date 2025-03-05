@@ -24,10 +24,10 @@ impl TryFrom<v1::Equality> for Equality {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Constraint<F: Function> {
+pub struct Constraint {
     // Required
     pub id: u64,
-    pub function: F,
+    pub function: Function,
     pub equality: Equality,
 
     // Metadata
@@ -37,8 +37,8 @@ pub struct Constraint<F: Function> {
     pub description: Option<String>,
 }
 
-impl<F: Function> Constraint<F> {
-    pub fn new(id: u64, function: F, equality: Equality) -> Self {
+impl Constraint {
+    pub fn new(id: u64, function: Function, equality: Equality) -> Self {
         Self {
             id,
             function,
@@ -51,10 +51,7 @@ impl<F: Function> Constraint<F> {
     }
 }
 
-impl<F> TryFrom<v1::Constraint> for Constraint<F>
-where
-    F: Function + TryFrom<v1::Function, Error = ParseError>,
-{
+impl TryFrom<v1::Constraint> for Constraint {
     type Error = ParseError;
     fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
         let equality = value.equality().try_into()?;
