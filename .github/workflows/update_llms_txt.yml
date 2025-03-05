@@ -1,0 +1,43 @@
+name: Update LLMs.txt
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "python/generate_llms_txt.py"
+      - "LLMs.txt"
+      - "docs/en/**/*.ipynb"
+      - "docs/en/_toc.yml"
+
+jobs:
+  detect-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Generate LLMs.txt
+        run: |
+          # Run the script to generate a new LLMs.txt file
+          uv run python/generate_llms_txt.py
+
+          # Check if there are differences
+          if ! git diff --exit-code LLMs.txt; then
+            echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+          else
+            echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
+          fi
+
+      - name: Create Pull Request if changes detected
+        if: env.CHANGES_DETECTED == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: "Update LLMs.txt"
+          body: "Automatically generated update for LLMs.txt based on notebook changes."
+          branch: "auto-update/llms-txt"
+          commit-message: "Update LLMs.txt"
+          base: "main"
