@@ -44,9 +44,9 @@ class SamplerAdapter(SolverAdapter):
     .. _implementation guide: https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html
     """
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def sample(ommx_instance: Instance) -> SampleSet:
+    def sample(cls, ommx_instance: Instance) -> SampleSet:
         pass
 
     @property
