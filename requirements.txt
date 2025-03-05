@@ -64,6 +64,8 @@ fastjsonschema==2.21.1
     # via nbformat
 fonttools==4.55.8
     # via matplotlib
+highspy==1.9.0
+    # via ommx-highs-adapter
 idna==3.10
     # via requests
 imagesize==1.4.1
@@ -166,23 +168,28 @@ numpy==1.26.4
     # via
     #   contourpy
     #   dimod
+    #   highspy
     #   jij-cimod
     #   matplotlib
     #   ommx
+    #   ommx-highs-adapter
     #   openjij
     #   pandas
     #   scipy
-ommx==1.8.3
+ommx==1.8.4
     # via
     #   ommx-book (pyproject.toml)
+    #   ommx-highs-adapter
     #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-openjij-adapter==1.8.3
+ommx-highs-adapter==1.8.4
     # via ommx-book (pyproject.toml)
-ommx-pyscipopt-adapter==1.8.3
+ommx-openjij-adapter==1.8.4
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==1.8.3
+ommx-pyscipopt-adapter==1.8.4
+    # via ommx-book (pyproject.toml)
+ommx-python-mip-adapter==1.8.4
     # via ommx-book (pyproject.toml)
 openjij==0.9.2
     # via ommx-openjij-adapter
