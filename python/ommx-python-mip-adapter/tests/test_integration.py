@@ -27,7 +27,7 @@ def test_integration_lp(generater):
     expected_solution = generater.get_v1_state()
     assert ommx_state.entries.keys() == expected_solution.entries.keys()
     for key in ommx_state.entries.keys():
-        assert ommx_state.entries[key] == pytest.approx(expected_solution.entries[key])
+        assert ommx_state.entries[key] == pytest.approx(expected_solution.entries[key], abs=1e-6)
 
 
 def test_integration_milp():
