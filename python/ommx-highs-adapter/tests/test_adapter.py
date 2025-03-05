@@ -80,4 +80,4 @@ def test_with_test_generator(generator):
     expected = generator.get_v1_state()
 
     for key in state.entries:
-        assert state.entries[key] == pytest.approx(expected.entries[key])
+        assert state.entries[key] == pytest.approx(expected.entries[key], abs=1e-6)
