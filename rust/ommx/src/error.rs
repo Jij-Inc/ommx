@@ -3,6 +3,7 @@ use prost::DecodeError;
 /// Error occurred during parsing OMMX Message
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
+    /// See [`crate::Function`] for more information.
     #[error(
         "Unsupported ommx.v1.Function is found. It is created by a newer version of OMMX SDK."
     )]
