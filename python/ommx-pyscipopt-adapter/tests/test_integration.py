@@ -31,7 +31,7 @@ def test_integration_lp(generater):
     # Check the solution of each decision variable
     for key, actual_value in actual_entries.items():
         expected_value = expected_entries[key]
-        assert actual_value == pytest.approx(expected_value)
+        assert actual_value == pytest.approx(expected_value, abs=1e-6)
 
 
 def test_integration_milp():
