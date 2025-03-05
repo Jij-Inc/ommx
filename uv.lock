@@ -1,4 +1,5 @@
 version = 1
+revision = 1
 requires-python = ">=3.9, <3.13"
 resolution-markers = [
     "python_full_version < '3.11'",
@@ -655,7 +656,7 @@ name = "ipykernel"
 version = "6.29.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "appnope", marker = "platform_system == 'Darwin'" },
+    { name = "appnope", marker = "sys_platform == 'darwin'" },
     { name = "comm" },
     { name = "debugpy" },
     { name = "ipython" },

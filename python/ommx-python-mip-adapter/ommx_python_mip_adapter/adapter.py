@@ -58,8 +58,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         else:
             self._relax = False
 
-    @staticmethod
+    @classmethod
     def solve(
+        cls,
         ommx_instance: Instance,
         relax: bool = False,
         verbose: bool = False,
@@ -173,7 +174,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 1.0
 
         """
-        adapter = OMMXPythonMIPAdapter(ommx_instance, relax=relax, verbose=verbose)
+        adapter = cls(ommx_instance, relax=relax, verbose=verbose)
         model = adapter.solver_input
         model.optimize(relax=relax)
         return adapter.decode(model)

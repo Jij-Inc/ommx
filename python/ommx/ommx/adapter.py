@@ -1,27 +1,29 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from ommx.v1 import Instance, Solution
+from ommx.v1 import Instance, Solution, SampleSet
 
 
 SolverInput = Any
 SolverOutput = Any
+SamplerInput = Any
+SamplerOutput = Any
 
 
 class SolverAdapter(ABC):
     """
-    An abstract interface for Adapters, defining how solvers should be used with OMMX.
+    An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
     See the `implementation guide` for more details.
-    .. _implementation guide: https://jij-inc.github.io/ommx/ommx_ecosystem/solver_adapter_guide.html
+    .. _implementation guide: https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html
     """
 
     @abstractmethod
     def __init__(self, ommx_instance: Instance):
         pass
 
-    @staticmethod
+    @classmethod
     @abstractmethod
-    def solve(ommx_instance: Instance) -> Solution:
+    def solve(cls, ommx_instance: Instance) -> Solution:
         pass
 
     @property
@@ -32,6 +34,40 @@ class SolverAdapter(ABC):
     @abstractmethod
     def decode(self, data: SolverOutput) -> Solution:
         pass
+
+
+class SamplerAdapter(SolverAdapter):
+    """
+    An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
+
+    See the `implementation guide` for more details.
+    .. _implementation guide: https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html
+    """
+
+    @classmethod
+    @abstractmethod
+    def sample(cls, ommx_instance: Instance) -> SampleSet:
+        pass
+
+    @property
+    @abstractmethod
+    def sampler_input(self) -> SamplerInput:
+        pass
+
+    @abstractmethod
+    def decode_to_sampleset(self, data: SamplerOutput) -> SampleSet:
+        pass
+
+    @classmethod
+    def solve(cls, ommx_instance: Instance) -> Solution:
+        return cls.sample(ommx_instance).best_feasible()
+
+    @property
+    def solver_input(self) -> SamplerInput:
+        return self.sampler_input
+
+    def decode(self, data: SamplerOutput) -> Solution:
+        return self.decode_to_sampleset(data).best_feasible()
 
 
 class InfeasibleDetected(Exception):

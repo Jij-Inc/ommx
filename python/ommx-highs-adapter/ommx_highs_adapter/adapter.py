@@ -31,8 +31,8 @@ class OMMXHighsAdapter(SolverAdapter):
         self._set_objective()
         self._set_constraints()
 
-    @staticmethod
-    def solve(ommx_instance: Instance, *, verbose: bool = False) -> Solution:
+    @classmethod
+    def solve(cls, ommx_instance: Instance, *, verbose: bool = False) -> Solution:
         """
         Solve the given ommx.v1.Instance using HiGHS, returning an ommx.v1.Solution.
 
@@ -122,7 +122,7 @@ class OMMXHighsAdapter(SolverAdapter):
         #     ...
         # ommx.adapter.UnboundedDetected: Model was unbounded
         # ````
-        adapter = OMMXHighsAdapter(ommx_instance, verbose=verbose)
+        adapter = cls(ommx_instance, verbose=verbose)
         model = adapter.solver_input
         model.run()
         return adapter.decode(model)
