@@ -172,4 +172,5 @@ pub mod v1 {
 mod v1_ext {
     mod constraint;
     mod function;
+    mod instance;
 }
