@@ -1,5 +1,5 @@
 from ommx.v1 import Instance, DecisionVariable
-import ommx_openjij_adapter as adapter
+from ommx_openjij_adapter import OMMXOpenJijAdapter
 
 
 def test_minimize():
@@ -12,8 +12,7 @@ def test_minimize():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    samples = adapter.sample_qubo_sa(instance, num_reads=1)
-    sample_set = instance.evaluate_samples(samples)
+    sample_set = OMMXOpenJijAdapter.sample(instance, num_reads=1)
 
     # x0 = x1 = 0 is minimum
     assert sample_set.extract_decision_variables("x", 0) == {(0,): 0.0, (1,): 0.0}
@@ -30,8 +29,7 @@ def test_maximize():
         sense=Instance.MAXIMIZE,
     )
     instance.as_minimization_problem()
-    samples = adapter.sample_qubo_sa(instance, num_reads=1)
-    sample_set = instance.evaluate_samples(samples)
+    sample_set = OMMXOpenJijAdapter.sample(instance, num_reads=1)
 
     # x0 = x1 = 1 is maximum
     assert sample_set.extract_decision_variables("x", 0) == {(0,): 1.0, (1,): 1.0}
