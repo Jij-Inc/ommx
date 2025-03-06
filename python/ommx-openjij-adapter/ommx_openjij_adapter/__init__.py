@@ -126,7 +126,7 @@ class OMMXOpenJijAdapter(SamplerAdapter):
         sampler = oj.SASampler()
         qubo, _offset = self.ommx_instance.as_qubo_format()
         return sampler.sample_qubo(
-            qubo, # type: ignore
+            qubo,  # type: ignore
             beta_min=self.beta_min,
             beta_max=self.beta_max,
             num_sweeps=self.num_sweeps,
