@@ -41,7 +41,6 @@ from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1.constraint_hints_pb2 import ConstraintHints
 
 # カスタム例外クラス
 class OMMXPySCIPOptAdapterError(Exception):
@@ -51,19 +50,12 @@ class OMMXPySCIPOptAdapterError(Exception):
 次に、`OMMXPySCIPOptAdapter` クラスのスケルトンを作成します。
 
 ```python
-HintMode = Literal["disabled", "auto", "forced"]
-
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    use_sos1: HintMode
-
     def __init__(
         self,
         ommx_instance: Instance,
-        *,
-        use_sos1: Literal["disabled", "auto", "forced"] = "auto",
     ):
         self.instance = ommx_instance
-        self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
         self.model.hideOutput()
 
@@ -153,33 +145,8 @@ def _set_objective(self):
 
 ```python
 def _set_constraints(self):
-    ommx_hints: ConstraintHints = self.instance.raw.constraint_hints
-    excluded = set()
-
-    # SOS1制約を処理（Special Ordered Set of type 1: 最大1つの変数のみが非ゼロ値を取る制約）
-    if self.use_sos1 != "disabled":
-        if self.use_sos1 == "force" and len(ommx_hints.sos1_constraints) == 0:
-            raise OMMXPySCIPOptAdapterError(
-                "No SOS1 constraints were found, but `use_sos1` is set to `force`."
-            )
-
-        for sos1 in ommx_hints.sos1_constraints:
-            bid = sos1.binary_constraint_id
-            excluded.add(bid)
-            big_m_ids = sos1.big_m_constraint_ids
-            if len(big_m_ids) == 0:
-                name = f"sos1_{bid}"
-            else:
-                name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-            vars = [self.varname_map[str(v)] for v in sos1.decision_variables]
-            self.model.addConsSOS1(vars, name=name)
-
     # 通常の制約条件を処理
     for constraint in self.instance.raw.constraints:
-        # 除外リストにある制約はスキップ（SOS1として既に処理済み）
-        if constraint.id in excluded:
-            continue
-            
         # 制約関数の種類に基づいて式を生成
         if constraint.function.HasField("linear"):
             expr = self._make_linear_expr(constraint.function)
@@ -261,13 +228,11 @@ def _make_quadratic_expr(self, function: Function) -> pyscipopt.Expr:
 def solve(
     cls,
     ommx_instance: Instance,
-    *,
-    use_sos1: Literal["disabled", "auto", "forced"] = "auto",
 ) -> Solution:
     """
     PySCIPoptを使ってommx.v1.Instanceを解き、ommx.v1.Solutionを返す
     """
-    adapter = cls(ommx_instance, use_sos1=use_sos1)
+    adapter = cls(ommx_instance)
     model = adapter.solver_input
     model.optimize()
     return adapter.decode(model)
