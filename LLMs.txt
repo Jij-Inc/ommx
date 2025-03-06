@@ -595,7 +595,7 @@ feasible_ids
 
 
 
-    Index([14, 11, 13, 7, 15, 9, 0, 4, 10, 12, 1, 6], dtype='int64', name='sample_id')
+    Index([2, 4, 15, 6, 12, 5, 8, 1, 13, 3, 7, 9], dtype='int64', name='sample_id')
 
 
 
@@ -878,6 +878,14 @@ glue("data", data, display=False)
 glue("df", df, display=False)
 ```
 
+
+
+
+
+
+
+
+
 ```{list-table}
 :header-rows: 1
 :widths: 5 30 10
@@ -1091,13 +1099,6 @@ import pandas as pd
 # Display annotations in tabular form using pandas
 pd.DataFrame.from_dict(instance.annotations, orient="index", columns=["Value"]).sort_index()
 ```
-
-
-
-
-
-
-
 
 These instances have both dataset-level annotations and dataset-specific annotations.
 
@@ -1803,9 +1804,13 @@ OMMX does not provide a method to determine which infeasible solution is the bes
 ### Solver Adapter
 
 
-This document outlines the recommendations for implementing an Adapter (hereafter called OMMX Solver/Sampler Adapter) to execute Solver/Sampler from OMMX. By following the guidelines below when implementing the OMMX Solver/Sampler Adapter, you can maintain a certain level of consistency with other OMMX Solver/Sampler Adapters, providing a better user experience for users utilizing multiple OMMX Solver/Sampler Adapters. Therefore, the OMMX community recommends adhering to the following content.
+```{note}
+Currently, an implementation guide for the Adapter (OMMX Sampler Adapter) to execute Sampler from OMMX is also being prepared.
+```
 
-## OMMX Solver Adapter Recommendations
+This document outlines the recommendations for implementing an Adapter (hereafter called OMMX Solver Adapter) to execute Solver from OMMX. By following the guidelines below when implementing the OMMX Solver Adapter, you can maintain a certain level of consistency with other OMMX Solver Adapters, providing a better user experience for users utilizing multiple OMMX Solver Adapters. Therefore, the OMMX community recommends adhering to the following content.
+
+## Recommendations
 
 - It is recommended that the adapter `OMMXxxxAdapter` for using Solver from OMMX inherits and implements the abstract base class `SolverAdapter`.
     ```python
@@ -1854,101 +1859,6 @@ This document outlines the recommendations for implementing an Adapter (hereafte
             ...
     ```
 
-## User Experience Guaranteed by OMMX Solver Adapters that Meet the Recommendations
-
-OMMX Solver Adapters that meet the above recommendations can provide the following consistent user experiences.
-
-- For users who want to use Solver in a straightforward way—without worrying about its input/output or parameters—it's easy to run Solver using the common static method `solve`.
-    ```python
-    from ommx_xxx_adapter import OMMXxxxAdapter
-    
-    ommx_solution = OMMXxxxAdapter.solve(ommx_instance)
-    ```
-    
-- For users who want to tune Solver can execute it by setting Solver parameters directly using the `OMMXxxxAdapter` class.
-    ```python
-    from ommx_xxx_adapter import OMMXxxxAdapter
-
-    adapter = OMMXxxxAdapter(ommx_instance)
-    solver_input = adapter.solver_input
-    
-    ... # Tune Solver here and execute to obtain solver_output
-    
-    ommx_solution = adapter.decode(solver_output)
-    ```
-
-## OMMX Sampler Adapter Recommendations
-
-- It is recommended that the adapter `OMMXxxxAdapter` for using Sampler from OMMX inherits and implements the abstract base class `SamplerAdapter`.
-    ```python
-    from ommx.ommx_adapter import SamplerAdapter
-
-    class OMMXxxxAdapter(SamplerAdapter):
-        ...
-    ``` 
-- The constructor of `OMMXxxxAdapter` should accept `ommx.v1.Instance` and perform the following processes:
-    - Generate the Sampler’s input format (data and objects) from the `ommx.v1.Instance`.
-    - Generate any data necessary for `OMMXxxxAdapter.decode_to_sampleset`.
-    ```python
-    class OMMXxxxAdapter(SamplerAdapter):
-        def __init__(self, ommx_instance: ommx.v1.Instance):
-            ...
-    ```
-- The `OMMXxxxAdapter.sample` method should be provided as a class method for easily using Sampler from OMMX.
-    - It is not necessary to implement all Sampler parameters as arguments. Such use cases can be sufficiently achieved by directly using the `OMMXxxxAdapter` class.
-    ```python
-    class OMMXxxxAdapter(SamplerAdapter):
-        ...
-        @classmethod
-        def sample(ommx_instance: ommx.v1.Instance) -> ommx.v1.Solution:
-            ...
-    ```
-- The `OMMXxxxAdapter.sampler_input` property should be provided as a property to obtain Sampler's input format (data and objects) from OMMX.
-    ```python
-    class OMMXxxxAdapter(SamplerAdapter):
-        ...
-        @property
-        def sampler_input(self) -> SamplerInput:
-            ...
-    ```
-- The `OMMXxxxAdapter.decode_to_sampleset` method should be provided as a method to convert Sampler's output format (data and objects) to `ommx.v1.SampleSet`.
-    ```python
-    class OMMXxxxAdapter(SamplerAdapter):
-        ...
-        def decode_to_sampleset(self, sampler_output: SamplerOutput) -> ommx.v1.SampleSet:
-            ...
-    ```
-- When defining arguments other than those in the methods implemented in `SamplerAdapter`, use keyword-only arguments with default values
-    ```python
-    class OMMXxxxAdapter(SamplerAdapter):
-        ...
-        def __init__(self, ommx_instance: ommx.v1.Instance, *, kwarg="default", ...):
-            ...
-    ```
-
-## User Experience Guaranteed by OMMX Sampler Adapters that Meet the Recommendations
-
-OMMX Sampler Adapters that meet the above recommendations can provide the following consistent user experiences.
-
-- For users who want to use Sampler in a straightforward way—without worrying about its input/output or parameters—it's easy to run Sampler using the common static method `sample`.
-    ```python
-    from ommx_xxx_adapter import OMMXxxxAdapter
-    
-    ommx_sampleset = OMMXxxxAdapter.sample(ommx_instance)
-    ```
-- For users who want to tune Sampler can execute it by setting Sampler parameters directly using the `OMMXxxxAdapter` class.
-    ```python
-    from ommx_xxx_adapter import OMMXxxxAdapter
-
-    adapter = OMMXxxxAdapter(ommx_instance)
-    sampler_input = adapter.sampler_input
-    
-    ... # Tune Sampler here and execute to obtain sampler_output
-    
-    ommx_solution = adapter.decode(sampler_output)
-    ```
-- The class method `solve` or the method `decode` can be used to obtain the best feasible solution from the samples as `ommx.v1.Solution`.
-
 ## Considerations
 
 Below are some items that, while not strongly recommended, may still be worth considering for implementation.
@@ -1969,6 +1879,32 @@ Below are some items that, while not strongly recommended, may still be worth co
     ```python
     def xxx_to_instance(data: Any) -> ommmx.v1.Instance:
     		...
+    ```
+    
+
+## User Experience Guaranteed by OMMX Solver Adapters that Meet the Recommendations
+
+OMMX Solver Adapters that meet the above recommendations can provide the following consistent user experiences.
+
+- For users who want to use Solver in a straightforward way—without worrying about its input/output or parameters—it's easy to run Solver using the common static method `solve`.
+    
+    ```python
+    from ommx_xxx_adapter import OMMXxxxAdapter
+    
+    ommx_solution = OMMXxxxAdapter.solve(ommx_instance)
+    ```
+    
+- For users who want to tune Solver can execute it by setting Solver parameters directly using the `OMMXxxxAdapter` class.
+
+    ```python
+    from ommx_xxx_adapter import OMMXxxxAdapter
+
+    adapter = OMMXxxxAdapter(ommx_instance)
+    solver_input = adapter.solver_input
+    
+    ... # Tune Solver here and execute to obtain solver_output
+    
+    ommx_solution = adapter.decode(solver_output)
     ```
 
 
@@ -2129,7 +2065,7 @@ with tempfile.NamedTemporaryFile(delete=False, suffix='.qplib') as temp_file:
 print(f"QPLIB sample file created at: {qplib_sample_path}")
 ```
 
-    QPLIB sample file created at: /var/folders/94/q3gqrl392hs5234_yg7rxpgm0000gn/T/tmpuf3rlm8l.qplib
+    QPLIB sample file created at: /var/folders/d2/w6bymm4n7l3_pmcpv7jgt4f00000gn/T/tmpvd06t1rs.qplib
 
 
 
