@@ -627,6 +627,165 @@ plt.show()
 
 
 
+### Switching Adapters
+
+Solve with multiple adapters and compare the results
+======================================================
+
+Since the OMMX Adapter provides a unified API, you can solve the same problem using multiple solvers and compare the results. Let's consider a simple knapsack problem as an example:
+
+$$
+\begin{align*}
+\mathrm{maximize} \quad & \sum_{i=0}^{N-1} v_i x_i \\
+\mathrm{s.t.} \quad & \sum_{i=0}^{n-1} w_i x_i - W \leq 0, \\
+& x_{i} \in \{ 0, 1\} 
+\end{align*}
+$$
+
+
+```python
+from ommx.v1 import Instance, DecisionVariable
+
+v = [10, 13, 18, 31, 7, 15]
+w = [11, 25, 20, 35, 10, 33]
+W = 47
+N = len(v)
+
+x = [
+    DecisionVariable.binary(
+        id=i,
+        name="x",
+        subscripts=[i],
+    )
+    for i in range(N)
+]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=sum(v[i] * x[i] for i in range(N)),
+    constraints=[sum(w[i] * x[i] for i in range(N)) - W <= 0],
+    sense=Instance.MAXIMIZE,
+)
+```
+
+## Solve with multiple adapters
+
+Here, we will use the following OSS solvers with corresponding adapters, which are developed as a part of OMMX Python SDK:
+
+| Package name | PyPI | Backend |
+|:--- |:--- |:--- |
+| `ommx-python-mip-adapter` | [](https://pypi.org/project/ommx-python-mip-adapter/) | [CBC](https://github.com/coin-or/Cbc) via [Python-MIP](https://github.com/coin-or/python-mip) |
+| `ommx-pyscipopt-adapter` | [](https://pypi.org/project/ommx-pyscipopt-adapter/) | [SCIP](https://github.com/scipopt/scip) via [PySCIPOpt](https://github.com/scipopt/PySCIPOpt) |
+| `ommx-highs-adapter` | [](https://pypi.org/project/ommx-highs-adapter/) | [HiGHS](https://github.com/ERGO-Code/HiGHS) |
+
+For non-OSS solvers, the following adapters also developed as separated repositories:
+
+| Package name | PyPI | Backend |
+|:--- |:--- |:--- |
+| [ommx-gurobipy-adapter](https://github.com/Jij-Inc/ommx-gurobipy-adapter) | [](https://pypi.org/project/ommx-gurobipy-adapter/) | [Gurobi](https://www.gurobi.com/) |
+| [ommx-fixstars-amplify-adapter](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter) | [](https://pypi.org/project/ommx-fixstars-amplify-adapter/) | [Fixstars Amplify](https://amplify.fixstars.com/ja/docs/amplify/v1/index.html#) |
+
+Here, let's solve the knapsack problem with OSS solvers, Highs, Python-MIP (CBC), and SCIP.
+
+
+```python
+from ommx_python_mip_adapter import OMMXPythonMIPAdapter
+from ommx_pyscipopt_adapter  import OMMXPySCIPOptAdapter
+from ommx_highs_adapter      import OMMXHighsAdapter
+
+# List of adapters to use
+adapters = {
+    "highs": OMMXHighsAdapter,
+    "cbc": OMMXPythonMIPAdapter,
+    "scip": OMMXPySCIPOptAdapter,
+}
+
+# Solve the problem using each adapter
+solutions = {
+    name: adapter.solve(instance) for name, adapter in adapters.items()
+}
+```
+
+    Cbc0038I Initial state - 1 integers unsatisfied sum - 0.457143
+    Cbc0038I Solution found of 28
+    Cbc0038I Before mini branch and bound, 5 integers at bound fixed and 0 continuous
+    Cbc0038I Full problem 1 rows 6 columns, reduced to 0 rows 0 columns
+    Cbc0038I Mini branch and bound did not improve solution (0.00 seconds)
+    Cbc0038I Round again with cutoff of 30.3171
+    Cbc0038I Reduced cost fixing fixed 1 variables on major pass 2
+    Cbc0038I Pass   1: suminf.    0.07474 (1) obj. 30.3171 iterations 1
+    Cbc0038I Pass   2: suminf.    0.45714 (1) obj. 42.1714 iterations 1
+    Cbc0038I Pass   3: suminf.    0.07474 (1) obj. 30.3171 iterations 1
+    Cbc0038I Pass   4: suminf.    0.45714 (1) obj. 42.1714 iterations 1
+    Cbc0038I Pass   5: suminf.    0.34461 (1) obj. 30.3171 iterations 2
+    Cbc0038I Solution found of 41
+    Cbc0038I Before mini branch and bound, 4 integers at bound fixed and 0 continuous
+    Cbc0038I Full problem 1 rows 6 columns, reduced to 1 rows 2 columns
+    Cbc0038I Mini branch and bound did not improve solution (0.01 seconds)
+    Cbc0038I Round again with cutoff of 42.0342
+    Cbc0038I Reduced cost fixing fixed 5 variables on major pass 3
+    Cbc0038I After 0.01 seconds - Feasibility pump exiting with objective of 41 - took 0.00 seconds
+    Cbc0012I Integer solution of 41 found by feasibility pump after 0 iterations and 0 nodes (0.01 seconds)
+    Cbc0038I Full problem 1 rows 6 columns, reduced to 0 rows 0 columns
+    Cbc0001I Search completed - best objective 41, took 0 iterations and 0 nodes (0.01 seconds)
+    Cbc0035I Maximum depth 0, 5 variables fixed on reduced cost
+
+
+## Compare the results
+
+Since this knapsack problem is simple, all solvers will find the optimal solution.
+
+
+```python
+from matplotlib import pyplot as plt
+
+marks = {
+    "highs": "o",
+    "cbc": "x",
+    "scip": "+",
+}
+
+for name, solution in solutions.items():
+    x = solution.extract_decision_variables("x")
+    subscripts = [key[0] for key in x.keys()]
+    plt.plot(subscripts, x.values(), marks[name], label=name)
+
+plt.legend()
+```
+
+
+
+
+    <matplotlib.legend.Legend at 0x15aa93a40>
+
+
+
+
+    
+
+    
+
+
+It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables` when analyzing the results of multiple solvers.
+
+
+```python
+import pandas
+
+decision_variables = pandas.concat([
+    solution.decision_variables.assign(solver=solver)
+    for solver, solution in solutions.items()
+])
+decision_variables
+```
+
+
+
+
+
+
+
+
+
 ### Share In Ommx Artifact
 
 
