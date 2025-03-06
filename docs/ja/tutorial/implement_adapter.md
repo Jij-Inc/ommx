@@ -47,39 +47,27 @@ class OMMXPySCIPOptAdapterError(Exception):
     pass
 ```
 
-次に、`OMMXPySCIPOptAdapter` クラスのスケルトンを作成します。
+次に、PySCIPOptのモデルを構築するための関数を順番に実装していきます。後で`OMMXPySCIPOptAdapter`クラスでこれらの関数を使うことになります。
+
+### 決定変数を設定する関数
 
 ```python
-class OMMXPySCIPOptAdapter(SolverAdapter):
-    def __init__(
-        self,
-        ommx_instance: Instance,
-    ):
-        self.instance = ommx_instance
-        self.model = pyscipopt.Model()
-        self.model.hideOutput()
-
-        self._set_decision_variables()
-        self._set_objective()
-        self._set_constraints()
-```
-
-### 決定変数の変換
-
-OMMX の `DecisionVariable` をバックエンドソルバー（ここでは PySCIPOpt）のモデルに追加するコードを実装します。
-各変数のタイプ（バイナリ、整数、連続）に基づいて適切な変数をモデルに追加し、IDを文字列として使用してマッピングを作成します。
-
-```python
-def _set_decision_variables(self):
-    for var in self.instance.raw.decision_variables:
+def set_decision_variables(model: pyscipopt.Model, instance: Instance):
+    """
+    モデルに決定変数を追加し、変数名のマッピングを作成して返す
+    """
+    varname_map = {}
+    
+    # 通常の決定変数を追加
+    for var in instance.raw.decision_variables:
         if var.kind == DecisionVariable.BINARY:
-            self.model.addVar(name=str(var.id), vtype="B")
+            model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
-            self.model.addVar(
+            model.addVar(
                 name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
             )
         elif var.kind == DecisionVariable.CONTINUOUS:
-            self.model.addVar(
+            model.addVar(
                 name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
             )
         else:
@@ -89,69 +77,98 @@ def _set_decision_variables(self):
             )
 
     # 目的関数が2次の場合、線形化のために補助変数を追加
-    if self.instance.raw.objective.HasField("quadratic"):
-        self.model.addVar(
+    if instance.raw.objective.HasField("quadratic"):
+        model.addVar(
             name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
         )
 
     # モデルに追加された変数へアクセスするための辞書を作成
-    self.varname_map = {var.name: var for var in self.model.getVars()}
+    varname_map = {var.name: var for var in model.getVars()}
+    return varname_map
 ```
 
-### 目的関数と制約条件の変換
-
-次に、OMMXの目的関数と制約条件をPySCIPOptのモデルに設定するメソッドを実装します。まず、目的関数の設定方法です：
+### 式を生成するヘルパー関数
 
 ```python
-def _set_objective(self):
-    objective = self.instance.raw.objective
+def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
+    """線形式を生成するヘルパー関数"""
+    linear = function.linear
+    return (
+        pyscipopt.quicksum(
+            term.coefficient * varname_map[str(term.id)]
+            for term in linear.terms
+        )
+        + linear.constant
+    )
 
-    if self.instance.sense == Instance.MAXIMIZE:
+def make_quadratic_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
+    """2次式を生成するヘルパー関数"""
+    quad = function.quadratic
+    quad_terms = pyscipopt.quicksum(
+        varname_map[str(row)] * varname_map[str(column)] * value
+        for row, column, value in zip(quad.rows, quad.columns, quad.values)
+    )
+
+    linear_terms = pyscipopt.quicksum(
+        term.coefficient * varname_map[str(term.id)]
+        for term in quad.linear.terms
+    )
+
+    constant = quad.linear.constant
+
+    return quad_terms + linear_terms + constant
+```
+
+### 目的関数と制約条件を設定する関数
+
+```python
+def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict):
+    """モデルに目的関数を設定"""
+    objective = instance.raw.objective
+
+    if instance.sense == Instance.MAXIMIZE:
         sense = "maximize"
-    elif self.instance.sense == Instance.MINIMIZE:
+    elif instance.sense == Instance.MINIMIZE:
         sense = "minimize"
     else:
         raise OMMXPySCIPOptAdapterError(
-            f"Sense not supported: {self.instance.sense}"
+            f"Sense not supported: {instance.sense}"
         )
 
     if objective.HasField("constant"):
-        self.model.setObjective(objective.constant, sense=sense)
+        model.setObjective(objective.constant, sense=sense)
     elif objective.HasField("linear"):
-        expr = self._make_linear_expr(objective)
-        self.model.setObjective(expr, sense=sense)
+        expr = make_linear_expr(objective, varname_map)
+        model.setObjective(expr, sense=sense)
     elif objective.HasField("quadratic"):
         # PySCIPOptでは2次の目的関数を直接サポートしていないため、補助変数を使って線形化
-        auxilary_var = self.varname_map["auxiliary_for_linearized_objective"]
+        auxilary_var = varname_map["auxiliary_for_linearized_objective"]
 
         # 補助変数を目的関数として設定
-        self.model.setObjective(auxilary_var, sense=sense)
+        model.setObjective(auxilary_var, sense=sense)
 
         # 補助変数に対する制約を追加
-        expr = self._make_quadratic_expr(objective)
+        expr = make_quadratic_expr(objective, varname_map)
         if sense == "minimize":
             constr_expr = auxilary_var >= expr
         else:  # sense == "maximize"
             constr_expr = auxilary_var <= expr
 
-        self.model.addCons(constr_expr, name="constraint_for_linearized_objective")
+        model.addCons(constr_expr, name="constraint_for_linearized_objective")
     else:
         raise OMMXPySCIPOptAdapterError(
             "The objective function must be `constant`, `linear`, `quadratic`."
         )
-```
-
-続いて、制約条件を設定するメソッドを実装します：
-
-```python
-def _set_constraints(self):
+        
+def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dict):
+    """モデルに制約条件を設定"""
     # 通常の制約条件を処理
-    for constraint in self.instance.raw.constraints:
+    for constraint in instance.raw.constraints:
         # 制約関数の種類に基づいて式を生成
         if constraint.function.HasField("linear"):
-            expr = self._make_linear_expr(constraint.function)
+            expr = make_linear_expr(constraint.function, varname_map)
         elif constraint.function.HasField("quadratic"):
-            expr = self._make_quadratic_expr(constraint.function)
+            expr = make_quadratic_expr(constraint.function, varname_map)
         elif constraint.function.HasField("constant"):
             # 定数制約の場合、実行可能かどうかをチェック
             if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
@@ -186,115 +203,101 @@ def _set_constraints(self):
             )
 
         # 制約をモデルに追加
-        self.model.addCons(constr_expr, name=str(constraint.id))
+        model.addCons(constr_expr, name=str(constraint.id))
 ```
 
-式を生成するためのヘルパーメソッドが必要です：
+### 解の変換関数
 
 ```python
-def _make_linear_expr(self, function: Function) -> pyscipopt.Expr:
-    linear = function.linear
-    return (
-        pyscipopt.quicksum(
-            term.coefficient * self.varname_map[str(term.id)]
-            for term in linear.terms
-        )
-        + linear.constant
-    )
-
-def _make_quadratic_expr(self, function: Function) -> pyscipopt.Expr:
-    quad = function.quadratic
-    quad_terms = pyscipopt.quicksum(
-        self.varname_map[str(row)] * self.varname_map[str(column)] * value
-        for row, column, value in zip(quad.rows, quad.columns, quad.values)
-    )
-
-    linear_terms = pyscipopt.quicksum(
-        term.coefficient * self.varname_map[str(term.id)]
-        for term in quad.linear.terms
-    )
-
-    constant = quad.linear.constant
-
-    return quad_terms + linear_terms + constant
-```
-
-### `OMMXPySCIPOptAdapter` の実装
-
-最後に、解を取得して変換するメソッドを実装します。これには `solve`、`decode`、`decode_to_state` の3つのメソッドが含まれます：
-
-```python
-@classmethod
-def solve(
-    cls,
-    ommx_instance: Instance,
-) -> Solution:
-    """
-    PySCIPoptを使ってommx.v1.Instanceを解き、ommx.v1.Solutionを返す
-    """
-    adapter = cls(ommx_instance)
-    model = adapter.solver_input
-    model.optimize()
-    return adapter.decode(model)
-
-@property
-def solver_input(self) -> pyscipopt.Model:
-    """生成されたPySCIPOptモデルを返す"""
-    return self.model
-
-def decode(self, data: pyscipopt.Model) -> Solution:
-    """
-    最適化後のpyscipopt.ModelとOMMX Instanceからommx.v1.Solutionを生成する
-    """
-    # 解の状態をチェック
-    if data.getStatus() == "infeasible":
-        raise InfeasibleDetected("Model was infeasible")
-
-    if data.getStatus() == "unbounded":
-        raise UnboundedDetected("Model was unbounded")
-
-    # 解を状態に変換
-    state = self.decode_to_state(data)
-    # インスタンスを使用して解を評価
-    solution = self.instance.evaluate(state)
-
-    # 最適性ステータスを設定
-    if data.getStatus() == "optimal":
-        solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
-
-    return solution
-
-def decode_to_state(self, data: pyscipopt.Model) -> State:
-    """
-    最適化済みのPySCIPOpt Modelからommx.v1.Stateを作成する
-    """
-    if data.getStatus() == "unknown":
+def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
+    """最適化済みのPySCIPOpt Modelからommx.v1.Stateを作成する"""
+    if model.getStatus() == "unknown":
         raise OMMXPySCIPOptAdapterError(
             "The model may not be optimized. [status: unknown]"
         )
 
-    if data.getStatus() == "infeasible":
+    if model.getStatus() == "infeasible":
         raise InfeasibleDetected("Model was infeasible")
 
-    if data.getStatus() == "unbounded":
+    if model.getStatus() == "unbounded":
         raise UnboundedDetected("Model was unbounded")
 
     try:
         # 最適解を取得
-        sol = data.getBestSol()
+        sol = model.getBestSol()
         # 変数名と変数のマッピングを作成
-        varname_map = {var.name: var for var in data.getVars()}
+        varname_map = {var.name: var for var in model.getVars()}
         # 変数IDと値のマッピングを持つStateを作成
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in self.instance.raw.decision_variables
+                for var in instance.raw.decision_variables
             }
         )
     except Exception:
         raise OMMXPySCIPOptAdapterError(
-            f"There is no feasible solution. [status: {data.getStatus()}]"
+            f"There is no feasible solution. [status: {model.getStatus()}]"
         )
+```
+
+### `OMMXPySCIPOptAdapter` クラスの実装
+
+最後に、上記の関数を使用するAdapterクラスを実装します：
+
+```python
+class OMMXPySCIPOptAdapter(SolverAdapter):
+    def __init__(
+        self,
+        ommx_instance: Instance,
+    ):
+        self.instance = ommx_instance
+        self.model = pyscipopt.Model()
+        self.model.hideOutput()
+
+        # 関数を使用してモデルを構築
+        self.varname_map = set_decision_variables(self.model, self.instance)
+        set_objective(self.model, self.instance, self.varname_map)
+        set_constraints(self.model, self.instance, self.varname_map)
+
+    @classmethod
+    def solve(
+        cls,
+        ommx_instance: Instance,
+    ) -> Solution:
+        """
+        PySCIPoptを使ってommx.v1.Instanceを解き、ommx.v1.Solutionを返す
+        """
+        adapter = cls(ommx_instance)
+        model = adapter.solver_input
+        model.optimize()
+        return adapter.decode(model)
+
+    @property
+    def solver_input(self) -> pyscipopt.Model:
+        """生成されたPySCIPOptモデルを返す"""
+        return self.model
+
+    def decode(self, data: pyscipopt.Model) -> Solution:
+        """
+        最適化後のpyscipopt.ModelとOMMX Instanceからommx.v1.Solutionを生成する
+        """
+        # 解の状態をチェック
+        if data.getStatus() == "infeasible":
+            raise InfeasibleDetected("Model was infeasible")
+
+        if data.getStatus() == "unbounded":
+            raise UnboundedDetected("Model was unbounded")
+
+        # 解を状態に変換
+        state = decode_to_state(data, self.instance)
+        # インスタンスを使用して解を評価
+        solution = self.instance.evaluate(state)
+
+        # 最適性ステータスを設定
+        if data.getStatus() == "optimal":
+            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+
+        return solution
 ```
 
 ## Sampler Adapterを実装する
