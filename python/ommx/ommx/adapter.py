@@ -13,8 +13,7 @@ class SolverAdapter(ABC):
     """
     An abstract interface for OMMX Solver Adapters, defining how solvers should be used with OMMX.
 
-    See the `implementation guide` for more details.
-    .. _implementation guide: https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html
+    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
     """
 
     @abstractmethod
@@ -40,8 +39,7 @@ class SamplerAdapter(SolverAdapter):
     """
     An abstract interface for OMMX Sampler Adapters, defining how samplers should be used with OMMX.
 
-    See the `implementation guide` for more details.
-    .. _implementation guide: https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html
+    See the `implementation guide <https://jij-inc.github.io/ommx/en/user_guide/solver_adapter.html>`_ for more details.
     """
 
     @classmethod
