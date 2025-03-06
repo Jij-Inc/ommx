@@ -39,7 +39,7 @@ OMMX（Open Mathematical prograMming eXchange; オミキス）とは、数理最
 
 ### OMMX Message
 
-OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題 ([`ommx.v1.Instance`](./ommx_message/instance.ipynb)) や解 ([`ommx.v1.Solution`](./ommx_message/solution.ipynb)) のデータなどを表現するためのスキーマを定義します。
+OMMX Messageはソフトウェア間でデータ交換を行うために設計されたデータ形式です。これは[Protocol Buffers](https://protobuf.dev/)を用いて定義されており、これにより特定のプログラミング言語やOSに依存しないデータ形式を実現しています。OMMX Messageは、数理最適化の問題 ([`ommx.v1.Instance`](./user_guide/instance.ipynb)) や解 ([`ommx.v1.Solution`](./user_guide/solution.ipynb)) のデータなどを表現するためのスキーマを定義します。
 さらに、Protocol Buffersの機能により、ほとんどの実用的なプログラミング言語に対してOMMX Messageを利用するためのライブラリを自動生成することができ、特にPythonとRust向けのライブラリはOMMX SDKの一部として提供されています。
 
 `ommx.v1.Instance` などのデータ構造はMessageと呼ばれ、それぞれのMessageは複数のフィールドを持ちます。例えば、 `ommx.v1.Instance` は次のようなフィールドを持ちます（簡単のために、一部省略しています）:
@@ -76,7 +76,7 @@ OCI Artifactでは、パッケージの中身をレイヤーという単位で�
 
 OMMXでは、OMMX Messageのそれぞれに対して `application/org.ommx.v1.instance` などのMedia Typeを定義し、OMMX MessageをProtocol Buffersでシリアライズしたバイナリを含むOCI ArtifactをOMMX Artifactと呼称しています。厳密に言えば、OMMXはOCI Artifactを何も拡張していないので、OMMX ArtifactをOCI Artifactの一種として扱うことができます。
 
-OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.md) を参照してください。
+OCI Artifactをパッケージ形式として利用する利点は、これが全く正規のコンテナとして扱えることです。つまり、[DockerHub](https://hub.docker.com/) や [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) をそのまま利用してデータの管理・配布を行うことができます。これにより、例えば、多くのコンテナと同様に、数GBに及ぶベンチマークセットを不特定多数に対して配布することが容易になります。OMMXではこの機能を利用して、代表的なデータセットである [MIPLIB 2017](https://miplib.zib.de/) のデータを[GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017)で配布しています。詳しくは [MIPLIBインスタンスをダウンロードする](./tutorial/download_miplib_instance.ipynb) を参照してください。
 
 ```{figure} ./assets/introduction_03.png
 :alt: OMMX MessageとOMMX Artifactの関係を表す図
