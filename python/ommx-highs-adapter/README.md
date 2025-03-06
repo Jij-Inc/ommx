@@ -12,7 +12,7 @@ pip install ommx-highs-adapter
 
 An example usage of HiGHS through this adapter:
 
-``` python markdown-code-runner
+```python markdown-code-runner
 from ommx_highs_adapter import OMMXHighsAdapter
 from ommx.v1 import Instance, DecisionVariable
 
