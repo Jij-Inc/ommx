@@ -26,39 +26,40 @@ Adapterの処理は大雑把にいうと次の3ステップからなります：
 
 ## Solver Adapterを実装する
 
-ここでは PySCIPOpt を例としてSolver Adapterを実装してみましょう。なお完全な例は [ommx-pyscipopt-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-pyscipopt-adapter) を確認してください。
+ここでは PySCIPOpt を例としてSolver Adapterを実装してみましょう。なお完全な例は [ommx-pyscipopt-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-pyscipopt-adapter) を確認してください。またSampler Adapterの実装については [Sampler Adapterを実装する](../user_guide/implement_sampler_adapter) を参照してください。
 
-まず、必要なモジュールをインポートします。
+ここではチュートリアルということで、順番に実行しやすいように以下のように作業します。
+
+- `ommx.v1.Instance` から PySCIPOpt のモデルを構築するための関数を順番に実装していきます。
+- 最後にこれらの関数を `OMMXPySCIPOptAdapter` クラスとしてまとめます
+
+### カスタム例外
+
+まずカスタム例外を定義しておくといいでしょう。これによりユーザーは例外が発生したときに、どの部分が問題を引き起こしているのかを理解しやすくなります。
 
 ```python markdown-code-runner
-from __future__ import annotations
-from typing import Literal
-
-import pyscipopt
-import math
-
-from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
-from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import State, Optimality
-
-# カスタム例外クラス
 class OMMXPySCIPOptAdapterError(Exception):
     pass
 ```
 
-次に、PySCIPOptのモデルを構築するための関数を順番に実装していきます。後で`OMMXPySCIPOptAdapter`クラスでこれらの関数を使うことになります。
+OMMXは広いクラスの最適化問題を保存できるようになっているので、バックエンドソルバーが対応していない問題が入力されるケースがあります。その場合はエラーを投げるようにしてください。
 
-### 決定変数を設定する関数
+### 決定変数を設定する
+
+PySCIPOptは決定変数を名前で管理するので、OMMXの決定変数のIDを文字列にして名前として登録します。これにより後述する `decode_to_state` においてPySCIPOptの決定変数だけから `ommx.v1.State` を復元することができます。これはバックエンドソルバーの実装に応じて適切な方法が変わることに注意してください。必要なのは解を得た後に `ommx.v1.State` に変換するための情報を保持することです。
 
 ```python markdown-code-runner
-def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[str, pyscipopt.Variable]:
+import pyscipopt
+from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, State, Optimality
+
+def set_decision_variables(
+    model: pyscipopt.Model,  # チュートリアルのために状態を引数で受け取っているがclassで管理するのが一般的
+    instance: Instance
+) -> dict[str, pyscipopt.Variable]:
     """
     モデルに決定変数を追加し、変数名のマッピングを作成して返す
     """
-    varname_map = {}
-    
-    # 通常の決定変数を追加
+    # OMMXの決定変数の情報からPySCIPOptの変数を作成
     for var in instance.raw.decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
@@ -71,6 +72,7 @@ def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[s
                 name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
             )
         else:
+            # 未対応の決定変数の種類がある場合はエラー
             raise OMMXPySCIPOptAdapterError(
                 f"Unsupported decision variable kind: "
                 f"id: {var.id}, kind: {var.kind}"
@@ -83,11 +85,12 @@ def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[s
         )
 
     # モデルに追加された変数へアクセスするための辞書を作成
-    varname_map = {var.name: var for var in model.getVars()}
-    return varname_map
+    return {var.name: var for var in model.getVars()}
 ```
 
-### 式を生成するヘルパー関数
+### `ommx.v1.Function` を `pyscipopt.Expr` に変換する
+
+`ommx.v1.Function` を `pyscipopt.Expr` に変換するための関数を実装します。`ommx.v1.Function` はOMMXの決定変数のIDしか持っていないので、IDからPySCIPOpt側の変数を取得する必要があり、そのために `set_decision_variables` で作成した変数名と変数のマッピングを使います。
 
 ```python markdown-code-runner
 def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
@@ -119,9 +122,13 @@ def make_quadratic_expr(function: Function, varname_map: dict) -> pyscipopt.Expr
     return quad_terms + linear_terms + constant
 ```
 
-### 目的関数と制約条件を設定する関数
+### 目的関数と制約条件を設定する
+
+`pyscipopt.Model` に目的関数と制約条件を追加します。この部分はバックエンドソルバーが何をどのようにサポートしているのかの知識が必要になります。例えばPySCIPOptでは目的関数として2次式を直接扱うことができないため、追加の変数を導入し、制約条件によってそれが本来の目的関数と一致するという形で変換しています。
 
 ```python markdown-code-runner
+import math
+
 def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """モデルに目的関数を設定"""
     objective = instance.raw.objective
@@ -206,9 +213,21 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
         model.addCons(constr_expr, name=str(constraint.id))
 ```
 
-### 解の変換関数
+例えばバックエンドソルバーが特殊な制約条件、例えば [SOS](https://en.wikipedia.org/wiki/Special_ordered_set) などをサポートしている場合は、それに対応するための関数を追加する必要があります。
+
+以上で `ommx.v1.Instance` から `pycscipopt.Model` が構築できるようになりました。
+
+### 得られた解を `ommx.v1.State` に変換する
+
+次に、PySCIPOptのモデルを解いて得られた解を `ommx.v1.State` に変換する関数を実装します。まず解けているかを確認します。SCIPには最適性を保証する機能や解が非有界であることを検知する機能があるので、それらを検知していたら対応した例外を投げます。これもバックエンドソルバーに依存します。
+
+```{warning}
+特に `ommx.adapter.InfeasibleDetected` は解がInfeasibleではなくて最適化問題自体がInfeasible、つまり **一つも解を持ち得ないことが保証できた** という意味であることに注意してください。ヒューリスティックソルバーが一つも実行可能解を見つけられなかった場合にこれを使ってはいけません。
+```
 
 ```python markdown-code-runner
+from ommx.adapter import InfeasibleDetected, UnboundedDetected
+
 def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
     """最適化済みのPySCIPOpt Modelからommx.v1.Stateを作成する"""
     if model.getStatus() == "unknown":
@@ -240,11 +259,13 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         )
 ```
 
-### `OMMXPySCIPOptAdapter` クラスの実装
+### `ommx.adapter.SolverAdapter` を継承した class を作る
 
-最後に、上記の関数を使用するAdapterクラスを実装します：
+最後に、Adapter毎のAPIを揃えるために `ommx.adapter.SolverAdapter` を継承したクラスを作成します。これはここまで作ってきた関数を使って簡単に実装できます
 
 ```python markdown-code-runner
+from ommx.adapter import SolverAdapter
+
 class OMMXPySCIPOptAdapter(SolverAdapter):
     def __init__(
         self,
@@ -300,122 +321,30 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         return solution
 ```
 
-## Sampler Adapterを実装する
-
-ここでは OpenJij を例としてSampler Adapterを実装してみましょう。SamplerAdapterは複数のサンプルを返すソルバーのためのAdapterです。基本的なアプローチはSolverAdapterと同様ですが、複数のサンプルを扱う方法が異なります。
+これを使ってナップザック問題を解いてみましょう
 
 ```python markdown-code-runner
-from __future__ import annotations
-import openjij as oj
-import numpy as np
+v = [10, 13, 18, 31, 7, 15]
+w = [11, 25, 20, 35, 10, 33]
+W = 47
+N = len(v)
 
-from ommx.adapter import SamplerAdapter
-from ommx.v1 import Instance, SampleSet, Solution, Samples
-from ommx.v1.solution_pb2 import State, Optimality
+x = [
+    DecisionVariable.binary(
+        id=i,
+        name="x",
+        subscripts=[i],
+    )
+    for i in range(N)
+]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=sum(v[i] * x[i] for i in range(N)),
+    constraints=[sum(w[i] * x[i] for i in range(N)) - W <= 0],
+    sense=Instance.MAXIMIZE,
+)
 
-class OMMXOpenJijAdapter(SamplerAdapter):
-    def __init__(self, ommx_instance: Instance):
-        self.instance = ommx_instance
-        # IDと変数インデックスのマッピングを作成
-        self.var_indices = {var.id: i for i, var in enumerate(self.instance.raw.decision_variables)}
-        # モデル変換処理を実行
-        self.model = self._convert_to_model()
-        
-    def _convert_to_model(self):
-        """
-        OMMX InstanceからOpenJijのモデルに変換
-        """
-        # OpenJijは主にQuadratic Unconstrained Binary Optimization (QUBO)またはIsingモデルで定義
-        # ここでは例としてQUBOフォーマットへの変換を示す
-        objective = self.instance.raw.objective
-        num_vars = len(self.var_indices)
-        Q = np.zeros((num_vars, num_vars))
-        
-        if objective.HasField("quadratic"):
-            quad = objective.quadratic
-            for row, col, val in zip(quad.rows, quad.columns, quad.values):
-                row_idx = self.var_indices[row]
-                col_idx = self.var_indices[col]
-                Q[row_idx, col_idx] += val
-                
-            # 線形項も含める
-            for term in quad.linear.terms:
-                var_idx = self.var_indices[term.id]
-                Q[var_idx, var_idx] += term.coefficient
-        
-        elif objective.HasField("linear"):
-            # 線形項はQUBOの対角要素
-            for term in objective.linear.terms:
-                var_idx = self.var_indices[term.id]
-                Q[var_idx, var_idx] += term.coefficient
-                
-        # 制約条件はペナルティ項として目的関数に追加する必要があります
-        # （この実装は簡略化されています）
-        
-        return Q
-    
-    @classmethod
-    def sample(cls, ommx_instance: Instance, num_reads: int = 100) -> SampleSet:
-        """
-        OpenJijを使用してサンプリングを実行し、SampleSetを返す
-        """
-        adapter = cls(ommx_instance)
-        sampler = oj.SQASampler()
-        response = sampler.sample_qubo(adapter.model, num_reads=num_reads)
-        return adapter.decode(response)
-    
-    def decode(self, data) -> SampleSet:
-        """
-        OpenJijのサンプリング結果をOMMX SampleSetに変換
-        """
-        samples = []
-        # OpenJijのレスポンスから各サンプルを取得
-        for i, sample_array in enumerate(data.record):
-            # サンプル値をStateフォーマットに変換
-            state_entries = {}
-            for var_id, idx in self.var_indices.items():
-                state_entries[var_id] = float(sample_array[0][idx])
-            
-            state = State(entries=state_entries)
-            # エネルギー値をOpenJijから取得
-            energy = data.energies[i]
-            # サンプル数を取得
-            num_occurrences = data.num_occurrences[i]
-            
-            # Sampleオブジェクトを作成
-            sample = Sample(
-                state=state,
-                energy=energy,
-                num_occurrences=num_occurrences
-            )
-            samples.append(sample)
-        
-        # SampleSetを作成
-        sample_set = SampleSet(samples=Samples(samples=samples))
-        
-        # インスタンスを使って各サンプルを評価
-        for sample in sample_set.raw.samples.samples:
-            solution = self.instance.evaluate(sample.state)
-            sample.evaluated = solution.raw
-        
-        return sample_set
-    
-    @property
-    def solver_input(self):
-        """モデルを返す"""
-        return self.model
-        
-    def decode_to_solution(self, data) -> Solution:
-        """
-        SamplerAdapterの実装として、最良のサンプルからSolutionを生成
-        """
-        sample_set = self.decode(data)
-        # 最良のサンプルを選択（エネルギー最小化）
-        best_sample = min(sample_set.raw.samples.samples, key=lambda s: s.energy)
-        # インスタンスを使って解を評価
-        solution = self.instance.evaluate(best_sample.state)
-        solution.raw.optimality = Optimality.OPTIMALITY_UNKNOWN
-        return solution
+solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 ## まとめ
