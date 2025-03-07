@@ -6,7 +6,7 @@ import openjij as oj
 from typing_extensions import deprecated
 
 
-class OMMXOpenJijAdapter(SamplerAdapter):
+class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
     Sampling QUBO with Simulated Annealing (SA) by `openjij.SASampler <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler>`_
     """
