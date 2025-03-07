@@ -34,8 +34,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self._set_objective()
         self._set_constraints()
 
-    @staticmethod
+    @classmethod
     def solve(
+        cls,
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
@@ -126,7 +127,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = OMMXPySCIPOptAdapter(ommx_instance, use_sos1=use_sos1)
+        adapter = cls(ommx_instance, use_sos1=use_sos1)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
