@@ -1,40 +1,24 @@
 # Sampler Adapterを実装する
 
-[複数のAdapterで最適化問題を解いて結果を比較する](../tutorial/switching_adapters)で触れた通り、OMMX Python SDKにはAdapterを実装するための抽象基底クラスが用意されており、これを継承する事で共通の仕様に沿ったAdapterを実装する事ができます。OMMXはAdapterの性質に応じて二つの抽象基底クラスを用意しています。
+[OMMX Adapterを実装する](../tutorial/implement_solver_adapter)では、PySCIPOptを使った Solver Adapterを実装する方法について説明しました。このページでは、OpenJijを使った Sampler Adapter を実装する方法について説明します。また OpenJij Adapterの使い方については [OMMX AdapterでQUBOからサンプリングする](../tutorial/tsp_sampling_with_openjij_adapter) を参照してください。
 
-- [`ommx.adapter.SolverAdapter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/adapter/index.html#ommx.adapter.SolverAdapter): 一つの解を返す最適化ソルバーのための抽象基底クラス
-- [`ommx.adapter.SamplerAdapter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/adapter/index.html#ommx.adapter.SamplerAdapter): サンプリングベースの最適化ソルバーのための抽象基底クラス
-
-[OMMX Adapterを実装する](../tutorial/implement_solver_adapter)では`SolverAdapter`の実装方法について説明しました。このページでは`SamplerAdapter`の実装方法について、OpenJijのSimulated Annealingを例に説明します。
-
-## Sampler Adapterの処理の流れ
-
-Sampler Adapterの処理は大雑把にいうと次の3ステップからなります：
-
-1. `ommx.v1.Instance` をバックエンドソルバーが読める形式に変換する
-2. バックエンドソルバーを実行して複数のサンプルを取得する
-3. バックエンドソルバーの出力を `ommx.v1.Samples` および `ommx.v1.SampleSet` に変換して返す
-
-ここでは、OpenJijのシミュレーテッドアニーリング（SA）を使ってサンプル生成を行うAdapterを順番に実装していきます。
-
-## OpenJijからSamplesへの変換
-
-まず必要なモジュールをインポートします：
-
-```python markdown-code-runner
-from __future__ import annotations
-import openjij as oj
-from ommx.v1 import Instance, SampleSet, Solution, Samples, State
-from ommx.adapter import SamplerAdapter
+```{note}
+OpenJijには Simulated Annealing (SA) による [`openjij.SASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler)と Simulated Quantum Annealing (SQA) による [`openjij.SQASampler`](https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SQASampler) が含まれています。このチュートリアルでは、 `SASampler` を使ったサンプリングを例に説明します。
 ```
 
-バックエンドソルバーの出力を`Samples`形式に変換する関数から実装しましょう：
+このチュートリアルでは簡単のためにOpenJijに渡すパラメータは省略しています。詳しくは [`ommx-openjij-adapter`](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter) の実装を参照してください。
+
+## `openjij.Response` から `ommx.v1.Samples` への変換
+
+OpenJijは決定変数をOMMXと同様に連番とは限らないIDで管理しているので、PySCIPOptの時のようにIDの対応表を作る必要はありません。
+
+OpenJijのサンプル結果は `openjij.Response` として得られるので、これを `ommx.v1.Samples` に変換する関数を実装します。OpenJijは同じサンプルが得られた時、それが発生した回数を `num_occurrence` として返します。一方 `ommx.v1.Samples` はここのサンプルが固有のサンプルIDをもち、同じ値を持つサンプルは `SamplesEntry` として圧縮されます。この変換を行う必要があります。
 
 ```python markdown-code-runner
+import openjij as oj
+from ommx.v1 import Instance, SampleSet, Solution, Samples, State
+
 def decode_to_samples(response: oj.Response) -> Samples:
-    """
-    OpenJijのResponseをommx.v1.Samplesに変換する
-    """
     # サンプルIDを生成
     sample_id = 0
     entries = []
@@ -52,256 +36,69 @@ def decode_to_samples(response: oj.Response) -> Samples:
     return Samples(entries=entries)
 ```
 
-## OpenJijでのサンプリング
+IDの対応を考えなくていいため、この段階では `ommx.v1.Instance` やその情報を抽出した対応表などが必要ないことに注意してください。
 
-次に、OpenJijを使ってサンプリングを行う関数を実装します：
+## `ommx.adapter.SamplerAdapter` を継承したクラスの実装
 
-```python markdown-code-runner
-def sample_with_openjij_sa(
-    ommx_instance: Instance,
-    beta_min: float | None = None,
-    beta_max: float | None = None,
-    num_sweeps: int | None = None,
-    num_reads: int | None = None,
-    schedule: list | None = None,
-    initial_state: list | dict | None = None,
-    updater: str | None = None,
-    sparse: bool | None = None,
-    reinitialize_state: bool | None = None,
-    seed: int | None = None,
-) -> oj.Response:
-    """
-    OpenJijのSASamplerを使ったサンプリング
-    """
-    sampler = oj.SASampler()
-    qubo, _offset = ommx_instance.as_qubo_format()
-    return sampler.sample_qubo(
-        qubo,
-        beta_min=beta_min,
-        beta_max=beta_max,
-        num_sweeps=num_sweeps,
-        num_reads=num_reads,
-        schedule=schedule,
-        initial_state=initial_state,
-        updater=updater,
-        sparse=sparse,
-        reinitialize_state=reinitialize_state,
-        seed=seed,
-    )
+PySCIPOptの時は `SolverAdapter` を継承しましたが、今回は `SamplerAdapter` を継承します。これは次のように3つの `@abstractmethod` を持っています。
+
+```python
+class SamplerAdapter(SolverAdapter):
+    @classmethod
+    @abstractmethod
+    def sample(cls, ommx_instance: Instance) -> SampleSet:
+        pass
+
+    @property
+    @abstractmethod
+    def sampler_input(self) -> SamplerInput:
+        pass
+
+    @abstractmethod
+    def decode_to_sampleset(self, data: SamplerOutput) -> SampleSet:
+        pass
 ```
 
-## SamplesからSampleSetへの変換
-
-サンプル結果を評価してSampleSetに変換する関数も実装します：
+加えて `SolverAdapter` を継承しているので `solve` などの `@abstractmethod` も実装する必要と思うかもしれませんが、これらについては `sample` を使って、最善のサンプルを返すというデフォルト実装が提供されているため、`sample` だけを実装すればよいです。あるいは自分でより効率の良い実装を行いたい場合は `solve` をオーバーライドしてください。
 
 ```python markdown-code-runner
-def evaluate_to_sampleset(
-    ommx_instance: Instance, 
-    samples: Samples
-) -> SampleSet:
-    """
-    Samplesを評価してSampleSetに変換
-    """
-    return ommx_instance.evaluate_samples(samples)
-```
+from ommx.adapter import SamplerAdapter
 
-## OpenJijを使った完全なサンプリングフロー
-
-上の関数を組み合わせて、完全なサンプリングフローを実装します：
-
-```python markdown-code-runner
-def sample_qubo_with_openjij_sa(
-    ommx_instance: Instance,
-    beta_min: float | None = None,
-    beta_max: float | None = None,
-    num_sweeps: int | None = None,
-    num_reads: int | None = None,
-    schedule: list | None = None,
-    initial_state: list | dict | None = None,
-    updater: str | None = None,
-    sparse: bool | None = None,
-    reinitialize_state: bool | None = None,
-    seed: int | None = None,
-) -> SampleSet:
-    """
-    OpenJijのSASamplerを使って問題を解き、SampleSetを返す
-    """
-    # OpenJijでサンプリング
-    response = sample_with_openjij_sa(
-        ommx_instance,
-        beta_min=beta_min,
-        beta_max=beta_max,
-        num_sweeps=num_sweeps,
-        num_reads=num_reads,
-        schedule=schedule,
-        initial_state=initial_state,
-        updater=updater,
-        sparse=sparse,
-        reinitialize_state=reinitialize_state,
-        seed=seed,
-    )
-    
-    # ResponseをSamplesに変換
-    samples = decode_to_samples(response)
-    
-    # SamplesをSampleSetに変換
-    return evaluate_to_sampleset(ommx_instance, samples)
-```
-
-## 使用例
-
-実装した関数を使って、シンプルな問題を解いてみましょう：
-
-```python markdown-code-runner
-from ommx.v1 import DecisionVariable, Instance
-
-# 問題をQUBOとして定義
-n = 5
-x = [DecisionVariable.binary(id=i) for i in range(n)]
-instance = Instance.from_components(
-    decision_variables=x,
-    objective=sum(x[i] * x[i+1] for i in range(n-1)),
-    sense=Instance.MINIMIZE,
-)
-
-# サンプリング実行
-sample_set = sample_qubo_with_openjij_sa(
-    instance,
-    num_reads=10,
-    num_sweeps=100,
-)
-
-# 結果の分析
-print(f"Number of samples: {len(sample_set.samples)}")
-print(f"Best energy: {sample_set.first.evaluate.objective_value}")
-```
-
-## SamplerAdapterクラスとしての実装
-
-最後に、これまで実装した関数をまとめて`SamplerAdapter`を継承したクラスを作成します：
-
-```python markdown-code-runner
 class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
     Sampling QUBO with Simulated Annealing (SA) by `openjij.SASampler`
     """
-    
-    def __init__(
-        self,
-        ommx_instance: Instance,
-        *,
-        beta_min: float | None = None,
-        beta_max: float | None = None,
-        num_sweeps: int | None = None,
-        num_reads: int | None = None,
-        schedule: list | None = None,
-        initial_state: list | dict | None = None,
-        updater: str | None = None,
-        sparse: bool | None = None,
-        reinitialize_state: bool | None = None,
-        seed: int | None = None,
-    ):
-        self.ommx_instance = ommx_instance
-        self.beta_min = beta_min
-        self.beta_max = beta_max
-        self.num_sweeps = num_sweeps
-        self.num_reads = num_reads
-        self.schedule = schedule
-        self.initial_state = initial_state
-        self.updater = updater
-        self.sparse = sparse
-        self.reinitialize_state = reinitialize_state
-        self.seed = seed
 
+    # SampleSetに変換する必要があるので、Instanceを保持
+    ommx_instance: Instance
+    
+    def __init__(self, ommx_instance: Instance):
+        self.ommx_instance = ommx_instance
+
+    # サンプリングを行う
+    def _sample(self) -> oj.Response:
+        sampler = oj.SASampler()
+        # QUBOの辞書形式に変換
+        # InstanceがQUBO形式でなければここでエラーになる
+        qubo, _offset = self.ommx_instance.as_qubo_format()
+        return sampler.sample_qubo(qubo)
+
+    # サンプリングを行う共通のメソッド
     @classmethod
-    def sample(
-        cls,
-        ommx_instance: Instance,
-        *,
-        beta_min: float | None = None,
-        beta_max: float | None = None,
-        num_sweeps: int | None = None,
-        num_reads: int | None = None,
-        schedule: list | None = None,
-        initial_state: list | dict | None = None,
-        updater: str | None = None,
-        sparse: bool | None = None,
-        reinitialize_state: bool | None = None,
-        seed: int | None = None,
-    ) -> SampleSet:
-        """
-        クラスメソッドでサンプリングを実行
-        """
-        adapter = cls(
-            ommx_instance,
-            beta_min=beta_min,
-            beta_max=beta_max,
-            num_sweeps=num_sweeps,
-            num_reads=num_reads,
-            schedule=schedule,
-            initial_state=initial_state,
-            updater=updater,
-            sparse=sparse,
-            reinitialize_state=reinitialize_state,
-            seed=seed,
-        )
+    def sample(cls, ommx_instance: Instance) -> SampleSet:
+        adapter = cls(ommx_instance)
         response = adapter._sample()
         return adapter.decode_to_sampleset(response)
     
+    # このAdapterでは `SamplerInput` は QUBO形式の辞書を使うことにする
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        """バックエンドソルバー入力形式を返す"""
         qubo, _offset = self.ommx_instance.as_qubo_format()
         return qubo
-    
-    def _sample(self) -> oj.Response:
-        """実際のサンプリングを実行"""
-        return sample_with_openjij_sa(
-            self.ommx_instance,
-            beta_min=self.beta_min,
-            beta_max=self.beta_max,
-            num_sweeps=self.num_sweeps,
-            num_reads=self.num_reads,
-            schedule=self.schedule,
-            initial_state=self.initial_state,
-            updater=self.updater,
-            sparse=self.sparse,
-            reinitialize_state=self.reinitialize_state,
-            seed=self.seed,
-        )
-    
+   
+    # OpenJijのResponseをSampleSetに変換
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
-        """OpenJijのResponseをSampleSetに変換"""
         samples = decode_to_samples(data)
-        return evaluate_to_sampleset(self.ommx_instance, samples)
-    
-    def decode_to_samples(self, data: oj.Response) -> Samples:
-        """OpenJijのResponseをSamplesに変換"""
-        return decode_to_samples(data)
+        # ここで `ommx.v1.Instance` が保持している情報が必要になる
+        return self.ommx_instance.evaluate_samples(samples)
 ```
-
-クラスを使った実行例：
-
-```python markdown-code-runner
-# クラスを使ったサンプリング実行
-sample_set2 = OMMXOpenJijSAAdapter.sample(
-    instance,
-    num_reads=10,
-    num_sweeps=100,
-)
-
-print(f"Number of samples using class: {len(sample_set2.samples)}")
-print(f"Best energy using class: {sample_set2.first.evaluate.objective_value}")
-```
-
-## まとめ
-
-このチュートリアルでは、Sampler Adapterを実装する方法を学びました。主なステップは以下の通りです：
-
-1. バックエンドソルバーの出力を`ommx.v1.Samples`に変換する関数の実装
-2. バックエンドソルバーを使ってサンプリングを行う関数の実装
-3. サンプルを評価して`ommx.v1.SampleSet`に変換する関数の実装
-4. 上記をまとめた完全なサンプリングフローの実装
-5. `SamplerAdapter`を継承したクラスの実装
-
-これらのステップに従うことで、任意のサンプリングベースのソルバーに対応するOMMX Adapterを実装できます。Adapterを使うことで、OMMX Python SDKのエコシステムに様々なソルバーを統合することができます。
