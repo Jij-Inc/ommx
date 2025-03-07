@@ -175,21 +175,22 @@ numpy==1.26.4
     #   ommx-highs-adapter
     #   openjij
     #   pandas
+    #   pyscipopt
     #   scipy
-ommx==1.8.4
+ommx==1.8.5
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-highs-adapter
     #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-highs-adapter==1.8.4
+ommx-highs-adapter==1.8.5
     # via ommx-book (pyproject.toml)
-ommx-openjij-adapter==1.8.4
+ommx-openjij-adapter==1.8.5
     # via ommx-book (pyproject.toml)
-ommx-pyscipopt-adapter==1.8.4
+ommx-pyscipopt-adapter==1.8.5
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==1.8.4
+ommx-python-mip-adapter==1.8.5
     # via ommx-book (pyproject.toml)
 openjij==0.9.2
     # via ommx-openjij-adapter
@@ -243,7 +244,7 @@ pygments==2.19.1
     #   sphinx
 pyparsing==3.2.1
     # via matplotlib
-pyscipopt==5.2.1
+pyscipopt==5.4.1
     # via ommx-pyscipopt-adapter
 python-dateutil==2.9.0.post0
     # via
