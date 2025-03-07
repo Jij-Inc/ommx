@@ -171,7 +171,7 @@ def decode_to_samples(response: oj.Response) -> Samples:
     return Samples(entries=entries)
 
 
-@deprecated("Use `OMMXOpenJijAdapter.sample` instead")
+@deprecated("Use `OMMXOpenJijSAAdapter.sample` instead")
 def sample_qubo_sa(
     instance: Instance,
     *,
@@ -187,7 +187,7 @@ def sample_qubo_sa(
     seed: int | None = None,
 ) -> Samples:
     """
-    Deprecated: Use :meth:`OMMXOpenJijAdapter.sample` instead
+    Deprecated: Use :meth:`OMMXOpenJijSAAdapter.sample` instead
     """
     q, _offset = instance.as_qubo_format()
     sampler = oj.SASampler()
