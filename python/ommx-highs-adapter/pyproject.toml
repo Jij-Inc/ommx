@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_highs_adapter"
-version = "1.8.5"
+version = "1.8.6"
 description = "An adapter between OMMX and HiGHS"
 authors = [
     { name = "Jij Inc.", email = "info@j-ij.com" }
@@ -22,7 +22,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "ommx >= 1.8.5, < 2.0.0",
+    "ommx >= 1.8.6, < 2.0.0",
     "highspy>=1.9.0",
     "numpy>=1.17.3",
 ]
