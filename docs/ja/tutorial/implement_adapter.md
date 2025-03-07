@@ -30,7 +30,7 @@ Adapterの処理は大雑把にいうと次の3ステップからなります：
 
 まず、必要なモジュールをインポートします。
 
-```python
+```python markdown-code-runner
 from __future__ import annotations
 from typing import Literal
 
@@ -51,7 +51,7 @@ class OMMXPySCIPOptAdapterError(Exception):
 
 ### 決定変数を設定する関数
 
-```python
+```python markdown-code-runner
 def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[str, pyscipopt.Variable]:
     """
     モデルに決定変数を追加し、変数名のマッピングを作成して返す
@@ -89,7 +89,7 @@ def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[s
 
 ### 式を生成するヘルパー関数
 
-```python
+```python markdown-code-runner
 def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
     """線形式を生成するヘルパー関数"""
     linear = function.linear
@@ -121,7 +121,7 @@ def make_quadratic_expr(function: Function, varname_map: dict) -> pyscipopt.Expr
 
 ### 目的関数と制約条件を設定する関数
 
-```python
+```python markdown-code-runner
 def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """モデルに目的関数を設定"""
     objective = instance.raw.objective
@@ -208,7 +208,7 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
 
 ### 解の変換関数
 
-```python
+```python markdown-code-runner
 def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
     """最適化済みのPySCIPOpt Modelからommx.v1.Stateを作成する"""
     if model.getStatus() == "unknown":
@@ -244,7 +244,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 最後に、上記の関数を使用するAdapterクラスを実装します：
 
-```python
+```python markdown-code-runner
 class OMMXPySCIPOptAdapter(SolverAdapter):
     def __init__(
         self,
@@ -304,14 +304,14 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
 ここでは OpenJij を例としてSampler Adapterを実装してみましょう。SamplerAdapterは複数のサンプルを返すソルバーのためのAdapterです。基本的なアプローチはSolverAdapterと同様ですが、複数のサンプルを扱う方法が異なります。
 
-```python
+```python markdown-code-runner
 from __future__ import annotations
 import openjij as oj
 import numpy as np
 
 from ommx.adapter import SamplerAdapter
-from ommx.v1 import Instance, SampleSet, Solution
-from ommx.v1.solution_pb2 import Samples, Sample, State, Optimality
+from ommx.v1 import Instance, SampleSet, Solution, Samples
+from ommx.v1.solution_pb2 import State, Optimality
 
 class OMMXOpenJijAdapter(SamplerAdapter):
     def __init__(self, ommx_instance: Instance):
