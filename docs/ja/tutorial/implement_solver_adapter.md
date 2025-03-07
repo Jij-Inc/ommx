@@ -261,7 +261,35 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
 
 ### `ommx.adapter.SolverAdapter` を継承した class を作る
 
-最後に、Adapter毎のAPIを揃えるために `ommx.adapter.SolverAdapter` を継承したクラスを作成します。これはここまで作ってきた関数を使って簡単に実装できます
+最後に、Adapter毎のAPIを揃えるために `ommx.adapter.SolverAdapter` を継承したクラスを作成します。これは `@abstractmethod` を含む次のような抽象基底クラスです：
+
+```python
+class SolverAdapter(ABC):
+    @abstractmethod
+    def __init__(self, ommx_instance: Instance):
+        pass
+
+    @classmethod
+    @abstractmethod
+    def solve(cls, ommx_instance: Instance) -> Solution:
+        pass
+
+    @property
+    @abstractmethod
+    def solver_input(self) -> SolverInput:
+        pass
+
+    @abstractmethod
+    def decode(self, data: SolverOutput) -> Solution:
+        pass
+```
+
+これは二通りのユースケースを想定していて
+
+- 単に `ommx.v1.Instance` を解いて `ommx.v1.Solution` を返すだけの場合は、`solve` を使います。
+- バックエンドソルバーのパラメータなどを調整する場合は `solver_input` を使ってバックエンドソルバーのデータ構造（今回は `pyscipopt.Model`）を取得して調整し、最後に出力を `ommx.v1.Solution` に変換する `decode` を使います。
+
+ここまでで用意した関数を使って次のように実装することができます：
 
 ```python markdown-code-runner
 from ommx.adapter import SolverAdapter
@@ -321,7 +349,24 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         return solution
 ```
 
-これを使ってナップザック問題を解いてみましょう
+これでSolver Adapter完成です 🎉
+
+```{note}
+Pythonは継承したクラスでパラメータ引数を追加してもいいので、次のように追加のパラメータを定義することもできます。ただし、これによってバックエンドソルバーの様々な機能が使えるようになる一方、他のAdapterとの互換性が損なわれるので、Adapterを作る際には慎重に検討してください。
+
+```python
+    @classmethod
+    def solve(
+        cls,
+        ommx_instance: Instance,
+        *,
+        timeout: Optional[int] = None,
+    ) -> Solution:
+```
+
+### Solver Adapterを使ってナップザック問題を解く
+
+動作確認のため、これを使ってナップザック問題を解いてみましょう
 
 ```python markdown-code-runner
 v = [10, 13, 18, 31, 7, 15]
@@ -349,13 +394,12 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 ## まとめ
 
-このチュートリアルでは、OMMXのAdapterを実装する方法を学びました。
+このチュートリアルでは、Solver Adapterを実装する方法を学びました。
 
 1. `SolverAdapter` または `SamplerAdapter` を継承したクラスを作成
 2. バックエンドソルバーの要件に合わせて `ommx.v1.Instance` からモデルを構築
-3. 変数のIDとソルバー内の表現とのマッピングを保持
-4. ソルバーを実行して結果を取得
-5. ソルバーの結果を `ommx.v1.State` または `ommx.v1.Samples` に変換
-6. 最終的に `ommx.v1.Solution` または `ommx.v1.SampleSet` を返す
+3. ソルバーを実行して結果を取得
+4. ソルバーの結果を `ommx.v1.State` または `ommx.v1.Samples` に変換
+5. `ommx.v1.Instance` を使って `ommx.v1.Solution` または `ommx.v1.SampleSet` を作成
 
 これらの手順に従って、任意のバックエンドソルバーに対応するOMMX Adapterを実装することができます。Adapterを実装することで、様々な最適化ソルバー間で最適化問題の定式化と解の評価を統一的に扱うことができます。
