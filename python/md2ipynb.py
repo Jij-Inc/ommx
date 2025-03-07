@@ -11,6 +11,7 @@ import re
 import sys
 import os
 
+
 def md_to_ipynb(md_file, ipynb_file):
     with open(md_file, "r", encoding="utf-8") as f:
         md_lines = f.readlines()
@@ -23,7 +24,9 @@ def md_to_ipynb(md_file, ipynb_file):
         # Python コードブロックの開始
         if re.match(r"^```python markdown-code-runner", line.strip()):
             if cell_content:
-                nb.cells.append(nbformat.v4.new_markdown_cell("".join(cell_content).strip()))
+                nb.cells.append(
+                    nbformat.v4.new_markdown_cell("".join(cell_content).strip())
+                )
                 cell_content = []
             in_code_block = True
         # コードブロックの終了
@@ -45,18 +48,28 @@ def md_to_ipynb(md_file, ipynb_file):
     with open(ipynb_file, "w", encoding="utf-8") as f:
         nbformat.write(nb, f)
 
+
 def main():
-    parser = argparse.ArgumentParser(description="Convert a Markdown file to a Jupyter Notebook.")
+    parser = argparse.ArgumentParser(
+        description="Convert a Markdown file to a Jupyter Notebook."
+    )
     parser.add_argument("input", help="Input Markdown file")
-    parser.add_argument("output", nargs="?", help="Output Jupyter Notebook file (default: replace .md with .ipynb)")
+    parser.add_argument(
+        "output",
+        nargs="?",
+        help="Output Jupyter Notebook file (default: replace .md with .ipynb)",
+    )
     args = parser.parse_args()
 
     if not args.input.endswith(".md"):
         print("Error: Input file must have a .md extension", file=sys.stderr)
         sys.exit(1)
 
-    output_file = args.output if args.output else os.path.splitext(args.input)[0] + ".ipynb"
+    output_file = (
+        args.output if args.output else os.path.splitext(args.input)[0] + ".ipynb"
+    )
     md_to_ipynb(args.input, output_file)
+
 
 if __name__ == "__main__":
     main()
