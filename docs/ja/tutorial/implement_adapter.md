@@ -52,7 +52,7 @@ class OMMXPySCIPOptAdapterError(Exception):
 ### 決定変数を設定する関数
 
 ```python
-def set_decision_variables(model: pyscipopt.Model, instance: Instance):
+def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[str, pyscipopt.Variable]:
     """
     モデルに決定変数を追加し、変数名のマッピングを作成して返す
     """
