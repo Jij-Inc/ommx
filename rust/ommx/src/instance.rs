@@ -1,4 +1,4 @@
-use crate::{error::ParseError, v1, Constraint, ConstraintID, ConstraintMetadata, Function};
+use crate::{error::ParseError, v1, Constraint, ConstraintID, Function};
 use std::{collections::HashMap, hash::Hash};
 
 /// ID for decision variable
@@ -9,7 +9,6 @@ pub struct VariableID(u64);
 pub struct Instance {
     objective: Function,
     constraints: HashMap<ConstraintID, Constraint>,
-    constraint_metadata: HashMap<ConstraintID, ConstraintMetadata>,
 }
 
 impl TryFrom<v1::Instance> for Instance {
@@ -23,18 +22,16 @@ impl TryFrom<v1::Instance> for Instance {
             })?
             .try_into()?;
         let mut constraints = HashMap::new();
-        let mut constraint_metadata = HashMap::new();
         for c in value.constraints {
-            let (id, c, metadata) = c.try_into()?;
+            let c: Constraint = c.try_into()?;
+            let id = c.id;
             if constraints.insert(id, c).is_some() {
                 return Err(ParseError::DuplicatedConstraintID { id });
             }
-            constraint_metadata.insert(id, metadata);
         }
         Ok(Self {
             objective,
             constraints,
-            constraint_metadata,
         })
     }
 }
