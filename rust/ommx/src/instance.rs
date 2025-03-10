@@ -3,8 +3,28 @@ use crate::{
 };
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Sense {
+    Minimize,
+    Maximize,
+}
+
+impl TryFrom<v1::instance::Sense> for Sense {
+    type Error = ParseError;
+    fn try_from(value: v1::instance::Sense) -> Result<Self, Self::Error> {
+        match value {
+            v1::instance::Sense::Minimize => Ok(Self::Minimize),
+            v1::instance::Sense::Maximize => Ok(Self::Maximize),
+            v1::instance::Sense::Unspecified => Err(ParseError::UnspecifiedEnum {
+                enum_name: "ommx.v1.instance.Sense",
+            }),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instance {
+    sense: Sense,
     objective: Function,
     constraints: HashMap<ConstraintID, Constraint>,
     decision_variables: HashMap<VariableID, DecisionVariable>,
@@ -13,6 +33,8 @@ pub struct Instance {
 impl TryFrom<v1::Instance> for Instance {
     type Error = ParseError;
     fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {
+        let sense = value.sense().try_into()?;
+
         let objective = value
             .objective
             .ok_or(ParseError::MissingField {
@@ -40,6 +62,7 @@ impl TryFrom<v1::Instance> for Instance {
         }
 
         Ok(Self {
+            sense,
             objective,
             constraints,
             decision_variables,
