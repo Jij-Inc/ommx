@@ -29,6 +29,9 @@ pub enum ParseError {
     #[error("Duplicated variable ID is found: {id:?}")]
     DuplicatedVariableID { id: VariableID },
 
+    #[error("Undefined variable ID is used: {id:?}")]
+    UndefinedVariableID { id: VariableID },
+
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]
     DecodeError(#[from] DecodeError),

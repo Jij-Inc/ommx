@@ -1,8 +1,9 @@
 use crate::v1;
+use derive_more::{Deref, From};
 use std::collections::HashMap;
 
 /// ID for decision variable and parameter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
 
 #[derive(Debug, Clone, PartialEq)]

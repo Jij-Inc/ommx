@@ -30,6 +30,7 @@ pub struct Instance {
     decision_variables: HashMap<VariableID, DecisionVariable>,
     constraints: HashMap<ConstraintID, Constraint>,
     removed_constraints: HashMap<ConstraintID, RemovedConstraint>,
+    decision_variable_dependency: HashMap<VariableID, Function>,
 }
 
 impl TryFrom<v1::Instance> for Instance {
@@ -75,12 +76,22 @@ impl TryFrom<v1::Instance> for Instance {
             }
         }
 
+        let mut decision_variable_dependency = HashMap::new();
+        for (id, f) in value.decision_variable_dependency {
+            let id = VariableID::from(id);
+            if !decision_variables.contains_key(&id) {
+                return Err(ParseError::UndefinedVariableID { id });
+            }
+            decision_variable_dependency.insert(id, f.try_into()?);
+        }
+
         Ok(Self {
             sense,
             objective,
             constraints,
             decision_variables,
             removed_constraints,
+            decision_variable_dependency,
         })
     }
 }
