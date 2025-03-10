@@ -31,6 +31,8 @@ pub struct Instance {
     constraints: HashMap<ConstraintID, Constraint>,
     removed_constraints: HashMap<ConstraintID, RemovedConstraint>,
     decision_variable_dependency: HashMap<VariableID, Function>,
+    parameters: Option<v1::Parameters>,
+    description: Option<v1::instance::Description>,
 }
 
 impl TryFrom<v1::Instance> for Instance {
@@ -92,6 +94,8 @@ impl TryFrom<v1::Instance> for Instance {
             decision_variables,
             removed_constraints,
             decision_variable_dependency,
+            parameters: value.parameters,
+            description: value.description,
         })
     }
 }
