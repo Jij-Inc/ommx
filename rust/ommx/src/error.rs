@@ -1,6 +1,5 @@
+use crate::{ConstraintID, VariableID};
 use prost::DecodeError;
-
-use crate::ConstraintID;
 
 /// Error occurred during parsing OMMX Message
 #[derive(Debug, thiserror::Error)]
@@ -26,6 +25,9 @@ pub enum ParseError {
 
     #[error("Duplicated constraint ID is found: {id:?}")]
     DuplicatedConstraintID { id: ConstraintID },
+
+    #[error("Duplicated variable ID is found: {id:?}")]
+    DuplicatedVariableID { id: VariableID },
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]

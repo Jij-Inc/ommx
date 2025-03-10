@@ -144,6 +144,7 @@ pub mod random;
 
 // Internal modules
 mod constraint;
+mod decision_variable;
 mod evaluate;
 mod format;
 mod function;
@@ -160,6 +161,7 @@ mod sorted_ids;
 mod state;
 
 pub use constraint::*;
+pub use decision_variable::*;
 pub use evaluate::Evaluate;
 pub use function::*;
 
