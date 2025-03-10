@@ -144,7 +144,6 @@ pub mod random;
 
 // Internal modules
 mod constraint;
-mod decision_variable;
 mod evaluate;
 mod format;
 mod function;
@@ -171,6 +170,7 @@ pub mod v1 {
 
 mod v1_ext {
     mod constraint;
+    mod decision_variable;
     mod function;
     mod instance;
 }
