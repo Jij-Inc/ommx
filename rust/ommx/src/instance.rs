@@ -1,7 +1,8 @@
 use crate::{
-    error::ParseError, v1, Constraint, ConstraintID, DecisionVariable, Function, VariableID,
+    error::ParseError, v1, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint,
+    VariableID,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
@@ -26,8 +27,9 @@ impl TryFrom<v1::instance::Sense> for Sense {
 pub struct Instance {
     sense: Sense,
     objective: Function,
-    constraints: HashMap<ConstraintID, Constraint>,
     decision_variables: HashMap<VariableID, DecisionVariable>,
+    constraints: HashMap<ConstraintID, Constraint>,
+    removed_constraints: HashMap<ConstraintID, RemovedConstraint>,
 }
 
 impl TryFrom<v1::Instance> for Instance {
@@ -43,15 +45,6 @@ impl TryFrom<v1::Instance> for Instance {
             })?
             .try_into()?;
 
-        let mut constraints = HashMap::new();
-        for c in value.constraints {
-            let c: Constraint = c.try_into()?;
-            let id = c.id;
-            if constraints.insert(id, c).is_some() {
-                return Err(ParseError::DuplicatedConstraintID { id });
-            }
-        }
-
         let mut decision_variables = HashMap::new();
         for v in value.decision_variables {
             let v: DecisionVariable = v.try_into()?;
@@ -61,11 +54,33 @@ impl TryFrom<v1::Instance> for Instance {
             }
         }
 
+        let mut constraints = HashMap::new();
+        for c in value.constraints {
+            let c: Constraint = c.try_into()?;
+            let id = c.id;
+            if constraints.insert(id, c).is_some() {
+                return Err(ParseError::DuplicatedConstraintID { id });
+            }
+        }
+
+        let mut removed_constraints = HashMap::new();
+        for c in value.removed_constraints {
+            let c: RemovedConstraint = c.try_into()?;
+            let id = c.constraint.id;
+            if constraints.contains_key(&id) {
+                return Err(ParseError::DuplicatedConstraintID { id });
+            }
+            if removed_constraints.insert(id, c).is_some() {
+                return Err(ParseError::DuplicatedConstraintID { id });
+            }
+        }
+
         Ok(Self {
             sense,
             objective,
             constraints,
             decision_variables,
+            removed_constraints,
         })
     }
 }

@@ -60,3 +60,27 @@ impl TryFrom<v1::Constraint> for Constraint {
         })
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemovedConstraint {
+    pub constraint: Constraint,
+    pub removed_reason: String,
+    pub removed_reason_parameters: HashMap<String, String>,
+}
+
+impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
+    type Error = ParseError;
+    fn try_from(value: v1::RemovedConstraint) -> Result<Self, Self::Error> {
+        Ok(Self {
+            constraint: value
+                .constraint
+                .ok_or(ParseError::MissingField {
+                    message: "ommx.v1.RemovedConstraint",
+                    field: "constraint",
+                })?
+                .try_into()?,
+            removed_reason: value.removed_reason,
+            removed_reason_parameters: value.removed_reason_parameters,
+        })
+    }
+}
