@@ -1,5 +1,7 @@
 use prost::DecodeError;
 
+use crate::ConstraintID;
+
 /// Error occurred during parsing OMMX Message
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
@@ -21,6 +23,9 @@ pub enum ParseError {
     /// this error is returned when the enum value is not set.
     #[error("Enum ({enum_name}) value is unspecified.")]
     UnspecifiedEnum { enum_name: &'static str },
+
+    #[error("Duplicated constraint ID is found: {id:?}")]
+    DuplicatedConstraintID { id: ConstraintID },
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]

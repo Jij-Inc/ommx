@@ -34,39 +34,30 @@ pub struct Constraint {
     pub equality: Equality,
 }
 
-impl Constraint {
-    pub fn new(function: Function, equality: Equality) -> Self {
-        Self { function, equality }
-    }
-}
-
-impl TryFrom<v1::Constraint> for Constraint {
-    type Error = ParseError;
-    fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
-        let equality = value.equality().try_into()?;
-        let function = value.function.ok_or(ParseError::UnsupportedV1Function)?;
-        Ok(Self {
-            function: function.try_into()?,
-            equality,
-        })
-    }
-}
-
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Metadata {
+pub struct ConstraintMetadata {
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
     pub parameters: HashMap<String, String>,
     pub description: Option<String>,
 }
 
-impl From<v1::Constraint> for Metadata {
-    fn from(value: v1::Constraint) -> Self {
-        Self {
+impl TryFrom<v1::Constraint> for (ConstraintID, Constraint, ConstraintMetadata) {
+    type Error = ParseError;
+    fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
+        let equality = value.equality().try_into()?;
+        let function = value.function.ok_or(ParseError::UnsupportedV1Function)?;
+        let id = ConstraintID(value.id);
+        let constraint = Constraint {
+            function: function.try_into()?,
+            equality,
+        };
+        let metadata = ConstraintMetadata {
             name: value.name,
             subscripts: value.subscripts,
             parameters: value.parameters,
             description: value.description,
-        }
+        };
+        Ok((id, constraint, metadata))
     }
 }
