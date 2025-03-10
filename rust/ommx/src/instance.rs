@@ -2,7 +2,7 @@ use crate::{
     error::ParseError, v1, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint,
     VariableID,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
