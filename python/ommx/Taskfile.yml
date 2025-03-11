@@ -27,4 +27,4 @@ tasks:
   pyright:
     desc: Type check OMMX Python SDK
     cmds:
-      - uv run pyright
+      - uv run --no-build pyright
