@@ -131,7 +131,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Format
-        run: ruff format --check python
+        run: uvx ruff format --check python
 
       - name: Lint
-        run: ruff check python
+        run: uvx ruff check python
