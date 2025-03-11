@@ -42,7 +42,7 @@ jobs:
           git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
 
   build-wheel:
-    name: Build Wheel
+    name: Build Wheel and run Pyright
     runs-on: ubuntu-latest
     env:
       python-version: 3.12
@@ -58,12 +58,18 @@ jobs:
         with:
           command: build
           args: --out wheels -m python/ommx/Cargo.toml
+      # We cannot run pyright in the test job,
+      # because we need to nuke python/ommx/ommx
+      # to get `pytest` working.
+      - name: Run pyright
+        run: task python:ommx:pyright
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: wheels
 
+  # Test a single wheel with multiple python versions
   test:
     runs-on: ubuntu-latest
     needs: build-wheel
@@ -86,14 +92,15 @@ jobs:
       - name: Override `ommx' in pyproject.toml
         run: |
           uv run ci-scripts/override-ommx-with-wheel.py
-          rm -rf python/ommx/pyproject.toml python/ommx/Cargo.toml
+          # NOTE: ommx/ommx confuses pytest and fails
+          rm -rf python/ommx/*.toml python/ommx/ommx
       - name: Install pytest-github-actions-annotate-failures
         run: |
           uv add --dev pytest-github-actions-annotate-failures
       - name: Install deps
         run: task python:sync
       - name: Test
-        run: task python:test
+        run: task python:test-ci
 
       - name: Run notebooks
         if: ${{ github.actor != 'dependabot[bot]' }}
