@@ -50,6 +50,9 @@ runs:
         sync: false
         python-version: ${{ inputs.python-version }}
     
+    - name: Fix Python Version
+      run: |
+        echo "cpython@${{inputs.python-version}}" > .python-version
     - name: Setup Python Tools
       shell: bash
       run: |
