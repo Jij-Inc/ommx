@@ -13,6 +13,11 @@ tasks:
       - task: pytest
       - task: pyright
 
+  test-ci:
+    desc: Run tests for OMMX Python SDK (CI mode; without pyright)
+    cmds:
+      - task: pytest
+
   pytest:
     desc: Run pytest for OMMX Python SDK
     cmds:
