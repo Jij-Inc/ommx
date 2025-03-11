@@ -58,9 +58,11 @@ jobs:
         with:
           command: build
           args: --out wheels -m python/ommx/Cargo.toml
-      - name: Install wheel
-        run: |
-          uv pip install wheels/*.whl
+      - name: Build ommx (so)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: develop
+          args: --uv -m python/ommx/Cargo.toml
       # We cannot run pyright in the test job,
       # because we need to nuke python/ommx/ommx
       # to get `pytest` working.
