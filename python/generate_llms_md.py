@@ -3,9 +3,9 @@
 Script to generate a consolidated markdown file for AI assistants.
 
 This script:
-1. Converts Jupyter notebooks to markdown
+1. Converts Jupyter notebooks to markdown (excluding output cells)
 2. Concatenates markdown files based on TOC order
-3. Creates a single LLMs.txt file with tutorial content
+3. Creates a single LLMs.md file with a Table of Contents and section separators
 """
 
 import os
@@ -26,8 +26,9 @@ def convert_notebook_to_markdown(notebook_path, output_path):
     with open(notebook_path, "r", encoding="utf-8") as f:
         nb = nbformat.read(f, as_version=4)
 
-    # Initialize MarkdownExporter
-    exporter = MarkdownExporter()
+    # Initialize MarkdownExporter with exclude_output=True to exclude output cells
+    # This modification was implemented by AI to exclude output cells as requested
+    exporter = MarkdownExporter(exclude_output=True)
 
     # Convert notebook to markdown
     body, _ = exporter.from_notebook_node(nb)
@@ -82,16 +83,70 @@ def read_toc_file(toc_path):
     return ordered_files
 
 
-def concatenate_markdown_files(docs_dir, ordered_files, output_file):
+def generate_table_of_contents(toc_data):
+    """Generate a Table of Contents based on the TOC file."""
+    # This function was implemented by AI to generate a Table of Contents based on the TOC file
+    toc_lines = ["# Table of Contents\n"]
+
+    # Add the root file
+    if "root" in toc_data:
+        root_title = toc_data["root"].replace("_", " ").title()
+        toc_lines.append(f"- [Introduction](#{root_title.lower().replace(' ', '-')})\n")
+
+    # Add entries from parts and chapters
+    if "parts" in toc_data:
+        for part_idx, part in enumerate(toc_data["parts"]):
+            if "caption" in part:
+                part_title = part["caption"].strip('"')
+                toc_lines.append(
+                    f"- [{part_title}](#{part_title.lower().replace(' ', '-')})\n"
+                )
+
+                if "chapters" in part:
+                    for chapter in part["chapters"]:
+                        if "file" in chapter:
+                            file_path = chapter["file"]
+                            # Extract the base name without extension
+                            if "/" in file_path:
+                                base_name = os.path.basename(file_path)
+                            else:
+                                base_name = file_path
+
+                            chapter_title = base_name.replace("_", " ").title()
+                            toc_lines.append(
+                                f"  - [{chapter_title}](#{chapter_title.lower().replace(' ', '-')})\n"
+                            )
+                        elif "title" in chapter and "url" in chapter:
+                            toc_lines.append(
+                                f"  - [{chapter['title']}]({chapter['url']})\n"
+                            )
+
+    return "".join(toc_lines)
+
+
+def concatenate_markdown_files(docs_dir, ordered_files, output_file, toc_data):
     """Concatenate markdown files in the order specified by the TOC."""
+    # This function was modified by AI to add horizontal lines as section separators and include the Table of Contents
     with open(output_file, "w") as outfile:
         outfile.write("# OMMX Documentation for AI Assistants\n\n")
 
+        # Add Table of Contents
+        toc_content = generate_table_of_contents(toc_data)
+        outfile.write(toc_content)
+        outfile.write("\n-------------\n\n")  # Add horizontal line after TOC
+
         # Track current section for adding headers
         current_section = None
+        previous_file = None
 
         # Process files in TOC order
         for file_path in ordered_files:
+            # Add horizontal line separator between content from different source files
+            if previous_file is not None:
+                outfile.write("\n-------------\n\n")
+
+            previous_file = file_path
+
             # Extract the section (first directory in the path)
             if "/" in file_path:
                 section = file_path.split("/")[0]
@@ -156,13 +211,14 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file):
 
 
 def main():
-    """Main function to generate the LLMs.txt file."""
+    """Main function to generate the LLMs.md file."""
+    # This function was modified by AI to use LLMs.md as the output file and pass the TOC data
     # Define paths
     repo_root = Path(__file__).parent.parent
     docs_dir = repo_root / "docs" / "en"
     notebook_dir = docs_dir  # Process all notebooks in docs/en, not just tutorial
     toc_path = docs_dir / "_toc.yml"
-    output_file = repo_root / "LLMs.txt"
+    output_file = repo_root / "LLMs.md"  # Changed from LLMs.txt to LLMs.md
 
     # Create temporary directories
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -179,10 +235,13 @@ def main():
             shutil.copy(md_file, target_path)
 
         # Read TOC file
+        with open(toc_path, "r") as f:
+            toc_data = yaml.safe_load(f)
+
         ordered_files = read_toc_file(toc_path)
 
         # Concatenate markdown files
-        concatenate_markdown_files(markdown_dir, ordered_files, output_file)
+        concatenate_markdown_files(markdown_dir, ordered_files, output_file, toc_data)
 
     print(f"Generated {output_file}")
 
