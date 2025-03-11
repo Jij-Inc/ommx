@@ -55,24 +55,18 @@ jobs:
           python-version: ${{ env.python-version }}
       - name: Initialise uv
         run: uv venv -p ${{env.python-version}}
-      - name: Build ommx wheel
-        uses: PyO3/maturin-action@v1
-        with:
-          command: build
-          args: --out wheels -m python/ommx/Cargo.toml
       - name: Build ommx (so)
         uses: PyO3/maturin-action@v1
         with:
           command: develop
           args: --uv -m python/ommx/Cargo.toml
-      # We cannot run pyright in the test job,
-      # because we need to nuke python/ommx/ommx
-      # to get `pytest` working.
-      - name: Override `ommx` in pyproject.toml
-        run: |
-          uv run ci-scripts/override-ommx-with-wheel.py
       - name: Run pyright
         run: task python:ommx:pyright
+      - name: Build ommx wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --out wheels -m python/ommx/Cargo.toml
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
