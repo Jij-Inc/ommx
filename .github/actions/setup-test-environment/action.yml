@@ -51,6 +51,7 @@ runs:
         python-version: ${{ inputs.python-version }}
     
     - name: Fix Python Version
+      shell: bash
       run: |
         echo "cpython@${{inputs.python-version}}" > .python-version
     - name: Setup Python Tools
