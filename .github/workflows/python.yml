@@ -42,7 +42,7 @@ jobs:
           git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
 
   build-wheel:
-    name: Build Wheel and run Pyright
+    name: Build Wheel and Run Pyright on OMMX
     runs-on: ubuntu-latest
     env:
       python-version: 3.12
