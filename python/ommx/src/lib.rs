@@ -20,7 +20,9 @@ pub use qplib::*;
 
 use pyo3::prelude::*;
 
-#[pymodule]
+/// We need `gil_used = false` to allow Python 3.13t
+/// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
+#[pymodule(gil_used = false)]
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
