@@ -68,6 +68,9 @@ jobs:
       # We cannot run pyright in the test job,
       # because we need to nuke python/ommx/ommx
       # to get `pytest` working.
+      - name: Override `ommx` in pyproject.toml
+        run: |
+          uv run ci-scripts/override-ommx-with-wheel.py
       - name: Run pyright
         run: task python:ommx:pyright
       - name: Upload wheel
