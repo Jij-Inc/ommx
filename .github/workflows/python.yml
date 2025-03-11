@@ -89,6 +89,7 @@ jobs:
       - name: Override `ommx' in pyproject.toml
         run: |
           uv run ci-scripts/override-ommx-with-wheel.py
+          rm -rf python/ommx
       - name: Install pytest-github-actions-annotate-failures
         run: |
           uv add --dev pytest-github-actions-annotate-failures
