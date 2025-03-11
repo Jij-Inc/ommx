@@ -53,6 +53,8 @@ jobs:
         uses: ./.github/actions/setup-test-environment
         with:
           python-version: ${{ env.python-version }}
+      - name: Initialise uv
+        run: uv venv -p ${{env.python-version}}
       - name: Build ommx wheel
         uses: PyO3/maturin-action@v1
         with:
