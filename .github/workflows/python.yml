@@ -105,9 +105,6 @@ jobs:
           uv run ci-scripts/override-ommx-with-wheel.py
           # NOTE: ommx/ommx confuses pytest so we must remove them as well
           rm -rf python/ommx/*.toml python/ommx/ommx
-      - name: Install pytest-github-actions-annotate-failures
-        run: |
-          uv add --dev pytest-github-actions-annotate-failures
       - name: Install deps
         run: task python:sync
       - name: Test
