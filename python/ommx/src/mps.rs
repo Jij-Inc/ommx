@@ -4,7 +4,7 @@ use pyo3::{prelude::*, types::PyBytes};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 #[pyfunction(name = "load_mps_bytes")]
-pub fn load_mps_bytes<'py>(py: Python<'py>, path: String) -> Result<Bound<'py, PyBytes>> {
+pub fn load_mps_bytes(py: Python<'_>, path: String) -> Result<Bound<'_, PyBytes>> {
     let instance = ommx::mps::load_file_bytes(path)?;
     Ok(PyBytes::new(py, &instance))
 }
