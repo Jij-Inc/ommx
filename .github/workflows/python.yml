@@ -87,7 +87,7 @@ jobs:
         run: task python:sync
       - name: Install ommx from wheel
         run: |
-          uv pip install wheels/ommx-*abi3*.whl
+          find wheels/ -name 'ommx-*abi3*.whl' -exec uv pip install {} +
 
       - name: Test
         run: task python:test
