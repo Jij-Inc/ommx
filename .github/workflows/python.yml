@@ -57,8 +57,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --out ../../wheels
-          working-directory: ./python/ommx
+          args: --out wheels -m python/ommx/Cargo.toml
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
