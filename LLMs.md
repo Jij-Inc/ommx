@@ -1,5 +1,34 @@
 # OMMX Documentation for AI Assistants
 
+# Table of Contents
+- [Introduction](#introduction)
+- [Switch Language](#switch-language)
+  - [日本語](https://jij-inc.github.io/ommx/ja/)
+- [Tutorial](#tutorial)
+  - [Solve With Ommx Adapter](#solve-with-ommx-adapter)
+  - [Tsp Sampling With Openjij Adapter](#tsp-sampling-with-openjij-adapter)
+  - [Switching Adapters](#switching-adapters)
+  - [Share In Ommx Artifact](#share-in-ommx-artifact)
+  - [Download Miplib Instance](#download-miplib-instance)
+- [User Guide](#user-guide)
+  - [Function](#function)
+  - [Instance](#instance)
+  - [Parametric Instance](#parametric-instance)
+  - [Solution](#solution)
+  - [Sample Set](#sample-set)
+  - [Solver Adapter](#solver-adapter)
+- [API Reference](#api-reference)
+  - [OMMX Message Schema](https://jij-inc.github.io/ommx/protobuf.html)
+  - [OMMX Rust SDK](https://jij-inc.github.io/ommx/rust/ommx/index.html)
+  - [OMMX Python SDK](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html)
+- [Release Note](#release-note)
+  - [Ommx-1.8.0](#ommx-1.8.0)
+  - [Ommx-1.7.0](#ommx-1.7.0)
+  - [Ommx-1.6.0](#ommx-1.6.0)
+  - [Ommx-1.5.0](#ommx-1.5.0)
+
+-------------
+
 ## Introduction
 
 ### Introduction
@@ -65,6 +94,9 @@ One major benefit of OCI Artifact compatibility is that standard container regis
 
 
 
+
+
+-------------
 
 ## Tutorial
 
@@ -203,13 +235,6 @@ The `decision_variables` property returns a `pandas.DataFrame` containing inform
 solution.decision_variables
 ```
 
-
-
-
-
-
-
-
 Using this `pandas.DataFrame`, for example, you can easily create a table in pandas that shows which items are included in the knapsack.
 
 
@@ -224,13 +249,6 @@ pd.DataFrame.from_dict(
     }
 )
 ```
-
-
-
-
-
-
-
 
 From this analysis, we see that choosing items 0 and 3 maximizes the total value while satisfying the knapsack’s weight constraint.
 
@@ -255,13 +273,6 @@ The `constraints` property returns a `pandas.DataFrame` that includes details ab
 solution.constraints
 ```
 
-
-
-
-
-
-
-
 Specifically, The `"value"` is helpful for understanding how much slack remains in each constraint. Here, item 0 weighs $11$, item 3 weighs $35$, and the knapsack’s capacity is $47$. Therefore, for the weight constraint 
 
 $$
@@ -271,6 +282,9 @@ $$
 $$
 the left-hand side "value" is $-1$, indicating there is exactly 1 unit of slack under the capacity.
 
+
+
+-------------
 
 ### Tsp Sampling With Openjij Adapter
 
@@ -318,12 +332,6 @@ plt.ylabel('Y Coordinate')
 plt.title('Ulysses16 Points')
 plt.show()
 ```
-
-
-    
-
-    
-
 
 Let's consider distance as the cost. We'll calculate the distance $d(i, j)$ between city $i$ and city $j$.
 
@@ -452,13 +460,6 @@ You can check the parameters of the `ParametricInstance` using the `parameter
 parametric_qubo.parameters
 ```
 
-
-
-
-
-
-
-
 As explained above, `uniform_penalty_method` has a single penalty weight parameter, so there is only one parameter. To fix this parameter to $\lambda = 20.0$, use `with_parameters` to specify the parameter. This function takes a dictionary `dict[int, float]` that maps parameter IDs to values.
 
 
@@ -481,13 +482,6 @@ However, this `qubo` instance retains the information of the original constraint
 qubo.removed_constraints.head(2)
 ```
 
-
-
-
-
-
-
-
 Note that the objective function of this `qubo` instance differs from the original problem's objective function. The `objective` value in subsequent processes refers to the value of this new objective function (commonly known as the energy value).
 
 
@@ -504,13 +498,6 @@ sample_set = qubo.evaluate_samples(samples)
 sample_set.summary
 ```
 
-
-
-
-
-
-
-
 `ommx_openjij_adapter.sample_qubo_sa` returns `ommx.v1.Samples`, which can be passed to `Instance.evaluate_samples` to calculate the objective function values and constraint violations. The `SampleSet.summary` property is used to display summary information. `feasible` indicates the feasibility to **the original problem** before conversion to QUBO. This is calculated using the information stored in `removed_constraints` of the `qubo` instance.
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
@@ -520,13 +507,6 @@ To view the feasibility for each constraint, use the `summary_with_constraints` 
 sample_set.summary_with_constraints
 ```
 
-
-
-
-
-
-
-
 For more detailed information, you can use the `SampleSet.decision_variables` and `SampleSet.constraints` properties.
 
 
@@ -535,23 +515,9 @@ sample_set.decision_variables.head(2)
 ```
 
 
-
-
-
-
-
-
-
 ```python
 sample_set.constraints.head(2)
 ```
-
-
-
-
-
-
-
 
 To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.v1.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.
 
@@ -563,13 +529,6 @@ t = 2
 i = 3
 x[(t, i)]
 ```
-
-
-
-
-    0.0
-
-
 
 Since we obtained a sample for $x_{t, i}$, we convert this into a TSP path. This depends on the formulation used, so you need to write the processing yourself.
 
@@ -591,13 +550,6 @@ Let's display this. First, we obtain the IDs of samples that are feasible for th
 feasible_ids = sample_set.summary.query("feasible == True").index
 feasible_ids
 ```
-
-
-
-
-    Index([2, 4, 15, 6, 12, 5, 8, 1, 13, 3, 7, 9], dtype='int64', name='sample_id')
-
-
 
 Let's display the optimized paths for these samples.
 
@@ -621,11 +573,8 @@ plt.show()
 ```
 
 
-    
 
-    
-
-
+-------------
 
 ### Switching Adapters
 
@@ -705,31 +654,6 @@ solutions = {
 }
 ```
 
-    Cbc0038I Initial state - 1 integers unsatisfied sum - 0.457143
-    Cbc0038I Solution found of 28
-    Cbc0038I Before mini branch and bound, 5 integers at bound fixed and 0 continuous
-    Cbc0038I Full problem 1 rows 6 columns, reduced to 0 rows 0 columns
-    Cbc0038I Mini branch and bound did not improve solution (0.00 seconds)
-    Cbc0038I Round again with cutoff of 30.3171
-    Cbc0038I Reduced cost fixing fixed 1 variables on major pass 2
-    Cbc0038I Pass   1: suminf.    0.07474 (1) obj. 30.3171 iterations 1
-    Cbc0038I Pass   2: suminf.    0.45714 (1) obj. 42.1714 iterations 1
-    Cbc0038I Pass   3: suminf.    0.07474 (1) obj. 30.3171 iterations 1
-    Cbc0038I Pass   4: suminf.    0.45714 (1) obj. 42.1714 iterations 1
-    Cbc0038I Pass   5: suminf.    0.34461 (1) obj. 30.3171 iterations 2
-    Cbc0038I Solution found of 41
-    Cbc0038I Before mini branch and bound, 4 integers at bound fixed and 0 continuous
-    Cbc0038I Full problem 1 rows 6 columns, reduced to 1 rows 2 columns
-    Cbc0038I Mini branch and bound did not improve solution (0.01 seconds)
-    Cbc0038I Round again with cutoff of 42.0342
-    Cbc0038I Reduced cost fixing fixed 5 variables on major pass 3
-    Cbc0038I After 0.01 seconds - Feasibility pump exiting with objective of 41 - took 0.00 seconds
-    Cbc0012I Integer solution of 41 found by feasibility pump after 0 iterations and 0 nodes (0.01 seconds)
-    Cbc0038I Full problem 1 rows 6 columns, reduced to 0 rows 0 columns
-    Cbc0001I Search completed - best objective 41, took 0 iterations and 0 nodes (0.01 seconds)
-    Cbc0035I Maximum depth 0, 5 variables fixed on reduced cost
-
-
 ## Compare the results
 
 Since this knapsack problem is simple, all solvers will find the optimal solution.
@@ -752,19 +676,6 @@ for name, solution in solutions.items():
 plt.legend()
 ```
 
-
-
-
-    <matplotlib.legend.Legend at 0x15aa93a40>
-
-
-
-
-    
-
-    
-
-
 It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables` when analyzing the results of multiple solvers.
 
 
@@ -780,11 +691,7 @@ decision_variables
 
 
 
-
-
-
-
-
+-------------
 
 ### Share In Ommx Artifact
 
@@ -878,14 +785,6 @@ glue("data", data, display=False)
 glue("df", df, display=False)
 ```
 
-
-
-
-
-
-
-
-
 ```{list-table}
 :header-rows: 1
 :widths: 5 30 10
@@ -967,16 +866,6 @@ In OMMX Artifacts, data is stored in layers, each with a dedicated media type. F
 desc_json.to_dict()
 ```
 
-
-
-
-    {'mediaType': 'application/json',
-     'digest': 'sha256:6cbfaaa7f97e84d8b46da95b81cf4d5158df3a9bd439f8c60be26adaa16ab3cf',
-     'size': 78,
-     'annotations': {'org.ommx.user.title': 'Data of Knapsack Problem'}}
-
-
-
 The part added as `title="..."` in `add_json` is saved as an annotation of the layer. OMMX Artifact is a data format for humans, so this is basically information for humans to read. The `ArtifactBuilder.add_*` functions all accept optional keyword arguments and automatically convert them to the `org.ommx.user.` namespace.
 
 Finally, call `build` to save it to a file.
@@ -993,9 +882,6 @@ This `artifact` is the same as the one that will be explained in the next sectio
 ```python
 ! ls $filename
 ```
-
-    my_instance.ommx
-
 
 Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
 
@@ -1026,13 +912,6 @@ pd.DataFrame({
 )
 ```
 
-
-
-
-
-
-
-
 For instance, to retrieve the JSON in layer 3, use [`Artifact.get_json`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.get_json). This function confirms that the Media Type is `application/json` and reinstates the bytes into a Python object.
 
 
@@ -1041,18 +920,14 @@ artifact.get_json(artifact.layers[3])
 ```
 
 
-
-
-    {'v': [10, 13, 18, 31, 7, 15], 'w': [11, 15, 20, 35, 10, 33], 'W': 47, 'N': 6}
-
-
-
-
 ```python
 # Remove the created OMMX Artifact file to clean up
 ! rm $filename
 ```
 
+
+
+-------------
 
 ### Download Miplib Instance
 
@@ -1136,6 +1011,9 @@ assert np.isclose(solution.objective, best)
 ```
 
 
+
+-------------
+
 ## User Guide
 
 ### Function
@@ -1162,18 +1040,12 @@ linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
 print(linear)
 ```
 
-    Linear(x1 + 2*x2 + 3)
-
-
 In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms` and `constant` properties.
 
 
 ```python
 print(f"{linear.terms=}, {linear.constant=}")
 ```
-
-    linear.terms={(1,): 1.0, (2,): 2.0, (): 3.0}, linear.constant=3.0
-
 
 Another approach is to create from `ommx.v1.DecisionVariable`. `ommx.v1.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.v1.Linear`, you can first create decision variables using `ommx.v1.DecisionVariable` and then use them to create polynomials.
 
@@ -1188,9 +1060,6 @@ linear = x + 2.0 * y + 3.0
 print(linear)
 ```
 
-    Linear(x1 + 2*x2 + 3)
-
-
 Note that the polynomial data type retains only the ID of the decision variable and does not store additional information. In the above example, information passed to `DecisionVariable.binary` such as `x` and `y` is not carried over to `Linear`. This second method can create polynomials of any degree.
 
 
@@ -1199,17 +1068,11 @@ q = x * x + x * y + y * y
 print(q)
 ```
 
-    Quadratic(x1*x1 + x1*x2 + x2*x2)
-
-
 
 ```python
 p = x * x * x + y * y
 print(p)
 ```
-
-    Polynomial(x1*x1*x1 + x2*x2)
-
 
 `Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. However, since any of them can be used as objective functions or constraints, a Message called `Function` is provided, which can be any of the above or a constant.
 
@@ -1227,12 +1090,6 @@ print(Function(q))
 print(Function(p))
 ```
 
-    Function(1)
-    Function(x1 + 2*x2 + 3)
-    Function(x1*x1 + x1*x2 + x2*x2)
-    Function(x1*x1*x1 + x2*x2)
-
-
 ## Substitution and Partial Evaluation of Decision Variables
 
 `Function` and other polynomials have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
@@ -1242,9 +1099,6 @@ print(Function(p))
 value, used_id = linear.evaluate({1: 1, 2: 0})
 print(f"{value=}, {used_id=}")
 ```
-
-    value=4.0, used_id={1, 2}
-
 
 The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns the evaluated value and the IDs of the decision variables used. This is useful when you want to know which parts were used when evaluating against `ommx.v1.State`, which is the solution obtained by solving the optimization problem. `evaluate` returns an error if the necessary decision variable IDs are missing.
 
@@ -1256,9 +1110,6 @@ except RuntimeError as e:
     print(f"Error: {e}")
 ```
 
-    Error: Variable id (2) is not found in the solution
-
-
 If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method. This takes the same arguments as `evaluate` but returns the decision variables without assigned values unevaluated.
 
 
@@ -1266,9 +1117,6 @@ If you want to substitute values for only some of the decision variables, use th
 linear2, used_id = linear.partial_evaluate({1: 1})
 print(f"{linear2=}, {used_id=}")
 ```
-
-    linear2=Linear(2*x2 + 4), used_id={1}
-
 
 The result of partial evaluation is a polynomial, so it is returned in the same type as the original polynomial.
 
@@ -1284,11 +1132,7 @@ xx.almost_equal(x * x + 2 * x + 1)
 
 
 
-
-    True
-
-
-
+-------------
 
 ### Instance
 
@@ -1334,26 +1178,12 @@ Each of these components has a corresponding property. The objective function is
 instance.objective
 ```
 
-
-
-
-    Function(x1 + x2)
-
-
-
 `sense` is set to `Instance.MAXIMIZE` for maximization problems or `Instance.MINIMIZE` for minimization problems.
 
 
 ```python
 instance.sense == Instance.MAXIMIZE
 ```
-
-
-
-
-    True
-
-
 
 ## Decision Variables
 
@@ -1363,13 +1193,6 @@ Decision variables and constraints can be obtained in the form of [`pandas.DataF
 ```python
 instance.decision_variables
 ```
-
-
-
-
-
-
-
 
 First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
 
@@ -1390,10 +1213,6 @@ for v in instance.get_decision_variables():
     print(f"{v.id=}, {v.name=}")
 ```
 
-    v.id=1, v.name='x'
-    v.id=2, v.name='y'
-
-
 To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable) method.
 
 
@@ -1401,9 +1220,6 @@ To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you c
 x1 = instance.get_decision_variable(1)
 print(f"{x1.id=}, {x1.name=}")
 ```
-
-    x1.id=1, x1.name='x'
-
 
 ## Constraints
 Next, let's look at the constraints.
@@ -1413,13 +1229,6 @@ Next, let's look at the constraints.
 instance.constraints
 ```
 
-
-
-
-
-
-
-
 In OMMX, constraints are also managed by ID. This ID is independent of the decision variable ID. When you create a constraint like `x * y == 0`, a sequential number is automatically assigned. To manually set the ID, you can use the [`set_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.set_id) method.
 
 
@@ -1427,9 +1236,6 @@ In OMMX, constraints are also managed by ID. This ID is independent of the decis
 c = (x * y == 0).set_id(100)
 print(f"{c.id=}")
 ```
-
-    c.id=100
-
 
 The essential information for constraints is `id` and `equality`. `equality` indicates whether the constraint is an equality constraint ([`Constraint.EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.EQUAL_TO_ZERO)) or an inequality constraint ([`Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.LESS_THAN_OR_EQUAL_TO_ZERO)). Note that constraints of the type $f(x) \geq 0$ are treated as $-f(x) \leq 0$.
 
@@ -1441,9 +1247,6 @@ c = (x * y == 0).set_id(100).add_name("prod-zero")
 print(f"{c.id=}, {c.name=}")
 ```
 
-    c.id=100, c.name='prod-zero'
-
-
 You can also use the [`get_constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraints) method to directly obtain a list of [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint). To obtain `ommx.v1.Constraint` by its the constraint ID, use the [`get_constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint) method.
 
 
@@ -1452,9 +1255,9 @@ for c in instance.get_constraints():
     print(c)
 ```
 
-    Constraint(Function(x1*x2) == 0)
 
 
+-------------
 
 ### Parametric Instance
 
@@ -1513,13 +1316,6 @@ Like `ommx.v1.Instance`, you can view the decision variables and constraints as 
 parametric_instance.parameters
 ```
 
-
-
-
-
-
-
-
 Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.
 
 
@@ -1535,6 +1331,9 @@ instance = parametric_instance.with_parameters({**p_values, **w_values, **W_valu
 `ommx.v1.ParametricInstance` cannot handle parameters that change the number of decision variables or parameters (for example, a variable $N$). If you need this functionality, please use a more advanced modeler such as [JijModeling](https://jij-inc.github.io/JijModeling-Tutorials/ja/introduction.html).
 ````
 
+
+
+-------------
 
 ### Solution
 
@@ -1586,13 +1385,6 @@ The generated `ommx.v1.Solution` inherits most of the information from the `ommx
 solution.decision_variables
 ```
 
-
-
-
-
-
-
-
 In addition to the required attributes—ID, `kind`, `lower`, and `upper`-it also inherits metadata such as `name`. Additionally, the `value` stores which was assigned in `evaluate`.  Similarly, the evaluation value is added to the constraints as `value`.
 
 
@@ -1600,22 +1392,12 @@ In addition to the required attributes—ID, `kind`, `lower`, and `upper`-it als
 solution.constraints
 ```
 
-
-
-
-
-
-
-
 The `objective` property contains the value of the objective function, and the `feasible` property contains whether the constraints are satisfied.
 
 
 ```python
 print(f"{solution.objective=}, {solution.feasible=}")
 ```
-
-    solution.objective=1.0, solution.feasible=True
-
 
 Since $xy = 0$ when $x = 1, y = 0$, all constraints are satisfied, so `feasible` is `True`. The value of the objective function is $x + y = 1$.
 
@@ -1627,11 +1409,11 @@ solution11 = instance.evaluate({1: 1, 2: 1})  # x=1, y=1
 print(f"{solution11.objective=}, {solution11.feasible=}")
 ```
 
-    solution11.objective=2.0, solution11.feasible=False
-
-
 `feasible = False` indicates that it is an infeasible solution.
 
+
+
+-------------
 
 ### Sample Set
 
@@ -1710,13 +1492,6 @@ sample_set = instance.evaluate_samples(samples)
 sample_set.summary
 ```
 
-
-
-
-
-
-
-
 The `summary` attribute displays each sample's objective value and feasibility in a DataFrame format. For example, the sample with `sample_id=2` is infeasible and shows `feasible=False`. The table is sorted with feasible samples appearing first, and within them, those with better bjective values (depending on whether `Instance.sense` is maximization or minimization) appear at the top.
 
 ```{note}
@@ -1738,16 +1513,6 @@ print(f"{solution.objective=}")
 solution.decision_variables
 ```
 
-    solution.objective=1.0
-
-
-
-
-
-
-
-
-
 Retrieving the best solution
 ---------------------------
 `SampleSet.best_feasible` returns the best feasible sample, meaning the one with the highest objective value among all feasible samples:
@@ -1759,16 +1524,6 @@ solution = sample_set.best_feasible()
 print(f"{solution.objective=}")
 solution.decision_variables
 ```
-
-    solution.objective=3.0
-
-
-
-
-
-
-
-
 
 Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
 
@@ -1789,17 +1544,13 @@ except RuntimeError as e:
     print(e)
 ```
 
-
-
-
-
-    No feasible solution found in SampleSet
-
-
 ```{note}
 OMMX does not provide a method to determine which infeasible solution is the best, as many different criteria can be considered. Implement it yourself if needed.
 ```
 
+
+
+-------------
 
 ### Solver Adapter
 
@@ -1908,6 +1659,9 @@ OMMX Solver Adapters that meet the above recommendations can provide the followi
     ```
 
 
+
+-------------
+
 ## Release Note
 
 ### Ommx-1.8.0
@@ -1951,13 +1705,6 @@ solution = OMMXPythonMIPAdapter.solve(instance)
 solution.objective
 ```
 
-
-
-
-    42.0
-
-
-
 With the new update, the process looks the same as the above when using the `OMMXPySCIPOptAdapter` class instead.
 
 To replace the usage of `instance_to_model()` functions, you can instantiating an adapter and using `solver_input`. You can then apply any solver-specific parameters before optimizing manually, then calling `decode()` to obtain the OMMX solution.
@@ -1974,11 +1721,7 @@ solution.objective
 
 
 
-
-    42.0
-
-
-
+-------------
 
 ### Ommx-1.7.0
 
@@ -2065,9 +1808,6 @@ with tempfile.NamedTemporaryFile(delete=False, suffix='.qplib') as temp_file:
 print(f"QPLIB sample file created at: {qplib_sample_path}")
 ```
 
-    QPLIB sample file created at: /var/folders/d2/w6bymm4n7l3_pmcpv7jgt4f00000gn/T/tmpvd06t1rs.qplib
-
-
 
 ```python
 from ommx import qplib
@@ -2079,14 +1819,6 @@ instance = qplib.load_file(qplib_sample_path)
 display(instance.decision_variables)
 display(instance.constraints)
 ```
-
-
-
-
-
-
-
-
 
 Change in behavior of `{Solution, SampleSet}.feasible`
 ---------------------
@@ -2125,13 +1857,6 @@ instance = Instance.from_components(
 instance.constraints
 ```
 
-
-
-
-
-
-
-
 Next, we relax one of the constraints $x_0 + x_1 \leq 1$.
 
 
@@ -2140,14 +1865,6 @@ instance.relax_constraint(constraint_id=0, reason="Manual relaxation")
 display(instance.constraints)
 display(instance.removed_constraints)
 ```
-
-
-
-
-
-
-
-
 
 Now, $x_0 = 1, x_1 = 1, x_2 = 0$ is not a solution to the original problem, but it is a solution to the relaxed problem. Therefore, `feasible_relaxed` will be `True`, but `feasible_unrelaxed` will be `False`. Since `feasible` is an alias for `feasible_unrelaxed`, it will be `False`.
 
@@ -2159,11 +1876,9 @@ print(f"{solution.feasible_relaxed=}")
 print(f"{solution.feasible_unrelaxed=}")
 ```
 
-    solution.feasible=False
-    solution.feasible_relaxed=True
-    solution.feasible_unrelaxed=False
 
 
+-------------
 
 ### Ommx-1.6.0
 
@@ -2179,6 +1894,9 @@ Summary
   - Several APIs are added for converting `ommx.v1.Instance` into QUBO format. Please see the above tutorial.
 - Python 3.8 support has been dropped due to its EOL
 
+
+
+-------------
 
 ### Ommx-1.5.0
 
@@ -2213,13 +1931,6 @@ solution = instance.evaluate({1: 1, 2: 0})
 solution.decision_variables
 ```
 
-
-
-
-
-
-
-
 From Python SDK 1.5.0, `Function` and its base classes, `Linear`, `Quadratic`, and `Polynomial` also support `evaluate` method:
 
 
@@ -2228,9 +1939,6 @@ f = 2*x + 3*y
 value, used_ids = f.evaluate({1: 1, 2: 0})
 print(f"{value=}, {used_ids=}")
 ```
-
-    value=2.0, used_ids={1, 2}
-
 
 This returns evaluated value of the function and used decision variable IDs. If some decision variables are lacking, the `evaluate` method raises an exception:
 
@@ -2242,9 +1950,6 @@ except RuntimeError as e:
     print(e)
 ```
 
-    Variable id (1) is not found in the solution
-
-
 In addition, there is `partial_evaluate` method
 
 
@@ -2253,9 +1958,6 @@ f2, used_ids = f.partial_evaluate({1: 1})
 print(f"{f2=}, {used_ids=}")
 ```
 
-    f2=Linear(3*x2 + 2), used_ids={1}
-
-
 This creates a new function by substituting `x = 1`. `partial_evaluate` is also added to `ommx.v1.Instance` class:
 
 
@@ -2263,13 +1965,6 @@ This creates a new function by substituting `x = 1`. `partial_evaluate` is also 
 new_instance = instance.partial_evaluate({1: 1})
 new_instance.objective
 ```
-
-
-
-
-    Function(x2 + 1)
-
-
 
 This method will be useful for creating a problem with fixing specific decision variables.
 
