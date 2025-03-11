@@ -35,18 +35,19 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [dependency-groups]
 dev = [
-  "mip @ git+https://github.com/coin-or/python-mip.git",
+  "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",
   "matplotlib>=3.9.4",
+  "mip @ git+https://github.com/coin-or/python-mip.git",
   "mypy-protobuf>=3.6.0",
+  "nbconvert>=7.16.6",
+  "nbformat>=5.9.2",
   "networkx>=3.2.1",
   "pyright>=1.1.394",
   "pytest>=8.3.4",
+  "pytest-github-actions-annotate-failures",
+  "pyyaml>=6.0.2",
   "ruff>=0.9.6",
   "tomlkit>=0.13.2",
-  "nbformat>=5.9.2",
-  "jupyter>=1.1.1",
-  "nbconvert>=7.16.6",
-  "pyyaml>=6.0.2",
 ]
