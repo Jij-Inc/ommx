@@ -88,13 +88,11 @@ jobs:
           path: wheels
       - name: Debug
         run: ls -R
-      # FIXME: prevent installing ommx from local file
+      - name: Override `ommx' in pyproject.toml
+        run: |
+          uv run ci-scripts/override-ommx-with-wheel.py
       - name: Install deps
         run: task python:sync
-      - name: Install ommx from wheel
-        run: |
-          find wheels/ -name 'ommx-*abi3*.whl' -exec uv pip install {} +
-
       - name: Test
         run: task python:test
 
