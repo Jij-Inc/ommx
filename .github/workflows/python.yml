@@ -59,11 +59,12 @@ jobs:
           command: build
           args: --out dist
           working-directory: ./python/ommx
+      - name: Relocate wheels
+        run: mv python/ommx/dist wheels
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheel
-          path: dist
+          path: wheels
 
   test:
     runs-on: ubuntu-latest
@@ -81,14 +82,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Download wheel
         uses: actions/download-artifact@v4
-        with:
-          name: wheel
       # FIXME: prevent installing ommx from local file
       - name: Install deps
         run: task python:sync
       - name: Install ommx from wheel
         run: |
-          uv pip install dist/ommx-*abi3*.whl
+          uv pip install wheels/ommx-*abi3*.whl
 
       - name: Test
         run: task python:test
