@@ -21,7 +21,7 @@ impl Instance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -84,7 +84,7 @@ impl ParametricInstance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -111,7 +111,7 @@ impl Parameters {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 }
 
@@ -129,7 +129,7 @@ impl Solution {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 }
 
@@ -147,7 +147,7 @@ impl Samples {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 }
 
@@ -165,7 +165,7 @@ impl SampleSet {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new_bound(py, &self.0.encode_to_vec()))
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {

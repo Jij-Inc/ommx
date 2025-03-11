@@ -7,13 +7,13 @@ use ocipkg::{
 };
 use ommx::artifact::{image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::RwLock};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
-pub struct ArtifactArchive(Artifact<OciArchive>);
+pub struct ArtifactArchive(RwLock<Artifact<OciArchive>>);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -49,7 +49,7 @@ impl ArtifactArchive {
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
         let digest = Digest::new(digest)?;
         let blob = self.0.get_blob(&digest)?;
-        Ok(PyBytes::new_bound(py, blob.as_ref()))
+        Ok(PyBytes::new(py, blob.as_ref()))
     }
 
     pub fn push(&mut self) -> Result<()> {
@@ -111,7 +111,7 @@ impl ArtifactDir {
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
         let digest = Digest::new(digest)?;
         let blob = self.0.get_blob(&digest)?;
-        Ok(PyBytes::new_bound(py, blob.as_ref()))
+        Ok(PyBytes::new(py, blob.as_ref()))
     }
 
     pub fn push(&mut self) -> Result<()> {
