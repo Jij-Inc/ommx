@@ -86,8 +86,6 @@ jobs:
         with:
           name: wheels
           path: wheels
-      - name: Debug
-        run: ls -R
       - name: Override `ommx' in pyproject.toml
         run: |
           uv run ci-scripts/override-ommx-with-wheel.py
