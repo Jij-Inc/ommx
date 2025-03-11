@@ -66,6 +66,11 @@ jobs:
           name: wheels
           path: wheels
 
+  # uv run and maturin develop/build doesn't work well together-
+  # Even if one runs maturin develop once, uv run pyright
+  # will rebuild the extension, and if we run uv run --no-build pyright,
+  # it will fail to find the extension.
+  # So, it is better to run pyright separately from the wheel building job.
   pyright:
     runs-on: ubuntu-latest
     steps:
