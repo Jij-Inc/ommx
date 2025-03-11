@@ -48,6 +48,7 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         sync: false
+        python-version: ${{ inputs.python-version }}
     
     - name: Setup Python Tools
       shell: bash
