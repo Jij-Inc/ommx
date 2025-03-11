@@ -6,25 +6,36 @@ build-backend = "setuptools.build_meta"
 name = "ommx_highs_adapter"
 version = "1.8.6"
 description = "An adapter between OMMX and HiGHS"
-authors = [
-    { name = "Jij Inc.", email = "info@j-ij.com" }
-]
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 requires-python = ">= 3.9"
 classifiers = [
-    "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: Apache Software License",
-    "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = [
-    "ommx >= 1.8.6, < 2.0.0",
-    "highspy>=1.9.0",
-    "numpy>=1.17.3",
+dependencies = ["ommx >= 1.8.6, < 2.0.0", "highspy>=1.9.0", "numpy>=1.17.3"]
+
+[dependency-groups]
+dev = [
+  "jupyterlab>=4.3.5",
+  "markdown-code-runner>=2.1.0",
+  "matplotlib>=3.9.4",
+  "mypy-protobuf>=3.6.0",
+  "networkx>=3.2.1",
+  "pyright>=1.1.394",
+  "pytest>=8.3.4",
+  "ruff>=0.9.6",
+  "tomlkit>=0.13.2",
+  "nbformat>=5.9.2",
+  "jupyter>=1.1.1",
+  "nbconvert>=7.16.6",
+  "pyyaml>=6.0.2",
 ]
 
 [project.urls]
