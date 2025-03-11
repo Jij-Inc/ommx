@@ -55,3 +55,4 @@ runs:
         uv tool install "twine >= 6.0.0, < 7.0.0"
         uv tool install build
         uv tool install pyright
+        uv tool install markdown-code-runner
