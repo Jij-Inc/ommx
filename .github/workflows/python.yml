@@ -92,7 +92,7 @@ jobs:
       - name: Override `ommx' in pyproject.toml
         run: |
           uv run ci-scripts/override-ommx-with-wheel.py
-          # NOTE: ommx/ommx confuses pytest and fails
+          # NOTE: ommx/ommx confuses pytest so we must remove them as well
           rm -rf python/ommx/*.toml python/ommx/ommx
       - name: Install pytest-github-actions-annotate-failures
         run: |
