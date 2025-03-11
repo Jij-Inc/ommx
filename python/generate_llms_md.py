@@ -87,19 +87,21 @@ def generate_table_of_contents(toc_data):
     """Generate a Table of Contents based on the TOC file."""
     # This function was implemented by AI to generate a Table of Contents based on the TOC file
     toc_lines = ["# Table of Contents\n"]
-    
+
     # Add the root file
     if "root" in toc_data:
         root_title = toc_data["root"].replace("_", " ").title()
         toc_lines.append(f"- [Introduction](#{root_title.lower().replace(' ', '-')})\n")
-    
+
     # Add entries from parts and chapters
     if "parts" in toc_data:
         for part_idx, part in enumerate(toc_data["parts"]):
             if "caption" in part:
                 part_title = part["caption"].strip('"')
-                toc_lines.append(f"- [{part_title}](#{part_title.lower().replace(' ', '-')})\n")
-                
+                toc_lines.append(
+                    f"- [{part_title}](#{part_title.lower().replace(' ', '-')})\n"
+                )
+
                 if "chapters" in part:
                     for chapter in part["chapters"]:
                         if "file" in chapter:
@@ -109,12 +111,16 @@ def generate_table_of_contents(toc_data):
                                 base_name = os.path.basename(file_path)
                             else:
                                 base_name = file_path
-                                
+
                             chapter_title = base_name.replace("_", " ").title()
-                            toc_lines.append(f"  - [{chapter_title}](#{chapter_title.lower().replace(' ', '-')})\n")
+                            toc_lines.append(
+                                f"  - [{chapter_title}](#{chapter_title.lower().replace(' ', '-')})\n"
+                            )
                         elif "title" in chapter and "url" in chapter:
-                            toc_lines.append(f"  - [{chapter['title']}]({chapter['url']})\n")
-    
+                            toc_lines.append(
+                                f"  - [{chapter['title']}]({chapter['url']})\n"
+                            )
+
     return "".join(toc_lines)
 
 
@@ -123,7 +129,7 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file, toc_data):
     # This function was modified by AI to add horizontal lines as section separators and include the Table of Contents
     with open(output_file, "w") as outfile:
         outfile.write("# OMMX Documentation for AI Assistants\n\n")
-        
+
         # Add Table of Contents
         toc_content = generate_table_of_contents(toc_data)
         outfile.write(toc_content)
@@ -138,9 +144,9 @@ def concatenate_markdown_files(docs_dir, ordered_files, output_file, toc_data):
             # Add horizontal line separator between content from different source files
             if previous_file is not None:
                 outfile.write("\n-------------\n\n")
-                
+
             previous_file = file_path
-            
+
             # Extract the section (first directory in the path)
             if "/" in file_path:
                 section = file_path.split("/")[0]
@@ -231,7 +237,7 @@ def main():
         # Read TOC file
         with open(toc_path, "r") as f:
             toc_data = yaml.safe_load(f)
-        
+
         ordered_files = read_toc_file(toc_path)
 
         # Concatenate markdown files
