@@ -23,7 +23,7 @@ env_logger = "0.11.6"
 flate2 = "1.1.0"
 glob = "0.3.2"
 itertools = "0.13.0"
-indoc = "2.0.5"
+indoc = "2.0.6"
 log = "0.4.26"
 maplit = "1.0.2"
 num = "0.4.3"
@@ -34,7 +34,7 @@ prost-build = "0.12.6"
 pyo3 = { version = "0.21.2", features = ["anyhow"] }
 pyo3-log = "0.10.0"
 pyo3-stub-gen = "0.6.2"
-serde = { version = "1.0.218", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde-pyobject = "0.3.0"
 serde_json = "1.0.140"
 thiserror = "2.0.12"
