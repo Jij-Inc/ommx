@@ -108,7 +108,10 @@ jobs:
           uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
       - name: Relock
         if: endsWith(matrix.python-version, 't')
-        run: uv lock --upgrade-package numpy
+        run: |
+          uv lock --upgrade-package numpy
+          # We need this for some mysterious reason
+          uv pip install pluggy
       - name: Install deps
         run: task python:sync
       - name: Test
