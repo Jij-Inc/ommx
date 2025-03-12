@@ -61,9 +61,9 @@ args = ap.parse_args()
 rm: bool = args.rm
 full_version: str = args.version
 t = re.compile(r"t$")
-free_thread = t.match(full_version) is not None
+free_thread = t.search(full_version) is not None
 version = t.sub("", full_version)
-print(f"Version: {version}")
+print(f"Version: {version}, Free Thread: {free_thread}")
 if args.version[-1] == "t":
     short_ver = version.replace(".", "")
     pat = f"ommx-*cp{short_ver}-cp{short_ver}t*.whl"
