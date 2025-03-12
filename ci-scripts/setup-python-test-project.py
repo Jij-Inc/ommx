@@ -29,7 +29,7 @@ from packaging.specifiers import SpecifierSet
 import re
 from ruamel.yaml import YAML
 
-FREE_THREAD_PACKAGES = {"ommx"}
+FREE_THREAD_PACKAGES = {"ommx", "ommx-tests"}
 
 
 def check_version(version: str, free_thread: bool, dir: Path) -> bool:
