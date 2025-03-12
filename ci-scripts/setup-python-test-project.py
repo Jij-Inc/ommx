@@ -32,7 +32,7 @@ import re
 from ruamel.yaml import YAML
 
 
-def check_version(version: str, dir: Path) -> bool:
+def check_version(version: str, free_thread: bool, dir: Path) -> bool:
     with open(dir / "pyproject.toml") as f:
         pyproject = tomlkit.parse(f.read())
         project = pyproject["project"]
@@ -43,6 +43,10 @@ def check_version(version: str, dir: Path) -> bool:
         if not isinstance(req_py, str):
             print(f"No project.requires-python: {pyproject}", file=sys.stderr)
             return False
+        if free_thread and dir.name != "ommx":
+            print(f"::warning::Excluding {dir} for free-threaded python")
+            return False
+
         spec = SpecifierSet(req_py)
         return version in spec
 
@@ -109,7 +113,7 @@ new_members = []
 excludeds = []
 for member in member_candidates:
     member = Path(member)
-    if not check_version(version, member):
+    if not check_version(version, free_thread, member):
         excludeds.append(member.name)
         print(
             f"Warning: {member} is not supported by Python {version}, and hence removed.",
@@ -144,7 +148,6 @@ for i in tasks:
         else:
             print(
                 f"::warning file={taskfile}::Excluding test {i['task']} for free-threaded python",
-                file=sys.stderr,
             )
     else:
         if i["task"].split(":")[0] not in excludeds:
