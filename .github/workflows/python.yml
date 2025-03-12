@@ -111,8 +111,9 @@ jobs:
       - name: Test
         run: task python:test-ci
 
+      # Skips jupyter on free-threaded
       - name: Run notebooks
-        if: ${{ github.actor != 'dependabot[bot]' }}
+        if: github.actor != 'dependabot[bot]' && endsWith('${{ matrix.python-version }}', 't')
         run: |
           uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:

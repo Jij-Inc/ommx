@@ -6,17 +6,9 @@ members = ["python/ommx*"]
 
 [dependency-groups]
 dev = [
-  "jupyter>=1.1.1",
   "markdown-code-runner>=2.1.0",
   "matplotlib>=3.9.4",
-  "mypy-protobuf>=3.6.0",
-  "nbconvert>=7.16.6",
-  "nbformat>=5.9.2",
-  "networkx>=3.2.1",
   "pyright>=1.1.394",
   "pytest-github-actions-annotate-failures",
   "pytest>=8.3.4",
-  "pyyaml>=6.0.2",
-  "ruff>=0.9.6",
-  "tomlkit>=0.13.2",
 ]
