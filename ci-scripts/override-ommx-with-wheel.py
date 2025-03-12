@@ -11,8 +11,19 @@ from tomlkit.items import Table
 import sys
 import glob
 from pathlib import Path
+from argparse import ArgumentParser
 
-whl = list(Path("wheels").glob("ommx-*abi3*.whl"))
+ap = ArgumentParser()
+ap.add_argument("version", type=str)
+args = ap.parse_args()
+
+if args.version[-1] == "t":
+    ver = args.version.replace(".", "")[:-1]
+    pat = f"ommx-*cp{ver}-cp{ver}t*.whl"
+else:
+    pat = "ommx-*abi3*.whl"
+
+whl = list(Path("wheels").glob(pat))
 if len(whl) != 1:
     print(
         f"Expected to find exactly one wheel in the wheels directory, \

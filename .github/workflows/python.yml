@@ -59,7 +59,10 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --out wheels -m python/ommx/Cargo.toml
+          args: >
+            --out wheels
+            -m python/ommx/Cargo.toml
+            --interpreter 3.8 3.13t
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
@@ -102,7 +105,7 @@ jobs:
           path: wheels
       - name: Override `ommx' in pyproject.toml
         run: |
-          uv run ci-scripts/override-ommx-with-wheel.py
+          uv run ci-scripts/override-ommx-with-wheel.py ${{ matrix.python-version }}
           # NOTE: ommx/ommx confuses pytest so we must remove them as well
           rm -rf python/ommx/*.toml python/ommx/ommx
       - name: Install deps
