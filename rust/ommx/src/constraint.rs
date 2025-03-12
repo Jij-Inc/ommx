@@ -1,5 +1,5 @@
 use crate::{
-    parse::{ParseError, RawParseError},
+    parse::{Parse, ParseError, RawParseError},
     v1, Function,
 };
 use derive_more::{Deref, From};
@@ -15,14 +15,15 @@ pub enum Equality {
 }
 
 impl TryFrom<v1::Equality> for Equality {
-    type Error = RawParseError;
+    type Error = ParseError;
     fn try_from(value: v1::Equality) -> Result<Self, Self::Error> {
         match value {
             v1::Equality::EqualToZero => Ok(Self::EqualToZero),
             v1::Equality::LessThanOrEqualToZero => Ok(Self::LessThanOrEqualToZero),
             _ => Err(RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.Equality",
-            }),
+            }
+            .into()),
         }
     }
 }
@@ -48,14 +49,14 @@ impl TryFrom<v1::Constraint> for Constraint {
     fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
         Ok(Self {
             id: ConstraintID(value.id),
-            equality: value.equality().try_into()?,
+            equality: value.equality().parse("ommx.v1.Constraint", "equality")?,
             function: value
                 .function
                 .ok_or(RawParseError::MissingField {
                     message: "ommx.v1.Constraint",
                     field: "function",
                 })?
-                .try_into()?,
+                .parse("ommx.v1.Constraint", "function")?,
             name: value.name,
             subscripts: value.subscripts,
             parameters: value.parameters,
@@ -81,9 +82,36 @@ impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
                     message: "ommx.v1.RemovedConstraint",
                     field: "constraint",
                 })?
-                .try_into()?,
+                .parse("ommx.v1.RemovedConstraint", "constraint")?,
             removed_reason: value.removed_reason,
             removed_reason_parameters: value.removed_reason_parameters,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_message() {
+        let out: Result<RemovedConstraint, ParseError> = v1::RemovedConstraint {
+            constraint: Some(v1::Constraint {
+                id: 1,
+                function: Some(v1::Function { function: None }),
+                equality: v1::Equality::EqualToZero as i32,
+                ..Default::default()
+            }),
+            removed_reason: "reason".to_string(),
+            removed_reason_parameters: Default::default(),
+        }
+        .try_into();
+
+        insta::assert_snapshot!(out.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.RemovedConstraint[constraint]
+          └─ommx.v1.Constraint[function]
+        Unsupported ommx.v1.Function is found. It is created by a newer version of OMMX SDK.
+        "###);
     }
 }

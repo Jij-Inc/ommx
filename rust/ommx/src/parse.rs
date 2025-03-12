@@ -2,32 +2,19 @@ use crate::{ConstraintID, VariableID};
 use prost::DecodeError;
 use std::fmt;
 
-pub trait ParseContextExt {
-    type Output;
-
-    fn parse_context(
-        self,
-        message: &'static str,
-        field: &'static str,
-    ) -> Result<Self::Output, ParseError>;
+/// A wrapper of [`TryFrom`] trait to provide a backtrace of parsing error.
+pub trait Parse<Output> {
+    fn parse(self, message: &'static str, field: &'static str) -> Result<Output, ParseError>;
 }
 
-impl<T> ParseContextExt for Result<T, RawParseError> {
-    type Output = T;
-    fn parse_context(self, message: &'static str, field: &'static str) -> Result<T, ParseError> {
-        self.map_err(|error| ParseError {
-            context: vec![ParseContext { message, field }],
-            error,
-        })
-    }
-}
-
-impl<T> ParseContextExt for Result<T, ParseError> {
-    type Output = T;
-    fn parse_context(self, message: &'static str, field: &'static str) -> Result<T, ParseError> {
-        self.map_err(|mut error| {
-            error.context.push(ParseContext { message, field });
-            error
+impl<Input, Output> Parse<Output> for Input
+where
+    Output: TryFrom<Input, Error = ParseError>,
+{
+    fn parse(self, message: &'static str, field: &'static str) -> Result<Output, ParseError> {
+        self.try_into().map_err(|mut err: ParseError| {
+            err.context.push(ParseContext { message, field });
+            err
         })
     }
 }
@@ -104,23 +91,4 @@ pub enum RawParseError {
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]
     DecodeError(#[from] DecodeError),
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn error_message() {
-        let out: Result<(), ParseError> = Err(RawParseError::UnsupportedV1Function)
-            .parse_context("ommx.v1.Constraint", "function")
-            .parse_context("ommx.v1.Instance", "constraints");
-        let err = out.unwrap_err();
-        insta::assert_snapshot!(err, @r###"
-        Traceback for OMMX Message parse error:
-        └─ommx.v1.Instance[constraints]
-          └─ommx.v1.Constraint[function]
-        Unsupported ommx.v1.Function is found. It is created by a newer version of OMMX SDK.
-        "###);
-    }
 }
