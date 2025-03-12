@@ -20,8 +20,6 @@
 # 5. Tweaks python:test-ci Taskfile so that the CI doesn't run for the unsupported package.
 #   + NOTE: with free-threaded pythons, it currently tests OMMX only, as the
 #     adapter dependencies tend to provide ABI3 wheels only, which is unsupported with free-threaded pythons.
-# 6. If `--rm` option is passed, it removes `python/ommx/{ommx,*.toml}` from the filesystem to avoid conflicts with the wheel (especially with pytest).
-import shutil
 import tomlkit
 import sys
 import glob
@@ -55,10 +53,8 @@ def check_version(version: str, free_thread: bool, dir: Path) -> bool:
 
 ap = ArgumentParser()
 ap.add_argument("version", type=str, help="Python version")
-ap.add_argument("--rm", action="store_true", help="Remove ommx-related directory")
 args = ap.parse_args()
 
-rm: bool = args.rm
 full_version: str = args.version
 t = re.compile(r"t$")
 free_thread = t.search(full_version) is not None
@@ -159,14 +155,3 @@ dic["tasks"]["test-ci"]["cmds"] = new_cmds
 
 with open(taskfile, "w") as f:
     yaml.dump(dic, f)
-
-
-if rm:
-    print("Removing ommx-related directory")
-    ommx = Path("python") / "ommx"
-    py_src = ommx / "ommx"
-    print(f"Removing {py_src}")
-    shutil.rmtree(py_src, ignore_errors=True)
-    for f in ommx.glob("*.toml"):
-        print(f"Removing {f}")
-        f.unlink(missing_ok=True)

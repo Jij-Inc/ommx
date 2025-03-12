@@ -105,7 +105,7 @@ jobs:
           path: wheels
       - name: Transform Python Project to run tests
         run: |
-          uv run ci-scripts/setup-python-test-project.py --rm ${{ matrix.python-version }}
+          uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
       - name: Install deps
         run: task python:sync
       - name: Test
