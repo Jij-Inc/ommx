@@ -31,7 +31,7 @@ from packaging.specifiers import SpecifierSet
 import re
 from ruamel.yaml import YAML
 
-FREE_THREAD_PACKAGES = {"ommx", "ommx-highs-adapter"}
+FREE_THREAD_PACKAGES = {"ommx"}
 
 
 def check_version(version: str, free_thread: bool, dir: Path) -> bool:
