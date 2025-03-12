@@ -1980,6 +1980,7 @@ version = "1.8.6"
 source = { editable = "python/ommx-tests" }
 dependencies = [
     { name = "ommx" },
+    { name = "pluggy" },
 ]
 
 [package.dev-dependencies]
@@ -1990,7 +1991,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "ommx", editable = "python/ommx" }]
+requires-dist = [
+    { name = "ommx", editable = "python/ommx" },
+    { name = "pluggy" },
+]
 
 [package.metadata.requires-dev]
 dev = [
