@@ -147,7 +147,7 @@ mod tests {
             removed_reason: "reason".to_string(),
             removed_reason_parameters: Default::default(),
         }
-        .try_into();
+        .parse(&());
 
         insta::assert_snapshot!(out.unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
