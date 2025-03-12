@@ -164,8 +164,9 @@ with open(taskfile, "w") as f:
 if rm:
     print("Removing ommx-related directory")
     ommx = Path("python") / "ommx"
-    print(f"Removing {ommx}")
-    shutil.rmtree(ommx / "ommx", ignore_errors=True)
+    py_src = ommx / "ommx"
+    print(f"Removing {py_src}")
+    shutil.rmtree(py_src, ignore_errors=True)
     for f in ommx.glob("*.toml"):
         print(f"Removing {f}")
         f.unlink(missing_ok=True)
