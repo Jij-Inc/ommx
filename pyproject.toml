@@ -7,7 +7,6 @@ members = ["python/ommx*"]
 [dependency-groups]
 dev = [
   "jupyter>=1.1.1",
-  "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",
   "matplotlib>=3.9.4",
   "mypy-protobuf>=3.6.0",
