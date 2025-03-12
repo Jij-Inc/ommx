@@ -18,6 +18,8 @@
 # 4. Filters out package not supported by the python version and warns about it.
 # 4. Write the updated `pyproject.toml` back to the file.
 # 5. Tweaks python:test-ci Taskfile so that the CI doesn't run for the unsupported package.
+#   + NOTE: with free-threaded pythons, it currently tests OMMX only, as the
+#     adapter dependencies tend to provide ABI3 wheels only, which is unsupported with free-threaded pythons.
 # 6. If `--rm` option is passed, it removes `python/ommx/{ommx,*.toml}` from the filesystem to avoid conflicts with the wheel (especially with pytest).
 import shutil
 import tomlkit
@@ -53,6 +55,7 @@ args = ap.parse_args()
 rm: bool = args.rm
 full_version: str = args.version
 t = re.compile(r"t$")
+free_thread = t.match(full_version) is not None
 version = t.sub("", full_version)
 print(f"Version: {version}")
 if args.version[-1] == "t":
@@ -124,6 +127,8 @@ with open("pyproject.toml", "w") as f:
     f.write(tomlkit.dumps(pyproject))
 
 
+# Rewriting Taskfile
+
 taskfile = Path("python") / "Taskfile.yml"
 with open(taskfile, "r") as f:
     yaml = YAML()
@@ -132,8 +137,18 @@ with open(taskfile, "r") as f:
 tasks = dic["tasks"]["test-ci"]["cmds"]
 new_cmds = []
 for i in tasks:
-    if i["task"].split(":")[0] not in excludeds:
-        new_cmds.append(i)
+    if free_thread:
+        # When free-threaded python is used, only ommx is tested.
+        if i["task"].split(":")[0] == "ommx":
+            new_cmds.append(i)
+        else:
+            print(
+                f"::warning file={taskfile}::Excluding test {i['task']} for free-threaded python",
+                file=sys.stderr,
+            )
+    else:
+        if i["task"].split(":")[0] not in excludeds:
+            new_cmds.append(i)
 dic["tasks"]["test-ci"]["cmds"] = new_cmds
 
 
