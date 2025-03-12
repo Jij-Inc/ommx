@@ -10,7 +10,8 @@ description = "An adapter for the Python-MIP from/to OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
-requires-python = ">=3.9"
+# Due to argon2-cffi-bindings
+requires-python = ">=3.9, <3.13"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.9",
