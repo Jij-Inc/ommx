@@ -15,6 +15,7 @@ parts:
       - file: tutorial/switching_adapters
       - file: tutorial/share_in_ommx_artifact
       - file: tutorial/download_miplib_instance
+      - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
       - file: user_guide/function
