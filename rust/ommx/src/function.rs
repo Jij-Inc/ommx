@@ -1,4 +1,4 @@
-use crate::{error::ParseError, v1};
+use crate::{parse::RawParseError, v1};
 use derive_more::From;
 use std::fmt::Debug;
 
@@ -20,10 +20,10 @@ pub enum Function {
 }
 
 impl TryFrom<v1::Function> for Function {
-    type Error = ParseError;
+    type Error = RawParseError;
 
     fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
-        match value.function.ok_or(ParseError::UnsupportedV1Function)? {
+        match value.function.ok_or(RawParseError::UnsupportedV1Function)? {
             v1::function::Function::Constant(c) => Ok(Function::Constant(c)),
             v1::function::Function::Linear(l) => Ok(Function::Linear(l)),
             v1::function::Function::Quadratic(q) => Ok(Function::Quadratic(q)),

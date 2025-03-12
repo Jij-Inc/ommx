@@ -1,4 +1,7 @@
-use crate::{error::ParseError, v1, Function};
+use crate::{
+    parse::{ParseError, RawParseError},
+    v1, Function,
+};
 use derive_more::{Deref, From};
 use std::collections::HashMap;
 
@@ -12,12 +15,12 @@ pub enum Equality {
 }
 
 impl TryFrom<v1::Equality> for Equality {
-    type Error = ParseError;
+    type Error = RawParseError;
     fn try_from(value: v1::Equality) -> Result<Self, Self::Error> {
         match value {
             v1::Equality::EqualToZero => Ok(Self::EqualToZero),
             v1::Equality::LessThanOrEqualToZero => Ok(Self::LessThanOrEqualToZero),
-            _ => Err(ParseError::UnspecifiedEnum {
+            _ => Err(RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.Equality",
             }),
         }
@@ -48,7 +51,7 @@ impl TryFrom<v1::Constraint> for Constraint {
             equality: value.equality().try_into()?,
             function: value
                 .function
-                .ok_or(ParseError::MissingField {
+                .ok_or(RawParseError::MissingField {
                     message: "ommx.v1.Constraint",
                     field: "function",
                 })?
@@ -74,7 +77,7 @@ impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
         Ok(Self {
             constraint: value
                 .constraint
-                .ok_or(ParseError::MissingField {
+                .ok_or(RawParseError::MissingField {
                     message: "ommx.v1.RemovedConstraint",
                     field: "constraint",
                 })?
