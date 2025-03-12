@@ -117,7 +117,7 @@ jobs:
         if: endsWith(matrix.python-version, 't')
         run: |
           # We need this for some mysterious reason...
-          uv pip install pluggy iniconfig packaging
+          uv pip install pluggy iniconfig packaging ommx
       - name: Test
         run: task python:test-ci
 
