@@ -61,7 +61,9 @@ jobs:
         # It must be at least STRICTLY newer than v5.4.0.
         uses: actions/setup-python@9e62be81b28222addecf85e47571213eb7680449
         with:
-          python-version: 3.13t
+          python-version: |
+            3.8
+            3.13t
           cache: "pip"
       - name: Build wheels
         uses: PyO3/maturin-action@v1
