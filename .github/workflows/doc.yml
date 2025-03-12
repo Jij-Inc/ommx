@@ -20,6 +20,8 @@ jobs:
       fail-fast: true
       matrix:
         lang: [ja, en]
+    env:
+      python-version: 3.11
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +29,13 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.11"
+          python-version: ${{ env.python-version }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.python-version }}
+          cache: "pip"
 
       - name: Install OMMX Book dependencies
         run: pip install -r requirements.txt
