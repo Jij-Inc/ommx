@@ -70,17 +70,6 @@ def check_version(version: str, free_thread: bool, dir: Path) -> bool:
         return version in spec
 
 
-whl = list(Path("wheels").glob(pat))
-if len(whl) != 1:
-    print(
-        f"Expected to find exactly one wheel in the wheels directory, \
-        but got: {whl}"
-    )
-    sys.exit(1)
-
-whl = whl[0]
-print(f"Found wheel: {whl}")
-
 with open("pyproject.toml") as f:
     pyproject = tomlkit.parse(f.read())
 
@@ -97,6 +86,16 @@ if not isinstance(sources, dict):
     raise KeyError("Expected tool.uv.sources table in pyproject.toml")
 
 if not use_local_ommx:
+    whl = list(Path("wheels").glob(pat))
+    if len(whl) != 1:
+        print(
+            f"Expected to find exactly one wheel in the wheels directory, \
+            but got: {whl}"
+        )
+        sys.exit(1)
+
+    whl = whl[0]
+    print(f"Found wheel: {whl}")
     sources["ommx"] = {"path": str(whl)}
 
 workspace = uv["workspace"]
