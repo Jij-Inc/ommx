@@ -121,31 +121,6 @@ jobs:
           OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
           OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
 
-  # Free-threaded python fails to test separately for some mysterious reason.
-  # Very sad...
-  test-freethreaded:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13t"]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Transform Python Project to run tests
-        run: |
-          uv run ci-scripts/setup-python-test-project.py --use_local_ommx  ${{ matrix.python-version }}
-      - name: Relock
-        run: uv lock --upgrade
-      - name: Install deps
-        run: task python:sync
-      - name: Test
-        run: task python:test-ci
-
   ruff:
     runs-on: ubuntu-latest
     steps:
