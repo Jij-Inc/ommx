@@ -112,11 +112,11 @@ jobs:
           uv lock --upgrade-package numpy
       - name: Install deps
         run: task python:sync
-      - name: Relock
+      - name: Install (mysteriously) missing packages
         if: endsWith(matrix.python-version, 't')
         run: |
           # We need this for some mysterious reason...
-          uv pip install pluggy iniconfig
+          uv pip install pluggy iniconfig packaging
       - name: Test
         run: task python:test-ci
 
