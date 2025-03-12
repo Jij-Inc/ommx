@@ -29,13 +29,6 @@ impl Parse for v1::Equality {
     }
 }
 
-impl TryFrom<v1::Equality> for Equality {
-    type Error = ParseError;
-    fn try_from(value: v1::Equality) -> Result<Self, Self::Error> {
-        value.parse(&())
-    }
-}
-
 /// ID for constraint
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct ConstraintID(u64);
@@ -76,13 +69,6 @@ impl Parse for v1::Constraint {
     }
 }
 
-impl TryFrom<v1::Constraint> for Constraint {
-    type Error = ParseError;
-    fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
-        value.parse(&())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: Constraint,
@@ -110,10 +96,38 @@ impl Parse for v1::RemovedConstraint {
     }
 }
 
-impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
-    type Error = ParseError;
-    fn try_from(value: v1::RemovedConstraint) -> Result<Self, Self::Error> {
-        value.parse(&())
+impl Parse for Vec<v1::Constraint> {
+    type Output = HashMap<ConstraintID, Constraint>;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut constraints = HashMap::new();
+        for c in self {
+            let c: Constraint = c.parse(&())?;
+            let id = c.id;
+            if constraints.insert(id, c).is_some() {
+                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+            }
+        }
+        Ok(constraints)
+    }
+}
+
+impl Parse for Vec<v1::RemovedConstraint> {
+    type Output = HashMap<ConstraintID, RemovedConstraint>;
+    type Context = HashMap<ConstraintID, Constraint>;
+    fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut removed_constraints = HashMap::new();
+        for c in self {
+            let c: RemovedConstraint = c.parse(&())?;
+            let id = c.constraint.id;
+            if constraints.contains_key(&id) {
+                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+            }
+            if removed_constraints.insert(id, c).is_some() {
+                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+            }
+        }
+        Ok(removed_constraints)
     }
 }
 

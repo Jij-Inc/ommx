@@ -26,13 +26,6 @@ impl Parse for v1::instance::Sense {
     }
 }
 
-impl TryFrom<v1::instance::Sense> for Sense {
-    type Error = ParseError;
-    fn try_from(value: v1::instance::Sense) -> Result<Self, Self::Error> {
-        value.parse(&())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneHotConstraint {
     pub id: ConstraintID,
@@ -50,12 +43,6 @@ pub struct SOS1Constraints {
 pub struct ConstraintHints {
     pub one_hot_constraints: Vec<OneHotConstraint>,
     pub sos1_constraints: Vec<SOS1Constraints>,
-}
-
-impl v1::ConstraintHints {
-    fn parse(self) -> ConstraintHints {
-        todo!()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,6 +64,11 @@ impl TryFrom<v1::Instance> for Instance {
         let message = "ommx.v1.Instance";
         let sense = value.sense().parse_as(&(), message, "sense")?;
 
+        let decision_variables =
+            value
+                .decision_variables
+                .parse_as(&(), message, "decision_variables")?;
+
         let objective = value
             .objective
             .ok_or(RawParseError::MissingField {
@@ -85,40 +77,11 @@ impl TryFrom<v1::Instance> for Instance {
             })?
             .parse_as(&(), message, "objective")?;
 
-        let mut decision_variables = HashMap::new();
-        for v in value.decision_variables {
-            let v: DecisionVariable = v.parse_as(&(), message, "decision_variables")?;
-            let id = v.id;
-            if decision_variables.insert(id, v).is_some() {
-                return Err(RawParseError::DuplicatedVariableID { id }
-                    .context(message, "decision_variables"));
-            }
-        }
-
-        let mut constraints = HashMap::new();
-        for c in value.constraints {
-            let c: Constraint = c.parse_as(&(), message, "constraints")?;
-            let id = c.id;
-            if constraints.insert(id, c).is_some() {
-                return Err(
-                    RawParseError::DuplicatedConstraintID { id }.context(message, "constraints")
-                );
-            }
-        }
-
-        let mut removed_constraints = HashMap::new();
-        for c in value.removed_constraints {
-            let c: RemovedConstraint = c.try_into()?;
-            let id = c.constraint.id;
-            if constraints.contains_key(&id) {
-                return Err(RawParseError::DuplicatedConstraintID { id }
-                    .context(message, "removed_constraints"));
-            }
-            if removed_constraints.insert(id, c).is_some() {
-                return Err(RawParseError::DuplicatedConstraintID { id }
-                    .context(message, "removed_constraints"));
-            }
-        }
+        let constraints = value.constraints.parse_as(&(), message, "constraints")?;
+        let removed_constraints =
+            value
+                .removed_constraints
+                .parse_as(&constraints, message, "removed_constraints")?;
 
         let as_variable_id = |id: u64| {
             let id = VariableID::from(id);

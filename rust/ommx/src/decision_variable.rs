@@ -58,13 +58,6 @@ impl Parse for v1::decision_variable::Kind {
     }
 }
 
-impl TryFrom<v1::decision_variable::Kind> for Kind {
-    type Error = ParseError;
-    fn try_from(value: v1::decision_variable::Kind) -> Result<Self, Self::Error> {
-        value.parse(&())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecisionVariable {
     pub id: VariableID,
@@ -97,9 +90,18 @@ impl Parse for v1::DecisionVariable {
     }
 }
 
-impl TryFrom<v1::DecisionVariable> for DecisionVariable {
-    type Error = ParseError;
-    fn try_from(value: v1::DecisionVariable) -> Result<Self, Self::Error> {
-        value.parse(&())
+impl Parse for Vec<v1::DecisionVariable> {
+    type Output = HashMap<VariableID, DecisionVariable>;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut decision_variables = HashMap::new();
+        for v in self {
+            let v: DecisionVariable = v.parse(&())?;
+            let id = v.id;
+            if decision_variables.insert(id, v).is_some() {
+                return Err(RawParseError::DuplicatedVariableID { id }.into());
+            }
+        }
+        Ok(decision_variables)
     }
 }

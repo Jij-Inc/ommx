@@ -34,11 +34,3 @@ impl Parse for v1::Function {
         }
     }
 }
-
-impl TryFrom<v1::Function> for Function {
-    type Error = ParseError;
-
-    fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
-        value.parse(&())
-    }
-}
