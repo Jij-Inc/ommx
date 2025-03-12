@@ -1,4 +1,4 @@
-use crate::v1;
+use crate::{parse::*, v1};
 use derive_more::{Deref, From};
 use std::collections::HashMap;
 
@@ -40,14 +40,15 @@ pub enum Kind {
 }
 
 impl TryFrom<v1::decision_variable::Kind> for Kind {
-    type Error = crate::parse::RawParseError;
+    type Error = ParseError;
 
     fn try_from(value: v1::decision_variable::Kind) -> Result<Self, Self::Error> {
         use v1::decision_variable::Kind::*;
         match value {
             Unspecified => Err(crate::parse::RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.decision_variable.Kind",
-            }),
+            }
+            .into()),
             Continuous => Ok(Self::Continuous),
             Integer => Ok(Self::Integer),
             Binary => Ok(Self::Binary),
@@ -72,7 +73,7 @@ pub struct DecisionVariable {
 }
 
 impl TryFrom<v1::DecisionVariable> for DecisionVariable {
-    type Error = crate::parse::RawParseError;
+    type Error = ParseError;
 
     fn try_from(value: v1::DecisionVariable) -> Result<Self, Self::Error> {
         Ok(Self {

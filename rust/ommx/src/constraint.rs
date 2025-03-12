@@ -47,16 +47,17 @@ pub struct Constraint {
 impl TryFrom<v1::Constraint> for Constraint {
     type Error = ParseError;
     fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
+        let message = "ommx.v1.Constraint";
         Ok(Self {
             id: ConstraintID(value.id),
-            equality: value.equality().parse("ommx.v1.Constraint", "equality")?,
+            equality: value.equality().parse(message, "equality")?,
             function: value
                 .function
                 .ok_or(RawParseError::MissingField {
-                    message: "ommx.v1.Constraint",
+                    message,
                     field: "function",
                 })?
-                .parse("ommx.v1.Constraint", "function")?,
+                .parse(message, "function")?,
             name: value.name,
             subscripts: value.subscripts,
             parameters: value.parameters,
@@ -75,14 +76,15 @@ pub struct RemovedConstraint {
 impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
     type Error = ParseError;
     fn try_from(value: v1::RemovedConstraint) -> Result<Self, Self::Error> {
+        let message = "ommx.v1.RemovedConstraint";
         Ok(Self {
             constraint: value
                 .constraint
                 .ok_or(RawParseError::MissingField {
-                    message: "ommx.v1.RemovedConstraint",
+                    message,
                     field: "constraint",
                 })?
-                .parse("ommx.v1.RemovedConstraint", "constraint")?,
+                .parse(message, "constraint")?,
             removed_reason: value.removed_reason,
             removed_reason_parameters: value.removed_reason_parameters,
         })

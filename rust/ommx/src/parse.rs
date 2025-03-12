@@ -12,10 +12,8 @@ where
     Output: TryFrom<Input, Error = ParseError>,
 {
     fn parse(self, message: &'static str, field: &'static str) -> Result<Output, ParseError> {
-        self.try_into().map_err(|mut err: ParseError| {
-            err.context.push(ParseContext { message, field });
-            err
-        })
+        self.try_into()
+            .map_err(|err: ParseError| err.context(message, field))
     }
 }
 
@@ -45,6 +43,13 @@ impl From<RawParseError> for ParseError {
             context: vec![],
             error,
         }
+    }
+}
+
+impl ParseError {
+    pub fn context(mut self, message: &'static str, field: &'static str) -> Self {
+        self.context.push(ParseContext { message, field });
+        self
     }
 }
 
@@ -91,4 +96,13 @@ pub enum RawParseError {
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]
     DecodeError(#[from] DecodeError),
+}
+
+impl RawParseError {
+    pub fn context(self, message: &'static str, field: &'static str) -> ParseError {
+        ParseError {
+            context: vec![ParseContext { message, field }],
+            error: self,
+        }
+    }
 }
