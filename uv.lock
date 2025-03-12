@@ -1984,6 +1984,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pluggy" },
     { name = "pytest" },
     { name = "pytest-github-actions-annotate-failures" },
 ]
@@ -1993,6 +1994,7 @@ requires-dist = [{ name = "ommx", editable = "python/ommx" }]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pluggy" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-github-actions-annotate-failures" },
 ]
