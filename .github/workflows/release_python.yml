@@ -59,6 +59,7 @@ jobs:
       - name: Setup Python
         # TODO: Bump to v* type version, once 9e62be8 is inclued in release
         # It must be at least STRICTLY newer than v5.4.0.
+        # Original PR: https://github.com/actions/setup-python/pull/973
         uses: actions/setup-python@9e62be81b28222addecf85e47571213eb7680449
         with:
           python-version: 3.13t

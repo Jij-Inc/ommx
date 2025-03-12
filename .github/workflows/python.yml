@@ -41,6 +41,20 @@ jobs:
         run: |
           git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
 
+  # uv run and maturin develop/build doesn't work well together-
+  # Even if one runs maturin develop once, uv run pyright
+  # will rebuild the extension, and if we run uv run --no-build pyright,
+  # it will fail to find the extension.
+  # So, it is better to run pyright separately from the wheel building job.
+  pyright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+      - name: Run Pyright
+        run: task python:ommx:pyright
+
   build-wheel:
     name: Build Wheel
     runs-on: ubuntu-latest
@@ -68,20 +82,6 @@ jobs:
         with:
           name: wheels
           path: wheels
-
-  # uv run and maturin develop/build doesn't work well together-
-  # Even if one runs maturin develop once, uv run pyright
-  # will rebuild the extension, and if we run uv run --no-build pyright,
-  # it will fail to find the extension.
-  # So, it is better to run pyright separately from the wheel building job.
-  pyright:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
-      - name: Run Pyright
-        run: task python:ommx:pyright
 
   # Test a single wheel with multiple python versions
   test:

@@ -1,0 +1,33 @@
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ommx_tests"
+version = "1.8.6"
+
+description = "Test suite for OMMX Python SDK"
+authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
+readme = "README.md"
+
+requires-python = ">=3.9"
+classifiers = [
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: MIT License",
+]
+
+dependencies = ["ommx >= 1.8.6, < 2.0.0"]
+
+[project.urls]
+Repository = "https://github.com/Jij-Inc/ommx"
+Issues = "https://github.com/Jij-Inc/ommx/issues"
+
+[dependency-groups]
+dev = ["pytest>=8.3.4", "pytest-github-actions-annotate-failures"]
