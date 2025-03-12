@@ -31,6 +31,8 @@ from packaging.specifiers import SpecifierSet
 import re
 from ruamel.yaml import YAML
 
+FREE_THREAD_PACKAGES = {"ommx", "ommx-highs-adapter"}
+
 
 def check_version(version: str, free_thread: bool, dir: Path) -> bool:
     with open(dir / "pyproject.toml") as f:
@@ -43,7 +45,7 @@ def check_version(version: str, free_thread: bool, dir: Path) -> bool:
         if not isinstance(req_py, str):
             print(f"No project.requires-python: {pyproject}", file=sys.stderr)
             return False
-        if free_thread and dir.name != "ommx":
+        if free_thread and dir.name not in FREE_THREAD_PACKAGES:
             print(f"::warning::Excluding {dir} for free-threaded python")
             return False
 
@@ -143,7 +145,7 @@ new_cmds = []
 for i in tasks:
     if free_thread:
         # When free-threaded python is used, only ommx is tested.
-        if i["task"].split(":")[0] == "ommx":
+        if i["task"].split(":")[0] in FREE_THREAD_PACKAGES:
             new_cmds.append(i)
         else:
             print(
