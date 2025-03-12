@@ -105,9 +105,7 @@ jobs:
           path: wheels
       - name: Override `ommx' in pyproject.toml
         run: |
-          uv run ci-scripts/override-ommx-with-wheel.py ${{ matrix.python-version }}
-          # NOTE: ommx/ommx confuses pytest so we must remove them as well
-          rm -rf python/ommx/*.toml python/ommx/ommx
+          uv run ci-scripts/setup-python-test-project.py --rm ${{ matrix.python-version }}
       - name: Install deps
         run: task python:sync
       - name: Test
