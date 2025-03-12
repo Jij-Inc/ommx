@@ -107,7 +107,7 @@ jobs:
         run: |
           uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
       - name: Relock
-        if: endsWith('${{ matrix.python-version }}', 't')
+        if: endsWith(matrix.python-version, 't')
         run: uv lock --upgrade-package numpy
       - name: Install deps
         run: task python:sync
@@ -116,7 +116,7 @@ jobs:
 
       # Skips jupyter on free-threaded
       - name: Run notebooks
-        if: github.actor != 'dependabot[bot]' && !endsWith('${{ matrix.python-version }}', 't')
+        if: github.actor != 'dependabot[bot]' && !endsWith(matrix.python-version, 't')
         run: |
           uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
