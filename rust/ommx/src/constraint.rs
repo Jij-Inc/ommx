@@ -14,17 +14,25 @@ pub enum Equality {
     LessThanOrEqualToZero,
 }
 
-impl TryFrom<v1::Equality> for Equality {
-    type Error = ParseError;
-    fn try_from(value: v1::Equality) -> Result<Self, Self::Error> {
-        match value {
-            v1::Equality::EqualToZero => Ok(Self::EqualToZero),
-            v1::Equality::LessThanOrEqualToZero => Ok(Self::LessThanOrEqualToZero),
+impl Parse for v1::Equality {
+    type Output = Equality;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        match self {
+            v1::Equality::EqualToZero => Ok(Equality::EqualToZero),
+            v1::Equality::LessThanOrEqualToZero => Ok(Equality::LessThanOrEqualToZero),
             _ => Err(RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.Equality",
             }
             .into()),
         }
+    }
+}
+
+impl TryFrom<v1::Equality> for Equality {
+    type Error = ParseError;
+    fn try_from(value: v1::Equality) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
@@ -44,25 +52,34 @@ pub struct Constraint {
     pub description: Option<String>,
 }
 
-impl TryFrom<v1::Constraint> for Constraint {
-    type Error = ParseError;
-    fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
+impl Parse for v1::Constraint {
+    type Output = Constraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Constraint";
-        Ok(Self {
-            id: ConstraintID(value.id),
-            equality: value.equality().parse(message, "equality")?,
-            function: value
+        Ok(Constraint {
+            id: ConstraintID(self.id),
+            equality: self.equality().parse_as(&(), message, "equality")?,
+            function: self
                 .function
                 .ok_or(RawParseError::MissingField {
                     message,
                     field: "function",
                 })?
-                .parse(message, "function")?,
-            name: value.name,
-            subscripts: value.subscripts,
-            parameters: value.parameters,
-            description: value.description,
+                .parse_as(&(), message, "function")?,
+            name: self.name,
+            subscripts: self.subscripts,
+            parameters: self.parameters,
+            description: self.description,
         })
+    }
+}
+
+impl TryFrom<v1::Constraint> for Constraint {
+    type Error = ParseError;
+    fn try_from(value: v1::Constraint) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
@@ -73,21 +90,30 @@ pub struct RemovedConstraint {
     pub removed_reason_parameters: HashMap<String, String>,
 }
 
-impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
-    type Error = ParseError;
-    fn try_from(value: v1::RemovedConstraint) -> Result<Self, Self::Error> {
+impl Parse for v1::RemovedConstraint {
+    type Output = RemovedConstraint;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.RemovedConstraint";
-        Ok(Self {
-            constraint: value
+        Ok(RemovedConstraint {
+            constraint: self
                 .constraint
                 .ok_or(RawParseError::MissingField {
                     message,
                     field: "constraint",
                 })?
-                .parse(message, "constraint")?,
-            removed_reason: value.removed_reason,
-            removed_reason_parameters: value.removed_reason_parameters,
+                .parse_as(&(), message, "constraint")?,
+            removed_reason: self.removed_reason,
+            removed_reason_parameters: self.removed_reason_parameters,
         })
+    }
+}
+
+impl TryFrom<v1::RemovedConstraint> for RemovedConstraint {
+    type Error = ParseError;
+    fn try_from(value: v1::RemovedConstraint) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 

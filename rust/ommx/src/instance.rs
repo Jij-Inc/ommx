@@ -1,10 +1,8 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1::{self, decision_variable},
+    v1::{self},
     Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
 };
-use anyhow::{bail, Context as _};
-use serde::de;
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -13,17 +11,25 @@ pub enum Sense {
     Maximize,
 }
 
-impl TryFrom<v1::instance::Sense> for Sense {
-    type Error = ParseError;
-    fn try_from(value: v1::instance::Sense) -> Result<Self, Self::Error> {
-        match value {
-            v1::instance::Sense::Minimize => Ok(Self::Minimize),
-            v1::instance::Sense::Maximize => Ok(Self::Maximize),
+impl Parse for v1::instance::Sense {
+    type Output = Sense;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        match self {
+            v1::instance::Sense::Minimize => Ok(Sense::Minimize),
+            v1::instance::Sense::Maximize => Ok(Sense::Maximize),
             v1::instance::Sense::Unspecified => Err(RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.instance.Sense",
             }
             .into()),
         }
+    }
+}
+
+impl TryFrom<v1::instance::Sense> for Sense {
+    type Error = ParseError;
+    fn try_from(value: v1::instance::Sense) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
@@ -69,7 +75,7 @@ impl TryFrom<v1::Instance> for Instance {
     type Error = ParseError;
     fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {
         let message = "ommx.v1.Instance";
-        let sense = value.sense().parse(message, "sense")?;
+        let sense = value.sense().parse_as(&(), message, "sense")?;
 
         let objective = value
             .objective
@@ -77,11 +83,11 @@ impl TryFrom<v1::Instance> for Instance {
                 message,
                 field: "objective",
             })?
-            .parse(message, "objective")?;
+            .parse_as(&(), message, "objective")?;
 
         let mut decision_variables = HashMap::new();
         for v in value.decision_variables {
-            let v: DecisionVariable = v.parse(message, "decision_variables")?;
+            let v: DecisionVariable = v.parse_as(&(), message, "decision_variables")?;
             let id = v.id;
             if decision_variables.insert(id, v).is_some() {
                 return Err(RawParseError::DuplicatedVariableID { id }
@@ -91,7 +97,7 @@ impl TryFrom<v1::Instance> for Instance {
 
         let mut constraints = HashMap::new();
         for c in value.constraints {
-            let c: Constraint = c.parse(message, "constraints")?;
+            let c: Constraint = c.parse_as(&(), message, "constraints")?;
             let id = c.id;
             if constraints.insert(id, c).is_some() {
                 return Err(
@@ -134,7 +140,7 @@ impl TryFrom<v1::Instance> for Instance {
             decision_variable_dependency.insert(
                 as_variable_id(id)
                     .map_err(|e| e.context(message, "decision_variable_dependency"))?,
-                f.parse(message, "decision_variable_dependency")?,
+                f.parse_as(&(), message, "decision_variable_dependency")?,
             );
         }
 
@@ -150,7 +156,7 @@ impl TryFrom<v1::Instance> for Instance {
                 for v in &onehot.decision_variables {
                     let id = as_variable_id(*v)?;
                     if !variables.insert(id) {
-                        bail!("One-hot constraint {constraint_id:?} contains duplicated decision variable {id:?}");
+                        todo!("One-hot constraint {constraint_id:?} contains duplicated decision variable {id:?}");
                     }
                 }
                 one_hot_constraints.push(OneHotConstraint {

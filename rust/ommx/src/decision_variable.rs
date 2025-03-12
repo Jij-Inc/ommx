@@ -39,22 +39,29 @@ pub enum Kind {
     SemiInteger,
 }
 
-impl TryFrom<v1::decision_variable::Kind> for Kind {
-    type Error = ParseError;
-
-    fn try_from(value: v1::decision_variable::Kind) -> Result<Self, Self::Error> {
+impl Parse for v1::decision_variable::Kind {
+    type Output = Kind;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         use v1::decision_variable::Kind::*;
-        match value {
-            Unspecified => Err(crate::parse::RawParseError::UnspecifiedEnum {
+        match self {
+            Unspecified => Err(RawParseError::UnspecifiedEnum {
                 enum_name: "ommx.v1.decision_variable.Kind",
             }
             .into()),
-            Continuous => Ok(Self::Continuous),
-            Integer => Ok(Self::Integer),
-            Binary => Ok(Self::Binary),
-            SemiContinuous => Ok(Self::SemiContinuous),
-            SemiInteger => Ok(Self::SemiInteger),
+            Continuous => Ok(Kind::Continuous),
+            Integer => Ok(Kind::Integer),
+            Binary => Ok(Kind::Binary),
+            SemiContinuous => Ok(Kind::SemiContinuous),
+            SemiInteger => Ok(Kind::SemiInteger),
         }
+    }
+}
+
+impl TryFrom<v1::decision_variable::Kind> for Kind {
+    type Error = ParseError;
+    fn try_from(value: v1::decision_variable::Kind) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
@@ -72,19 +79,27 @@ pub struct DecisionVariable {
     pub description: Option<String>,
 }
 
+impl Parse for v1::DecisionVariable {
+    type Output = DecisionVariable;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.DecisionVariable";
+        Ok(DecisionVariable {
+            id: VariableID(self.id),
+            kind: self.kind().parse_as(&(), message, "kind")?,
+            bound: self.bound.map(Bound::from).unwrap_or_default(),
+            substituted_value: self.substituted_value,
+            name: self.name,
+            subscripts: self.subscripts,
+            parameters: self.parameters,
+            description: self.description,
+        })
+    }
+}
+
 impl TryFrom<v1::DecisionVariable> for DecisionVariable {
     type Error = ParseError;
-
     fn try_from(value: v1::DecisionVariable) -> Result<Self, Self::Error> {
-        Ok(Self {
-            id: VariableID(value.id),
-            kind: value.kind().try_into()?,
-            bound: value.bound.map(Bound::from).unwrap_or_default(),
-            substituted_value: value.substituted_value,
-            name: value.name,
-            subscripts: value.subscripts,
-            parameters: value.parameters,
-            description: value.description,
-        })
+        value.parse(&())
     }
 }

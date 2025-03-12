@@ -1,5 +1,5 @@
 use crate::{
-    parse::{ParseError, RawParseError},
+    parse::{Parse, ParseError, RawParseError},
     v1,
 };
 use derive_more::From;
@@ -22,15 +22,23 @@ pub enum Function {
     Polynomial(v1::Polynomial),
 }
 
-impl TryFrom<v1::Function> for Function {
-    type Error = ParseError;
-
-    fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
-        match value.function.ok_or(RawParseError::UnsupportedV1Function)? {
+impl Parse for v1::Function {
+    type Output = Function;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        match self.function.ok_or(RawParseError::UnsupportedV1Function)? {
             v1::function::Function::Constant(c) => Ok(Function::Constant(c)),
             v1::function::Function::Linear(l) => Ok(Function::Linear(l)),
             v1::function::Function::Quadratic(q) => Ok(Function::Quadratic(q)),
             v1::function::Function::Polynomial(p) => Ok(Function::Polynomial(p)),
         }
+    }
+}
+
+impl TryFrom<v1::Function> for Function {
+    type Error = ParseError;
+
+    fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }

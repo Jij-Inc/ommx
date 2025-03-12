@@ -2,18 +2,20 @@ use crate::{ConstraintID, VariableID};
 use prost::DecodeError;
 use std::fmt;
 
-/// A wrapper of [`TryFrom`] trait to provide a backtrace of parsing error.
-pub trait Parse<Output> {
-    fn parse(self, message: &'static str, field: &'static str) -> Result<Output, ParseError>;
-}
+/// Parse [`crate::v1`] messages into validated Rust types.
+pub trait Parse: Sized {
+    type Output;
+    type Context;
 
-impl<Input, Output> Parse<Output> for Input
-where
-    Output: TryFrom<Input, Error = ParseError>,
-{
-    fn parse(self, message: &'static str, field: &'static str) -> Result<Output, ParseError> {
-        self.try_into()
-            .map_err(|err: ParseError| err.context(message, field))
+    fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError>;
+
+    fn parse_as(
+        self,
+        context: &Self::Context,
+        message: &'static str,
+        field: &'static str,
+    ) -> Result<Self::Output, ParseError> {
+        self.parse(context).map_err(|e| e.context(message, field))
     }
 }
 
