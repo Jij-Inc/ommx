@@ -55,14 +55,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
+      # Windows requires local Python
+      - name: Setup Python
+        # TODO: Bump to v* type version, once 9e62be8 is inclued in release
+        # It must be at least STRICTLY newer than v5.4.0.
+        uses: actions/setup-python@9e62be81b28222addecf85e47571213eb7680449
         with:
           python-version: 3.13t
-      - name: Install Python 3.8
-        run: uv python install 3.8
-
+          cache: "pip"
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
