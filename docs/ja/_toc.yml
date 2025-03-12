@@ -15,6 +15,7 @@ parts:
       - file: tutorial/switching_adapters
       - file: tutorial/share_in_ommx_artifact
       - file: tutorial/download_miplib_instance
+      - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
       - file: user_guide/function
@@ -22,7 +23,6 @@ parts:
       - file: user_guide/parametric_instance
       - file: user_guide/solution
       - file: user_guide/sample_set
-      - file: user_guide/solver_adapter
   - caption: "API Reference"
     chapters:
       - url: https://jij-inc.github.io/ommx/protobuf.html
