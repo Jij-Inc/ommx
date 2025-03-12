@@ -106,6 +106,9 @@ jobs:
       - name: Transform Python Project to run tests
         run: |
           uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+      - name: Relock
+        if: endsWith('${{ matrix.python-version }}', 't')
+        run: uv lock --upgrade-package numpy
       - name: Install deps
         run: task python:sync
       - name: Test
