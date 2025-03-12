@@ -110,10 +110,13 @@ jobs:
         if: endsWith(matrix.python-version, 't')
         run: |
           uv lock --upgrade-package numpy
-          # We need this for some mysterious reason
-          uv pip install pluggy
       - name: Install deps
         run: task python:sync
+      - name: Relock
+        if: endsWith(matrix.python-version, 't')
+        run: |
+          # We need this for some mysterious reason...
+          uv pip install pluggy
       - name: Test
         run: task python:test-ci
 
