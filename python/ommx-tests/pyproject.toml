@@ -23,7 +23,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx >= 1.8.6, < 2.0.0", "pluggy"]
+dependencies = ["ommx", "pluggy"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

@@ -106,6 +106,7 @@ jobs:
       - name: Transform Python Project to run tests
         run: |
           uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+          cat pyproject.toml
       - name: Relock
         if: endsWith(matrix.python-version, 't')
         run: |
