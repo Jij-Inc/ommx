@@ -39,7 +39,6 @@ runs:
     - name: Install uv
       uses: astral-sh/setup-uv@v3
       with:
-        sync: false
         python-version: ${{ inputs.python-version }}
     
     - name: Fix Python Version
