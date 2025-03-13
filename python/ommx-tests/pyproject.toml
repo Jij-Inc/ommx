@@ -1,12 +1,13 @@
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ommx_python_mip_adapter"
-version = "1.8.7"
+name = "ommx_tests"
+version = "1.8.6"
 
-description = "An adapter for the Python-MIP from/to OMMX."
+description = "Test suite for OMMX Python SDK"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
@@ -22,16 +23,8 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-# FIXME 
-# ======
-# To support Python 3.12 and Apple silicon systems, this requires latest version of Python-MIP (will be 1.16.0?),
-# which does not release yet. https://github.com/coin-or/python-mip/issues/384
-# This project uses dev-dependency to use the latest version of Python-MIP not to include pre-release version in the release.
-dependencies = ["ommx >= 1.8.7, < 2.0.0","mip >= 1.15.0, < 2.0.0"]
+dependencies = ["ommx", "pluggy"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
-
-[dependency-groups]
-dev = ["mip @ git+https://github.com/coin-or/python-mip.git"]

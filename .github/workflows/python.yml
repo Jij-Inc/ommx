@@ -41,12 +41,55 @@ jobs:
         run: |
           git diff --exit-code python/ommx/ommx/_ommx_rust.pyi
 
+  # uv run and maturin develop/build doesn't work well together-
+  # Even if one runs maturin develop once, uv run pyright
+  # will rebuild the extension, and if we run uv run --no-build pyright,
+  # it will fail to find the extension.
+  # So, it is better to run pyright separately from the wheel building job.
+  pyright:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+      - name: Run Pyright
+        run: task python:ommx:pyright
+
+  build-wheel:
+    name: Build Wheel
+    runs-on: ubuntu-latest
+    env:
+      python-version: 3.12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          python-version: ${{ env.python-version }}
+      - name: Initialise uv
+        run: uv venv -p ${{env.python-version}}
+      - name: Build ommx wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: >
+            --out wheels
+            -m python/ommx/Cargo.toml
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: wheels
+
+  # Test a single wheel with multiple python versions
   test:
     runs-on: ubuntu-latest
+    needs: build-wheel
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
@@ -54,15 +97,23 @@ jobs:
         uses: ./.github/actions/setup-test-environment
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install ommx
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: wheels
+      - name: Transform Python Project to run tests
+        run: |
+          uv run ci-scripts/setup-python-test-project.py ${{ matrix.python-version }}
+          cat pyproject.toml
+      - name: Install deps
         run: task python:sync
-
       - name: Test
-        run: task python:test
+        run: task python:test-ci
 
+      # Skips jupyter on free-threaded
       - name: Run notebooks
-        if: ${{ github.actor != 'dependabot[bot]' }}
+        if: github.actor != 'dependabot[bot]'
         run: |
           uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
         env:
@@ -79,7 +130,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Format
-        run: ruff format --check python
+        run: uvx ruff format --check python
 
       - name: Lint
-        run: ruff check python
+        run: uvx ruff check python
