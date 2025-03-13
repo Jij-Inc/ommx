@@ -10,6 +10,7 @@ macro_rules! impl_add_inverse {
         }
     };
 }
+pub(crate) use impl_add_inverse;
 
 macro_rules! impl_add_from {
     ($lhs:ty, $rhs:ty) => {
@@ -21,6 +22,7 @@ macro_rules! impl_add_from {
         }
     };
 }
+pub(crate) use impl_add_from;
 
 macro_rules! impl_sub_by_neg_add {
     ($lhs:ty, $rhs:ty) => {
@@ -32,6 +34,7 @@ macro_rules! impl_sub_by_neg_add {
         }
     };
 }
+pub(crate) use impl_sub_by_neg_add;
 
 macro_rules! impl_mul_inverse {
     ($lhs:ty, $rhs:ty) => {
@@ -43,6 +46,7 @@ macro_rules! impl_mul_inverse {
         }
     };
 }
+pub(crate) use impl_mul_inverse;
 
 macro_rules! impl_mul_from {
     ($lhs:ty, $rhs:ty, $output:ty) => {
@@ -54,6 +58,7 @@ macro_rules! impl_mul_from {
         }
     };
 }
+pub(crate) use impl_mul_from;
 
 macro_rules! impl_neg_by_mul {
     ($ty:ty) => {
@@ -72,6 +77,7 @@ macro_rules! impl_neg_by_mul {
         }
     };
 }
+pub(crate) use impl_neg_by_mul;
 
 #[cfg(test)]
 macro_rules! test_algebraic {
@@ -148,16 +154,5 @@ macro_rules! test_algebraic {
     };
 }
 
-mod constraint;
-mod decision_variable;
-mod format;
-mod function;
-mod instance;
-mod linear;
-mod parameter;
-mod parametric_instance;
-mod polynomial;
-mod quadratic;
-mod sample_set;
-mod solution;
-mod state;
+#[cfg(test)]
+pub(crate) use test_algebraic;

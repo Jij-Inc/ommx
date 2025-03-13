@@ -1,4 +1,7 @@
-use crate::v1::{linear::Term, Linear, Quadratic};
+use crate::{
+    macros::*,
+    v1::{linear::Term, Linear, Quadratic},
+};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -251,6 +254,8 @@ impl fmt::Display for Linear {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     test_algebraic!(super::Linear);
 
     #[test]

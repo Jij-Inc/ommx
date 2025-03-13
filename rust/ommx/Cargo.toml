@@ -30,7 +30,7 @@ log.workspace = true
 maplit.workspace = true
 num.workspace = true
 ocipkg.workspace = true
-ordered-float = "5.0.0"
+ordered-float.workspace = true
 proptest.workspace = true
 prost.workspace = true
 serde.workspace = true
@@ -41,8 +41,9 @@ uuid.workspace = true
 
 [dev-dependencies]
 colored.workspace = true
-indoc.workspace = true
 criterion.workspace = true
+indoc.workspace = true
+insta.workspace = true
 
 [build-dependencies]
 built.workspace = true

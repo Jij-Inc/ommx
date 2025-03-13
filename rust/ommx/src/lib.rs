@@ -138,17 +138,41 @@ pub use prost::Message;
 pub mod artifact;
 pub mod dataset;
 pub mod mps;
+pub mod parse;
 pub mod qplib;
 pub mod random;
 
 // Internal modules
-mod convert;
+mod constraint;
+mod decision_variable;
 mod evaluate;
+mod format;
+mod function;
+mod instance;
+mod linear;
+mod macros;
+mod parameter;
+mod parametric_instance;
+mod polynomial;
+mod quadratic;
+mod sample_set;
+mod solution;
 mod sorted_ids;
+mod state;
 
+pub use constraint::*;
+pub use decision_variable::*;
 pub use evaluate::Evaluate;
+pub use function::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
     include!("ommx.v1.rs");
+}
+
+mod v1_ext {
+    mod constraint;
+    mod decision_variable;
+    mod function;
+    mod instance;
 }
