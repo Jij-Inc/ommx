@@ -1,4 +1,5 @@
 use crate::{
+    decision_variable,
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
@@ -27,9 +28,38 @@ impl Parse for v1::instance::Sense {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OneHotConstraint {
+pub struct OneHot {
     pub id: ConstraintID,
     pub variables: BTreeSet<VariableID>,
+}
+
+impl Parse for v1::OneHot {
+    type Output = OneHot;
+    type Context = (
+        HashMap<VariableID, DecisionVariable>,
+        HashMap<ConstraintID, Constraint>,
+    );
+    fn parse(
+        self,
+        (decision_variable, constraints): &Self::Context,
+    ) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.OneHot";
+        let constraint_id = as_constraint_id(constraints, self.constraint_id)
+            .map_err(|e| e.context(message, "constraint_id"))?;
+        let mut variables = BTreeSet::new();
+        for v in &self.decision_variables {
+            let id = as_variable_id(decision_variable, *v)
+                .map_err(|e| e.context(message, "decision_variables"))?;
+            if !variables.insert(id) {
+                return Err(RawParseError::NonUniqueVariableID { id }
+                    .context(message, "decision_variables"));
+            }
+        }
+        Ok(OneHot {
+            id: constraint_id,
+            variables,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,10 +71,18 @@ pub struct SOS1Constraints {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ConstraintHints {
-    pub one_hot_constraints: Vec<OneHotConstraint>,
+    pub one_hot_constraints: Vec<OneHot>,
     pub sos1_constraints: Vec<SOS1Constraints>,
 }
 
+/// Instance, represents a mathematical optimization problem.
+///
+/// Invariants
+/// -----------
+/// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
+/// - Key of `constraints` and `removed_constraints` are disjoint.
+/// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
+///
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instance {
     sense: Sense,
@@ -122,7 +160,7 @@ impl TryFrom<v1::Instance> for Instance {
                         todo!("One-hot constraint {constraint_id:?} contains duplicated decision variable {id:?}");
                     }
                 }
-                one_hot_constraints.push(OneHotConstraint {
+                one_hot_constraints.push(OneHot {
                     id: constraint_id,
                     variables,
                 });
@@ -165,4 +203,26 @@ impl TryFrom<v1::Instance> for Instance {
             constraint_hints,
         })
     }
+}
+
+fn as_constraint_id(
+    constraints: &HashMap<ConstraintID, Constraint>,
+    id: u64,
+) -> Result<ConstraintID, ParseError> {
+    let id = ConstraintID::from(id);
+    if !constraints.contains_key(&id) {
+        return Err(RawParseError::UndefinedConstraintID { id }.into());
+    }
+    Ok(id)
+}
+
+fn as_variable_id(
+    decision_variables: &HashMap<VariableID, DecisionVariable>,
+    id: u64,
+) -> Result<VariableID, ParseError> {
+    let id = VariableID::from(id);
+    if !decision_variables.contains_key(&id) {
+        return Err(RawParseError::UndefinedVariableID { id }.into());
+    }
+    Ok(id)
 }
