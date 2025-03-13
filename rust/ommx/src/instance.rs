@@ -62,16 +62,80 @@ impl Parse for v1::OneHot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SOS1Constraints {
+pub struct Sos1 {
     pub binary_constraint_id: ConstraintID,
     pub big_m_constraint_ids: BTreeSet<ConstraintID>,
     pub variables: BTreeSet<VariableID>,
 }
 
+impl Parse for v1::Sos1 {
+    type Output = Sos1;
+    type Context = (
+        HashMap<VariableID, DecisionVariable>,
+        HashMap<ConstraintID, Constraint>,
+    );
+    fn parse(
+        self,
+        (decision_variable, constraints): &Self::Context,
+    ) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Sos1";
+        let binary_constraint_id = as_constraint_id(constraints, self.binary_constraint_id)
+            .map_err(|e| e.context(message, "binary_constraint_id"))?;
+        let mut big_m_constraint_ids = BTreeSet::new();
+        for id in &self.big_m_constraint_ids {
+            let id = as_constraint_id(constraints, *id)
+                .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
+            if !big_m_constraint_ids.insert(id) {
+                return Err(RawParseError::NonUniqueConstraintID { id }
+                    .context(message, "big_m_constraint_ids"));
+            }
+        }
+        let mut variables = BTreeSet::new();
+        for id in &self.decision_variables {
+            let id = as_variable_id(decision_variable, *id)
+                .map_err(|e| e.context(message, "decision_variables"))?;
+            if !variables.insert(id) {
+                return Err(RawParseError::NonUniqueVariableID { id }
+                    .context(message, "decision_variables"));
+            }
+        }
+        Ok(Sos1 {
+            binary_constraint_id,
+            big_m_constraint_ids,
+            variables,
+        })
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ConstraintHints {
     pub one_hot_constraints: Vec<OneHot>,
-    pub sos1_constraints: Vec<SOS1Constraints>,
+    pub sos1_constraints: Vec<Sos1>,
+}
+
+impl Parse for v1::ConstraintHints {
+    type Output = ConstraintHints;
+    type Context = (
+        HashMap<VariableID, DecisionVariable>,
+        HashMap<ConstraintID, Constraint>,
+    );
+    fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.ConstraintHints";
+        let one_hot_constraints = self
+            .one_hot_constraints
+            .into_iter()
+            .map(|c| c.parse_as(context, message, "one_hot_constraints"))
+            .collect::<Result<Vec<_>, ParseError>>()?;
+        let sos1_constraints = self
+            .sos1_constraints
+            .into_iter()
+            .map(|c| c.parse_as(context, message, "sos1_constraints"))
+            .collect::<Result<_, ParseError>>()?;
+        Ok(ConstraintHints {
+            one_hot_constraints,
+            sos1_constraints,
+        })
+    }
 }
 
 /// Instance, represents a mathematical optimization problem.
@@ -120,75 +184,22 @@ impl TryFrom<v1::Instance> for Instance {
                 .removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
-        let as_variable_id = |id: u64| {
-            let id = VariableID::from(id);
-            if !decision_variables.contains_key(&id) {
-                return Err(RawParseError::UndefinedVariableID { id });
-            }
-            Ok(id)
-        };
-        let as_constraint_id = |id: u64| {
-            let id = ConstraintID::from(id);
-            if !constraints.contains_key(&id) {
-                return Err(RawParseError::UndefinedConstraintID { id });
-            }
-            Ok(id)
-        };
-
         let mut decision_variable_dependency = HashMap::new();
         for (id, f) in value.decision_variable_dependency {
             decision_variable_dependency.insert(
-                as_variable_id(id)
+                as_variable_id(&decision_variables, id)
                     .map_err(|e| e.context(message, "decision_variable_dependency"))?,
                 f.parse_as(&(), message, "decision_variable_dependency")?,
             );
         }
 
+        let context = (decision_variables, constraints);
         let constraint_hints = if let Some(hints) = value.constraint_hints {
-            let mut one_hot_constraints = Vec::new();
-            for onehot in hints.one_hot_constraints {
-                let constraint_id = as_constraint_id(onehot.constraint_id).map_err(|e| {
-                    e.context("ommx.v1.OneHotConstraint", "constraint_id")
-                        .context("ommx.v1.ConstraintHints", "one_hot_constraints")
-                        .context(message, "constraint_hints")
-                })?;
-                let mut variables = BTreeSet::new();
-                for v in &onehot.decision_variables {
-                    let id = as_variable_id(*v)?;
-                    if !variables.insert(id) {
-                        todo!("One-hot constraint {constraint_id:?} contains duplicated decision variable {id:?}");
-                    }
-                }
-                one_hot_constraints.push(OneHot {
-                    id: constraint_id,
-                    variables,
-                });
-            }
-            let mut sos1_constraints = Vec::new();
-            for sos1 in hints.sos1_constraints {
-                let variables = sos1
-                    .decision_variables
-                    .into_iter()
-                    .map(as_variable_id)
-                    .collect::<Result<_, RawParseError>>()?;
-                let big_m_constraint_ids = sos1
-                    .big_m_constraint_ids
-                    .into_iter()
-                    .map(as_constraint_id)
-                    .collect::<Result<_, RawParseError>>()?;
-                sos1_constraints.push(SOS1Constraints {
-                    binary_constraint_id: as_constraint_id(sos1.binary_constraint_id)?,
-                    big_m_constraint_ids,
-                    variables,
-                });
-            }
-            ConstraintHints {
-                one_hot_constraints,
-                sos1_constraints,
-            }
+            hints.parse_as(&context, message, "constraint_hints")?
         } else {
-            ConstraintHints::default()
+            Default::default()
         };
+        let (decision_variables, constraints) = context;
 
         Ok(Self {
             sense,
