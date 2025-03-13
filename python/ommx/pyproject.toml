@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin == 1.8.1"]
+requires = ["maturin == 1.8.2"]
 build-backend = "maturin"
 
 [project]
@@ -16,6 +16,7 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Programming Language :: Rust",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
@@ -36,23 +37,6 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
-
-[dependency-groups]
-dev = [
-  "jupyterlab>=4.3.5",
-  "markdown-code-runner>=2.1.0",
-  "matplotlib>=3.9.4",
-  "mypy-protobuf>=3.6.0",
-  "networkx>=3.2.1",
-  "pyright>=1.1.394",
-  "pytest>=8.3.4",
-  "ruff>=0.9.6",
-  "tomlkit>=0.13.2",
-  "nbformat>=5.9.2",
-  "jupyter>=1.1.1",
-  "nbconvert>=7.16.6",
-  "pyyaml>=6.0.2",
-]
 
 [tool.maturin]
 module-name = "ommx._ommx_rust"

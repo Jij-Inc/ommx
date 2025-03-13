@@ -23,7 +23,7 @@ impl Linear {
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.0.encode_to_vec();
-        Ok(PyBytes::new_bound(py, &bytes))
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn almost_equal(&self, other: &Linear, atol: f64) -> bool {
@@ -71,7 +71,7 @@ impl Quadratic {
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.0.encode_to_vec();
-        Ok(PyBytes::new_bound(py, &bytes))
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn almost_equal(&self, other: &Quadratic, atol: f64) -> bool {
@@ -127,7 +127,7 @@ impl Polynomial {
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.0.encode_to_vec();
-        Ok(PyBytes::new_bound(py, &bytes))
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
@@ -211,7 +211,7 @@ impl Function {
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let bytes = self.0.encode_to_vec();
-        Ok(PyBytes::new_bound(py, &bytes))
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {

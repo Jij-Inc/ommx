@@ -2,12 +2,12 @@
 name = "ommx-api-reference"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.9, <3.13"
+requires-python = ">=3.9, <3.14"
 dependencies = [
-    "myst-parser>=3.0.1",
-    "sphinx-autoapi>=3.5.0",
-    "sphinx-fontawesome>=0.0.6",
-    "sphinx-rtd-theme>=3.0.2",
-    "sphinx>=7.4.7",
-    "tomlkit>=0.13.2",
+  "myst-parser>=3.0.1",
+  "sphinx-autoapi>=3.5.0",
+  "sphinx-fontawesome>=0.0.6",
+  "sphinx-rtd-theme>=3.0.2",
+  "sphinx>=7.4.7",
+  "tomlkit>=0.13.2",
 ]

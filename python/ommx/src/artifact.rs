@@ -7,13 +7,19 @@ use ocipkg::{
 };
 use ommx::artifact::{image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
-pub struct ArtifactArchive(Artifact<OciArchive>);
+pub struct ArtifactArchive(Mutex<Artifact<OciArchive>>);
+
+impl From<Artifact<OciArchive>> for ArtifactArchive {
+    fn from(artifact: Artifact<OciArchive>) -> Self {
+        Self(Mutex::new(artifact))
+    }
+}
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -21,23 +27,28 @@ impl ArtifactArchive {
     #[staticmethod]
     pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
         let artifact = Artifact::from_oci_archive(&path)?;
-        Ok(Self(artifact))
+        Ok(Self(artifact.into()))
     }
 
     #[getter]
     pub fn image_name(&mut self) -> Option<String> {
-        self.0.get_name().map(|name| name.to_string()).ok()
+        self.0
+            .lock()
+            .unwrap()
+            .get_name()
+            .map(|name| name.to_string())
+            .ok()
     }
 
     #[getter]
     pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
-        let manifest = self.0.get_manifest()?;
+        let manifest = self.0.lock().unwrap().get_manifest()?;
         Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
     }
 
     #[getter]
     pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
-        let manifest = self.0.get_manifest()?;
+        let manifest = self.0.lock().unwrap().get_manifest()?;
         Ok(manifest
             .layers()
             .iter()
@@ -48,14 +59,14 @@ impl ArtifactArchive {
 
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
         let digest = Digest::new(digest)?;
-        let blob = self.0.get_blob(&digest)?;
-        Ok(PyBytes::new_bound(py, blob.as_ref()))
+        let blob = self.0.lock().unwrap().get_blob(&digest)?;
+        Ok(PyBytes::new(py, blob.as_ref()))
     }
 
     pub fn push(&mut self) -> Result<()> {
         // Do not expose Artifact<Remote> to Python API for simplicity.
         // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
-        let _remote = self.0.push()?;
+        let _remote = self.0.lock().unwrap().push()?;
         Ok(())
     }
 }
@@ -111,7 +122,7 @@ impl ArtifactDir {
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
         let digest = Digest::new(digest)?;
         let blob = self.0.get_blob(&digest)?;
-        Ok(PyBytes::new_bound(py, blob.as_ref()))
+        Ok(PyBytes::new(py, blob.as_ref()))
     }
 
     pub fn push(&mut self) -> Result<()> {

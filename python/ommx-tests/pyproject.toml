@@ -1,14 +1,17 @@
+
 [build-system]
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ommx_highs_adapter"
+name = "ommx_tests"
 version = "1.8.6"
-description = "An adapter between OMMX and HiGHS"
+
+description = "Test suite for OMMX Python SDK"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
-requires-python = ">= 3.9"
+
+requires-python = ">=3.9"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.9",
@@ -20,7 +23,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx >= 1.8.6, < 2.0.0", "highspy>=1.9.0", "numpy>=1.17.3"]
+dependencies = ["ommx", "pluggy"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
