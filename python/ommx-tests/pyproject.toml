@@ -28,6 +28,3 @@ dependencies = ["ommx", "pluggy"]
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
-
-[dependency-groups]
-dev = ["pytest>=8.3.4", "pytest-github-actions-annotate-failures", "pluggy"]

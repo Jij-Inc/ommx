@@ -20,9 +20,21 @@ members = [
 
 [manifest.dependency-groups]
 dev = [
+    { name = "jupyter", specifier = ">=1.1.1" },
+    { name = "jupyterlab", specifier = ">=4.3.5" },
+    { name = "markdown-code-runner", specifier = ">=2.1.0" },
+    { name = "matplotlib", specifier = ">=3.9.4" },
+    { name = "mypy-protobuf", specifier = ">=3.6.0" },
+    { name = "nbconvert", specifier = ">=7.16.6" },
+    { name = "nbformat", specifier = ">=5.9.2" },
+    { name = "networkx", specifier = ">=3.2.1" },
+    { name = "pluggy" },
     { name = "pyright", specifier = ">=1.1.394" },
     { name = "pytest", specifier = ">=8.3.4" },
     { name = "pytest-github-actions-annotate-failures" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
+    { name = "ruff", specifier = ">=0.9.6" },
+    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
@@ -1710,26 +1722,6 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-    { name = "markdown-code-runner" },
-    { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "matplotlib", version = "3.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "mypy-protobuf" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "tomlkit" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=1.23.0,<3.0.0" },
@@ -1738,24 +1730,6 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=16.0.0,<20.0.0" },
     { name = "python-dateutil", specifier = ">=2.9.0,<3.0.0" },
     { name = "typing-extensions", specifier = ">=4.12.2,<5.0.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.3.5" },
-    { name = "markdown-code-runner", specifier = ">=2.1.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
-    { name = "networkx", specifier = ">=3.2.1" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", specifier = ">=0.9.6" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
@@ -1768,49 +1742,11 @@ dependencies = [
     { name = "ommx" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-    { name = "markdown-code-runner" },
-    { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "matplotlib", version = "3.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "mypy-protobuf" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "tomlkit" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "highspy", specifier = ">=1.9.0" },
     { name = "numpy", specifier = ">=1.17.3" },
     { name = "ommx", editable = "python/ommx" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.3.5" },
-    { name = "markdown-code-runner", specifier = ">=2.1.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
-    { name = "networkx", specifier = ">=3.2.1" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", specifier = ">=0.9.6" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
@@ -1822,48 +1758,10 @@ dependencies = [
     { name = "openjij" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-    { name = "markdown-code-runner" },
-    { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "matplotlib", version = "3.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "mypy-protobuf" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "tomlkit" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "ommx", editable = "python/ommx" },
     { name = "openjij", specifier = ">=0.9.2" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.3.5" },
-    { name = "markdown-code-runner", specifier = ">=2.1.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
-    { name = "networkx", specifier = ">=3.2.1" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", specifier = ">=0.9.6" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
@@ -1875,48 +1773,10 @@ dependencies = [
     { name = "pyscipopt" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-    { name = "markdown-code-runner" },
-    { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "matplotlib", version = "3.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "mypy-protobuf" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "tomlkit" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "ommx", editable = "python/ommx" },
     { name = "pyscipopt", specifier = ">=5.4.0,<6.0.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.3.5" },
-    { name = "markdown-code-runner", specifier = ">=2.1.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
-    { name = "networkx", specifier = ">=3.2.1" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", specifier = ">=0.9.6" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
 ]
 
 [[package]]
@@ -1930,23 +1790,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "jupyter" },
-    { name = "jupyterlab" },
-    { name = "markdown-code-runner" },
-    { name = "matplotlib", version = "3.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "matplotlib", version = "3.10.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
     { name = "mip" },
-    { name = "mypy-protobuf" },
-    { name = "nbconvert" },
-    { name = "nbformat" },
-    { name = "networkx", version = "3.2.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
-    { name = "networkx", version = "3.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-    { name = "tomlkit" },
 ]
 
 [package.metadata]
@@ -1956,23 +1800,7 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupyterlab", specifier = ">=4.3.5" },
-    { name = "markdown-code-runner", specifier = ">=2.1.0" },
-    { name = "matplotlib", specifier = ">=3.9.4" },
-    { name = "mip", git = "https://github.com/coin-or/python-mip.git" },
-    { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
-    { name = "networkx", specifier = ">=3.2.1" },
-    { name = "pyright", specifier = ">=1.1.394" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
-    { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "ruff", specifier = ">=0.9.6" },
-    { name = "tomlkit", specifier = ">=0.13.2" },
-]
+dev = [{ name = "mip", git = "https://github.com/coin-or/python-mip.git" }]
 
 [[package]]
 name = "ommx-tests"
@@ -1983,24 +1811,10 @@ dependencies = [
     { name = "pluggy" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "pluggy" },
-    { name = "pytest" },
-    { name = "pytest-github-actions-annotate-failures" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "ommx", editable = "python/ommx" },
     { name = "pluggy" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pluggy" },
-    { name = "pytest", specifier = ">=8.3.4" },
-    { name = "pytest-github-actions-annotate-failures" },
 ]
 
 [[package]]
