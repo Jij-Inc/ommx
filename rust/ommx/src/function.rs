@@ -26,6 +26,8 @@ impl Parse for v1::Function {
     type Output = Function;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        // FIXME: We should check the decision variable ID used in the function are valid.
+        //        This will be done when implementing Linear and Quadratic functions.
         match self.function.ok_or(RawParseError::UnsupportedV1Function)? {
             v1::function::Function::Constant(c) => Ok(Function::Constant(c)),
             v1::function::Function::Linear(l) => Ok(Function::Linear(l)),
