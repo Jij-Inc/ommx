@@ -1,5 +1,4 @@
 use crate::{
-    decision_variable,
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
     Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
