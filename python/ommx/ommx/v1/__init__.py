@@ -731,8 +731,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         self.raw.ParseFromString(instance.to_bytes())
 
     def log_encode(self, decision_variable_ids: set[int]):
-        """
+        r"""
         Log-encode the integer decision variables
+
+        Log encoding of an integer variable :math:`x \in [l, u]` is to represent by :math:`m` bits :math:`b_i \in \{0, 1\}` by
+
+        .. math::
+            x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+
+        where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
 
         Examples
         =========
@@ -780,10 +787,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         5    binary    0.0    1.0  ommx.log_encode     [2, 0]
         6    binary    0.0    1.0  ommx.log_encode     [2, 1]
 
-        The `subscripts` of the new binary variables must be two elements in form of :math:`[k, l]` where
+        The `subscripts` of the new binary variables must be two elements in form of :math:`[i, j]` where
 
-        - :math:`k` is the decision variable ID of the original integer variable
-        - :math:`l` is the index of the binary variable
+        - :math:`i` is the decision variable ID of the original integer variable
+        - :math:`j` is the index of the binary variable
 
         After log-encoded, the problem does not contains original integer variables,
         and solver will returns only encoded variables.
