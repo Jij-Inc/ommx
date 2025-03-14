@@ -366,6 +366,27 @@ class Instance(InstanceBase, UserAnnotationBase):
     def objective(self) -> Function:
         return Function(self.raw.objective)
 
+    @objective.setter
+    def objective(
+        self,
+        value: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ):
+        """
+        Set the objective function.
+
+        Examples
+        ---------
+
+
+        """
+        self.raw.objective.CopyFrom(as_function(value))
+
     @property
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
