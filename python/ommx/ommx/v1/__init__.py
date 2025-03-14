@@ -366,6 +366,32 @@ class Instance(InstanceBase, UserAnnotationBase):
     def objective(self) -> Function:
         return Function(self.raw.objective)
 
+    @objective.setter
+    def objective(self, value: int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function):
+        """
+        Set the objective function.
+
+        Examples
+        ---------
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+
+        >>> instance.objective = x[1]
+        >>> instance.objective
+        Function(x0)
+
+        """
+        self.raw.objective.CopyFrom(as_function(value))
+
     @property
     def sense(self) -> _Instance.Sense.ValueType:
         return self.raw.sense
