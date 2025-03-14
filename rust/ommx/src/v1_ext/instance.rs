@@ -1,8 +1,8 @@
 use crate::{
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
-        decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Parameter, ParametricInstance, RemovedConstraint,
+        decision_variable::Kind, instance::Sense, Bound, DecisionVariable, Equality, Function,
+        Instance, Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -21,6 +21,21 @@ impl Instance {
             // Empty function is regarded as zero function
             None => Cow::Owned(Function::zero()),
         }
+    }
+
+    pub fn get_bounds(&self) -> HashMap<u64, Bound> {
+        self.decision_variables
+            .iter()
+            .map(|dv| {
+                (
+                    dv.id,
+                    dv.bound.clone().unwrap_or(Bound {
+                        lower: f64::NEG_INFINITY,
+                        upper: f64::INFINITY,
+                    }),
+                )
+            })
+            .collect()
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
