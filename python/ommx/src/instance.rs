@@ -67,6 +67,15 @@ impl Instance {
     pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
         self.0.restore_constraint(constraint_id)
     }
+
+    pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
+        let replacements = integer_variable_ids
+            .iter()
+            .map(|&id| Ok((id, self.0.log_encoding(id)?.into())))
+            .collect::<Result<_>>()?;
+        self.0.substitute(replacements)?;
+        Ok(())
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
