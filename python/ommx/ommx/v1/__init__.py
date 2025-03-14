@@ -770,19 +770,20 @@ class Instance(InstanceBase, UserAnnotationBase):
         Added binary variables are also appeared in :attr:`decision_variables`
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
-                kind  lower  upper               name subscripts
+               kind  lower  upper             name subscripts
         id
-        0   integer    0.0    3.0                  x        [0]
-        1   integer    0.0    3.0                  x        [1]
-        2   integer    0.0    3.0                  x        [2]
-        3    binary    0.0    1.0  ommx.log_encoding     [0, 0]
-        4    binary    0.0    1.0  ommx.log_encoding     [0, 1]
-        5    binary    0.0    1.0  ommx.log_encoding     [2, 0]
-        6    binary    0.0    1.0  ommx.log_encoding     [2, 1]
+        0   integer    0.0    3.0                x        [0]
+        1   integer    0.0    3.0                x        [1]
+        2   integer    0.0    3.0                x        [2]
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary    0.0    1.0  ommx.log_encode     [2, 0]
+        6    binary    0.0    1.0  ommx.log_encode     [2, 1]
 
-        The `subscripts` of the new binary variables must be two elements in form of `[k, l]` where
-        - `k` is the decision variable ID of the original integer variable
-        - `l` is the index of the binary variable
+        The `subscripts` of the new binary variables must be two elements in form of :math:`[k, l]` where
+
+        - :math:`k` is the decision variable ID of the original integer variable
+        - :math:`l` is the index of the binary variable
 
         After log-encoded, the problem does not contains original integer variables,
         and solver will returns only encoded variables.
@@ -798,9 +799,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.extract_decision_variables("x")
         {(0,): 2.0, (1,): 2.0, (2,): 0.0}
 
-        The name of the binary variables are automatically generated as `ommx.log_encoding`.
+        The name of the binary variables are automatically generated as `ommx.log_encode`.
 
-        >>> solution.extract_decision_variables("ommx.log_encoding")
+        >>> solution.extract_decision_variables("ommx.log_encode")
         {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
 
         """

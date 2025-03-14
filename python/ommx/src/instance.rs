@@ -71,7 +71,7 @@ impl Instance {
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
         let replacements = integer_variable_ids
             .iter()
-            .map(|&id| Ok((id, self.0.log_encoding(id)?.into())))
+            .map(|&id| Ok((id, self.0.log_encode(id)?.into())))
             .collect::<Result<_>>()?;
         self.0.substitute(replacements)?;
         Ok(())
