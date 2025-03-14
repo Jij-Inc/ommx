@@ -737,69 +737,71 @@ class Instance(InstanceBase, UserAnnotationBase):
         Examples
         =========
 
-        .. doctest::
+        Let's consider a simple integer programming problem with three integer variables :math:`x_0`, :math:`x_1`, and :math:`x_2`.
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x = [
-            ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
-            ...     for i in range(3)
-            ... ]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(x),
-            ...     constraints=[],
-            ...     sense=Instance.MAXIMIZE,
-            ... )
-            >>> instance.objective
-            Function(x0 + x1 + x2)
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
 
-            To log-encode the integer variables x0 and x2 (except x1), call `log_encode`:
+        To log-encode the integer variables :math:`x_0` and :math:`x_2` (except :math:`x_1`), call :meth:`log_encode`:
 
-            >>> instance.log_encode({0, 2})
+        >>> instance.log_encode({0, 2})
 
-            Integer variable in range [0, 3] can be represented by two binary variables:
-            - x0 = x3 + 2*x4
-            - x2 = x5 + 2*x6
-            And these are substituted into the objective and constraint functions.
+        Integer variable in range :math:`[0, 3]` can be represented by two binary variables:
 
-            >>> instance.objective
-            Function(x1 + x3 + 2*x4 + x5 + 2*x6)
+        .. math::
+            x_0 = b_{0, 0} + 2 b_{0, 1}, x_2 = b_{2, 0} + 2 b_{2, 1}
 
-            Added binary variables are also appeared in `decision_variables`
+        And these are substituted into the objective and constraint functions.
 
-            >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
-                   kind  lower  upper               name subscripts
-            id
-            0   integer    0.0    3.0                  x        [0]
-            1   integer    0.0    3.0                  x        [1]
-            2   integer    0.0    3.0                  x        [2]
-            3    binary    0.0    1.0  ommx.log_encoding     [0, 0]
-            4    binary    0.0    1.0  ommx.log_encoding     [0, 1]
-            5    binary    0.0    1.0  ommx.log_encoding     [2, 0]
-            6    binary    0.0    1.0  ommx.log_encoding     [2, 1]
+        >>> instance.objective
+        Function(x1 + x3 + 2*x4 + x5 + 2*x6)
 
-            The `subscripts` of the new binary variables must be two elements in form of `[k, l]` where
-            - `k` is the decision variable ID of the original integer variable
-            - `l` is the index of the binary variable
+        Added binary variables are also appeared in :attr:`decision_variables`
 
-            After log-encoded, the problem does not contains original integer variables,
-            and solver will returns only encoded variables.
+        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+                kind  lower  upper               name subscripts
+        id
+        0   integer    0.0    3.0                  x        [0]
+        1   integer    0.0    3.0                  x        [1]
+        2   integer    0.0    3.0                  x        [2]
+        3    binary    0.0    1.0  ommx.log_encoding     [0, 0]
+        4    binary    0.0    1.0  ommx.log_encoding     [0, 1]
+        5    binary    0.0    1.0  ommx.log_encoding     [2, 0]
+        6    binary    0.0    1.0  ommx.log_encoding     [2, 1]
 
-            >>> solution = instance.evaluate({
-            ...   1: 2,          # x1 = 2
-            ...   3: 0, 4: 1,    # x0 = x3 + 2*x4 = 0 + 2*1 = 2
-            ...   5: 0, 6: 0     # x2 = x5 + 2*x6 = 0 + 2*0 = 0
-            ... })               # x0 and x2 are not contained in the solver result
+        The `subscripts` of the new binary variables must be two elements in form of `[k, l]` where
+        - `k` is the decision variable ID of the original integer variable
+        - `l` is the index of the binary variable
 
-            x0 and x2 are automatically evaluated:
+        After log-encoded, the problem does not contains original integer variables,
+        and solver will returns only encoded variables.
 
-            >>> solution.extract_decision_variables("x")
-            {(0,): 2.0, (1,): 2.0, (2,): 0.0}
+        >>> solution = instance.evaluate({
+        ...   1: 2,          # x1 = 2
+        ...   3: 0, 4: 1,    # x0 = x3 + 2*x4 = 0 + 2*1 = 2
+        ...   5: 0, 6: 0     # x2 = x5 + 2*x6 = 0 + 2*0 = 0
+        ... })               # x0 and x2 are not contained in the solver result
 
-            The name of the binary variables are automatically generated as `ommx.log_encoding`.
+        x0 and x2 are automatically evaluated:
 
-            >>> solution.extract_decision_variables("ommx.log_encoding")
-            {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
+        >>> solution.extract_decision_variables("x")
+        {(0,): 2.0, (1,): 2.0, (2,): 0.0}
+
+        The name of the binary variables are automatically generated as `ommx.log_encoding`.
+
+        >>> solution.extract_decision_variables("ommx.log_encoding")
+        {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
