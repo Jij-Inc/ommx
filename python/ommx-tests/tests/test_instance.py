@@ -1,5 +1,6 @@
 from ommx.v1 import Instance, DecisionVariable, Function
 
+
 def test_set_objective():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(

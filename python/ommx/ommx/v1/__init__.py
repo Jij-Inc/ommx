@@ -367,7 +367,16 @@ class Instance(InstanceBase, UserAnnotationBase):
         return Function(self.raw.objective)
 
     @objective.setter
-    def objective(self, value: int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function):
+    def objective(
+        self,
+        value: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ):
         """
         Set the objective function.
 
