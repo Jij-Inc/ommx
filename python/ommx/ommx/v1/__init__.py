@@ -730,6 +730,92 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.restore_constraint(constraint_id)
         self.raw.ParseFromString(instance.to_bytes())
 
+    def log_encode(self, decision_variable_ids: set[int]):
+        r"""
+        Log-encode the integer decision variables
+
+        Log encoding of an integer variable :math:`x \in [l, u]` is to represent by :math:`m` bits :math:`b_i \in \{0, 1\}` by
+
+        .. math::
+            x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+
+        where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
+
+        Examples
+        =========
+
+        Let's consider a simple integer programming problem with three integer variables :math:`x_0`, :math:`x_1`, and :math:`x_2`.
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+
+        To log-encode the integer variables :math:`x_0` and :math:`x_2` (except :math:`x_1`), call :meth:`log_encode`:
+
+        >>> instance.log_encode({0, 2})
+
+        Integer variable in range :math:`[0, 3]` can be represented by two binary variables:
+
+        .. math::
+            x_0 = b_{0, 0} + 2 b_{0, 1}, x_2 = b_{2, 0} + 2 b_{2, 1}
+
+        And these are substituted into the objective and constraint functions.
+
+        >>> instance.objective
+        Function(x1 + x3 + 2*x4 + x5 + 2*x6)
+
+        Added binary variables are also appeared in :attr:`decision_variables`
+
+        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper             name subscripts
+        id
+        0   integer    0.0    3.0                x        [0]
+        1   integer    0.0    3.0                x        [1]
+        2   integer    0.0    3.0                x        [2]
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary    0.0    1.0  ommx.log_encode     [2, 0]
+        6    binary    0.0    1.0  ommx.log_encode     [2, 1]
+
+        The `subscripts` of the new binary variables must be two elements in form of :math:`[i, j]` where
+
+        - :math:`i` is the decision variable ID of the original integer variable
+        - :math:`j` is the index of the binary variable
+
+        After log-encoded, the problem does not contains original integer variables,
+        and solver will returns only encoded variables.
+
+        >>> solution = instance.evaluate({
+        ...   1: 2,          # x1 = 2
+        ...   3: 0, 4: 1,    # x0 = x3 + 2*x4 = 0 + 2*1 = 2
+        ...   5: 0, 6: 0     # x2 = x5 + 2*x6 = 0 + 2*0 = 0
+        ... })               # x0 and x2 are not contained in the solver result
+
+        x0 and x2 are automatically evaluated:
+
+        >>> solution.extract_decision_variables("x")
+        {(0,): 2.0, (1,): 2.0, (2,): 0.0}
+
+        The name of the binary variables are automatically generated as `ommx.log_encode`.
+
+        >>> solution.extract_decision_variables("ommx.log_encode")
+        {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.log_encode(decision_variable_ids)
+        self.raw.ParseFromString(instance.to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase, UserAnnotationBase):

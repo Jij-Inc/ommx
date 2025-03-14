@@ -314,7 +314,7 @@ impl Instance {
     /// - The specified decision variable is not an integer type.
     /// - The bound of the decision variable is not set or not finite.
     ///
-    pub fn log_encoding(&mut self, decision_variable_id: u64) -> Result<Linear> {
+    pub fn log_encode(&mut self, decision_variable_id: u64) -> Result<Linear> {
         let v = self
             .decision_variables
             .iter()
@@ -372,7 +372,7 @@ impl Instance {
             ));
             self.decision_variables.push(DecisionVariable {
                 id,
-                name: Some("ommx.log_encoding".to_string()),
+                name: Some("ommx.log_encode".to_string()),
                 subscripts: vec![decision_variable_id as i64, i as i64],
                 kind: Kind::Binary as i32,
                 bound: Some(crate::v1::Bound {
@@ -572,7 +572,7 @@ mod tests {
         }
 
         #[test]
-        fn log_encoding((lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
+        fn log_encode((lower, upper) in (-10.0_f64..10.0, -10.0_f64..10.0)
             .prop_filter("At least one integer", |(lower, upper)| lower.ceil() <= upper.floor())
         ) {
             let mut instance = Instance::default();
@@ -583,7 +583,7 @@ mod tests {
                 bound: Some(crate::v1::Bound { lower, upper }),
                 ..Default::default()
             });
-            let encoded = instance.log_encoding(0).unwrap();
+            let encoded = instance.log_encode(0).unwrap();
 
             // Test the ID of yielded decision variables are not duplicated
             instance.validate().unwrap();
@@ -593,7 +593,7 @@ mod tests {
                 .decision_variables
                 .iter()
                 .filter_map(|dv| {
-                    if dv.name == Some("ommx.log_encoding".to_string()) && dv.subscripts[0] == 0 {
+                    if dv.name == Some("ommx.log_encode".to_string()) && dv.subscripts[0] == 0 {
                         Some(dv.id)
                     } else {
                         None
