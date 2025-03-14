@@ -374,20 +374,6 @@ class Instance(InstanceBase, UserAnnotationBase):
         Examples
         ---------
 
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.objective
-        Function(x0 + x1 + x2)
-
-        >>> instance.objective = x[1]
-        >>> instance.objective
-        Function(x0)
 
         """
         self.raw.objective.CopyFrom(as_function(value))
