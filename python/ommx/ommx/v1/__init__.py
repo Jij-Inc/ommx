@@ -767,9 +767,9 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             Added binary variables are also appeared in `decision_variables`
 
-            >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]
+            >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                    kind  lower  upper               name subscripts
-            id                                                     
+            id
             0   integer    0.0    3.0                  x        [0]
             1   integer    0.0    3.0                  x        [1]
             2   integer    0.0    3.0                  x        [2]
