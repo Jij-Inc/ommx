@@ -37,7 +37,6 @@ impl From<f64> for Bound {
 
 impl Add for Bound {
     type Output = Bound;
-
     fn add(self, rhs: Self) -> Self::Output {
         Bound {
             lower: self.lower + rhs.lower,
@@ -54,6 +53,20 @@ impl Zero for Bound {
     }
     fn is_zero(&self) -> bool {
         self.lower == 0.0 && self.upper == 0.0
+    }
+}
+
+impl Mul for Bound {
+    type Output = Bound;
+    fn mul(self, rhs: Self) -> Self::Output {
+        let a = self.lower * rhs.lower;
+        let b = self.lower * rhs.upper;
+        let c = self.upper * rhs.lower;
+        let d = self.upper * rhs.upper;
+        Bound {
+            lower: a.min(b).min(c).min(d),
+            upper: a.max(b).max(c).max(d),
+        }
     }
 }
 
@@ -87,5 +100,35 @@ impl Bound {
     /// `[lower, upper]` with finite `lower` and `upper`
     pub fn is_finite(&self) -> bool {
         self.lower.is_finite() && self.upper.is_finite()
+    }
+
+    pub fn pow(&self, exp: u8) -> Self {
+        if exp % 2 == 0 {
+            if self.lower >= 0.0 {
+                // 0 <= lower <= upper
+                Bound {
+                    lower: self.lower.powi(exp as i32),
+                    upper: self.upper.powi(exp as i32),
+                }
+            } else if self.upper <= 0.0 {
+                // lower <= upper <= 0
+                Bound {
+                    lower: self.upper.powi(exp as i32),
+                    upper: self.lower.powi(exp as i32),
+                }
+            } else {
+                // lower <= 0 <= upper
+                Bound {
+                    lower: 0.0,
+                    upper: self.upper.powi(exp as i32),
+                }
+            }
+        } else {
+            // pow is monotonic for odd exponents
+            Bound {
+                lower: self.lower.powi(exp as i32),
+                upper: self.upper.powi(exp as i32),
+            }
+        }
     }
 }
