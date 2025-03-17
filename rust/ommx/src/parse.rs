@@ -1,4 +1,4 @@
-use crate::{ConstraintID, VariableID};
+use crate::{BoundError, ConstraintID, VariableID};
 use prost::DecodeError;
 use std::fmt;
 
@@ -100,6 +100,9 @@ pub enum RawParseError {
 
     #[error("Non-unique constraint ID is found where uniqueness is required: {id:?}")]
     NonUniqueConstraintID { id: ConstraintID },
+
+    #[error(transparent)]
+    InvalidBound(#[from] BoundError),
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]

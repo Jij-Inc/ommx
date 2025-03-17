@@ -1,12 +1,12 @@
 use crate::{
     macros::*,
     v1::{linear::Term, Linear, Quadratic},
-    Bound,
+    Bound, Bounds, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     iter::Sum,
     ops::*,
@@ -70,13 +70,17 @@ impl Linear {
         }
     }
 
-    pub fn evaluate_bound(&self, bounds: HashMap<u64, Bound>) -> Bound {
-        let mut bound = Bound::from(0.0);
+    pub fn evaluate_bound(&self, bounds: &Bounds) -> Bound {
+        let mut bound = Bound::zero();
         for term in &self.terms {
-            let Some(b) = bounds.get(&term.id) else {
-                return Bound::no_bound();
+            if term.coefficient.is_zero() {
+                continue;
+            }
+            let id = VariableID::from(term.id);
+            let Some(b) = bounds.get(&id) else {
+                return Bound::default();
             };
-            bound = bound + term.coefficient * *b;
+            bound += term.coefficient * *b;
         }
         bound + self.constant
     }

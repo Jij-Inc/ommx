@@ -56,7 +56,10 @@ impl Parse for v1::DecisionVariable {
         Ok(DecisionVariable {
             id: VariableID(self.id),
             kind: self.kind().parse_as(&(), message, "kind")?,
-            bound: self.bound.map(Bound::from).unwrap_or_default(),
+            bound: self
+                .bound
+                .unwrap_or_default()
+                .parse_as(&(), message, "bound")?,
             substituted_value: self.substituted_value,
             name: self.name,
             subscripts: self.subscripts,

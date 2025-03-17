@@ -4,7 +4,7 @@ use crate::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
         Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
-    Bound,
+    Bound, Bounds, VariableID,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -24,19 +24,19 @@ impl Instance {
         }
     }
 
-    pub fn get_bounds(&self) -> HashMap<u64, Bound> {
-        self.decision_variables
-            .iter()
-            .map(|dv| {
-                (
-                    dv.id,
-                    dv.bound
-                        .as_ref()
-                        .map(|b| b.clone().into())
-                        .unwrap_or_default(),
-                )
-            })
-            .collect()
+    pub fn get_bounds(&self) -> Result<Bounds> {
+        let mut bounds = Bounds::new();
+        for v in &self.decision_variables {
+            let id = VariableID::from(v.id);
+            if let Some(bound) = &v.bound {
+                let bound = bound.clone().try_into()?;
+                if bound == Bound::default() {
+                    continue;
+                }
+                bounds.insert(id, bound);
+            }
+        }
+        Ok(bounds)
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
