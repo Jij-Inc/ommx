@@ -90,7 +90,7 @@ impl Parse for v1::Bound {
 impl TryFrom<v1::Bound> for Bound {
     type Error = ParseError;
     fn try_from(value: v1::Bound) -> std::result::Result<Self, Self::Error> {
-        Ok(value.parse(&())?)
+        value.parse(&())
     }
 }
 
