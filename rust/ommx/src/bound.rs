@@ -1,5 +1,5 @@
 use crate::{
-    macros::{impl_add_from, impl_add_inverse, impl_mul_inverse},
+    macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError, RawParseError},
     v1, VariableID,
 };
@@ -55,13 +55,11 @@ pub type Bounds = HashMap<VariableID, Bound>;
 /// use ommx::Bound;
 ///
 /// // Usual
-/// let bound = Bound::from([1.0, 2.0]);
-/// // Into trait
-/// let bound: Bound = [1.0, 2.0].into();
+/// let bound = Bound::try_from([1.0, 2.0]).unwrap();
 /// // Single point `[1.0, 1.0]`
-/// let bound = Bound::from(1.0);
+/// let bound = Bound::try_from(1.0).unwrap();
 /// // Default is `(-inf, inf)`
-/// assert_eq!(Bound::default(), Bound::from([f64::NEG_INFINITY, f64::INFINITY]));
+/// assert_eq!(Bound::default(), Bound::try_from([f64::NEG_INFINITY, f64::INFINITY]).unwrap());
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Bound {
@@ -88,38 +86,38 @@ impl Parse for v1::Bound {
 }
 
 impl TryFrom<v1::Bound> for Bound {
-    type Error = ParseError;
-    fn try_from(value: v1::Bound) -> std::result::Result<Self, Self::Error> {
-        value.parse(&())
+    type Error = BoundError;
+    fn try_from(value: v1::Bound) -> Result<Self, Self::Error> {
+        Self::new(value.lower, value.upper)
     }
 }
 
-impl From<f64> for Bound {
-    fn from(a: f64) -> Self {
-        Self { lower: a, upper: a }
+impl TryFrom<f64> for Bound {
+    type Error = BoundError;
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        Self::new(value, value)
     }
 }
 
-impl From<[f64; 2]> for Bound {
-    fn from([lower, upper]: [f64; 2]) -> Self {
-        assert!(
-            lower <= upper,
-            "Bound must satisfy lower({lower}) <= upper({upper})",
-        );
-        Self { lower, upper }
+impl TryFrom<[f64; 2]> for Bound {
+    type Error = BoundError;
+    fn try_from([lower, upper]: [f64; 2]) -> Result<Self, Self::Error> {
+        Self::new(lower, upper)
     }
 }
 
 impl Add for Bound {
     type Output = Bound;
     fn add(self, rhs: Self) -> Self::Output {
-        Bound {
-            lower: self.lower + rhs.lower,
-            upper: self.upper + rhs.upper,
-        }
+        Self::new(self.lower + rhs.lower, self.upper + rhs.upper).unwrap()
     }
 }
-impl_add_from!(Bound, f64);
+impl Add<f64> for Bound {
+    type Output = Bound;
+    fn add(self, rhs: f64) -> Self::Output {
+        Bound::new(self.lower + rhs, self.upper + rhs).unwrap()
+    }
+}
 impl_add_inverse!(f64, Bound);
 
 impl AddAssign for Bound {
@@ -130,7 +128,7 @@ impl AddAssign for Bound {
 
 impl Zero for Bound {
     fn zero() -> Self {
-        Self::from(0.0)
+        Self::try_from(0.0).unwrap()
     }
     fn is_zero(&self) -> bool {
         self.lower == 0.0 && self.upper == 0.0
@@ -144,10 +142,7 @@ impl Mul for Bound {
         let b = self.lower * rhs.upper;
         let c = self.upper * rhs.lower;
         let d = self.upper * rhs.upper;
-        Bound {
-            lower: a.min(b).min(c).min(d),
-            upper: a.max(b).max(c).max(d),
-        }
+        Bound::new(a.min(b).min(c).min(d), a.max(b).max(c).max(d)).unwrap()
     }
 }
 
@@ -155,15 +150,9 @@ impl Mul<f64> for Bound {
     type Output = Bound;
     fn mul(self, rhs: f64) -> Self::Output {
         if rhs >= 0.0 {
-            Bound {
-                lower: self.lower * rhs,
-                upper: self.upper * rhs,
-            }
+            Bound::new(self.lower * rhs, self.upper * rhs).unwrap()
         } else {
-            Bound {
-                lower: self.upper * rhs,
-                upper: self.lower * rhs,
-            }
+            Bound::new(self.upper * rhs, self.lower * rhs).unwrap()
         }
     }
 }
@@ -204,29 +193,24 @@ impl Bound {
         if exp % 2 == 0 {
             if self.lower >= 0.0 {
                 // 0 <= lower <= upper
-                Bound {
-                    lower: self.lower.powi(exp as i32),
-                    upper: self.upper.powi(exp as i32),
-                }
+                Bound::new(self.lower.powi(exp as i32), self.upper.powi(exp as i32)).unwrap()
             } else if self.upper <= 0.0 {
                 // lower <= upper <= 0
-                Bound {
-                    lower: self.upper.powi(exp as i32),
-                    upper: self.lower.powi(exp as i32),
-                }
+                Bound::new(self.upper.powi(exp as i32), self.lower.powi(exp as i32)).unwrap()
             } else {
                 // lower <= 0 <= upper
-                Bound {
-                    lower: 0.0,
-                    upper: self.upper.powi(exp as i32),
-                }
+                Bound::new(
+                    0.0,
+                    self.upper
+                        .abs()
+                        .powi(exp as i32)
+                        .max(self.lower.abs().powi(exp as i32)),
+                )
+                .unwrap()
             }
         } else {
             // pow is monotonic for odd exponents
-            Bound {
-                lower: self.lower.powi(exp as i32),
-                upper: self.upper.powi(exp as i32),
-            }
+            Bound::new(self.lower.powi(exp as i32), self.upper.powi(exp as i32)).unwrap()
         }
     }
 }
