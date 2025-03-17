@@ -171,6 +171,7 @@ pub mod v1 {
 }
 
 mod v1_ext {
+    mod bound;
     mod constraint;
     mod decision_variable;
     mod function;
