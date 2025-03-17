@@ -143,6 +143,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod bound;
 mod constraint;
 mod decision_variable;
 mod evaluate;
@@ -160,10 +161,12 @@ mod solution;
 mod sorted_ids;
 mod state;
 
+pub use bound::*;
 pub use constraint::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
 pub use function::*;
+pub use instance::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
@@ -171,7 +174,6 @@ pub mod v1 {
 }
 
 mod v1_ext {
-    mod bound;
     mod constraint;
     mod decision_variable;
     mod function;

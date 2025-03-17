@@ -1,9 +1,10 @@
 use crate::{
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
-        decision_variable::Kind, instance::Sense, Bound, DecisionVariable, Equality, Function,
-        Instance, Linear, Parameter, ParametricInstance, RemovedConstraint,
+        decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
+        Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
+    Bound,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -29,10 +30,10 @@ impl Instance {
             .map(|dv| {
                 (
                     dv.id,
-                    dv.bound.clone().unwrap_or(Bound {
-                        lower: f64::NEG_INFINITY,
-                        upper: f64::INFINITY,
-                    }),
+                    dv.bound
+                        .as_ref()
+                        .map(|b| b.clone().into())
+                        .unwrap_or_default(),
                 )
             })
             .collect()

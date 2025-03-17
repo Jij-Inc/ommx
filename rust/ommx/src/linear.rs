@@ -1,6 +1,7 @@
 use crate::{
     macros::*,
-    v1::{linear::Term, Bound, Linear, Quadratic},
+    v1::{linear::Term, Linear, Quadratic},
+    Bound,
 };
 use approx::AbsDiffEq;
 use num::Zero;

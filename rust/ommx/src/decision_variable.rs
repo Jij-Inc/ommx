@@ -1,34 +1,10 @@
-use crate::{parse::*, v1};
+use crate::{parse::*, v1, Bound};
 use derive_more::{Deref, From};
 use std::collections::HashMap;
 
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Bound {
-    pub lower: f64,
-    pub upper: f64,
-}
-
-impl Default for Bound {
-    fn default() -> Self {
-        Self {
-            lower: f64::NEG_INFINITY,
-            upper: f64::INFINITY,
-        }
-    }
-}
-
-impl From<v1::Bound> for Bound {
-    fn from(bound: v1::Bound) -> Self {
-        Self {
-            lower: bound.lower,
-            upper: bound.upper,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {

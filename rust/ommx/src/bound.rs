@@ -1,10 +1,33 @@
 use crate::{
     macros::{impl_add_from, impl_add_inverse, impl_mul_inverse},
-    v1::Bound,
+    v1,
 };
+use num::Zero;
 use std::ops::*;
 
-impl Copy for Bound {}
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Bound {
+    pub lower: f64,
+    pub upper: f64,
+}
+
+impl Default for Bound {
+    fn default() -> Self {
+        Self {
+            lower: f64::NEG_INFINITY,
+            upper: f64::INFINITY,
+        }
+    }
+}
+
+impl From<v1::Bound> for Bound {
+    fn from(bound: v1::Bound) -> Self {
+        Self {
+            lower: bound.lower,
+            upper: bound.upper,
+        }
+    }
+}
 
 impl From<f64> for Bound {
     fn from(a: f64) -> Self {
@@ -24,6 +47,15 @@ impl Add for Bound {
 }
 impl_add_from!(Bound, f64);
 impl_add_inverse!(f64, Bound);
+
+impl Zero for Bound {
+    fn zero() -> Self {
+        Self::from(0.0)
+    }
+    fn is_zero(&self) -> bool {
+        self.lower == 0.0 && self.upper == 0.0
+    }
+}
 
 impl Mul<f64> for Bound {
     type Output = Bound;
