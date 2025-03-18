@@ -1,9 +1,11 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError, RawParseError},
-    v1, VariableID,
+    v1::{self, State},
+    VariableID,
 };
 use num::Zero;
+use proptest::prelude::*;
 use std::{collections::HashMap, ops::*};
 use thiserror::Error;
 
@@ -213,4 +215,27 @@ impl Bound {
             Bound::new(self.lower.powi(exp as i32), self.upper.powi(exp as i32)).unwrap()
         }
     }
+
+    /// Check the `value` is in the bound with absolute tolerance
+    pub fn contains(&self, value: f64, atol: f64) -> bool {
+        self.lower - atol <= value && value <= self.upper + atol
+    }
+
+    pub fn as_range(&self) -> RangeInclusive<f64> {
+        self.lower..=self.upper
+    }
+}
+
+pub fn arbitrary_state_within_bounds(bounds: &Bounds) -> BoxedStrategy<State> {
+    let mut stratety = Just(HashMap::new()).boxed();
+    for (id, bound) in bounds {
+        let raw_id = *id.deref();
+        stratety = (stratety, bound.as_range())
+            .prop_map(move |(mut state, value)| {
+                state.insert(raw_id, value);
+                state
+            })
+            .boxed();
+    }
+    stratety.prop_map(|state| state.into()).boxed()
 }
