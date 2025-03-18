@@ -5,6 +5,7 @@ use crate::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
     },
+    Bound, Bounds,
 };
 use anyhow::Result;
 use approx::AbsDiffEq;
@@ -180,6 +181,28 @@ impl Function {
             out = out + v;
         }
         Ok(out)
+    }
+
+    pub fn evaluate_bound(&self, bounds: &Bounds) -> Bound {
+        let mut bound = Bound::zero();
+        for (ids, value) in self.into_iter() {
+            if value.is_zero() {
+                continue;
+            }
+            if ids.is_empty() {
+                bound += value;
+                continue;
+            }
+            let mut cur = Bound::new(1.0, 1.0).unwrap();
+            for (id, exp) in ids.chunks() {
+                let Some(b) = bounds.get(&id.into()) else {
+                    return Bound::default();
+                };
+                cur *= b.pow(exp as u8);
+            }
+            bound += value * cur;
+        }
+        bound
     }
 }
 
@@ -375,9 +398,8 @@ impl fmt::Display for Function {
 
 #[cfg(test)]
 mod tests {
-    use crate::random::FunctionParameters;
-
     use super::*;
+    use crate::{random::*, Evaluate, VariableID};
 
     test_algebraic!(Function);
 
@@ -418,6 +440,23 @@ mod tests {
         #[test]
         fn test_as_const_any(f in Function::arbitrary()) {
             prop_assert!((dbg!(f.degree()) >= 1) ^ dbg!(f.as_constant()).is_some());
+        }
+
+        #[test]
+        fn evaluate_bound(
+            (f, bounds, state) in Function::arbitrary()
+                .prop_flat_map(|linear| {
+                    let bounds = arbitrary_bounds(linear.used_decision_variable_ids().into_iter().map(VariableID::from));
+                    (Just(linear), bounds)
+                        .prop_flat_map(|(linear, bounds)| {
+                            let state = arbitrary_state_within_bounds(&bounds, 1e5);
+                            (Just(linear), Just(bounds), state)
+                        })
+                })
+        ) {
+            let bound = f.evaluate_bound(&bounds);
+            let (value, _) = f.evaluate(&state).unwrap();
+            prop_assert!(bound.contains(value, 1e-7), "bound: {bound:?}, value: {value:e}");
         }
     }
 }

@@ -215,11 +215,11 @@ pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<
     strategy
 }
 
-pub fn arbitrary_state_within_bounds(bounds: &Bounds) -> BoxedStrategy<State> {
+pub fn arbitrary_state_within_bounds(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
     let mut stratety = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = *id.deref();
-        stratety = (stratety, bound.arbitrary_containing())
+        stratety = (stratety, bound.arbitrary_containing(max_abs))
             .prop_map(move |(mut state, value)| {
                 state.insert(raw_id, value);
                 state

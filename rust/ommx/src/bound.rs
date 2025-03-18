@@ -127,6 +127,12 @@ impl AddAssign for Bound {
     }
 }
 
+impl AddAssign<f64> for Bound {
+    fn add_assign(&mut self, rhs: f64) {
+        *self = *self + rhs;
+    }
+}
+
 impl Zero for Bound {
     fn zero() -> Self {
         Self::try_from(0.0).unwrap()
@@ -162,6 +168,17 @@ impl Mul<f64> for Bound {
     }
 }
 impl_mul_inverse!(f64, Bound);
+
+impl MulAssign for Bound {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+impl MulAssign<f64> for Bound {
+    fn mul_assign(&mut self, rhs: f64) {
+        *self = *self * rhs;
+    }
+}
 
 impl Bound {
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
@@ -229,21 +246,25 @@ impl Bound {
     }
 
     /// Arbitrary *finite* value within the bound
-    pub fn arbitrary_containing(&self) -> BoxedStrategy<f64> {
+    ///
+    /// `max_abs` is the maximum absolute value of the generated value
+    /// to keep floating point arithmetic stable.
+    pub fn arbitrary_containing(&self, max_abs: f64) -> BoxedStrategy<f64> {
+        assert!(max_abs > 0.0);
         // RangeInclusive::arbitrary() does not support infinite range
         match (self.lower, self.upper) {
-            (f64::NEG_INFINITY, f64::INFINITY) => f64::arbitrary().boxed(),
-            (f64::NEG_INFINITY, upper) => prop_oneof![
-                f64::arbitrary().prop_filter("upper", move |&x| x <= upper),
-                Just(upper)
-            ]
-            .boxed(),
-            (lower, f64::INFINITY) => prop_oneof![
-                f64::arbitrary().prop_filter("lower", move |&x| x >= lower),
-                Just(lower)
-            ]
-            .boxed(),
+            (f64::NEG_INFINITY, f64::INFINITY) => (-max_abs..=max_abs).boxed(),
+            (f64::NEG_INFINITY, upper) => {
+                let upper = upper.min(max_abs);
+                prop_oneof![(-max_abs..=upper).boxed(), Just(upper)].boxed()
+            }
+            (lower, f64::INFINITY) => {
+                let lower = lower.max(-max_abs);
+                prop_oneof![(lower..=max_abs).boxed(), Just(lower)].boxed()
+            }
             (lower, upper) => {
+                let lower = lower.max(-max_abs);
+                let upper = upper.min(max_abs);
                 if lower == upper {
                     Just(lower).boxed()
                 } else {
@@ -289,7 +310,7 @@ mod tests {
 
     fn bound_and_containing() -> BoxedStrategy<(Bound, f64)> {
         Bound::arbitrary()
-            .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing()))
+            .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing(1e5)))
             .boxed()
     }
 

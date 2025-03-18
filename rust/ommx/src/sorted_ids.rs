@@ -1,4 +1,5 @@
 use anyhow::bail;
+use itertools::Itertools;
 use proptest::prelude::*;
 use serde::{ser::*, Serialize};
 use std::{collections::BTreeSet, ops::*};
@@ -76,6 +77,14 @@ impl SortedIds {
 
     pub fn iter(&self) -> impl Iterator<Item = &u64> {
         self.0.iter()
+    }
+
+    pub fn chunks(&self) -> Vec<(u64, usize)> {
+        self.iter()
+            .chunk_by(|&x| x)
+            .into_iter()
+            .map(|(key, group)| (*key, group.count()))
+            .collect::<Vec<_>>()
     }
 }
 
