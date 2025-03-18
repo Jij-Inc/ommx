@@ -271,6 +271,10 @@ impl fmt::Display for Linear {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        random::{arbitrary_bounds, arbitrary_state_within_bounds},
+        Evaluate,
+    };
 
     test_algebraic!(super::Linear);
 
@@ -300,5 +304,24 @@ mod tests {
         let linear = super::Linear::new([(1, 1.0)].into_iter(), -1.0);
         assert_eq!(linear.to_string(), "x1 - 1");
         assert_eq!(format!("{:.2}", linear), "x1 - 1.00");
+    }
+
+    proptest! {
+        #[test]
+        fn eval_bound(
+            (linear, bounds, state) in Linear::arbitrary()
+                .prop_flat_map(|linear| {
+                    let bounds = arbitrary_bounds(linear.used_decision_variable_ids().into_iter().map(VariableID::from));
+                    (Just(linear), bounds)
+                        .prop_flat_map(|(linear, bounds)| {
+                            let state = arbitrary_state_within_bounds(&bounds);
+                            (Just(linear), Just(bounds), state)
+                        })
+                })
+        ) {
+            let bound = linear.evaluate_bound(&bounds);
+            let (value, _) = linear.evaluate(&state).unwrap();
+            prop_assert!(bound.contains(value, 1e-7));
+        }
     }
 }

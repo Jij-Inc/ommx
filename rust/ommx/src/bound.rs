@@ -1,8 +1,7 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError, RawParseError},
-    v1::{self, State},
-    VariableID,
+    v1, VariableID,
 };
 use num::Zero;
 use proptest::prelude::*;
@@ -282,33 +281,6 @@ impl Arbitrary for Bound {
             })
             .boxed()
     }
-}
-
-pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<Bounds> {
-    let mut strategy = Just(HashMap::new()).boxed();
-    for id in ids {
-        strategy = (strategy, Bound::arbitrary())
-            .prop_map(move |(mut bounds, bound)| {
-                bounds.insert(id, bound);
-                bounds
-            })
-            .boxed();
-    }
-    strategy
-}
-
-pub fn arbitrary_state_within_bounds(bounds: &Bounds) -> BoxedStrategy<State> {
-    let mut stratety = Just(HashMap::new()).boxed();
-    for (id, bound) in bounds {
-        let raw_id = *id.deref();
-        stratety = (stratety, bound.as_range())
-            .prop_map(move |(mut state, value)| {
-                state.insert(raw_id, value);
-                state
-            })
-            .boxed();
-    }
-    stratety.prop_map(|state| state.into()).boxed()
 }
 
 #[cfg(test)]
