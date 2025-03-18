@@ -224,6 +224,73 @@ impl Bound {
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.lower..=self.upper
     }
+
+    /// Arbitrary *finite* value within the bound
+    pub fn arbitrary_containing(&self) -> BoxedStrategy<f64> {
+        // RangeInclusive::arbitrary() does not support infinite range
+        match (self.lower, self.upper) {
+            (f64::NEG_INFINITY, f64::INFINITY) => f64::arbitrary().boxed(),
+            (f64::NEG_INFINITY, upper) => prop_oneof![
+                f64::arbitrary().prop_filter("upper", move |&x| x <= upper),
+                Just(upper)
+            ]
+            .boxed(),
+            (lower, f64::INFINITY) => prop_oneof![
+                f64::arbitrary().prop_filter("lower", move |&x| x >= lower),
+                Just(lower)
+            ]
+            .boxed(),
+            (lower, upper) => {
+                if lower == upper {
+                    Just(lower).boxed()
+                } else {
+                    prop_oneof![Just(upper), Just(lower), (lower..=upper)].boxed()
+                }
+            }
+        }
+    }
+}
+
+impl Arbitrary for Bound {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        (
+            prop_oneof![
+                Just(f64::NEG_INFINITY),
+                Just(0.0),
+                (-10..=10).prop_map(|x| x as f64),
+                -10.0..=10.0
+            ],
+            prop_oneof![
+                Just(f64::INFINITY),
+                Just(0.0),
+                (-10..=10).prop_map(|x| x as f64),
+                -10.0..=10.0
+            ],
+        )
+            .prop_map(|(lower, upper)| {
+                if lower <= upper {
+                    Bound::new(lower, upper).unwrap()
+                } else {
+                    Bound::new(upper, lower).unwrap()
+                }
+            })
+            .boxed()
+    }
+}
+
+pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<Bounds> {
+    let mut strategy = Just(HashMap::new()).boxed();
+    for id in ids {
+        strategy = (strategy, Bound::arbitrary())
+            .prop_map(move |(mut bounds, bound)| {
+                bounds.insert(id, bound);
+                bounds
+            })
+            .boxed();
+    }
+    strategy
 }
 
 pub fn arbitrary_state_within_bounds(bounds: &Bounds) -> BoxedStrategy<State> {
@@ -238,4 +305,27 @@ pub fn arbitrary_state_within_bounds(bounds: &Bounds) -> BoxedStrategy<State> {
             .boxed();
     }
     stratety.prop_map(|state| state.into()).boxed()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bound_and_containing() -> BoxedStrategy<(Bound, f64)> {
+        Bound::arbitrary()
+            .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing()))
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn contains((bound, value) in bound_and_containing()) {
+            prop_assert!(bound.contains(value, 1e-9));
+        }
+
+        #[test]
+        fn add((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
+            prop_assert!((b1 + b2).contains(v1 + v2, 1e-9));
+        }
+    }
 }
