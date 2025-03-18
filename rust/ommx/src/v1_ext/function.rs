@@ -400,8 +400,33 @@ impl fmt::Display for Function {
 mod tests {
     use super::*;
     use crate::{random::*, Evaluate, VariableID};
+    use maplit::*;
 
     test_algebraic!(Function);
+
+    #[test]
+    fn evaluate_bound_missing() {
+        let f: Function = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0).into();
+        // Missing bounds of x1 and x2
+        let bounds = Bounds::default();
+        assert_eq!(f.evaluate_bound(&bounds), Bound::default());
+    }
+
+    #[test]
+    fn evaluate_bound() {
+        let f: Function = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0).into();
+        let bounds = hashmap! {
+            VariableID::from(1) => Bound::new(-1.0, 1.0).unwrap(),
+            VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
+        };
+        // [-1, 1] + 2*[2, 3] + 1 = [4, 8]
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
+        Bound {
+            lower: 4.0,
+            upper: 8.0,
+        }
+        "###);
+    }
 
     proptest! {
         #[test]
@@ -443,20 +468,20 @@ mod tests {
         }
 
         #[test]
-        fn evaluate_bound(
+        fn evaluate_bound_arb(
             (f, bounds, state) in Function::arbitrary()
-                .prop_flat_map(|linear| {
-                    let bounds = arbitrary_bounds(linear.used_decision_variable_ids().into_iter().map(VariableID::from));
-                    (Just(linear), bounds)
-                        .prop_flat_map(|(linear, bounds)| {
+                .prop_flat_map(|f| {
+                    let bounds = arbitrary_bounds(f.used_decision_variable_ids().into_iter().map(VariableID::from));
+                    (Just(f), bounds)
+                        .prop_flat_map(|(f, bounds)| {
                             let state = arbitrary_state_within_bounds(&bounds, 1e5);
-                            (Just(linear), Just(bounds), state)
+                            (Just(f), Just(bounds), state)
                         })
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
             let (value, _) = f.evaluate(&state).unwrap();
-            prop_assert!(bound.contains(value, 1e-7), "bound: {bound:?}, value: {value:e}");
+            prop_assert!(bound.contains(value, 1e-7));
         }
     }
 }

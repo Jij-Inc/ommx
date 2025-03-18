@@ -1,7 +1,6 @@
 use crate::{
     macros::*,
     v1::{linear::Term, Linear, Quadratic},
-    Bound, Bounds, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -68,21 +67,6 @@ impl Linear {
         } else {
             None
         }
-    }
-
-    pub fn evaluate_bound(&self, bounds: &Bounds) -> Bound {
-        let mut bound = Bound::zero();
-        for term in &self.terms {
-            if term.coefficient.is_zero() {
-                continue;
-            }
-            let id = VariableID::from(term.id);
-            let Some(b) = bounds.get(&id) else {
-                return Bound::default();
-            };
-            bound += term.coefficient * *b;
-        }
-        bound + self.constant
     }
 }
 
@@ -271,11 +255,6 @@ impl fmt::Display for Linear {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        random::{arbitrary_bounds, arbitrary_state_within_bounds},
-        Evaluate,
-    };
-    use maplit::*;
 
     test_algebraic!(super::Linear);
 
@@ -305,47 +284,5 @@ mod tests {
         let linear = super::Linear::new([(1, 1.0)].into_iter(), -1.0);
         assert_eq!(linear.to_string(), "x1 - 1");
         assert_eq!(format!("{:.2}", linear), "x1 - 1.00");
-    }
-
-    #[test]
-    fn evaluate_bound_missing() {
-        let f = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0);
-        // Missing bounds of x1 and x2
-        let bounds = Bounds::default();
-        assert_eq!(f.evaluate_bound(&bounds), Bound::default());
-    }
-
-    #[test]
-    fn evaluate_bound() {
-        let f = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0);
-        let bounds = hashmap! {
-            VariableID::from(1) => Bound::new(-1.0, 1.0).unwrap(),
-            VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
-        };
-        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
-        Bound {
-            lower: 4.0,
-            upper: 8.0,
-        }
-        "###);
-    }
-
-    proptest! {
-        #[test]
-        fn evaluate_bound_arb(
-            (linear, bounds, state) in Linear::arbitrary()
-                .prop_flat_map(|linear| {
-                    let bounds = arbitrary_bounds(linear.used_decision_variable_ids().into_iter().map(VariableID::from));
-                    (Just(linear), bounds)
-                        .prop_flat_map(|(linear, bounds)| {
-                            let state = arbitrary_state_within_bounds(&bounds, 1e5);
-                            (Just(linear), Just(bounds), state)
-                        })
-                })
-        ) {
-            let bound = linear.evaluate_bound(&bounds);
-            let (value, _) = linear.evaluate(&state).unwrap();
-            prop_assert!(bound.contains(value, 1e-7));
-        }
     }
 }
