@@ -140,6 +140,10 @@ impl Zero for Bound {
 impl Mul for Bound {
     type Output = Bound;
     fn mul(self, rhs: Self) -> Self::Output {
+        // [0, 0] x (-inf, inf) = [0, 0]
+        if self == Bound::zero() || rhs == Bound::zero() {
+            return Bound::zero();
+        }
         let a = self.lower * rhs.lower;
         let b = self.lower * rhs.upper;
         let c = self.upper * rhs.lower;
@@ -326,6 +330,11 @@ mod tests {
         #[test]
         fn add((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
             prop_assert!((b1 + b2).contains(v1 + v2, 1e-9));
+        }
+
+        #[test]
+        fn mul((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
+            prop_assert!((b1 * b2).contains(v1 * v2, 1e-9));
         }
     }
 }
