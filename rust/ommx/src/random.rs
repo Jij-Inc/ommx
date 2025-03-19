@@ -55,7 +55,8 @@ pub use instance::*;
 pub use parameter::*;
 pub use state::*;
 
-use crate::sorted_ids::SortedIds;
+use crate::{decision_variable::VariableID, sorted_ids::SortedIds, v1::State, Bound, Bounds};
+use std::{collections::HashMap, ops::Deref};
 
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
 pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
@@ -199,6 +200,33 @@ fn combinations(n: u64, r: usize) -> u64 {
 /// nHr
 fn multi_choose(n: u64, r: usize) -> u64 {
     combinations(n + r as u64 - 1, r)
+}
+
+pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<Bounds> {
+    let mut strategy = Just(HashMap::new()).boxed();
+    for id in ids {
+        strategy = (strategy, Bound::arbitrary())
+            .prop_map(move |(mut bounds, bound)| {
+                bounds.insert(id, bound);
+                bounds
+            })
+            .boxed();
+    }
+    strategy
+}
+
+pub fn arbitrary_state_within_bounds(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
+    let mut stratety = Just(HashMap::new()).boxed();
+    for (id, bound) in bounds {
+        let raw_id = *id.deref();
+        stratety = (stratety, bound.arbitrary_containing(max_abs))
+            .prop_map(move |(mut state, value)| {
+                state.insert(raw_id, value);
+                state
+            })
+            .boxed();
+    }
+    stratety.prop_map(|state| state.into()).boxed()
 }
 
 #[cfg(test)]

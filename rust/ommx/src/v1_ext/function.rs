@@ -5,6 +5,7 @@ use crate::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
     },
+    Bound, Bounds,
 };
 use anyhow::Result;
 use approx::AbsDiffEq;
@@ -180,6 +181,29 @@ impl Function {
             out = out + v;
         }
         Ok(out)
+    }
+
+    pub fn evaluate_bound(&self, bounds: &Bounds) -> Bound {
+        let mut bound = Bound::zero();
+        for (ids, value) in self.into_iter() {
+            if value.is_zero() {
+                continue;
+            }
+            if ids.is_empty() {
+                bound += value;
+                continue;
+            }
+            let mut cur = Bound::new(1.0, 1.0).unwrap();
+            for (id, exp) in ids.chunks() {
+                let b = bounds.get(&id.into()).cloned().unwrap_or_default();
+                cur *= b.pow(exp as u8);
+                if cur == Bound::default() {
+                    return Bound::default();
+                }
+            }
+            bound += value * cur;
+        }
+        bound
     }
 }
 
@@ -375,11 +399,53 @@ impl fmt::Display for Function {
 
 #[cfg(test)]
 mod tests {
-    use crate::random::FunctionParameters;
-
     use super::*;
+    use crate::{random::*, Evaluate, VariableID};
+    use maplit::*;
 
     test_algebraic!(Function);
+
+    #[test]
+    fn evaluate_bound_missing() {
+        let f: Function = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0).into();
+        // Missing bounds of x1 and x2
+        let bounds = Bounds::default();
+        assert_eq!(f.evaluate_bound(&bounds), Bound::default());
+    }
+
+    #[test]
+    fn evaluate_bound() {
+        let x1 = Linear::single_term(1, 1.0);
+        let x2 = Linear::single_term(2, 2.0);
+        let f: Function = (x1.clone() + x2 + 1.0).into();
+        let bounds = hashmap! {
+            VariableID::from(1) => Bound::new(-1.0, 1.0).unwrap(),
+            VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
+        };
+        // [-1, 1] + 2*[2, 3] + 1 = [4, 8]
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
+        Bound {
+            lower: 4.0,
+            upper: 8.0,
+        }
+        "###);
+
+        let f: Function = (x1.clone() * x1).into();
+        // [-1, 1]^2 = [0, 1]
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
+        Bound {
+            lower: 0.0,
+            upper: 1.0,
+        }
+        "###);
+        // (-inf, inf)^2 = [0, inf)
+        insta::assert_debug_snapshot!(f.evaluate_bound(&Bounds::default()), @r###"
+        Bound {
+            lower: 0.0,
+            upper: inf,
+        }
+        "###);
+    }
 
     proptest! {
         #[test]
@@ -418,6 +484,23 @@ mod tests {
         #[test]
         fn test_as_const_any(f in Function::arbitrary()) {
             prop_assert!((dbg!(f.degree()) >= 1) ^ dbg!(f.as_constant()).is_some());
+        }
+
+        #[test]
+        fn evaluate_bound_arb(
+            (f, bounds, state) in Function::arbitrary()
+                .prop_flat_map(|f| {
+                    let bounds = arbitrary_bounds(f.used_decision_variable_ids().into_iter().map(VariableID::from));
+                    (Just(f), bounds)
+                        .prop_flat_map(|(f, bounds)| {
+                            let state = arbitrary_state_within_bounds(&bounds, 1e5);
+                            (Just(f), Just(bounds), state)
+                        })
+                })
+        ) {
+            let bound = f.evaluate_bound(&bounds);
+            let (value, _) = f.evaluate(&state).unwrap();
+            prop_assert!(bound.contains(value, 1e-7));
         }
     }
 }
