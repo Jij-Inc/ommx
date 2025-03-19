@@ -194,6 +194,10 @@ impl Bound {
         self.upper
     }
 
+    pub fn width(&self) -> f64 {
+        self.upper - self.lower
+    }
+
     pub fn set_lower(&mut self, lower: f64) -> Result<(), BoundError> {
         BoundError::check(lower, self.upper)?;
         self.lower = lower;

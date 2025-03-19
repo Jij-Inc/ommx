@@ -7,7 +7,7 @@ use crate::{
     },
     Bound, Bounds,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::{
     integer::{gcd, lcm},

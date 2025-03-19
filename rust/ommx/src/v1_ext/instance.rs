@@ -28,7 +28,9 @@ impl Instance {
         let mut bounds = Bounds::new();
         for v in &self.decision_variables {
             let id = VariableID::from(v.id);
-            if let Some(bound) = &v.bound {
+            if v.kind() == Kind::Binary {
+                bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
+            } else if let Some(bound) = &v.bound {
                 let bound = bound.clone().try_into()?;
                 if bound == Bound::default() {
                     continue;
@@ -37,6 +39,13 @@ impl Instance {
             }
         }
         Ok(bounds)
+    }
+
+    pub fn get_kinds(&self) -> HashMap<VariableID, Kind> {
+        self.decision_variables
+            .iter()
+            .map(|dv| (VariableID::from(dv.id), dv.kind()))
+            .collect()
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -433,7 +442,7 @@ impl Instance {
     /// - `max_integer_range`: The maximum integer range of the slack variable.
     /// - `atol`: Absolute tolerance for approximating the coefficient to rational number.
     ///
-    /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance (`atol` is used for it),
+    /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance,
     /// multiplying the lcm `a` of every denominator of coefficients `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
     /// However, this cause very large coefficients and thus the slack variable may have very large range,
     /// which is not practical for solvers.
@@ -459,9 +468,60 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
-        atol: f64,
     ) -> Result<()> {
+        let bounds = self.get_bounds()?;
+        let kinds = self.get_kinds();
+
+        let constraint = self
+            .constraints
+            .iter_mut()
+            .find(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let function = constraint
+            .function
+            .as_ref()
+            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+
+        // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
+        for id in function.used_decision_variable_ids() {
+            let id = VariableID::from(id);
+            let kind = kinds
+                .get(&id)
+                .context(format!("Decision variable ID {id:?} not found"))?;
+            if !matches!(kind, Kind::Binary | Kind::Integer) {
+                bail!("The constraint contains continuous decision variables: ID={id:?}");
+            }
+        }
+
+        // Evaluate minimal integer coefficient multiplier `a` which make all coefficients of `a * f(x)` integer
+        let a = function
+            .minimal_integer_coefficient_multiplier()
+            .context("Cannot normalize the coefficients to integers")?;
+        let af = a * function.clone();
+        let bound = af.evaluate_bound(&bounds);
+        let bound = Bound::new(try_round(bound.lower())?, try_round(bound.upper())?)?;
+        if bound.width() > max_integer_range as f64 {
+            bail!(
+                "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",
+                width = bound.width()
+            );
+        }
+
         todo!()
+    }
+}
+
+fn try_round(x: f64) -> Result<f64> {
+    let rounded = x.round();
+    let res = if x.abs() >= 1.0 {
+        (rounded - x) / x.abs()
+    } else {
+        rounded - x
+    };
+    if res < 1e-6 {
+        Ok(x.round())
+    } else {
+        bail!("Try to round non-integer value: {x}");
     }
 }
 
