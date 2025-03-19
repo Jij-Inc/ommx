@@ -427,8 +427,6 @@ impl Instance {
 
     /// Convert inequality `f(x) <= 0` into equality `f(x) + s/a = 0` with an *integer* slack variable `s`.
     ///
-    /// The coefficient `1/a` can be a real number.
-    ///
     /// Arguments
     /// ---------
     /// - `constraint_id`: The ID of the constraint to be converted.
@@ -436,10 +434,10 @@ impl Instance {
     /// - `atol`: Absolute tolerance for approximating the coefficient to rational number.
     ///
     /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance (`atol` is used for it),
-    /// multiplying the lcm `a` of every denominator `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
+    /// multiplying the lcm `a` of every denominator of coefficients `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
     /// However, this cause very large coefficients and thus the slack variable may have very large range,
     /// which is not practical for solvers.
-    /// `max_integer_range` is used to limit the range of the slack variable, and if exceeded, the method returns error.
+    /// `max_integer_range` is used to limit the range of the slack variable, and the method returns error if exceeded it.
     ///
     /// Mutability
     /// ----------
@@ -449,11 +447,12 @@ impl Instance {
     ///   - Its bound is determined from `f(x)`
     ///   - Its kind are discussed below
     /// - The constraint is changed as equality with keeping the constraint ID.
-    ///   - Its function will be converted `f(x)` to `f(x) + a*s`
+    ///   - Its function will be converted `f(x)` to `f(x) + s/a`
     ///
     /// Error
     /// -----
     /// - The constraint ID is not found, or is not inequality
+    /// - The constraint contains continuous decision variables
     /// - The slack variable range exceeds `max_integer_range`
     ///
     pub fn convert_inequality_to_equality_with_integer_slack_variable(
