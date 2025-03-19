@@ -7,9 +7,12 @@ use crate::{
     },
     Bound, Bounds,
 };
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
-use num::Zero;
+use num::{
+    integer::{gcd, lcm},
+    Zero,
+};
 use std::{
     collections::{BTreeSet, HashMap},
     fmt,
@@ -204,6 +207,29 @@ impl Function {
             bound += value * cur;
         }
         bound
+    }
+
+    /// Get a minimal positive multiplier `a` which make all coefficients of `a * self` integer.
+    ///
+    /// This returns `1` for zero function.
+    pub fn minimal_integer_coefficient_multiplier(&self) -> Result<f64> {
+        let mut numer_gcd = 0;
+        let mut denom_lcm: i64 = 1;
+        for (_, coefficient) in self {
+            let r = num::Rational64::approximate_float(coefficient)
+                .context("Cannot approximate coefficient in 64-bit rational")?;
+            numer_gcd = gcd(numer_gcd, *r.numer());
+            denom_lcm
+                .checked_mul(*r.denom())
+                .context("Overflow detected while evaluating minimal integer coefficient multiplier. This means it is hard to make the all coefficient integer")?;
+            denom_lcm = lcm(denom_lcm, *r.denom());
+        }
+
+        if numer_gcd == 0 {
+            Ok(1.0)
+        } else {
+            Ok((denom_lcm as f64 / numer_gcd as f64).abs())
+        }
     }
 }
 
@@ -447,6 +473,38 @@ mod tests {
         "###);
     }
 
+    #[test]
+    fn minimal_integer_coefficient_multiplier() {
+        let x1 = Linear::single_term(1, 1.0);
+        let x2 = Linear::single_term(2, 1.0);
+
+        // x1 + x2
+        // => 1
+        let f: Function = (x1.clone() + x2.clone()).into();
+        assert_eq!(f.minimal_integer_coefficient_multiplier().unwrap(), 1.0);
+
+        // x1 / 2 + x2 / 3
+        // => 6 / 1
+        let f: Function = (0.5 * x1.clone() + (1.0 / 3.0) * x2.clone()).into();
+        assert_eq!(f.minimal_integer_coefficient_multiplier().unwrap(), 6.0);
+
+        // 2 * x1 / 3 + 2 * x2 / 5
+        // => 15 / 2
+        let f: Function = (2.0 / 3.0 * x1.clone() + 2.0 / 5.0 * x2.clone()).into();
+        assert_eq!(
+            f.minimal_integer_coefficient_multiplier().unwrap(),
+            15.0 / 2.0
+        );
+
+        // 3 * x1 / 4 + 3 * x2 / 8
+        // => 8 / 3
+        let f: Function = (3.0 / 4.0 * x1 + 3.0 / 8.0 * x2).into();
+        assert_eq!(
+            f.minimal_integer_coefficient_multiplier().unwrap(),
+            8.0 / 3.0
+        );
+    }
+
     proptest! {
         #[test]
         fn test_as_linear_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
@@ -501,6 +559,20 @@ mod tests {
             let bound = f.evaluate_bound(&bounds);
             let (value, _) = f.evaluate(&state).unwrap();
             prop_assert!(bound.contains(value, 1e-7));
+        }
+
+        #[test]
+        fn minimal_integer_coefficient_multiplier_arb(f in Function::arbitrary()) {
+            let Ok(multiplier) = f.minimal_integer_coefficient_multiplier() else { return Ok(()) };
+            prop_assert!(multiplier > 0.0);
+            let f = f * multiplier;
+            for (_, c) in &f {
+                if c.abs() > 1.0 {
+                    prop_assert!((c - c.round()).abs() / c.abs() < 1e-10, "c = {c}");
+                } else {
+                    prop_assert!((c - c.round()).abs() < 1e-10, "c = {c}");
+                }
+            }
         }
     }
 }
