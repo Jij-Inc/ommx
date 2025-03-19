@@ -308,6 +308,46 @@ impl Arbitrary for Bound {
 mod tests {
     use super::*;
 
+    #[test]
+    fn bound_pow() {
+        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @r###"
+        Bound {
+            lower: 4.0,
+            upper: 9.0,
+        }
+        "###);
+        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(3), @r###"
+        Bound {
+            lower: 8.0,
+            upper: 27.0,
+        }
+        "###);
+        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(2), @r###"
+        Bound {
+            lower: 0.0,
+            upper: 9.0,
+        }
+        "###);
+        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(3), @r###"
+        Bound {
+            lower: -8.0,
+            upper: 27.0,
+        }
+        "###);
+        insta::assert_debug_snapshot!(Bound::default().pow(2), @r###"
+        Bound {
+            lower: 0.0,
+            upper: inf,
+        }
+        "###);
+        insta::assert_debug_snapshot!(Bound::default().pow(3), @r###"
+        Bound {
+            lower: -inf,
+            upper: inf,
+        }
+        "###);
+    }
+
     fn bound_and_containing() -> BoxedStrategy<(Bound, f64)> {
         Bound::arbitrary()
             .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing(1e5)))
@@ -328,6 +368,12 @@ mod tests {
         #[test]
         fn mul((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
             prop_assert!((b1 * b2).contains(v1 * v2, 1e-9));
+        }
+
+        #[test]
+        fn pow((b, v) in bound_and_containing()) {
+            prop_assert!(b.pow(2).contains(v.powi(2), 1e-9));
+            prop_assert!(b.pow(3).contains(v.powi(3), 1e-9));
         }
     }
 }
