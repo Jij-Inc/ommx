@@ -425,10 +425,42 @@ impl Instance {
         Ok(())
     }
 
-    /// Convert inequality `f(x) <= 0` into equality `f(x) + s = 0` with a slack variable `s`.
-    pub fn convert_inequality_to_equality_with_slack_variable(
+    /// Convert inequality `f(x) <= 0` into equality `f(x) + s/a = 0` with an *integer* slack variable `s`.
+    ///
+    /// The coefficient `1/a` can be a real number.
+    ///
+    /// Arguments
+    /// ---------
+    /// - `constraint_id`: The ID of the constraint to be converted.
+    /// - `max_integer_range`: The maximum integer range of the slack variable.
+    /// - `atol`: Absolute tolerance for approximating the coefficient to rational number.
+    ///
+    /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance (`atol` is used for it),
+    /// multiplying the lcm `a` of every denominator `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
+    /// However, this cause very large coefficients and thus the slack variable may have very large range,
+    /// which is not practical for solvers.
+    /// `max_integer_range` is used to limit the range of the slack variable, and if exceeded, the method returns error.
+    ///
+    /// Mutability
+    /// ----------
+    /// - This creates a new decision variable for the slack variable.
+    ///   - Its name is `ommx_slack`
+    ///   - Its subscript is single element `[constraint_id]`
+    ///   - Its bound is determined from `f(x)`
+    ///   - Its kind are discussed below
+    /// - The constraint is changed as equality with keeping the constraint ID.
+    ///   - Its function will be converted `f(x)` to `f(x) + a*s`
+    ///
+    /// Error
+    /// -----
+    /// - The constraint ID is not found, or is not inequality
+    /// - The slack variable range exceeds `max_integer_range`
+    ///
+    pub fn convert_inequality_to_equality_with_integer_slack_variable(
         &mut self,
         constraint_id: u64,
+        max_integer_range: u64,
+        atol: f64,
     ) -> Result<()> {
         todo!()
     }
