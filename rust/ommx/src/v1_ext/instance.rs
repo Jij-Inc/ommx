@@ -424,6 +424,14 @@ impl Instance {
         self.decision_variable_dependency.extend(replacement);
         Ok(())
     }
+
+    /// Convert inequality `f(x) <= 0` into equality `f(x) + s = 0` with a slack variable `s`.
+    pub fn convert_inequality_to_equality_with_slack_variable(
+        &mut self,
+        constraint_id: u64,
+    ) -> Result<()> {
+        todo!()
+    }
 }
 
 /// Compare two instances as mathematical programming problems. This does not compare the metadata.
