@@ -195,10 +195,11 @@ impl Function {
             }
             let mut cur = Bound::new(1.0, 1.0).unwrap();
             for (id, exp) in ids.chunks() {
-                let Some(b) = bounds.get(&id.into()) else {
-                    return Bound::default();
-                };
+                let b = bounds.get(&id.into()).cloned().unwrap_or_default();
                 cur *= b.pow(exp as u8);
+                if cur == Bound::default() {
+                    return Bound::default();
+                }
             }
             bound += value * cur;
         }
@@ -440,7 +441,7 @@ mod tests {
         // (-inf, inf)^2 = [0, inf)
         insta::assert_debug_snapshot!(f.evaluate_bound(&Bounds::default()), @r###"
         Bound {
-            lower: -inf,
+            lower: 0.0,
             upper: inf,
         }
         "###);
