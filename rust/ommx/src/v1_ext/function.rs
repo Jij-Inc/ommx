@@ -414,7 +414,9 @@ mod tests {
 
     #[test]
     fn evaluate_bound() {
-        let f: Function = Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 1.0).into();
+        let x1 = Linear::single_term(1, 1.0);
+        let x2 = Linear::single_term(2, 2.0);
+        let f: Function = (x1.clone() + x2 + 1.0).into();
         let bounds = hashmap! {
             VariableID::from(1) => Bound::new(-1.0, 1.0).unwrap(),
             VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
@@ -424,6 +426,22 @@ mod tests {
         Bound {
             lower: 4.0,
             upper: 8.0,
+        }
+        "###);
+
+        let f: Function = (x1.clone() * x1).into();
+        // [-1, 1]^2 = [0, 1]
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
+        Bound {
+            lower: 0.0,
+            upper: 1.0,
+        }
+        "###);
+        // (-inf, inf)^2 = [0, inf)
+        insta::assert_debug_snapshot!(f.evaluate_bound(&Bounds::default()), @r###"
+        Bound {
+            lower: -inf,
+            upper: inf,
         }
         "###);
     }
