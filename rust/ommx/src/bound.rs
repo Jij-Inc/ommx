@@ -210,6 +210,25 @@ impl Bound {
         Ok(())
     }
 
+    /// Strengthen the bound for integer decision variables
+    ///
+    /// Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
+    /// this method rounds to `[ceil(lower-atol), floor(upper+atol)]` with `atol = 1e-6`.
+    pub fn as_integer_bound(&self) -> Self {
+        let atol = 1e-6;
+        let lower = if self.lower.is_finite() {
+            (self.lower - atol).ceil()
+        } else {
+            self.lower
+        };
+        let upper = if self.upper.is_finite() {
+            (self.upper + atol).floor()
+        } else {
+            self.upper
+        };
+        Self::new(lower, upper).unwrap()
+    }
+
     /// `[lower, upper]` with finite `lower` and `upper`
     pub fn is_finite(&self) -> bool {
         self.lower.is_finite() && self.upper.is_finite()
@@ -356,6 +375,16 @@ mod tests {
         Bound::arbitrary()
             .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing(1e5)))
             .boxed()
+    }
+
+    #[test]
+    fn as_integer_bound() {
+        assert_eq!(
+            Bound::new(1.000000000001, 1.99999999999)
+                .unwrap()
+                .as_integer_bound(),
+            Bound::new(1.0, 2.0).unwrap()
+        )
     }
 
     proptest! {

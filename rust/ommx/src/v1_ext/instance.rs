@@ -487,7 +487,7 @@ impl Instance {
             let id = VariableID::from(id);
             let kind = kinds
                 .get(&id)
-                .context(format!("Decision variable ID {id:?} not found"))?;
+                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
             if !matches!(kind, Kind::Binary | Kind::Integer) {
                 bail!("The constraint contains continuous decision variables: ID={id:?}");
             }
@@ -498,8 +498,7 @@ impl Instance {
             .minimal_integer_coefficient_multiplier()
             .context("Cannot normalize the coefficients to integers")?;
         let af = a * function.clone();
-        let bound = af.evaluate_bound(&bounds);
-        let bound = Bound::new(try_round(bound.lower())?, try_round(bound.upper())?)?;
+        let bound = af.evaluate_bound(&bounds).as_integer_bound();
         if bound.width() > max_integer_range as f64 {
             bail!(
                 "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",
@@ -508,20 +507,6 @@ impl Instance {
         }
 
         todo!()
-    }
-}
-
-fn try_round(x: f64) -> Result<f64> {
-    let rounded = x.round();
-    let res = if x.abs() >= 1.0 {
-        (rounded - x) / x.abs()
-    } else {
-        rounded - x
-    };
-    if res < 1e-6 {
-        Ok(x.round())
-    } else {
-        bail!("Try to round non-integer value: {x}");
     }
 }
 
