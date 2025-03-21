@@ -843,6 +843,21 @@ class Instance(InstanceBase, UserAnnotationBase):
         r"""
         Convert an inequality constraint :math:`f(x) \leq 0` to an equality constraint :math:`f(x) + s/a = 0` with an integer slack variable `s`.
 
+        * Since :math:`a` is determined as the minimal multiplier to make the every coefficient of :math:`af(x)` integer,
+          :math:`a` itself and the range of :math:`s` becomes impractically large. `max_integer_range` limits the maximal range of :math:`s`,
+          and returns error if the range exceeds it.
+
+        * Since this method evaluates the bound of :math:`f(x)`, we may find that:
+
+          * The bound :math:`[l, u]` is strictly positive, i.e. :math:`l \gt 0`.
+            This means the instance is infeasible because this constraint never be satisfied.
+            In this case, an error is raised.
+
+          * The bound :math:`[l, u]` is always negative, i.e. :math:`u \leq 0`.
+            This means this constraint is trivially satisfied.
+            In this case, the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+            and this method returns without introducing slack variable or raising an error.
+
         Examples
         =========
 
