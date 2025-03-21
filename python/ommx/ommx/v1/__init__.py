@@ -2530,9 +2530,7 @@ class Function(AsConstraint):
         In practice, you must check if the multiplier is enough small.
 
         """
-        return _ommx_rust.Function.decode(
-            self.raw.SerializeToString()
-        ).content_factor()
+        return _ommx_rust.Function.decode(self.raw.SerializeToString()).content_factor()
 
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
