@@ -93,6 +93,15 @@ impl TryFrom<v1::Bound> for Bound {
     }
 }
 
+impl From<Bound> for v1::Bound {
+    fn from(bound: Bound) -> Self {
+        Self {
+            lower: bound.lower,
+            upper: bound.upper,
+        }
+    }
+}
+
 impl TryFrom<f64> for Bound {
     type Error = BoundError;
     fn try_from(value: f64) -> Result<Self, Self::Error> {
@@ -180,7 +189,56 @@ impl MulAssign<f64> for Bound {
     }
 }
 
+impl PartialEq<f64> for Bound {
+    fn eq(&self, other: &f64) -> bool {
+        self.lower == *other && self.upper == *other
+    }
+}
+
+impl PartialEq<Bound> for f64 {
+    fn eq(&self, other: &Bound) -> bool {
+        other == self
+    }
+}
+
+/// - `a <= [b, c]` means `a <= b`, i.e. `a <= x (forall x \in [b, c])`
+/// - `a >= [b, c]` means `a >= c`, i.e. `a >= x (forall x \in [b, c])`
+/// - If `a` is in `[b, c]`, return `None`
+impl PartialOrd<f64> for Bound {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        debug_assert!(
+            self.lower <= self.upper,
+            "lower({}) <= upper({})",
+            self.lower,
+            self.upper
+        );
+        if other <= &self.lower {
+            Some(std::cmp::Ordering::Greater)
+        } else if other >= &self.upper {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            None
+        }
+    }
+}
+
+impl PartialOrd<Bound> for f64 {
+    fn partial_cmp(&self, other: &Bound) -> Option<std::cmp::Ordering> {
+        other.partial_cmp(self).map(|o| o.reverse())
+    }
+}
+
 impl Bound {
+    /// Positive or zero, `[0, inf)`
+    pub fn positive() -> Self {
+        Self::new(0.0, f64::INFINITY).unwrap()
+    }
+
+    /// Negative or zero, `(-inf, 0]`
+    pub fn negative() -> Self {
+        Self::new(f64::NEG_INFINITY, 0.0).unwrap()
+    }
+
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
         BoundError::check(lower, upper)?;
         Ok(Self { lower, upper })
@@ -192,6 +250,10 @@ impl Bound {
 
     pub fn upper(&self) -> f64 {
         self.upper
+    }
+
+    pub fn width(&self) -> f64 {
+        self.upper - self.lower
     }
 
     pub fn set_lower(&mut self, lower: f64) -> Result<(), BoundError> {
@@ -206,9 +268,33 @@ impl Bound {
         Ok(())
     }
 
+    /// Strengthen the bound for integer decision variables
+    ///
+    /// Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
+    /// this method rounds to `[ceil(lower-atol), floor(upper+atol)]` with `atol = 1e-6`.
+    pub fn as_integer_bound(&self) -> Self {
+        let atol = 1e-6;
+        let lower = if self.lower.is_finite() {
+            (self.lower - atol).ceil()
+        } else {
+            self.lower
+        };
+        let upper = if self.upper.is_finite() {
+            (self.upper + atol).floor()
+        } else {
+            self.upper
+        };
+        Self::new(lower, upper).unwrap()
+    }
+
     /// `[lower, upper]` with finite `lower` and `upper`
     pub fn is_finite(&self) -> bool {
         self.lower.is_finite() && self.upper.is_finite()
+    }
+
+    /// Take the intersection of two bounds, `None` if the intersection is empty
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        Self::new(self.lower.max(other.lower), self.upper.min(other.upper)).ok()
     }
 
     pub fn pow(&self, exp: u8) -> Self {
@@ -309,6 +395,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn partial_ord() {
+        assert!(1.0 <= Bound::new(2.0, 3.0).unwrap());
+        assert!(2.0 <= Bound::new(2.0, 3.0).unwrap());
+        assert!(3.0 >= Bound::new(2.0, 3.0).unwrap());
+        assert!(4.0 >= Bound::new(2.0, 3.0).unwrap());
+    }
+
+    #[test]
+    fn intersection() {
+        assert_eq!(
+            Bound::new(1.0, 2.0)
+                .unwrap()
+                .intersection(&Bound::new(1.5, 3.0).unwrap()),
+            Some(Bound::new(1.5, 2.0).unwrap())
+        );
+        assert_eq!(
+            Bound::new(1.0, 2.0)
+                .unwrap()
+                .intersection(&Bound::new(2.5, 3.0).unwrap()),
+            None
+        );
+        assert_eq!(
+            Bound::positive().intersection(&Bound::negative()).unwrap(),
+            0.0
+        );
+    }
+
+    #[test]
     fn bound_pow() {
         insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @r###"
         Bound {
@@ -352,6 +466,16 @@ mod tests {
         Bound::arbitrary()
             .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing(1e5)))
             .boxed()
+    }
+
+    #[test]
+    fn as_integer_bound() {
+        assert_eq!(
+            Bound::new(1.000000000001, 1.99999999999)
+                .unwrap()
+                .as_integer_bound(),
+            Bound::new(1.0, 2.0).unwrap()
+        )
     }
 
     proptest! {

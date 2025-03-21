@@ -4,7 +4,7 @@ use crate::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
         Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
-    Bound, Bounds, VariableID,
+    Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -28,7 +28,9 @@ impl Instance {
         let mut bounds = Bounds::new();
         for v in &self.decision_variables {
             let id = VariableID::from(v.id);
-            if let Some(bound) = &v.bound {
+            if v.kind() == Kind::Binary {
+                bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
+            } else if let Some(bound) = &v.bound {
                 let bound = bound.clone().try_into()?;
                 if bound == Bound::default() {
                     continue;
@@ -37,6 +39,13 @@ impl Instance {
             }
         }
         Ok(bounds)
+    }
+
+    pub fn get_kinds(&self) -> HashMap<VariableID, Kind> {
+        self.decision_variables
+            .iter()
+            .map(|dv| (VariableID::from(dv.id), dv.kind()))
+            .collect()
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -422,6 +431,116 @@ impl Instance {
             *f = f.substitute(&replacement)?;
         }
         self.decision_variable_dependency.extend(replacement);
+        Ok(())
+    }
+
+    /// Convert inequality `f(x) <= 0` into equality `f(x) + s/a = 0` with an *integer* slack variable `s`.
+    ///
+    /// Arguments
+    /// ---------
+    /// - `constraint_id`: The ID of the constraint to be converted.
+    /// - `max_integer_range`: The maximum integer range of the slack variable.
+    /// - `atol`: Absolute tolerance for approximating the coefficient to rational number.
+    ///
+    /// Since any `x: f64` can be approximated by an rational number (`x ~ p/q`) within some tolerance,
+    /// multiplying the lcm `a` of every denominator of coefficients `q_1, ...` yields `a * f(x)` whose coefficients are all integer.
+    /// However, this cause very large coefficients and thus the slack variable may have very large range,
+    /// which is not practical for solvers.
+    /// `max_integer_range` is used to limit the range of the slack variable, and the method returns error if exceeded it.
+    ///
+    /// Mutability
+    /// ----------
+    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
+    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
+    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
+    /// - This creates a new decision variable for the slack variable.
+    ///   - Its name is `ommx_slack`
+    ///   - Its subscript is single element `[constraint_id]`
+    ///   - Its bound is determined from `f(x)`
+    ///   - Its kind are discussed below
+    /// - The constraint is changed as equality with keeping the constraint ID.
+    ///   - Its function will be converted `f(x)` to `f(x) + s/a`
+    ///
+    /// Error
+    /// -----
+    /// - The constraint ID is not found, or is not inequality
+    /// - The constraint contains continuous decision variables
+    /// - The slack variable range exceeds `max_integer_range`
+    ///
+    pub fn convert_inequality_to_equality_with_integer_slack_variable(
+        &mut self,
+        constraint_id: u64,
+        max_integer_range: u64,
+    ) -> Result<()> {
+        let bounds = self.get_bounds()?;
+        let kinds = self.get_kinds();
+        let next_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
+
+        let constraint = self
+            .constraints
+            .iter_mut()
+            .find(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        let function = constraint
+            .function
+            .as_ref()
+            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+
+        // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
+        for id in function.used_decision_variable_ids() {
+            let id = VariableID::from(id);
+            let kind = kinds
+                .get(&id)
+                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
+            if !matches!(kind, Kind::Binary | Kind::Integer) {
+                bail!("The constraint contains continuous decision variables: ID={id:?}");
+            }
+        }
+
+        // Evaluate minimal integer coefficient multiplier `a` which make all coefficients of `a * f(x)` integer
+        let a = function
+            .content_factor()
+            .context("Cannot normalize the coefficients to integers")?;
+        let af = a * function.clone();
+
+        // Check the bound of `a*f`
+        // - If `lower > 0`, the constraint is infeasible
+        // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
+        let bound = af.evaluate_bound(&bounds).as_integer_bound();
+        if bound.lower() > 0.0 {
+            bail!(InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound,
+            });
+        }
+        if bound.upper() <= 0.0 {
+            // The constraint is always satisfied
+            self.relax_constraint(
+                constraint_id,
+                "convert_inequality_to_equality_with_integer_slack_variable".to_string(),
+                Default::default(),
+            )?;
+            return Ok(());
+        }
+        let bound = Bound::new(0.0, -bound.lower()).unwrap();
+        if bound.width() > max_integer_range as f64 {
+            bail!(
+                "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",
+                width = bound.width()
+            );
+        }
+
+        self.decision_variables.push(DecisionVariable {
+            id: next_id,
+            name: Some("ommx_slack".to_string()),
+            subscripts: vec![constraint_id as i64],
+            kind: Kind::Integer as i32,
+            bound: Some(bound.into()),
+            ..Default::default()
+        });
+        constraint.function = Some(function.clone() + Linear::single_term(next_id, 1.0 / a));
+        constraint.set_equality(Equality::EqualToZero);
+
         Ok(())
     }
 }

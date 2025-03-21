@@ -837,6 +837,120 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
 
+    def convert_inequality_to_equality_with_integer_slack_variable(
+        self, constraint_id: int, max_integer_range: int
+    ):
+        r"""
+        Convert an inequality constraint :math:`f(x) \leq 0` to an equality constraint :math:`f(x) + s/a = 0` with an integer slack variable `s`.
+
+        * Since :math:`a` is determined as the minimal multiplier to make the every coefficient of :math:`af(x)` integer,
+          :math:`a` itself and the range of :math:`s` becomes impractically large. `max_integer_range` limits the maximal range of :math:`s`,
+          and returns error if the range exceeds it. See also :py:meth:`~Function.content_factor`.
+
+        * Since this method evaluates the bound of :math:`f(x)`, we may find that:
+
+          * The bound :math:`[l, u]` is strictly positive, i.e. :math:`l \gt 0`.
+            This means the instance is infeasible because this constraint never be satisfied.
+            In this case, an error is raised.
+
+          * The bound :math:`[l, u]` is always negative, i.e. :math:`u \leq 0`.
+            This means this constraint is trivially satisfied.
+            In this case, the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+            and this method returns without introducing slack variable or raising an error.
+
+        Examples
+        =========
+
+        Normal case
+        -----------
+
+        Let's consider a simple inequality constraint :math:`x_0 + 2x_1 \leq 5`.
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= 5).set_id(0)   # Set ID manually to use after
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 - 5) <= 0)
+
+        Introduce an integer slack variable
+
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(
+        ...     constraint_id=0,
+        ...     max_integer_range=32
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
+
+        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+
+        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper        name subscripts
+        id
+        0   integer    0.0    3.0           x        [0]
+        1   integer    0.0    3.0           x        [1]
+        2   integer    0.0    3.0           x        [2]
+        3   integer    0.0    5.0  ommx_slack        [0]
+
+        Infeasible case
+        ----------------
+
+        For an infeasible constraint :math:`x_0 + 2x_1 \leq -1`, this returns an error.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= -1).set_id(0)   # Never satisfied since both x0 and x1 are non-negative
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 + 1) <= 0)
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        Traceback (most recent call last):
+        ...
+        RuntimeError: The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }
+
+        Trivial case
+        ------------
+
+        For a trivially satisfied constraint :math:`x_0 + 2x_1 \geq 0`, this removes the constraint.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] >= 0).set_id(0)  # Trivially satisfied
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(-x0 - 2*x1) <= 0)
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        >>> instance.get_constraints()
+        []
+        >>> instance.removed_constraints[["equality", "removed_reason"]]  # doctest: +NORMALIZE_WHITESPACE
+           equality                                     removed_reason
+        id
+        0       <=0  convert_inequality_to_equality_with_integer_sl...
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.convert_inequality_to_equality_with_integer_slack_variable(
+            constraint_id, max_integer_range
+        )
+        self.raw.ParseFromString(instance.to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase, UserAnnotationBase):
@@ -2381,6 +2495,42 @@ class Function(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
         return Function.from_bytes(new), used_ids
+
+    def content_factor(self) -> float:
+        r"""
+        For given polynomial :math:`f(x)`, get the minimal positive factor :math:`a` which makes all coefficient of :math:`a f(x)` integer.
+        See also https://en.wikipedia.org/wiki/Primitive_part_and_content
+
+        Examples
+        =========
+
+        :math:`\frac{1}{3} x_0 + \frac{3}{2} x_1` can be multiplied by 6 to make all coefficients integer.
+
+        >>> x = [DecisionVariable.integer(i) for i in range(2)]
+        >>> f = Function((1.0/3.0)*x[0] + (3.0/2.0)*x[1])
+        >>> a = f.content_factor()
+        >>> (a, a*f)
+        (6.0, Function(2*x0 + 9*x1))
+
+        This works even for non-rational numbers like :math:`\pi` because 64-bit float is actually rational.
+
+        >>> import math
+        >>> f = Function(math.pi*x[0] + 3*math.pi*x[1])
+        >>> a = f.content_factor()
+        >>> (a, a*f)
+        (0.3183098861837907, Function(x0 + 3*x1))
+
+        But this returns very large number if there is no multiplier:
+
+        >>> f = Function(math.pi*x[0] + math.e*x[1])
+        >>> a = f.content_factor()
+        >>> (a, a*f)
+        (3122347504612692.0, Function(9809143982445656*x0 + 8487420483923125*x1))
+
+        In practice, you must check if the multiplier is enough small.
+
+        """
+        return _ommx_rust.Function.decode(self.raw.SerializeToString()).content_factor()
 
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
