@@ -510,7 +510,7 @@ impl Instance {
         if bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: ConstraintID::from(constraint_id),
-                bound: bound.clone(),
+                bound,
             });
         }
         if bound.upper() <= 0.0 {
