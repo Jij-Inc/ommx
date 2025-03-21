@@ -845,7 +845,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         * Since :math:`a` is determined as the minimal multiplier to make the every coefficient of :math:`af(x)` integer,
           :math:`a` itself and the range of :math:`s` becomes impractically large. `max_integer_range` limits the maximal range of :math:`s`,
-          and returns error if the range exceeds it.
+          and returns error if the range exceeds it. See also :py:meth:`~Function.minimal_integer_coefficient_multiplier`.
 
         * Since this method evaluates the bound of :math:`f(x)`, we may find that:
 
@@ -860,6 +860,11 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Examples
         =========
+
+        Normal case
+        -----------
+
+        Let's consider a simple inequality constraint :math:`x_0 + 2x_1 \leq 5`.
 
         >>> from ommx.v1 import Instance, DecisionVariable
         >>> x = [
@@ -877,12 +882,16 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.get_constraints()[0]
         Constraint(Function(x0 + 2*x1 - 5) <= 0)
 
+        Introduce an integer slack variable
+
         >>> instance.convert_inequality_to_equality_with_integer_slack_variable(
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
         >>> instance.get_constraints()[0]
         Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
+
+        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -891,6 +900,49 @@ class Instance(InstanceBase, UserAnnotationBase):
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
         3   integer    0.0    5.0  ommx_slack        [0]
+
+        Infeasible case
+        ----------------
+
+        For an infeasible constraint :math:`x_0 + 2x_1 \leq -1`, this returns an error.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= -1).set_id(0)   # Never satisfied since both x0 and x1 are non-negative
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 + 1) <= 0)
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        Traceback (most recent call last):
+        ...
+        RuntimeError: The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }
+
+        Trivial case
+        ------------
+
+        For a trivially satisfied constraint :math:`x_0 + 2x_1 \geq 0`, this removes the constraint.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] >= 0).set_id(0)  # Trivially satisfied
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(-x0 - 2*x1) <= 0)
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        >>> instance.get_constraints()
+        []
+        >>> instance.removed_constraints[["equality", "removed_reason"]]  # doctest: +NORMALIZE_WHITESPACE
+           equality                                     removed_reason
+        id
+        0       <=0  convert_inequality_to_equality_with_integer_sl...
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
@@ -2477,7 +2529,9 @@ class Function(AsConstraint):
         In practice, you must check if the multiplier is enough small.
 
         """
-        return _ommx_rust.Function.decode(self.raw.SerializeToString()).minimal_integer_coefficient_multiplier()
+        return _ommx_rust.Function.decode(
+            self.raw.SerializeToString()
+        ).minimal_integer_coefficient_multiplier()
 
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
