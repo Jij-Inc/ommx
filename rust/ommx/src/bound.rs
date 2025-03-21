@@ -220,6 +220,16 @@ impl PartialOrd<Bound> for f64 {
 }
 
 impl Bound {
+    /// Positive or zero, `[0, inf)`
+    pub fn positive() -> Self {
+        Self::new(0.0, f64::INFINITY).unwrap()
+    }
+
+    /// Negative or zero, `(-inf, 0]`
+    pub fn negative() -> Self {
+        Self::new(f64::NEG_INFINITY, 0.0).unwrap()
+    }
+
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
         BoundError::check(lower, upper)?;
         Ok(Self { lower, upper })
@@ -271,6 +281,19 @@ impl Bound {
     /// `[lower, upper]` with finite `lower` and `upper`
     pub fn is_finite(&self) -> bool {
         self.lower.is_finite() && self.upper.is_finite()
+    }
+
+    /// Take the intersection of two bounds, `None` if the intersection is empty
+    pub fn intersection(&self, other: &Self) -> Option<Self> {
+        Self::new(self.lower.max(other.lower), self.upper.min(other.upper)).ok()
+    }
+
+    pub fn contains(&self, value: f64) -> bool {
+        self.lower <= value && value <= self.upper
+    }
+
+    pub fn contains_bound(&self, other: &Self) -> bool {
+        self.lower <= other.lower && other.upper <= self.upper
     }
 
     pub fn pow(&self, exp: u8) -> Self {
@@ -376,6 +399,26 @@ mod tests {
         assert!(2.0 <= Bound::new(2.0, 3.0).unwrap());
         assert!(3.0 >= Bound::new(2.0, 3.0).unwrap());
         assert!(4.0 >= Bound::new(2.0, 3.0).unwrap());
+    }
+
+    #[test]
+    fn intersection() {
+        assert_eq!(
+            Bound::new(1.0, 2.0)
+                .unwrap()
+                .intersection(&Bound::new(1.5, 3.0).unwrap()),
+            Some(Bound::new(1.5, 2.0).unwrap())
+        );
+        assert_eq!(
+            Bound::new(1.0, 2.0)
+                .unwrap()
+                .intersection(&Bound::new(2.5, 3.0).unwrap()),
+            None
+        );
+        assert_eq!(
+            Bound::positive().intersection(&Bound::negative()).unwrap(),
+            0.0
+        );
     }
 
     #[test]

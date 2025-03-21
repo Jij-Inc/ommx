@@ -4,7 +4,7 @@ use crate::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
         Linear, Parameter, ParametricInstance, RemovedConstraint,
     },
-    Bound, Bounds, VariableID,
+    Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -450,6 +450,9 @@ impl Instance {
     ///
     /// Mutability
     /// ----------
+    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
+    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
+    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
     /// - This creates a new decision variable for the slack variable.
     ///   - Its name is `ommx_slack`
     ///   - Its subscript is single element `[constraint_id]`
@@ -498,7 +501,26 @@ impl Instance {
             .minimal_integer_coefficient_multiplier()
             .context("Cannot normalize the coefficients to integers")?;
         let af = a * function.clone();
+
+        // Check the bound of `a*f`
+        // - If `lower > 0`, the constraint is infeasible
+        // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
         let bound = af.evaluate_bound(&bounds).as_integer_bound();
+        if bound.lower() > 0.0 {
+            bail!(InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound: bound.clone(),
+            });
+        }
+        if bound.upper() <= 0.0 {
+            // The constraint is always satisfied
+            self.relax_constraint(
+                constraint_id,
+                "convert_inequality_to_equality_with_integer_slack_variable".to_string(),
+                Default::default(),
+            )?;
+            return Ok(());
+        }
         if bound.width() > max_integer_range as f64 {
             bail!(
                 "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",

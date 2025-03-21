@@ -149,6 +149,7 @@ mod decision_variable;
 mod evaluate;
 mod format;
 mod function;
+mod infeasible_detected;
 mod instance;
 mod linear;
 mod macros;
@@ -166,6 +167,7 @@ pub use constraint::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
 pub use function::*;
+pub use infeasible_detected::*;
 pub use instance::*;
 
 /// Module created from `ommx.v1` proto files
