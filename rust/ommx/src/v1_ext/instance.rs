@@ -126,9 +126,6 @@ impl Instance {
         let mut parameters = Vec::new();
         let mut removed_constraints = Vec::new();
         for (i, c) in self.constraints.into_iter().enumerate() {
-            if c.equality() != Equality::EqualToZero {
-                bail!("Penalty method is only for equality constraints. Non-equality constraint is found: ID={}", c.id);
-            }
             let parameter = Parameter {
                 id: id_base + i as u64,
                 name: Some("penalty_weight".to_string()),
