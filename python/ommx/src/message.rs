@@ -1,3 +1,4 @@
+use anyhow::Result;
 use approx::AbsDiffEq;
 use ommx::{v1, Message};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyBytes};
@@ -264,5 +265,9 @@ impl Function {
 
     pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Function {
         Function(self.0.clone() * polynomial.0.clone())
+    }
+
+    pub fn minimal_integer_coefficient_multiplier(&self) -> Result<f64> {
+        self.0.minimal_integer_coefficient_multiplier()
     }
 }

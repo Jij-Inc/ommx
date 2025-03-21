@@ -2444,6 +2444,41 @@ class Function(AsConstraint):
         )
         return Function.from_bytes(new), used_ids
 
+    def minimal_integer_coefficient_multiplier(self) -> float:
+        r"""
+        Get the minimal integer coefficient multiplier to make all coefficients integer.
+
+        Examples
+        =========
+
+        :math:`\frac{1}{3} x_0 + \frac{3}{2} x_1` can be multiplied by 6 to make all coefficients integer.
+
+        >>> x = [DecisionVariable.integer(i) for i in range(2)]
+        >>> f = Function((1.0/3.0)*x[0] + (3.0/2.0)*x[1])
+        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> (a, a*f)
+        (6.0, Function(2*x0 + 9*x1))
+
+        This works even for non-rational numbers like :math:`\pi` because 64-bit float is actually rational.
+
+        >>> import math
+        >>> f = Function(math.pi*x[0] + 3*math.pi*x[1])
+        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> (a, a*f)
+        (0.3183098861837907, Function(x0 + 3*x1))
+
+        But this returns very large number if there is no multiplier:
+
+        >>> f = Function(math.pi*x[0] + math.e*x[1])
+        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> (a, a*f)
+        (3122347504612692.0, Function(9809143982445656*x0 + 8487420483923125*x1))
+
+        In practice, you must check if the multiplier is enough small.
+
+        """
+        return _ommx_rust.Function.decode(self.raw.SerializeToString()).minimal_integer_coefficient_multiplier()
+
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
 
