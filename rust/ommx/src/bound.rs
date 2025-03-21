@@ -180,6 +180,45 @@ impl MulAssign<f64> for Bound {
     }
 }
 
+impl PartialEq<f64> for Bound {
+    fn eq(&self, other: &f64) -> bool {
+        self.lower == *other && self.upper == *other
+    }
+}
+
+impl PartialEq<Bound> for f64 {
+    fn eq(&self, other: &Bound) -> bool {
+        other == self
+    }
+}
+
+/// - `a <= [b, c]` means `a <= b`, i.e. `a <= x (forall x \in [b, c])`
+/// - `a >= [b, c]` means `a >= c`, i.e. `a >= x (forall x \in [b, c])`
+/// - If `a` is in `[b, c]`, return `None`
+impl PartialOrd<f64> for Bound {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        debug_assert!(
+            self.lower <= self.upper,
+            "lower({}) <= upper({})",
+            self.lower,
+            self.upper
+        );
+        if other <= &self.lower {
+            Some(std::cmp::Ordering::Greater)
+        } else if other >= &self.upper {
+            Some(std::cmp::Ordering::Less)
+        } else {
+            None
+        }
+    }
+}
+
+impl PartialOrd<Bound> for f64 {
+    fn partial_cmp(&self, other: &Bound) -> Option<std::cmp::Ordering> {
+        other.partial_cmp(self).map(|o| o.reverse())
+    }
+}
+
 impl Bound {
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
         BoundError::check(lower, upper)?;
@@ -330,6 +369,14 @@ impl Arbitrary for Bound {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partial_ord() {
+        assert!(1.0 <= Bound::new(2.0, 3.0).unwrap());
+        assert!(2.0 <= Bound::new(2.0, 3.0).unwrap());
+        assert!(3.0 >= Bound::new(2.0, 3.0).unwrap());
+        assert!(4.0 >= Bound::new(2.0, 3.0).unwrap());
+    }
 
     #[test]
     fn bound_pow() {
