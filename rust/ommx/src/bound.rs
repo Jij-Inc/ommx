@@ -93,6 +93,15 @@ impl TryFrom<v1::Bound> for Bound {
     }
 }
 
+impl From<Bound> for v1::Bound {
+    fn from(bound: Bound) -> Self {
+        Self {
+            lower: bound.lower,
+            upper: bound.upper,
+        }
+    }
+}
+
 impl TryFrom<f64> for Bound {
     type Error = BoundError;
     fn try_from(value: f64) -> Result<Self, Self::Error> {

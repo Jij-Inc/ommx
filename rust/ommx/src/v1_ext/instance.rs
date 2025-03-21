@@ -474,6 +474,7 @@ impl Instance {
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
+        let next_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
 
         let constraint = self
             .constraints
@@ -528,7 +529,18 @@ impl Instance {
             );
         }
 
-        todo!()
+        self.decision_variables.push(DecisionVariable {
+            id: next_id,
+            name: Some("ommx_slack".to_string()),
+            subscripts: vec![constraint_id as i64],
+            kind: Kind::Integer as i32,
+            bound: Some(bound.into()),
+            ..Default::default()
+        });
+        constraint.function = Some(function.clone() + Linear::single_term(next_id, 1.0 / a));
+        constraint.set_equality(Equality::EqualToZero);
+
+        Ok(())
     }
 }
 
