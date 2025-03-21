@@ -209,10 +209,10 @@ impl Function {
         bound
     }
 
-    /// Get a minimal positive multiplier `a` which make all coefficients of `a * self` integer.
+    /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
     ///
-    /// This returns `1` for zero function.
-    pub fn minimal_integer_coefficient_multiplier(&self) -> Result<f64> {
+    /// This returns `1` for zero function. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    pub fn content_factor(&self) -> Result<f64> {
         let mut numer_gcd = 0;
         let mut denom_lcm: i64 = 1;
         for (_, coefficient) in self {
@@ -474,42 +474,33 @@ mod tests {
     }
 
     #[test]
-    fn minimal_integer_coefficient_multiplier() {
+    fn content_factor() {
         let x1 = Linear::single_term(1, 1.0);
         let x2 = Linear::single_term(2, 1.0);
 
         // x1 + x2
         // => 1
         let f: Function = (x1.clone() + x2.clone()).into();
-        assert_eq!(f.minimal_integer_coefficient_multiplier().unwrap(), 1.0);
+        assert_eq!(f.content_factor().unwrap(), 1.0);
 
         // x1 / 2 + x2 / 3
         // => 6 / 1
         let f: Function = (0.5 * x1.clone() + (1.0 / 3.0) * x2.clone()).into();
-        assert_eq!(f.minimal_integer_coefficient_multiplier().unwrap(), 6.0);
+        assert_eq!(f.content_factor().unwrap(), 6.0);
 
         // 2 * x1 / 3 + 2 * x2 / 5
         // => 15 / 2
         let f: Function = (2.0 / 3.0 * x1.clone() + 2.0 / 5.0 * x2.clone()).into();
-        assert_eq!(
-            f.minimal_integer_coefficient_multiplier().unwrap(),
-            15.0 / 2.0
-        );
+        assert_eq!(f.content_factor().unwrap(), 15.0 / 2.0);
 
         // 3 * x1 / 4 + 3 * x2 / 8
         // => 8 / 3
         let f: Function = (3.0 / 4.0 * x1.clone() + 3.0 / 8.0 * x2.clone()).into();
-        assert_eq!(
-            f.minimal_integer_coefficient_multiplier().unwrap(),
-            8.0 / 3.0
-        );
+        assert_eq!(f.content_factor().unwrap(), 8.0 / 3.0);
 
         use std::f64::consts::PI;
         let f: Function = (PI * x1 + 2.0 * PI * x2).into();
-        assert_eq!(
-            f.minimal_integer_coefficient_multiplier().unwrap(),
-            1.0 / PI,
-        );
+        assert_eq!(f.content_factor().unwrap(), 1.0 / PI,);
     }
 
     proptest! {
@@ -569,8 +560,8 @@ mod tests {
         }
 
         #[test]
-        fn minimal_integer_coefficient_multiplier_arb(f in Function::arbitrary()) {
-            let Ok(multiplier) = f.minimal_integer_coefficient_multiplier() else { return Ok(()) };
+        fn content_factor_arb(f in Function::arbitrary()) {
+            let Ok(multiplier) = f.content_factor() else { return Ok(()) };
             prop_assert!(multiplier > 0.0);
             let f = f * multiplier;
             for (_, c) in &f {

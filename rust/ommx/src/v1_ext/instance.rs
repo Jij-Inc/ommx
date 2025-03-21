@@ -499,7 +499,7 @@ impl Instance {
 
         // Evaluate minimal integer coefficient multiplier `a` which make all coefficients of `a * f(x)` integer
         let a = function
-            .minimal_integer_coefficient_multiplier()
+            .content_factor()
             .context("Cannot normalize the coefficients to integers")?;
         let af = a * function.clone();
 

@@ -845,7 +845,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         * Since :math:`a` is determined as the minimal multiplier to make the every coefficient of :math:`af(x)` integer,
           :math:`a` itself and the range of :math:`s` becomes impractically large. `max_integer_range` limits the maximal range of :math:`s`,
-          and returns error if the range exceeds it. See also :py:meth:`~Function.minimal_integer_coefficient_multiplier`.
+          and returns error if the range exceeds it. See also :py:meth:`~Function.content_factor`.
 
         * Since this method evaluates the bound of :math:`f(x)`, we may find that:
 
@@ -2496,9 +2496,10 @@ class Function(AsConstraint):
         )
         return Function.from_bytes(new), used_ids
 
-    def minimal_integer_coefficient_multiplier(self) -> float:
+    def content_factor(self) -> float:
         r"""
-        For given polynomial :math:`f(x)`, get the minimal positive multiplier :math:`a` which makes all coefficient of :math:`a f(x)` integer.
+        For given polynomial :math:`f(x)`, get the minimal positive factor :math:`a` which makes all coefficient of :math:`a f(x)` integer.
+        See also https://en.wikipedia.org/wiki/Primitive_part_and_content
 
         Examples
         =========
@@ -2507,7 +2508,7 @@ class Function(AsConstraint):
 
         >>> x = [DecisionVariable.integer(i) for i in range(2)]
         >>> f = Function((1.0/3.0)*x[0] + (3.0/2.0)*x[1])
-        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> a = f.content_factor()
         >>> (a, a*f)
         (6.0, Function(2*x0 + 9*x1))
 
@@ -2515,14 +2516,14 @@ class Function(AsConstraint):
 
         >>> import math
         >>> f = Function(math.pi*x[0] + 3*math.pi*x[1])
-        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> a = f.content_factor()
         >>> (a, a*f)
         (0.3183098861837907, Function(x0 + 3*x1))
 
         But this returns very large number if there is no multiplier:
 
         >>> f = Function(math.pi*x[0] + math.e*x[1])
-        >>> a = f.minimal_integer_coefficient_multiplier()
+        >>> a = f.content_factor()
         >>> (a, a*f)
         (3122347504612692.0, Function(9809143982445656*x0 + 8487420483923125*x1))
 
@@ -2531,7 +2532,7 @@ class Function(AsConstraint):
         """
         return _ommx_rust.Function.decode(
             self.raw.SerializeToString()
-        ).minimal_integer_coefficient_multiplier()
+        ).content_factor()
 
     def __repr__(self) -> str:
         return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"

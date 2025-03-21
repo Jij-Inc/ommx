@@ -267,7 +267,7 @@ impl Function {
         Function(self.0.clone() * polynomial.0.clone())
     }
 
-    pub fn minimal_integer_coefficient_multiplier(&self) -> Result<f64> {
-        self.0.minimal_integer_coefficient_multiplier()
+    pub fn content_factor(&self) -> Result<f64> {
+        self.0.content_factor()
     }
 }
