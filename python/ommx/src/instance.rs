@@ -76,6 +76,18 @@ impl Instance {
         self.0.substitute(replacements)?;
         Ok(())
     }
+
+    pub fn convert_inequality_to_equality_with_integer_slack_variable(
+        &mut self,
+        constraint_id: u64,
+        max_integer_range: u64,
+    ) -> Result<()> {
+        self.0
+            .convert_inequality_to_equality_with_integer_slack_variable(
+                constraint_id,
+                max_integer_range,
+            )
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
