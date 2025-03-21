@@ -2446,7 +2446,7 @@ class Function(AsConstraint):
 
     def minimal_integer_coefficient_multiplier(self) -> float:
         r"""
-        Get the minimal integer coefficient multiplier to make all coefficients integer.
+        For given polynomial :math:`f(x)`, get the minimal positive multiplier :math:`a` which makes all coefficient of :math:`a f(x)` integer.
 
         Examples
         =========
