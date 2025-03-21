@@ -837,6 +837,53 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
 
+    def convert_inequality_to_equality_with_integer_slack_variable(
+        self, constraint_id: int, max_integer_range: int
+    ):
+        r"""
+        Convert an inequality constraint :math:`f(x) \leq 0` to an equality constraint :math:`f(x) + s/a = 0` with an integer slack variable `s`.
+
+        Examples
+        =========
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= 3).set_id(0)   # Set ID manually to use after
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 - 3) <= 0)
+
+        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(
+        ...     constraint_id=0,
+        ...     max_integer_range=32
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 + x3 - 3) == 0)
+
+        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper        name subscripts
+        id
+        0   integer    0.0    3.0           x        [0]
+        1   integer    0.0    3.0           x        [1]
+        2   integer    0.0    3.0           x        [2]
+        3   integer   -3.0    6.0  ommx_slack        [0]
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        instance.convert_inequality_to_equality_with_integer_slack_variable(
+            constraint_id, max_integer_range
+        )
+        self.raw.ParseFromString(instance.to_bytes())
+
 
 @dataclass
 class ParametricInstance(InstanceBase, UserAnnotationBase):
