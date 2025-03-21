@@ -490,21 +490,23 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             \begin{align*}
                 \min_x & \space f(x) & \\
-                \text{ s.t. } & \space g_i(x) = 0 & (\forall i)
+                \text{ s.t. } & \space g_i(x) = 0 & (\forall i) \\
+                & \space h_j(x) \leq 0 & (\forall j)
             \end{align*}
 
         to an unconstrained problem with parameters
 
         .. math::
 
-            \min_x f(x) + \sum_i \lambda_i g_i(x)^2
+            \min_x f(x) + \sum_i \lambda_i g_i(x)^2 + \sum_j \rho_j h_j(x)^2
 
-        where :math:`\lambda_i` are the penalty weight parameters for each constraint.
+        where :math:`\lambda_i` and :math:`\rho_j` are the penalty weight parameters for each constraint.
         If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        :raises RuntimeError: If the instance contains inequality constraints.
+        Note that this method converts inequality constraints `h(x) <= 0` to a same penalty term $|h(x)|^2$ as equality constraints `h(x) = 0`.
+        This means
 
         Examples
         =========
