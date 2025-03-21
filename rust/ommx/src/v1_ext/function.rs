@@ -498,10 +498,17 @@ mod tests {
 
         // 3 * x1 / 4 + 3 * x2 / 8
         // => 8 / 3
-        let f: Function = (3.0 / 4.0 * x1 + 3.0 / 8.0 * x2).into();
+        let f: Function = (3.0 / 4.0 * x1.clone() + 3.0 / 8.0 * x2.clone()).into();
         assert_eq!(
             f.minimal_integer_coefficient_multiplier().unwrap(),
             8.0 / 3.0
+        );
+
+        use std::f64::consts::PI;
+        let f: Function = (PI * x1 + 2.0 * PI * x2).into();
+        assert_eq!(
+            f.minimal_integer_coefficient_multiplier().unwrap(),
+            1.0 / PI,
         );
     }
 
