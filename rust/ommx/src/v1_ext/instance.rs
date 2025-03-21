@@ -522,6 +522,7 @@ impl Instance {
             )?;
             return Ok(());
         }
+        let bound = Bound::new(0.0, -bound.lower()).unwrap();
         if bound.width() > max_integer_range as f64 {
             bail!(
                 "The range of the slack variable exceeds the limit: evaluated({width}) > limit({max_integer_range})",

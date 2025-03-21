@@ -855,19 +855,19 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     decision_variables=x,
         ...     objective=sum(x),
         ...     constraints=[
-        ...         (x[0] + 2*x[1] <= 3).set_id(0)   # Set ID manually to use after
+        ...         (x[0] + 2*x[1] <= 5).set_id(0)   # Set ID manually to use after
         ...     ],
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> instance.get_constraints()[0]
-        Constraint(Function(x0 + 2*x1 - 3) <= 0)
+        Constraint(Function(x0 + 2*x1 - 5) <= 0)
 
         >>> instance.convert_inequality_to_equality_with_integer_slack_variable(
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
         >>> instance.get_constraints()[0]
-        Constraint(Function(x0 + 2*x1 + x3 - 3) == 0)
+        Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -875,7 +875,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         0   integer    0.0    3.0           x        [0]
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
-        3   integer   -3.0    6.0  ommx_slack        [0]
+        3   integer    0.0    5.0  ommx_slack        [0]
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
