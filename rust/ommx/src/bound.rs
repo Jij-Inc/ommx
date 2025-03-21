@@ -288,14 +288,6 @@ impl Bound {
         Self::new(self.lower.max(other.lower), self.upper.min(other.upper)).ok()
     }
 
-    pub fn contains(&self, value: f64) -> bool {
-        self.lower <= value && value <= self.upper
-    }
-
-    pub fn contains_bound(&self, other: &Self) -> bool {
-        self.lower <= other.lower && other.upper <= self.upper
-    }
-
     pub fn pow(&self, exp: u8) -> Self {
         if exp % 2 == 0 {
             if self.lower >= 0.0 {
