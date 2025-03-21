@@ -18,6 +18,7 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 |:------|:-------------|
 | Solving Optimization Problems with OMMX Adapter | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/solve_with_ommx_adapter.html) |
 | Sampling from QUBO with OMMX Adapter | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/tsp_sampling_with_openjij_adapter.html) |
+| Sharing Various Types of Data in an OMMX Artifact | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/share_in_ommx_artifact.html) |
 | Downloading a MIPLIB Instance | [![Book](https://img.shields.io/badge/Book-English-blue)](https://jij-inc.github.io/ommx/en/tutorial/download_miplib_instance.html) |
 
 ## 日本語
@@ -26,6 +27,7 @@ Open Mathematical prograMming eXchange (OMMX) is an open ecosystem that empowers
 |:------|:-------------|
 | OMMX Adapterで最適化問題を解く | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/solve_with_ommx_adapter.html) |
 | OMMX AdapterでQUBOからサンプリングする | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/tsp_sampling_with_openjij_adapter.html) |
+| 様々なデータをOMMX Artifact形式で共有する | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/share_in_ommx_artifact.html) |
 | MIPLIBインスタンスをダウンロードする | [![Book](https://img.shields.io/badge/Book-日本語-blue)](https://jij-inc.github.io/ommx/ja/tutorial/download_miplib_instance.html) |
 
 # API Reference
