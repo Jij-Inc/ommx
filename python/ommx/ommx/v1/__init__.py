@@ -911,6 +911,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         r"""
         Convert inequality :math:`f(x) \leq 0` to **inequality** :math:`f(x) + b s \leq 0` with an integer slack variable `s`.
 
+        * This should be used when :meth:`convert_inequality_to_equality_with_integer_slack` is not applicable
+
         * The bound of :math:`s` will be `[0, slack_upper_bound]`, and the coefficients :math:`b` are determined from the lower bound of :math:`f(x)`.
 
         * Since the slack variable is integer, the yielded inequality has residual error :math:`\min_s f(x) + b s` at most :math:`b`.
@@ -972,7 +974,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   integer    0.0    3.0           x        [2]
         3   integer    0.0    2.0  ommx_slack        [0]
 
-        In this case, the slack variable only take :math:`b \cdot s = \{ 0, 2, 4 \}`, and thus the residual error is not disappear for $x_0 = x_1 = 1$ case.
+        In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
+        and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
