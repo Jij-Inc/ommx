@@ -421,6 +421,27 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return Instance.from_bytes(out)
 
+    def to_qubo(self) -> tuple[dict[tuple[int, int], float], float]:
+        """
+        Convert the instance to a QUBO format with basic settings.
+
+        This is easy-to-use method for QUBO conversion, but not for advanced settings.
+        """
+        self.as_minimization_problem()
+        ineq_ids = [
+            c.id
+            for c in self.get_constraints()
+            if c.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        ]
+        for ineq_id in ineq_ids:
+            try:
+                self.convert_inequality_to_equality_with_integer_slack(ineq_id, 32)
+            except RuntimeError:
+                self.add_integer_slack_to_inequality(ineq_id, 32)
+        pi = self.uniform_penalty_method()
+        weight = pi.get_parameters()[0]
+        return pi.with_parameters({weight.id: 1.0}).as_qubo_format()
+
     def as_minimization_problem(self):
         """
         Convert the instance to a minimization problem.
