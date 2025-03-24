@@ -48,6 +48,7 @@ def test_convert_inequality_to_equality_with_integer_slack_continuous():
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
     )
 
+
 def test_convert_inequality_to_equality_with_integer_slack_infeasible():
     x = [
         DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -57,7 +58,9 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
         decision_variables=x,
         objective=sum(x),
         constraints=[
-            (x[0] + 2*x[1] <= -1).set_id(0)   # Never satisfied since both x0 and x1 are non-negative
+            (x[0] + 2 * x[1] <= -1).set_id(
+                0
+            )  # Never satisfied since both x0 and x1 are non-negative
         ],
         sense=Instance.MAXIMIZE,
     )
@@ -68,6 +71,7 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
         == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }"
     )
 
+
 def test_convert_inequality_to_equality_with_integer_slack_trivial():
     x = [
         DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -77,14 +81,17 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
         decision_variables=x,
         objective=sum(x),
         constraints=[
-            (x[0] + 2*x[1] >= 0).set_id(0)  # Trivially satisfied
+            (x[0] + 2 * x[1] >= 0).set_id(0)  # Trivially satisfied
         ],
         sense=Instance.MAXIMIZE,
     )
-    instance.convert_inequality_to_equality_with_integer_slack(constraint_id=0, max_integer_range=32)
+    instance.convert_inequality_to_equality_with_integer_slack(
+        constraint_id=0, max_integer_range=32
+    )
     assert instance.get_constraints() == []
     removed = instance.get_removed_constraints()[0]
     assert removed.id == 0
+
 
 def test_add_integer_slack_to_inequality_infeasible():
     x = [
@@ -95,7 +102,9 @@ def test_add_integer_slack_to_inequality_infeasible():
         decision_variables=x,
         objective=sum(x),
         constraints=[
-            (x[0] + 2*x[1] <= -1).set_id(0)   # Never satisfied since both x0 and x1 are non-negative
+            (x[0] + 2 * x[1] <= -1).set_id(
+                0
+            )  # Never satisfied since both x0 and x1 are non-negative
         ],
         sense=Instance.MAXIMIZE,
     )
@@ -106,6 +115,7 @@ def test_add_integer_slack_to_inequality_infeasible():
         == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }"
     )
 
+
 def test_add_integer_slack_to_inequality_trivial():
     x = [
         DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
@@ -115,7 +125,7 @@ def test_add_integer_slack_to_inequality_trivial():
         decision_variables=x,
         objective=sum(x),
         constraints=[
-            (x[0] + 2*x[1] >= 0).set_id(0)  # Trivially satisfied
+            (x[0] + 2 * x[1] >= 0).set_id(0)  # Trivially satisfied
         ],
         sense=Instance.MAXIMIZE,
     )
