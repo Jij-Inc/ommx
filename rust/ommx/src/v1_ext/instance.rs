@@ -467,7 +467,7 @@ impl Instance {
     /// - The constraint contains continuous decision variables
     /// - The slack variable range exceeds `max_integer_range`
     ///
-    pub fn convert_inequality_to_equality_with_integer_slack_variable(
+    pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
@@ -517,7 +517,7 @@ impl Instance {
             // The constraint is always satisfied
             self.relax_constraint(
                 constraint_id,
-                "convert_inequality_to_equality_with_integer_slack_variable".to_string(),
+                "convert_inequality_to_equality_with_integer_slack".to_string(),
                 Default::default(),
             )?;
             return Ok(());
@@ -542,6 +542,90 @@ impl Instance {
         constraint.set_equality(Equality::EqualToZero);
 
         Ok(())
+    }
+
+    /// Add integer slack variable to inequality
+    ///
+    /// This converts an inequality `f(x) <= 0` to `f(x) + b*s <= 0` where `s` is an integer slack variable.
+    ///
+    /// Mutability
+    /// ----------
+    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
+    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
+    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
+    /// - This adds a new decision variable for the slack variable.
+    ///   - Its name is `ommx_slack`
+    ///   - Its subscript is single element `[constraint_id]`
+    ///   - Its bound is `[0, slack_upper_bound]`
+    ///   - Its kind is integer
+    ///
+    /// Errors
+    /// ------
+    /// - The constraint ID is not found, or is not inequality
+    /// - The constraint contains continuous decision variables
+    ///
+    pub fn add_integer_slack_to_inequality(
+        &mut self,
+        constraint_id: u64,
+        slack_upper_bound: u64,
+    ) -> Result<Option<f64>> {
+        let slack_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
+        let bounds = self.get_bounds()?;
+        let kinds = self.get_kinds();
+        let constraint = self
+            .constraints
+            .iter_mut()
+            .find(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        if constraint.equality() != Equality::LessThanOrEqualToZero {
+            bail!("The constraint is not inequality: ID={}", constraint_id);
+        }
+        let f = constraint
+            .function
+            .as_ref()
+            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+
+        for id in f.used_decision_variable_ids() {
+            let id = VariableID::from(id);
+            let kind = kinds
+                .get(&id)
+                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
+            if !matches!(kind, Kind::Binary | Kind::Integer) {
+                bail!("The constraint contains continuous decision variables: ID={id:?}");
+            }
+        }
+
+        let bound = f.evaluate_bound(&bounds);
+        if bound.lower() > 0.0 {
+            bail!(InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound,
+            });
+        }
+        if bound.upper() <= 0.0 {
+            // The constraint is always satisfied
+            self.relax_constraint(
+                constraint_id,
+                "add_integer_slack_to_inequality".to_string(),
+                Default::default(),
+            )?;
+            return Ok(None);
+        }
+        let b = -bound.lower() / slack_upper_bound as f64;
+
+        self.decision_variables.push(DecisionVariable {
+            id: slack_id,
+            name: Some("ommx_slack".to_string()),
+            subscripts: vec![constraint_id as i64],
+            kind: Kind::Integer as i32,
+            bound: Some(crate::v1::Bound {
+                lower: 0.0,
+                upper: slack_upper_bound as f64,
+            }),
+            ..Default::default()
+        });
+        constraint.function = Some(f.clone() + Linear::single_term(slack_id, b));
+        Ok(Some(b))
     }
 }
 
