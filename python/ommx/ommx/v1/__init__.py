@@ -951,14 +951,31 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         self.raw.ParseFromString(instance.to_bytes())
 
-    def add_integer_slack_to_inequality(self, constraint_id: int, slack_upper_bound: int) -> float:
+    def add_integer_slack_to_inequality(
+        self, constraint_id: int, slack_upper_bound: int
+    ) -> float:
         r"""
-        Add an integer slack variable to an inequality constraint.
+        Convert inequality :math:`f(x) \leq 0` to **inequality** :math:`f(x) + b s + a \leq 0` with an integer slack variable `s`.
+
+        * The bound of :math:`s` will be `[0, slack_upper_bound]`, and the coefficients :math:`a` and :math:`b` are determined from the bound of :math:`f(x)`.
+
+        * Since this method evaluates the bound of :math:`f(x)`, we may find that:
+
+          * The bound :math:`[l, u]` is strictly positive, i.e. :math:`l \gt 0`.
+            This means the instance is infeasible because this constraint never be satisfied.
+            In this case, an error is raised.
+
+          * The bound :math:`[l, u]` is always negative, i.e. :math:`u \leq 0`.
+            This means this constraint is trivially satisfied.
+            In this case, the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+            and this method returns without introducing slack variable or raising an error.
+
+        Examples
+        =========
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        b = instance.add_integer_slack_to_inequality(
-            constraint_id, slack_upper_bound
-        )
+        b = instance.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
         self.raw.ParseFromString(instance.to_bytes())
         return b
 
