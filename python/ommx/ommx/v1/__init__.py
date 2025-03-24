@@ -505,8 +505,9 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        Note that this method converts inequality constraints `h(x) <= 0` to a same penalty term $|h(x)|^2$ as equality constraints `h(x) = 0`.
-        This means
+        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
