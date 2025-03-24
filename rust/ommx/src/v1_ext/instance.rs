@@ -559,6 +559,7 @@ impl Instance {
     /// Errors
     /// ------
     /// - The constraint ID is not found, or is not inequality
+    /// - The constraint contains continuous decision variables
     ///
     pub fn add_integer_slack_to_inequality(
         &mut self,
@@ -567,6 +568,7 @@ impl Instance {
     ) -> Result<f64> {
         let slack_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let bounds = self.get_bounds()?;
+        let kinds = self.get_kinds();
         let constraint = self
             .constraints
             .iter_mut()
@@ -579,6 +581,17 @@ impl Instance {
             .function
             .as_ref()
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+
+        for id in f.used_decision_variable_ids() {
+            let id = VariableID::from(id);
+            let kind = kinds
+                .get(&id)
+                .with_context(|| format!("Decision variable ID {id:?} not found"))?;
+            if !matches!(kind, Kind::Binary | Kind::Integer) {
+                bail!("The constraint contains continuous decision variables: ID={id:?}");
+            }
+        }
+
         let bound = f.evaluate_bound(&bounds);
         self.decision_variables.push(DecisionVariable {
             id: slack_id,
