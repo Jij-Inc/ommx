@@ -137,6 +137,7 @@ def test_add_integer_slack_to_inequality_trivial():
     removed = instance.get_removed_constraints()[0]
     assert removed.id == 0
 
+
 def test_add_integer_slack_to_inequality_continuous():
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
