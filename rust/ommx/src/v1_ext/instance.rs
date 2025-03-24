@@ -165,9 +165,6 @@ impl Instance {
         let mut removed_constraints = Vec::new();
         let mut quad_sum = Function::zero();
         for c in self.constraints.into_iter() {
-            if c.equality() != Equality::EqualToZero {
-                bail!("Uniform penalty method is only for equality constraints. Non-equality constraint is found: ID={}", c.id);
-            }
             let f = c.function().into_owned();
             quad_sum = quad_sum + f.clone() * f;
             removed_constraints.push(RemovedConstraint {

@@ -572,69 +572,69 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             \begin{align*}
                 \min_x & \space f(x) & \\
-                \text{ s.t. } & \space g_i(x) = 0 & (\forall i)
+                \text{ s.t. } & \space g_i(x) = 0 & (\forall i) \\
+                & \space h_j(x) \leq 0 & (\forall j)
             \end{align*}
 
         to an unconstrained problem with a parameter
 
         .. math::
 
-            \min_x f(x) + \lambda \sum_i g_i(x)^2
+            \min_x f(x) + \lambda \left( \sum_i g_i(x)^2 + \sum_j h_j(x)^2 \right)
 
         where :math:`\lambda` is the uniform penalty weight parameter for all constraints.
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        :raises RuntimeError: If the instance contains inequality constraints.
+        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
 
-        .. doctest::
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 3],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        >>> pi = instance.uniform_penalty_method()
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x = [DecisionVariable.binary(i) for i in range(3)]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(x),
-            ...     constraints=[sum(x) == 3],
-            ...     sense=Instance.MAXIMIZE,
-            ... )
-            >>> instance.objective
-            Function(x0 + x1 + x2)
+        The constraint is put in :attr:`removed_constraints`
 
-            >>> pi = instance.uniform_penalty_method()
+        >>> pi.get_constraints()
+        []
+        >>> len(pi.get_removed_constraints())
+        1
+        >>> pi.get_removed_constraints()[0]
+        RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=uniform_penalty_method)
 
-            The constraint is put in `removed_constraints`
+        There is only one parameter in the instance
 
-            >>> pi.get_constraints()
-            []
-            >>> len(pi.get_removed_constraints())
-            1
-            >>> pi.get_removed_constraints()[0]
-            RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=uniform_penalty_method)
+        >>> len(pi.get_parameters())
+        1
+        >>> p = pi.get_parameters()[0]
+        >>> p.id
+        3
+        >>> p.name
+        'uniform_penalty_weight'
 
-            There is only one parameter in the instance
+        Substitute `p = 0` to get the original objective
 
-            >>> len(pi.get_parameters())
-            1
-            >>> p = pi.get_parameters()[0]
-            >>> p.id
-            3
-            >>> p.name
-            'uniform_penalty_weight'
+        >>> instance0 = pi.with_parameters({p.id: 0.0})
+        >>> instance0.objective
+        Function(x0 + x1 + x2)
 
-            Substitute `p = 0` to get the original objective
+        Substitute `p = 1`
 
-            >>> instance0 = pi.with_parameters({p.id: 0.0})
-            >>> instance0.objective
-            Function(x0 + x1 + x2)
-
-            Substitute `p = 1`
-
-            >>> instance1 = pi.with_parameters({p.id: 1.0})
-            >>> instance1.objective
-            Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
+        >>> instance1 = pi.with_parameters({p.id: 1.0})
+        >>> instance1.objective
+        Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
