@@ -90,7 +90,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
-    ) -> Result<f64> {
+    ) -> Result<Option<f64>> {
         self.0
             .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
     }

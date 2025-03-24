@@ -953,11 +953,14 @@ class Instance(InstanceBase, UserAnnotationBase):
 
     def add_integer_slack_to_inequality(
         self, constraint_id: int, slack_upper_bound: int
-    ) -> float:
+    ) -> float | None:
         r"""
         Convert inequality :math:`f(x) \leq 0` to **inequality** :math:`f(x) + b s + a \leq 0` with an integer slack variable `s`.
 
         * The bound of :math:`s` will be `[0, slack_upper_bound]`, and the coefficients :math:`a` and :math:`b` are determined from the bound of :math:`f(x)`.
+
+        * Since the slack variable is integer, the yielded inequality has residual error :math:`\min_s f(x) + b s + a` at most :math:`b`.
+          And thus :math:`b` is returned to use scaling the penalty weight or other things.
 
         * Since this method evaluates the bound of :math:`f(x)`, we may find that:
 
@@ -969,6 +972,8 @@ class Instance(InstanceBase, UserAnnotationBase):
             This means this constraint is trivially satisfied.
             In this case, the constraint is moved to :py:attr:`~Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
+
+        :return: The coefficient :math:`b` of the slack variable. If the constraint is trivially satisfied, this returns `None`.
 
         Examples
         =========

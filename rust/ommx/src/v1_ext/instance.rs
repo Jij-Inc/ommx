@@ -550,6 +550,9 @@ impl Instance {
     ///
     /// Mutability
     /// ----------
+    /// - This evaluates the bound of `f(x)` as `[lower, upper]`, and then:
+    ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
+    ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
     /// - This adds a new decision variable for the slack variable.
     ///   - Its name is `ommx_slack`
     ///   - Its subscript is single element `[constraint_id]`
@@ -565,7 +568,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         slack_upper_bound: u64,
-    ) -> Result<f64> {
+    ) -> Result<Option<f64>> {
         let slack_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -593,6 +596,22 @@ impl Instance {
         }
 
         let bound = f.evaluate_bound(&bounds);
+        if bound.lower() > 0.0 {
+            bail!(InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound,
+            });
+        }
+        if bound.upper() <= 0.0 {
+            // The constraint is always satisfied
+            self.relax_constraint(
+                constraint_id,
+                "add_integer_slack_to_inequality".to_string(),
+                Default::default(),
+            )?;
+            return Ok(None);
+        }
+
         self.decision_variables.push(DecisionVariable {
             id: slack_id,
             name: Some("ommx_slack".to_string()),
@@ -608,7 +627,7 @@ impl Instance {
         let b = bound.width() / slack_upper_bound as f64;
         let slack = Linear::single_term(slack_id, b) + a;
         constraint.function = Some(f.clone() + slack);
-        Ok(b)
+        Ok(Some(b))
     }
 }
 
