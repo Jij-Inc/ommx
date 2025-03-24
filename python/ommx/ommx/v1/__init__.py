@@ -837,7 +837,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
 
-    def convert_inequality_to_equality_with_integer_slack_variable(
+    def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
     ):
         r"""
@@ -884,7 +884,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Introduce an integer slack variable
 
-        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(
+        >>> instance.convert_inequality_to_equality_with_integer_slack(
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
@@ -916,7 +916,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ... )
         >>> instance.get_constraints()[0]
         Constraint(Function(x0 + 2*x1 + 1) <= 0)
-        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        >>> instance.convert_inequality_to_equality_with_integer_slack(constraint_id=0, max_integer_range=32)
         Traceback (most recent call last):
         ...
         RuntimeError: The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }
@@ -936,7 +936,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ... )
         >>> instance.get_constraints()[0]
         Constraint(Function(-x0 - 2*x1) <= 0)
-        >>> instance.convert_inequality_to_equality_with_integer_slack_variable(constraint_id=0, max_integer_range=32)
+        >>> instance.convert_inequality_to_equality_with_integer_slack(constraint_id=0, max_integer_range=32)
         >>> instance.get_constraints()
         []
         >>> instance.removed_constraints[["equality", "removed_reason"]]  # doctest: +NORMALIZE_WHITESPACE
@@ -946,7 +946,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.convert_inequality_to_equality_with_integer_slack_variable(
+        instance.convert_inequality_to_equality_with_integer_slack(
             constraint_id, max_integer_range
         )
         self.raw.ParseFromString(instance.to_bytes())

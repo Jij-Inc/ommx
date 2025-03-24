@@ -467,7 +467,7 @@ impl Instance {
     /// - The constraint contains continuous decision variables
     /// - The slack variable range exceeds `max_integer_range`
     ///
-    pub fn convert_inequality_to_equality_with_integer_slack_variable(
+    pub fn convert_inequality_to_equality_with_integer_slack(
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
@@ -517,7 +517,7 @@ impl Instance {
             // The constraint is always satisfied
             self.relax_constraint(
                 constraint_id,
-                "convert_inequality_to_equality_with_integer_slack_variable".to_string(),
+                "convert_inequality_to_equality_with_integer_slack".to_string(),
                 Default::default(),
             )?;
             return Ok(());

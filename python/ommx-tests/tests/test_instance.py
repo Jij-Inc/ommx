@@ -17,7 +17,7 @@ def test_set_objective():
     assert instance.objective.almost_equal(Function(x[1]))
 
 
-def test_convert_inequality_to_equality_with_integer_slack_variable_limit():
+def test_convert_inequality_to_equality_with_integer_slack_limit():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -26,14 +26,14 @@ def test_convert_inequality_to_equality_with_integer_slack_variable_limit():
         sense=Instance.MAXIMIZE,
     )
     with pytest.raises(RuntimeError) as e:
-        instance.convert_inequality_to_equality_with_integer_slack_variable(0, 32)
+        instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
         == "The range of the slack variable exceeds the limit: evaluated(15174216961756088) > limit(32)"
     )
 
 
-def test_convert_inequality_to_equality_with_integer_slack_variable_continuous():
+def test_convert_inequality_to_equality_with_integer_slack_continuous():
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -42,7 +42,7 @@ def test_convert_inequality_to_equality_with_integer_slack_variable_continuous()
         sense=Instance.MAXIMIZE,
     )
     with pytest.raises(RuntimeError) as e:
-        instance.convert_inequality_to_equality_with_integer_slack_variable(0, 32)
+        instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
