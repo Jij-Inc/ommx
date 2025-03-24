@@ -512,54 +512,51 @@ class Instance(InstanceBase, UserAnnotationBase):
         Examples
         =========
 
-        .. doctest::
+        >>> from ommx.v1 import Instance, DecisionVariable, Constraint
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        >>> pi = instance.penalty_method()
 
-            >>> from ommx.v1 import Instance, DecisionVariable, Constraint
-            >>> x = [DecisionVariable.binary(i) for i in range(3)]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(x),
-            ...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],
-            ...     sense=Instance.MAXIMIZE,
-            ... )
-            >>> instance.objective
-            Function(x0 + x1 + x2)
+        The constraint is put in :attr:`removed_constraints`
 
-            >>> pi = instance.penalty_method()
+        >>> pi.get_constraints()
+        []
+        >>> len(pi.get_removed_constraints())
+        2
+        >>> pi.get_removed_constraints()[0]
+        RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method, parameter_id=3)
+        >>> pi.get_removed_constraints()[1]
+        RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method, parameter_id=4)
 
-            The constraint is put in `removed_constraints`
+        There are two parameters corresponding to the two constraints
 
-            >>> pi.get_constraints()
-            []
-            >>> len(pi.get_removed_constraints())
-            2
-            >>> pi.get_removed_constraints()[0]
-            RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method, parameter_id=3)
-            >>> pi.get_removed_constraints()[1]
-            RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method, parameter_id=4)
+        >>> len(pi.get_parameters())
+        2
+        >>> p1 = pi.get_parameters()[0]
+        >>> p1.id, p1.name
+        (3, 'penalty_weight')
+        >>> p2 = pi.get_parameters()[1]
+        >>> p2.id, p2.name
+        (4, 'penalty_weight')
 
-            There are two parameters corresponding to the two constraints
+        Substitute all parameters to zero to get the original objective
 
-            >>> len(pi.get_parameters())
-            2
-            >>> p1 = pi.get_parameters()[0]
-            >>> p1.id, p1.name
-            (3, 'penalty_weight')
-            >>> p2 = pi.get_parameters()[1]
-            >>> p2.id, p2.name
-            (4, 'penalty_weight')
+        >>> instance0 = pi.with_parameters({p1.id: 0.0, p2.id: 0.0})
+        >>> instance0.objective
+        Function(x0 + x1 + x2)
 
-            Substitute all parameters to zero to get the original objective
+        Substitute all parameters to one
 
-            >>> instance0 = pi.with_parameters({p1.id: 0.0, p2.id: 0.0})
-            >>> instance0.objective
-            Function(x0 + x1 + x2)
-
-            Substitute all parameters to one
-
-            >>> instance1 = pi.with_parameters({p1.id: 1.0, p2.id: 1.0})
-            >>> instance1.objective
-            Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
+        >>> instance1 = pi.with_parameters({p1.id: 1.0, p2.id: 1.0})
+        >>> instance1.objective
+        Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
