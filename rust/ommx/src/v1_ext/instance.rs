@@ -543,6 +543,60 @@ impl Instance {
 
         Ok(())
     }
+
+    /// Add integer slack variable to inequality
+    ///
+    /// This converts an inequality `f(x) <= 0` to `f(x) + b*s + a <= 0` where `s` is an integer slack variable.
+    ///
+    /// Mutability
+    /// ----------
+    /// - This adds a new decision variable for the slack variable.
+    ///   - Its name is `ommx_slack`
+    ///   - Its subscript is single element `[constraint_id]`
+    ///   - Its bound is `[0, slack_upper_bound]`
+    ///   - Its kind is integer
+    ///
+    /// Errors
+    /// ------
+    /// - The constraint ID is not found, or is not inequality
+    ///
+    pub fn add_integer_slack_to_inequality(
+        &mut self,
+        constraint_id: u64,
+        slack_upper_bound: u64,
+    ) -> Result<f64> {
+        let slack_id = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
+        let bounds = self.get_bounds()?;
+        let constraint = self
+            .constraints
+            .iter_mut()
+            .find(|c| c.id == constraint_id)
+            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+        if constraint.equality() != Equality::LessThanOrEqualToZero {
+            bail!("The constraint is not inequality: ID={}", constraint_id);
+        }
+        let f = constraint
+            .function
+            .as_ref()
+            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+        let bound = f.evaluate_bound(&bounds);
+        self.decision_variables.push(DecisionVariable {
+            id: slack_id,
+            name: Some("ommx_slack".to_string()),
+            subscripts: vec![constraint_id as i64],
+            kind: Kind::Integer as i32,
+            bound: Some(crate::v1::Bound {
+                lower: 0.0,
+                upper: slack_upper_bound as f64,
+            }),
+            ..Default::default()
+        });
+        let a = bound.lower();
+        let b = bound.width() / slack_upper_bound as f64;
+        let slack = Linear::single_term(slack_id, b) + a;
+        constraint.function = Some(f.clone() + slack);
+        Ok(b)
+    }
 }
 
 /// Compare two instances as mathematical programming problems. This does not compare the metadata.
