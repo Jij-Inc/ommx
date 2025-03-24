@@ -136,3 +136,18 @@ def test_add_integer_slack_to_inequality_trivial():
     assert instance.get_constraints() == []
     removed = instance.get_removed_constraints()[0]
     assert removed.id == 0
+
+def test_add_integer_slack_to_inequality_continuous():
+    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + x[1] >= 7.89).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    with pytest.raises(RuntimeError) as e:
+        instance.add_integer_slack_to_inequality(0, 4)
+    assert (
+        str(e.value)
+        == "The constraint contains continuous decision variables: ID=VariableID(0)"
+    )
