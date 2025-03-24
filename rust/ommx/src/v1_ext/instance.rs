@@ -546,7 +546,7 @@ impl Instance {
 
     /// Add integer slack variable to inequality
     ///
-    /// This converts an inequality `f(x) <= 0` to `f(x) + b*s + a <= 0` where `s` is an integer slack variable.
+    /// This converts an inequality `f(x) <= 0` to `f(x) + b*s <= 0` where `s` is an integer slack variable.
     ///
     /// Mutability
     /// ----------
@@ -611,6 +611,7 @@ impl Instance {
             )?;
             return Ok(None);
         }
+        let b = -bound.lower() / slack_upper_bound as f64;
 
         self.decision_variables.push(DecisionVariable {
             id: slack_id,
@@ -623,10 +624,7 @@ impl Instance {
             }),
             ..Default::default()
         });
-        let a = bound.lower();
-        let b = bound.width() / slack_upper_bound as f64;
-        let slack = Linear::single_term(slack_id, b) + a;
-        constraint.function = Some(f.clone() + slack);
+        constraint.function = Some(f.clone() + Linear::single_term(slack_id, b));
         Ok(Some(b))
     }
 }

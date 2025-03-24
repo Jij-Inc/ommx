@@ -955,12 +955,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         self, constraint_id: int, slack_upper_bound: int
     ) -> float | None:
         r"""
-        Convert inequality :math:`f(x) \leq 0` to **inequality** :math:`f(x) + b s + a \leq 0` with an integer slack variable `s`.
+        Convert inequality :math:`f(x) \leq 0` to **inequality** :math:`f(x) + b s \leq 0` with an integer slack variable `s`.
 
-        * The bound of :math:`s` will be `[0, slack_upper_bound]`, and the coefficients :math:`a` and :math:`b` are determined from the bound of :math:`f(x)`.
+        * The bound of :math:`s` will be `[0, slack_upper_bound]`, and the coefficients :math:`b` are determined from the lower bound of :math:`f(x)`.
 
-        * Since the slack variable is integer, the yielded inequality has residual error :math:`\min_s f(x) + b s + a` at most :math:`b`.
+        * Since the slack variable is integer, the yielded inequality has residual error :math:`\min_s f(x) + b s` at most :math:`b`.
           And thus :math:`b` is returned to use scaling the penalty weight or other things.
+
+          * Larger `slack_upper_bound` (i.e. fined-grained slack) yields smaller `b`, and thus smaller the residual error.
+            But it needs more bits for the slack variable, and thus the problem size becomes larger.
 
         * Since this method evaluates the bound of :math:`f(x)`, we may find that:
 
@@ -977,6 +980,96 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Examples
         =========
+
+        Normal case
+        -----------
+
+        Let's consider a simple inequality constraint :math:`x_0 + 2x_1 \leq 4`.
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= 4).set_id(0)   # Set ID manually to use after
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 - 4) <= 0)
+
+        Introduce an integer slack variable :math:`s \in [0, 2]`
+
+        >>> b = instance.add_integer_slack_to_inequality(
+        ...     constraint_id=0,
+        ...     slack_upper_bound=2
+        ... )
+        >>> b, instance.get_constraints()[0]
+        (2.0, Constraint(Function(x0 + 2*x1 + 2*x3 - 4) <= 0))
+
+        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+
+        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper        name subscripts
+        id
+        0   integer    0.0    3.0           x        [0]
+        1   integer    0.0    3.0           x        [1]
+        2   integer    0.0    3.0           x        [2]
+        3   integer    0.0    2.0  ommx_slack        [0]
+
+        In this case, the slack variable only take :math:`b \cdot s = \{ 0, 2, 4 \}`, and thus the residual error is not disappear for $x_0 = x_1 = 1$ case.
+
+        Infeasible case
+        ----------------
+
+        For an infeasible constraint :math:`x_0 + 2x_1 \leq -1`, this returns an error.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= -1).set_id(0)   # Never satisfied since both x0 and x1 are non-negative
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(x0 + 2*x1 + 1) <= 0)
+        >>> instance.add_integer_slack_to_inequality(constraint_id=0, slack_upper_bound=3)
+        Traceback (most recent call last):
+        ...
+        RuntimeError: The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }
+
+        Trivial case
+        ------------
+
+        For a trivially satisfied constraint :math:`x_0 + 2x_1 \geq 0`, this removes the constraint.
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] >= 0).set_id(0)  # Trivially satisfied
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.get_constraints()[0]
+        Constraint(Function(-x0 - 2*x1) <= 0)
+
+        In this case, the returned :math:`b` is `None`.
+
+        >>> b = instance.add_integer_slack_to_inequality(constraint_id=0, slack_upper_bound=3)
+        >>> assert b is None
+
+        >>> instance.get_constraints()
+        []
+        >>> instance.removed_constraints[["equality", "removed_reason"]]  # doctest: +NORMALIZE_WHITESPACE
+           equality                   removed_reason
+        id
+        0       <=0  add_integer_slack_to_inequality
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
