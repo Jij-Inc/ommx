@@ -134,6 +134,9 @@ class Instance:
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: builtins.int, max_integer_range: builtins.int
     ) -> None: ...
+    def add_integer_slack_to_inequality(
+        self, constraint_id: builtins.int, slack_upper_bound: builtins.int
+    ) -> builtins.float: ...
 
 class Linear:
     @staticmethod

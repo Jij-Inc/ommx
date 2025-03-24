@@ -951,6 +951,17 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         self.raw.ParseFromString(instance.to_bytes())
 
+    def add_integer_slack_to_inequality(self, constraint_id: int, slack_upper_bound: int) -> float:
+        r"""
+        Add an integer slack variable to an inequality constraint.
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        b = instance.add_integer_slack_to_inequality(
+            constraint_id, slack_upper_bound
+        )
+        self.raw.ParseFromString(instance.to_bytes())
+        return b
+
 
 @dataclass
 class ParametricInstance(InstanceBase, UserAnnotationBase):

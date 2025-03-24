@@ -85,6 +85,15 @@ impl Instance {
         self.0
             .convert_inequality_to_equality_with_integer_slack(constraint_id, max_integer_range)
     }
+
+    pub fn add_integer_slack_to_inequality(
+        &mut self,
+        constraint_id: u64,
+        slack_upper_bound: u64,
+    ) -> Result<f64> {
+        self.0
+            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
