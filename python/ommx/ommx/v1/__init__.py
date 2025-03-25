@@ -495,7 +495,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         * Two types of decision variables are added
 
-            * ``ommx_slack`` integer slack variable :math:`x_2` by :py:meth:`convert_inequality_to_equality_with_integer_slack`
+            * ``ommx.slack`` integer slack variable :math:`x_2` by :py:meth:`convert_inequality_to_equality_with_integer_slack`
 
             * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
 
@@ -504,7 +504,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         id
         0   integer    0.0    2.0                x        [0]
         1   integer    0.0    2.0                x        [1]
-        2   integer    0.0    3.0       ommx_slack        [0]
+        2   integer    0.0    3.0       ommx.slack        [0]
         3    binary    0.0    1.0  ommx.log_encode     [0, 0]
         4    binary    0.0    1.0  ommx.log_encode     [0, 1]
         5    binary    0.0    1.0  ommx.log_encode     [1, 0]
@@ -1047,7 +1047,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.get_constraints()[0]
         Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
 
-        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+        The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -1055,7 +1055,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         0   integer    0.0    3.0           x        [0]
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    5.0  ommx_slack        [0]
+        3   integer    0.0    5.0  ommx.slack        [0]
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
@@ -1123,7 +1123,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> b, instance.get_constraints()[0]
         (2.0, Constraint(Function(x0 + 2*x1 + 2*x3 - 4) <= 0))
 
-        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+        The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -1131,7 +1131,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         0   integer    0.0    3.0           x        [0]
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    2.0  ommx_slack        [0]
+        3   integer    0.0    2.0  ommx.slack        [0]
 
         In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
