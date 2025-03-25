@@ -169,12 +169,16 @@ def test_to_qubo_continuous():
         == "Continuous variables are not supported in QUBO conversion: IDs=[0, 1, 2]"
     )
 
+
 def test_to_qubo_invalid_penalty_option():
-    x = [DecisionVariable.integer(i, lower=0, upper=2, name = "x", subscripts=[i]) for i in range(2)]
+    x = [
+        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
+        for i in range(2)
+    ]
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+        constraints=[(x[0] + 2 * x[1] <= 3).set_id(0)],
         sense=Instance.MAXIMIZE,
     )
 
