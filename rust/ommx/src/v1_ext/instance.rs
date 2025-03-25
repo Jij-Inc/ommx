@@ -448,7 +448,7 @@ impl Instance {
     ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
     ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
     /// - This creates a new decision variable for the slack variable.
-    ///   - Its name is `ommx_slack`
+    ///   - Its name is `ommx.slack`
     ///   - Its subscript is single element `[constraint_id]`
     ///   - Its bound is determined from `f(x)`
     ///   - Its kind are discussed below
@@ -526,7 +526,7 @@ impl Instance {
 
         self.decision_variables.push(DecisionVariable {
             id: next_id,
-            name: Some("ommx_slack".to_string()),
+            name: Some("ommx.slack".to_string()),
             subscripts: vec![constraint_id as i64],
             kind: Kind::Integer as i32,
             bound: Some(bound.into()),
@@ -548,7 +548,7 @@ impl Instance {
     ///   - if `lower > 0`, this constraint never be satisfied, and the method returns [`InfeasibleDetected::InequalityConstraintBound`].
     ///   - if `upper <= 0`, this constraint is always satisfied, and the constraint is moved to `removed_constraints`.
     /// - This adds a new decision variable for the slack variable.
-    ///   - Its name is `ommx_slack`
+    ///   - Its name is `ommx.slack`
     ///   - Its subscript is single element `[constraint_id]`
     ///   - Its bound is `[0, slack_upper_bound]`
     ///   - Its kind is integer
@@ -609,7 +609,7 @@ impl Instance {
 
         self.decision_variables.push(DecisionVariable {
             id: slack_id,
-            name: Some("ommx_slack".to_string()),
+            name: Some("ommx.slack".to_string()),
             subscripts: vec![constraint_id as i64],
             kind: Kind::Integer as i32,
             bound: Some(crate::v1::Bound {

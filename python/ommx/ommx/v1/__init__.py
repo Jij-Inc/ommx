@@ -421,6 +421,152 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return Instance.from_bytes(out)
 
+    def to_qubo(
+        self,
+        *,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 32,
+    ) -> tuple[dict[tuple[int, int], float], float]:
+        r"""
+        Convert the instance to a QUBO format
+
+        This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
+
+        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        2. Check continuous variables and raise error if exists.
+        3. Log-encode integer variables by :py:meth:`log_encode`.
+        4. Convert inequality constraints
+
+            * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+            * If failed, :py:meth:`add_integer_slack_to_inequality`
+
+        5. Convert to QUBO with (uniform) penalty method
+
+            * If ``penalty_weights`` is given, use :py:meth:`penalty_method` with the given weights.
+            * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+            * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+
+        6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+
+        Please see the document of each method for details.
+        If you want to customize the conversion, use the methods above manually.
+
+        .. important::
+
+            The above process is not stable, and subject to change for better QUBO generation in the future versions.
+            If you wish to keep the compatibility, please use the methods above manually.
+
+        Examples
+        ========
+
+        Let's consider a maximization problem with two integer variables :math:`x_0, x_1 \in [0, 2]` subject to an inequality:
+
+        .. math::
+
+            \begin{align*}
+                \max_{x_0, x_1} & \space x_0 + x_1 & \\
+                \text{ s.t. } & \space x_0 + 2x_1 \leq 3
+            \end{align*}
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.integer(i, lower=0, upper=2, name = "x", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        Convert into QUBO format
+
+        >>> qubo, offset = instance.to_qubo()
+        >>> qubo
+        {(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}
+        >>> offset
+        9.0
+
+        The ``instance`` object stores how converted:
+
+        * The sense is converted to minimization
+
+        >>> instance.sense == Instance.MINIMIZE
+        True
+
+        * Two types of decision variables are added
+
+            * ``ommx.slack`` integer slack variable :math:`x_2` by :py:meth:`convert_inequality_to_equality_with_integer_slack`
+
+            * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
+
+        >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper             name subscripts
+        id
+        0   integer    0.0    2.0                x        [0]
+        1   integer    0.0    2.0                x        [1]
+        2   integer    0.0    3.0       ommx.slack        [0]
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary    0.0    1.0  ommx.log_encode     [1, 0]
+        6    binary    0.0    1.0  ommx.log_encode     [1, 1]
+        7    binary    0.0    1.0  ommx.log_encode     [2, 0]
+        8    binary    0.0    1.0  ommx.log_encode     [2, 1]
+
+        * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
+
+        >>> instance.objective
+        Function(x3*x3 + 2*x3*x4 + 4*x3*x5 + 4*x3*x6 + 2*x3*x7 + 4*x3*x8 + x4*x4 + 4*x4*x5 + 4*x4*x6 + 2*x4*x7 + 4*x4*x8 + 4*x5*x5 + 8*x5*x6 + 4*x5*x7 + 8*x5*x8 + 4*x6*x6 + 4*x6*x7 + 8*x6*x8 + x7*x7 + 4*x7*x8 + 4*x8*x8 - 7*x3 - 7*x4 - 13*x5 - 13*x6 - 6*x7 - 12*x8 + 9)
+        >>> instance.get_removed_constraint(0)
+        RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
+
+        """
+        self.as_minimization_problem()
+
+        continuous_variables = [
+            var.id
+            for var in self.get_decision_variables()
+            if var.kind == DecisionVariable.CONTINUOUS
+        ]
+        if len(continuous_variables) > 0:
+            raise ValueError(
+                f"Continuous variables are not supported in QUBO conversion: IDs={continuous_variables}"
+            )
+
+        # Prepare inequality constraints
+        ineq_ids = [
+            c.id
+            for c in self.get_constraints()
+            if c.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        ]
+        for ineq_id in ineq_ids:
+            try:
+                self.convert_inequality_to_equality_with_integer_slack(
+                    ineq_id, inequality_integer_slack_max_range
+                )
+            except RuntimeError:
+                self.add_integer_slack_to_inequality(ineq_id, 32)
+
+        # Penalty method
+        if uniform_penalty_weight is not None and penalty_weights:
+            raise ValueError(
+                "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+            )
+        if penalty_weights:
+            pi = self.penalty_method()
+            return pi.with_parameters(penalty_weights).as_qubo_format()
+        if uniform_penalty_weight is None:
+            # If both are None, defaults to uniform_penalty_weight = 1.0
+            uniform_penalty_weight = 1.0
+        pi = self.uniform_penalty_method()
+        weight = pi.get_parameters()[0]
+        unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+
+        unconstrained.log_encode()
+
+        qubo = unconstrained.as_qubo_format()
+        self.raw = unconstrained.raw
+        return qubo
+
     def as_minimization_problem(self):
         """
         Convert the instance to a minimization problem.
@@ -464,8 +610,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Convert unconstrained quadratic instance to PyQUBO-style format.
 
-        This method is designed for better composability rather than easy-to-use.
-        This does not execute any conversion of the instance, only translates the data format.
+        .. note::
+            This is a single-purpose method to only convert the format, not to execute any conversion of the instance.
+            Use :py:meth:`to_qubo` driver for the full QUBO conversion.
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_qubo_format()
@@ -505,9 +653,12 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
-        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
-        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        .. note::
+
+            Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+            This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+
+            This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
@@ -586,9 +737,12 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
-        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
-        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        .. note::
+
+            Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+            This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+
+            This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
@@ -751,7 +905,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.restore_constraint(constraint_id)
         self.raw.ParseFromString(instance.to_bytes())
 
-    def log_encode(self, decision_variable_ids: set[int]):
+    def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
         Log-encode the integer decision variables
 
@@ -761,6 +915,8 @@ class Instance(InstanceBase, UserAnnotationBase):
             x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
 
         where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
+
+        :param decision_variable_ids: The IDs of the integer decision variables to log-encode. If not specified, all integer variables are log-encoded.
 
         Examples
         =========
@@ -833,6 +989,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
 
         """
+        if not decision_variable_ids:
+            decision_variable_ids = {
+                var.id
+                for var in self.get_decision_variables()
+                if var.kind == DecisionVariable.INTEGER
+            }
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
@@ -888,7 +1050,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.get_constraints()[0]
         Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
 
-        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+        The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -896,7 +1058,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         0   integer    0.0    3.0           x        [0]
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    5.0  ommx_slack        [0]
+        3   integer    0.0    5.0  ommx.slack        [0]
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
@@ -964,7 +1126,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> b, instance.get_constraints()[0]
         (2.0, Constraint(Function(x0 + 2*x1 + 2*x3 - 4) <= 0))
 
-        The slack variable is added to the decision variables with name `ommx_slack` and the constraint ID is stored in `subscripts`.
+        The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
@@ -972,7 +1134,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         0   integer    0.0    3.0           x        [0]
         1   integer    0.0    3.0           x        [1]
         2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    2.0  ommx_slack        [0]
+        3   integer    0.0    2.0  ommx.slack        [0]
 
         In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
