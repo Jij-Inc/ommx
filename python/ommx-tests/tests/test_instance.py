@@ -168,3 +168,19 @@ def test_to_qubo_continuous():
         str(e.value)
         == "Continuous variables are not supported in QUBO conversion: IDs=[0, 1, 2]"
     )
+
+def test_to_qubo_invalid_penalty_option():
+    x = [DecisionVariable.integer(i, lower=0, upper=2, name = "x", subscripts=[i]) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+
+    with pytest.raises(ValueError) as e:
+        instance.to_qubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
+    assert (
+        str(e.value)
+        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+    )
