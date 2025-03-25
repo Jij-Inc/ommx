@@ -428,7 +428,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ) -> tuple[dict[tuple[int, int], float], float]:
-        """
+        r"""
         Convert the instance to a QUBO format
 
         This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
@@ -460,16 +460,64 @@ class Instance(InstanceBase, UserAnnotationBase):
         Examples
         ========
 
+        Let's consider a maximization problem with two integer variables :math:`x_0, x_1 \in [0, 2]` subject to an inequality:
+
+        .. math::
+
+            \begin{align*}
+                \max_{x_0, x_1} & \space x_0 + x_1 & \\
+                \text{ s.t. } & \space x_0 + 2x_1 \leq 3
+            \end{align*}
+
         >>> from ommx.v1 import Instance, DecisionVariable
-        >>> x = [DecisionVariable.integer(i, lower=0, upper=3) for i in range(3)]
+        >>> x = [DecisionVariable.integer(i, lower=0, upper=2, name = "x", subscripts=[i]) for i in range(2)]
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[x[0] + x[1] <= 2],
+        ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> qubo = instance.to_qubo()
+
+        Convert into QUBO format
+
+        >>> qubo, offset = instance.to_qubo()
         >>> qubo
+        {(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}
+        >>> offset
+        9.0
+
+        The ``instance`` object stores how converted:
+
+        * The sense is converted to minimization
+
+        >>> instance.sense == Instance.MINIMIZE
+        True
+
+        * Two types of decision variables are added
+
+            * ``ommx_slack`` integer slack variable :math:`x_2` by :py:meth:`convert_inequality_to_equality_with_integer_slack`
+
+            * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
+
+        >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper             name subscripts
+        id
+        0   integer    0.0    2.0                x        [0]
+        1   integer    0.0    2.0                x        [1]
+        2   integer    0.0    3.0       ommx_slack        [0]
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary    0.0    1.0  ommx.log_encode     [1, 0]
+        6    binary    0.0    1.0  ommx.log_encode     [1, 1]
+        7    binary    0.0    1.0  ommx.log_encode     [2, 0]
+        8    binary    0.0    1.0  ommx.log_encode     [2, 1]
+
+        * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
+
+        >>> instance.objective
+        Function(x3*x3 + 2*x3*x4 + 4*x3*x5 + 4*x3*x6 + 2*x3*x7 + 4*x3*x8 + x4*x4 + 4*x4*x5 + 4*x4*x6 + 2*x4*x7 + 4*x4*x8 + 4*x5*x5 + 8*x5*x6 + 4*x5*x7 + 8*x5*x8 + 4*x6*x6 + 4*x6*x7 + 8*x6*x8 + x7*x7 + 4*x7*x8 + 4*x8*x8 - 7*x3 - 7*x4 - 13*x5 - 13*x6 - 6*x7 - 12*x8 + 9)
+        >>> instance.get_removed_constraint(0)
+        RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
 
         """
         self.as_minimization_problem()
@@ -484,13 +532,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 f"Continuous variables are not supported in QUBO conversion: IDs={continuous_variables}"
             )
 
-        integer_variables = {
-            var.id
-            for var in self.get_decision_variables()
-            if var.kind == DecisionVariable.INTEGER
-        }
-        self.log_encode(integer_variables)
-
+        # Prepare inequality constraints
         ineq_ids = [
             c.id
             for c in self.get_constraints()
@@ -504,6 +546,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             except RuntimeError:
                 self.add_integer_slack_to_inequality(ineq_id, 32)
 
+        # Penalty method
         if uniform_penalty_weight is not None and penalty_weights:
             raise ValueError(
                 "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -516,7 +559,18 @@ class Instance(InstanceBase, UserAnnotationBase):
             uniform_penalty_weight = 1.0
         pi = self.uniform_penalty_method()
         weight = pi.get_parameters()[0]
-        return pi.with_parameters({weight.id: uniform_penalty_weight}).as_qubo_format()
+        unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+
+        integer_variables = {
+            var.id
+            for var in unconstrained.get_decision_variables()
+            if var.kind == DecisionVariable.INTEGER
+        }
+        unconstrained.log_encode(integer_variables)
+
+        qubo = unconstrained.as_qubo_format()
+        self.raw = unconstrained.raw
+        return qubo
 
     def as_minimization_problem(self):
         """
