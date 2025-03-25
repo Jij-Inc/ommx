@@ -421,11 +421,36 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return Instance.from_bytes(out)
 
-    def to_qubo(self) -> tuple[dict[tuple[int, int], float], float]:
+    def to_qubo(
+        self,
+        *,
+        uniform_penalty_weight: float = 1.0,
+        inequality_integer_slack_max_range: int = 32,
+    ) -> tuple[dict[tuple[int, int], float], float]:
         """
-        Convert the instance to a QUBO format with basic settings.
+        Convert the instance to a QUBO format
 
-        This is easy-to-use method for QUBO conversion, but not for advanced settings.
+        This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
+
+        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        2. Check continuous variables and raise error if exists.
+        3. Log-encode integer variables by :py:meth:`log_encode`.
+        4. Convert inequality constraints
+
+          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, :py:meth:`add_integer_slack_to_inequality`
+
+        5. Convert a parametric QUBO by :py:meth:`uniform_penalty_method` and substitute with given ``penalty_weight``.
+        6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+
+        Please see the document of each method for details.
+        If you want to customize the conversion, use the methods above manually.
+
+        Compatibility
+        =============
+        The above process is not stable, and subject to change for better QUBO generation in the future versions.
+        If you wish to keep the compatibility, please use the methods above manually.
+
         """
         self.as_minimization_problem()
 
@@ -435,9 +460,10 @@ class Instance(InstanceBase, UserAnnotationBase):
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
-            raise RuntimeError(
+            raise ValueError(
                 f"Continuous variables are not supported in QUBO conversion: IDs={continuous_variables}"
             )
+
         integer_variables = {
             var.id
             for var in self.get_decision_variables()
@@ -452,12 +478,14 @@ class Instance(InstanceBase, UserAnnotationBase):
         ]
         for ineq_id in ineq_ids:
             try:
-                self.convert_inequality_to_equality_with_integer_slack(ineq_id, 32)
+                self.convert_inequality_to_equality_with_integer_slack(
+                    ineq_id, inequality_integer_slack_max_range
+                )
             except RuntimeError:
                 self.add_integer_slack_to_inequality(ineq_id, 32)
         pi = self.uniform_penalty_method()
         weight = pi.get_parameters()[0]
-        return pi.with_parameters({weight.id: 1.0}).as_qubo_format()
+        return pi.with_parameters({weight.id: uniform_penalty_weight}).as_qubo_format()
 
     def as_minimization_problem(self):
         """

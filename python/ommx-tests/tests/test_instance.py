@@ -153,6 +153,7 @@ def test_add_integer_slack_to_inequality_continuous():
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
     )
 
+
 def test_to_qubo_continuous():
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(
@@ -161,7 +162,7 @@ def test_to_qubo_continuous():
         constraints=[(x[0] + x[1] >= 7.89).set_id(0)],
         sense=Instance.MAXIMIZE,
     )
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(ValueError) as e:
         instance.to_qubo()
     assert (
         str(e.value)
