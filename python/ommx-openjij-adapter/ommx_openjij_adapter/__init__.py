@@ -124,7 +124,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        qubo, _offset = self.ommx_instance.as_qubo_format()
+        qubo = self.sampler_input
         return sampler.sample_qubo(
             qubo,  # type: ignore
             beta_min=self.beta_min,
@@ -189,10 +189,8 @@ def sample_qubo_sa(
     """
     Deprecated: Use :meth:`OMMXOpenJijSAAdapter.sample` instead
     """
-    q, _offset = instance.as_qubo_format()
-    sampler = oj.SASampler()
-    response = sampler.sample_qubo(
-        q,  # type: ignore
+    sampler = OMMXOpenJijSAAdapter(
+        instance,
         beta_min=beta_min,
         beta_max=beta_max,
         num_sweeps=num_sweeps,
@@ -204,4 +202,5 @@ def sample_qubo_sa(
         reinitialize_state=reinitialize_state,
         seed=seed,
     )
+    response = sampler._sample()
     return decode_to_samples(response)
