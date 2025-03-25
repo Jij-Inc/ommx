@@ -452,10 +452,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         Please see the document of each method for details.
         If you want to customize the conversion, use the methods above manually.
 
-        Compatibility
-        =============
-        The above process is not stable, and subject to change for better QUBO generation in the future versions.
-        If you wish to keep the compatibility, please use the methods above manually.
+        .. important::
+
+            The above process is not stable, and subject to change for better QUBO generation in the future versions.
+            If you wish to keep the compatibility, please use the methods above manually.
 
         """
         self.as_minimization_problem()
@@ -547,8 +547,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Convert unconstrained quadratic instance to PyQUBO-style format.
 
-        This method is designed for better composability rather than easy-to-use.
-        This does not execute any conversion of the instance, only translates the data format.
+        .. note::
+            This is a single-purpose method to only convert the format, not to execute any conversion of the instance.
+            Use :py:meth:`to_qubo` driver for the full QUBO conversion.
+
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_qubo_format()
@@ -588,9 +590,12 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
-        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
-        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        .. note::
+
+            Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+            This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+
+            This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
@@ -669,9 +674,12 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The removed constrains are stored in :py:attr:`~ParametricInstance.removed_constraints`.
 
-        Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
-        This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
-        This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+        .. note::
+
+            Note that this method converts inequality constraints :math:`h(x) \leq 0` to :math:`|h(x)|^2` not to :math:`\max(0, h(x))^2`.
+            This means the penalty is enforced even for :math:`h(x) < 0` cases, and :math:`h(x) = 0` is unfairly favored.
+
+            This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         Examples
         =========
