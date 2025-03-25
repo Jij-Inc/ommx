@@ -457,6 +457,20 @@ class Instance(InstanceBase, UserAnnotationBase):
             The above process is not stable, and subject to change for better QUBO generation in the future versions.
             If you wish to keep the compatibility, please use the methods above manually.
 
+        Examples
+        ========
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.integer(i, lower=0, upper=3) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[x[0] + x[1] <= 2],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> qubo = instance.to_qubo()
+        >>> qubo
+
         """
         self.as_minimization_problem()
 
