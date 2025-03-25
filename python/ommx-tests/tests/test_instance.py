@@ -152,3 +152,18 @@ def test_add_integer_slack_to_inequality_continuous():
         str(e.value)
         == "The constraint contains continuous decision variables: ID=VariableID(0)"
     )
+
+def test_to_qubo_continuous():
+    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + x[1] >= 7.89).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    with pytest.raises(RuntimeError) as e:
+        instance.to_qubo()
+    assert (
+        str(e.value)
+        == "Continuous variables are not supported in QUBO conversion: IDs=[0, 1, 2]"
+    )

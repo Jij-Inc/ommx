@@ -428,6 +428,23 @@ class Instance(InstanceBase, UserAnnotationBase):
         This is easy-to-use method for QUBO conversion, but not for advanced settings.
         """
         self.as_minimization_problem()
+
+        continuous_variables = [
+            var.id
+            for var in self.get_decision_variables()
+            if var.kind == DecisionVariable.CONTINUOUS
+        ]
+        if len(continuous_variables) > 0:
+            raise RuntimeError(
+                f"Continuous variables are not supported in QUBO conversion: IDs={continuous_variables}"
+            )
+        integer_variables = {
+            var.id
+            for var in self.get_decision_variables()
+            if var.kind == DecisionVariable.INTEGER
+        }
+        self.log_encode(integer_variables)
+
         ineq_ids = [
             c.id
             for c in self.get_constraints()
