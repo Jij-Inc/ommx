@@ -561,12 +561,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         weight = pi.get_parameters()[0]
         unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
 
-        integer_variables = {
-            var.id
-            for var in unconstrained.get_decision_variables()
-            if var.kind == DecisionVariable.INTEGER
-        }
-        unconstrained.log_encode(integer_variables)
+        unconstrained.log_encode()
 
         qubo = unconstrained.as_qubo_format()
         self.raw = unconstrained.raw
@@ -910,7 +905,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.restore_constraint(constraint_id)
         self.raw.ParseFromString(instance.to_bytes())
 
-    def log_encode(self, decision_variable_ids: set[int]):
+    def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
         Log-encode the integer decision variables
 
@@ -920,6 +915,8 @@ class Instance(InstanceBase, UserAnnotationBase):
             x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
 
         where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
+
+        :param decision_variable_ids: The IDs of the integer decision variables to log-encode. If not specified, all integer variables are log-encoded.
 
         Examples
         =========
@@ -992,6 +989,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         {(0, 0): 0.0, (0, 1): 1.0, (2, 0): 0.0, (2, 1): 0.0}
 
         """
+        if not decision_variable_ids:
+            decision_variable_ids = {
+                var.id
+                for var in self.get_decision_variables()
+                if var.kind == DecisionVariable.INTEGER
+            }
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
