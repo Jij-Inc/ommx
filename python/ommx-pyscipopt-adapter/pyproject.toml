@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_pyscipopt_adapter"
-version = "1.9.0rc1"
+version = "1.9.0rc2"
 description = "An adapter for the SCIP from OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
