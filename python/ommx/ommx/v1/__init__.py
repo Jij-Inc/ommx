@@ -424,7 +424,8 @@ class Instance(InstanceBase, UserAnnotationBase):
     def to_qubo(
         self,
         *,
-        uniform_penalty_weight: float = 1.0,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ) -> tuple[dict[tuple[int, int], float], float]:
         """
@@ -437,10 +438,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         3. Log-encode integer variables by :py:meth:`log_encode`.
         4. Convert inequality constraints
 
-          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-          * If failed, :py:meth:`add_integer_slack_to_inequality`
+            * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+            * If failed, :py:meth:`add_integer_slack_to_inequality`
 
-        5. Convert a parametric QUBO by :py:meth:`uniform_penalty_method` and substitute with given ``penalty_weight``.
+        5. Convert to QUBO with (uniform) penalty method
+
+            * If ``penalty_weights`` is given, use :py:meth:`penalty_method` with the given weights.
+            * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+            * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+
         6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
 
         Please see the document of each method for details.
@@ -483,6 +489,17 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
             except RuntimeError:
                 self.add_integer_slack_to_inequality(ineq_id, 32)
+
+        if uniform_penalty_weight is not None and penalty_weights:
+            raise ValueError(
+                "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+            )
+        if penalty_weights:
+            pi = self.penalty_method()
+            return pi.with_parameters(penalty_weights).as_qubo_format()
+        if uniform_penalty_weight is None:
+            # If both are None, defaults to uniform_penalty_weight = 1.0
+            uniform_penalty_weight = 1.0
         pi = self.uniform_penalty_method()
         weight = pi.get_parameters()[0]
         return pi.with_parameters({weight.id: uniform_penalty_weight}).as_qubo_format()
