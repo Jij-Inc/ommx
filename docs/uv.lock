@@ -1390,7 +1390,7 @@ wheels = [
 
 [[package]]
 name = "ommx"
-version = "1.8.5"
+version = "1.9.0rc2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
@@ -1401,18 +1401,12 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/25/9cc4a51423055efac9e7ae06e49f1fd1e56ba448d3eb2e9a56ce24ddf537/ommx-1.8.5-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:fce163a12c7c444cb35a9a4d46cf3cac540f6fe768e32e1e2be59a43b00c4491", size = 2791455 },
-    { url = "https://files.pythonhosted.org/packages/6f/c6/1b745244554d686c88859cbc9f419e5554057ace85b338d4f152e6c3b677/ommx-1.8.5-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:dc4e4c3e9ecc7651cf42bc6b71f04aa050bc4a79cf1498ee0d9cca14a2c2931a", size = 3205476 },
-    { url = "https://files.pythonhosted.org/packages/3b/32/4d6e54f327a68cf13212244bee50af8db58423270fbce0332f56f0350156/ommx-1.8.5-cp310-cp310-win_amd64.whl", hash = "sha256:5886e5c46440408ad42da7b47a58cdd23ea6129b639e207e936fc3ee7ade6cee", size = 2556124 },
-    { url = "https://files.pythonhosted.org/packages/47/f5/1b3446ce969109b347a9311a05b01f2756d7730f7553c86dc0c27cb43740/ommx-1.8.5-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:0696280874bf1c7e40b5498f89bd5c980c914a0a103f2dc196b2cc92baaf141e", size = 2791538 },
-    { url = "https://files.pythonhosted.org/packages/a7/f4/5ad0319e0d7df2b26e55c2b843ac41620fc288e5a2fa3ccc5da43a18717c/ommx-1.8.5-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b13a4f15daea80423d0c958562cf1248a13a16f70969284b97a95341021e62f7", size = 3205920 },
-    { url = "https://files.pythonhosted.org/packages/74/33/ccc2b7f3830ecd5b9cc5be08104265f43f495ca38de41cb3a56eb8b9c0e4/ommx-1.8.5-cp311-cp311-win_amd64.whl", hash = "sha256:109579817d0a4b46b820fb453fc150c1da5d6500f072f98d05f3ecfa23cb358b", size = 2555547 },
-    { url = "https://files.pythonhosted.org/packages/65/0e/7a6a385532d4dd588074347f3a86511d2df8c234cc4bd93972861c7883dd/ommx-1.8.5-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:29fbb133a3c00f5aae0d22ae0e5645c4ad69fb16ce82398c9656a0ab7cab5f33", size = 2792285 },
-    { url = "https://files.pythonhosted.org/packages/81/d5/84ff7877cca93c7f492c8538f095370dba21e2b2cb92a56c0c602cd98174/ommx-1.8.5-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:1a290c3d665847e387e673145d44ec0ade7d9890571a4ce2fb4483548d956b18", size = 3205047 },
-    { url = "https://files.pythonhosted.org/packages/c7/82/e9de960d2e2ac1e6a87c37875fbe3579df96fb36d27225be7207cac0d436/ommx-1.8.5-cp312-cp312-win_amd64.whl", hash = "sha256:7652067c0e1a612a34404901207a889c4c3b45e7230c82aedba6ac97d9ad19d7", size = 2558664 },
-    { url = "https://files.pythonhosted.org/packages/66/57/f5b8b016d7f595206923a1916d7d73d284e742e20f4b481aeda5fad9cd74/ommx-1.8.5-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:95c16b09c1efc78cfcf97ddfdf4ec1b284a82c83c0e3a6c0ccbb4358762cbb16", size = 2792250 },
-    { url = "https://files.pythonhosted.org/packages/06/11/50782d573b0fec7d51300ce317b7e882e0f605d96d2745b695952ce56d95/ommx-1.8.5-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:21ebbdc7fcd64d77fac2f9c3c7f4b21e120569d756a04af6541836b2117607c6", size = 3205300 },
-    { url = "https://files.pythonhosted.org/packages/69/3a/d582bc3cdd7511e3919dbb72d545b79d737c0a6a37ca86180ed479758a0f/ommx-1.8.5-cp39-cp39-win_amd64.whl", hash = "sha256:8f758f58f510667a616636e6e3f168eed22f35c0986d4dd6cc711ea094b22f19", size = 2556172 },
+    { url = "https://files.pythonhosted.org/packages/be/77/a3816265ef0b051ed7c5e44afb670a41ff39add8305595c8757c35ead67a/ommx-1.9.0rc2-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:177ec93653d8996592bc8543538df54e6f4cc00ee8ad4fc1380a0e2082c53ef6", size = 2829857 },
+    { url = "https://files.pythonhosted.org/packages/0d/b3/50a7a3fef92513aa34dab6607bf1af4d87409d3c5a814cc1730b3fb93705/ommx-1.9.0rc2-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:8a699780a4d1699d2c662641fbbcc1b88ee5282795c6af458c19df6b1b34f321", size = 3287200 },
+    { url = "https://files.pythonhosted.org/packages/62/22/14dc07757e00798916375670373849a31cda4c1f5b0915a7982e863ee3bd/ommx-1.9.0rc2-cp313-cp313t-win_amd64.whl", hash = "sha256:3e9be1b62dc4721063a9420e6d454229dc197ef0d8811e82e53f022abe2144d7", size = 2632906 },
+    { url = "https://files.pythonhosted.org/packages/64/a0/b2ff5bb3f0ffd045dde1d23501b765cead9a2681534240c89d79322a53a0/ommx-1.9.0rc2-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:480839aa2abc97ef0826255bf0dedd44896848de9a52592a337c9718289d0a0e", size = 2849018 },
+    { url = "https://files.pythonhosted.org/packages/83/a4/8ef68984196af60dee379ca02daed0415c95b8c4bd369b49e66f3e05b8a3/ommx-1.9.0rc2-cp38-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:3c6044bbaf1534a845b8cbbdb45c2dd20b6b2eb168180ac2f33c17e721145675", size = 3293199 },
+    { url = "https://files.pythonhosted.org/packages/e6/ac/6f3d54c7fdba3778df313b7f4a53e710a76845e2437d3c274c64ea3b9f10/ommx-1.9.0rc2-cp38-abi3-win_amd64.whl", hash = "sha256:0cf8cb47c4655a4efe60f88ed21a6603d6915123067c9df96736db2a7de011f3", size = 2637983 },
 ]
 
 [[package]]
@@ -1442,11 +1436,11 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "nbconvert", specifier = ">=7.16.4" },
     { name = "networkx", specifier = ">=3.2.1" },
-    { name = "ommx", specifier = ">=1.8.5" },
-    { name = "ommx-highs-adapter", specifier = ">=1.8.5" },
-    { name = "ommx-openjij-adapter", specifier = ">=1.8.5" },
-    { name = "ommx-pyscipopt-adapter", specifier = ">=1.8.5" },
-    { name = "ommx-python-mip-adapter", specifier = ">=1.8.5" },
+    { name = "ommx", specifier = ">=1.9.0rc2" },
+    { name = "ommx-highs-adapter", specifier = ">=1.9.0rc2" },
+    { name = "ommx-openjij-adapter", specifier = ">=1.9.0rc2" },
+    { name = "ommx-pyscipopt-adapter", specifier = ">=1.9.0rc2" },
+    { name = "ommx-python-mip-adapter", specifier = ">=1.9.0rc2" },
 ]
 
 [package.metadata.requires-dev]
@@ -1454,44 +1448,44 @@ dev = [{ name = "mip", git = "https://github.com/coin-or/python-mip.git" }]
 
 [[package]]
 name = "ommx-highs-adapter"
-version = "1.8.5"
+version = "1.9.0rc2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "highspy" },
     { name = "numpy" },
     { name = "ommx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d9/4d/f21fdbf6752fe307d9f69e533b324420451f05eac2269c4d2395906ab0bf/ommx_highs_adapter-1.8.5.tar.gz", hash = "sha256:8e98e89f6ece29642ced7f4d41c939ab40aae67786b0c9083bfec42b3eed7420", size = 5915 }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/7a/d420d23de75bb6a5bedb7f3240aa7bbd6539ffd21e99a40e94e4fd5f2147/ommx_highs_adapter-1.9.0rc2.tar.gz", hash = "sha256:5ab7f3e0fef2508877cd974549f3af7330d33465bad534948d4f5744568e22db", size = 5919 }
 
 [[package]]
 name = "ommx-openjij-adapter"
-version = "1.8.5"
+version = "1.9.0rc2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ommx" },
     { name = "openjij" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6c/43/e1d0d98d9ac06e016311b31de18c6ca2855f584c27afebb5fd8ec72a6062/ommx_openjij_adapter-1.8.5.tar.gz", hash = "sha256:4d3bf1756aa80e313d30ba523112951a8cb7f6b91eea4203834c254cf2f2dab4", size = 3471 }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/63/e99f622c3d157d6397b024182de1e13fd354c19ee7a1c4ac9bae6ad36663/ommx_openjij_adapter-1.9.0rc2.tar.gz", hash = "sha256:a2f002a7dcaa8780f45dd26264ca8e46cc0368ff0517def051afe240ab42b5a3", size = 4095 }
 
 [[package]]
 name = "ommx-pyscipopt-adapter"
-version = "1.8.5"
+version = "1.9.0rc2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ommx" },
     { name = "pyscipopt" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/85/f8/d06585fa4e441385b567dfcd1e466866fc6e9d3d497cff4e53fca0f7ed2e/ommx_pyscipopt_adapter-1.8.5.tar.gz", hash = "sha256:08fcc8e163c055f2b463270aca9dc69b5185443c9b8801b4f9d76854f268836a", size = 7027 }
+sdist = { url = "https://files.pythonhosted.org/packages/63/23/d14c18178e0f0188a4f9ebe661b791b99f644b19d998febc9a8422620e91/ommx_pyscipopt_adapter-1.9.0rc2.tar.gz", hash = "sha256:20a0a774462fbc2ee3341cc98e9a3fd4eefd56a21088c169a7d5b740c41e2782", size = 7049 }
 
 [[package]]
 name = "ommx-python-mip-adapter"
-version = "1.8.5"
+version = "1.9.0rc2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "mip" },
     { name = "ommx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/ca/e05efdc02f39a5ebe73347e7aebbd7cb81039470c183e7d94af5d8ef894b/ommx_python_mip_adapter-1.8.5.tar.gz", hash = "sha256:af9d43ccc5e003cd390357f20e0abe4356cd7f1f36e13096efea286c318c792a", size = 9941 }
+sdist = { url = "https://files.pythonhosted.org/packages/8b/fa/0c62b3674d01b7122e3724921743fb24d36ff1688b0ce236205e887839c2/ommx_python_mip_adapter-1.9.0rc2.tar.gz", hash = "sha256:24e00e86e7f5cbd407a4b78b81bfce3e03131b5ca108e3a8325a72374ec30feb", size = 9996 }
 
 [[package]]
 name = "openjij"
