@@ -101,14 +101,13 @@ def test_binary_inequality():
     }
 
 
-
 def test_integer_equality():
     x0 = DecisionVariable.integer(0, name="x", lower=-1, upper=1, subscripts=[0])
     x1 = DecisionVariable.integer(1, name="x", lower=-1, upper=1, subscripts=[1])
 
     instance = Instance.from_components(
         decision_variables=[x0, x1],
-        objective=x0 + 2*x1,
+        objective=x0 + 2 * x1,
         constraints=[x0 + x1 == 0],
         sense=Instance.MAXIMIZE,
     )
@@ -129,13 +128,14 @@ def test_integer_equality():
         (1,): 1.0,
     }
 
+
 def test_integer_inequality():
     x0 = DecisionVariable.integer(0, name="x", lower=-1, upper=1, subscripts=[0])
     x1 = DecisionVariable.integer(1, name="x", lower=-1, upper=1, subscripts=[1])
 
     instance = Instance.from_components(
         decision_variables=[x0, x1],
-        objective=x0 + 2*x1,
+        objective=x0 + 2 * x1,
         constraints=[x0 + x1 <= 0],
         sense=Instance.MAXIMIZE,
     )
