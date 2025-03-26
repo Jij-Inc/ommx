@@ -5,6 +5,7 @@ from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
 from typing import Optional
+import copy
 
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -110,7 +111,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
     ):
-        self.ommx_instance = ommx_instance
+        self.ommx_instance = copy.deepcopy(ommx_instance)
         self.beta_min = beta_min
         self.beta_max = beta_max
         self.num_sweeps = num_sweeps

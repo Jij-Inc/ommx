@@ -129,3 +129,19 @@ def test_solve(instance, ans):
         instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345
     )
     assert solution.extract_decision_variables("x") == ans
+
+
+@pytest.mark.parametrize(
+    "instance, ans",
+    [
+        binary_no_constraint_minimize(),
+        binary_no_constraint_maximize(),
+        binary_equality(),
+        binary_inequality(),
+        integer_equality(),
+        integer_inequality(),
+    ],
+)
+def test_sample_twice(instance, ans):
+    test_sample(instance, ans)
+    test_sample(instance, ans)
