@@ -166,7 +166,9 @@ pub struct BinaryIdPair(pub u64, pub u64);
 
 impl TryFrom<Vec<u64>> for BinaryIdPair {
     type Error = anyhow::Error;
-    fn try_from(ids: Vec<u64>) -> Result<Self, Self::Error> {
+    fn try_from(mut ids: Vec<u64>) -> Result<Self, Self::Error> {
+        ids.sort_unstable();
+        ids.dedup();
         match &ids[..] {
             [a, b] if a <= b => Ok(Self(*a, *b)),
             [a, b] => Ok(Self(*b, *a)),

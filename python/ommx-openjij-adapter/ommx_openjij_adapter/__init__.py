@@ -4,6 +4,8 @@ from ommx.v1 import Instance, State, Samples, SampleSet
 from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
+from typing import Optional
+import copy
 
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -46,6 +48,13 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     seed: int | None = None
     """ seed for Monte Carlo algorithm """
 
+    uniform_penalty_weight: Optional[float] = None
+    """ Weight for uniform penalty, passed to ``Instance.to_qubo`` """
+    penalty_weights: dict[int, float] = {}
+    """ Penalty weights for each constraint, passed to ``Instance.to_qubo`` """
+    inequality_integer_slack_max_range: int = 32
+    """ Max range for integer slack variables in inequality constraints, passed to ``Instance.to_qubo`` """
+
     @classmethod
     def sample(
         cls,
@@ -61,6 +70,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         sparse: bool | None = None,
         reinitialize_state: bool | None = None,
         seed: int | None = None,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 32,
     ) -> SampleSet:
         sampler = cls(
             ommx_instance,
@@ -74,6 +86,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             sparse=sparse,
             reinitialize_state=reinitialize_state,
             seed=seed,
+            uniform_penalty_weight=uniform_penalty_weight,
+            penalty_weights=penalty_weights,
+            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
         )
         response = sampler._sample()
         return sampler.decode_to_sampleset(response)
@@ -92,8 +107,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         sparse: bool | None = None,
         reinitialize_state: bool | None = None,
         seed: int | None = None,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 32,
     ):
-        self.ommx_instance = ommx_instance
+        self.ommx_instance = copy.deepcopy(ommx_instance)
         self.beta_min = beta_min
         self.beta_max = beta_max
         self.num_sweeps = num_sweeps
@@ -104,6 +122,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         self.sparse = sparse
         self.reinitialize_state = reinitialize_state
         self.seed = seed
+        self.uniform_penalty_weight = uniform_penalty_weight
+        self.penalty_weights = penalty_weights
+        self.inequality_integer_slack_max_range = inequality_integer_slack_max_range
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         samples = decode_to_samples(data)
@@ -119,12 +140,16 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.as_qubo_format()
+        qubo, _offset = self.ommx_instance.to_qubo(
+            uniform_penalty_weight=self.uniform_penalty_weight,
+            penalty_weights=self.penalty_weights,
+            inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
+        )
         return qubo
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        qubo, _offset = self.ommx_instance.as_qubo_format()
+        qubo = self.sampler_input
         return sampler.sample_qubo(
             qubo,  # type: ignore
             beta_min=self.beta_min,
@@ -189,10 +214,8 @@ def sample_qubo_sa(
     """
     Deprecated: Use :meth:`OMMXOpenJijSAAdapter.sample` instead
     """
-    q, _offset = instance.as_qubo_format()
-    sampler = oj.SASampler()
-    response = sampler.sample_qubo(
-        q,  # type: ignore
+    sampler = OMMXOpenJijSAAdapter(
+        instance,
         beta_min=beta_min,
         beta_max=beta_max,
         num_sweeps=num_sweeps,
@@ -204,4 +227,5 @@ def sample_qubo_sa(
         reinitialize_state=reinitialize_state,
         seed=seed,
     )
+    response = sampler._sample()
     return decode_to_samples(response)

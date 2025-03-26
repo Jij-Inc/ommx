@@ -547,24 +547,24 @@ class Instance(InstanceBase, UserAnnotationBase):
                 self.add_integer_slack_to_inequality(ineq_id, 32)
 
         # Penalty method
-        if uniform_penalty_weight is not None and penalty_weights:
-            raise ValueError(
-                "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
-            )
-        if penalty_weights:
-            pi = self.penalty_method()
-            return pi.with_parameters(penalty_weights).as_qubo_format()
-        if uniform_penalty_weight is None:
-            # If both are None, defaults to uniform_penalty_weight = 1.0
-            uniform_penalty_weight = 1.0
-        pi = self.uniform_penalty_method()
-        weight = pi.get_parameters()[0]
-        unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+        if self.get_constraints():
+            if uniform_penalty_weight is not None and penalty_weights:
+                raise ValueError(
+                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                )
+            if penalty_weights:
+                pi = self.penalty_method()
+                return pi.with_parameters(penalty_weights).as_qubo_format()
+            if uniform_penalty_weight is None:
+                # If both are None, defaults to uniform_penalty_weight = 1.0
+                uniform_penalty_weight = 1.0
+            pi = self.uniform_penalty_method()
+            weight = pi.get_parameters()[0]
+            unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+            self.raw = unconstrained.raw
 
-        unconstrained.log_encode()
-
-        qubo = unconstrained.as_qubo_format()
-        self.raw = unconstrained.raw
+        self.log_encode()
+        qubo = self.as_qubo_format()
         return qubo
 
     def as_minimization_problem(self):
@@ -995,6 +995,9 @@ class Instance(InstanceBase, UserAnnotationBase):
                 for var in self.get_decision_variables()
                 if var.kind == DecisionVariable.INTEGER
             }
+            if not decision_variable_ids:
+                # No integer variables
+                return
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.log_encode(decision_variable_ids)
         self.raw.ParseFromString(instance.to_bytes())
