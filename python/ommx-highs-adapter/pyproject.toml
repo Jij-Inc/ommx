@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_highs_adapter"
-version = "1.9.0rc2"
+version = "1.9.0rc3"
 description = "An adapter between OMMX and HiGHS"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
