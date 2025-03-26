@@ -421,6 +421,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return Instance.from_bytes(out)
 
+    def used_decision_variable_ids(self) -> set[int]:
+        """
+        Get the set of decision variable IDs used in the objective and remaining constraints.
+        """
+        return _ommx_rust.Instance.from_bytes(self.to_bytes()).used_decision_variable_ids()
+
     def to_qubo(
         self,
         *,
@@ -2692,6 +2698,12 @@ class Function(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
         return Function.from_bytes(new), used_ids
+
+    def used_decision_variable_ids(self) -> set[int]:
+        """
+        Get the IDs of decision variables used in the function.
+        """
+        return _ommx_rust.Function.decode(self.raw.SerializeToString()).used_decision_variable_ids()
 
     def content_factor(self) -> float:
         r"""

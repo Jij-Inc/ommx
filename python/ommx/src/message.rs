@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use approx::AbsDiffEq;
 use ommx::{v1, Message};
@@ -269,5 +271,9 @@ impl Function {
 
     pub fn content_factor(&self) -> Result<f64> {
         self.0.content_factor()
+    }
+
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.used_decision_variable_ids()
     }
 }
