@@ -424,6 +424,33 @@ class Instance(InstanceBase, UserAnnotationBase):
     def used_decision_variable_ids(self) -> set[int]:
         """
         Get the set of decision variable IDs used in the objective and remaining constraints.
+
+        Examples
+        =========
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.used_decision_variable_ids()
+        {0, 1, 2}
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0],
+        ...     constraints=[(x[1] == 1).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.used_decision_variable_ids()
+        {0, 1}
+
+        >>> instance.relax_constraint(0, "testing")
+        >>> instance.used_decision_variable_ids()
+        {0, 1}
+
         """
         return _ommx_rust.Instance.from_bytes(self.to_bytes()).used_decision_variable_ids()
 
