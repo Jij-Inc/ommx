@@ -28,6 +28,7 @@ def binary_no_constraint_maximize():
     ans = {(0,): 1.0, (1,): 1.0}
     return pytest.param(instance, ans, id="binary_no_constraint_maximize")
 
+
 def binary_equality():
     x0 = DecisionVariable.binary(0, name="x", subscripts=[0])
     x1 = DecisionVariable.binary(1, name="x", subscripts=[1])
@@ -44,6 +45,7 @@ def binary_equality():
     ans = {(0,): 1.0, (1,): 0.0, (2,): 1.0}
     return pytest.param(instance, ans, id="binary_equality")
 
+
 def binary_inequality():
     x0 = DecisionVariable.binary(0, name="x", subscripts=[0])
     x1 = DecisionVariable.binary(1, name="x", subscripts=[1])
@@ -59,6 +61,7 @@ def binary_inequality():
     # x1 = x2 = 1, x0 = 0 is maximum
     ans = {(0,): 0.0, (1,): 1.0, (2,): 1.0}
     return pytest.param(instance, ans, id="binary_inequality")
+
 
 def integer_equality():
     x0 = DecisionVariable.integer(0, name="x", lower=-1, upper=1, subscripts=[0])
@@ -104,7 +107,9 @@ def integer_inequality():
     ],
 )
 def test_sample(instance, ans):
-    sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345)
+    sample_set = OMMXOpenJijSAAdapter.sample(
+        instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345
+    )
     assert sample_set.extract_decision_variables("x", 0) == ans
 
 
@@ -120,5 +125,7 @@ def test_sample(instance, ans):
     ],
 )
 def test_solve(instance, ans):
-    solution = OMMXOpenJijSAAdapter.solve(instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345)
+    solution = OMMXOpenJijSAAdapter.solve(
+        instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345
+    )
     assert solution.extract_decision_variables("x") == ans
