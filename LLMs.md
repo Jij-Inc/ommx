@@ -415,75 +415,6 @@ instance = Instance.from_components(
 
 The variable names and subscripts added to `DecisionVariable.binary` during creation will be used later when interpreting the obtained samples.
 
-## Converting to QUBO
-
-Many samplers, including OpenJij, operate by generating samples that minimize the objective function described in QUBO (Quadratic Unconstrained Binary Optimization) without constraints. The Traveling Salesman Problem formulated above has all binary variables but includes constraints, making it constrained. Therefore, we convert it to an unconstrained problem by embedding the constraints into the objective function using the penalty method. OMMX's [`Instance.uniform_penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.uniform_penalty_method) converts a problem with equality constraints
-
-$$
-\begin{align*}
-\min \quad &f(x) \\
-\text{s.t.} \quad &g_i(x) = 0 \quad (\forall i)
-\end{align*}
-$$
-
-into an unconstrained problem with a single parameter $\lambda$:
-
-$$
-\min \quad f(x) + \lambda \sum_i g_i(x)^2
-$$
-
-If you want to specify weight parameters for each constraint, you can use [`Instance.penalty_method`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.penalty_method) to convert it into
-
-$$
-\min \quad f(x) + \sum_i \lambda_i g_i(x)^2
-$$
-
-OMMX's `Instance.penalty_method` allows for specifying individual weight parameters for each constraint.
-
-
-```python
-parametric_qubo = instance.uniform_penalty_method()
-```
-
-Since this has parameters that are not decision variables, it becomes a `ommx.v1.ParametricInstance` instead of `ommx.v1.Instance`, which corresponds to the following parameterized QUBO:
-
-$$
-\min \quad \sum_{t=0}^{N-1} \sum_{i, j = 0}^{N-1} d(i, j) x_{t, i} x_{(t+1 \% N), j}
-+ \lambda \left[ \sum_{t=0}^{N-1} \left(\sum_{i=0}^{N-1} x_{t, i} - 1\right)^2
-+ \sum_{i=0}^{N-1} \left(\sum_{t=0}^{N-1} x_{t, i} - 1\right)^2 \right]
-$$
-
-You can check the parameters of the `ParametricInstance` using the `parameters` property.
-
-
-```python
-parametric_qubo.parameters
-```
-
-As explained above, `uniform_penalty_method` has a single penalty weight parameter, so there is only one parameter. To fix this parameter to $\lambda = 20.0$, use `with_parameters` to specify the parameter. This function takes a dictionary `dict[int, float]` that maps parameter IDs to values.
-
-
-```python
-weight = parametric_qubo.get_parameters()[0]
-qubo = parametric_qubo.with_parameters({weight.id: 20.0})
-```
-
-The resulting `qubo` now has all parameters substituted, so it is an `ommx.v1.Instance` instead of an `ommx.v1.ParametricInstance`. Additionally, it is an unconstrained optimization problem without any constraints.
-
-
-```python
-assert qubo.get_constraints() == []
-```
-
-However, this `qubo` instance retains the information of the original constraints as `removed_constraints`. This information is used to verify whether the samples obtained from QUBO satisfy the original problem's constraints. Converting to QUBO is an extreme example, but it is common for users to preprocess their mathematical models in such a way that the original constraints become unnecessary before passing them to a solver. Even in such cases, users are interested in the original constraints they input, so `ommx.v1.Instance` includes a mechanism to retain this information.
-
-
-```python
-qubo.removed_constraints.head(2)
-```
-
-Note that the objective function of this `qubo` instance differs from the original problem's objective function. The `objective` value in subsequent processes refers to the value of this new objective function (commonly known as the energy value).
-
 
 ## Sampling with OpenJij
 
@@ -493,11 +424,11 @@ To sample the QUBO described by `ommx.v1.Instance` using OpenJij, use the `ommx-
 ```python
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
-sample_set = OMMXOpenJijSAAdapter.sample(qubo, num_reads=16)
+sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16, uniform_penalty_weight=20.0)
 sample_set.summary
 ```
 
-`ommx_openjij_adapter.sample_qubo_sa` returns `ommx.v1.Samples`, which can be passed to `Instance.evaluate_samples` to calculate the objective function values and constraint violations. The `SampleSet.summary` property is used to display summary information. `feasible` indicates the feasibility to **the original problem** before conversion to QUBO. This is calculated using the information stored in `removed_constraints` of the `qubo` instance.
+[`OMMXOpenJijSAAdapter.sample`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html#ommx_openjij_adapter.OMMXOpenJijSAAdapter.sample) returns [`ommx.v1.SampleSet`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet), which stores the evaluated objective function values and constraint violations in addition to the decision variable values of samples. The `SampleSet.summary` property is used to display summary information. `feasible` indicates the feasibility to **the original problem** before conversion to QUBO. This is calculated using the information stored in `removed_constraints` of the `qubo` instance.
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 
