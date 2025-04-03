@@ -30,7 +30,7 @@ impl Instance {
     }
     
     pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.0.constraint_hints.clone())
+        ConstraintHints(self.0.constraint_hints.clone().unwrap_or_default())
     }
 
     pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
@@ -124,7 +124,7 @@ impl ParametricInstance {
     }
     
     pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.0.constraint_hints.clone())
+        ConstraintHints(self.0.constraint_hints.clone().unwrap_or_default())
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
@@ -254,28 +254,24 @@ impl ConstraintHints {
         let one_hot_constraints = self.0.one_hot_constraints();
         let result = PyList::empty(py);
         for constraint in one_hot_constraints {
-            let proto_constraint = OneHot {
-                constraint_id: constraint.constraint_id,
-                decision_variables: constraint.decision_variables,
-                ..Default::default()
-            };
+            let mut proto_constraint = OneHot::default();
+            proto_constraint.constraint_id = constraint.id.into();
+            proto_constraint.decision_variables = constraint.variables.iter().map(|&id| id.into()).collect();
             result.append(proto_constraint.encode_to_vec().as_slice())?;
         }
         Ok(result.into())
     }
 
     pub fn k_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let k_hot_constraints = self.0.get_k_hot_constraints();
+        let k_hot_constraints = self.0.k_hot_constraints();
         let result = PyDict::new(py);
         for (k, constraints) in k_hot_constraints {
             let constraints_list = PyList::empty(py);
             for constraint in constraints {
-                let proto_constraint = KHot {
-                    constraint_id: constraint.constraint_id,
-                    decision_variables: constraint.decision_variables,
-                    num_hot_vars: constraint.num_hot_vars,
-                    ..Default::default()
-                };
+                let mut proto_constraint = KHot::default();
+                proto_constraint.constraint_id = constraint.id.into();
+                proto_constraint.decision_variables = constraint.variables.iter().map(|&id| id.into()).collect();
+                proto_constraint.num_hot_vars = constraint.num_hot_vars;
                 constraints_list.append(proto_constraint.encode_to_vec().as_slice())?;
             }
             result.set_item(k, constraints_list)?;
