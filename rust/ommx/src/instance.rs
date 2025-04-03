@@ -3,7 +3,7 @@ use crate::{
     v1::{self},
     Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
