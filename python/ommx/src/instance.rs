@@ -2,9 +2,10 @@ use anyhow::Result;
 use ommx::{Evaluate, Message};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict},
+    types::{PyBytes, PyDict, PyList},
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
+use ommx::v1::{self, OneHot, KHot};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -26,6 +27,10 @@ impl Instance {
 
     pub fn validate(&self) -> Result<()> {
         self.0.validate()
+    }
+    
+    pub fn constraint_hints(&self) -> ConstraintHints {
+        ConstraintHints(self.0.constraint_hints.clone())
     }
 
     pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
@@ -116,6 +121,10 @@ impl ParametricInstance {
 
     pub fn validate(&self) -> Result<()> {
         self.0.validate()
+    }
+    
+    pub fn constraint_hints(&self) -> ConstraintHints {
+        ConstraintHints(self.0.constraint_hints.clone())
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
@@ -221,5 +230,56 @@ impl SampleSet {
 
     pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
         Ok(self.0.best_feasible_unrelaxed().map(Solution)?)
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct ConstraintHints(ommx::v1::ConstraintHints);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl ConstraintHints {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::ConstraintHints::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    }
+
+    pub fn one_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let one_hot_constraints = self.0.one_hot_constraints();
+        let result = PyList::empty(py);
+        for constraint in one_hot_constraints {
+            let proto_constraint = OneHot {
+                constraint_id: constraint.constraint_id,
+                decision_variables: constraint.decision_variables,
+                ..Default::default()
+            };
+            result.append(proto_constraint.encode_to_vec().as_slice())?;
+        }
+        Ok(result.into())
+    }
+
+    pub fn k_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let k_hot_constraints = self.0.get_k_hot_constraints();
+        let result = PyDict::new(py);
+        for (k, constraints) in k_hot_constraints {
+            let constraints_list = PyList::empty(py);
+            for constraint in constraints {
+                let proto_constraint = KHot {
+                    constraint_id: constraint.constraint_id,
+                    decision_variables: constraint.decision_variables,
+                    num_hot_vars: constraint.num_hot_vars,
+                    ..Default::default()
+                };
+                constraints_list.append(proto_constraint.encode_to_vec().as_slice())?;
+            }
+            result.set_item(k, constraints_list)?;
+        }
+        Ok(result.into())
     }
 }

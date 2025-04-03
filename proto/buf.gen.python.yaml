@@ -1,6 +1,6 @@
-version: v2
+version: v1
 plugins:
-  - remote: buf.build/protocolbuffers/python:v26.1
+  - plugin: buf.build/protocolbuffers/python
     out: ../python/ommx
-  - remote: buf.build/community/nipunn1313-mypy:v3.6.0
+  - plugin: buf.build/community/nipunn1313-mypy
     out: ../python/ommx
