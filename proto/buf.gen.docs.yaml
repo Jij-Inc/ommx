@@ -1,5 +1,5 @@
-version: v1
+version: v2
 plugins:
-  - plugin: buf.build/community/pseudomuto-doc
+  - remote: buf.build/community/pseudomuto-doc:v1.5.1
     out: .
     opt: html,protobuf.html
