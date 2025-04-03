@@ -1,11 +1,46 @@
 use anyhow::Result;
-use ommx::v1::{KHot, OneHot};
 use ommx::{Evaluate, Message};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyList},
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct OneHot(ommx::v1::OneHot);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl OneHot {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::OneHot::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct KHot(ommx::v1::KHot);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl KHot {
+    #[staticmethod]
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::KHot::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
+    }
+
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    }
+}
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -252,34 +287,28 @@ impl ConstraintHints {
         Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 
-    pub fn one_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let result = PyList::empty(py);
+    pub fn one_hot_constraints(&self) -> Vec<OneHot> {
+        let mut result = Vec::new();
+        let mut constraint_ids = HashSet::<u64>::new();
 
         #[allow(deprecated)]
         for constraint in &self.0.one_hot_constraints {
-            result.append(constraint.encode_to_vec().as_slice())?;
+            constraint_ids.insert(constraint.constraint_id);
+            result.push(OneHot(constraint.clone()));
         }
 
         if let Some(k_hot_list) = self.0.k_hot_constraints.get(&1) {
-            #[allow(deprecated)]
-            let constraint_ids: HashSet<u64> = self
-                .0
-                .one_hot_constraints
-                .iter()
-                .map(|c| c.constraint_id)
-                .collect();
-
             for k_hot in &k_hot_list.constraints {
                 if !constraint_ids.contains(&k_hot.constraint_id) {
-                    let mut one_hot = OneHot::default();
+                    let mut one_hot = ommx::v1::OneHot::default();
                     one_hot.constraint_id = k_hot.constraint_id;
                     one_hot.decision_variables = k_hot.decision_variables.clone();
-                    result.append(one_hot.encode_to_vec().as_slice())?;
+                    result.push(OneHot(one_hot));
                 }
             }
         }
 
-        Ok(result.into())
+        result
     }
 
     pub fn k_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
@@ -316,7 +345,7 @@ impl ConstraintHints {
             #[allow(deprecated)]
             for one_hot in &self.0.one_hot_constraints {
                 if !k1_constraint_ids.contains(&one_hot.constraint_id) {
-                    let mut k_hot = KHot::default();
+                    let mut k_hot = ommx::v1::KHot::default();
                     k_hot.constraint_id = one_hot.constraint_id;
                     k_hot.decision_variables = one_hot.decision_variables.clone();
                     k_hot.num_hot_vars = 1;
@@ -329,6 +358,6 @@ impl ConstraintHints {
             }
         }
 
-        Ok(result.into())
+        Ok(result)
     }
 }
