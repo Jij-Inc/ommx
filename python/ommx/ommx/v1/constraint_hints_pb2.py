@@ -13,12 +13,13 @@ from google.protobuf.internal import builder as _builder
 _sym_db = _symbol_database.Default()
 
 
+from ommx.v1 import k_hot_pb2 as ommx_dot_v1_dot_k__hot__pb2
 from ommx.v1 import one_hot_pb2 as ommx_dot_v1_dot_one__hot__pb2
 from ommx.v1 import sos1_pb2 as ommx_dot_v1_dot_sos1__pb2
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x1eommx/v1/constraint_hints.proto\x12\x07ommx.v1\x1a\x15ommx/v1/one_hot.proto\x1a\x12ommx/v1/sos1.proto"\x8c\x01\n\x0f\x43onstraintHints\x12?\n\x13one_hot_constraints\x18\x02 \x03(\x0b\x32\x0f.ommx.v1.OneHotR\x11oneHotConstraints\x12\x38\n\x10sos1_constraints\x18\x03 \x03(\x0b\x32\r.ommx.v1.SOS1R\x0fsos1Constraintsb\x06proto3'
+    b'\n\x1eommx/v1/constraint_hints.proto\x12\x07ommx.v1\x1a\x13ommx/v1/k_hot.proto\x1a\x15ommx/v1/one_hot.proto\x1a\x12ommx/v1/sos1.proto"\xc2\x02\n\x0f\x43onstraintHints\x12\x43\n\x13one_hot_constraints\x18\x02 \x03(\x0b\x32\x0f.ommx.v1.OneHotB\x02\x18\x01R\x11oneHotConstraints\x12\x38\n\x10sos1_constraints\x18\x03 \x03(\x0b\x32\r.ommx.v1.SOS1R\x0fsos1Constraints\x12Y\n\x11k_hot_constraints\x18\x04 \x03(\x0b\x32-.ommx.v1.ConstraintHints.KHotConstraintsEntryR\x0fkHotConstraints\x1aU\n\x14KHotConstraintsEntry\x12\x10\n\x03key\x18\x01 \x01(\x04R\x03key\x12\'\n\x05value\x18\x02 \x01(\x0b\x32\x11.ommx.v1.KHotListR\x05value:\x02\x38\x01";\n\x08KHotList\x12/\n\x0b\x63onstraints\x18\x01 \x03(\x0b\x32\r.ommx.v1.KHotR\x0b\x63onstraintsb\x06proto3'
 )
 
 _globals = globals()
@@ -28,6 +29,18 @@ _builder.BuildTopDescriptorsAndMessages(
 )
 if not _descriptor._USE_C_DESCRIPTORS:
     DESCRIPTOR._loaded_options = None
-    _globals["_CONSTRAINTHINTS"]._serialized_start = 87
-    _globals["_CONSTRAINTHINTS"]._serialized_end = 227
+    _globals["_CONSTRAINTHINTS_KHOTCONSTRAINTSENTRY"]._loaded_options = None
+    _globals["_CONSTRAINTHINTS_KHOTCONSTRAINTSENTRY"]._serialized_options = b"8\001"
+    _globals["_CONSTRAINTHINTS"].fields_by_name[
+        "one_hot_constraints"
+    ]._loaded_options = None
+    _globals["_CONSTRAINTHINTS"].fields_by_name[
+        "one_hot_constraints"
+    ]._serialized_options = b"\030\001"
+    _globals["_CONSTRAINTHINTS"]._serialized_start = 108
+    _globals["_CONSTRAINTHINTS"]._serialized_end = 430
+    _globals["_CONSTRAINTHINTS_KHOTCONSTRAINTSENTRY"]._serialized_start = 345
+    _globals["_CONSTRAINTHINTS_KHOTCONSTRAINTSENTRY"]._serialized_end = 430
+    _globals["_KHOTLIST"]._serialized_start = 432
+    _globals["_KHOTLIST"]._serialized_end = 491
 # @@protoc_insertion_point(module_scope)

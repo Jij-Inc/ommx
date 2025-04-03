@@ -35,7 +35,6 @@ from .annotation import (
     json_annotation_property,
     int_annotation_property,
 )
-
 from .. import _ommx_rust
 
 __all__ = [
