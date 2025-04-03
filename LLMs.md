@@ -2002,7 +2002,7 @@ This release significantly enhances the conversion functionality from `ommx.v1.I
 Integer variables $x$ are encoded using binary variables $b_i$ as follows:
 
 $$
-x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
 $$
 
 This allows optimization problems with integer variables to be handled by QUBO solvers that can only deal with binary variables.
