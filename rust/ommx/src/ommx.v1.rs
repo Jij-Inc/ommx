@@ -225,6 +225,21 @@ impl Equality {
         }
     }
 }
+/// A message representing a k-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KHot {
+    /// The ID of the constraint.
+    #[prost(uint64, tag = "1")]
+    pub constraint_id: u64,
+    /// The list of ids of decision variables that are constrained to be k-hot.
+    #[prost(uint64, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+    /// The number of variables that should be set to 1 (i.e., the value of k).
+    #[prost(uint64, tag = "3")]
+    pub num_hot_vars: u64,
+}
 /// A message representing a one-hot constraint.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -253,21 +268,6 @@ pub struct Sos1 {
     /// The list of ids of decision variables that are constrained to be one-hot.
     #[prost(uint64, repeated, tag = "3")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
-}
-/// A message representing a k-hot constraint.
-#[non_exhaustive]
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct KHot {
-    /// The ID of the constraint.
-    #[prost(uint64, tag = "1")]
-    pub constraint_id: u64,
-    /// The list of ids of decision variables that are constrained to be k-hot.
-    #[prost(uint64, repeated, tag = "2")]
-    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
-    /// The number of variables that should be set to 1 (i.e., the value of k).
-    #[prost(uint64, tag = "3")]
-    pub num_hot_vars: u64,
 }
 /// A constraint hint is an additional inforomation to be used by solver to gain performance.
 /// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).

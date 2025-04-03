@@ -30,10 +30,12 @@ class ConstraintHintsWrapper:
             for k_hot in k_hot_list.constraints:
                 if k_hot.constraint_id not in constraint_ids:
                     constraint_ids.add(k_hot.constraint_id)
-                    result.append(OneHot(
-                        constraint_id=k_hot.constraint_id,
-                        decision_variables=k_hot.decision_variables
-                    ))
+                    result.append(
+                        OneHot(
+                            constraint_id=k_hot.constraint_id,
+                            decision_variables=k_hot.decision_variables,
+                        )
+                    )
 
         return result
 
@@ -52,10 +54,12 @@ class ConstraintHintsWrapper:
         for one_hot in self._proto.one_hot_constraints:
             if one_hot.constraint_id not in k1_constraint_ids:
                 k1_constraint_ids.add(one_hot.constraint_id)
-                result[1].append(KHot(
-                    constraint_id=one_hot.constraint_id,
-                    decision_variables=one_hot.decision_variables,
-                    num_hot_vars=1
-                ))
+                result[1].append(
+                    KHot(
+                        constraint_id=one_hot.constraint_id,
+                        decision_variables=one_hot.decision_variables,
+                        num_hot_vars=1,
+                    )
+                )
 
         return dict(result)
