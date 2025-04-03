@@ -159,6 +159,7 @@ impl Parse for v1::ConstraintHints {
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";
+        #[allow(deprecated)]
         let one_hot_constraints = self
             .one_hot_constraints
             .into_iter()
