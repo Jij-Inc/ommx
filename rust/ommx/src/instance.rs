@@ -169,7 +169,7 @@ impl Parse for v1::ConstraintHints {
             .into_iter()
             .map(|c| c.parse_as(context, message, "sos1_constraints"))
             .collect::<Result<_, ParseError>>()?;
-        
+
         let mut k_hot_constraints = HashMap::new();
         for (k, k_hot_list) in self.k_hot_constraints {
             let constraints = k_hot_list
@@ -181,7 +181,7 @@ impl Parse for v1::ConstraintHints {
                 k_hot_constraints.insert(k, constraints);
             }
         }
-        
+
         Ok(ConstraintHints {
             one_hot_constraints,
             sos1_constraints,
