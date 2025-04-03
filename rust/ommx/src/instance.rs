@@ -107,10 +107,48 @@ impl Parse for v1::Sos1 {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KHot {
+    pub id: ConstraintID,
+    pub variables: BTreeSet<VariableID>,
+    pub num_hot_vars: u64,
+}
+
+impl Parse for v1::KHot {
+    type Output = KHot;
+    type Context = (
+        HashMap<VariableID, DecisionVariable>,
+        HashMap<ConstraintID, Constraint>,
+    );
+    fn parse(
+        self,
+        (decision_variable, constraints): &Self::Context,
+    ) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.KHot";
+        let constraint_id = as_constraint_id(constraints, self.constraint_id)
+            .map_err(|e| e.context(message, "constraint_id"))?;
+        let mut variables = BTreeSet::new();
+        for v in &self.decision_variables {
+            let id = as_variable_id(decision_variable, *v)
+                .map_err(|e| e.context(message, "decision_variables"))?;
+            if !variables.insert(id) {
+                return Err(RawParseError::NonUniqueVariableID { id }
+                    .context(message, "decision_variables"));
+            }
+        }
+        Ok(KHot {
+            id: constraint_id,
+            variables,
+            num_hot_vars: self.num_hot_vars,
+        })
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ConstraintHints {
     pub one_hot_constraints: Vec<OneHot>,
     pub sos1_constraints: Vec<Sos1>,
+    pub k_hot_constraints: HashMap<u64, Vec<KHot>>,
 }
 
 impl Parse for v1::ConstraintHints {
@@ -131,10 +169,80 @@ impl Parse for v1::ConstraintHints {
             .into_iter()
             .map(|c| c.parse_as(context, message, "sos1_constraints"))
             .collect::<Result<_, ParseError>>()?;
+        
+        let mut k_hot_constraints = HashMap::new();
+        for (k, k_hot_list) in self.k_hot_constraints {
+            let constraints = k_hot_list
+                .constraints
+                .into_iter()
+                .map(|c| c.parse_as(context, message, "k_hot_constraints"))
+                .collect::<Result<Vec<_>, ParseError>>()?;
+            if !constraints.is_empty() {
+                k_hot_constraints.insert(k, constraints);
+            }
+        }
+        
         Ok(ConstraintHints {
             one_hot_constraints,
             sos1_constraints,
+            k_hot_constraints,
         })
+    }
+}
+
+impl ConstraintHints {
+    pub fn one_hot_constraints(&self) -> Vec<OneHot> {
+        let mut result = self.one_hot_constraints.clone();
+        let mut constraint_ids: HashSet<ConstraintID> = result.iter().map(|c| c.id).collect();
+
+        if let Some(k_hot_list) = self.k_hot_constraints.get(&1) {
+            for k_hot in k_hot_list {
+                if !constraint_ids.contains(&k_hot.id) {
+                    constraint_ids.insert(k_hot.id);
+                    result.push(OneHot {
+                        id: k_hot.id,
+                        variables: k_hot.variables.clone(),
+                    });
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn k_hot_constraints(&self) -> HashMap<u64, Vec<KHot>> {
+        let mut result: HashMap<u64, Vec<KHot>> = HashMap::new();
+
+        for (k, k_hot_list) in &self.k_hot_constraints {
+            result.insert(*k, k_hot_list.clone());
+        }
+
+        let mut k1_constraint_ids: HashSet<ConstraintID> = match result.get(&1) {
+            Some(k_hots) => k_hots.iter().map(|c| c.id).collect(),
+            None => HashSet::new(),
+        };
+
+        let mut k1_constraints = match result.get(&1) {
+            Some(k_hots) => k_hots.clone(),
+            None => Vec::new(),
+        };
+
+        for one_hot in &self.one_hot_constraints {
+            if !k1_constraint_ids.contains(&one_hot.id) {
+                k1_constraint_ids.insert(one_hot.id);
+                k1_constraints.push(KHot {
+                    id: one_hot.id,
+                    variables: one_hot.variables.clone(),
+                    num_hot_vars: 1,
+                });
+            }
+        }
+
+        if !k1_constraints.is_empty() {
+            result.insert(1, k1_constraints);
+        }
+
+        result
     }
 }
 
