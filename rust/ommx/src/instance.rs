@@ -192,7 +192,7 @@ impl Parse for v1::ConstraintHints {
 }
 
 impl ConstraintHints {
-    pub fn one_hot_constraints(&self) -> Vec<OneHot> {
+    pub fn get_one_hot_constraints(&self) -> Vec<OneHot> {
         let mut result = self.one_hot_constraints.clone();
         let mut constraint_ids: HashSet<ConstraintID> = result.iter().map(|c| c.id).collect();
 
@@ -211,7 +211,7 @@ impl ConstraintHints {
         result
     }
 
-    pub fn k_hot_constraints(&self) -> HashMap<u64, Vec<KHot>> {
+    pub fn get_k_hot_constraints(&self) -> HashMap<u64, Vec<KHot>> {
         let mut result: HashMap<u64, Vec<KHot>> = HashMap::new();
 
         for (k, k_hot_list) in &self.k_hot_constraints {

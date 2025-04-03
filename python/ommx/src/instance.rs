@@ -2,7 +2,7 @@ use anyhow::Result;
 use ommx::{Evaluate, Message};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyList},
+    types::{PyBytes, PyDict},
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
 
@@ -311,53 +311,42 @@ impl ConstraintHints {
         result
     }
 
-    pub fn k_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let result = PyDict::new(py);
-
-        for (k, k_hot_list) in &self.0.k_hot_constraints {
-            let constraints_list = PyList::empty(py);
-            for constraint in &k_hot_list.constraints {
-                constraints_list.append(constraint.encode_to_vec().as_slice())?;
-            }
-            result.set_item(k, constraints_list)?;
-        }
-
-        let k1_constraint_ids: HashSet<u64> = match self.0.k_hot_constraints.get(&1) {
-            Some(k_hot_list) => k_hot_list
-                .constraints
-                .iter()
-                .map(|c| c.constraint_id)
-                .collect(),
-            None => HashSet::new(),
-        };
+    pub fn k_hot_constraints<'py>(&self) -> HashMap<u64, Vec<KHot>> {
+        let mut result = self
+            .0
+            .k_hot_constraints
+            .iter()
+            .map(|(k, v)| {
+                (
+                    *k,
+                    v.constraints.iter().cloned().map(KHot).collect::<Vec<_>>(),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let visited_one_hot = result
+            .get(&1)
+            .map(|k| k.iter().map(|c| c.0.constraint_id).collect::<HashSet<_>>())
+            .unwrap_or_default();
 
         #[allow(deprecated)]
         if !self.0.one_hot_constraints.is_empty() {
-            let k1_list = PyList::empty(py);
-
-            if let Some(existing_list) = result.get_item(1)? {
-                let existing_list = existing_list.downcast::<PyList>()?;
-                for item in existing_list.iter() {
-                    k1_list.append(item)?;
-                }
-            }
-
             #[allow(deprecated)]
-            for one_hot in &self.0.one_hot_constraints {
-                if !k1_constraint_ids.contains(&one_hot.constraint_id) {
+            let mut ones = Vec::with_capacity(self.0.one_hot_constraints.len());
+            #[allow(deprecated)]
+            for constr in &self.0.one_hot_constraints {
+                if !visited_one_hot.contains(&constr.constraint_id) {
                     let mut k_hot = ommx::v1::KHot::default();
-                    k_hot.constraint_id = one_hot.constraint_id;
-                    k_hot.decision_variables = one_hot.decision_variables.clone();
+                    k_hot.constraint_id = constr.constraint_id;
+                    k_hot.decision_variables = constr.decision_variables.clone();
                     k_hot.num_hot_vars = 1;
-                    k1_list.append(k_hot.encode_to_vec().as_slice())?;
+                    ones.push(KHot(k_hot));
                 }
             }
-
-            if !k1_list.is_empty() {
-                result.set_item(1, k1_list)?;
+            if !ones.is_empty() {
+                result.entry(1).or_default().extend(ones)
             }
         }
 
-        Ok(result)
+        result
     }
 }
