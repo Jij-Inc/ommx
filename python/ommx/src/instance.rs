@@ -28,6 +28,10 @@ impl Instance {
         self.0.validate()
     }
 
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.used_decision_variable_ids()
+    }
+
     pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
         let pubo = self.0.as_pubo_format()?;
         Ok(serde_pyobject::to_pyobject(py, &pubo)?.extract()?)
