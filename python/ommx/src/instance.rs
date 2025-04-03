@@ -5,7 +5,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyList},
 };
 use std::collections::{BTreeSet, HashMap, HashSet};
-use ommx::v1::{self, OneHot, KHot};
+use ommx::v1::{OneHot, KHot};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -29,8 +29,9 @@ impl Instance {
         self.0.validate()
     }
     
-    pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.0.constraint_hints.clone().unwrap_or_default())
+    pub fn constraint_hints<'py>(&'py self, py: Python<'py>) -> Bound<'py, ConstraintHints> {
+        let hints = self.0.constraint_hints.clone().unwrap_or_default();
+        Bound::new(py, ConstraintHints(hints)).unwrap()
     }
 
     pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
@@ -123,8 +124,9 @@ impl ParametricInstance {
         self.0.validate()
     }
     
-    pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.0.constraint_hints.clone().unwrap_or_default())
+    pub fn constraint_hints<'py>(&'py self, py: Python<'py>) -> Bound<'py, ConstraintHints> {
+        let hints = self.0.constraint_hints.clone().unwrap_or_default();
+        Bound::new(py, ConstraintHints(hints)).unwrap()
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
@@ -251,31 +253,72 @@ impl ConstraintHints {
     }
 
     pub fn one_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let one_hot_constraints = self.0.one_hot_constraints();
         let result = PyList::empty(py);
-        for constraint in one_hot_constraints {
-            let mut proto_constraint = OneHot::default();
-            proto_constraint.constraint_id = constraint.id.into();
-            proto_constraint.decision_variables = constraint.variables.iter().map(|&id| id.into()).collect();
-            result.append(proto_constraint.encode_to_vec().as_slice())?;
+        
+        for constraint in &self.0.one_hot_constraints {
+            result.append(constraint.encode_to_vec().as_slice())?;
         }
+        
+        if let Some(k_hot_list) = self.0.k_hot_constraints.get(&1) {
+            let constraint_ids: HashSet<u64> = self.0.one_hot_constraints
+                .iter()
+                .map(|c| c.constraint_id)
+                .collect();
+                
+            for k_hot in &k_hot_list.constraints {
+                if !constraint_ids.contains(&k_hot.constraint_id) {
+                    let mut one_hot = OneHot::default();
+                    one_hot.constraint_id = k_hot.constraint_id;
+                    one_hot.decision_variables = k_hot.decision_variables.clone();
+                    result.append(one_hot.encode_to_vec().as_slice())?;
+                }
+            }
+        }
+        
         Ok(result.into())
     }
 
     pub fn k_hot_constraints<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let k_hot_constraints = self.0.k_hot_constraints();
         let result = PyDict::new(py);
-        for (k, constraints) in k_hot_constraints {
+        
+        for (k, k_hot_list) in &self.0.k_hot_constraints {
             let constraints_list = PyList::empty(py);
-            for constraint in constraints {
-                let mut proto_constraint = KHot::default();
-                proto_constraint.constraint_id = constraint.id.into();
-                proto_constraint.decision_variables = constraint.variables.iter().map(|&id| id.into()).collect();
-                proto_constraint.num_hot_vars = constraint.num_hot_vars;
-                constraints_list.append(proto_constraint.encode_to_vec().as_slice())?;
+            for constraint in &k_hot_list.constraints {
+                constraints_list.append(constraint.encode_to_vec().as_slice())?;
             }
             result.set_item(k, constraints_list)?;
         }
+        
+        let k1_constraint_ids: HashSet<u64> = match self.0.k_hot_constraints.get(&1) {
+            Some(k_hot_list) => k_hot_list.constraints.iter().map(|c| c.constraint_id).collect(),
+            None => HashSet::new(),
+        };
+        
+        if !self.0.one_hot_constraints.is_empty() {
+            let k1_list = PyList::empty(py);
+            
+            if let Some(existing_list) = result.get_item(1)? {
+                let existing_list = existing_list.downcast::<PyList>()?;
+                for item in existing_list.iter() {
+                    k1_list.append(item)?;
+                }
+            }
+            
+            for one_hot in &self.0.one_hot_constraints {
+                if !k1_constraint_ids.contains(&one_hot.constraint_id) {
+                    let mut k_hot = KHot::default();
+                    k_hot.constraint_id = one_hot.constraint_id;
+                    k_hot.decision_variables = one_hot.decision_variables.clone();
+                    k_hot.num_hot_vars = 1;
+                    k1_list.append(k_hot.encode_to_vec().as_slice())?;
+                }
+            }
+            
+            if !k1_list.is_empty() {
+                result.set_item(1, k1_list)?;
+            }
+        }
+        
         Ok(result.into())
     }
 }
