@@ -912,7 +912,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Log encoding of an integer variable :math:`x \in [l, u]` is to represent by :math:`m` bits :math:`b_i \in \{0, 1\}` by
 
         .. math::
-            x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+            x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
 
         where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
 
