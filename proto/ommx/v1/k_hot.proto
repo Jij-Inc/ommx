@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+// A message representing a k-hot constraint.
+message KHot {
+  // The ID of the constraint.
+  uint64 constraint_id = 1;
+  // The list of ids of decision variables that are constrained to be k-hot.
+  repeated uint64 decision_variables = 2;
+  // The number of variables that should be set to 1 (i.e., the value of k).
+  uint64 num_hot_vars = 3;
+}

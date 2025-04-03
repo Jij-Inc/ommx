@@ -254,6 +254,21 @@ pub struct Sos1 {
     #[prost(uint64, repeated, tag = "3")]
     pub decision_variables: ::prost::alloc::vec::Vec<u64>,
 }
+/// A message representing a k-hot constraint.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KHot {
+    /// The ID of the constraint.
+    #[prost(uint64, tag = "1")]
+    pub constraint_id: u64,
+    /// The list of ids of decision variables that are constrained to be k-hot.
+    #[prost(uint64, repeated, tag = "2")]
+    pub decision_variables: ::prost::alloc::vec::Vec<u64>,
+    /// The number of variables that should be set to 1 (i.e., the value of k).
+    #[prost(uint64, tag = "3")]
+    pub num_hot_vars: u64,
+}
 /// A constraint hint is an additional inforomation to be used by solver to gain performance.
 /// They are derived from one-or-more constraints in the instance and typically contains information of special types of constraints (e.g. one-hot, SOS, ...).
 #[non_exhaustive]
@@ -261,11 +276,23 @@ pub struct Sos1 {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConstraintHints {
     /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+    #[deprecated]
     #[prost(message, repeated, tag = "2")]
     pub one_hot_constraints: ::prost::alloc::vec::Vec<OneHot>,
     /// SOS1 constraint: at most one of x_1, ..., x_n can be non-zero.
     #[prost(message, repeated, tag = "3")]
     pub sos1_constraints: ::prost::alloc::vec::Vec<Sos1>,
+    /// K-hot constraints: map from k to a list of k-hot constraints.
+    #[prost(map = "uint64, message", tag = "4")]
+    pub k_hot_constraints: ::std::collections::HashMap<u64, KHotList>,
+}
+/// A list of KHot constraints with the same k value.
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KHotList {
+    #[prost(message, repeated, tag = "1")]
+    pub constraints: ::prost::alloc::vec::Vec<KHot>,
 }
 /// Upper and lower bound of the decision variable.
 #[non_exhaustive]

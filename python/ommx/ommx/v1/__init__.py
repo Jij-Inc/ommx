@@ -35,6 +35,7 @@ from .annotation import (
     json_annotation_property,
     int_annotation_property,
 )
+from .constraint_hints_wrapper import ConstraintHintsWrapper
 
 from .. import _ommx_rust
 
@@ -60,6 +61,7 @@ __all__ = [
     "Bound",
     # Utility
     "SampledValues",
+    "ConstraintHintsWrapper",
     # Type Alias
     "ToState",
     "ToSamples",
