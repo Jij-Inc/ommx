@@ -275,6 +275,8 @@ pub struct Sos1 {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConstraintHints {
+    /// **DEPRECATED**: This field is deprecated and will be removed in future versions. Use `k_hot_constraints` instead.
+    ///
     /// One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
     #[deprecated]
     #[prost(message, repeated, tag = "2")]
@@ -282,7 +284,8 @@ pub struct ConstraintHints {
     /// SOS1 constraint: at most one of x_1, ..., x_n can be non-zero.
     #[prost(message, repeated, tag = "3")]
     pub sos1_constraints: ::prost::alloc::vec::Vec<Sos1>,
-    /// K-hot constraints: map from k to a list of k-hot constraints.
+    /// K-hot constraints: map from k to a list of k-hot constraints, i.e.
+    /// `x_1 + ... + x_n = k` for binary variables `x_1, ..., x_n` and a natural number `k`.
     #[prost(map = "uint64, message", tag = "4")]
     pub k_hot_constraints: ::std::collections::HashMap<u64, KHotList>,
 }

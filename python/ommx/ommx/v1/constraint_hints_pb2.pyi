@@ -54,7 +54,10 @@ class ConstraintHints(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.one_hot_pb2.OneHot
     ]:
-        """One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`."""
+        """**DEPRECATED**: This field is deprecated and will be removed in future versions. Use `k_hot_constraints` instead.
+
+        One-hot constraint: e.g. `x_1 + ... + x_n = 1` for binary variables `x_1, ..., x_n`.
+        """
 
     @property
     def sos1_constraints(
@@ -70,7 +73,9 @@ class ConstraintHints(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.MessageMap[
         builtins.int, global___KHotList
     ]:
-        """K-hot constraints: map from k to a list of k-hot constraints."""
+        """K-hot constraints: map from k to a list of k-hot constraints, i.e.
+        `x_1 + ... + x_n = k` for binary variables `x_1, ..., x_n` and a natural number `k`.
+        """
 
     def __init__(
         self,
