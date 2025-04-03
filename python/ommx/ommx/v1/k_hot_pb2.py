@@ -11,73 +11,106 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-
-
 DESCRIPTOR = _descriptor.FileDescriptor(
-  name='ommx/v1/k_hot.proto',
-  package='ommx.v1',
-  syntax='proto3',
-  serialized_options=None,
-  create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x13ommx/v1/k_hot.proto\x12\x07ommx.v1\"O\n\x04KHot\x12\x15\n\rconstraint_id\x18\x01 \x01(\x04\x12\x1a\n\x12\x64\x65\x63ision_variables\x18\x02 \x03(\x04\x12\x14\n\x0cnum_hot_vars\x18\x03 \x01(\x04\x62\x06proto3'
+    name="ommx/v1/k_hot.proto",
+    package="ommx.v1",
+    syntax="proto3",
+    serialized_options=None,
+    create_key=_descriptor._internal_create_key,
+    serialized_pb=b'\n\x13ommx/v1/k_hot.proto\x12\x07ommx.v1"O\n\x04KHot\x12\x15\n\rconstraint_id\x18\x01 \x01(\x04\x12\x1a\n\x12\x64\x65\x63ision_variables\x18\x02 \x03(\x04\x12\x14\n\x0cnum_hot_vars\x18\x03 \x01(\x04\x62\x06proto3',
 )
-
-
 
 
 _KHOT = _descriptor.Descriptor(
-  name='KHot',
-  full_name='ommx.v1.KHot',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  create_key=_descriptor._internal_create_key,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='constraint_id', full_name='ommx.v1.KHot.constraint_id', index=0,
-      number=1, type=4, cpp_type=4, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='decision_variables', full_name='ommx.v1.KHot.decision_variables', index=1,
-      number=2, type=4, cpp_type=4, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='num_hot_vars', full_name='ommx.v1.KHot.num_hot_vars', index=2,
-      number=3, type=4, cpp_type=4, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=32,
-  serialized_end=111,
+    name="KHot",
+    full_name="ommx.v1.KHot",
+    filename=None,
+    file=DESCRIPTOR,
+    containing_type=None,
+    create_key=_descriptor._internal_create_key,
+    fields=[
+        _descriptor.FieldDescriptor(
+            name="constraint_id",
+            full_name="ommx.v1.KHot.constraint_id",
+            index=0,
+            number=1,
+            type=4,
+            cpp_type=4,
+            label=1,
+            has_default_value=False,
+            default_value=0,
+            message_type=None,
+            enum_type=None,
+            containing_type=None,
+            is_extension=False,
+            extension_scope=None,
+            serialized_options=None,
+            file=DESCRIPTOR,
+            create_key=_descriptor._internal_create_key,
+        ),
+        _descriptor.FieldDescriptor(
+            name="decision_variables",
+            full_name="ommx.v1.KHot.decision_variables",
+            index=1,
+            number=2,
+            type=4,
+            cpp_type=4,
+            label=3,
+            has_default_value=False,
+            default_value=[],
+            message_type=None,
+            enum_type=None,
+            containing_type=None,
+            is_extension=False,
+            extension_scope=None,
+            serialized_options=None,
+            file=DESCRIPTOR,
+            create_key=_descriptor._internal_create_key,
+        ),
+        _descriptor.FieldDescriptor(
+            name="num_hot_vars",
+            full_name="ommx.v1.KHot.num_hot_vars",
+            index=2,
+            number=3,
+            type=4,
+            cpp_type=4,
+            label=1,
+            has_default_value=False,
+            default_value=0,
+            message_type=None,
+            enum_type=None,
+            containing_type=None,
+            is_extension=False,
+            extension_scope=None,
+            serialized_options=None,
+            file=DESCRIPTOR,
+            create_key=_descriptor._internal_create_key,
+        ),
+    ],
+    extensions=[],
+    nested_types=[],
+    enum_types=[],
+    serialized_options=None,
+    is_extendable=False,
+    syntax="proto3",
+    extension_ranges=[],
+    oneofs=[],
+    serialized_start=32,
+    serialized_end=111,
 )
 
-DESCRIPTOR.message_types_by_name['KHot'] = _KHOT
+DESCRIPTOR.message_types_by_name["KHot"] = _KHOT
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
-KHot = _reflection.GeneratedProtocolMessageType('KHot', (_message.Message,), {
-  'DESCRIPTOR' : _KHOT,
-  '__module__' : 'ommx.v1.k_hot_pb2'
-  # @@protoc_insertion_point(class_scope:ommx.v1.KHot)
-  })
+KHot = _reflection.GeneratedProtocolMessageType(
+    "KHot",
+    (_message.Message,),
+    {
+        "DESCRIPTOR": _KHOT,
+        "__module__": "ommx.v1.k_hot_pb2",
+        # @@protoc_insertion_point(class_scope:ommx.v1.KHot)
+    },
+)
 _sym_db.RegisterMessage(KHot)
 
 
