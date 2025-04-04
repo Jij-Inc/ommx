@@ -18,12 +18,13 @@ parts:
       - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
+      - file: user_guide/supproted_adapters
       - file: user_guide/function
       - file: user_guide/instance
       - file: user_guide/parametric_instance
       - file: user_guide/solution
       - file: user_guide/sample_set
-  - caption: "Reference"
+  - caption: "API Reference"
     chapters:
       - url: https://jij-inc.github.io/ommx/protobuf.html
         title: "OMMX Message Schema"
