@@ -154,6 +154,20 @@ def test_add_integer_slack_to_inequality_continuous():
     )
 
 
+def test_to_qubo_penalty_weight():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[0] == 0).set_id(123), (x[1] == 1).set_id(456)],
+        sense=Instance.MINIMIZE,
+    )
+    # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
+    qubo, offset = instance.to_qubo(penalty_weights={123: 1.0, 456: 2.0})
+    assert qubo == {(0, 0): 2.0, (1, 1): -2.0}
+    assert offset == 2.0
+
+
 def test_to_qubo_continuous():
     x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
     instance = Instance.from_components(

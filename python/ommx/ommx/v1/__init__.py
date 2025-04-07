@@ -443,7 +443,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         5. Convert to QUBO with (uniform) penalty method
 
-            * If ``penalty_weights`` is given, use :py:meth:`penalty_method` with the given weights.
+            * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
             * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
             * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
@@ -554,13 +554,17 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
             if penalty_weights:
                 pi = self.penalty_method()
-                return pi.with_parameters(penalty_weights).as_qubo_format()
-            if uniform_penalty_weight is None:
-                # If both are None, defaults to uniform_penalty_weight = 1.0
-                uniform_penalty_weight = 1.0
-            pi = self.uniform_penalty_method()
-            weight = pi.get_parameters()[0]
-            unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+                weights = {
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                }
+                unconstrained = pi.with_parameters(weights)
+            else:
+                if uniform_penalty_weight is None:
+                    # If both are None, defaults to uniform_penalty_weight = 1.0
+                    uniform_penalty_weight = 1.0
+                pi = self.uniform_penalty_method()
+                weight = pi.get_parameters()[0]
+                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
         self.log_encode()
