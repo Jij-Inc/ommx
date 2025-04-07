@@ -52,7 +52,7 @@ OMMX Python SDK consists of the main package `ommx` and several adapters for OSS
 |:--- |:--- |:--- |:--- |
 | [ommx](./python/ommx) | [![ommx](https://img.shields.io/pypi/v/ommx)](https://pypi.org/project/ommx/) | [![main](https://img.shields.io/badge/API_Reference-main-blue)](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html) | Core package of OMMX Python SDK |
 
-See [Supported Adapters](https://jij-inc.github.io/ommx/en/user_guide/supported_adapters.ipynb) about a complete list of supported adapters for each solver/sampler.
+See [Supported Adapters](https://jij-inc.github.io/ommx/en/user_guide/supported_ommx_adapters.ipynb) about a complete list of supported adapters for each solver/sampler.
 
 # License
 © 2024 Jij Inc.
