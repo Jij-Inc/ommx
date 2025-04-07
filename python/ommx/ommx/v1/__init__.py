@@ -554,7 +554,9 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
             if penalty_weights:
                 pi = self.penalty_method()
-                weights = { p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()}
+                weights = {
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                }
                 unconstrained = pi.with_parameters(weights)
             else:
                 if uniform_penalty_weight is None:
