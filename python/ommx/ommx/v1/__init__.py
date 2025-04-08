@@ -572,50 +572,63 @@ class Instance(InstanceBase, UserAnnotationBase):
         qubo = self.as_qubo_format()
         return qubo
 
-    def as_minimization_problem(self):
+    def as_minimization_problem(self) -> bool:
         """
         Convert the instance to a minimization problem.
 
         If the instance is already a minimization problem, this does nothing.
 
+        :return: ``True`` if the instance is converted, ``False`` if already a minimization problem.
+
         Examples
         =========
 
-        .. doctest::
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(x0 + x1 + x2)
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x = [DecisionVariable.binary(i) for i in range(3)]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(x),
-            ...     constraints=[sum(x) == 1],
-            ...     sense=Instance.MAXIMIZE,
-            ... )
-            >>> instance.sense == Instance.MAXIMIZE
-            True
-            >>> instance.objective
-            Function(x0 + x1 + x2)
+        Convert to a minimization problem
 
-            Convert to a minimization problem
+        >>> instance.as_minimization_problem()
+        True
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
 
-            >>> instance.as_minimization_problem()
-            >>> instance.sense == Instance.MINIMIZE
-            True
-            >>> instance.objective
-            Function(-x0 - x1 - x2)
+        If the instance is already a minimization problem, this does nothing
+
+        >>> instance.as_minimization_problem()
+        False
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
 
         """
         if self.raw.sense == Instance.MINIMIZE:
-            return
+            return False
         self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
         self.raw.objective.CopyFrom(obj.raw)
+        return True
 
-    def as_maximization_problem(self):
+    def as_maximization_problem(self) -> bool:
         """
         Convert the instance to a maximization problem.
 
         If the instance is already a maximization problem, this does nothing.
+
+        :return: ``True`` if the instance is converted, ``False`` if already a maximization problem.
 
         Examples
         =========
@@ -636,6 +649,16 @@ class Instance(InstanceBase, UserAnnotationBase):
         Convert to a maximization problem
 
         >>> instance.as_maximization_problem()
+        True
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
+
+        If the instance is already a maximization problem, this does nothing
+
+        >>> instance.as_maximization_problem()
+        False
         >>> instance.sense == Instance.MAXIMIZE
         True
         >>> instance.objective
@@ -643,10 +666,11 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         """
         if self.raw.sense == Instance.MAXIMIZE:
-            return
+            return False
         self.raw.sense = Instance.MAXIMIZE
         obj = -self.objective
         self.raw.objective.CopyFrom(obj.raw)
+        return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
