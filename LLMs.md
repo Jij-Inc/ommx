@@ -12,6 +12,7 @@
   - [Download Miplib Instance](#download-miplib-instance)
   - [Implement Adapter](#implement-adapter)
 - [User Guide](#user-guide)
+  - [Supported Ommx Adapters](#supported-ommx-adapters)
   - [Function](#function)
   - [Instance](#instance)
   - [Parametric Instance](#parametric-instance)
@@ -549,20 +550,9 @@ instance = Instance.from_components(
 
 ## Solve with multiple adapters
 
-Here, we will use the following OSS solvers with corresponding adapters, which are developed as a part of OMMX Python SDK:
-
-| Package name | PyPI | Backend |
-|:--- |:--- |:--- |
-| `ommx-python-mip-adapter` | [](https://pypi.org/project/ommx-python-mip-adapter/) | [CBC](https://github.com/coin-or/Cbc) via [Python-MIP](https://github.com/coin-or/python-mip) |
-| `ommx-pyscipopt-adapter` | [](https://pypi.org/project/ommx-pyscipopt-adapter/) | [SCIP](https://github.com/scipopt/scip) via [PySCIPOpt](https://github.com/scipopt/PySCIPOpt) |
-| `ommx-highs-adapter` | [](https://pypi.org/project/ommx-highs-adapter/) | [HiGHS](https://github.com/ERGO-Code/HiGHS) |
-
-For non-OSS solvers, the following adapters also developed as separated repositories:
-
-| Package name | PyPI | Backend |
-|:--- |:--- |:--- |
-| [ommx-gurobipy-adapter](https://github.com/Jij-Inc/ommx-gurobipy-adapter) | [](https://pypi.org/project/ommx-gurobipy-adapter/) | [Gurobi](https://www.gurobi.com/) |
-| [ommx-fixstars-amplify-adapter](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter) | [](https://pypi.org/project/ommx-fixstars-amplify-adapter/) | [Fixstars Amplify](https://amplify.fixstars.com/ja/docs/amplify/v1/index.html#) |
+Here, we will use OSS adapters developed as a part of OMMX Python SDK.
+For non-OSS solvers, adapters are also available and can be used with the same interface.
+A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.ipynb).
 
 Here, let's solve the knapsack problem with OSS solvers, Highs, Python-MIP (CBC), and SCIP.
 
@@ -1451,6 +1441,39 @@ For more detailed implementation examples, refer to the repositories such as [om
 -------------
 
 ## User Guide
+
+### Supported Ommx Adapters
+
+To solve mathematical optimization problems described in OMMX using solvers, it is necessary to convert them into data structures that conform to the solver's specifications. OMMX Adapters play this conversion role. Since specifications differ for each solver, there exists an adapter for each solver.
+
+## Adapters for OSS solvers/samplers
+Several adapters for OSS solvers/samplers are supported in OMMX repository.
+
+| Package name | PyPI | API Reference | Description |
+|:--- |:--- |:--- |:--- |
+| [ommx-highs-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-highs-adapter) | [](https://pypi.org/project/ommx-highs-adapter/) | [](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_highs_adapter/index.html) | Adapter for [HiGHS](https://github.com/ERGO-Code/HiGHS)
+| [ommx-openjij-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-openjij-adapter) | [](https://pypi.org/project/ommx-openjij-adapter/) | [](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_openjij_adapter/index.html) | Adapter for [OpenJij](https://github.com/OpenJij/OpenJij)
+| [ommx-python-mip-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-python-mip-adapter) | [](https://pypi.org/project/ommx-python-mip-adapter/) | [](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_python_mip_adapter/index.html)| Adapter for [Python-MIP](https://www.python-mip.com/) |
+| [ommx-pyscipopt-adapter](https://github.com/Jij-Inc/ommx/tree/main/python/ommx-pyscipopt-adapter) | [](https://pypi.org/project/ommx-pyscipopt-adapter/) | [](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx_pyscipopt_adapter/index.html) | Adapter for [PySCIPOpt](https://github.com/scipopt/PySCIPOpt)
+
+## Adapters for Non-OSS solvers/samplers
+Non-OSS solvers/samplers are also supported in other repositories.
+
+| Package name | PyPI | Description |
+|:--- |:--- |:--- |
+| [ommx-da4-adapter](https://github.com/Jij-Inc/ommx-da4-adapter) | [](https://pypi.org/project/ommx-da4-adapter/) | Adapter for [Fujitsu Digital Annealer(DA4)](https://www.fujitsu.com/jp/digitalannealer/) |
+|  [ommx-dwave-adapter](https://github.com/Jij-Inc/ommx-dwave-adapter) | [](https://pypi.org/project/ommx-dwave-adapter) | Adapter for [D-Wave](https://docs.dwavequantum.com/en/latest/index.html) |
+| [ommx-fixstars-amplify-adapter](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter) | [](https://pypi.org/project/ommx-fixstars-amplify-adapter/) | Adapter for [Fixstars Amplify](https://amplify.fixstars.com/ja/docs/amplify/v1/index.html#) |
+| [ommx-gurobipy-adapter](https://github.com/Jij-Inc/ommx-gurobipy-adapter) | [](https://pypi.org/project/ommx-gurobipy-adapter/) | Adapter for [Gurobi](https://www.gurobi.com/) |
+
+
+```python
+
+```
+
+
+
+-------------
 
 ### Function
 
