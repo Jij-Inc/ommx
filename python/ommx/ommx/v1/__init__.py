@@ -489,9 +489,9 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The ``instance`` object stores how converted:
 
-        * The sense is converted to minimization
+        * The sense is converted to minimization for generating QUBO, but converted back to maximization after the conversion.
 
-        >>> instance.sense == Instance.MINIMIZE
+        >>> instance.sense == Instance.MAXIMIZE
         True
 
         * Two types of decision variables are added
@@ -516,12 +516,47 @@ class Instance(InstanceBase, UserAnnotationBase):
         * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
 
         >>> instance.objective
-        Function(x3*x3 + 2*x3*x4 + 4*x3*x5 + 4*x3*x6 + 2*x3*x7 + 4*x3*x8 + x4*x4 + 4*x4*x5 + 4*x4*x6 + 2*x4*x7 + 4*x4*x8 + 4*x5*x5 + 8*x5*x6 + 4*x5*x7 + 8*x5*x8 + 4*x6*x6 + 4*x6*x7 + 8*x6*x8 + x7*x7 + 4*x7*x8 + 4*x8*x8 - 7*x3 - 7*x4 - 13*x5 - 13*x6 - 6*x7 - 12*x8 + 9)
+        Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
         >>> instance.get_removed_constraint(0)
         RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
 
+        The solver will returns the solution, which only contains the log-encoded binary variables like:
+
+        >>> state = {
+        ...     3: 1, 4: 1,  # x0 = 0 + (2-1)*1 = 2
+        ...     5: 0, 6: 0,  # x1 = 0 + (2-1)*0 = 0
+        ...     7: 1, 8: 0   # x3 = 1 + 2*0 = 1
+        ... }
+
+        This can be evaluated by :py:meth:`evaluate` method.
+
+        >>> solution = instance.evaluate(state)
+
+        The log-encoded integer variables are automatically evaluated from the binary variables.
+
+        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper             name subscripts  value
+        id                                                          
+        0   integer    0.0    2.0                x        [0]    2.0
+        1   integer    0.0    2.0                x        [1]    0.0
+        2   integer    0.0    3.0       ommx.slack        [0]    1.0
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]    1.0
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]    1.0
+        5    binary    0.0    1.0  ommx.log_encode     [1, 0]    0.0
+        6    binary    0.0    1.0  ommx.log_encode     [1, 1]    0.0
+        7    binary    0.0    1.0  ommx.log_encode     [2, 0]    1.0
+        8    binary    0.0    1.0  ommx.log_encode     [2, 1]    0.0
+
+        >>> solution.objective
+        2.0
+
+        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+           equality  value            used_ids subscripts          removed_reason
+        id                                                                       
+        0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
+
         """
-        self.as_minimization_problem()
+        is_converted_to_minimize = self.as_minimization_problem()
 
         continuous_variables = [
             var.id
@@ -570,6 +605,11 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         self.log_encode()
         qubo = self.as_qubo_format()
+
+        if is_converted_to_minimize:
+            # Convert back to maximization
+            self.as_maximization_problem()
+
         return qubo
 
     def as_minimization_problem(self) -> bool:
