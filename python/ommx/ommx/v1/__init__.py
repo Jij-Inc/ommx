@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
-from typing_extensions import deprecated, TypeAlias, Union
+from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
@@ -77,7 +77,7 @@ def to_state(state: ToState) -> State:
     return State(entries=state)
 
 
-ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], list[ToState]]
+ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
 """
