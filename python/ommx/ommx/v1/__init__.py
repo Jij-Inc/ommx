@@ -489,7 +489,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The ``instance`` object stores how converted:
 
-        * The sense is converted to minimization for generating QUBO, but converted back to maximization after the conversion.
+        * For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
 
         >>> instance.sense == Instance.MAXIMIZE
         True
