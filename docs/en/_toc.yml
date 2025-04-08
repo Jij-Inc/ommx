@@ -18,6 +18,7 @@ parts:
       - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
+      - file: user_guide/supported_ommx_adapters
       - file: user_guide/function
       - file: user_guide/instance
       - file: user_guide/parametric_instance
