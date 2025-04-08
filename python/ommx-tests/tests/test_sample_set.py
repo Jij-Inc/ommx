@@ -8,7 +8,7 @@ def test_evaluate_samples_type_check():
     x = [DecisionVariable.binary(i) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
-        objective=x[0] + 2*x[1] + 3*x[2],
+        objective=x[0] + 2 * x[1] + 3 * x[2],
         constraints=[x[1] + x[2] <= 1],
         sense=Instance.MAXIMIZE,
     )
