@@ -4,6 +4,7 @@ from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
+import collections.abc
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -84,7 +85,7 @@ Type alias for convertible types to :class:`Samples`.
 
 
 def to_samples(samples: ToSamples) -> Samples:
-    if isinstance(samples, list):
+    if isinstance(samples, collections.abc.Sequence):
         samples = {i: state for i, state in enumerate(samples)}
     if not isinstance(samples, Samples):
         # Do not compress the samples
