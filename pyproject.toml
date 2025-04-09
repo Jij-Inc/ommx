@@ -6,6 +6,7 @@ members = ["python/ommx*"]
 
 [dependency-groups]
 dev = [
+  "jupyter-book>=1.0.3",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",
@@ -19,7 +20,7 @@ dev = [
   "pytest-github-actions-annotate-failures",
   "pytest>=8.3.4",
   "pyyaml>=6.0.2",
+  "ruamel-yaml>=0.18.10",
   "ruff>=0.9.6",
   "tomlkit>=0.13.2",
-  "ruamel-yaml>=0.18.10",
 ]

@@ -18,6 +18,7 @@ parts:
       - file: tutorial/implement_adapter
   - caption: "User Guide"
     chapters:
+      - file: user_guide/supported_ommx_adapters
       - file: user_guide/function
       - file: user_guide/instance
       - file: user_guide/parametric_instance
@@ -33,6 +34,7 @@ parts:
         title: "OMMX Python SDK"
   - caption: "Release Note"
     chapters:
+      - file: release_note/ommx-1.9.0
       - file: release_note/ommx-1.8.0
       - file: release_note/ommx-1.7.0
       - file: release_note/ommx-1.6.0

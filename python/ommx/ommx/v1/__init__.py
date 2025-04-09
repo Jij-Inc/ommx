@@ -1,9 +1,10 @@
 from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
-from typing_extensions import deprecated, TypeAlias, Union
+from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
+import collections.abc
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -77,14 +78,14 @@ def to_state(state: ToState) -> State:
     return State(entries=state)
 
 
-ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], list[ToState]]
+ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
 """
 
 
 def to_samples(samples: ToSamples) -> Samples:
-    if isinstance(samples, list):
+    if isinstance(samples, collections.abc.Sequence):
         samples = {i: state for i, state in enumerate(samples)}
     if not isinstance(samples, Samples):
         # Do not compress the samples
@@ -478,7 +479,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         5. Convert to QUBO with (uniform) penalty method
 
-            * If ``penalty_weights`` is given, use :py:meth:`penalty_method` with the given weights.
+            * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
             * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
             * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
@@ -523,9 +524,9 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The ``instance`` object stores how converted:
 
-        * The sense is converted to minimization
+        * For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
 
-        >>> instance.sense == Instance.MINIMIZE
+        >>> instance.sense == Instance.MAXIMIZE
         True
 
         * Two types of decision variables are added
@@ -550,12 +551,47 @@ class Instance(InstanceBase, UserAnnotationBase):
         * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
 
         >>> instance.objective
-        Function(x3*x3 + 2*x3*x4 + 4*x3*x5 + 4*x3*x6 + 2*x3*x7 + 4*x3*x8 + x4*x4 + 4*x4*x5 + 4*x4*x6 + 2*x4*x7 + 4*x4*x8 + 4*x5*x5 + 8*x5*x6 + 4*x5*x7 + 8*x5*x8 + 4*x6*x6 + 4*x6*x7 + 8*x6*x8 + x7*x7 + 4*x7*x8 + 4*x8*x8 - 7*x3 - 7*x4 - 13*x5 - 13*x6 - 6*x7 - 12*x8 + 9)
+        Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
         >>> instance.get_removed_constraint(0)
         RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
 
+        The solver will returns the solution, which only contains the log-encoded binary variables like:
+
+        >>> state = {
+        ...     3: 1, 4: 1,  # x0 = 0 + (2-1)*1 = 2
+        ...     5: 0, 6: 0,  # x1 = 0 + (2-1)*0 = 0
+        ...     7: 1, 8: 0   # x3 = 1 + 2*0 = 1
+        ... }
+
+        This can be evaluated by :py:meth:`evaluate` method.
+
+        >>> solution = instance.evaluate(state)
+
+        The log-encoded integer variables are automatically evaluated from the binary variables.
+
+        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+               kind  lower  upper             name subscripts  value
+        id                                                          
+        0   integer    0.0    2.0                x        [0]    2.0
+        1   integer    0.0    2.0                x        [1]    0.0
+        2   integer    0.0    3.0       ommx.slack        [0]    1.0
+        3    binary    0.0    1.0  ommx.log_encode     [0, 0]    1.0
+        4    binary    0.0    1.0  ommx.log_encode     [0, 1]    1.0
+        5    binary    0.0    1.0  ommx.log_encode     [1, 0]    0.0
+        6    binary    0.0    1.0  ommx.log_encode     [1, 1]    0.0
+        7    binary    0.0    1.0  ommx.log_encode     [2, 0]    1.0
+        8    binary    0.0    1.0  ommx.log_encode     [2, 1]    0.0
+
+        >>> solution.objective
+        2.0
+
+        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+           equality  value            used_ids subscripts          removed_reason
+        id                                                                       
+        0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
+
         """
-        self.as_minimization_problem()
+        is_converted_to_minimize = self.as_minimization_problem()
 
         continuous_variables = [
             var.id
@@ -589,57 +625,127 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
             if penalty_weights:
                 pi = self.penalty_method()
-                return pi.with_parameters(penalty_weights).as_qubo_format()
-            if uniform_penalty_weight is None:
-                # If both are None, defaults to uniform_penalty_weight = 1.0
-                uniform_penalty_weight = 1.0
-            pi = self.uniform_penalty_method()
-            weight = pi.get_parameters()[0]
-            unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+                weights = {
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                }
+                unconstrained = pi.with_parameters(weights)
+            else:
+                if uniform_penalty_weight is None:
+                    # If both are None, defaults to uniform_penalty_weight = 1.0
+                    uniform_penalty_weight = 1.0
+                pi = self.uniform_penalty_method()
+                weight = pi.get_parameters()[0]
+                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
         self.log_encode()
         qubo = self.as_qubo_format()
+
+        if is_converted_to_minimize:
+            # Convert back to maximization
+            self.as_maximization_problem()
+
         return qubo
 
-    def as_minimization_problem(self):
+    def as_minimization_problem(self) -> bool:
         """
         Convert the instance to a minimization problem.
 
         If the instance is already a minimization problem, this does nothing.
 
+        :return: ``True`` if the instance is converted, ``False`` if already a minimization problem.
+
         Examples
         =========
 
-        .. doctest::
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(x0 + x1 + x2)
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x = [DecisionVariable.binary(i) for i in range(3)]
-            >>> instance = Instance.from_components(
-            ...     decision_variables=x,
-            ...     objective=sum(x),
-            ...     constraints=[sum(x) == 1],
-            ...     sense=Instance.MAXIMIZE,
-            ... )
-            >>> instance.sense == Instance.MAXIMIZE
-            True
-            >>> instance.objective
-            Function(x0 + x1 + x2)
+        Convert to a minimization problem
 
-            Convert to a minimization problem
+        >>> instance.as_minimization_problem()
+        True
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
 
-            >>> instance.as_minimization_problem()
-            >>> instance.sense == Instance.MINIMIZE
-            True
-            >>> instance.objective
-            Function(-x0 - x1 - x2)
+        If the instance is already a minimization problem, this does nothing
+
+        >>> instance.as_minimization_problem()
+        False
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
 
         """
         if self.raw.sense == Instance.MINIMIZE:
-            return
+            return False
         self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
         self.raw.objective.CopyFrom(obj.raw)
+        return True
+
+    def as_maximization_problem(self) -> bool:
+        """
+        Convert the instance to a maximization problem.
+
+        If the instance is already a maximization problem, this does nothing.
+
+        :return: ``True`` if the instance is converted, ``False`` if already a maximization problem.
+
+        Examples
+        =========
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+
+        Convert to a maximization problem
+
+        >>> instance.as_maximization_problem()
+        True
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
+
+        If the instance is already a maximization problem, this does nothing
+
+        >>> instance.as_maximization_problem()
+        False
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
+
+        """
+        if self.raw.sense == Instance.MAXIMIZE:
+            return False
+        self.raw.sense = Instance.MAXIMIZE
+        obj = -self.objective
+        self.raw.objective.CopyFrom(obj.raw)
+        return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
@@ -947,7 +1053,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Log encoding of an integer variable :math:`x \in [l, u]` is to represent by :math:`m` bits :math:`b_i \in \{0, 1\}` by
 
         .. math::
-            x = \sum_{i=0}^{m-2} 2^l b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+            x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
 
         where :math:`m = \lceil \log_2(u - l + 1) \rceil`.
 
