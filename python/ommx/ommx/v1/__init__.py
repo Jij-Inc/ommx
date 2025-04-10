@@ -411,6 +411,44 @@ class Instance(InstanceBase, UserAnnotationBase):
         return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
 
     def evaluate(self, state: ToState) -> Solution:
+        """
+        Evaluate the given :class:`State` into a :class:`Solution`.
+        
+        This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
+        and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
+        
+        :param state: A mapping from decision variable IDs to their values
+        :return: A Solution object containing the evaluation results
+        
+        Examples
+        =========
+        
+        Create a simple instance with three binary variables and evaluate a solution:
+            
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})
+
+        >>> solution.objective
+        1.0
+        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+           equality  value   used_ids subscripts
+        id                                      
+        12       =0    0.0  {0, 1, 2}         []
+        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper subscripts  value
+        id                                        
+        0   binary    0.0    1.0         []    1.0
+        1   binary    0.0    1.0         []    0.0
+        2   binary    0.0    1.0         []    0.0
+        
+        """
         out, _ = _ommx_rust.evaluate_instance(
             self.to_bytes(), to_state(state).SerializeToString()
         )
