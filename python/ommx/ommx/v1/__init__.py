@@ -462,7 +462,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.evaluate({0: 1, 1: 0, 2: 2})
         Traceback (most recent call last):
             ...
-        RuntimeError: Variable value out of bound for ID=2: value=2, bound=[0, 1]
+        RuntimeError: Decision variable value out of bound: ID=2, value=2, bound=[0, 1]
         
         """
         out, _ = _ommx_rust.evaluate_instance(

@@ -362,22 +362,7 @@ impl Evaluate for Instance {
     type SampledOutput = SampleSet;
 
     fn evaluate(&self, state: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
-        // Check the bounds of the decision variables
-        let bounds = self.get_bounds()?;
-        for (var_id, value) in &state.entries {
-            if let Some(bound) = bounds.get(&VariableID::from(*var_id)) {
-                if !bound.contains(*value, 1e-6) {
-                    bail!(
-                        "Variable value out of bound for ID={}: value={}, bound=[{}, {}]",
-                        var_id,
-                        value,
-                        bound.lower(),
-                        bound.upper()
-                    );
-                }
-            }
-        }
-
+        self.check_bound(state, 1e-7)?;
         let mut used_ids = BTreeSet::new();
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;

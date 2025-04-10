@@ -68,6 +68,12 @@ pub struct Bound {
     upper: f64,
 }
 
+impl std::fmt::Display for Bound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]", self.lower, self.upper)
+    }
+}
+
 impl Default for Bound {
     fn default() -> Self {
         Self {
