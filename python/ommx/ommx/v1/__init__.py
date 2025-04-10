@@ -444,9 +444,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.objective
         1.0
         >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
-           equality  value   used_ids subscripts
-        id                                      
-        12       =0    0.0  {0, 1, 2}         []
+           equality  value used_ids subscripts
+        id                                    
+        12      <=0    0.0   {0, 1}         []
 
         The values of decision variables are also stored in the solution:
 
@@ -461,6 +461,8 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> instance.evaluate({0: 1, 1: 0, 2: 2})
         Traceback (most recent call last):
+            ...
+        RuntimeError: Variable value out of bound for ID=2: value=2, bound=[0, 1]
         
         """
         out, _ = _ommx_rust.evaluate_instance(
