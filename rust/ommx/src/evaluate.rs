@@ -1,11 +1,8 @@
-use crate::{
-    v1::{
-        function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
-        EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial,
-        Quadratic, Relaxation, RemovedConstraint, SampleSet, SampledConstraint,
-        SampledDecisionVariable, SampledValues, Samples, Solution, State,
-    },
-    VariableID,
+use crate::v1::{
+    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
+    EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
+    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
+    SampledValues, Samples, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -712,8 +709,8 @@ mod tests {
     fn instance_with_state() -> BoxedStrategy<(Instance, State)> {
         Instance::arbitrary()
             .prop_flat_map(|instance| {
-                let used_ids = instance.used_decision_variable_ids();
-                let state = arbitrary_state(used_ids);
+                let bounds = instance.get_bounds().expect("Invalid Bound in Instance");
+                let state = arbitrary_state_within_bounds(&bounds, 100.0);
                 (Just(instance), state)
             })
             .boxed()
