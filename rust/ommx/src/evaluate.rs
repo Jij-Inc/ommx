@@ -743,8 +743,9 @@ mod tests {
     fn instance_with_split_state() -> BoxedStrategy<(Instance, State, (State, State))> {
         Instance::arbitrary()
             .prop_flat_map(|instance| {
-                let used_ids = instance.used_decision_variable_ids();
-                (Just(instance), arbitrary_state(used_ids)).prop_flat_map(|(instance, state)| {
+                let bounds = instance.get_bounds().expect("Invalid Bound in Instance");
+                let state = arbitrary_state_within_bounds(&bounds, 100.0);
+                (Just(instance), state).prop_flat_map(|(instance, state)| {
                     (Just(instance), Just(state.clone()), split_state(state))
                 })
             })
