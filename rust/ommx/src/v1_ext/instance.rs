@@ -28,14 +28,14 @@ impl Instance {
         let mut bounds = Bounds::new();
         for v in &self.decision_variables {
             let id = VariableID::from(v.id);
-            if v.kind() == Kind::Binary {
-                bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
-            } else if let Some(bound) = &v.bound {
-                let bound = bound.clone().try_into()?;
-                if bound == Bound::default() {
-                    continue;
+            if let Some(bound) = &v.bound {
+                bounds.insert(id, bound.clone().try_into()?);
+            } else {
+                if v.kind() == Kind::Binary {
+                    bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
+                } else {
+                    bounds.insert(id, Bound::default());
                 }
-                bounds.insert(id, bound);
             }
         }
         Ok(bounds)
