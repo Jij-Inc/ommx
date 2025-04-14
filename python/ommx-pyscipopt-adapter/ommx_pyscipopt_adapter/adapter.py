@@ -59,7 +59,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         :param ommx_instance: The ommx.v1.Instance to solve.
         :param use_sos1: Strategy for handling SOS1 constraints.
-        :param initial_state: Optional initial solution state. 
+        :param initial_state: Optional initial solution state.
 
         Examples
         =========
