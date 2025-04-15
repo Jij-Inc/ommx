@@ -669,7 +669,9 @@ class Instance(InstanceBase, UserAnnotationBase):
                     ineq_id, inequality_integer_slack_max_range
                 )
             except RuntimeError:
-                self.add_integer_slack_to_inequality(ineq_id, 32)
+                self.add_integer_slack_to_inequality(
+                    ineq_id, inequality_integer_slack_max_range
+                )
 
         # Penalty method
         if self.get_constraints():
