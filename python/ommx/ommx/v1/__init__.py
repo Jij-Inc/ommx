@@ -530,16 +530,11 @@ class Instance(InstanceBase, UserAnnotationBase):
         - Incrementally solving a problem by fixing some variables and optimizing the rest
         - Testing specific configurations of a problem
         
-        Parameters
-        ----------
-        state : State or dict
-            Maps decision variable IDs to their fixed values.
-            Can be a State object or a dictionary mapping variable IDs to values.
-        
-        Returns
-        -------
-        Instance
-            A new instance with the specified decision variables fixed to their given values.
+        :param state: Maps decision variable IDs to their fixed values.
+                     Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+        :type state: :class:`~ommx.v1.ToState`
+        :return: A new instance with the specified decision variables fixed to their given values.
+        :rtype: :class:`~ommx.v1.Instance`
         
         Examples
         =========
