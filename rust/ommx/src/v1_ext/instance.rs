@@ -2,7 +2,7 @@ use crate::{
     sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Parameter, ParametricInstance, RemovedConstraint,
+        Linear, Parameter, ParametricInstance, RemovedConstraint, State,
     },
     Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID,
 };
@@ -28,17 +28,28 @@ impl Instance {
         let mut bounds = Bounds::new();
         for v in &self.decision_variables {
             let id = VariableID::from(v.id);
-            if v.kind() == Kind::Binary {
+            if let Some(bound) = &v.bound {
+                bounds.insert(id, bound.clone().try_into()?);
+            } else if v.kind() == Kind::Binary {
                 bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
-            } else if let Some(bound) = &v.bound {
-                let bound = bound.clone().try_into()?;
-                if bound == Bound::default() {
-                    continue;
-                }
-                bounds.insert(id, bound);
+            } else {
+                bounds.insert(id, Bound::default());
             }
         }
         Ok(bounds)
+    }
+
+    pub fn check_bound(&self, state: &State, atol: f64) -> Result<()> {
+        let bounds = self.get_bounds()?;
+        for (id, value) in state.entries.iter() {
+            let id = VariableID::from(*id);
+            if let Some(bound) = bounds.get(&id) {
+                if !bound.contains(*value, atol) {
+                    bail!("Decision variable value out of bound: ID={id}, value={value}, bound={bound}",);
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn get_kinds(&self) -> HashMap<VariableID, Kind> {

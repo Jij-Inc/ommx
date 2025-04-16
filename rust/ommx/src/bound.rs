@@ -68,6 +68,12 @@ pub struct Bound {
     upper: f64,
 }
 
+impl std::fmt::Display for Bound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]", self.lower, self.upper)
+    }
+}
+
 impl Default for Bound {
     fn default() -> Self {
         Self {
@@ -90,6 +96,19 @@ impl TryFrom<v1::Bound> for Bound {
     type Error = BoundError;
     fn try_from(value: v1::Bound) -> Result<Self, Self::Error> {
         Self::new(value.lower, value.upper)
+    }
+}
+
+impl TryFrom<&v1::DecisionVariable> for Bound {
+    type Error = BoundError;
+    fn try_from(v: &v1::DecisionVariable) -> Result<Self, Self::Error> {
+        if let Some(bound) = &v.bound {
+            Self::try_from(bound.clone())
+        } else if v.kind() == v1::decision_variable::Kind::Binary {
+            Self::new(0.0, 1.0)
+        } else {
+            Ok(Self::default())
+        }
     }
 }
 
@@ -329,6 +348,16 @@ impl Bound {
 
     pub fn as_range(&self) -> RangeInclusive<f64> {
         self.lower..=self.upper
+    }
+
+    pub fn nearest_to_zero(&self) -> f64 {
+        if self.lower >= 0.0 {
+            self.lower
+        } else if self.upper <= 0.0 {
+            self.upper
+        } else {
+            0.0
+        }
     }
 
     /// Arbitrary *finite* value within the bound
