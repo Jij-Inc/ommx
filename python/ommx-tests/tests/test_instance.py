@@ -202,3 +202,48 @@ def test_to_qubo_invalid_penalty_option():
         str(e.value)
         == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
     )
+
+
+def test_evaluate_irrelevant_binary_variable():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[1] == 1).set_id(0)],
+        sense=Instance.MINIMIZE,
+    )
+    solution = instance.evaluate({0: 1, 1: 0})
+    assert solution.extract_decision_variables("x") == {
+        (0,): 1.0,
+        (1,): 0.0,
+        (2,): 0.0,  # Irrelevant variable
+    }
+
+
+def test_evaluate_irrelevant_integer_variables():
+    x = [
+        DecisionVariable.integer(0, lower=-3, upper=3, name="x", subscripts=[0]),
+        DecisionVariable.integer(1, lower=-3, upper=3, name="x", subscripts=[1]),
+        DecisionVariable.integer(
+            2, lower=2, upper=5, name="x", subscripts=[2]
+        ),  # 0 is not allowed
+        DecisionVariable.integer(
+            3, lower=-5, upper=-2, name="x", subscripts=[3]
+        ),  # 0 is not allowed
+        DecisionVariable.integer(4, name="x", subscripts=[4]),  # (-inf, inf)
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[1] == 1).set_id(0)],
+        sense=Instance.MINIMIZE,
+    )
+    solution = instance.evaluate({0: 1, 1: 0})
+    assert solution.extract_decision_variables("x") == {
+        (0,): 1.0,
+        (1,): 0.0,
+        # Irrelevant variables
+        (2,): 2.0,
+        (3,): -2.0,
+        (4,): 0.0,
+    }
