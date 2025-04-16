@@ -463,6 +463,54 @@ class Instance(InstanceBase, UserAnnotationBase):
         Traceback (most recent call last):
             ...
         RuntimeError: Decision variable value out of bound: ID=2, value=2, bound=[0, 1]
+
+        If some of the decision variables are not set, this raises an error:
+
+        >>> instance.evaluate({0: 1, 1: 0})
+        Traceback (most recent call last):
+            ...
+        RuntimeError: Variable id (2) is not found in the solution
+
+        Irrelevant decision variables
+        -----------------------------
+
+        Sometimes, the instance contains decision variables that are not used in the objective or constraints.
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0],
+        ...     constraints=[(x[0] + x[1] == 1).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        This instance does not contain the decision variable :math:`x_2` in the objective or constraints.
+        We call such variables "irrelevant". This is mathematically meaningless,
+        but sometimes useful in data science application.
+        Since the irrelevant variables cannot be determined from the instance, solvers will ignores them,
+        and do not return the values of them. This function works as well for such cases:
+
+        >>> solution = instance.evaluate({0: 1, 1: 0})
+        >>> solution.objective
+        1.0
+        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+           equality  value used_ids subscripts
+        id                                    
+        0        =0    0.0   {0, 1}         []
+
+        The irrelevant decision variable :math:`x_2` is also stored in the :class:`Solution` with the value
+        nearest to ``0`` within its bound. For example,
+
+        * When the bound is :math:`[-1, 1]` or :math:`(-\infty, \infty)`, the value is ``0``
+        * When the bound is :math:`[2, 5]`, the value is ``2``
+        * When the bound is :math:`[-3, -1]`, the value is ``-1``
+
+        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper subscripts  value
+        id                                        
+        0   binary    0.0    1.0         []    1.0
+        1   binary    0.0    1.0         []    0.0
+        2   binary    0.0    1.0         []    0.0
         
         """
         out, _ = _ommx_rust.evaluate_instance(
