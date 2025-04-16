@@ -487,8 +487,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         This instance does not contain the decision variable :math:`x_2` in the objective or constraints.
         We call such variables "irrelevant". This is mathematically meaningless,
         but sometimes useful in data science application.
-        Since the irrelevant variables cannot be determined from the instance, solvers will ignores them,
-        and do not return the values of them. This function works as well for such cases:
+        Since the irrelevant variables cannot be determined from the instance, solvers will ignore them,
+        and do not return their values. This function works as well for such cases:
 
         >>> solution = instance.evaluate({0: 1, 1: 0})
         >>> solution.objective
