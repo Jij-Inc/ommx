@@ -5,7 +5,7 @@ use crate::v1::{
     SampledValues, Samples, Solution, State,
 };
 use anyhow::{bail, ensure, Context, Result};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap};
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -392,6 +392,12 @@ impl Evaluate for Instance {
             }
         }
         eval_dependencies(&self.decision_variable_dependency, &mut state)?;
+        for v in &self.decision_variables {
+            if let HashMapEntry::Vacant(e) = state.entries.entry(v.id) {
+                let bound: crate::Bound = v.try_into()?;
+                e.insert(bound.nearest_to_zero());
+            }
+        }
         Ok((
             Solution {
                 decision_variables: self.decision_variables.clone(),
