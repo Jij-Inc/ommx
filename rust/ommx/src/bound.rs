@@ -104,12 +104,10 @@ impl TryFrom<&v1::DecisionVariable> for Bound {
     fn try_from(v: &v1::DecisionVariable) -> Result<Self, Self::Error> {
         if let Some(bound) = &v.bound {
             Self::try_from(bound.clone())
+        } else if v.kind() == v1::decision_variable::Kind::Binary {
+            Self::new(0.0, 1.0)
         } else {
-            if v.kind() == v1::decision_variable::Kind::Binary {
-                Self::new(0.0, 1.0)
-            } else {
-                Ok(Self::default())
-            }
+            Ok(Self::default())
         }
     }
 }
