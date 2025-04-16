@@ -30,12 +30,10 @@ impl Instance {
             let id = VariableID::from(v.id);
             if let Some(bound) = &v.bound {
                 bounds.insert(id, bound.clone().try_into()?);
+            } else if v.kind() == Kind::Binary {
+                bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
             } else {
-                if v.kind() == Kind::Binary {
-                    bounds.insert(id, Bound::new(0.0, 1.0).unwrap());
-                } else {
-                    bounds.insert(id, Bound::default());
-                }
+                bounds.insert(id, Bound::default());
             }
         }
         Ok(bounds)
