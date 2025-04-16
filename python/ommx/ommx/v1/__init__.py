@@ -552,7 +552,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             ... )
             >>> new_instance = instance.partial_evaluate({1: 1})
             >>> new_instance.objective
-            Function(1 + x2)
+            Function(x2 + 1)
         """
         out, _ = _ommx_rust.partial_evaluate_instance(
             self.to_bytes(), to_state(state).SerializeToString()
