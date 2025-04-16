@@ -519,6 +519,41 @@ class Instance(InstanceBase, UserAnnotationBase):
         return Solution.from_bytes(out)
 
     def partial_evaluate(self, state: ToState) -> Instance:
+        """
+        Creates a new instance with specific decision variables fixed to given values.
+
+        This method substitutes the specified decision variables with their provided values,
+        creating a new problem instance where these variables are fixed. This is useful for
+        scenarios such as:
+
+        - Creating simplified sub-problems with some variables fixed
+        - Incrementally solving a problem by fixing some variables and optimizing the rest
+        - Testing specific configurations of a problem
+
+        :param state: Maps decision variable IDs to their fixed values.
+                     Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+        :type state: :class:`~ommx.v1.ToState`
+        :return: A new instance with the specified decision variables fixed to their given values.
+        :rtype: :class:`~ommx.v1.Instance`
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = DecisionVariable.binary(1)
+            >>> y = DecisionVariable.binary(2)
+            >>> instance = Instance.from_components(
+            ...     decision_variables=[x, y],
+            ...     objective=x + y,
+            ...     constraints=[x + y <= 1],
+            ...     sense=Instance.MINIMIZE
+            ... )
+            >>> new_instance = instance.partial_evaluate({1: 1})
+            >>> new_instance.objective
+            Function(x2 + 1)
+        """
         out, _ = _ommx_rust.partial_evaluate_instance(
             self.to_bytes(), to_state(state).SerializeToString()
         )
