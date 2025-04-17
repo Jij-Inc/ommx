@@ -599,7 +599,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         *,
         uniform_penalty_weight: Optional[float] = None,
         penalty_weights: dict[int, float] = {},
-        inequality_integer_slack_max_range: int = 32,
+        inequality_integer_slack_max_range: int = 31,
     ) -> tuple[dict[tuple[int, int], float], float]:
         r"""
         Convert the instance to a QUBO format
