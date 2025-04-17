@@ -38,5 +38,34 @@ fn sum_linear_small_many(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, sum_linear_small_many);
+fn sum_linear_large_little(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("sum-linear-large-little");
+    group.plot_config(plot_config.clone());
+    for num_terms in [10, 100, 1000, 10_000, 100_000] {
+        let functions = (0..3)
+            .map(|_| -> Linear {
+                random_deterministic(FunctionParameters {
+                    num_terms,
+                    max_degree: 1,
+                    max_id: 3 * num_terms as u64,
+                })
+            })
+            .collect::<Vec<_>>();
+        group.bench_with_input(
+            BenchmarkId::new("sum-linear-large-little", num_terms.to_string()),
+            &functions,
+            |b, linears| {
+                b.iter(|| {
+                    linears
+                        .iter()
+                        .fold(Linear::zero(), |acc, lin| acc + lin.clone())
+                })
+            },
+        );
+    }
+    group.finish();
+}
+
+criterion_group!(benches, sum_linear_small_many, sum_linear_large_little);
 criterion_main!(benches);
