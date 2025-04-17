@@ -187,6 +187,31 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
     group.finish();
 }
 
+/// Benchmark for summation of linear + quadratic functions with varying terms
+fn add_linear_quadratic(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("add-linear-quadratic");
+    group.plot_config(plot_config.clone());
+    for num_terms in [10, 100, 1000, 10_000] {
+        let lin: Linear = random_deterministic(FunctionParameters {
+            num_terms,
+            max_degree: 1,
+            max_id: (3 * num_terms) as u64,
+        });
+        let quad: Quadratic = random_deterministic(FunctionParameters {
+            num_terms,
+            max_degree: 2,
+            max_id: (3 * num_terms) as u64,
+        });
+        group.bench_with_input(
+            BenchmarkId::new("add-linear-quadratic", num_terms.to_string()),
+            &(lin, quad),
+            |b, (lin, quad)| b.iter(|| lin.clone() + quad.clone()),
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     sum_linear_small_many,
@@ -194,6 +219,7 @@ criterion_group!(
     sum_quadratic_small_many,
     sum_quadratic_large_little,
     sum_polynomial_small_many,
-    sum_polynomial_large_little
+    sum_polynomial_large_little,
+    add_linear_quadratic
 );
 criterion_main!(benches);
