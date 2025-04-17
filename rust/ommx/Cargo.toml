@@ -51,3 +51,7 @@ built.workspace = true
 [[bench]]
 name = "evaluate"
 harness = false
+
+[[bench]]
+name = "sum"
+harness = false

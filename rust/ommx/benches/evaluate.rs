@@ -46,5 +46,5 @@ fn evaluate(c: &mut Criterion) {
     eval_quadratic.finish();
 }
 
-criterion_group!(eval_benches, evaluate);
-criterion_main!(eval_benches);
+criterion_group!(benches, evaluate);
+criterion_main!(benches);
