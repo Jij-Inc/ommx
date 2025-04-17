@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "ommx"
 
-version = "1.9.3"
+version = "1.9.4"
 description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
