@@ -53,6 +53,10 @@ name = "evaluate"
 harness = false
 
 [[bench]]
+name = "partial_evaluate"
+harness = false
+
+[[bench]]
 name = "sum"
 harness = false
 
