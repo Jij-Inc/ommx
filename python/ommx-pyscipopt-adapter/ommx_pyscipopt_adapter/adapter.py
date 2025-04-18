@@ -26,6 +26,14 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
         initial_state: Optional[ToState] = None,
     ):
+        """
+        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param use_sos1: Strategy for handling SOS1 constraints.Options:
+            - "disabled": Do not use SOS1 constraints.
+            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
+            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
+        :param initial_state: Optional initial solution state.
+        """
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
