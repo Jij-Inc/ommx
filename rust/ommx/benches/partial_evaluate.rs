@@ -9,9 +9,12 @@ use ommx::{
     Evaluate,
 };
 
-fn partial_evaluate_linear_all(c: &mut Criterion) {
+fn bench_partial_linear<F>(c: &mut Criterion, group_name: &str, select_ids: F)
+where
+    F: Fn(&Linear) -> std::collections::BTreeSet<u64> + Copy,
+{
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("partial-evaluate-linear-all");
+    let mut group = c.benchmark_group(group_name);
     group.plot_config(plot_config.clone());
     for num_terms in [10usize, 100, 1_000, 10_000] {
         let lin: Linear = random_deterministic(FunctionParameters {
@@ -19,11 +22,11 @@ fn partial_evaluate_linear_all(c: &mut Criterion) {
             max_degree: 1,
             max_id: 10 * num_terms as u64,
         });
-        let ids = lin.used_decision_variable_ids();
+        let ids = select_ids(&lin);
         let state = sample_deterministic(arbitrary_state(ids));
         group.bench_with_input(
-            BenchmarkId::new("partial-evaluate-linear-all", num_terms.to_string()),
-            &(lin, state),
+            BenchmarkId::new(group_name, num_terms.to_string()),
+            &(lin.clone(), state),
             |b, (lin, state)| {
                 b.iter(|| {
                     let mut f = lin.clone();
@@ -35,62 +38,30 @@ fn partial_evaluate_linear_all(c: &mut Criterion) {
     group.finish();
 }
 
+/// Substitute all decision variables in a linear function
+fn partial_evaluate_linear_all(c: &mut Criterion) {
+    bench_partial_linear(c, "partial-evaluate-linear-all", |lin| {
+        lin.used_decision_variable_ids()
+    });
+}
+
+/// Substitute half of the decision variables in a linear function
 fn partial_evaluate_linear_half(c: &mut Criterion) {
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("partial-evaluate-linear-half");
-    group.plot_config(plot_config.clone());
-    for num_terms in [10usize, 100, 1_000, 10_000] {
-        let lin: Linear = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 1,
-            max_id: 10 * num_terms as u64,
-        });
+    bench_partial_linear(c, "partial-evaluate-linear-half", |lin| {
         let ids: Vec<_> = lin.used_decision_variable_ids().into_iter().collect();
-        let half_count = ids.len() / 2;
-        let half_ids: std::collections::BTreeSet<_> = ids.into_iter().take(half_count).collect();
-        let state = sample_deterministic(arbitrary_state(half_ids));
-        group.bench_with_input(
-            BenchmarkId::new("partial-evaluate-linear-half", num_terms.to_string()),
-            &(lin, state),
-            |b, (lin, state)| {
-                b.iter(|| {
-                    let mut f = lin.clone();
-                    f.partial_evaluate(&state).unwrap();
-                })
-            },
-        );
-    }
-    group.finish();
+        let n = ids.len() / 2;
+        ids.into_iter().take(n).collect()
+    });
 }
 
+/// Substitute one decision variable in a linear function
 fn partial_evaluate_linear_one(c: &mut Criterion) {
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("partial-evaluate-linear-one");
-    group.plot_config(plot_config.clone());
-    for num_terms in [10usize, 100, 1_000, 10_000] {
-        let lin: Linear = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 1,
-            max_id: 10 * num_terms as u64,
-        });
-        let one_ids: std::collections::BTreeSet<_> = lin
-            .used_decision_variable_ids()
+    bench_partial_linear(c, "partial-evaluate-linear-one", |lin| {
+        lin.used_decision_variable_ids()
             .into_iter()
             .take(1)
-            .collect();
-        let state = sample_deterministic(arbitrary_state(one_ids));
-        group.bench_with_input(
-            BenchmarkId::new("partial-evaluate-linear-one", num_terms.to_string()),
-            &(lin, state),
-            |b, (lin, state)| {
-                b.iter(|| {
-                    let mut f = lin.clone();
-                    f.partial_evaluate(&state).unwrap();
-                })
-            },
-        );
-    }
-    group.finish();
+            .collect()
+    });
 }
 
 criterion_group!(
