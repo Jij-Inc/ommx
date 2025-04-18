@@ -1,9 +1,11 @@
+# Since most of PR does not affect benchmark, we do not run benchmarks on PR by default.
+# Run manually if needed via `task codspeed:trigger`
+
 name: Benchmark
 
 on:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -11,34 +13,15 @@ jobs:
     name: CodSpeed Benchmark
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Environment
-      uses: ./.github/actions/setup-test-environment
-    - name: Install cargo-codspeed
-      run: cargo install cargo-codspeed --locked
-    - name: Build CodSpeed Benchmark Target(s)
-      run: cargo codspeed build
-    - name: Run the benchmarks
-      uses: CodSpeedHQ/action@v3
-      with:
-        run: cargo codspeed run
-        token: ${{ secrets.CODSPEED_TOKEN }}
-
-  report:
-    name: Take Benchmark Report in GitHub Runners
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - name: Setup Environment
-      uses: ./.github/actions/setup-test-environment
-    - name: Run Benchmarks
-      run: cargo bench
-    - name: Collects Benchmark Results
-      run: |
-        find target/criterion -type d -name report | cut -d/ -f2- >reports.txt
-        tar caf criterion.tar.gz --directory target -T reports.txt
-    - name: Upload Benchmark Results
-      uses: actions/upload-artifact@v4
-      with:
-        name: criterion
-        path: criterion.tar.gz
+      - uses: actions/checkout@v4
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+      - name: Install cargo-codspeed
+        run: cargo install cargo-codspeed --locked
+      - name: Build CodSpeed Benchmark Target(s)
+        run: cargo codspeed build
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@v3
+        with:
+          run: cargo codspeed run
+          token: ${{ secrets.CODSPEED_TOKEN }}
