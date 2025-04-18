@@ -1,11 +1,11 @@
 from __future__ import annotations
-from typing import Literal
+from typing import Literal, Optional
 
 import pyscipopt
 import math
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Solution, DecisionVariable, Constraint
+from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, ToState, to_state
 from ommx.v1.function_pb2 import Function
 from ommx.v1.solution_pb2 import State, Optimality
 from ommx.v1.constraint_hints_pb2 import ConstraintHints
@@ -24,7 +24,16 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
+        initial_state: Optional[ToState] = None,
     ):
+        """
+        :param ommx_instance: The ommx.v1.Instance to solve.
+        :param use_sos1: Strategy for handling SOS1 constraints.Options:
+            - "disabled": Do not use SOS1 constraints.
+            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
+            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
+        :param initial_state: Optional initial solution state.
+        """
         self.instance = ommx_instance
         self.use_sos1 = use_sos1
         self.model = pyscipopt.Model()
@@ -34,17 +43,27 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self._set_objective()
         self._set_constraints()
 
+        # Add initial solution if provided
+        if initial_state is not None:
+            self._add_initial_state(initial_state)
+
     @classmethod
     def solve(
         cls,
         ommx_instance: Instance,
         *,
         use_sos1: Literal["disabled", "auto", "forced"] = "auto",
+        initial_state: Optional[ToState] = None,
     ) -> Solution:
         """
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
 
         :param ommx_instance: The ommx.v1.Instance to solve.
+        :param use_sos1: Strategy for handling SOS1 constraints.Options:
+            - "disabled": Do not use SOS1 constraints.
+            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
+            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
+        :param initial_state: Optional initial solution state.
 
         Examples
         =========
@@ -127,7 +146,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = cls(ommx_instance, use_sos1=use_sos1)
+        adapter = cls(ommx_instance, use_sos1=use_sos1, initial_state=initial_state)
         model = adapter.solver_input
         model.optimize()
         return adapter.decode(model)
@@ -417,3 +436,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         constant = quad.linear.constant
 
         return quad_terms + linear_terms + constant
+
+    def _add_initial_state(self, initial_state: ToState) -> None:
+        initial_sol = self.model.createSol()
+        for var_id, value in to_state(initial_state).entries.items():
+            var_name = str(var_id)
+            if var_name in self.varname_map:
+                self.model.setSolVal(initial_sol, self.varname_map[var_name], value)
+        # The free=True parameter means that solution will be freed afterwards.
+        self.model.addSol(initial_sol, free=True)
