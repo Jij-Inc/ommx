@@ -28,10 +28,13 @@ where
             BenchmarkId::new(group_name, num_terms.to_string()),
             &(lin.clone(), state),
             |b, (lin, state)| {
-                b.iter(|| {
-                    let mut f = lin.clone();
-                    f.partial_evaluate(&state).unwrap();
-                })
+                b.iter_batched_ref(
+                    || lin.clone(),
+                    |f| {
+                        f.partial_evaluate(&state).unwrap();
+                    },
+                    criterion::BatchSize::SmallInput,
+                )
             },
         );
     }
