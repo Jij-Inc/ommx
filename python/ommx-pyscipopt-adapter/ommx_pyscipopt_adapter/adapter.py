@@ -51,7 +51,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         Solve the given ommx.v1.Instance using PySCIPopt, returning an ommx.v1.Solution.
 
         :param ommx_instance: The ommx.v1.Instance to solve.
-        :param use_sos1: Strategy for handling SOS1 constraints.
+        :param use_sos1: Strategy for handling SOS1 constraints.Options:
+            - "disabled": Do not use SOS1 constraints.
+            - "auto": Use SOS1 constraints if hints are provided, otherwise solve without them.(default)
+            - "forced": Require SOS1 constraints and raise an error if no SOS1 constraint hints are found.
         :param initial_state: Optional initial solution state.
 
         Examples
