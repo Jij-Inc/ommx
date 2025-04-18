@@ -37,14 +37,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         # Add initial solution if provided
         if initial_state is not None:
-            initial_sol = self.model.createSol()
-            varname_map = {var.name: var for var in self.model.getVars()}
-            for var_id, value in to_state(initial_state).entries.items():
-                var_name = str(var_id)
-                if var_name in varname_map:
-                    self.model.setSolVal(initial_sol, varname_map[var_name], value)
-            # The free=True parameter means that solution will be freed afterwards.
-            self.model.addSol(initial_sol, free=True)
+            self._add_initial_state(initial_state)
 
     @classmethod
     def solve(
@@ -432,3 +425,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         constant = quad.linear.constant
 
         return quad_terms + linear_terms + constant
+
+    def _add_initial_state(self, initial_state: ToState) -> None:
+        initial_sol = self.model.createSol()
+        varname_map = {var.name: var for var in self.model.getVars()}
+        for var_id, value in to_state(initial_state).entries.items():
+            var_name = str(var_id)
+            if var_name in varname_map:
+                self.model.setSolVal(initial_sol, varname_map[var_name], value)
+        # The free=True parameter means that solution will be freed afterwards.
+        self.model.addSol(initial_sol, free=True)
