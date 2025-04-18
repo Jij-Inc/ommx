@@ -13,7 +13,7 @@ fn sum_linear_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-linear-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [10, 100, 1000, 10_000, 100_000] {
+    for num_functions in [10, 100, 1000, 10_000] {
         let functions = (0..num_functions)
             .map(|_| -> Linear {
                 random_deterministic(FunctionParameters {
@@ -42,7 +42,7 @@ fn sum_linear_large_little(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-linear-large-little");
     group.plot_config(plot_config.clone());
-    for num_terms in [10, 100, 1000, 10_000, 100_000] {
+    for num_terms in [10, 100, 1000, 10_000] {
         let functions = (0..3)
             .map(|_| -> Linear {
                 random_deterministic(FunctionParameters {
@@ -72,7 +72,7 @@ fn sum_quadratic_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-quadratic-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [10, 100, 1000, 10_000, 100_000] {
+    for num_functions in [10, 100, 1000, 10_000] {
         let functions = (0..num_functions)
             .map(|_| -> Quadratic {
                 random_deterministic(FunctionParameters {
@@ -132,7 +132,7 @@ fn sum_polynomial_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-polynomial-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [10, 100, 1000, 10_000, 100_000] {
+    for num_functions in [10, 100, 1000, 10_000] {
         let functions = (0..num_functions)
             .map(|_| -> Polynomial {
                 random_deterministic(FunctionParameters {
@@ -216,7 +216,7 @@ fn add_small_many_linear_to_quadratic(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("add-small-many-linear-to-quadratic");
     group.plot_config(plot_config.clone());
-    for num_lin in [10, 100, 1000, 10_000, 100_000] {
+    for num_lin in [10, 100, 1000, 10_000] {
         let lins = (0..num_lin)
             .map(|_| -> Linear {
                 random_deterministic(FunctionParameters {
@@ -246,7 +246,7 @@ fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("add-small-many-linear-to-polynomial");
     group.plot_config(plot_config.clone());
-    for num_lin in [10, 100, 1000, 10_000, 100_000] {
+    for num_lin in [10, 100, 1000, 10_000] {
         let lins = (0..num_lin)
             .map(|_| -> Linear {
                 random_deterministic(FunctionParameters {
