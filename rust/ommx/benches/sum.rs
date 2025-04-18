@@ -188,7 +188,7 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
 }
 
 /// Benchmark for summation of linear + quadratic functions with varying terms
-fn add_linear_quadratic(c: &mut Criterion) {
+fn add_linear_quadratic_large(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("add-linear-quadratic");
     group.plot_config(plot_config.clone());
@@ -212,6 +212,66 @@ fn add_linear_quadratic(c: &mut Criterion) {
     group.finish();
 }
 
+fn add_small_many_linear_to_quadratic(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("add-small-many-linear-to-quadratic");
+    group.plot_config(plot_config.clone());
+    for num_lin in [10, 100, 1000, 10_000, 100_000] {
+        let lins = (0..num_lin)
+            .map(|_| -> Linear {
+                random_deterministic(FunctionParameters {
+                    num_terms: 3,
+                    max_degree: 1,
+                    max_id: 3 * num_lin as u64,
+                })
+            })
+            .collect::<Vec<_>>();
+        let quad: Quadratic = random_deterministic(FunctionParameters {
+            num_terms: 3,
+            max_degree: 2,
+            max_id: (3 * num_lin) as u64,
+        });
+        group.bench_with_input(
+            BenchmarkId::new("add-small-many-linear-to-quadratic", num_lin.to_string()),
+            &(lins, quad),
+            |b, (lins, quad)| {
+                b.iter(|| lins.iter().fold(quad.clone(), |acc, lin| acc + lin.clone()))
+            },
+        );
+    }
+    group.finish();
+}
+
+fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
+    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
+    let mut group = c.benchmark_group("add-small-many-linear-to-polynomial");
+    group.plot_config(plot_config.clone());
+    for num_lin in [10, 100, 1000, 10_000, 100_000] {
+        let lins = (0..num_lin)
+            .map(|_| -> Linear {
+                random_deterministic(FunctionParameters {
+                    num_terms: 3,
+                    max_degree: 1,
+                    max_id: 3 * num_lin as u64,
+                })
+            })
+            .collect::<Vec<_>>();
+        let poly: Polynomial = random_deterministic(FunctionParameters {
+            num_terms: 3,
+            max_degree: 3,
+            max_id: (3 * num_lin) as u64,
+        });
+        group.bench_with_input(
+            BenchmarkId::new("add-small-many-linear-to-polynomial", num_lin.to_string()),
+            &(lins, poly),
+            |b, (lins, poly)| {
+                b.iter(|| lins.iter().fold(poly.clone(), |acc, lin| acc + lin.clone()))
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     sum_linear_small_many,
@@ -220,6 +280,8 @@ criterion_group!(
     sum_quadratic_large_little,
     sum_polynomial_small_many,
     sum_polynomial_large_little,
-    add_linear_quadratic
+    add_linear_quadratic_large,
+    add_small_many_linear_to_quadratic,
+    add_small_many_linear_to_polynomial,
 );
 criterion_main!(benches);
