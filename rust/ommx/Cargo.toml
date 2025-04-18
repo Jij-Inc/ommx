@@ -49,5 +49,17 @@ insta.workspace = true
 built.workspace = true
 
 [[bench]]
-name = "evaluate_bench"
+name = "evaluate"
+harness = false
+
+[[bench]]
+name = "partial_evaluate"
+harness = false
+
+[[bench]]
+name = "sum"
+harness = false
+
+[[bench]]
+name = "mul"
 harness = false
