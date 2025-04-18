@@ -554,18 +554,17 @@ Here, we will use OSS adapters developed as a part of OMMX Python SDK.
 For non-OSS solvers, adapters are also available and can be used with the same interface.
 A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.ipynb).
 
-Here, let's solve the knapsack problem with OSS solvers, Highs, Python-MIP (CBC), and SCIP.
+Here, let's solve the knapsack problem with OSS solvers, Highs, SCIP.
 
 
 ```python
-from ommx_python_mip_adapter import OMMXPythonMIPAdapter
-from ommx_pyscipopt_adapter  import OMMXPySCIPOptAdapter
-from ommx_highs_adapter      import OMMXHighsAdapter
+from ommx_highs_adapter import OMMXHighsAdapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
 
 # List of adapters to use
 adapters = {
     "highs": OMMXHighsAdapter,
-    "cbc": OMMXPythonMIPAdapter,
     "scip": OMMXPySCIPOptAdapter,
 }
 
@@ -585,7 +584,6 @@ from matplotlib import pyplot as plt
 
 marks = {
     "highs": "o",
-    "cbc": "x",
     "scip": "+",
 }
 
@@ -2242,7 +2240,7 @@ Here is an example of the new Adapter interface to simply solve an OMMX instance
 
 ```python
 from ommx.v1 import Instance, DecisionVariable
-from ommx_python_mip_adapter import OMMXPythonMIPAdapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 p = [10, 13, 18, 32, 7, 15]
 w = [11, 15, 20, 35, 10, 33]
@@ -2254,18 +2252,18 @@ instance = Instance.from_components(
     sense=Instance.MAXIMIZE,
 )
 
-solution = OMMXPythonMIPAdapter.solve(instance)
+solution = OMMXPySCIPOptAdapter.solve(instance)
 solution.objective
 ```
 
-With the new update, the process looks the same as the above when using the `OMMXPySCIPOptAdapter` class instead.
+With the new update, the process looks the same as the above when using the `OMMXPythonMIPAdapter` class instead.
 
 To replace the usage of `instance_to_model()` functions, you can instantiating an adapter and using `solver_input`. You can then apply any solver-specific parameters before optimizing manually, then calling `decode()` to obtain the OMMX solution.
 
 
 ```python
-adapter = OMMXPythonMIPAdapter(instance)
-model = adapter.solver_input # in OMMXPythonMIPAdapter's case, this is a `mip.Model` object
+adapter = OMMXPySCIPOptAdapter(instance)
+model = adapter.solver_input # in OMMXPySCIPOptAdapter's case, this is a `pyscipopt.Model` object
 # modify model parameters here
 model.optimize() 
 solution = adapter.decode(model)
