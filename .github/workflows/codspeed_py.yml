@@ -1,0 +1,32 @@
+name: CodSpeed
+
+on:
+  push:
+    branches:
+      - "main" # or "master"
+  pull_request:
+  # `workflow_dispatch` allows CodSpeed to trigger backtest
+  # performance analysis in order to generate initial data.
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
+      - name: Build wheel
+        run: |
+          pip install python/ommx
+          pip install pytest-codspeed
+
+      - name: Run benchmarks
+        uses: CodSpeedHQ/action@v3
+        with:
+          run: pytest python/ommx-tests/ --codspeed
+          token: ${{ secrets.CODSPEED_TOKEN }}
