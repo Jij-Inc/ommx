@@ -28,3 +28,8 @@ dependencies = ["ommx", "pluggy"]
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
+
+[dependency-groups]
+dev = [
+    "pytest-codspeed>=3.2.0",
+]
