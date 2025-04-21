@@ -21,7 +21,7 @@ fn bench_partial_evaluate<T>(
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group(group_name);
     group.plot_config(plot_config.clone());
-    for num_terms in [10usize, 100, 1_000, 10_000, 100_000] {
+    for num_terms in [100, 1_000, 10_000] {
         let lin: T = random_deterministic(FunctionParameters {
             num_terms,
             max_degree,
