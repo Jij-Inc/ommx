@@ -20,6 +20,9 @@ pub trait Evaluate {
 
     /// Evaluate for each sample
     fn evaluate_samples(&self, samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)>;
+
+    /// Decision variable IDs required for evaluation
+    fn required_ids(&self) -> BTreeSet<u64>;
 }
 
 impl Evaluate for Function {
@@ -55,6 +58,10 @@ impl Evaluate for Function {
             Ok(value)
         })?;
         Ok((out, ids))
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 
@@ -100,6 +107,10 @@ impl Evaluate for Linear {
             Ok(value)
         })?;
         Ok((out, ids))
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 
@@ -190,6 +201,10 @@ impl Evaluate for Quadratic {
         })?;
         Ok((out, ids))
     }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
+    }
 }
 
 impl Evaluate for Polynomial {
@@ -251,6 +266,10 @@ impl Evaluate for Polynomial {
             Ok(value)
         })?;
         Ok((out, ids))
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 
@@ -318,6 +337,12 @@ impl Evaluate for Constraint {
             used_ids,
         ))
     }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.function
+            .as_ref()
+            .map_or(BTreeSet::new(), |f| f.used_decision_variable_ids())
+    }
 }
 
 impl Evaluate for RemovedConstraint {
@@ -351,6 +376,12 @@ impl Evaluate for RemovedConstraint {
         evaluated.removed_reason = Some(self.removed_reason.clone());
         evaluated.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok((evaluated, used_ids))
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.constraint
+            .as_ref()
+            .map_or(BTreeSet::new(), |c| c.required_ids())
     }
 }
 
@@ -503,6 +534,10 @@ impl Evaluate for Instance {
             },
             used_ids,
         ))
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 

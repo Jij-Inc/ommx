@@ -27,3 +27,13 @@ tasks:
     cmds:
       - uv pip compile pyproject.toml -o ../requirements.txt
     dir: docs/
+
+  codspeed:trigger:
+    desc: Trigger GitHub Actions workflow for Codspeed on current branch
+    cmds:
+      - gh workflow run bench.yml --ref $(git branch --show-current)
+
+  codspeed:list:
+    desc: List all Codspeed workflows
+    cmds:
+      - gh run list --workflow=bench.yml
