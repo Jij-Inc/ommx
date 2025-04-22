@@ -248,6 +248,7 @@ def test_integration_feasible_constant_constraint():
     assert actual_entries[1] == pytest.approx(3)
     assert actual_entries[2] == pytest.approx(3)
 
+
 def test_integration_timelimit():
     # Objective function: x1 + x2
     # x1, x2: binary
@@ -256,8 +257,7 @@ def test_integration_timelimit():
     instance = Instance.from_components(
         decision_variables=[x1, x2],
         objective=-x1 + x2,
-        constraints=[
-        ],
+        constraints=[],
         sense=Instance.MAXIMIZE,
     )
 
@@ -268,6 +268,6 @@ def test_integration_timelimit():
     model.optimize()
 
     with pytest.raises(
-            InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
-        ):
-            adapter.decode(model)
+        InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
+    ):
+        adapter.decode(model)
