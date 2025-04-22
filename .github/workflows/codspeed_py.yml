@@ -24,8 +24,8 @@ jobs:
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
         run: |
-          pip install python/ommx
-          pip install pytest-codspeed
+          pip install -ve python/ommx
+          pip install -v pytest-codspeed
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
