@@ -31,12 +31,6 @@
 //! See [proptest book](https://proptest-rs.github.io/proptest/intro.html) for the details.
 //!
 
-use proptest::{
-    prelude::*,
-    strategy::{Strategy, ValueTree},
-    test_runner::TestRunner,
-};
-
 mod constraint;
 mod decision_variable;
 mod function;
@@ -55,11 +49,17 @@ pub use instance::*;
 pub use parameter::*;
 pub use state::*;
 
+pub use proptest::test_runner::TestRunner as Rng;
+
 use crate::{decision_variable::VariableID, sorted_ids::SortedIds, v1::State, Bound, Bounds};
+use proptest::{
+    prelude::*,
+    strategy::{Strategy, ValueTree},
+};
 use std::{collections::HashMap, ops::Deref};
 
 /// Get random object based on [`Arbitrary`] trait with its [`Arbitrary::Parameters`].
-pub fn random<T: Arbitrary>(rng: proptest::test_runner::TestRng, parameters: T::Parameters) -> T {
+pub fn random<T: Arbitrary>(rng: &mut Rng, parameters: T::Parameters) -> T {
     sample(rng, T::arbitrary_with(parameters))
 }
 
@@ -68,17 +68,13 @@ pub fn random_deterministic<T: Arbitrary>(parameters: T::Parameters) -> T {
     sample_deterministic(T::arbitrary_with(parameters))
 }
 
-pub fn sample<T>(rng: proptest::test_runner::TestRng, strategy: impl Strategy<Value = T>) -> T {
-    let config = proptest::test_runner::Config::default();
-    let mut runner = proptest::test_runner::TestRunner::new_with_rng(config, rng);
-    let tree = strategy
-        .new_tree(&mut runner)
-        .expect("Failed to create a new tree");
+pub fn sample<T>(rng: &mut Rng, strategy: impl Strategy<Value = T>) -> T {
+    let tree = strategy.new_tree(rng).expect("Failed to create a new tree");
     tree.current()
 }
 
 pub fn sample_deterministic<T>(strategy: impl Strategy<Value = T>) -> T {
-    let mut runner = TestRunner::deterministic();
+    let mut runner = Rng::deterministic();
     let tree = strategy
         .new_tree(&mut runner)
         .expect("Failed to create a new tree");
