@@ -16,16 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
+      - uses: actions/setup-python@v5
         with:
-          python-version: 3.12
+          python-version: "3.13"
 
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
       - name: Build wheel
         run: |
-          pip install -ve python/ommx
-          pip install -v pytest-codspeed
+          pip install python/ommx
+          pip install pytest-codspeed
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v3
