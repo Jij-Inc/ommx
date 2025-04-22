@@ -35,3 +35,6 @@ pyo3-log.workspace = true
 pyo3-stub-gen = { workspace = true, optional = true }
 serde-pyobject.workspace = true
 serde_json.workspace = true
+
+[profile.release]
+debug = true
