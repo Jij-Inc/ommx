@@ -1,8 +1,7 @@
 import pytest
-from statistics import median
-from ommx.v1 import DecisionVariable, Instance
-from copy import deepcopy
 import random
+from copy import deepcopy
+from ommx.v1 import DecisionVariable, Instance
 
 
 @pytest.fixture
