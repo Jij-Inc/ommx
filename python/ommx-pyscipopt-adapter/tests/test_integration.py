@@ -249,7 +249,7 @@ def test_integration_feasible_constant_constraint():
     assert actual_entries[2] == pytest.approx(3)
 
 
-def test_integration_timelimit():
+def test_integration_decode_to_state_timelimit():
     # Objective function: x1 + x2
     # x1, x2: binary
     x1 = DecisionVariable.binary(1)
@@ -271,3 +271,27 @@ def test_integration_timelimit():
         InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
     ):
         adapter.decode_to_state(model)
+
+
+def test_integration_decode_timelimit():
+    # Objective function: x1 + x2
+    # x1, x2: binary
+    x1 = DecisionVariable.binary(1)
+    x2 = DecisionVariable.binary(2)
+    instance = Instance.from_components(
+        decision_variables=[x1, x2],
+        objective=-x1 + x2,
+        constraints=[],
+        sense=Instance.MAXIMIZE,
+    )
+
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    # Set a very small time limit to force the solver to stop before finding the optimal solution
+    model.setParam("limits/time", 0.00001)
+    model.optimize()
+
+    with pytest.raises(
+        InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
+    ):
+        adapter.decode(model)
