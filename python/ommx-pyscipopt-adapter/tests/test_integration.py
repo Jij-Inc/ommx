@@ -270,4 +270,4 @@ def test_integration_timelimit():
     with pytest.raises(
         InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
     ):
-        adapter.decode(model)
+        adapter.decode_to_state(model)
