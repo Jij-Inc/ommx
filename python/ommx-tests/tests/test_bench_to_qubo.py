@@ -52,3 +52,18 @@ def test_to_qubo_pseudo_boolean_inequality(benchmark, pseudo_boolean_inequality)
         pseudo_boolean_inequality,
     )
     assert result is not None
+
+
+@pytest.mark.benchmark
+def test_no_fixture():
+    x = [
+        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
+        for i in range(2)
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + 2 * x[1] <= 3).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    instance.to_qubo()
