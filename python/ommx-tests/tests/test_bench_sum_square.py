@@ -1,11 +1,13 @@
 import pytest
 
+
 def sum_squares(arr):
     """Sum the squares of the numbers in an array."""
     total = 0
     for x in arr:
         total += x * x
     return total
+
 
 # Your tests can also be benchmarks
 @pytest.mark.benchmark
