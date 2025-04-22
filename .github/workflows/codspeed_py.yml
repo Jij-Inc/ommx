@@ -18,6 +18,9 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
+          # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
+          # but updates in 3.13 seems to be required for generating trace information.
+          # https://docs.python.org/3/library/sys.monitoring.html
           python-version: "3.13"
 
       # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
