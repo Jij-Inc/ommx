@@ -3,6 +3,8 @@ from typing import Literal, Optional
 
 import pyscipopt
 import math
+import warnings
+
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, ToState, to_state
@@ -207,7 +209,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if data.getStatus() == "timelimit":
             # infeasible
             if data.getNSols() == 0:
-                raise OMMXPySCIPOptAdapterError("Model was infeasible [status: timelimit]")
+                raise InfeasibleDetected("Model was infeasible [status: timelimit]")
+            else:
+                warnings.warn(f"Time limit reached with {data.getNSols()} solutions found. Solution may not be optimal.")
 
         # TODO: Add the feature to store dual variables in `solution`.
 
@@ -261,6 +265,13 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         if data.getStatus() == "unbounded":
             raise UnboundedDetected("Model was unbounded")
+        
+        if data.getStatus() == "timelimit":
+            # infeasible
+            if data.getNSols() == 0:
+                raise InfeasibleDetected("Model was infeasible [status: timelimit]")
+            else:
+                warnings.warn(f"Time limit reached with {data.getNSols()} solutions found. Solution may not be optimal.")
 
         # NOTE: It is assumed that getBestSol will return an error
         #       if there is no feasible solution.
