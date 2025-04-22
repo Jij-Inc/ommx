@@ -1,6 +1,7 @@
 import pytest
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
 from ommx.testing import SingleFeasibleLPGenerator, DataType
@@ -246,3 +247,27 @@ def test_integration_feasible_constant_constraint():
     actual_entries = state.entries
     assert actual_entries[1] == pytest.approx(3)
     assert actual_entries[2] == pytest.approx(3)
+
+def test_integration_timelimit():
+    # Objective function: x1 + x2
+    # x1, x2: binary
+    x1 = DecisionVariable.binary(1)
+    x2 = DecisionVariable.binary(2)
+    instance = Instance.from_components(
+        decision_variables=[x1, x2],
+        objective=-x1 + x2,
+        constraints=[
+        ],
+        sense=Instance.MAXIMIZE,
+    )
+
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    # Set a very small time limit to force the solver to stop before finding the optimal solution
+    model.setParam("limits/time", 0.00001)
+    model.optimize()
+
+    with pytest.raises(
+            OMMXPySCIPOptAdapterError, match="Model was infeasible \\(status: timelimit\\)"
+        ):
+            adapter.decode(model)
