@@ -268,6 +268,6 @@ def test_integration_timelimit():
     model.optimize()
 
     with pytest.raises(
-            OMMXPySCIPOptAdapterError, match="Model was infeasible \\(status: timelimit\\)"
+            OMMXPySCIPOptAdapterError, match=r"Model was infeasible \[status: timelimit\]"
         ):
             adapter.decode(model)

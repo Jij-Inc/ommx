@@ -207,7 +207,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if data.getStatus() == "timelimit":
             # infeasible
             if data.getNSols() == 0:
-                raise OMMXPySCIPOptAdapterError("Model was infeasible (status: timelimit)")
+                raise OMMXPySCIPOptAdapterError("Model was infeasible [status: timelimit]")
 
         # TODO: Add the feature to store dual variables in `solution`.
 
