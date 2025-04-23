@@ -1,6 +1,9 @@
 //! Rust-idiomatic Linear function
 
 mod convert;
+mod parse;
+
+pub use parse::*;
 
 use crate::{Coefficient, Offset, VariableID};
 use std::collections::HashMap;
