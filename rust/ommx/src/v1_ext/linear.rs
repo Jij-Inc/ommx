@@ -244,7 +244,7 @@ impl fmt::Display for Linear {
         if self.is_zero() {
             return write!(f, "0");
         }
-        super::format::format_polynomial(
+        crate::format::format_polynomial(
             f,
             self.into_iter()
                 .map(|(id, c)| (id.into_iter().collect(), c)),

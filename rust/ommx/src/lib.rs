@@ -151,7 +151,6 @@ mod format;
 mod function;
 mod infeasible_detected;
 mod instance;
-mod linear;
 mod macros;
 mod parameter;
 mod parametric_instance;
@@ -180,4 +179,5 @@ mod v1_ext {
     mod decision_variable;
     mod function;
     mod instance;
+    mod linear;
 }
