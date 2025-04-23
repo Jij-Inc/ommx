@@ -9,8 +9,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  codspeed:
-    name: CodSpeed Benchmark
+  rust:
+    name: Benchmarks for Rust SDK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,4 +24,29 @@ jobs:
         uses: CodSpeedHQ/action@v3
         with:
           run: cargo codspeed run
+          token: ${{ secrets.CODSPEED_TOKEN }}
+
+  python:
+    name: Benchmarks for Python SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
+          # but updates in 3.13 seems to be required for generating trace information.
+          # https://docs.python.org/3/library/sys.monitoring.html
+          python-version: "3.13"
+
+      # FIXME: `codspeed` command used in `CodSpeedHQ/action` cannot work with `uv run`
+      - name: Build wheel
+        run: |
+          pip install python/ommx
+          pip install pytest-codspeed
+
+      - name: Run benchmarks
+        uses: CodSpeedHQ/action@v3
+        with:
+          run: pytest python/ommx-tests/ --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
