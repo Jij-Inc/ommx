@@ -43,8 +43,7 @@ impl Parse for v1::linear::Term {
         match self.coefficient.try_into() {
             Ok(coefficient) => Ok(Some(Term { id, coefficient })),
             Err(CoefficientError::Zero) => Ok(None),
-            Err(e) => Err(RawParseError::from(e)
-                .context("ommx.v1.linear.Term", "coefficient")),
+            Err(e) => Err(RawParseError::from(e).context("ommx.v1.linear.Term", "coefficient")),
         }
     }
 }
