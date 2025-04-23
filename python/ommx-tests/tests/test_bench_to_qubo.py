@@ -46,7 +46,9 @@ def to_qubo(instance: Instance):
 
     This means that if the first run modifies the input, the subsequent runs will be affected.
     """
-    new_instance = deepcopy(instance)  # Create a new instance since `to_qubo` modifies the instance
+    new_instance = deepcopy(
+        instance
+    )  # Create a new instance since `to_qubo` modifies the instance
     new_instance.to_qubo()
 
 
