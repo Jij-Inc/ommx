@@ -65,6 +65,11 @@ tasks:
       - task: ommx-pyscipopt-adapter:test
       - task: ommx-highs-adapter:test
 
+  bench:
+    desc: Run benchmarks for OMMX Python SDK
+    cmds:
+      - task: ommx:bench
+
   set-version:
     desc: Set the version for all Python projects
     cmds:

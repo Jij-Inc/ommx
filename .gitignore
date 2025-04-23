@@ -33,3 +33,6 @@ _build/
 # Protobuf document
 proto/protobuf.html
 /wheels
+
+# CodSpeed
+.codspeed/

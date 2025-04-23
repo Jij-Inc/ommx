@@ -28,3 +28,9 @@ tasks:
     desc: Type check OMMX Python SDK
     cmds:
       - uv run pyright
+
+  bench:
+    desc: Run benchmarks for OMMX Python SDK
+    cmds:
+      - uv run pytest python/ommx-tests --codspeed
+    dir: ../.. # Doctest users ${repo_root}/data/

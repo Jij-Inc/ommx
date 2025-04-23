@@ -434,7 +434,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),
-        ...     constraints=[x[0] + x[1] <= 1],
+        ...     constraints=[(x[0] + x[1] <= 1).set_id(0)],
         ...     sense=Instance.MAXIMIZE,
         ... )
 
@@ -446,7 +446,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value used_ids subscripts
         id                                    
-        12      <=0    0.0   {0, 1}         []
+        0       <=0    0.0   {0, 1}         []
 
         The values of decision variables are also stored in the solution:
 
