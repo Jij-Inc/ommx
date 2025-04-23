@@ -182,8 +182,8 @@ class OMMXHighsAdapter(SolverAdapter):
 
         # dual variables
         solution_info = self.model.getSolution()
-        row_dual_len = len(solution_info.row_dual)
         row_dual = solution_info.row_dual
+        row_dual_len = len(row_dual)
 
         for constraint in solution.raw.evaluated_constraints:
             if constraint.id < row_dual_len:
