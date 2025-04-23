@@ -29,28 +29,44 @@ impl From<Linear> for v1::Linear {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Term {
+    id: VariableID,
+    coefficient: Coefficient,
+}
+
+impl Parse for v1::linear::Term {
+    type Output = Option<Term>;
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let id = VariableID::from(self.id);
+        match self.coefficient.try_into() {
+            Ok(coefficient) => Ok(Some(Term { id, coefficient })),
+            Err(CoefficientError::Zero) => Ok(None),
+            Err(e) => Err(RawParseError::from(e)
+                .context("ommx.v1.linear.Term", "coefficient")
+                .into()),
+        }
+    }
+}
+
 impl Parse for v1::Linear {
     type Output = Linear;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Linear";
         let mut out = Linear::default();
-        for v1::linear::Term { id, coefficient } in self.terms {
-            let coefficient = match coefficient.try_into() {
-                Ok(coefficient) => coefficient,
-                Err(CoefficientError::Zero) => continue,
-                Err(e) => {
-                    return Err(RawParseError::from(e)
-                        .context("ommx.v1.linear.Term", "coefficient")
-                        .into())
-                }
-            };
-            out.add_term(id.into(), coefficient);
+        for term in self.terms {
+            let term = term.parse_as(&(), message, "terms")?;
+            if let Some(term) = term {
+                out.add_term(term.id, term.coefficient);
+            }
         }
         out.constant = self
             .constant
             .try_into()
-            .map_err(|e| RawParseError::from(e).context("ommx.v1.Linear", "constant"))?;
+            .map_err(|e| RawParseError::from(e).context(message, "constant"))?;
         Ok(out)
     }
 }
@@ -59,6 +75,7 @@ impl Parse for v1::Linear {
 mod tests {
     use super::*;
     use crate::v1::linear::Term;
+    use maplit::*;
 
     #[test]
     fn test_parse_linear() {
@@ -76,25 +93,16 @@ mod tests {
             ],
             constant: 4.0,
         };
-        insta::assert_debug_snapshot!(linear.parse(&()).unwrap(), @r###"
-        Linear {
-            terms: {
-                VariableID(
-                    1,
-                ): Coefficient(
-                    2.0,
-                ),
-                VariableID(
-                    2,
-                ): Coefficient(
-                    3.0,
-                ),
-            },
-            constant: Offset(
-                4.0,
-            ),
-        }
-        "###);
+        assert_eq!(
+            linear.parse(&()).unwrap(),
+            Linear {
+                terms: hashmap! {
+                    1.into() => 2.0.try_into().unwrap(),
+                    2.into() => 3.0.try_into().unwrap(),
+                },
+                constant: 4.0.try_into().unwrap(),
+            }
+        );
 
         // Valid case with zero coefficient
         let linear = v1::Linear {
@@ -110,20 +118,15 @@ mod tests {
             ],
             constant: 4.0,
         };
-        insta::assert_debug_snapshot!(linear.parse(&()).unwrap(), @r###"
-        Linear {
-            terms: {
-                VariableID(
-                    2,
-                ): Coefficient(
-                    3.0,
-                ),
-            },
-            constant: Offset(
-                4.0,
-            ),
-        }
-        "###);
+        assert_eq!(
+            linear.parse(&()).unwrap(),
+            Linear {
+                terms: hashmap! {
+                    2.into() => 3.0.try_into().unwrap(),
+                },
+                constant: 4.0.try_into().unwrap(),
+            }
+        )
     }
 
     #[test]
@@ -144,7 +147,8 @@ mod tests {
         };
         insta::assert_snapshot!(linear.parse(&()).unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
-        └─ommx.v1.linear.Term[coefficient]
+        └─ommx.v1.Linear[terms]
+          └─ommx.v1.linear.Term[coefficient]
         Coefficient must be finite
         "###);
 
@@ -165,7 +169,7 @@ mod tests {
         insta::assert_snapshot!(linear.parse(&()).unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Linear[constant]
-        Coefficient must be finite
+        Offset must be finite
         "###);
     }
 }
