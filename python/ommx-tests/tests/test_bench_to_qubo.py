@@ -39,7 +39,7 @@ def to_qubo(instance: Instance):
     """
     Run `Instance.to_qubo` without modifying the original instance.
 
-    Although `fixture`s are created par test call, pytest-benchmark (and codspeed) will
+    Although `fixture`s are created per test, pytest-benchmark (and codspeed) will
 
     1. Initialize the input of test function
     2. Call the test function multiple times with **this** input to measure the performance
