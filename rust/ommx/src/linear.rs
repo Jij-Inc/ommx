@@ -1,6 +1,7 @@
 //! Rust-idiomatic Linear function
 
 mod add;
+mod arbitrary;
 mod convert;
 mod parse;
 

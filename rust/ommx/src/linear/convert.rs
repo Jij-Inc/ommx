@@ -2,6 +2,10 @@ use super::*;
 use crate::v1;
 
 impl Linear {
+    pub fn new(terms: HashMap<VariableID, Coefficient>, constant: Offset) -> Self {
+        Self { terms, constant }
+    }
+
     pub fn add_term(&mut self, id: VariableID, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(id) {
@@ -17,6 +21,25 @@ impl Linear {
             Entry::Vacant(entry) => {
                 entry.insert(coefficient);
             }
+        }
+    }
+
+    pub fn add_constant(&mut self, constant: Offset) {
+        self.constant += constant;
+    }
+
+    pub fn linear_terms(&self) -> impl Iterator<Item = (VariableID, Coefficient)> + '_ {
+        self.terms
+            .iter()
+            .map(|(id, coefficient)| (*id, *coefficient))
+    }
+}
+
+impl From<Offset> for Linear {
+    fn from(constant: Offset) -> Self {
+        Self {
+            terms: HashMap::new(),
+            constant,
         }
     }
 }
@@ -56,6 +79,26 @@ impl FromIterator<(Option<VariableID>, Coefficient)> for Linear {
             }
         }
         out
+    }
+}
+
+impl<'a> IntoIterator for &'a Linear {
+    type Item = (Option<VariableID>, Coefficient);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        if let Ok(constant) = self.constant.try_into() {
+            Box::new(
+                self.linear_terms()
+                    .map(|(id, coefficient)| (Some(id), coefficient))
+                    .chain(std::iter::once((None, constant))),
+            )
+        } else {
+            Box::new(
+                self.linear_terms()
+                    .map(|(id, coefficient)| (Some(id.into()), coefficient.into())),
+            )
+        }
     }
 }
 
