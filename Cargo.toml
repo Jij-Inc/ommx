@@ -43,3 +43,6 @@ thiserror = "2.0.12"
 url = "2.5.3"
 uuid = { version = "1.16.0", features = ["v4"] }
 zip = "2.6.1"
+
+[profile.release]
+debug = true
