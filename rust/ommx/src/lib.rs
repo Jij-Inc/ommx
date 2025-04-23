@@ -144,6 +144,7 @@ pub mod random;
 
 // Internal modules
 mod bound;
+mod coefficient;
 mod constraint;
 mod decision_variable;
 mod evaluate;
@@ -153,6 +154,7 @@ mod infeasible_detected;
 mod instance;
 mod linear;
 mod macros;
+mod offset;
 mod parameter;
 mod parametric_instance;
 mod polynomial;
@@ -163,6 +165,7 @@ mod sorted_ids;
 mod state;
 
 pub use bound::*;
+pub use coefficient::*;
 pub use constraint::*;
 pub use decision_variable::*;
 pub use evaluate::Evaluate;
@@ -170,6 +173,7 @@ pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
 pub use linear::*;
+pub use offset::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
