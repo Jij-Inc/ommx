@@ -1,5 +1,5 @@
 use ordered_float::NotNan;
-use std::ops::{Add, AddAssign, Deref, Mul, MulAssign};
+use std::ops::{Add, Deref, Mul, MulAssign};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoefficientError {
@@ -56,18 +56,19 @@ impl Deref for Coefficient {
 }
 
 impl Add for Coefficient {
-    type Output = Self;
+    type Output = Option<Self>;
     fn add(self, rhs: Self) -> Self::Output {
-        Self(self.0 + rhs.0)
+        let sum = self.0 + rhs.0;
+        // Check cancellation since Coefficient is not zero
+        if sum == 0.0 {
+            None
+        } else {
+            Some(Self(sum))
+        }
     }
 }
 
-impl AddAssign for Coefficient {
-    fn add_assign(&mut self, rhs: Self) {
-        self.0 += rhs.0;
-    }
-}
-
+// Non-zero * Non-zero = Non-zero
 impl Mul for Coefficient {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {

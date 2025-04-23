@@ -1,5 +1,7 @@
 use ordered_float::NotNan;
-use std::ops::Deref;
+use std::ops::{Add, AddAssign, Deref, Mul, MulAssign};
+
+use crate::Coefficient;
 
 #[derive(Debug, thiserror::Error)]
 pub enum OffsetError {
@@ -43,5 +45,37 @@ impl TryFrom<f64> for Offset {
             return Err(OffsetError::Infinite);
         }
         Ok(Self(NotNan::new(value).unwrap())) // Safe because we checked the value is not NaN
+    }
+}
+
+impl From<Coefficient> for Offset {
+    fn from(value: Coefficient) -> Self {
+        Self(NotNan::new(value.into_inner()).unwrap()) // Coefficient is stricter than Offset
+    }
+}
+
+impl Add for Offset {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Offset(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for Offset {
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+impl Mul for Offset {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self::Output {
+        Offset(self.0 * rhs.0)
+    }
+}
+
+impl MulAssign for Offset {
+    fn mul_assign(&mut self, rhs: Self) {
+        self.0 *= rhs.0;
     }
 }
