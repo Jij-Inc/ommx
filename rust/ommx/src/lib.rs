@@ -151,6 +151,7 @@ mod format;
 mod function;
 mod infeasible_detected;
 mod instance;
+mod linear;
 mod macros;
 mod parameter;
 mod parametric_instance;
@@ -168,6 +169,7 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use linear::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
