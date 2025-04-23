@@ -4,6 +4,7 @@ from typing import Literal, Optional
 import pyscipopt
 import math
 
+
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, ToState, to_state
 from ommx.v1.function_pb2 import Function
@@ -197,13 +198,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         """
 
-        # there appears to be no enum for this in pyscipopt
-        if data.getStatus() == "infeasible":
-            raise InfeasibleDetected("Model was infeasible")
-
-        if data.getStatus() == "unbounded":
-            raise UnboundedDetected("Model was unbounded")
-
         # TODO: Add the feature to store dual variables in `solution`.
 
         state = self.decode_to_state(data)
@@ -256,6 +250,12 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
         if data.getStatus() == "unbounded":
             raise UnboundedDetected("Model was unbounded")
+
+        if data.getStatus() == "timelimit":
+            # The following condition checks if there is no feasible primal solution.
+            # In other words, it is checking for the absence of any feasible solution.
+            if data.getNSols() == 0:
+                raise InfeasibleDetected("Model was infeasible [status: timelimit]")
 
         # NOTE: It is assumed that getBestSol will return an error
         #       if there is no feasible solution.
