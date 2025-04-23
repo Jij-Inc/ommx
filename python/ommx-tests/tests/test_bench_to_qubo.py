@@ -35,7 +35,7 @@ def pseudo_boolean_inequality(request):
     return instance
 
 
-def to_qubo(instance):
+def to_qubo(instance: Instance):
     """
     Run `Instance.to_qubo` without modifying the original instance.
 
@@ -45,17 +45,16 @@ def to_qubo(instance):
     2. Call the test function multiple times with **this** input to measure the performance
 
     This means that if the first run modifies the input, the subsequent runs will be affected.
-    Thus we need to create a deep copy of the input before calling the test function.
     """
-    new_instance = deepcopy(instance)
-    return new_instance.to_qubo()
+    new_instance = deepcopy(instance)  # Create a new instance since `to_qubo` modifies the instance
+    new_instance.to_qubo()
 
 
 @pytest.mark.benchmark
-def test_to_qubo_small(small):
+def test_to_qubo_small(small: Instance):
     to_qubo(small)
 
 
 @pytest.mark.benchmark
-def test_to_qubo_pbi(pseudo_boolean_inequality):
+def test_to_qubo_pbi(pseudo_boolean_inequality: Instance):
     to_qubo(pseudo_boolean_inequality)
