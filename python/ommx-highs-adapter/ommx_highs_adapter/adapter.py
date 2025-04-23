@@ -185,10 +185,10 @@ class OMMXHighsAdapter(SolverAdapter):
         row_dual_len = len(solution_info.row_dual)
         row_dual = solution_info.row_dual
 
-        valid_constraints = [
+        filtered_constraints = [
             c for c in solution.raw.evaluated_constraints if c.id < row_dual_len
         ]
-        for constraint in valid_constraints:
+        for constraint in filtered_constraints:
             constraint.dual_variable = row_dual[constraint.id]
 
         return solution
