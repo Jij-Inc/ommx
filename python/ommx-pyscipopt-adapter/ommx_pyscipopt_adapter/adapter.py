@@ -206,15 +206,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if data.getStatus() == "unbounded":
             raise UnboundedDetected("Model was unbounded")
 
-        if data.getStatus() == "timelimit":
-            # infeasible
-            if data.getNSols() == 0:
-                raise InfeasibleDetected("Model was infeasible [status: timelimit]")
-            else:
-                warnings.warn(
-                    f"Time limit reached with {data.getNSols()} solutions found. Solution may not be optimal."
-                )
-
         # TODO: Add the feature to store dual variables in `solution`.
 
         state = self.decode_to_state(data)
