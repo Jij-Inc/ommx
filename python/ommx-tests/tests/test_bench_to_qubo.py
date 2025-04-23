@@ -36,6 +36,17 @@ def pseudo_boolean_inequality(request):
 
 
 def to_qubo(instance):
+    """
+    Run `Instance.to_qubo` without modifying the original instance.
+
+    Although `fixture`s are created par test call, pytest-benchmark (and codspeed) will
+
+    1. Initialize the input of test function
+    2. Call the test function multiple times with **this** input to measure the performance
+
+    This means that if the first run modifies the input, the subsequent runs will be affected.
+    Thus we need to create a deep copy of the input before calling the test function.
+    """
     new_instance = deepcopy(instance)
     return new_instance.to_qubo()
 
