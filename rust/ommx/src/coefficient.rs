@@ -1,4 +1,5 @@
 use ordered_float::NotNan;
+use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign};
 
 #[derive(Debug, thiserror::Error)]
@@ -79,5 +80,16 @@ impl Mul for Coefficient {
 impl MulAssign for Coefficient {
     fn mul_assign(&mut self, rhs: Self) {
         self.0 *= rhs.0;
+    }
+}
+
+impl Arbitrary for Coefficient {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        prop_oneof![Just(1.0), Just(-1.0), -10.0..10.0]
+            .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
+            .prop_map(|x| Coefficient::try_from(x).unwrap())
+            .boxed()
     }
 }

@@ -1,4 +1,5 @@
 use ordered_float::NotNan;
+use proptest::prelude::*;
 use std::ops::{Add, AddAssign, Deref, Mul, MulAssign};
 
 use crate::Coefficient;
@@ -77,5 +78,15 @@ impl Mul for Offset {
 impl MulAssign for Offset {
     fn mul_assign(&mut self, rhs: Self) {
         self.0 *= rhs.0;
+    }
+}
+
+impl Arbitrary for Offset {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -10.0..10.0]
+            .prop_map(|x| Offset::try_from(x).unwrap())
+            .boxed()
     }
 }
