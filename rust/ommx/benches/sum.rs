@@ -4,7 +4,7 @@ use criterion::{
 
 use num::Zero;
 use ommx::{
-    random::{random_deterministic, FunctionParameters},
+    random::{random, random_deterministic, FunctionParameters, Rng},
     v1::{Linear, Polynomial, Quadratic},
 };
 
@@ -13,14 +13,18 @@ fn sum_linear_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-linear-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [100, 1000, 10_000] {
+    for num_functions in [10, 100, 1000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..num_functions)
             .map(|_| -> Linear {
-                random_deterministic(FunctionParameters {
-                    num_terms: 3,
-                    max_degree: 1,
-                    max_id: num_functions,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms: 3,
+                        max_degree: 1,
+                        max_id: num_functions,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -43,13 +47,17 @@ fn sum_linear_large_little(c: &mut Criterion) {
     let mut group = c.benchmark_group("sum-linear-large-little");
     group.plot_config(plot_config.clone());
     for num_terms in [100, 1000, 10_000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..3)
             .map(|_| -> Linear {
-                random_deterministic(FunctionParameters {
-                    num_terms,
-                    max_degree: 1,
-                    max_id: 3 * num_terms as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms,
+                        max_degree: 1,
+                        max_id: 3 * num_terms as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -72,14 +80,18 @@ fn sum_quadratic_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-quadratic-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [100, 1000, 10_000] {
+    for num_functions in [10, 100, 1000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..num_functions)
             .map(|_| -> Quadratic {
-                random_deterministic(FunctionParameters {
-                    num_terms: 3,
-                    max_degree: 2,
-                    max_id: num_functions as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms: 3,
+                        max_degree: 2,
+                        max_id: num_functions as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -103,13 +115,17 @@ fn sum_quadratic_large_little(c: &mut Criterion) {
     let mut group = c.benchmark_group("sum-quadratic-large-little");
     group.plot_config(plot_config.clone());
     for num_terms in [100, 1000, 10_000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..3)
             .map(|_| -> Quadratic {
-                random_deterministic(FunctionParameters {
-                    num_terms,
-                    max_degree: 2,
-                    max_id: (3 * num_terms) as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms,
+                        max_degree: 2,
+                        max_id: (3 * num_terms) as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -132,14 +148,18 @@ fn sum_polynomial_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-polynomial-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [100, 1000, 10_000] {
+    for num_functions in [10, 100, 1000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..num_functions)
             .map(|_| -> Polynomial {
-                random_deterministic(FunctionParameters {
-                    num_terms: 3,
-                    max_degree: 3,
-                    max_id: num_functions as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms: 3,
+                        max_degree: 3,
+                        max_id: num_functions as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -163,13 +183,17 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
     let mut group = c.benchmark_group("sum-polynomial-large-little");
     group.plot_config(plot_config.clone());
     for num_terms in [100, 1000, 10_000] {
+        let mut rng = Rng::deterministic();
         let functions = (0..3)
             .map(|_| -> Polynomial {
-                random_deterministic(FunctionParameters {
-                    num_terms,
-                    max_degree: 3,
-                    max_id: (3 * num_terms) as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms,
+                        max_degree: 3,
+                        max_id: (3 * num_terms) as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         group.bench_with_input(
@@ -187,43 +211,22 @@ fn sum_polynomial_large_little(c: &mut Criterion) {
     group.finish();
 }
 
-/// Benchmark for summation of linear + quadratic functions with varying terms
-fn add_linear_quadratic_large(c: &mut Criterion) {
-    let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
-    let mut group = c.benchmark_group("add-linear-quadratic");
-    group.plot_config(plot_config.clone());
-    for num_terms in [100, 1000, 10_000] {
-        let lin: Linear = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 1,
-            max_id: (3 * num_terms) as u64,
-        });
-        let quad: Quadratic = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 2,
-            max_id: (3 * num_terms) as u64,
-        });
-        group.bench_with_input(
-            BenchmarkId::new("add-linear-quadratic", num_terms.to_string()),
-            &(lin, quad),
-            |b, (lin, quad)| b.iter(|| lin.clone() + quad.clone()),
-        );
-    }
-    group.finish();
-}
-
 fn add_small_many_linear_to_quadratic(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("add-small-many-linear-to-quadratic");
     group.plot_config(plot_config.clone());
-    for num_lin in [100, 1000, 10_000] {
+    for num_lin in [10, 100, 1000] {
+        let mut rng = Rng::deterministic();
         let lins = (0..num_lin)
             .map(|_| -> Linear {
-                random_deterministic(FunctionParameters {
-                    num_terms: 3,
-                    max_degree: 1,
-                    max_id: 3 * num_lin as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms: 3,
+                        max_degree: 1,
+                        max_id: 3 * num_lin as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         let quad: Quadratic = random_deterministic(FunctionParameters {
@@ -246,14 +249,18 @@ fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("add-small-many-linear-to-polynomial");
     group.plot_config(plot_config.clone());
-    for num_lin in [100, 1000, 10_000] {
+    for num_lin in [10, 100, 1000] {
+        let mut rng = Rng::deterministic();
         let lins = (0..num_lin)
             .map(|_| -> Linear {
-                random_deterministic(FunctionParameters {
-                    num_terms: 3,
-                    max_degree: 1,
-                    max_id: 3 * num_lin as u64,
-                })
+                random(
+                    &mut rng,
+                    FunctionParameters {
+                        num_terms: 3,
+                        max_degree: 1,
+                        max_id: 3 * num_lin as u64,
+                    },
+                )
             })
             .collect::<Vec<_>>();
         let poly: Polynomial = random_deterministic(FunctionParameters {
@@ -280,7 +287,6 @@ criterion_group!(
     sum_quadratic_large_little,
     sum_polynomial_small_many,
     sum_polynomial_large_little,
-    add_linear_quadratic_large,
     add_small_many_linear_to_quadratic,
     add_small_many_linear_to_polynomial,
 );
