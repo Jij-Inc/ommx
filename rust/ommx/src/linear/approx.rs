@@ -10,7 +10,8 @@ impl AbsDiffEq for Linear {
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         let residual = self - other;
         residual
-            .max_coefficient_abs().is_none_or(|max| max <= epsilon)
+            .max_coefficient_abs()
+            .is_none_or(|max| max <= epsilon)
     }
 }
 
