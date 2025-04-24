@@ -5,7 +5,8 @@ use criterion::{
 use num::Zero;
 use ommx::{
     random::{random, random_deterministic, FunctionParameters, Rng},
-    v1::{Linear, Polynomial, Quadratic},
+    v1::{Linear as v1Linear, Polynomial, Quadratic},
+    Linear,
 };
 
 /// Benchmark for summation of many linear functions with three terms
@@ -13,7 +14,7 @@ fn sum_linear_small_many(c: &mut Criterion) {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group("sum-linear-small-many");
     group.plot_config(plot_config.clone());
-    for num_functions in [10, 100, 1000] {
+    for num_functions in [100, 1000, 10_000] {
         let mut rng = Rng::deterministic();
         let functions = (0..num_functions)
             .map(|_| -> Linear {
@@ -218,7 +219,7 @@ fn add_small_many_linear_to_quadratic(c: &mut Criterion) {
     for num_lin in [10, 100, 1000] {
         let mut rng = Rng::deterministic();
         let lins = (0..num_lin)
-            .map(|_| -> Linear {
+            .map(|_| -> v1Linear {
                 random(
                     &mut rng,
                     FunctionParameters {
@@ -252,7 +253,7 @@ fn add_small_many_linear_to_polynomial(c: &mut Criterion) {
     for num_lin in [10, 100, 1000] {
         let mut rng = Rng::deterministic();
         let lins = (0..num_lin)
-            .map(|_| -> Linear {
+            .map(|_| -> v1Linear {
                 random(
                     &mut rng,
                     FunctionParameters {
