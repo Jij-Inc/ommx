@@ -12,7 +12,10 @@ pub use parse::*;
 use crate::{Coefficient, Offset, VariableID};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+/// Linear function of decision variables or parameters.
+///
+/// - This represents up-to linear function, i.e. linear term can be empty.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Linear {
     terms: HashMap<VariableID, Coefficient>,
     constant: Offset,

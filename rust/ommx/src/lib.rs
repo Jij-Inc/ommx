@@ -157,6 +157,7 @@ mod macros;
 mod offset;
 mod parameter;
 mod parametric_instance;
+mod quadratic;
 mod sample_set;
 mod solution;
 mod sorted_ids;
@@ -172,6 +173,7 @@ pub use infeasible_detected::*;
 pub use instance::*;
 pub use linear::*;
 pub use offset::*;
+pub use quadratic::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
