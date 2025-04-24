@@ -11,7 +11,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use crate::format::format_polynomial;
 
 impl Zero for Quadratic {
     fn zero() -> Self {
