@@ -93,7 +93,7 @@ pub fn arbitrary_coefficient_nonzero() -> BoxedStrategy<f64> {
 }
 
 /// Generate a strategy for producing a vector of unique integers within a given range `min_id..=max_id`
-fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u64>> {
+pub fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<Vec<u64>> {
     assert!(
         min_id <= max_id,
         "min_id({min_id}) must be less than or equal to max_id({max_id}) to ensure a valid range"

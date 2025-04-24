@@ -1,4 +1,4 @@
-use crate::{BoundError, ConstraintID, VariableID};
+use crate::{BoundError, CoefficientError, ConstraintID, OffsetError, VariableID};
 use prost::DecodeError;
 use std::fmt;
 
@@ -100,6 +100,12 @@ pub enum RawParseError {
 
     #[error("Non-unique constraint ID is found where uniqueness is required: {id:?}")]
     NonUniqueConstraintID { id: ConstraintID },
+
+    #[error(transparent)]
+    InvalidCoefficient(#[from] CoefficientError),
+
+    #[error(transparent)]
+    InvalidOffset(#[from] OffsetError),
 
     #[error(transparent)]
     InvalidBound(#[from] BoundError),
