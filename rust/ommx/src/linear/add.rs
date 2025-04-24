@@ -73,7 +73,7 @@ impl Sum for Linear {
 impl Neg for Linear {
     type Output = Self;
     fn neg(mut self) -> Self::Output {
-        for (_, c) in &mut self.terms {
+        for c in self.terms.values_mut() {
             *c = -(*c);
         }
         self.constant = -self.constant;

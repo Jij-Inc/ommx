@@ -96,7 +96,7 @@ impl<'a> IntoIterator for &'a Linear {
         } else {
             Box::new(
                 self.linear_terms()
-                    .map(|(id, coefficient)| (Some(id.into()), coefficient.into())),
+                    .map(|(id, coefficient)| (Some(id), coefficient)),
             )
         }
     }

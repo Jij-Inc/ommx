@@ -6,7 +6,7 @@ impl Mul<Coefficient> for Linear {
     type Output = Self;
     fn mul(self, rhs: Coefficient) -> Self::Output {
         let mut result = self.clone();
-        for (_, c) in &mut result.terms {
+        for c in result.terms.values_mut() {
             *c *= rhs;
         }
         result.constant *= rhs.into();

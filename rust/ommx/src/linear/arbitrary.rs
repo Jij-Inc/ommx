@@ -41,7 +41,7 @@ impl Arbitrary for Linear {
                 (ids, coefficients).prop_map(move |(ids, coefficients)| {
                     Linear::new(
                         ids.into_iter()
-                            .map(|id| VariableID::from(id))
+                            .map(VariableID::from)
                             .zip(coefficients)
                             .collect(),
                         constant,
