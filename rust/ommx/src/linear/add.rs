@@ -2,7 +2,7 @@ use super::Linear;
 use num::Zero;
 use std::{
     iter::Sum,
-    ops::{Add, AddAssign},
+    ops::{Add, AddAssign, Neg, Sub, SubAssign},
 };
 
 impl AddAssign<&Linear> for Linear {
@@ -67,6 +67,70 @@ impl Add<Linear> for &Linear {
 impl Sum for Linear {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Linear::default(), Add::add)
+    }
+}
+
+impl Neg for Linear {
+    type Output = Self;
+    fn neg(mut self) -> Self::Output {
+        for (_, c) in &mut self.terms {
+            *c = -(*c);
+        }
+        self.constant = -self.constant;
+        self
+    }
+}
+
+impl SubAssign<&Linear> for Linear {
+    fn sub_assign(&mut self, rhs: &Linear) {
+        for (id, c) in &rhs.terms {
+            self.add_term(*id, -(*c));
+        }
+        self.constant -= rhs.constant;
+    }
+}
+
+impl SubAssign for Linear {
+    fn sub_assign(&mut self, rhs: Self) {
+        if self.terms.len() < rhs.terms.len() {
+            *self = -rhs + &*self;
+        } else {
+            self.sub_assign(&rhs);
+        }
+    }
+}
+
+impl Sub for Linear {
+    type Output = Self;
+    fn sub(mut self, rhs: Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl Sub<&Linear> for Linear {
+    type Output = Self;
+    fn sub(mut self, rhs: &Self) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl Sub for &Linear {
+    type Output = Linear;
+    fn sub(self, rhs: Self) -> Self::Output {
+        if self.terms.len() < rhs.terms.len() {
+            -rhs.clone() + self
+        } else {
+            self.clone() - rhs
+        }
+    }
+}
+
+impl Sub<Linear> for &Linear {
+    type Output = Linear;
+    fn sub(self, rhs: Linear) -> Self::Output {
+        -rhs + self
     }
 }
 

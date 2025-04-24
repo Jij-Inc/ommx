@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 use proptest::prelude::*;
-use std::ops::{Add, AddAssign, Deref, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Deref, Mul, MulAssign, Neg, Sub, SubAssign};
 
 use crate::Coefficient;
 
@@ -13,6 +13,11 @@ pub enum OffsetError {
 }
 
 /// Offset of polynomial
+///
+/// Invariants
+/// -----------
+/// - The value is finite, not infinite or NaN, can be zero.
+///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 #[repr(transparent)]
 pub struct Offset(NotNan<f64>);
@@ -20,6 +25,10 @@ pub struct Offset(NotNan<f64>);
 impl Offset {
     pub fn into_inner(self) -> f64 {
         self.0.into_inner()
+    }
+
+    pub fn abs(&self) -> Self {
+        Self(self.0.abs().try_into().unwrap())
     }
 }
 
@@ -46,6 +55,13 @@ impl TryFrom<f64> for Offset {
             return Err(OffsetError::Infinite);
         }
         Ok(Self(NotNan::new(value).unwrap())) // Safe because we checked the value is not NaN
+    }
+}
+
+impl TryFrom<&f64> for Offset {
+    type Error = OffsetError;
+    fn try_from(value: &f64) -> Result<Self, Self::Error> {
+        Self::try_from(*value)
     }
 }
 
@@ -81,6 +97,26 @@ impl MulAssign for Offset {
     }
 }
 
+impl Neg for Offset {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Offset(-self.0)
+    }
+}
+
+impl Sub for Offset {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self::Output {
+        Offset(self.0 - rhs.0)
+    }
+}
+
+impl SubAssign for Offset {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 -= rhs.0;
+    }
+}
+
 impl Arbitrary for Offset {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -88,5 +124,21 @@ impl Arbitrary for Offset {
         prop_oneof![Just(0.0), Just(1.0), Just(-1.0), -10.0..10.0]
             .prop_map(|x| Offset::try_from(x).unwrap())
             .boxed()
+    }
+}
+
+impl PartialEq<f64> for Offset {
+    fn eq(&self, other: &f64) -> bool {
+        if let Ok(other) = TryInto::<Offset>::try_into(*other) {
+            *self == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialOrd<f64> for Offset {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        Some(self.into_inner().total_cmp(other))
     }
 }

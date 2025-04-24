@@ -1,6 +1,6 @@
 use ordered_float::NotNan;
 use proptest::prelude::*;
-use std::ops::{Add, Deref, Mul, MulAssign};
+use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
 
 use crate::Offset;
 
@@ -23,6 +23,17 @@ pub enum CoefficientError {
 #[repr(transparent)]
 pub struct Coefficient(NotNan<f64>);
 
+impl Coefficient {
+    pub fn into_inner(self) -> f64 {
+        self.0.into_inner()
+    }
+
+    /// ABS of the coefficient is also a coefficient.
+    pub fn abs(&self) -> Self {
+        Self(self.0.abs().try_into().unwrap())
+    }
+}
+
 impl TryFrom<f64> for Coefficient {
     type Error = CoefficientError;
     fn try_from(value: f64) -> Result<Self, Self::Error> {
@@ -43,12 +54,6 @@ impl TryFrom<Offset> for Coefficient {
     type Error = CoefficientError;
     fn try_from(value: Offset) -> Result<Self, Self::Error> {
         Self::try_from(value.into_inner())
-    }
-}
-
-impl Coefficient {
-    pub fn into_inner(self) -> f64 {
-        self.0.into_inner()
     }
 }
 
@@ -92,6 +97,20 @@ impl MulAssign for Coefficient {
     }
 }
 
+impl Neg for Coefficient {
+    type Output = Self;
+    fn neg(self) -> Self::Output {
+        Self(-self.0)
+    }
+}
+
+impl Sub for Coefficient {
+    type Output = Option<Self>;
+    fn sub(self, rhs: Self) -> Self::Output {
+        self + (-rhs)
+    }
+}
+
 impl Arbitrary for Coefficient {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -100,5 +119,21 @@ impl Arbitrary for Coefficient {
             .prop_filter("nonzero", |x: &f64| x.abs() > f64::EPSILON)
             .prop_map(|x| Coefficient::try_from(x).unwrap())
             .boxed()
+    }
+}
+
+impl PartialEq<f64> for Coefficient {
+    fn eq(&self, other: &f64) -> bool {
+        if let Ok(other) = TryInto::<Coefficient>::try_into(*other) {
+            *self == other
+        } else {
+            false
+        }
+    }
+}
+
+impl PartialOrd<f64> for Coefficient {
+    fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
+        Some(self.into_inner().total_cmp(other))
     }
 }
