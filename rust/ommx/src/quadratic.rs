@@ -1,18 +1,19 @@
-use crate::{Coefficient, Linear, VariableID};
+mod convert;
+mod pair;
+
+pub use pair::VariableIDPair;
+
+use crate::{Coefficient, Linear};
 use std::collections::HashMap;
 
+/// Quadratic function
+///
+/// - Since the decision variable may be non-binary, we keep the squared terms as it is.
+/// - This represents up-to quadratic function, i.e. quadratic term can be empty.
+///
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Quadratic {
-    /// Quadratic function
-    ///
-    /// - Since the decision variable may be non-binary, we keep the squared terms as it is.
-    /// - This represents up-to quadratic function, i.e. quadratic term can be empty.
-    ///
-    /// Invariants
-    /// -----------
-    /// - The first ID is less than or equal to the second ID.
-    ///
-    quad: HashMap<(VariableID, VariableID), Coefficient>,
+    quad: HashMap<VariableIDPair, Coefficient>,
     linear: Linear,
 }
 
