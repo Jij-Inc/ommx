@@ -1,3 +1,4 @@
+mod add;
 mod convert;
 
 use crate::{Coefficient, VariableID};
@@ -6,7 +7,7 @@ use std::{collections::HashMap, hash::Hash};
 /// Monomial
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Hash + Eq + Default {}
+pub trait Monomial: Clone + Hash + Eq + Default {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Polynomial<M: Monomial> {
