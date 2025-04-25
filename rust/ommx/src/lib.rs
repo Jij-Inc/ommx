@@ -157,7 +157,6 @@ mod macros;
 mod offset;
 mod parameter;
 mod parametric_instance;
-mod polynomial;
 mod quadratic;
 mod sample_set;
 mod solution;
@@ -186,4 +185,5 @@ mod v1_ext {
     mod function;
     mod instance;
     mod linear;
+    mod polynomial;
 }
