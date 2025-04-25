@@ -1,14 +1,24 @@
 mod add;
 mod approx;
+mod arbitrary;
 mod convert;
+mod linear;
 
-use crate::{Coefficient, VariableID};
-use std::{collections::HashMap, hash::Hash};
+pub use linear::*;
 
-/// Monomial
+use crate::Coefficient;
+use proptest::strategy::BoxedStrategy;
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
+
+/// Monomial, without coefficient
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Clone + Hash + Eq + Default {}
+pub trait Monomial: Debug + Clone + Hash + Eq + Default {
+    type Parameters: Default;
+
+    /// Generate distinct monomials
+    fn arbitrary_distinct(parameters: Self::Parameters) -> BoxedStrategy<Vec<Self>>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Polynomial<M: Monomial> {
@@ -58,13 +68,3 @@ impl<M: Monomial> Polynomial<M> {
             .max()
     }
 }
-
-/// Linear function only contains monomial of degree 1 or constant
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum LinearMonomial {
-    Variable(VariableID),
-    #[default]
-    Constant,
-}
-
-impl Monomial for LinearMonomial {}
