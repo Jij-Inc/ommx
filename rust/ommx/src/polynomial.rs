@@ -1,4 +1,5 @@
 mod add;
+mod approx;
 mod convert;
 
 use crate::{Coefficient, VariableID};
@@ -45,6 +46,16 @@ impl<M: Monomial> Polynomial<M> {
 
     pub fn get(&self, term: &M) -> Option<Coefficient> {
         self.terms.get(term).copied()
+    }
+
+    /// The maximum absolute value of the coefficients including the constant.
+    ///
+    /// `None` means this polynomial is exactly zero.
+    pub fn max_coefficient_abs(&self) -> Option<Coefficient> {
+        self.terms
+            .values()
+            .map(|coefficient| coefficient.abs())
+            .max()
     }
 }
 
