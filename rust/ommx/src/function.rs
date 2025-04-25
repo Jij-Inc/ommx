@@ -1,6 +1,6 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1,
+    v1, Coefficient,
 };
 use derive_more::From;
 use std::fmt::Debug;
@@ -35,4 +35,20 @@ impl Parse for v1::Function {
             v1::function::Function::Polynomial(p) => Ok(Function::Polynomial(p)),
         }
     }
+}
+
+/// Common properties of polynomial-like functions.
+pub trait PolynomialProperties {
+    /// The degree of the polynomial.
+    ///
+    /// The degree of zero polynomial is defined as `0`.
+    fn degree(&self) -> u32;
+
+    /// The maximum absolute value of the coefficients including the constant.
+    ///
+    /// `None` means this polynomial is exactly zero.
+    fn max_coefficient_abs(&self) -> Option<Coefficient>;
+
+    /// The number of terms in the polynomial.
+    fn num_terms(&self) -> usize;
 }

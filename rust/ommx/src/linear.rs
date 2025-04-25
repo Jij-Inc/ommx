@@ -9,7 +9,8 @@ mod parse;
 
 pub use parse::*;
 
-use crate::{Coefficient, Offset, VariableID};
+use crate::{Coefficient, Offset, PolynomialProperties, VariableID};
+use num::Zero;
 use std::collections::HashMap;
 
 /// Linear function of decision variables or parameters.
@@ -21,11 +22,20 @@ pub struct Linear {
     constant: Offset,
 }
 
-impl Linear {
-    /// The maximum absolute value of the coefficients including the constant.
-    ///
-    /// `None` means this linear function is exactly zero.
-    pub fn max_coefficient_abs(&self) -> Option<Coefficient> {
+impl PolynomialProperties for Linear {
+    fn degree(&self) -> u32 {
+        if self.terms.is_empty() {
+            0
+        } else {
+            1
+        }
+    }
+
+    fn num_terms(&self) -> usize {
+        self.terms.len() + if self.constant.is_zero() { 0 } else { 1 }
+    }
+
+    fn max_coefficient_abs(&self) -> Option<Coefficient> {
         self.terms
             .values()
             .map(|coefficient| coefficient.abs())

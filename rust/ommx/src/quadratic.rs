@@ -1,9 +1,10 @@
+mod add;
 mod convert;
 mod pair;
 
 pub use pair::VariableIDPair;
 
-use crate::{Coefficient, Linear};
+use crate::{Coefficient, Linear, PolynomialProperties};
 use std::collections::HashMap;
 
 /// Quadratic function
@@ -17,11 +18,20 @@ pub struct Quadratic {
     linear: Linear,
 }
 
-impl Quadratic {
-    /// The maximum absolute value of the coefficients including the constant.
-    ///
-    /// `None` means this quadratic function is exactly zero.
-    pub fn max_coefficient_abs(&self) -> Option<Coefficient> {
+impl PolynomialProperties for Quadratic {
+    fn degree(&self) -> u32 {
+        if !self.quad.is_empty() {
+            2
+        } else {
+            self.linear.degree()
+        }
+    }
+
+    fn num_terms(&self) -> usize {
+        self.quad.len() + self.linear.num_terms()
+    }
+
+    fn max_coefficient_abs(&self) -> Option<Coefficient> {
         self.quad
             .values()
             .map(|coefficient| coefficient.abs())
