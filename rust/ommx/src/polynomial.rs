@@ -8,7 +8,11 @@ pub use linear::*;
 
 use crate::Coefficient;
 use proptest::strategy::BoxedStrategy;
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    hash::Hash,
+};
 
 /// Monomial, without coefficient
 ///
@@ -16,8 +20,8 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 pub trait Monomial: Debug + Clone + Hash + Eq + Default {
     type Parameters: Default;
 
-    /// Generate distinct monomials
-    fn arbitrary_distinct(parameters: Self::Parameters) -> BoxedStrategy<Vec<Self>>;
+    /// Generate non duplicated monomials
+    fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
