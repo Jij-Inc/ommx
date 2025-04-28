@@ -107,7 +107,7 @@ impl Monomial for SortedIds {
                 };
                 let sub = SortedIds::arbitrary_uniques(sub_parameters);
                 (ids, sub).prop_map(|(ids, mut sub)| {
-                    sub.extend(ids.into_iter());
+                    sub.extend(ids);
                     sub
                 })
             })
