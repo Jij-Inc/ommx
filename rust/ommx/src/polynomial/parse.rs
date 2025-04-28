@@ -1,5 +1,5 @@
 use super::*;
-use crate::{parse::*, v1, CoefficientError};
+use crate::{parse::*, v1, CoefficientError, VariableID};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Term {
@@ -30,13 +30,14 @@ impl Parse for v1::Linear {
         for term in self.terms {
             let term = term.parse_as(&(), message, "terms")?;
             if let Some(term) = term {
-                out.add_term(term.id, term.coefficient);
+                out.add_term(term.id.into(), term.coefficient);
             }
         }
-        out.constant = self
-            .constant
-            .try_into()
-            .map_err(|e| RawParseError::from(e).context(message, "constant"))?;
+        match self.constant.try_into() {
+            Ok(coefficient) => out.add_term(LinearMonomial::Constant, coefficient),
+            Err(CoefficientError::Zero) => {}
+            Err(e) => return Err(RawParseError::from(e).context(message, "constant")),
+        }
         Ok(out)
     }
 }
@@ -76,8 +77,8 @@ mod tests {
                 terms: hashmap! {
                     1.into() => 2.0.try_into().unwrap(),
                     2.into() => 3.0.try_into().unwrap(),
+                    LinearMonomial::Constant => 4.0.try_into().unwrap()
                 },
-                constant: 4.0.try_into().unwrap(),
             }
         );
 
@@ -100,8 +101,8 @@ mod tests {
             Linear {
                 terms: hashmap! {
                     2.into() => 3.0.try_into().unwrap(),
+                    LinearMonomial::Constant => 4.0.try_into().unwrap(),
                 },
-                constant: 4.0.try_into().unwrap(),
             }
         )
     }
@@ -146,7 +147,7 @@ mod tests {
         insta::assert_snapshot!(linear.parse(&()).unwrap_err(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Linear[constant]
-        Offset must be finite
+        Coefficient must be finite
         "###);
     }
 }

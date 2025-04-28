@@ -3,6 +3,7 @@ mod approx;
 mod arbitrary;
 mod convert;
 mod linear;
+mod parse;
 
 pub use linear::*;
 

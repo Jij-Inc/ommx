@@ -75,6 +75,18 @@ pub enum LinearMonomial {
     Constant,
 }
 
+impl From<VariableID> for LinearMonomial {
+    fn from(value: VariableID) -> Self {
+        LinearMonomial::Variable(value)
+    }
+}
+
+impl From<u64> for LinearMonomial {
+    fn from(value: u64) -> Self {
+        LinearMonomial::Variable(VariableID::from(value))
+    }
+}
+
 impl Monomial for LinearMonomial {
     type Parameters = LinearParameters;
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {

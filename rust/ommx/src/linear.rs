@@ -5,7 +5,6 @@ mod approx;
 mod arbitrary;
 mod convert;
 mod mul;
-mod parse;
 
 use crate::{Coefficient, Offset, VariableID};
 use std::collections::HashMap;
