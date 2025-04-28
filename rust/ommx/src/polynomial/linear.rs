@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use proptest::prelude::*;
 use std::{fmt::Debug, hash::Hash};
 
-pub type Linear = Polynomial<LinearMonomial>;
+pub type Linear = PolynomialBase<LinearMonomial>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {

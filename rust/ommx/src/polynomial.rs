@@ -28,12 +28,13 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
 }
 
+/// Base struct for [`Linear`] and other polynomials
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Polynomial<M: Monomial> {
+pub struct PolynomialBase<M: Monomial> {
     terms: HashMap<M, Coefficient>,
 }
 
-impl<M: Monomial> Default for Polynomial<M> {
+impl<M: Monomial> Default for PolynomialBase<M> {
     fn default() -> Self {
         Self {
             terms: HashMap::new(),
@@ -41,7 +42,7 @@ impl<M: Monomial> Default for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Polynomial<M> {
+impl<M: Monomial> PolynomialBase<M> {
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {
