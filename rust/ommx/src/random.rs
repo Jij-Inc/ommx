@@ -194,7 +194,7 @@ fn combinations(n: u64, r: usize) -> u64 {
 }
 
 /// nHr
-fn multi_choose(n: u64, r: usize) -> u64 {
+pub fn multi_choose(n: u64, r: usize) -> u64 {
     combinations(n + r as u64 - 1, r)
 }
 

@@ -4,6 +4,7 @@ mod arbitrary;
 mod convert;
 mod linear;
 mod parse;
+mod polynomial;
 
 pub use linear::*;
 

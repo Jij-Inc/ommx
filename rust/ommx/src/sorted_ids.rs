@@ -8,7 +8,7 @@ use std::{collections::BTreeSet, ops::*};
 ///
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
 /// This is better than `[(1, 2), (2, 3)]` or `{1: 2, 2: 3}` style for low-degree polynomials.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct SortedIds(Vec<u64>);
 
 impl From<Vec<u64>> for SortedIds {

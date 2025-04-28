@@ -6,6 +6,12 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
 
+impl VariableID {
+    pub fn into_inner(&self) -> u64 {
+        self.0
+    }
+}
+
 impl From<VariableID> for u64 {
     fn from(id: VariableID) -> Self {
         id.0
