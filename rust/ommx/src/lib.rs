@@ -152,7 +152,6 @@ mod format;
 mod function;
 mod infeasible_detected;
 mod instance;
-mod linear;
 mod macros;
 mod offset;
 mod parameter;
@@ -172,8 +171,8 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
-pub use linear::*;
 pub use offset::*;
+pub use polynomial::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
@@ -186,4 +185,5 @@ mod v1_ext {
     mod function;
     mod instance;
     mod linear;
+    mod polynomial;
 }

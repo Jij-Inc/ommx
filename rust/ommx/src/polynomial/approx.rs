@@ -1,8 +1,8 @@
 use super::*;
 use ::approx::AbsDiffEq;
 
-/// Compare two linear functions in sup-norm.
-impl AbsDiffEq for Linear {
+/// Compare two polynomial by maximum coefficient difference.
+impl<M: Monomial> AbsDiffEq for Polynomial<M> {
     type Epsilon = f64;
     fn default_epsilon() -> Self::Epsilon {
         f64::EPSILON
@@ -23,12 +23,11 @@ mod tests {
 
     #[test]
     fn test_abs_diff_eq() {
-        let zero = Linear::default();
-        let small = Linear {
+        let zero = Polynomial::default();
+        let small = Polynomial {
             terms: hashmap! {
-                1.into() => 1e-9.try_into().unwrap(),
+                LinearMonomial::Variable(1.into()) => 1e-9.try_into().unwrap(),
             },
-            constant: Offset::default(),
         };
         assert_abs_diff_eq!(small, zero, epsilon = 1e-8);
     }

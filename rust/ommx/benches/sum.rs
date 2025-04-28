@@ -6,7 +6,7 @@ use num::Zero;
 use ommx::{
     random::{random, random_deterministic, FunctionParameters, Rng},
     v1::{Linear as v1Linear, Polynomial, Quadratic},
-    Linear,
+    Linear, LinearParameters,
 };
 
 /// Benchmark for summation of many linear functions with three terms
@@ -20,11 +20,7 @@ fn sum_linear_small_many(c: &mut Criterion) {
             .map(|_| -> Linear {
                 random(
                     &mut rng,
-                    FunctionParameters {
-                        num_terms: 3,
-                        max_degree: 1,
-                        max_id: num_functions,
-                    },
+                    LinearParameters::new(3, num_functions.into()).unwrap(),
                 )
             })
             .collect::<Vec<_>>();
@@ -53,11 +49,7 @@ fn sum_linear_large_little(c: &mut Criterion) {
             .map(|_| -> Linear {
                 random(
                     &mut rng,
-                    FunctionParameters {
-                        num_terms,
-                        max_degree: 1,
-                        max_id: 3 * num_terms as u64,
-                    },
+                    LinearParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
                 )
             })
             .collect::<Vec<_>>();
