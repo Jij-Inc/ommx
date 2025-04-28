@@ -142,7 +142,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_linear_monomial_full(
+        fn test_linear(
             (p, monomials) in LinearParameters::arbitrary()
                 .prop_flat_map(|p| {
                     LinearMonomial::arbitrary_uniques(p)

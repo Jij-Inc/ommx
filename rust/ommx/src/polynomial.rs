@@ -2,10 +2,12 @@ mod add;
 mod approx;
 mod arbitrary;
 mod convert;
+mod degree;
 mod linear;
 mod parse;
 mod polynomial;
 
+pub use degree::*;
 pub use linear::*;
 
 use crate::Coefficient;

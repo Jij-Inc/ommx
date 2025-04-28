@@ -138,7 +138,7 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
         .boxed()
 }
 
-fn unique_sorted_ids(
+pub fn unique_sorted_ids(
     max_id: u64,
     degree: usize,
     num_terms: usize,
