@@ -139,3 +139,49 @@ impl<M: Monomial> Zero for Polynomial<M> {
         self.terms.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ::approx::assert_abs_diff_eq;
+    use proptest::prelude::*;
+
+    type Linear = Polynomial<LinearMonomial>;
+
+    proptest! {
+        /// Check four implementations of Add yields the same result
+        #[test]
+        fn add_ref(a: Linear, b: Linear) {
+            let ans = a.clone() + b.clone();
+            assert_abs_diff_eq!(&a + &b, ans);
+            assert_abs_diff_eq!(&a + b.clone(), ans);
+            assert_abs_diff_eq!(a + &b, ans);
+        }
+
+        /// Check four implementations of Sub yields the same result
+        #[test]
+        fn sub_ref(a: Linear, b: Linear) {
+            let ans = a.clone() - b.clone();
+            assert_abs_diff_eq!(&a - &b, ans);
+            assert_abs_diff_eq!(&a - b.clone(), ans);
+            assert_abs_diff_eq!(a - &b, ans);
+        }
+
+        #[test]
+        fn zero(a: Linear) {
+            assert_abs_diff_eq!(&a + Linear::zero(), &a);
+            assert_abs_diff_eq!(&a - Linear::zero(), &a);
+            assert_abs_diff_eq!(&a - &a, Linear::zero());
+        }
+
+        #[test]
+        fn add_commutative(a: Linear, b: Linear) {
+            assert_abs_diff_eq!(&a + &b, &b + &a);
+        }
+
+        #[test]
+        fn add_associative(a: Linear, b: Linear, c: Linear) {
+            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c, epsilon = 1e-9);
+        }
+    }
+}
