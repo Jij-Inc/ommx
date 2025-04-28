@@ -172,7 +172,6 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
-pub use linear::*;
 pub use offset::*;
 pub use polynomial::*;
 

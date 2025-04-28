@@ -7,8 +7,6 @@ mod convert;
 mod mul;
 mod parse;
 
-pub use parse::*;
-
 use crate::{Coefficient, Offset, VariableID};
 use std::collections::HashMap;
 
