@@ -17,7 +17,7 @@ use std::{
 /// Monomial, without coefficient
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Debug + Clone + Hash + Eq + Default {
+pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     type Parameters: Default;
 
     /// Generate non duplicated monomials
