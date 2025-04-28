@@ -6,10 +6,12 @@ mod degree;
 mod linear;
 mod parse;
 mod polynomial;
+mod quadratic;
 
 pub use degree::*;
 pub use linear::*;
 pub use polynomial::*;
+pub use quadratic::*;
 
 use crate::Coefficient;
 use proptest::strategy::BoxedStrategy;

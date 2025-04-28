@@ -125,7 +125,7 @@ pub fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<V
 }
 
 /// Generate unique pairs of integers `(i, j)` where `i <= j <= max_id`
-fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
+pub fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
     unique_integers(0, multi_choose(max_id + 1, 2) - 1, num_terms)
         .prop_map(move |ids| {
             ids.into_iter()
