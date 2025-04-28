@@ -4,6 +4,7 @@ mod arbitrary;
 mod convert;
 mod degree;
 mod linear;
+mod mul;
 mod parse;
 mod polynomial;
 mod quadratic;

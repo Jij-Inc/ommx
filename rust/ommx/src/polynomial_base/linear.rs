@@ -75,6 +75,15 @@ pub enum LinearMonomial {
     Constant,
 }
 
+impl LinearMonomial {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = VariableID>> {
+        match self {
+            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
+            LinearMonomial::Constant => Box::new(std::iter::empty()),
+        }
+    }
+}
+
 impl From<VariableID> for LinearMonomial {
     fn from(value: VariableID) -> Self {
         LinearMonomial::Variable(value)
