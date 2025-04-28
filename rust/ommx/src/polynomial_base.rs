@@ -9,6 +9,7 @@ mod polynomial;
 
 pub use degree::*;
 pub use linear::*;
+pub use polynomial::*;
 
 use crate::Coefficient;
 use proptest::strategy::BoxedStrategy;

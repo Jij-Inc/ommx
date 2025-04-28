@@ -156,7 +156,7 @@ mod macros;
 mod offset;
 mod parameter;
 mod parametric_instance;
-mod polynomial;
+mod polynomial_base;
 mod quadratic;
 mod sample_set;
 mod solution;
@@ -172,7 +172,7 @@ pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
 pub use offset::*;
-pub use polynomial::*;
+pub use polynomial_base::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
