@@ -152,7 +152,6 @@ mod format;
 mod function;
 mod infeasible_detected;
 mod instance;
-mod linear;
 mod macros;
 mod offset;
 mod parameter;
