@@ -1,5 +1,5 @@
 use super::*;
-use crate::{random::*, sorted_ids::SortedIds, Monomial, VariableID};
+use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
 use maplit::hashset;
 use proptest::prelude::*;
@@ -75,13 +75,13 @@ impl Default for PolynomialParameters {
     }
 }
 
-impl Monomial for SortedIds {
+impl Monomial for MonomialDyn {
     type Parameters = PolynomialParameters;
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {
                 0 => return Just(HashSet::new()).boxed(),
-                1 => return Just(hashset! { SortedIds::default() }).boxed(),
+                1 => return Just(hashset! { MonomialDyn::default() }).boxed(),
                 _ => {
                     panic!("Invalid parameters for 0-degree polynomial: {p:?}");
                 }
@@ -105,7 +105,7 @@ impl Monomial for SortedIds {
                     max_degree: p.max_degree - 1,
                     max_id: p.max_id,
                 };
-                let sub = SortedIds::arbitrary_uniques(sub_parameters);
+                let sub = MonomialDyn::arbitrary_uniques(sub_parameters);
                 (ids, sub).prop_map(|(ids, mut sub)| {
                     sub.extend(ids);
                     sub
@@ -151,7 +151,7 @@ mod tests {
         fn test_polynomial(
             (p, monomials) in PolynomialParameters::arbitrary()
                 .prop_flat_map(|p| {
-                    SortedIds::arbitrary_uniques(p)
+                    MonomialDyn::arbitrary_uniques(p)
                         .prop_map(move |monomials| (p, monomials))
                 }),
         ) {

@@ -1,10 +1,9 @@
 use crate::{
-    sorted_ids::{BinaryIdPair, BinaryIds},
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
         Linear, Parameter, ParametricInstance, RemovedConstraint, State,
     },
-    Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID,
+    Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID, {BinaryIdPair, BinaryIds},
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;

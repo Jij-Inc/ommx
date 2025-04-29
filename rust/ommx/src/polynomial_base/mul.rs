@@ -1,5 +1,5 @@
 use super::*;
-use crate::{sorted_ids::SortedIds, Coefficient};
+use crate::{Coefficient, MonomialDyn};
 use std::ops::{Mul, MulAssign};
 
 impl<M: Monomial> MulAssign<Coefficient> for PolynomialBase<M> {
@@ -40,7 +40,7 @@ impl Mul for LinearMonomial {
 }
 
 impl Mul<LinearMonomial> for QuadraticMonomial {
-    type Output = SortedIds;
+    type Output = MonomialDyn;
     fn mul(self, rhs: LinearMonomial) -> Self::Output {
         self.iter()
             .chain(rhs.iter())
@@ -50,14 +50,14 @@ impl Mul<LinearMonomial> for QuadraticMonomial {
 }
 
 impl Mul<QuadraticMonomial> for LinearMonomial {
-    type Output = SortedIds;
+    type Output = MonomialDyn;
     fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
         rhs.mul(self)
     }
 }
 
 impl Mul for QuadraticMonomial {
-    type Output = SortedIds;
+    type Output = MonomialDyn;
     fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
         self.iter()
             .chain(rhs.iter())

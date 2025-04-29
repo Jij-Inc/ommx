@@ -160,7 +160,6 @@ mod polynomial_base;
 mod quadratic;
 mod sample_set;
 mod solution;
-mod sorted_ids;
 mod state;
 
 pub use bound::*;

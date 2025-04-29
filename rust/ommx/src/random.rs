@@ -51,7 +51,7 @@ pub use state::*;
 
 pub use proptest::test_runner::TestRunner as Rng;
 
-use crate::{decision_variable::VariableID, sorted_ids::SortedIds, v1::State, Bound, Bounds};
+use crate::{decision_variable::VariableID, v1::State, Bound, Bounds, MonomialDyn};
 use proptest::{
     prelude::*,
     strategy::{Strategy, ValueTree},
@@ -142,13 +142,13 @@ pub fn unique_sorted_ids(
     max_id: u64,
     degree: usize,
     num_terms: usize,
-) -> BoxedStrategy<Vec<SortedIds>> {
+) -> BoxedStrategy<Vec<MonomialDyn>> {
     unique_integers(0, multi_choose(max_id + 1, degree) - 1, num_terms)
         .prop_map(move |ids| {
             ids.into_iter()
                 .map(|k| {
                     let tuple = map_k_to_tuple(k, degree, max_id);
-                    SortedIds::new(tuple)
+                    MonomialDyn::new(tuple)
                 })
                 .collect()
         })

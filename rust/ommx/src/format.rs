@@ -1,4 +1,4 @@
-use crate::sorted_ids::SortedIds;
+use crate::MonomialDyn;
 use std::fmt;
 
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
@@ -10,7 +10,7 @@ fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Re
     Ok(())
 }
 
-fn write_term(f: &mut fmt::Formatter, ids: SortedIds, coefficient: f64) -> fmt::Result {
+fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt::Result {
     if ids.is_empty() {
         write_f64_with_precision(f, coefficient)?;
         return Ok(());
@@ -35,7 +35,7 @@ fn write_term(f: &mut fmt::Formatter, ids: SortedIds, coefficient: f64) -> fmt::
 
 pub fn format_polynomial(
     f: &mut fmt::Formatter,
-    iter: impl Iterator<Item = (SortedIds, f64)>,
+    iter: impl Iterator<Item = (MonomialDyn, f64)>,
 ) -> fmt::Result {
     let mut terms: Vec<_> = iter
         .filter(|(_, coefficient)| coefficient.abs() > f64::EPSILON)

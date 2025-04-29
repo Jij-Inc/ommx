@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
-    sorted_ids::SortedIds,
     v1::{Linear, Polynomial, Quadratic},
+    MonomialDyn,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -125,7 +125,7 @@ impl FromIterator<((u64, u64), f64)> for Quadratic {
 }
 
 impl<'a> IntoIterator for &'a Quadratic {
-    type Item = (SortedIds, f64);
+    type Item = (MonomialDyn, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -134,7 +134,7 @@ impl<'a> IntoIterator for &'a Quadratic {
         let n = self.columns.len();
         let quad = (0..n).map(move |i| {
             (
-                SortedIds::new(vec![self.columns[i], self.rows[i]]),
+                MonomialDyn::new(vec![self.columns[i], self.rows[i]]),
                 self.values[i],
             )
         });

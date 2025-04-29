@@ -1,11 +1,10 @@
 use crate::{
     macros::*,
-    sorted_ids::SortedIds,
     v1::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
     },
-    Bound, Bounds,
+    Bound, Bounds, MonomialDyn,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -90,20 +89,22 @@ impl FromIterator<((u64, u64), f64)> for Function {
     }
 }
 
-impl FromIterator<(SortedIds, f64)> for Function {
-    fn from_iter<I: IntoIterator<Item = (SortedIds, f64)>>(iter: I) -> Self {
+impl FromIterator<(MonomialDyn, f64)> for Function {
+    fn from_iter<I: IntoIterator<Item = (MonomialDyn, f64)>>(iter: I) -> Self {
         let poly: Polynomial = iter.into_iter().collect();
         poly.into()
     }
 }
 
 impl<'a> IntoIterator for &'a Function {
-    type Item = (SortedIds, f64);
+    type Item = (MonomialDyn, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match &self.function {
-            Some(FunctionEnum::Constant(c)) => Box::new(std::iter::once((SortedIds::empty(), *c))),
+            Some(FunctionEnum::Constant(c)) => {
+                Box::new(std::iter::once((MonomialDyn::empty(), *c)))
+            }
             Some(FunctionEnum::Linear(linear)) => {
                 Box::new(linear.into_iter().map(|(id, c)| (id.into(), c)))
             }
