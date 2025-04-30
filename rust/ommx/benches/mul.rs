@@ -3,8 +3,8 @@ use criterion::{
 };
 
 use ommx::{
-    random::{random_deterministic, FunctionParameters},
-    v1::{Linear, Polynomial, Quadratic},
+    random::random_deterministic, Linear, LinearParameters, Polynomial, PolynomialParameters,
+    Quadratic, QuadraticParameters,
 };
 
 /// Benchmark for squaring a linear function with varying number of terms
@@ -14,17 +14,15 @@ fn square_linear(c: &mut Criterion) {
     group.plot_config(plot_config.clone());
 
     for &num_terms in &[10, 100] {
-        let f: Linear = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 1,
-            max_id: 3 * num_terms as u64,
-        });
+        let f: Linear = random_deterministic(
+            LinearParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
+        );
         group.bench_with_input(
             BenchmarkId::new("square-linear", num_terms.to_string()),
             &f,
             |b, f| {
                 b.iter(|| {
-                    let _ = f.clone() * f.clone();
+                    let _ = f * f;
                 })
             },
         );
@@ -40,17 +38,15 @@ fn square_quadratic(c: &mut Criterion) {
     group.plot_config(plot_config.clone());
 
     for &num_terms in &[10, 100] {
-        let f: Quadratic = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 2,
-            max_id: 3 * num_terms as u64,
-        });
+        let f: Quadratic = random_deterministic(
+            QuadraticParameters::new(num_terms, (3 * num_terms as u64).into()).unwrap(),
+        );
         group.bench_with_input(
             BenchmarkId::new("square-quadratic", num_terms.to_string()),
             &f,
             |b, f| {
                 b.iter(|| {
-                    let _ = f.clone() * f.clone();
+                    let _ = f * f;
                 })
             },
         );
@@ -66,17 +62,15 @@ fn square_polynomial(c: &mut Criterion) {
     group.plot_config(plot_config.clone());
 
     for &num_terms in &[10, 100] {
-        let f: Polynomial = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree: 3,
-            max_id: 3 * num_terms as u64,
-        });
+        let f: Polynomial = random_deterministic(
+            PolynomialParameters::new(num_terms, 3.into(), (3 * num_terms as u64).into()).unwrap(),
+        );
         group.bench_with_input(
             BenchmarkId::new("square-polynomial", num_terms.to_string()),
             &f,
             |b, f| {
                 b.iter(|| {
-                    let _ = f.clone() * f.clone();
+                    let _ = f * f;
                 })
             },
         );
