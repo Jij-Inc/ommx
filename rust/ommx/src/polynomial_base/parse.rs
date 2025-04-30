@@ -127,6 +127,34 @@ impl Parse for v1::Quadratic {
     }
 }
 
+impl From<&Quadratic> for v1::Quadratic {
+    fn from(value: &Quadratic) -> Self {
+        let mut out = v1::Quadratic::default();
+        for (id, coefficient) in &value.terms {
+            match id {
+                QuadraticMonomial::Constant => {
+                    out.linear.get_or_insert_default().constant = coefficient.into_inner();
+                }
+                QuadraticMonomial::Linear(id) => {
+                    out.linear
+                        .get_or_insert_default()
+                        .terms
+                        .push(v1::linear::Term {
+                            id: id.into_inner(),
+                            coefficient: coefficient.into_inner(),
+                        });
+                }
+                QuadraticMonomial::Pair(pair) => {
+                    out.rows.push(pair.lower().into_inner());
+                    out.columns.push(pair.upper().into_inner());
+                    out.values.push(coefficient.into_inner());
+                }
+            }
+        }
+        out
+    }
+}
+
 impl Parse for v1::Monomial {
     type Output = Option<(MonomialDyn, Coefficient)>;
     type Context = ();
@@ -317,6 +345,16 @@ mod tests {
         └─ommx.v1.Quadratic[columns]
         Column length (2) does not match value length (3)
         "###);
+    }
+
+    proptest! {
+        /// Quadratic -> v1::Quadratic -> Quadratic roundtrip test
+        #[test]
+        fn test_quadratic_roundtrip(quadratic in Quadratic::arbitrary()) {
+            let v1_quadratic: v1::Quadratic = (&quadratic).into();
+            let parsed = v1_quadratic.parse(&()).unwrap();
+            prop_assert_eq!(quadratic, parsed);
+        }
     }
 
     #[test]
