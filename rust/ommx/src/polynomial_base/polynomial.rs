@@ -125,10 +125,13 @@ impl Mul for MonomialDyn {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, getset::CopyGetters)]
 pub struct PolynomialParameters {
+    #[getset(get_copy = "pub")]
     num_terms: usize,
+    #[getset(get_copy = "pub")]
     max_degree: Degree,
+    #[getset(get_copy = "pub")]
     max_id: VariableID,
 }
 
@@ -191,6 +194,26 @@ impl Default for PolynomialParameters {
             num_terms: 5,
             max_degree: 3.into(),
             max_id: 10.into(),
+        }
+    }
+}
+
+impl From<LinearParameters> for PolynomialParameters {
+    fn from(p: LinearParameters) -> Self {
+        PolynomialParameters {
+            num_terms: p.num_terms(),
+            max_degree: 1.into(),
+            max_id: p.max_id(),
+        }
+    }
+}
+
+impl From<QuadraticParameters> for PolynomialParameters {
+    fn from(p: QuadraticParameters) -> Self {
+        PolynomialParameters {
+            num_terms: p.num_terms(),
+            max_degree: 2.into(),
+            max_id: p.max_id(),
         }
     }
 }

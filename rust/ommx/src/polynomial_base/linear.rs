@@ -6,9 +6,11 @@ use std::{fmt::Debug, hash::Hash};
 
 pub type Linear = PolynomialBase<LinearMonomial>;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, getset::CopyGetters)]
 pub struct LinearParameters {
+    #[getset(get_copy = "pub")]
     num_terms: usize,
+    #[getset(get_copy = "pub")]
     /// This ID is allowed. So when the `max_id=2`, `[0, 1, 2]` are allowed.
     max_id: VariableID,
 }

@@ -75,10 +75,12 @@ impl VariableIDPair {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, getset::CopyGetters)]
 pub struct QuadraticParameters {
+    #[getset(get_copy = "pub")]
     num_terms: usize,
     /// This ID is allowed. So when the `max_id=2`, `[0, 1, 2]` are allowed.
+    #[getset(get_copy = "pub")]
     max_id: VariableID,
 }
 
