@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use proptest::prelude::*;
 use std::{fmt::Debug, hash::Hash};
 
-pub type Linear = Polynomial<LinearMonomial>;
+pub type Linear = PolynomialBase<LinearMonomial>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LinearParameters {
@@ -75,6 +75,15 @@ pub enum LinearMonomial {
     Constant,
 }
 
+impl LinearMonomial {
+    pub fn iter(&self) -> Box<dyn Iterator<Item = VariableID>> {
+        match self {
+            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
+            LinearMonomial::Constant => Box::new(std::iter::empty()),
+        }
+    }
+}
+
 impl From<VariableID> for LinearMonomial {
     fn from(value: VariableID) -> Self {
         LinearMonomial::Variable(value)
@@ -142,7 +151,7 @@ mod tests {
 
     proptest! {
         #[test]
-        fn test_linear_monomial_full(
+        fn test_linear(
             (p, monomials) in LinearParameters::arbitrary()
                 .prop_flat_map(|p| {
                     LinearMonomial::arbitrary_uniques(p)

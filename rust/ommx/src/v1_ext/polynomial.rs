@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
-    sorted_ids::SortedIds,
     v1::{Linear, Monomial, Polynomial, Quadratic},
+    MonomialDyn,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -51,8 +51,8 @@ impl From<Quadratic> for Polynomial {
     }
 }
 
-impl FromIterator<(SortedIds, f64)> for Polynomial {
-    fn from_iter<I: IntoIterator<Item = (SortedIds, f64)>>(iter: I) -> Self {
+impl FromIterator<(MonomialDyn, f64)> for Polynomial {
+    fn from_iter<I: IntoIterator<Item = (MonomialDyn, f64)>>(iter: I) -> Self {
         let mut terms = BTreeMap::new();
         for (ids, coefficient) in iter {
             let v: &mut f64 = terms.entry(ids.clone()).or_default();
@@ -74,14 +74,14 @@ impl FromIterator<(SortedIds, f64)> for Polynomial {
 }
 
 impl<'a> IntoIterator for &'a Polynomial {
-    type Item = (SortedIds, f64);
+    type Item = (MonomialDyn, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(
             self.terms
                 .iter()
-                .map(|term| (SortedIds::new(term.ids.clone()), term.coefficient)),
+                .map(|term| (MonomialDyn::new(term.ids.clone()), term.coefficient)),
         )
     }
 }
@@ -180,7 +180,7 @@ impl Mul for Polynomial {
         let mut terms = BTreeMap::new();
         for (id_l, value_l) in self.into_iter() {
             for (id_r, value_r) in rhs.clone().into_iter() {
-                let ids = id_r + id_l.clone();
+                let ids = id_r * id_l.clone();
                 *terms.entry(ids).or_default() += value_l * value_r;
             }
         }

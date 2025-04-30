@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
-    sorted_ids::SortedIds,
     v1::{Linear, Polynomial, Quadratic},
+    MonomialDyn,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -125,7 +125,7 @@ impl FromIterator<((u64, u64), f64)> for Quadratic {
 }
 
 impl<'a> IntoIterator for &'a Quadratic {
-    type Item = (SortedIds, f64);
+    type Item = (MonomialDyn, f64);
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -134,7 +134,7 @@ impl<'a> IntoIterator for &'a Quadratic {
         let n = self.columns.len();
         let quad = (0..n).map(move |i| {
             (
-                SortedIds::new(vec![self.columns[i], self.rows[i]]),
+                MonomialDyn::new(vec![self.columns[i], self.rows[i]]),
                 self.values[i],
             )
         });
@@ -220,7 +220,7 @@ impl Mul for Quadratic {
         let mut terms = BTreeMap::new();
         for (id_l, value_l) in self.into_iter() {
             for (id_r, value_r) in rhs.clone().into_iter() {
-                let ids = id_r + id_l.clone();
+                let ids = id_r * id_l.clone();
                 *terms.entry(ids).or_default() += value_l * value_r;
             }
         }

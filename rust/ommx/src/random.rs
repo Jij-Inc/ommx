@@ -51,7 +51,7 @@ pub use state::*;
 
 pub use proptest::test_runner::TestRunner as Rng;
 
-use crate::{decision_variable::VariableID, sorted_ids::SortedIds, v1::State, Bound, Bounds};
+use crate::{decision_variable::VariableID, v1::State, Bound, Bounds, MonomialDyn};
 use proptest::{
     prelude::*,
     strategy::{Strategy, ValueTree},
@@ -125,7 +125,7 @@ pub fn unique_integers(min_id: u64, max_id: u64, size: usize) -> BoxedStrategy<V
 }
 
 /// Generate unique pairs of integers `(i, j)` where `i <= j <= max_id`
-fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
+pub fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64, u64)>> {
     unique_integers(0, multi_choose(max_id + 1, 2) - 1, num_terms)
         .prop_map(move |ids| {
             ids.into_iter()
@@ -138,17 +138,17 @@ fn unique_integer_pairs(max_id: u64, num_terms: usize) -> BoxedStrategy<Vec<(u64
         .boxed()
 }
 
-fn unique_sorted_ids(
+pub fn unique_sorted_ids(
     max_id: u64,
     degree: usize,
     num_terms: usize,
-) -> BoxedStrategy<Vec<SortedIds>> {
+) -> BoxedStrategy<Vec<MonomialDyn>> {
     unique_integers(0, multi_choose(max_id + 1, degree) - 1, num_terms)
         .prop_map(move |ids| {
             ids.into_iter()
                 .map(|k| {
                     let tuple = map_k_to_tuple(k, degree, max_id);
-                    SortedIds::new(tuple)
+                    MonomialDyn::new(tuple)
                 })
                 .collect()
         })
@@ -194,7 +194,7 @@ fn combinations(n: u64, r: usize) -> u64 {
 }
 
 /// nHr
-fn multi_choose(n: u64, r: usize) -> u64 {
+pub fn multi_choose(n: u64, r: usize) -> u64 {
     combinations(n + r as u64 - 1, r)
 }
 

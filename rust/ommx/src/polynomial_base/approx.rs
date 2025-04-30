@@ -2,7 +2,7 @@ use super::*;
 use ::approx::AbsDiffEq;
 
 /// Compare two polynomial by maximum coefficient difference.
-impl<M: Monomial> AbsDiffEq for Polynomial<M> {
+impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
     type Epsilon = f64;
     fn default_epsilon() -> Self::Epsilon {
         f64::EPSILON
@@ -23,8 +23,8 @@ mod tests {
 
     #[test]
     fn test_abs_diff_eq() {
-        let zero = Polynomial::default();
-        let small = Polynomial {
+        let zero = PolynomialBase::default();
+        let small = PolynomialBase {
             terms: hashmap! {
                 LinearMonomial::Variable(1.into()) => 1e-9.try_into().unwrap(),
             },

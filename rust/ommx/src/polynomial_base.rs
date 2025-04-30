@@ -1,11 +1,20 @@
 mod add;
 mod approx;
 mod arbitrary;
+mod binary_ids;
 mod convert;
+mod degree;
 mod linear;
+mod mul;
 mod parse;
+mod polynomial;
+mod quadratic;
 
+pub use binary_ids::*;
+pub use degree::*;
 pub use linear::*;
+pub use polynomial::*;
+pub use quadratic::*;
 
 use crate::Coefficient;
 use proptest::strategy::BoxedStrategy;
@@ -25,12 +34,13 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
 }
 
+/// Base struct for [`Linear`] and other polynomials
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Polynomial<M: Monomial> {
+pub struct PolynomialBase<M: Monomial> {
     terms: HashMap<M, Coefficient>,
 }
 
-impl<M: Monomial> Default for Polynomial<M> {
+impl<M: Monomial> Default for PolynomialBase<M> {
     fn default() -> Self {
         Self {
             terms: HashMap::new(),
@@ -38,7 +48,7 @@ impl<M: Monomial> Default for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Polynomial<M> {
+impl<M: Monomial> PolynomialBase<M> {
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {

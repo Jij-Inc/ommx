@@ -5,15 +5,19 @@ use std::{
     ops::{Add, AddAssign, Neg, Sub, SubAssign},
 };
 
-impl<M: Monomial> AddAssign<&Polynomial<M>> for Polynomial<M> {
-    fn add_assign(&mut self, rhs: &Self) {
+impl<M1, M2> AddAssign<&PolynomialBase<M1>> for PolynomialBase<M2>
+where
+    M1: Monomial,
+    M2: Monomial + From<M1>,
+{
+    fn add_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone(), *c)
+            self.add_term(id.clone().into(), *c)
         }
     }
 }
 
-impl<M: Monomial> AddAssign for Polynomial<M> {
+impl<M: Monomial> AddAssign for PolynomialBase<M> {
     fn add_assign(&mut self, mut rhs: Self) {
         if self.terms.len() < rhs.terms.len() {
             rhs += &*self;
@@ -24,7 +28,7 @@ impl<M: Monomial> AddAssign for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Add for Polynomial<M> {
+impl<M: Monomial> Add for PolynomialBase<M> {
     type Output = Self;
     fn add(mut self, mut rhs: Self) -> Self::Output {
         if self.terms.len() < rhs.terms.len() {
@@ -37,16 +41,16 @@ impl<M: Monomial> Add for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Add<&Polynomial<M>> for Polynomial<M> {
+impl<M1: Monomial, M2: Monomial + From<M1>> Add<&PolynomialBase<M1>> for PolynomialBase<M2> {
     type Output = Self;
-    fn add(mut self, rhs: &Self) -> Self::Output {
+    fn add(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
         self += rhs;
         self
     }
 }
 
-impl<M: Monomial> Add for &Polynomial<M> {
-    type Output = Polynomial<M>;
+impl<M: Monomial> Add for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
     fn add(self, rhs: Self) -> Self::Output {
         if self.terms.len() < rhs.terms.len() {
             rhs.clone() + self
@@ -56,20 +60,20 @@ impl<M: Monomial> Add for &Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Add<Polynomial<M>> for &Polynomial<M> {
-    type Output = Polynomial<M>;
-    fn add(self, rhs: Polynomial<M>) -> Self::Output {
+impl<M: Monomial> Add<PolynomialBase<M>> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn add(self, rhs: PolynomialBase<M>) -> Self::Output {
         rhs + self
     }
 }
 
-impl<M: Monomial> Sum for Polynomial<M> {
+impl<M: Monomial> Sum for PolynomialBase<M> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Self::default(), Add::add)
     }
 }
 
-impl<M: Monomial> Neg for Polynomial<M> {
+impl<M: Monomial> Neg for PolynomialBase<M> {
     type Output = Self;
     fn neg(mut self) -> Self::Output {
         for c in self.terms.values_mut() {
@@ -79,15 +83,15 @@ impl<M: Monomial> Neg for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> SubAssign<&Polynomial<M>> for Polynomial<M> {
-    fn sub_assign(&mut self, rhs: &Polynomial<M>) {
+impl<M1: Monomial, M2: Monomial + From<M1>> SubAssign<&PolynomialBase<M1>> for PolynomialBase<M2> {
+    fn sub_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone(), -(*c));
+            self.add_term(id.clone().into(), -(*c));
         }
     }
 }
 
-impl<M: Monomial> SubAssign for Polynomial<M> {
+impl<M: Monomial> SubAssign for PolynomialBase<M> {
     fn sub_assign(&mut self, rhs: Self) {
         if self.terms.len() < rhs.terms.len() {
             *self = -rhs + &*self;
@@ -97,7 +101,7 @@ impl<M: Monomial> SubAssign for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Sub for Polynomial<M> {
+impl<M: Monomial> Sub for PolynomialBase<M> {
     type Output = Self;
     fn sub(mut self, rhs: Self) -> Self::Output {
         self -= rhs;
@@ -105,16 +109,16 @@ impl<M: Monomial> Sub for Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Sub<&Polynomial<M>> for Polynomial<M> {
+impl<M1: Monomial, M2: Monomial + From<M1>> Sub<&PolynomialBase<M1>> for PolynomialBase<M2> {
     type Output = Self;
-    fn sub(mut self, rhs: &Self) -> Self::Output {
+    fn sub(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
         self -= rhs;
         self
     }
 }
 
-impl<M: Monomial> Sub for &Polynomial<M> {
-    type Output = Polynomial<M>;
+impl<M: Monomial> Sub for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
     fn sub(self, rhs: Self) -> Self::Output {
         if self.terms.len() < rhs.terms.len() {
             -rhs.clone() + self
@@ -124,14 +128,14 @@ impl<M: Monomial> Sub for &Polynomial<M> {
     }
 }
 
-impl<M: Monomial> Sub<Polynomial<M>> for &Polynomial<M> {
-    type Output = Polynomial<M>;
-    fn sub(self, rhs: Polynomial<M>) -> Self::Output {
+impl<M: Monomial> Sub<PolynomialBase<M>> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: PolynomialBase<M>) -> Self::Output {
         -rhs + self
     }
 }
 
-impl<M: Monomial> Zero for Polynomial<M> {
+impl<M: Monomial> Zero for PolynomialBase<M> {
     fn zero() -> Self {
         Self::default()
     }
@@ -146,7 +150,7 @@ mod tests {
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
 
-    type Linear = Polynomial<LinearMonomial>;
+    type Linear = PolynomialBase<LinearMonomial>;
 
     proptest! {
         /// Check four implementations of Add yields the same result
