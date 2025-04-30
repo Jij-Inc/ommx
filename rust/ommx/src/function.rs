@@ -50,3 +50,26 @@ impl Parse for v1::Function {
         }
     }
 }
+
+impl TryFrom<v1::Function> for Function {
+    type Error = ParseError;
+    fn try_from(value: v1::Function) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl From<Function> for v1::Function {
+    fn from(value: Function) -> Self {
+        use v1::function::Function::*;
+        let function = match value {
+            Function::Zero => Constant(0.0),
+            Function::Constant(c) => Constant(c.into()),
+            Function::Linear(l) => Linear(l.into()),
+            Function::Quadratic(q) => Quadratic(q.into()),
+            Function::Polynomial(p) => Polynomial(p.into()),
+        };
+        Self {
+            function: Some(function),
+        }
+    }
+}
