@@ -180,7 +180,7 @@ impl Mul for Polynomial {
         let mut terms = BTreeMap::new();
         for (id_l, value_l) in self.into_iter() {
             for (id_r, value_r) in rhs.clone().into_iter() {
-                let ids = id_r + id_l.clone();
+                let ids = id_r * id_l.clone();
                 *terms.entry(ids).or_default() += value_l * value_r;
             }
         }

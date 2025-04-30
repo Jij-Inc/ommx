@@ -1,9 +1,106 @@
 use super::*;
 use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
+use itertools::Itertools;
 use maplit::hashset;
 use proptest::prelude::*;
 use std::collections::HashSet;
+use std::ops::*;
+
+/// A sorted list of decision variable and parameter IDs
+///
+/// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
+/// This is better than `[(1, 2), (2, 3)]` or `{1: 2, 2: 3}` style for low-degree polynomials.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
+pub struct MonomialDyn(Vec<u64>);
+
+impl From<Vec<u64>> for MonomialDyn {
+    fn from(ids: Vec<u64>) -> Self {
+        Self::new(ids)
+    }
+}
+
+impl Deref for MonomialDyn {
+    type Target = [u64];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Graded lexicographic order
+///
+/// - Higher grade comes first
+/// - If grades are equal, lexicographic order is used
+///
+impl Ord for MonomialDyn {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let a = &self.0;
+        let b = &other.0;
+        if a.len() != b.len() {
+            b.len().cmp(&a.len())
+        } else {
+            a.cmp(b)
+        }
+    }
+}
+
+impl PartialOrd for MonomialDyn {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl FromIterator<u64> for MonomialDyn {
+    fn from_iter<I: IntoIterator<Item = u64>>(iter: I) -> Self {
+        let ids = iter.into_iter().collect::<Vec<_>>();
+        Self::new(ids)
+    }
+}
+
+impl From<Option<u64>> for MonomialDyn {
+    fn from(id: Option<u64>) -> Self {
+        id.into_iter().collect()
+    }
+}
+
+impl MonomialDyn {
+    pub fn new(ids: Vec<u64>) -> Self {
+        let mut ids = ids;
+        ids.sort_unstable();
+        Self(ids)
+    }
+
+    pub fn into_inner(self) -> Vec<u64> {
+        self.0
+    }
+
+    pub fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &u64> {
+        self.0.iter()
+    }
+
+    pub fn chunks(&self) -> Vec<(u64, usize)> {
+        self.iter()
+            .chunk_by(|&x| x)
+            .into_iter()
+            .map(|(key, group)| (*key, group.count()))
+            .collect::<Vec<_>>()
+    }
+}
+
+impl Mul for MonomialDyn {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        let mut ids = self.0;
+        ids.extend(other.0);
+        ids.sort_unstable();
+        Self(ids)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PolynomialParameters {

@@ -5,7 +5,6 @@ mod binary_ids;
 mod convert;
 mod degree;
 mod linear;
-mod monomial_dyn;
 mod mul;
 mod parse;
 mod polynomial;
@@ -14,7 +13,6 @@ mod quadratic;
 pub use binary_ids::*;
 pub use degree::*;
 pub use linear::*;
-pub use monomial_dyn::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
