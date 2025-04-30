@@ -1,4 +1,7 @@
-use crate::{BoundError, CoefficientError, ConstraintID, OffsetError, VariableID};
+use crate::{
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID, OffsetError,
+    VariableID,
+};
 use prost::DecodeError;
 use std::fmt;
 
@@ -103,6 +106,9 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InvalidCoefficient(#[from] CoefficientError),
+
+    #[error(transparent)]
+    QuadraticParseError(#[from] QuadraticParseError),
 
     #[error(transparent)]
     InvalidOffset(#[from] OffsetError),

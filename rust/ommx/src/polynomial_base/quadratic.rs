@@ -4,17 +4,24 @@ use crate::{
     Monomial, VariableID,
 };
 use anyhow::{bail, Result};
+use derive_more::From;
 use proptest::prelude::*;
 use std::collections::HashSet;
 
 pub type Quadratic = PolynomialBase<QuadraticMonomial>;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From)]
 pub enum QuadraticMonomial {
     Pair(VariableIDPair),
     Linear(VariableID),
     #[default]
     Constant,
+}
+
+impl From<(VariableID, VariableID)> for QuadraticMonomial {
+    fn from(pair: (VariableID, VariableID)) -> Self {
+        Self::new_pair(pair.0, pair.1)
+    }
 }
 
 impl QuadraticMonomial {

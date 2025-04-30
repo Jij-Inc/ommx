@@ -13,6 +13,7 @@ mod quadratic;
 pub use binary_ids::*;
 pub use degree::*;
 pub use linear::*;
+pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 

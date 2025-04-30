@@ -1,5 +1,6 @@
 use super::*;
 use crate::{parse::*, v1, CoefficientError, VariableID};
+use itertools::izip;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Term {
@@ -17,6 +18,13 @@ impl Parse for v1::linear::Term {
             Err(CoefficientError::Zero) => Ok(None),
             Err(e) => Err(RawParseError::from(e).context("ommx.v1.linear.Term", "coefficient")),
         }
+    }
+}
+
+impl TryFrom<v1::linear::Term> for Option<Term> {
+    type Error = ParseError;
+    fn try_from(value: v1::linear::Term) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
@@ -46,6 +54,56 @@ impl TryFrom<v1::Linear> for Linear {
     type Error = ParseError;
     fn try_from(value: v1::Linear) -> Result<Self, Self::Error> {
         value.parse(&())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum QuadraticParseError {
+    #[error("Row length ({row}) does not match value length ({value})")]
+    RowLengthMismatch { row: usize, value: usize },
+    #[error("Column length ({column}) does not match value length ({value})")]
+    ColumnLengthMismatch { column: usize, value: usize },
+}
+
+impl Parse for v1::Quadratic {
+    type Output = Quadratic;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Quadratic";
+        let mut out = Quadratic::default();
+        let num_terms = self.values.len();
+        if self.columns.len() != num_terms {
+            return Err(
+                RawParseError::from(QuadraticParseError::ColumnLengthMismatch {
+                    column: self.columns.len(),
+                    value: num_terms,
+                })
+                .context(message, "columns"),
+            );
+        }
+        if self.rows.len() != num_terms {
+            return Err(RawParseError::from(QuadraticParseError::RowLengthMismatch {
+                row: self.rows.len(),
+                value: num_terms,
+            })
+            .context(message, "rows"));
+        }
+        for (column, row, value) in izip!(self.columns, self.rows, self.values) {
+            let column = VariableID::from(column);
+            let row = VariableID::from(row);
+            match value.try_into() {
+                Ok(coefficient) => out.add_term((column, row).into(), coefficient),
+                Err(CoefficientError::Zero) => {}
+                Err(e) => return Err(RawParseError::from(e).context(message, "values")),
+            }
+        }
+
+        if let Some(linear) = self.linear {
+            let linear = linear.parse_as(&(), message, "linear")?;
+            out += &linear;
+        }
+        Ok(out)
     }
 }
 
@@ -148,6 +206,53 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Linear[constant]
         Coefficient must be finite
+        "###);
+    }
+
+    #[test]
+    fn test_parse_quadratic() {
+        // Valid case
+        let quadratic = v1::Quadratic {
+            rows: vec![1, 2, 3],
+            columns: vec![4, 5, 6],
+            values: vec![7.0, 8.0, 9.0],
+            linear: None,
+        };
+        assert_eq!(
+            quadratic.parse(&()).unwrap(),
+            Quadratic {
+                terms: hashmap! {
+                    (1.into(), 4.into()).into() => 7.0.try_into().unwrap(),
+                    (2.into(), 5.into()).into() => 8.0.try_into().unwrap(),
+                    (3.into(), 6.into()).into() => 9.0.try_into().unwrap(),
+                },
+            }
+        );
+
+        // Invalid case: row length mismatch
+        let quadratic = v1::Quadratic {
+            rows: vec![1, 2],
+            columns: vec![4, 5, 6],
+            values: vec![7.0, 8.0, 9.0],
+            linear: None,
+        };
+        insta::assert_snapshot!(quadratic.parse(&()).unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Quadratic[rows]
+        Row length (2) does not match value length (3)
+        "###);
+
+        // Invalid case: column length mismatch
+        let quadratic = v1::Quadratic {
+            rows: vec![1, 2, 3],
+            columns: vec![4, 5],
+            values: vec![7.0, 8.0, 9.0],
+            linear: None,
+        };
+        insta::assert_snapshot!(quadratic.parse(&()).unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Quadratic[columns]
+        Column length (2) does not match value length (3)
         "###);
     }
 }
