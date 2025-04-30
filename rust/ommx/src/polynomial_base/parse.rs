@@ -107,6 +107,38 @@ impl Parse for v1::Quadratic {
     }
 }
 
+impl Parse for v1::Monomial {
+    type Output = Option<(MonomialDyn, Coefficient)>;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Monomial";
+        let ids = MonomialDyn::new(self.ids);
+        match self.coefficient.try_into() {
+            Ok(coefficient) => Ok(Some((ids, coefficient))),
+            Err(CoefficientError::Zero) => return Ok(None),
+            Err(e) => return Err(RawParseError::from(e).context(message, "coefficient")),
+        }
+    }
+}
+
+impl Parse for v1::Polynomial {
+    type Output = Polynomial;
+    type Context = ();
+
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut out = Polynomial::default();
+        for term in self.terms {
+            if let Some((monomial, coefficient)) =
+                term.parse_as(&(), "ommx.v1.Polynomial", "terms")?
+            {
+                out.add_term(monomial, coefficient);
+            }
+        }
+        Ok(out)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +285,52 @@ mod tests {
         Traceback for OMMX Message parse error:
         └─ommx.v1.Quadratic[columns]
         Column length (2) does not match value length (3)
+        "###);
+    }
+
+    #[test]
+    fn test_parse_polynomial() {
+        // Valid case
+        let polynomial = v1::Polynomial {
+            terms: vec![
+                v1::Monomial {
+                    ids: vec![1, 2],
+                    coefficient: 3.0,
+                },
+                v1::Monomial {
+                    ids: vec![3, 4],
+                    coefficient: 5.0,
+                },
+            ],
+        };
+        assert_eq!(
+            polynomial.parse(&()).unwrap(),
+            Polynomial {
+                terms: hashmap! {
+                    MonomialDyn::new(vec![1, 2]) => 3.0.try_into().unwrap(),
+                    MonomialDyn::new(vec![3, 4]) => 5.0.try_into().unwrap(),
+                },
+            }
+        );
+
+        // Invalid case: coefficient has infinity
+        let polynomial = v1::Polynomial {
+            terms: vec![
+                v1::Monomial {
+                    ids: vec![1, 2],
+                    coefficient: f64::INFINITY,
+                },
+                v1::Monomial {
+                    ids: vec![3, 4],
+                    coefficient: 5.0,
+                },
+            ],
+        };
+        insta::assert_snapshot!(polynomial.parse(&()).unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.Polynomial[terms]
+          └─ommx.v1.Monomial[coefficient]
+        Coefficient must be finite
         "###);
     }
 }
