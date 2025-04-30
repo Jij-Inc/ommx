@@ -57,6 +57,26 @@ impl TryFrom<v1::Linear> for Linear {
     }
 }
 
+impl From<&Linear> for v1::Linear {
+    fn from(value: &Linear) -> Self {
+        let mut out = v1::Linear::default();
+        for (id, coefficient) in &value.terms {
+            match id {
+                LinearMonomial::Constant => {
+                    out.constant = coefficient.into_inner();
+                }
+                LinearMonomial::Variable(id) => {
+                    out.terms.push(v1::linear::Term {
+                        id: id.into_inner(),
+                        coefficient: coefficient.into_inner(),
+                    });
+                }
+            }
+        }
+        out
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum QuadraticParseError {
     #[error("Row length ({row}) does not match value length ({value})")]
@@ -144,6 +164,7 @@ mod tests {
     use super::*;
     use crate::v1::linear::Term;
     use maplit::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_parse_linear() {
@@ -239,6 +260,16 @@ mod tests {
         └─ommx.v1.Linear[constant]
         Coefficient must be finite
         "###);
+    }
+
+    proptest! {
+        /// Linear -> v1::Linear -> Linear roundtrip test
+        #[test]
+        fn test_linear_roundtrip(linear in Linear::arbitrary()) {
+            let v1_linear: v1::Linear = (&linear).into();
+            let parsed = v1_linear.parse(&()).unwrap();
+            prop_assert_eq!(linear, parsed);
+        }
     }
 
     #[test]
