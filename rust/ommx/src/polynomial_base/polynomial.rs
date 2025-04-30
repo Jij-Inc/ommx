@@ -7,6 +7,8 @@ use proptest::prelude::*;
 use std::collections::HashSet;
 use std::ops::*;
 
+pub type Polynomial = PolynomialBase<MonomialDyn>;
+
 /// A sorted list of decision variable and parameter IDs
 ///
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.

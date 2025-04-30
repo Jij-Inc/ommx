@@ -1,3 +1,4 @@
+use super::*;
 use crate::{
     random::{multi_choose, unique_integer_pairs},
     Monomial, VariableID,
@@ -6,7 +7,7 @@ use anyhow::{bail, Result};
 use proptest::prelude::*;
 use std::collections::HashSet;
 
-use super::{LinearMonomial, LinearParameters};
+pub type Quadratic = PolynomialBase<QuadraticMonomial>;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QuadraticMonomial {
