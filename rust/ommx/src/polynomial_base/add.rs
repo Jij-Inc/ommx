@@ -5,10 +5,14 @@ use std::{
     ops::{Add, AddAssign, Neg, Sub, SubAssign},
 };
 
-impl<M: Monomial> AddAssign<&PolynomialBase<M>> for PolynomialBase<M> {
-    fn add_assign(&mut self, rhs: &Self) {
+impl<M1, M2> AddAssign<&PolynomialBase<M1>> for PolynomialBase<M2>
+where
+    M1: Monomial,
+    M2: Monomial + From<M1>,
+{
+    fn add_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone(), *c)
+            self.add_term(id.clone().into(), *c)
         }
     }
 }
@@ -37,9 +41,9 @@ impl<M: Monomial> Add for PolynomialBase<M> {
     }
 }
 
-impl<M: Monomial> Add<&PolynomialBase<M>> for PolynomialBase<M> {
+impl<M1: Monomial, M2: Monomial + From<M1>> Add<&PolynomialBase<M1>> for PolynomialBase<M2> {
     type Output = Self;
-    fn add(mut self, rhs: &Self) -> Self::Output {
+    fn add(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
         self += rhs;
         self
     }
@@ -79,10 +83,10 @@ impl<M: Monomial> Neg for PolynomialBase<M> {
     }
 }
 
-impl<M: Monomial> SubAssign<&PolynomialBase<M>> for PolynomialBase<M> {
-    fn sub_assign(&mut self, rhs: &PolynomialBase<M>) {
+impl<M1: Monomial, M2: Monomial + From<M1>> SubAssign<&PolynomialBase<M1>> for PolynomialBase<M2> {
+    fn sub_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone(), -(*c));
+            self.add_term(id.clone().into(), -(*c));
         }
     }
 }
@@ -105,9 +109,9 @@ impl<M: Monomial> Sub for PolynomialBase<M> {
     }
 }
 
-impl<M: Monomial> Sub<&PolynomialBase<M>> for PolynomialBase<M> {
+impl<M1: Monomial, M2: Monomial + From<M1>> Sub<&PolynomialBase<M1>> for PolynomialBase<M2> {
     type Output = Self;
-    fn sub(mut self, rhs: &Self) -> Self::Output {
+    fn sub(mut self, rhs: &PolynomialBase<M1>) -> Self::Output {
         self -= rhs;
         self
     }

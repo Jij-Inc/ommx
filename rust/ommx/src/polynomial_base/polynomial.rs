@@ -16,6 +16,27 @@ pub type Polynomial = PolynomialBase<MonomialDyn>;
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct MonomialDyn(Vec<u64>);
 
+impl From<LinearMonomial> for MonomialDyn {
+    fn from(m: LinearMonomial) -> Self {
+        match m {
+            LinearMonomial::Variable(id) => Self(vec![id.into_inner()]),
+            LinearMonomial::Constant => Self::empty(),
+        }
+    }
+}
+
+impl From<QuadraticMonomial> for MonomialDyn {
+    fn from(m: QuadraticMonomial) -> Self {
+        match m {
+            QuadraticMonomial::Pair(pair) => {
+                Self(vec![pair.lower().into_inner(), pair.upper().into_inner()])
+            }
+            QuadraticMonomial::Linear(id) => Self(vec![id.into_inner()]),
+            QuadraticMonomial::Constant => Self::empty(),
+        }
+    }
+}
+
 impl From<Vec<u64>> for MonomialDyn {
     fn from(ids: Vec<u64>) -> Self {
         Self::new(ids)
