@@ -1,6 +1,6 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1,
+    v1, Coefficient, CoefficientError, Linear, Polynomial, Quadratic,
 };
 use derive_more::From;
 use std::fmt::Debug;
@@ -16,23 +16,37 @@ use std::fmt::Debug;
 ///
 #[derive(Debug, Clone, PartialEq, From)]
 pub enum Function {
-    Constant(f64),
-    Linear(v1::Linear),
-    Quadratic(v1::Quadratic),
-    Polynomial(v1::Polynomial),
+    Zero,
+    /// Non-zero constant
+    Constant(Coefficient),
+    Linear(Linear),
+    Quadratic(Quadratic),
+    Polynomial(Polynomial),
 }
 
 impl Parse for v1::Function {
     type Output = Function;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        // FIXME: We should check the decision variable ID used in the function are valid.
-        //        This will be done when implementing Linear and Quadratic functions.
+        let message = "ommx.v1.Function";
+        use v1::function::Function::*;
         match self.function.ok_or(RawParseError::UnsupportedV1Function)? {
-            v1::function::Function::Constant(c) => Ok(Function::Constant(c)),
-            v1::function::Function::Linear(l) => Ok(Function::Linear(l)),
-            v1::function::Function::Quadratic(q) => Ok(Function::Quadratic(q)),
-            v1::function::Function::Polynomial(p) => Ok(Function::Polynomial(p)),
+            Constant(c) => match c.try_into() {
+                Ok(c) => Ok(Function::Constant(c)),
+                Err(CoefficientError::Zero) => Ok(Function::Zero),
+                Err(c) => Err(RawParseError::from(c).context(message, "constant")),
+            },
+            Linear(l) => Ok(Function::Linear(l.parse_as(&(), message, "linear")?)),
+            Quadratic(q) => Ok(Function::Quadratic(q.parse_as(
+                &(),
+                message,
+                "quadratic",
+            )?)),
+            Polynomial(p) => Ok(Function::Polynomial(p.parse_as(
+                &(),
+                message,
+                "polynomial",
+            )?)),
         }
     }
 }
