@@ -57,8 +57,8 @@ impl TryFrom<v1::Linear> for Linear {
     }
 }
 
-impl From<&Linear> for v1::Linear {
-    fn from(value: &Linear) -> Self {
+impl From<Linear> for v1::Linear {
+    fn from(value: Linear) -> Self {
         let mut out = v1::Linear::default();
         for (id, coefficient) in &value.terms {
             match id {
@@ -127,8 +127,15 @@ impl Parse for v1::Quadratic {
     }
 }
 
-impl From<&Quadratic> for v1::Quadratic {
-    fn from(value: &Quadratic) -> Self {
+impl TryFrom<v1::Quadratic> for Quadratic {
+    type Error = ParseError;
+    fn try_from(value: v1::Quadratic) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl From<Quadratic> for v1::Quadratic {
+    fn from(value: Quadratic) -> Self {
         let mut out = v1::Quadratic::default();
         for (id, coefficient) in &value.terms {
             match id {
@@ -184,6 +191,26 @@ impl Parse for v1::Polynomial {
             }
         }
         Ok(out)
+    }
+}
+
+impl TryFrom<v1::Polynomial> for Polynomial {
+    type Error = ParseError;
+    fn try_from(value: v1::Polynomial) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl From<Polynomial> for v1::Polynomial {
+    fn from(value: Polynomial) -> Self {
+        let mut out = v1::Polynomial::default();
+        for (monomial, coefficient) in value.terms {
+            out.terms.push(v1::Monomial {
+                ids: monomial.into_inner(),
+                coefficient: coefficient.into_inner(),
+            });
+        }
+        out
     }
 }
 
@@ -294,7 +321,7 @@ mod tests {
         /// Linear -> v1::Linear -> Linear roundtrip test
         #[test]
         fn test_linear_roundtrip(linear in Linear::arbitrary()) {
-            let v1_linear: v1::Linear = (&linear).into();
+            let v1_linear: v1::Linear = linear.clone().into();
             let parsed = v1_linear.parse(&()).unwrap();
             prop_assert_eq!(linear, parsed);
         }
@@ -351,7 +378,7 @@ mod tests {
         /// Quadratic -> v1::Quadratic -> Quadratic roundtrip test
         #[test]
         fn test_quadratic_roundtrip(quadratic in Quadratic::arbitrary()) {
-            let v1_quadratic: v1::Quadratic = (&quadratic).into();
+            let v1_quadratic: v1::Quadratic = quadratic.clone().into();
             let parsed = v1_quadratic.parse(&()).unwrap();
             prop_assert_eq!(quadratic, parsed);
         }
@@ -401,5 +428,15 @@ mod tests {
           └─ommx.v1.Monomial[coefficient]
         Coefficient must be finite
         "###);
+    }
+
+    proptest! {
+        /// Polynomial -> v1::Polynomial -> Polynomial roundtrip test
+        #[test]
+        fn test_polynomial_roundtrip(polynomial in Polynomial::arbitrary()) {
+            let v1_polynomial: v1::Polynomial = polynomial.clone().into();
+            let parsed = v1_polynomial.parse(&()).unwrap();
+            prop_assert_eq!(polynomial, parsed);
+        }
     }
 }
