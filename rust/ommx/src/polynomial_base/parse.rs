@@ -116,8 +116,8 @@ impl Parse for v1::Monomial {
         let ids = MonomialDyn::new(self.ids);
         match self.coefficient.try_into() {
             Ok(coefficient) => Ok(Some((ids, coefficient))),
-            Err(CoefficientError::Zero) => return Ok(None),
-            Err(e) => return Err(RawParseError::from(e).context(message, "coefficient")),
+            Err(CoefficientError::Zero) => Ok(None),
+            Err(e) => Err(RawParseError::from(e).context(message, "coefficient")),
         }
     }
 }
