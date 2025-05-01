@@ -4,10 +4,10 @@ use num::Zero;
 use std::{borrow::Cow, fmt::Debug};
 
 mod add;
+mod approx;
 mod arbitrary;
 mod mul;
 mod parse;
-mod approx;
 mod sub;
 
 /// A real-valued function of decision variables used for objective and constraint functions.
