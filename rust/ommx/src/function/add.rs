@@ -1,6 +1,6 @@
 use super::*;
-use std::ops::{Add, AddAssign, Neg};
 use num::Zero;
+use std::ops::{Add, AddAssign, Neg};
 
 impl Zero for Function {
     fn zero() -> Self {
@@ -173,10 +173,50 @@ impl Add for &Function {
     }
 }
 
+impl Add<Function> for &Function {
+    type Output = Function;
+    fn add(self, rhs: Function) -> Self::Output {
+        rhs + self
+    }
+}
+
 impl Neg for Function {
     type Output = Self;
     fn neg(mut self) -> Self::Output {
         self.values_mut().for_each(|v| *v = -(*v));
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ::approx::assert_abs_diff_eq;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn add_ref(a in any::<Function>(), b in any::<Function>()) {
+            let ans = a.clone() + b.clone();
+            assert_abs_diff_eq!(&a + &b, ans);
+            assert_abs_diff_eq!(&a + b.clone(), ans);
+            assert_abs_diff_eq!(a + &b, ans);
+        }
+
+        #[test]
+        fn zero(a in any::<Function>()) {
+            assert_abs_diff_eq!(&a + Function::zero(), a.clone());
+            assert_abs_diff_eq!(Function::zero() + &a, a.clone());
+        }
+
+        #[test]
+        fn add_commutative(a in any::<Function>(), b in any::<Function>()) {
+            assert_abs_diff_eq!(&a + &b, &b + &a);
+        }
+
+        #[test]
+        fn add_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c, epsilon = 1e-9);
+        }
     }
 }
