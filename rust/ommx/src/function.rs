@@ -166,9 +166,7 @@ impl Arbitrary for Function {
             .ok()
             .map(Linear::arbitrary_with);
         let quad = if p.max_degree() == 1 {
-            linear
-                .clone()
-                .map(|l| l.prop_map(Quadratic::from).boxed())
+            linear.clone().map(|l| l.prop_map(Quadratic::from).boxed())
         } else {
             QuadraticParameters::new(p.num_terms(), p.max_id())
                 .ok()
