@@ -2,16 +2,16 @@ use super::*;
 
 impl<M1: Monomial, M2: Monomial> TryFrom<&PolynomialBase<M1>> for PolynomialBase<M2>
 where
-    M2: for<'a> TryFrom<&'a M1, Error = MonomialDowngradeError>,
+    M2: for<'a> TryFrom<&'a M1, Error = InvalidDegreeError>,
 {
-    type Error = MonomialDowngradeError;
-    fn try_from(q: &PolynomialBase<M1>) -> std::result::Result<Self, MonomialDowngradeError> {
+    type Error = InvalidDegreeError;
+    fn try_from(q: &PolynomialBase<M1>) -> std::result::Result<Self, InvalidDegreeError> {
         Ok(Self {
             terms: q
                 .terms
                 .iter()
                 .map(|(k, v)| Ok((k.try_into()?, *v)))
-                .collect::<Result<_, MonomialDowngradeError>>()?,
+                .collect::<Result<_, InvalidDegreeError>>()?,
         })
     }
 }

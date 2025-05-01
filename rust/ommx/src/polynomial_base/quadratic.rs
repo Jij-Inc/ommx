@@ -48,10 +48,10 @@ impl From<LinearMonomial> for QuadraticMonomial {
 }
 
 impl TryFrom<&QuadraticMonomial> for LinearMonomial {
-    type Error = MonomialDowngradeError;
-    fn try_from(m: &QuadraticMonomial) -> std::result::Result<Self, MonomialDowngradeError> {
+    type Error = InvalidDegreeError;
+    fn try_from(m: &QuadraticMonomial) -> std::result::Result<Self, InvalidDegreeError> {
         match m {
-            QuadraticMonomial::Pair(_) => Err(MonomialDowngradeError {
+            QuadraticMonomial::Pair(_) => Err(InvalidDegreeError {
                 degree: 2.into(),
                 max_degree: 1.into(),
             }),
