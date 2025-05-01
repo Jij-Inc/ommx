@@ -1,5 +1,5 @@
 use super::*;
-use std::ops::{Sub, SubAssign};
+use std::ops::{AddAssign, Sub, SubAssign};
 
 impl SubAssign<&Function> for Function {
     fn sub_assign(&mut self, rhs: &Function) {
@@ -165,6 +165,48 @@ impl Sub for &Function {
             -rhs.clone() + self.clone()
         } else {
             self.clone() - rhs.clone()
+        }
+    }
+}
+
+impl Sub<Function> for &Function {
+    type Output = Function;
+    fn sub(self, rhs: Function) -> Self::Output {
+        let mut out = -rhs;
+        out.add_assign(self);
+        out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ::approx::assert_abs_diff_eq;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn sub_ref(a in any::<Function>(), b in any::<Function>()) {
+            let expected = a.clone() - b.clone();
+            assert_abs_diff_eq!(&a - &b, expected);
+            assert_abs_diff_eq!(&a - b.clone(), expected);
+            assert_abs_diff_eq!(a.clone() - &b, expected);
+        }
+
+        #[test]
+        fn zero_sub(a in any::<Function>()) {
+            assert_abs_diff_eq!(&a - Function::zero(), a.clone());
+            assert_abs_diff_eq!(Function::zero() - &a, -a.clone());
+        }
+
+        #[test]
+        fn sub_via_add_neg(a in any::<Function>(), b in any::<Function>()) {
+            assert_abs_diff_eq!(a.clone() - b.clone(), a + (-b.clone()));
+        }
+
+        #[test]
+        fn neg_sub(a in any::<Function>(), b in any::<Function>()) {
+            assert_abs_diff_eq!(-(a.clone() - b.clone()), b - a);
         }
     }
 }
