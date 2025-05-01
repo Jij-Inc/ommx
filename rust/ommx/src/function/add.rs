@@ -1,5 +1,5 @@
 use super::*;
-use std::ops::{Add, AddAssign, Neg, SubAssign};
+use std::ops::{Add, AddAssign, Neg};
 
 impl AddAssign<&Function> for Function {
     fn add_assign(&mut self, rhs: &Function) {
@@ -168,19 +168,5 @@ impl Neg for Function {
     fn neg(mut self) -> Self::Output {
         self.values_mut().for_each(|v| *v = -(*v));
         self
-    }
-}
-
-impl SubAssign<Coefficient> for Function {
-    fn sub_assign(&mut self, rhs: Coefficient) {
-        match self {
-            Function::Zero => *self = Function::from(-rhs),
-            Function::Constant(c) => {
-                *self = (*c - rhs).map(Function::from).unwrap_or(Function::Zero)
-            }
-            Function::Linear(l) => l.sub_assign(rhs),
-            Function::Quadratic(q) => q.sub_assign(rhs),
-            Function::Polynomial(p) => p.sub_assign(rhs),
-        }
     }
 }
