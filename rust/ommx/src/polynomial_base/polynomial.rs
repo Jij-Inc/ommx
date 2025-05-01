@@ -241,6 +241,10 @@ impl Monomial for MonomialDyn {
         (self.0.len() as u32).into()
     }
 
+    fn max_degree() -> Degree {
+        u32::MAX.into()
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {

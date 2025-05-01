@@ -32,6 +32,7 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     type Parameters: Default;
 
     fn degree(&self) -> Degree;
+    fn max_degree() -> Degree;
 
     /// Generate non duplicated monomials
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
@@ -73,11 +74,16 @@ impl<M: Monomial> PolynomialBase<M> {
     }
 
     pub fn degree(&self) -> Degree {
-        self.terms
-            .keys()
-            .map(|term| term.degree())
-            .max()
-            .unwrap_or(0.into())
+        let max_degree = M::max_degree();
+        let mut current: Degree = 0.into();
+        for term in self.terms.keys() {
+            current = current.max(term.degree());
+            // can be saturated
+            if current == max_degree {
+                break;
+            }
+        }
+        current
     }
 
     pub fn contains(&self, term: &M) -> bool {

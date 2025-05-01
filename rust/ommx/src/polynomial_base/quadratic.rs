@@ -149,6 +149,10 @@ impl Monomial for QuadraticMonomial {
         }
     }
 
+    fn max_degree() -> Degree {
+        2.into()
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()

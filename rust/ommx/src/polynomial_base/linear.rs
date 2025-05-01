@@ -108,6 +108,10 @@ impl Monomial for LinearMonomial {
         }
     }
 
+    fn max_degree() -> Degree {
+        1.into()
+    }
+
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();
