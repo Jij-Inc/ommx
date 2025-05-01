@@ -5,6 +5,7 @@ use std::{borrow::Cow, fmt::Debug};
 
 mod add;
 mod arbitrary;
+mod mul;
 mod parse;
 
 /// A real-valued function of decision variables used for objective and constraint functions.

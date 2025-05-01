@@ -177,6 +177,38 @@ impl Mul for MonomialDyn {
     }
 }
 
+impl Mul<LinearMonomial> for MonomialDyn {
+    type Output = Self;
+    fn mul(self, other: LinearMonomial) -> Self::Output {
+        match other {
+            LinearMonomial::Variable(id) => {
+                let mut ids = self.0;
+                ids.push(id.into_inner());
+                ids.sort_unstable();
+                Self(ids)
+            }
+            LinearMonomial::Constant => self,
+        }
+    }
+}
+
+impl Mul<QuadraticMonomial> for MonomialDyn {
+    type Output = Self;
+    fn mul(self, other: QuadraticMonomial) -> Self::Output {
+        match other {
+            QuadraticMonomial::Pair(pair) => {
+                let mut ids = self.0;
+                ids.push(pair.lower().into_inner());
+                ids.push(pair.upper().into_inner());
+                ids.sort_unstable();
+                Self(ids)
+            }
+            QuadraticMonomial::Linear(id) => self * LinearMonomial::Variable(id),
+            QuadraticMonomial::Constant => self,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, getset::CopyGetters)]
 pub struct PolynomialParameters {
     #[getset(get_copy = "pub")]
