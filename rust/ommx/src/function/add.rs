@@ -1,6 +1,5 @@
-use std::ops::AddAssign;
-
 use super::*;
+use std::ops::{Add, AddAssign};
 
 impl AddAssign<&Function> for Function {
     fn add_assign(&mut self, rhs: &Function) {
@@ -124,6 +123,46 @@ impl AddAssign<Polynomial> for Function {
                 *self = Function::from(rhs);
             }
             Function::Polynomial(p) => p.add_assign(rhs),
+        }
+    }
+}
+
+macro_rules! impl_add_via_add_assign {
+    ($RHS:ty) => {
+        impl Add<$RHS> for Function {
+            type Output = Self;
+            fn add(mut self, rhs: $RHS) -> Self::Output {
+                self.add_assign(rhs);
+                self
+            }
+        }
+    };
+}
+
+impl_add_via_add_assign!(Coefficient);
+impl_add_via_add_assign!(Linear);
+impl_add_via_add_assign!(&Linear);
+impl_add_via_add_assign!(Quadratic);
+impl_add_via_add_assign!(&Quadratic);
+impl_add_via_add_assign!(Polynomial);
+impl_add_via_add_assign!(&Polynomial);
+impl_add_via_add_assign!(&Function);
+
+impl Add for Function {
+    type Output = Self;
+    fn add(mut self, rhs: Self) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl Add for &Function {
+    type Output = Function;
+    fn add(self, rhs: Self) -> Self::Output {
+        if self.degree() > rhs.degree() {
+            self.clone() + rhs
+        } else {
+            rhs.clone() + self
         }
     }
 }
