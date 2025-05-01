@@ -7,6 +7,7 @@ mod add;
 mod arbitrary;
 mod mul;
 mod parse;
+mod approx;
 mod sub;
 
 /// A real-valued function of decision variables used for objective and constraint functions.
