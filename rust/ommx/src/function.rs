@@ -164,11 +164,11 @@ impl Arbitrary for Function {
         let polynomial = Polynomial::arbitrary_with(p);
         let linear = LinearParameters::new(p.num_terms(), p.max_id())
             .ok()
-            .map(|p| Linear::arbitrary_with(p));
+            .map(Linear::arbitrary_with);
         let quad = if p.max_degree() == 1 {
             linear
                 .clone()
-                .map(|l| l.prop_map(|l| Quadratic::from(l)).boxed())
+                .map(|l| l.prop_map(Quadratic::from).boxed())
         } else {
             QuadraticParameters::new(p.num_terms(), p.max_id())
                 .ok()
