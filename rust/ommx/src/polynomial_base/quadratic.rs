@@ -47,6 +47,14 @@ impl From<LinearMonomial> for QuadraticMonomial {
     }
 }
 
+impl From<Linear> for Quadratic {
+    fn from(l: Linear) -> Self {
+        Self {
+            terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableIDPair {
     lower: VariableID,
