@@ -56,13 +56,12 @@ impl AddAssign<&Linear> for Function {
 }
 
 impl AddAssign<Linear> for Function {
-    fn add_assign(&mut self, rhs: Linear) {
+    fn add_assign(&mut self, mut rhs: Linear) {
         match self {
             Function::Zero => *self = Function::from(rhs),
             Function::Constant(c) => {
-                let mut l = rhs;
-                l += *c;
-                *self = Function::from(l);
+                rhs += *c;
+                *self = Function::from(rhs);
             }
             Function::Linear(l) => l.add_assign(rhs),
             Function::Quadratic(q) => q.add_assign(&rhs),
@@ -82,18 +81,16 @@ impl AddAssign<&Quadratic> for Function {
 }
 
 impl AddAssign<Quadratic> for Function {
-    fn add_assign(&mut self, rhs: Quadratic) {
+    fn add_assign(&mut self, mut rhs: Quadratic) {
         match self {
             Function::Zero => *self = Function::from(rhs),
             Function::Constant(c) => {
-                let mut l = rhs;
-                l += *c;
-                *self = Function::from(l);
+                rhs += *c;
+                *self = Function::from(rhs);
             }
             Function::Linear(l) => {
-                let mut q = rhs;
-                q.add_assign(&*l);
-                *self = Function::from(q);
+                rhs += &*l;
+                *self = Function::from(rhs);
             }
             Function::Quadratic(q) => q.add_assign(rhs),
             Function::Polynomial(p) => p.add_assign(&rhs),
@@ -111,23 +108,20 @@ impl AddAssign<&Polynomial> for Function {
 }
 
 impl AddAssign<Polynomial> for Function {
-    fn add_assign(&mut self, rhs: Polynomial) {
+    fn add_assign(&mut self, mut rhs: Polynomial) {
         match self {
             Function::Zero => *self = Function::from(rhs),
             Function::Constant(c) => {
-                let mut l = rhs;
-                l.add_assign(*c);
-                *self = Function::from(l);
+                rhs += *c;
+                *self = Function::from(rhs);
             }
             Function::Linear(l) => {
-                let mut p = rhs;
-                p.add_assign(&*l);
-                *self = Function::from(p);
+                rhs += &*l;
+                *self = Function::from(rhs);
             }
             Function::Quadratic(q) => {
-                let mut p = rhs;
-                p.add_assign(&*q);
-                *self = Function::from(p);
+                rhs += &*q;
+                *self = Function::from(rhs);
             }
             Function::Polynomial(p) => p.add_assign(rhs),
         }
