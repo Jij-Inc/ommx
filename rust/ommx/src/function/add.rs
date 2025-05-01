@@ -1,5 +1,5 @@
 use super::*;
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Neg, SubAssign};
 
 impl AddAssign<&Function> for Function {
     fn add_assign(&mut self, rhs: &Function) {
@@ -30,11 +30,7 @@ impl AddAssign<Coefficient> for Function {
         match self {
             Function::Zero => *self = Function::from(rhs),
             Function::Constant(c) => {
-                if let Some(v) = *c + rhs {
-                    *self = Function::from(v);
-                } else {
-                    *self = Function::Zero;
-                }
+                *self = (*c + rhs).map(Function::from).unwrap_or(Function::Zero)
             }
             Function::Linear(l) => l.add_assign(rhs),
             Function::Quadratic(q) => q.add_assign(rhs),
@@ -163,6 +159,28 @@ impl Add for &Function {
             self.clone() + rhs
         } else {
             rhs.clone() + self
+        }
+    }
+}
+
+impl Neg for Function {
+    type Output = Self;
+    fn neg(mut self) -> Self::Output {
+        self.values_mut().for_each(|v| *v = -(*v));
+        self
+    }
+}
+
+impl SubAssign<Coefficient> for Function {
+    fn sub_assign(&mut self, rhs: Coefficient) {
+        match self {
+            Function::Zero => *self = Function::from(-rhs),
+            Function::Constant(c) => {
+                *self = (*c - rhs).map(Function::from).unwrap_or(Function::Zero)
+            }
+            Function::Linear(l) => l.sub_assign(rhs),
+            Function::Quadratic(q) => q.sub_assign(rhs),
+            Function::Polynomial(p) => p.sub_assign(rhs),
         }
     }
 }
