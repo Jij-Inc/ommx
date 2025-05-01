@@ -28,6 +28,12 @@ impl<M: Monomial> AddAssign for PolynomialBase<M> {
     }
 }
 
+impl<M: Monomial> AddAssign<Coefficient> for PolynomialBase<M> {
+    fn add_assign(&mut self, rhs: Coefficient) {
+        self.add_term(M::default(), rhs);
+    }
+}
+
 impl<M: Monomial> Add for PolynomialBase<M> {
     type Output = Self;
     fn add(mut self, mut rhs: Self) -> Self::Output {

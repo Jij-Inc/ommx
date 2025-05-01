@@ -3,6 +3,7 @@ use derive_more::From;
 use num::Zero;
 use std::{borrow::Cow, fmt::Debug};
 
+mod add;
 mod arbitrary;
 mod parse;
 
