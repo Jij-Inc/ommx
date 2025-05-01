@@ -53,6 +53,42 @@ impl From<QuadraticMonomial> for MonomialDyn {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+#[error("Cannot downgrade {degree}-degree monomial to {max_degree}-degree")]
+pub struct MonomialDowngradeError {
+    pub degree: Degree,
+    pub max_degree: Degree,
+}
+
+impl TryFrom<&MonomialDyn> for LinearMonomial {
+    type Error = MonomialDowngradeError;
+    fn try_from(m: &MonomialDyn) -> std::result::Result<Self, MonomialDowngradeError> {
+        match *m.degree() {
+            1 => Ok(LinearMonomial::Variable(m.0[0].into())),
+            0 => Ok(LinearMonomial::Constant),
+            _ => Err(MonomialDowngradeError {
+                degree: m.degree(),
+                max_degree: LinearMonomial::max_degree(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&MonomialDyn> for QuadraticMonomial {
+    type Error = MonomialDowngradeError;
+    fn try_from(m: &MonomialDyn) -> std::result::Result<Self, MonomialDowngradeError> {
+        match *m.degree() {
+            2 => Ok(QuadraticMonomial::new_pair(m.0[0].into(), m.0[1].into())),
+            1 => Ok(QuadraticMonomial::Linear(m.0[0].into())),
+            0 => Ok(QuadraticMonomial::Constant),
+            _ => Err(MonomialDowngradeError {
+                degree: m.degree(),
+                max_degree: QuadraticMonomial::max_degree(),
+            }),
+        }
+    }
+}
+
 impl From<Vec<u64>> for MonomialDyn {
     fn from(ids: Vec<u64>) -> Self {
         Self::new(ids)

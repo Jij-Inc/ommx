@@ -47,11 +47,41 @@ impl From<LinearMonomial> for QuadraticMonomial {
     }
 }
 
+impl TryFrom<&QuadraticMonomial> for LinearMonomial {
+    type Error = MonomialDowngradeError;
+    fn try_from(m: &QuadraticMonomial) -> std::result::Result<Self, MonomialDowngradeError> {
+        match m {
+            QuadraticMonomial::Pair(_) => Err(MonomialDowngradeError {
+                degree: 2.into(),
+                max_degree: 1.into(),
+            }),
+            QuadraticMonomial::Linear(id) => Ok(LinearMonomial::from(*id)),
+            QuadraticMonomial::Constant => Ok(LinearMonomial::Constant),
+        }
+    }
+}
+
 impl From<Linear> for Quadratic {
     fn from(l: Linear) -> Self {
         Self {
             terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
         }
+    }
+}
+
+impl<M: Monomial> TryFrom<&PolynomialBase<M>> for Linear
+where
+    LinearMonomial: for<'a> TryFrom<&'a M, Error = MonomialDowngradeError>,
+{
+    type Error = MonomialDowngradeError;
+    fn try_from(q: &PolynomialBase<M>) -> std::result::Result<Self, MonomialDowngradeError> {
+        Ok(Self {
+            terms: q
+                .terms
+                .iter()
+                .map(|(k, v)| Ok((k.try_into()?, *v)))
+                .collect::<Result<_, MonomialDowngradeError>>()?,
+        })
     }
 }
 
