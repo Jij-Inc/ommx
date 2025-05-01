@@ -69,22 +69,6 @@ impl From<Linear> for Quadratic {
     }
 }
 
-impl<M: Monomial> TryFrom<&PolynomialBase<M>> for Linear
-where
-    LinearMonomial: for<'a> TryFrom<&'a M, Error = MonomialDowngradeError>,
-{
-    type Error = MonomialDowngradeError;
-    fn try_from(q: &PolynomialBase<M>) -> std::result::Result<Self, MonomialDowngradeError> {
-        Ok(Self {
-            terms: q
-                .terms
-                .iter()
-                .map(|(k, v)| Ok((k.try_into()?, *v)))
-                .collect::<Result<_, MonomialDowngradeError>>()?,
-        })
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableIDPair {
     lower: VariableID,

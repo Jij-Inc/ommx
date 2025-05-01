@@ -6,7 +6,7 @@ use crate::{
 use derive_more::From;
 use num::Zero;
 use proptest::{prelude::*, strategy::Union};
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 
 /// Mathematical function up to polynomial.
 ///
@@ -28,6 +28,26 @@ pub enum Function {
 }
 
 impl Function {
+    pub fn as_linear(&self) -> Option<Cow<Linear>> {
+        match self {
+            Function::Zero => Some(Cow::Owned(Linear::zero())),
+            Function::Constant(c) => Some(Cow::Owned((*c).into())),
+            Function::Linear(l) => Some(Cow::Borrowed(l)),
+            Function::Quadratic(q) => q.try_into().map(Cow::Owned).ok(),
+            Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
+        }
+    }
+
+    pub fn as_quadratic(&self) -> Option<Cow<Quadratic>> {
+        match self {
+            Function::Zero => Some(Cow::Owned(Quadratic::zero())),
+            Function::Constant(c) => Some(Cow::Owned((*c).into())),
+            Function::Linear(l) => Some(Cow::Owned(l.clone().into())),
+            Function::Quadratic(q) => Some(Cow::Borrowed(q)),
+            Function::Polynomial(p) => p.try_into().map(Cow::Owned).ok(),
+        }
+    }
+
     pub fn num_terms(&self) -> usize {
         match self {
             Function::Zero => 0,
