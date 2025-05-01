@@ -31,6 +31,8 @@ use std::{
 pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     type Parameters: Default;
 
+    fn degree(&self) -> Degree;
+
     /// Generate non duplicated monomials
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
 }
@@ -66,12 +68,44 @@ impl<M: Monomial> PolynomialBase<M> {
         }
     }
 
+    pub fn num_terms(&self) -> usize {
+        self.terms.len()
+    }
+
+    pub fn degree(&self) -> Degree {
+        self.terms
+            .keys()
+            .map(|term| term.degree())
+            .max()
+            .unwrap_or(0.into())
+    }
+
     pub fn contains(&self, term: &M) -> bool {
         self.terms.contains_key(term)
     }
 
     pub fn get(&self, term: &M) -> Option<Coefficient> {
         self.terms.get(term).copied()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&M, &Coefficient)> {
+        self.terms.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&M, &mut Coefficient)> {
+        self.terms.iter_mut()
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &Coefficient> {
+        self.terms.values()
+    }
+
+    pub fn values_mut(&mut self) -> impl Iterator<Item = &mut Coefficient> {
+        self.terms.values_mut()
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &M> {
+        self.terms.keys()
     }
 
     /// The maximum absolute value of the coefficients including the constant.

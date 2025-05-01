@@ -140,6 +140,15 @@ impl Default for QuadraticParameters {
 
 impl Monomial for QuadraticMonomial {
     type Parameters = QuadraticParameters;
+
+    fn degree(&self) -> Degree {
+        match self {
+            Self::Pair(_) => 2.into(),
+            Self::Linear(_) => 1.into(),
+            Self::Constant => 0.into(),
+        }
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()

@@ -100,6 +100,14 @@ impl From<u64> for LinearMonomial {
 
 impl Monomial for LinearMonomial {
     type Parameters = LinearParameters;
+
+    fn degree(&self) -> Degree {
+        match self {
+            LinearMonomial::Variable(_) => 1.into(),
+            LinearMonomial::Constant => 0.into(),
+        }
+    }
+
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();

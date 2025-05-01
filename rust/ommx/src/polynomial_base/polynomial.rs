@@ -9,6 +9,22 @@ use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
 
+impl From<Linear> for Polynomial {
+    fn from(l: Linear) -> Self {
+        Self {
+            terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        }
+    }
+}
+
+impl From<Quadratic> for Polynomial {
+    fn from(q: Quadratic) -> Self {
+        Self {
+            terms: q.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        }
+    }
+}
+
 /// A sorted list of decision variable and parameter IDs
 ///
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
@@ -220,6 +236,11 @@ impl From<QuadraticParameters> for PolynomialParameters {
 
 impl Monomial for MonomialDyn {
     type Parameters = PolynomialParameters;
+
+    fn degree(&self) -> Degree {
+        (self.0.len() as u32).into()
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {
