@@ -1,5 +1,15 @@
 use super::*;
 use std::ops::{Add, AddAssign, Neg};
+use num::Zero;
+
+impl Zero for Function {
+    fn zero() -> Self {
+        Function::Zero
+    }
+    fn is_zero(&self) -> bool {
+        matches!(self, Function::Zero)
+    }
+}
 
 impl AddAssign<&Function> for Function {
     fn add_assign(&mut self, rhs: &Function) {
