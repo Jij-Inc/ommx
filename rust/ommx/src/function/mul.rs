@@ -97,6 +97,7 @@ impl_mul_via_mul_assign!(&Quadratic);
 impl_mul_via_mul_assign!(Quadratic);
 impl_mul_via_mul_assign!(&Polynomial);
 impl_mul_via_mul_assign!(Polynomial);
+impl_mul_via_mul_assign!(&Function);
 
 impl MulAssign for Function {
     fn mul_assign(&mut self, rhs: Self) {
@@ -118,6 +119,71 @@ impl MulAssign<&Function> for Function {
             Function::Linear(l) => self.mul_assign(l),
             Function::Quadratic(q) => self.mul_assign(q),
             Function::Polynomial(p) => self.mul_assign(p),
+        }
+    }
+}
+
+impl Mul for Function {
+    type Output = Self;
+    fn mul(mut self, rhs: Function) -> Self::Output {
+        self.mul_assign(rhs);
+        self
+    }
+}
+
+impl Mul for &Function {
+    type Output = Function;
+    fn mul(self, rhs: Self) -> Self::Output {
+        if self.degree() > rhs.degree() {
+            let mut out = self.clone();
+            out.mul_assign(rhs);
+            out
+        } else {
+            let mut out = rhs.clone();
+            out.mul_assign(self);
+            out
+        }
+    }
+}
+
+impl Mul<Function> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: Function) -> Self::Output {
+        rhs * self
+    }
+}
+
+// Add property-based tests for multiplication of Function
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ::approx::assert_abs_diff_eq;
+    use num::Zero;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn mul_ref(a in any::<Function>(), b in any::<Function>()) {
+            let ans = a.clone() * b.clone();
+            assert_abs_diff_eq!(&a * &b, ans);
+            assert_abs_diff_eq!(a.clone() * &b, ans);
+            assert_abs_diff_eq!(&a * b, ans);
+        }
+
+        #[test]
+        fn zero(a in any::<Function>()) {
+            assert_abs_diff_eq!(&a * Function::zero(), Function::zero());
+            assert_abs_diff_eq!(Function::zero() * &a, Function::zero());
+        }
+
+        #[test]
+        fn mul_commutative(a in any::<Function>(), b in any::<Function>()) {
+            assert_abs_diff_eq!(&a * &b, &b * &a);
+        }
+
+        #[test]
+        fn mul_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
+            assert_abs_diff_eq!(&a * (&b * &c), (&a * &b) * &c, epsilon = 1e-9);
         }
     }
 }
