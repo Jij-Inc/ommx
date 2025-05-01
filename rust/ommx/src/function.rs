@@ -204,5 +204,13 @@ mod tests {
                 }
             }
         }
+
+        /// Function -> v1::Function -> Function
+        #[test]
+        fn test_function_roundtrip(original in Function::arbitrary()) {
+            let v1_function = v1::Function::try_from(original.clone()).unwrap();
+            let parsed = Function::try_from(v1_function).unwrap();
+            prop_assert_eq!(original, parsed);
+        }
     }
 }
