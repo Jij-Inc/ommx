@@ -34,7 +34,10 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
 
     fn degree(&self) -> Degree;
     fn max_degree() -> Degree;
+
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
+    /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
+    fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self>;
 
     /// Generate non duplicated monomials
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;

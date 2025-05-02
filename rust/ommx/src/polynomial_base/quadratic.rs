@@ -175,6 +175,15 @@ impl Monomial for QuadraticMonomial {
         }
     }
 
+    fn from_ids(mut ids: impl Iterator<Item = VariableID>) -> Option<Self> {
+        match (ids.next(), ids.next(), ids.next()) {
+            (Some(a), Some(b), None) => Some(Self::new_pair(a, b)),
+            (Some(a), None, None) => Some(Self::Linear(a)),
+            (None, None, None) => Some(Self::Constant),
+            _ => None,
+        }
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()

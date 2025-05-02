@@ -317,6 +317,10 @@ impl Monomial for MonomialDyn {
         Box::new(self.0.iter().map(|&id| VariableID::from(id)))
     }
 
+    fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self> {
+        Some(Self(ids.map(|id| id.into_inner()).collect()))
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {

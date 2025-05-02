@@ -28,6 +28,9 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
     }
 
     fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+        if state.entries.is_empty() {
+            return Ok(BTreeSet::new());
+        }
         todo!()
     }
 

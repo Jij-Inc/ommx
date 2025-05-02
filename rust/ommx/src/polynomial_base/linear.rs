@@ -119,6 +119,14 @@ impl Monomial for LinearMonomial {
         }
     }
 
+    fn from_ids(mut ids: impl Iterator<Item = VariableID>) -> Option<Self> {
+        match (ids.next(), ids.next()) {
+            (Some(id), None) => Some(LinearMonomial::Variable(id)),
+            (None, None) => Some(LinearMonomial::Constant),
+            _ => None,
+        }
+    }
+
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();
