@@ -9,6 +9,22 @@ use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
 
+impl From<Linear> for Polynomial {
+    fn from(l: Linear) -> Self {
+        Self {
+            terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        }
+    }
+}
+
+impl From<Quadratic> for Polynomial {
+    fn from(q: Quadratic) -> Self {
+        Self {
+            terms: q.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        }
+    }
+}
+
 /// A sorted list of decision variable and parameter IDs
 ///
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
@@ -33,6 +49,42 @@ impl From<QuadraticMonomial> for MonomialDyn {
             }
             QuadraticMonomial::Linear(id) => Self(vec![id.into_inner()]),
             QuadraticMonomial::Constant => Self::empty(),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Cannot convert {degree}-degree monomial to {max_degree}-degree")]
+pub struct InvalidDegreeError {
+    pub degree: Degree,
+    pub max_degree: Degree,
+}
+
+impl TryFrom<&MonomialDyn> for LinearMonomial {
+    type Error = InvalidDegreeError;
+    fn try_from(m: &MonomialDyn) -> std::result::Result<Self, InvalidDegreeError> {
+        match *m.degree() {
+            1 => Ok(LinearMonomial::Variable(m.0[0].into())),
+            0 => Ok(LinearMonomial::Constant),
+            _ => Err(InvalidDegreeError {
+                degree: m.degree(),
+                max_degree: LinearMonomial::max_degree(),
+            }),
+        }
+    }
+}
+
+impl TryFrom<&MonomialDyn> for QuadraticMonomial {
+    type Error = InvalidDegreeError;
+    fn try_from(m: &MonomialDyn) -> std::result::Result<Self, InvalidDegreeError> {
+        match *m.degree() {
+            2 => Ok(QuadraticMonomial::new_pair(m.0[0].into(), m.0[1].into())),
+            1 => Ok(QuadraticMonomial::Linear(m.0[0].into())),
+            0 => Ok(QuadraticMonomial::Constant),
+            _ => Err(InvalidDegreeError {
+                degree: m.degree(),
+                max_degree: QuadraticMonomial::max_degree(),
+            }),
         }
     }
 }
@@ -125,10 +177,45 @@ impl Mul for MonomialDyn {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl Mul<LinearMonomial> for MonomialDyn {
+    type Output = Self;
+    fn mul(self, other: LinearMonomial) -> Self::Output {
+        match other {
+            LinearMonomial::Variable(id) => {
+                let mut ids = self.0;
+                ids.push(id.into_inner());
+                ids.sort_unstable();
+                Self(ids)
+            }
+            LinearMonomial::Constant => self,
+        }
+    }
+}
+
+impl Mul<QuadraticMonomial> for MonomialDyn {
+    type Output = Self;
+    fn mul(self, other: QuadraticMonomial) -> Self::Output {
+        match other {
+            QuadraticMonomial::Pair(pair) => {
+                let mut ids = self.0;
+                ids.push(pair.lower().into_inner());
+                ids.push(pair.upper().into_inner());
+                ids.sort_unstable();
+                Self(ids)
+            }
+            QuadraticMonomial::Linear(id) => self * LinearMonomial::Variable(id),
+            QuadraticMonomial::Constant => self,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, getset::CopyGetters)]
 pub struct PolynomialParameters {
+    #[getset(get_copy = "pub")]
     num_terms: usize,
+    #[getset(get_copy = "pub")]
     max_degree: Degree,
+    #[getset(get_copy = "pub")]
     max_id: VariableID,
 }
 
@@ -195,8 +282,37 @@ impl Default for PolynomialParameters {
     }
 }
 
+impl From<LinearParameters> for PolynomialParameters {
+    fn from(p: LinearParameters) -> Self {
+        PolynomialParameters {
+            num_terms: p.num_terms(),
+            max_degree: 1.into(),
+            max_id: p.max_id(),
+        }
+    }
+}
+
+impl From<QuadraticParameters> for PolynomialParameters {
+    fn from(p: QuadraticParameters) -> Self {
+        PolynomialParameters {
+            num_terms: p.num_terms(),
+            max_degree: 2.into(),
+            max_id: p.max_id(),
+        }
+    }
+}
+
 impl Monomial for MonomialDyn {
     type Parameters = PolynomialParameters;
+
+    fn degree(&self) -> Degree {
+        (self.0.len() as u32).into()
+    }
+
+    fn max_degree() -> Degree {
+        u32::MAX.into()
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {

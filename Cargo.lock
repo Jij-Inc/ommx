@@ -1530,6 +1530,7 @@ dependencies = [
  "directories",
  "env_logger",
  "flate2",
+ "getset",
  "indoc",
  "insta",
  "itertools 0.13.0",

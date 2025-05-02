@@ -66,6 +66,20 @@ impl Mul for QuadraticMonomial {
     }
 }
 
+impl Mul<MonomialDyn> for LinearMonomial {
+    type Output = MonomialDyn;
+    fn mul(self, other: MonomialDyn) -> Self::Output {
+        other * self
+    }
+}
+
+impl Mul<MonomialDyn> for QuadraticMonomial {
+    type Output = MonomialDyn;
+    fn mul(self, other: MonomialDyn) -> Self::Output {
+        other * self
+    }
+}
+
 impl<M1, M2, N> Mul<&PolynomialBase<M2>> for &PolynomialBase<M1>
 where
     M1: Monomial + Mul<M2, Output = N>,
@@ -81,5 +95,15 @@ where
             }
         }
         out
+    }
+}
+
+impl<M1, M2> MulAssign<&PolynomialBase<M2>> for PolynomialBase<M1>
+where
+    M1: Monomial + Mul<M2, Output = M1>,
+    M2: Monomial,
+{
+    fn mul_assign(&mut self, rhs: &PolynomialBase<M2>) {
+        *self = &*self * rhs;
     }
 }

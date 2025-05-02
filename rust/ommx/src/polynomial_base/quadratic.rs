@@ -4,17 +4,24 @@ use crate::{
     Monomial, VariableID,
 };
 use anyhow::{bail, Result};
+use derive_more::From;
 use proptest::prelude::*;
 use std::collections::HashSet;
 
 pub type Quadratic = PolynomialBase<QuadraticMonomial>;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From)]
 pub enum QuadraticMonomial {
     Pair(VariableIDPair),
     Linear(VariableID),
     #[default]
     Constant,
+}
+
+impl From<(VariableID, VariableID)> for QuadraticMonomial {
+    fn from(pair: (VariableID, VariableID)) -> Self {
+        Self::new_pair(pair.0, pair.1)
+    }
 }
 
 impl QuadraticMonomial {
@@ -36,6 +43,28 @@ impl From<LinearMonomial> for QuadraticMonomial {
         match m {
             LinearMonomial::Variable(id) => Self::Linear(id),
             LinearMonomial::Constant => Self::Constant,
+        }
+    }
+}
+
+impl TryFrom<&QuadraticMonomial> for LinearMonomial {
+    type Error = InvalidDegreeError;
+    fn try_from(m: &QuadraticMonomial) -> std::result::Result<Self, InvalidDegreeError> {
+        match m {
+            QuadraticMonomial::Pair(_) => Err(InvalidDegreeError {
+                degree: 2.into(),
+                max_degree: 1.into(),
+            }),
+            QuadraticMonomial::Linear(id) => Ok(LinearMonomial::from(*id)),
+            QuadraticMonomial::Constant => Ok(LinearMonomial::Constant),
+        }
+    }
+}
+
+impl From<Linear> for Quadratic {
+    fn from(l: Linear) -> Self {
+        Self {
+            terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
         }
     }
 }
@@ -68,10 +97,12 @@ impl VariableIDPair {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, getset::CopyGetters)]
 pub struct QuadraticParameters {
+    #[getset(get_copy = "pub")]
     num_terms: usize,
     /// This ID is allowed. So when the `max_id=2`, `[0, 1, 2]` are allowed.
+    #[getset(get_copy = "pub")]
     max_id: VariableID,
 }
 
@@ -123,6 +154,19 @@ impl Default for QuadraticParameters {
 
 impl Monomial for QuadraticMonomial {
     type Parameters = QuadraticParameters;
+
+    fn degree(&self) -> Degree {
+        match self {
+            Self::Pair(_) => 2.into(),
+            Self::Linear(_) => 1.into(),
+            Self::Constant => 0.into(),
+        }
+    }
+
+    fn max_degree() -> Degree {
+        2.into()
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()
