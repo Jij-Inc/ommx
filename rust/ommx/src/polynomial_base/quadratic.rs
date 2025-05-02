@@ -167,6 +167,14 @@ impl Monomial for QuadraticMonomial {
         2.into()
     }
 
+    fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
+        match self {
+            Self::Pair(pair) => Box::new(pair.iter()),
+            Self::Linear(id) => Box::new(std::iter::once(*id)),
+            Self::Constant => Box::new(std::iter::empty()),
+        }
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()

@@ -112,6 +112,13 @@ impl Monomial for LinearMonomial {
         1.into()
     }
 
+    fn ids(&self) -> Box<dyn Iterator<Item = VariableID>> {
+        match self {
+            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
+            LinearMonomial::Constant => Box::new(std::iter::empty()),
+        }
+    }
+
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();
