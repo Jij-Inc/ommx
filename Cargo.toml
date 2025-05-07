@@ -12,7 +12,7 @@ anyhow = "1.0.98"
 approx = "0.5.1"
 base64 = "0.22.1"
 built = { version = "0.7.7", features = ["git2"] }
-chrono = "0.4.40"
+chrono = "0.4.41"
 clap = { version = "4.5.37", features = ["derive"] }
 colored = "2.2.0"
 criterion = { package = "codspeed-criterion-compat", version = "2.8.0" }
@@ -24,7 +24,7 @@ flate2 = "1.1.1"
 getset = "0.1.5"
 glob = "0.3.2"
 indoc = "2.0.6"
-insta = "1.43.0"
+insta = "1.43.1"
 itertools = "0.13.0"
 log = "0.4.27"
 maplit = "1.0.2"
