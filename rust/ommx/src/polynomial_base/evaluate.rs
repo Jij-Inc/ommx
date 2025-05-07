@@ -163,13 +163,23 @@ mod tests {
             .boxed()
     }
 
-    proptest! {
-        #[test]
-        fn test_partial_evaluate_linear((mut poly, state, s1, s2) in polynomial_and_state_split::<LinearMonomial>()) {
-            let v = poly.evaluate(&state).unwrap().0;
-            let _ = poly.partial_evaluate(&s1).unwrap();
-            let w = poly.evaluate(&s2).unwrap().0;
-            prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
-        }
+    macro_rules! test_partial_evaluate {
+        ($monomial:ty, $name:ident) => {
+            proptest! {
+                #[test]
+                fn $name(
+                    (mut poly, state, s1, s2) in polynomial_and_state_split::<$monomial>()
+                ) {
+                    let v = poly.evaluate(&state).unwrap().0;
+                    let _ = poly.partial_evaluate(&s1).unwrap();
+                    let w = poly.evaluate(&s2).unwrap().0;
+                    prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
+                }
+            }
+        };
     }
+
+    test_partial_evaluate!(LinearMonomial, test_partial_evaluate_linear);
+    test_partial_evaluate!(QuadraticMonomial, test_partial_evaluate_quadratic);
+    test_partial_evaluate!(MonomialDyn, test_partial_evaluate_polynomial);
 }
