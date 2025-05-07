@@ -184,6 +184,34 @@ impl Monomial for QuadraticMonomial {
         }
     }
 
+    fn partial_evaluate(self, state: &State) -> (Self, f64, BTreeSet<u64>) {
+        match self {
+            Self::Pair(VariableIDPair { lower, upper }) => {
+                let lower = lower.into_inner();
+                let upper = upper.into_inner();
+                match (state.entries.get(&lower), state.entries.get(&upper)) {
+                    (Some(l), Some(u)) => {
+                        return (Self::default(), (*l) * (*u), BTreeSet::from([lower, upper]));
+                    }
+                    (Some(l), None) => {
+                        return (Self::Linear(upper.into()), *l, BTreeSet::from([lower]));
+                    }
+                    (None, Some(u)) => {
+                        return (Self::Linear(lower.into()), *u, BTreeSet::from([upper]));
+                    }
+                    _ => {}
+                }
+            }
+            Self::Linear(id) => {
+                if let Some(value) = state.entries.get(&id.into_inner()) {
+                    return (Self::default(), *value, BTreeSet::from([id.into_inner()]));
+                }
+            }
+            _ => {}
+        }
+        (self, 1.0, BTreeSet::new())
+    }
+
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()
