@@ -78,44 +78,77 @@ fn partial_evaluate_linear_one(c: &mut Criterion) {
 
 /// Substitute all decision variables in a quadratic function
 fn partial_evaluate_quadratic_all(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic, _>(c, "partial-evaluate-quadratic-all", all_ids, |num_terms| {
-        QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-all",
+        all_ids,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute half of the decision variables in a quadratic function
 fn partial_evaluate_quadratic_half(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic, _>(c, "partial-evaluate-quadratic-half", half_ids, |num_terms| {
-        QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-half",
+        half_ids,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute one decision variable in a quadratic function
 fn partial_evaluate_quadratic_one(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic, _>(c, "partial-evaluate-quadratic-one", one_id, |num_terms| {
-        QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-one",
+        one_id,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute all decision variables in a polynomial function
 fn partial_evaluate_polynomial_all(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial, _>(c, "partial-evaluate-polynomial-all", all_ids, |num_terms| {
-        PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-all",
+        all_ids,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 /// Substitute half of the decision variables in a polynomial function
 fn partial_evaluate_polynomial_half(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial, _>(c, "partial-evaluate-polynomial-half", half_ids, |num_terms| {
-        PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-half",
+        half_ids,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 /// Substitute one decision variable in a polynomial function
 fn partial_evaluate_polynomial_one(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial, _>(c, "partial-evaluate-polynomial-one", one_id, |num_terms| {
-        PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64)).unwrap()
-    });
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-one",
+        one_id,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 criterion_group!(

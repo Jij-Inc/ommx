@@ -3,8 +3,8 @@ use criterion::{
 };
 use ommx::{
     random::{arbitrary_state, random_deterministic, sample_deterministic},
-    Evaluate, Linear, Quadratic, Polynomial,
-    LinearParameters, QuadraticParameters, PolynomialParameters, VariableID,
+    Evaluate, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
+    QuadraticParameters, VariableID,
 };
 use proptest::prelude::Arbitrary;
 
@@ -45,7 +45,8 @@ fn evaluate_quadratic(c: &mut Criterion) {
 
 fn evaluate_polynomial(c: &mut Criterion) {
     evaluate::<Polynomial, PolynomialParameters>(c, "evaluate-polynomial", |num_terms| {
-        PolynomialParameters::new(num_terms, 3.into(), VariableID::from(10 * num_terms as u64)).unwrap()
+        PolynomialParameters::new(num_terms, 3.into(), VariableID::from(10 * num_terms as u64))
+            .unwrap()
     });
 }
 
