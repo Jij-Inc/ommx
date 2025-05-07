@@ -31,7 +31,27 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         if state.entries.is_empty() {
             return Ok(BTreeSet::new());
         }
-        todo!()
+        let mut used = BTreeSet::new();
+        let current = std::mem::take(&mut self.terms);
+        for (monomial, coefficient) in current {
+            let (new_monomial, value, ids) = monomial.partial_evaluate(state);
+            used.extend(ids);
+            match TryInto::<Coefficient>::try_into(value) {
+                Ok(value) => {
+                    self.terms.insert(new_monomial, value * coefficient);
+                }
+                Err(crate::CoefficientError::Zero) => {
+                    continue;
+                }
+                Err(e) => {
+                    return Err(anyhow!(
+                        "Partial evaluation yields non-finite coefficient: {}",
+                        e
+                    ));
+                }
+            }
+        }
+        Ok(used)
     }
 
     fn required_ids(&self) -> BTreeSet<u64> {
