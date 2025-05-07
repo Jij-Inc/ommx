@@ -19,7 +19,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                 out *= state
                     .entries
                     .get(&id.into_inner())
-                    .ok_or(anyhow!("Missing entry for id: {}", id.into_inner()))?;
+                    .ok_or_else(|| anyhow!("Missing entry for id: {}", id.into_inner()))?;
             }
             result += coefficient.into_inner() * out;
             ids.extend(monomial.ids().map(|id| id.into_inner()));
