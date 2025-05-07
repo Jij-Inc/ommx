@@ -133,4 +133,43 @@ mod tests {
     test_ops_evaluate!(QuadraticMonomial, test_mul_evaluate_quadratic, *);
     test_ops_evaluate!(MonomialDyn, test_add_evaluate_polynomial, +);
     test_ops_evaluate!(MonomialDyn, test_mul_evaluate_polynomial, *);
+
+    fn split_state(state: State) -> BoxedStrategy<(State, State)> {
+        let ids: Vec<(u64, f64)> = state.entries.into_iter().collect();
+        let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
+        (Just(ids), flips)
+            .prop_map(|(ids, flips)| {
+                let mut a = State::default();
+                let mut b = State::default();
+                for (flip, (id, value)) in flips.into_iter().zip(ids.into_iter()) {
+                    if flip {
+                        a.entries.insert(id, value);
+                    } else {
+                        b.entries.insert(id, value);
+                    }
+                }
+                (a, b)
+            })
+            .boxed()
+    }
+
+    fn polynomial_and_state_split<M: Monomial>(
+    ) -> impl Strategy<Value = (PolynomialBase<M>, State, State, State)> {
+        polynomial_and_state::<M>()
+            .prop_flat_map(|(poly, state)| {
+                split_state(state.clone())
+                    .prop_map(move |(state1, state2)| (poly.clone(), state.clone(), state1, state2))
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_partial_evaluate_linear((mut poly, state, s1, s2) in polynomial_and_state_split::<LinearMonomial>()) {
+            let v = poly.evaluate(&state).unwrap().0;
+            let _ = poly.partial_evaluate(&s1).unwrap();
+            let w = poly.evaluate(&s2).unwrap().0;
+            prop_assert!(w.abs_diff_eq(&v, 1e-9), "w = {}, v = {}", w, v);
+        }
+    }
 }
