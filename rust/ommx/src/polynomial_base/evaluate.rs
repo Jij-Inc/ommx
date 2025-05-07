@@ -38,7 +38,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             used.extend(ids);
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(value) => {
-                    self.terms.insert(new_monomial, value * coefficient);
+                    self.add_term(new_monomial, value * coefficient);
                 }
                 Err(crate::CoefficientError::Zero) => {
                     continue;
@@ -169,7 +169,7 @@ mod tests {
             let v = poly.evaluate(&state).unwrap().0;
             let _ = poly.partial_evaluate(&s1).unwrap();
             let w = poly.evaluate(&s2).unwrap().0;
-            prop_assert!(w.abs_diff_eq(&v, 1e-9), "w = {}, v = {}", w, v);
+            prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
         }
     }
 }
