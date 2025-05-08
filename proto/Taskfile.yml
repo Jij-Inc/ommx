@@ -24,7 +24,15 @@ tasks:
     desc: Generate Python code from Protobuf definitions
     cmds:
       - buf generate --template buf.gen.python.yaml
+      - task: revise_stub_file
       - task: _python:format
+
+  revise_stub_file:
+    internal: true
+    desc: Post process for stub files generated from *.proto
+    cmds:
+      - uv run python/revise_stub_file.py
+    dir: ..
 
   doc:
     desc: Generate documentation from Protobuf definitions
