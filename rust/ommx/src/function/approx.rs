@@ -5,7 +5,7 @@ impl AbsDiffEq for Function {
     type Epsilon = f64;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::EPSILON
+        1e-9
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -24,9 +24,9 @@ mod tests {
     use ::approx::assert_abs_diff_eq;
 
     #[test]
-    fn test_abs_diff_eq_linear() {
+    fn test_abs_diff_eq() {
         let f = Function::from(Coefficient::try_from(1.0).unwrap());
-        let g = Function::from(Coefficient::try_from(1.0 + 1e-9).unwrap());
-        assert_abs_diff_eq!(f, g, epsilon = 1e-8);
+        let g = Function::from(Coefficient::try_from(1.0 + 1e-10).unwrap());
+        assert_abs_diff_eq!(f, g);
     }
 }

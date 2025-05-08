@@ -197,7 +197,7 @@ mod tests {
 
         #[test]
         fn add_associative(a: Linear, b: Linear, c: Linear) {
-            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c, epsilon = 1e-9);
+            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c);
         }
     }
 }
