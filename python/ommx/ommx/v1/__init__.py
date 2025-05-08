@@ -513,7 +513,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   binary    0.0    1.0         []    0.0
         
         """
-        out, _ = _ommx_rust.evaluate_instance(
+        out = _ommx_rust.evaluate_instance(
             self.to_bytes(), to_state(state).SerializeToString()
         )
         return Solution.from_bytes(out)
@@ -554,7 +554,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             >>> new_instance.objective
             Function(x2 + 1)
         """
-        out, _ = _ommx_rust.partial_evaluate_instance(
+        out = _ommx_rust.partial_evaluate_instance(
             self.to_bytes(), to_state(state).SerializeToString()
         )
         return Instance.from_bytes(out)
@@ -2340,7 +2340,7 @@ class Linear(AsConstraint):
         rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: ToState) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> float:
         """
         Evaluate the linear function with the given state.
 
@@ -2373,7 +2373,7 @@ class Linear(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(self, state: ToState) -> tuple[Linear, set]:
+    def partial_evaluate(self, state: ToState) -> Linear:
         """
         Partially evaluate the linear function with the given state.
 
@@ -2394,10 +2394,10 @@ class Linear(AsConstraint):
             (Linear(19), {2})
 
         """
-        new, used_ids = _ommx_rust.partial_evaluate_linear(
+        new = _ommx_rust.partial_evaluate_linear(
             self.to_bytes(), to_state(state).SerializeToString()
         )
-        return Linear.from_bytes(new), used_ids
+        return Linear.from_bytes(new)
 
     def __repr__(self) -> str:
         return f"Linear({_ommx_rust.Linear.decode(self.raw.SerializeToString()).__repr__()})"
@@ -2503,7 +2503,7 @@ class Quadratic(AsConstraint):
         rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: ToState) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> float:
         """
         Evaluate the quadratic function with the given state.
 
@@ -2535,7 +2535,7 @@ class Quadratic(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(self, state: ToState) -> tuple[Quadratic, set]:
+    def partial_evaluate(self, state: ToState) -> Quadratic:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -2557,10 +2557,10 @@ class Quadratic(AsConstraint):
             (Quadratic(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        new, used_ids = _ommx_rust.partial_evaluate_quadratic(
+        new = _ommx_rust.partial_evaluate_quadratic(
             self.to_bytes(), to_state(state).SerializeToString()
         )
-        return Quadratic.from_bytes(new), used_ids
+        return Quadratic.from_bytes(new)
 
     @property
     def linear(self) -> Linear | None:
@@ -2704,7 +2704,7 @@ class Polynomial(AsConstraint):
         rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: ToState) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> float:
         """
         Evaluate the polynomial with the given state.
 
@@ -2736,7 +2736,7 @@ class Polynomial(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(self, state: ToState) -> tuple[Polynomial, set]:
+    def partial_evaluate(self, state: ToState) -> Polynomial:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -2758,10 +2758,10 @@ class Polynomial(AsConstraint):
             (Polynomial(9*x2*x3 + 1), {1})
 
         """
-        new, used_ids = _ommx_rust.partial_evaluate_polynomial(
+        new = _ommx_rust.partial_evaluate_polynomial(
             self.to_bytes(), to_state(state).SerializeToString()
         )
-        return Polynomial.from_bytes(new), used_ids
+        return Polynomial.from_bytes(new)
 
     def __repr__(self) -> str:
         return f"Polynomial({_ommx_rust.Polynomial.decode(self.raw.SerializeToString()).__repr__()})"
@@ -2914,7 +2914,7 @@ class Function(AsConstraint):
         rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
         return lhs.almost_equal(rhs, atol)
 
-    def evaluate(self, state: ToState) -> tuple[float, set]:
+    def evaluate(self, state: ToState) -> float:
         """
         Evaluate the function with the given state.
 
@@ -2946,7 +2946,7 @@ class Function(AsConstraint):
             self.to_bytes(), to_state(state).SerializeToString()
         )
 
-    def partial_evaluate(self, state: ToState) -> tuple[Function, set]:
+    def partial_evaluate(self, state: ToState) -> Function:
         """
         Partially evaluate the function with the given state.
 
@@ -2968,10 +2968,10 @@ class Function(AsConstraint):
             (Function(3*x2*x3 + 6*x2 + 1), {1})
 
         """
-        new, used_ids = _ommx_rust.partial_evaluate_function(
+        new = _ommx_rust.partial_evaluate_function(
             self.to_bytes(), to_state(state).SerializeToString()
         )
-        return Function.from_bytes(new), used_ids
+        return Function.from_bytes(new)
 
     def used_decision_variable_ids(self) -> set[int]:
         """
