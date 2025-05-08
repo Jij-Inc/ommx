@@ -3,30 +3,26 @@ use criterion::{
     criterion_group, criterion_main, AxisScale, BenchmarkId, Criterion, PlotConfiguration,
 };
 use ommx::{
-    random::{arbitrary_state, random_deterministic, sample_deterministic, FunctionParameters},
-    v1::{Linear, Polynomial, Quadratic},
-    Evaluate,
+    random::{arbitrary_state, random_deterministic, sample_deterministic},
+    Evaluate, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
+    QuadraticParameters, VariableID,
 };
 use proptest::prelude::Arbitrary;
 use std::collections::BTreeSet;
 
-fn bench_partial_evaluate<T>(
+fn bench_partial_evaluate<T, Parameters>(
     c: &mut Criterion,
     group_name: &str,
     id_selector: impl Fn(BTreeSet<u64>) -> BTreeSet<u64>,
-    max_degree: u32,
+    parameter_generator: impl Fn(usize) -> Parameters,
 ) where
-    T: Evaluate + Clone + Arbitrary<Parameters = FunctionParameters>,
+    T: Evaluate + Clone + Arbitrary<Parameters = Parameters>,
 {
     let plot_config = PlotConfiguration::default().summary_scale(AxisScale::Logarithmic);
     let mut group = c.benchmark_group(group_name);
     group.plot_config(plot_config.clone());
     for num_terms in [100, 1_000, 10_000] {
-        let lin: T = random_deterministic(FunctionParameters {
-            num_terms,
-            max_degree,
-            max_id: 10 * num_terms as u64,
-        });
+        let lin: T = random_deterministic(parameter_generator(num_terms));
         let ids = id_selector(lin.required_ids());
         let state = sample_deterministic(arbitrary_state(ids));
         group.bench_with_input(
@@ -61,47 +57,98 @@ fn one_id(ids: BTreeSet<u64>) -> BTreeSet<u64> {
 
 /// Substitute all decision variables in a linear function
 fn partial_evaluate_linear_all(c: &mut Criterion) {
-    bench_partial_evaluate::<Linear>(c, "partial-evaluate-linear-all", all_ids, 1);
+    bench_partial_evaluate::<Linear, _>(c, "partial-evaluate-linear-all", all_ids, |num_terms| {
+        LinearParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+    });
 }
 
 /// Substitute half of the decision variables in a linear function
 fn partial_evaluate_linear_half(c: &mut Criterion) {
-    bench_partial_evaluate::<Linear>(c, "partial-evaluate-linear-half", half_ids, 1);
+    bench_partial_evaluate::<Linear, _>(c, "partial-evaluate-linear-half", half_ids, |num_terms| {
+        LinearParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+    });
 }
 
 /// Substitute one decision variable in a linear function
 fn partial_evaluate_linear_one(c: &mut Criterion) {
-    bench_partial_evaluate::<Linear>(c, "partial-evaluate-linear-one", one_id, 1);
+    bench_partial_evaluate::<Linear, _>(c, "partial-evaluate-linear-one", one_id, |num_terms| {
+        LinearParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+    });
 }
 
 /// Substitute all decision variables in a quadratic function
 fn partial_evaluate_quadratic_all(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic>(c, "partial-evaluate-quadratic-all", all_ids, 2);
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-all",
+        all_ids,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute half of the decision variables in a quadratic function
 fn partial_evaluate_quadratic_half(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic>(c, "partial-evaluate-quadratic-half", half_ids, 2);
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-half",
+        half_ids,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute one decision variable in a quadratic function
 fn partial_evaluate_quadratic_one(c: &mut Criterion) {
-    bench_partial_evaluate::<Quadratic>(c, "partial-evaluate-quadratic-one", one_id, 2);
+    bench_partial_evaluate::<Quadratic, _>(
+        c,
+        "partial-evaluate-quadratic-one",
+        one_id,
+        |num_terms| {
+            QuadraticParameters::new(num_terms, VariableID::from(10 * num_terms as u64)).unwrap()
+        },
+    );
 }
 
 /// Substitute all decision variables in a polynomial function
 fn partial_evaluate_polynomial_all(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial>(c, "partial-evaluate-polynomial-all", all_ids, 5);
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-all",
+        all_ids,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 /// Substitute half of the decision variables in a polynomial function
 fn partial_evaluate_polynomial_half(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial>(c, "partial-evaluate-polynomial-half", half_ids, 5);
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-half",
+        half_ids,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 /// Substitute one decision variable in a polynomial function
 fn partial_evaluate_polynomial_one(c: &mut Criterion) {
-    bench_partial_evaluate::<Polynomial>(c, "partial-evaluate-polynomial-one", one_id, 5);
+    bench_partial_evaluate::<Polynomial, _>(
+        c,
+        "partial-evaluate-polynomial-one",
+        one_id,
+        |num_terms| {
+            PolynomialParameters::new(num_terms, 5.into(), VariableID::from(10 * num_terms as u64))
+                .unwrap()
+        },
+    );
 }
 
 criterion_group!(

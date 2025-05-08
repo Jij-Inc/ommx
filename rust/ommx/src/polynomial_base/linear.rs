@@ -112,6 +112,30 @@ impl Monomial for LinearMonomial {
         1.into()
     }
 
+    fn ids(&self) -> Box<dyn Iterator<Item = VariableID>> {
+        match self {
+            LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),
+            LinearMonomial::Constant => Box::new(std::iter::empty()),
+        }
+    }
+
+    fn from_ids(mut ids: impl Iterator<Item = VariableID>) -> Option<Self> {
+        match (ids.next(), ids.next()) {
+            (Some(id), None) => Some(LinearMonomial::Variable(id)),
+            (None, None) => Some(LinearMonomial::Constant),
+            _ => None,
+        }
+    }
+
+    fn partial_evaluate(self, state: &State) -> (Self, f64, BTreeSet<u64>) {
+        if let LinearMonomial::Variable(id) = self {
+            if let Some(value) = state.entries.get(&id.into_inner()) {
+                return (Self::default(), *value, BTreeSet::from([id.into_inner()]));
+            }
+        }
+        (self, 1.0, BTreeSet::new())
+    }
+
     fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();

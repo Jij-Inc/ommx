@@ -4,6 +4,7 @@ mod arbitrary;
 mod binary_ids;
 mod convert;
 mod degree;
+mod evaluate;
 mod linear;
 mod mul;
 mod parse;
@@ -17,10 +18,10 @@ pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
-use crate::Coefficient;
+use crate::{v1::State, Coefficient, VariableID};
 use proptest::strategy::BoxedStrategy;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt::Debug,
     hash::Hash,
 };
@@ -33,6 +34,12 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
 
     fn degree(&self) -> Degree;
     fn max_degree() -> Degree;
+
+    fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
+    /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
+    fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self>;
+
+    fn partial_evaluate(self, state: &State) -> (Self, f64, BTreeSet<u64>);
 
     /// Generate non duplicated monomials
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;

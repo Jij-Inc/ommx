@@ -6,6 +6,7 @@ use std::{borrow::Cow, fmt::Debug};
 mod add;
 mod approx;
 mod arbitrary;
+mod evaluate;
 mod mul;
 mod parse;
 mod sub;
