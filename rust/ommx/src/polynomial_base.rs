@@ -131,3 +131,49 @@ impl<M: Monomial> PolynomialBase<M> {
             .max()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::random::random_deterministic;
+
+    /// The iteration order must be deterministic
+    #[test]
+    fn test_deterministic() {
+        let p: Linear = random_deterministic(LinearParameters::new(3, 10.into()).unwrap());
+        insta::assert_debug_snapshot!(p.iter().collect::<Vec<_>>(), @r###"
+        [
+            (
+                Variable(
+                    VariableID(
+                        10,
+                    ),
+                ),
+                Coefficient(
+                    -1.0,
+                ),
+            ),
+            (
+                Variable(
+                    VariableID(
+                        7,
+                    ),
+                ),
+                Coefficient(
+                    1.0,
+                ),
+            ),
+            (
+                Variable(
+                    VariableID(
+                        8,
+                    ),
+                ),
+                Coefficient(
+                    -4.973622349033379,
+                ),
+            ),
+        ]
+        "###);
+    }
+}
