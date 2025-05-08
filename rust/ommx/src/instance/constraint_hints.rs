@@ -4,7 +4,8 @@ use crate::{
     v1::{self},
     Constraint, ConstraintID, DecisionVariable, VariableID,
 };
-use std::collections::{BTreeSet, HashMap};
+use fnv::FnvHashMap;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneHot {
@@ -15,8 +16,8 @@ pub struct OneHot {
 impl Parse for v1::OneHot {
     type Output = OneHot;
     type Context = (
-        HashMap<VariableID, DecisionVariable>,
-        HashMap<ConstraintID, Constraint>,
+        FnvHashMap<VariableID, DecisionVariable>,
+        FnvHashMap<ConstraintID, Constraint>,
     );
     fn parse(
         self,
@@ -51,8 +52,8 @@ pub struct Sos1 {
 impl Parse for v1::Sos1 {
     type Output = Sos1;
     type Context = (
-        HashMap<VariableID, DecisionVariable>,
-        HashMap<ConstraintID, Constraint>,
+        FnvHashMap<VariableID, DecisionVariable>,
+        FnvHashMap<ConstraintID, Constraint>,
     );
     fn parse(
         self,
@@ -96,8 +97,8 @@ pub struct ConstraintHints {
 impl Parse for v1::ConstraintHints {
     type Output = ConstraintHints;
     type Context = (
-        HashMap<VariableID, DecisionVariable>,
-        HashMap<ConstraintID, Constraint>,
+        FnvHashMap<VariableID, DecisionVariable>,
+        FnvHashMap<ConstraintID, Constraint>,
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";
