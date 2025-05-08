@@ -2,9 +2,7 @@ use super::*;
 use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
 use itertools::Itertools;
-use maplit::hashset;
 use proptest::prelude::*;
-use std::collections::HashSet;
 use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
@@ -321,9 +319,8 @@ impl Monomial for MonomialDyn {
         Some(Self(ids.map(|id| id.into_inner()).collect()))
     }
 
-    fn partial_evaluate(mut self, state: &State) -> (Self, f64, BTreeSet<u64>) {
+    fn partial_evaluate(mut self, state: &State) -> (Self, f64) {
         let mut i = 0;
-        let mut used = BTreeSet::new();
         let mut out = 1.0;
         while i < self.0.len() {
             let id = self.0[i];
@@ -331,20 +328,19 @@ impl Monomial for MonomialDyn {
                 // This keeps the order of the IDs
                 // Since this `Vec` is usually small, we can use `remove` instead of `swap_remove`
                 self.0.remove(i);
-                used.insert(id);
                 out *= *value;
                 continue;
             }
             i += 1;
         }
-        (self, out, used)
+        (self, out)
     }
 
-    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {
-                0 => return Just(HashSet::new()).boxed(),
-                1 => return Just(hashset! { MonomialDyn::default() }).boxed(),
+                0 => return Just(Default::default()).boxed(),
+                1 => return Just([MonomialDyn::default()].into_iter().collect()).boxed(),
                 _ => {
                     panic!("Invalid parameters for 0-degree polynomial: {p:?}");
                 }

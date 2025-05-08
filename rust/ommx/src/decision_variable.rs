@@ -1,6 +1,6 @@
 use crate::{parse::*, v1, Bound};
 use derive_more::{Deref, From};
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
@@ -62,7 +62,7 @@ pub struct DecisionVariable {
 
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
-    pub parameters: HashMap<String, String>,
+    pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
 }
 
@@ -81,17 +81,17 @@ impl Parse for v1::DecisionVariable {
             substituted_value: self.substituted_value,
             name: self.name,
             subscripts: self.subscripts,
-            parameters: self.parameters,
+            parameters: self.parameters.into_iter().collect(),
             description: self.description,
         })
     }
 }
 
 impl Parse for Vec<v1::DecisionVariable> {
-    type Output = HashMap<VariableID, DecisionVariable>;
+    type Output = FnvHashMap<VariableID, DecisionVariable>;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut decision_variables = HashMap::new();
+        let mut decision_variables = FnvHashMap::default();
         for v in self {
             let v: DecisionVariable = v.parse(&())?;
             let id = v.id;

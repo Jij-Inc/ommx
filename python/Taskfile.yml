@@ -42,6 +42,11 @@ tasks:
     cmds:
       - uv sync --all-extras
 
+  upgrade:
+    desc: Upgrade uv dependencies
+    cmds:
+      - uv sync --all-extras --upgrade
+
   format:
     desc: Format Python code
     cmds:

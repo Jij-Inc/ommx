@@ -44,8 +44,8 @@ impl<'a, M: Monomial> IntoIterator for &'a PolynomialBase<M> {
 
 impl<M: Monomial> From<Coefficient> for PolynomialBase<M> {
     fn from(c: Coefficient) -> Self {
-        Self {
-            terms: HashMap::from([(M::default(), c)]),
-        }
+        let mut terms = FnvHashMap::default();
+        terms.insert(M::default(), c);
+        Self { terms }
     }
 }

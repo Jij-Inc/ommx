@@ -1530,6 +1530,7 @@ dependencies = [
  "directories",
  "env_logger",
  "flate2",
+ "fnv",
  "getset",
  "indoc",
  "insta",

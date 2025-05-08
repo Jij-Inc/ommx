@@ -3,7 +3,7 @@ use crate::{
     v1, Function,
 };
 use derive_more::{Deref, From};
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -41,7 +41,7 @@ pub struct Constraint {
     pub equality: Equality,
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
-    pub parameters: HashMap<String, String>,
+    pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
 }
 
@@ -63,7 +63,7 @@ impl Parse for v1::Constraint {
                 .parse_as(&(), message, "function")?,
             name: self.name,
             subscripts: self.subscripts,
-            parameters: self.parameters,
+            parameters: self.parameters.into_iter().collect(),
             description: self.description,
         })
     }
@@ -73,7 +73,7 @@ impl Parse for v1::Constraint {
 pub struct RemovedConstraint {
     pub constraint: Constraint,
     pub removed_reason: String,
-    pub removed_reason_parameters: HashMap<String, String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
 }
 
 impl Parse for v1::RemovedConstraint {
@@ -91,16 +91,16 @@ impl Parse for v1::RemovedConstraint {
                 })?
                 .parse_as(&(), message, "constraint")?,
             removed_reason: self.removed_reason,
-            removed_reason_parameters: self.removed_reason_parameters,
+            removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         })
     }
 }
 
 impl Parse for Vec<v1::Constraint> {
-    type Output = HashMap<ConstraintID, Constraint>;
+    type Output = FnvHashMap<ConstraintID, Constraint>;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut constraints = HashMap::new();
+        let mut constraints = FnvHashMap::default();
         for c in self {
             let c: Constraint = c.parse(&())?;
             let id = c.id;
@@ -113,10 +113,10 @@ impl Parse for Vec<v1::Constraint> {
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = HashMap<ConstraintID, RemovedConstraint>;
-    type Context = HashMap<ConstraintID, Constraint>;
+    type Output = FnvHashMap<ConstraintID, RemovedConstraint>;
+    type Context = FnvHashMap<ConstraintID, Constraint>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut removed_constraints = HashMap::new();
+        let mut removed_constraints = FnvHashMap::default();
         for c in self {
             let c: RemovedConstraint = c.parse(&())?;
             let id = c.constraint.id;

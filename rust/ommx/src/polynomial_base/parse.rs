@@ -218,7 +218,6 @@ impl From<Polynomial> for v1::Polynomial {
 mod tests {
     use super::*;
     use crate::v1::linear::Term;
-    use maplit::*;
     use proptest::prelude::*;
 
     #[test]
@@ -240,11 +239,13 @@ mod tests {
         assert_eq!(
             linear.parse(&()).unwrap(),
             Linear {
-                terms: hashmap! {
-                    1.into() => 2.0.try_into().unwrap(),
-                    2.into() => 3.0.try_into().unwrap(),
-                    LinearMonomial::Constant => 4.0.try_into().unwrap()
-                },
+                terms: [
+                    (1.into(), 2.0.try_into().unwrap()),
+                    (2.into(), 3.0.try_into().unwrap()),
+                    (LinearMonomial::Constant, 4.0.try_into().unwrap())
+                ]
+                .into_iter()
+                .collect(),
             }
         );
 
@@ -265,10 +266,12 @@ mod tests {
         assert_eq!(
             linear.parse(&()).unwrap(),
             Linear {
-                terms: hashmap! {
-                    2.into() => 3.0.try_into().unwrap(),
-                    LinearMonomial::Constant => 4.0.try_into().unwrap(),
-                },
+                terms: [
+                    (2.into(), 3.0.try_into().unwrap()),
+                    (LinearMonomial::Constant, 4.0.try_into().unwrap())
+                ]
+                .into_iter()
+                .collect(),
             }
         )
     }
@@ -339,11 +342,13 @@ mod tests {
         assert_eq!(
             quadratic.parse(&()).unwrap(),
             Quadratic {
-                terms: hashmap! {
-                    (1.into(), 4.into()).into() => 7.0.try_into().unwrap(),
-                    (2.into(), 5.into()).into() => 8.0.try_into().unwrap(),
-                    (3.into(), 6.into()).into() => 9.0.try_into().unwrap(),
-                },
+                terms: [
+                    ((1.into(), 4.into()).into(), 7.0.try_into().unwrap()),
+                    ((2.into(), 5.into()).into(), 8.0.try_into().unwrap()),
+                    ((3.into(), 6.into()).into(), 9.0.try_into().unwrap()),
+                ]
+                .into_iter()
+                .collect(),
             }
         );
 
@@ -402,10 +407,12 @@ mod tests {
         assert_eq!(
             polynomial.parse(&()).unwrap(),
             Polynomial {
-                terms: hashmap! {
-                    MonomialDyn::new(vec![1, 2]) => 3.0.try_into().unwrap(),
-                    MonomialDyn::new(vec![3, 4]) => 5.0.try_into().unwrap(),
-                },
+                terms: [
+                    (MonomialDyn::new(vec![1, 2]), 3.0.try_into().unwrap()),
+                    (MonomialDyn::new(vec![3, 4]), 5.0.try_into().unwrap()),
+                ]
+                .into_iter()
+                .collect(),
             }
         );
 
