@@ -2352,15 +2352,11 @@ class Linear(AsConstraint):
             Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3, x2 = 4, x3 = 5`
 
             >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> value, used_ids = f.evaluate({1: 3, 2: 4, 3: 5}) # Unused ID `3` can be included
+            >>> value = f.evaluate({1: 3, 2: 4, 3: 5}) # Unused ID `3` can be included
 
             2*3 + 3*4 + 1 = 19
             >>> value
             19.0
-
-            Since the value of ID `3` of `state` is not used, the it is not included in `used_ids`.
-            >>> used_ids
-            {1, 2}
 
             Missing ID raises an error
             >>> f.evaluate({1: 3})
@@ -2385,13 +2381,11 @@ class Linear(AsConstraint):
             Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3`, yielding `3 x2 + 7`
 
             >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> new_f, used_ids = f.partial_evaluate({1: 3})
+            >>> new_f = f.partial_evaluate({1: 3})
             >>> new_f
             Linear(3*x2 + 7)
-            >>> used_ids
-            {1}
             >>> new_f.partial_evaluate({2: 4})
-            (Linear(19), {2})
+            Linear(19)
 
         """
         new = _ommx_rust.partial_evaluate_linear(
@@ -2522,7 +2516,7 @@ class Quadratic(AsConstraint):
             Quadratic(2*x1*x2 + 3*x2*x3 + 1)
 
             >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            (85.0, {1, 2, 3})
+            85.0
 
             Missing ID raises an error
             >>> f.evaluate({1: 3})
@@ -2554,7 +2548,7 @@ class Quadratic(AsConstraint):
             Quadratic(2*x1*x2 + 3*x2*x3 + 1)
 
             >>> f.partial_evaluate({1: 3})
-            (Quadratic(3*x2*x3 + 6*x2 + 1), {1})
+            Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
         new = _ommx_rust.partial_evaluate_quadratic(
@@ -2723,7 +2717,7 @@ class Polynomial(AsConstraint):
             Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
 
             >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            (181.0, {1, 2, 3})
+            181.0
 
             Missing ID raises an error
             >>> f.evaluate({1: 3})
@@ -2755,7 +2749,7 @@ class Polynomial(AsConstraint):
             Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
 
             >>> f.partial_evaluate({1: 3})
-            (Polynomial(9*x2*x3 + 1), {1})
+            Polynomial(9*x2*x3 + 1)
 
         """
         new = _ommx_rust.partial_evaluate_polynomial(
@@ -2933,7 +2927,7 @@ class Function(AsConstraint):
             Function(2*x1*x2 + 3*x2*x3 + 1)
 
             >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            (85.0, {1, 2, 3})
+            85.0
 
             Missing ID raises an error
             >>> f.evaluate({1: 3})
@@ -2965,7 +2959,7 @@ class Function(AsConstraint):
             Function(2*x1*x2 + 3*x2*x3 + 1)
 
             >>> f.partial_evaluate({1: 3})
-            (Function(3*x2*x3 + 6*x2 + 1), {1})
+            Function(3*x2*x3 + 6*x2 + 1)
 
         """
         new = _ommx_rust.partial_evaluate_function(
