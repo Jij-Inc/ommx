@@ -136,7 +136,7 @@ impl Monomial for LinearMonomial {
         (self, 1.0, BTreeSet::new())
     }
 
-    fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<FnvHashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();
         }

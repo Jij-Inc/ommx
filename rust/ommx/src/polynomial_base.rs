@@ -19,9 +19,10 @@ pub use polynomial::*;
 pub use quadratic::*;
 
 use crate::{v1::State, Coefficient, VariableID};
+use fnv::{FnvHashMap, FnvHashSet};
 use proptest::strategy::BoxedStrategy;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashSet},
     fmt::Debug,
     hash::Hash,
 };
@@ -42,19 +43,19 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     fn partial_evaluate(self, state: &State) -> (Self, f64, BTreeSet<u64>);
 
     /// Generate non duplicated monomials
-    fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
+    fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>>;
 }
 
 /// Base struct for [`Linear`] and other polynomials
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolynomialBase<M: Monomial> {
-    terms: HashMap<M, Coefficient>,
+    terms: FnvHashMap<M, Coefficient>,
 }
 
 impl<M: Monomial> Default for PolynomialBase<M> {
     fn default() -> Self {
         Self {
-            terms: HashMap::new(),
+            terms: Default::default(),
         }
     }
 }
@@ -146,11 +147,11 @@ mod tests {
             (
                 Variable(
                     VariableID(
-                        10,
+                        8,
                     ),
                 ),
                 Coefficient(
-                    -1.0,
+                    -4.973622349033379,
                 ),
             ),
             (
@@ -160,17 +161,17 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    1.0,
+                    -1.0,
                 ),
             ),
             (
                 Variable(
                     VariableID(
-                        8,
+                        10,
                     ),
                 ),
                 Coefficient(
-                    -4.973622349033379,
+                    1.0,
                 ),
             ),
         ]

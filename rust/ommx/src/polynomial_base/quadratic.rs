@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{bail, Result};
 use derive_more::From;
 use proptest::prelude::*;
-use std::collections::HashSet;
 
 pub type Quadratic = PolynomialBase<QuadraticMonomial>;
 
@@ -212,7 +211,7 @@ impl Monomial for QuadraticMonomial {
         (self, 1.0, BTreeSet::new())
     }
 
-    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>> {
         let min = if p.num_terms >= p.largest_sub_degree_terms() {
             p.num_terms - p.largest_sub_degree_terms()
         } else {
