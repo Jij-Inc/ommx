@@ -319,9 +319,8 @@ impl Monomial for MonomialDyn {
         Some(Self(ids.map(|id| id.into_inner()).collect()))
     }
 
-    fn partial_evaluate(mut self, state: &State) -> (Self, f64, BTreeSet<u64>) {
+    fn partial_evaluate(mut self, state: &State) -> (Self, f64) {
         let mut i = 0;
-        let mut used = BTreeSet::new();
         let mut out = 1.0;
         while i < self.0.len() {
             let id = self.0[i];
@@ -329,13 +328,12 @@ impl Monomial for MonomialDyn {
                 // This keeps the order of the IDs
                 // Since this `Vec` is usually small, we can use `remove` instead of `swap_remove`
                 self.0.remove(i);
-                used.insert(id);
                 out *= *value;
                 continue;
             }
             i += 1;
         }
-        (self, out, used)
+        (self, out)
     }
 
     fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>> {

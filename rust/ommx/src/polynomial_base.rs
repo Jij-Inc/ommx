@@ -21,11 +21,7 @@ pub use quadratic::*;
 use crate::{v1::State, Coefficient, VariableID};
 use fnv::{FnvHashMap, FnvHashSet};
 use proptest::strategy::BoxedStrategy;
-use std::{
-    collections::{BTreeSet, HashSet},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{fmt::Debug, hash::Hash};
 
 /// Monomial, without coefficient
 ///
@@ -40,7 +36,7 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
     fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self>;
 
-    fn partial_evaluate(self, state: &State) -> (Self, f64, BTreeSet<u64>);
+    fn partial_evaluate(self, state: &State) -> (Self, f64);
 
     /// Generate non duplicated monomials
     fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>>;

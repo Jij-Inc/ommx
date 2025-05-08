@@ -55,7 +55,7 @@ impl Instance {
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
-        Ok(SampleSet(self.0.evaluate_samples(&samples.0)?.0))
+        Ok(SampleSet(self.0.evaluate_samples(&samples.0)?))
     }
 
     pub fn relax_constraint(

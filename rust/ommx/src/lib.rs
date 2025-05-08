@@ -39,10 +39,9 @@
 //!   let state: State = hashmap! { 1 => 4.0, 2 => 5.0, 3 => 6.0 }.into();
 //!
 //!   // Evaluate the linear function with the state, and get the value and used variable ids
-//!   let (value, used_ids) = linear.evaluate(&state).unwrap();
+//!   let value = linear.evaluate(&state).unwrap();
 //!
 //!   assert_eq!(value, 1.0 * 4.0 + 2.0 * 5.0 + 3.0);
-//!   assert_eq!(used_ids, btreeset!{ 1, 2 }) // x3 is not used
 //!   ```
 //!
 //! OMMX Artifact

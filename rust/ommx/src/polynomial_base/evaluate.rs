@@ -10,9 +10,8 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, state: &State) -> Result<(Self::Output, BTreeSet<u64>)> {
+    fn evaluate(&self, state: &State) -> Result<Self::Output> {
         let mut result = 0.0;
-        let mut ids = BTreeSet::new();
         for (monomial, coefficient) in self.iter() {
             let mut out = 1.0;
             for id in monomial.ids() {
@@ -22,20 +21,17 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                     .ok_or_else(|| anyhow!("Missing entry for id: {}", id.into_inner()))?;
             }
             result += coefficient.into_inner() * out;
-            ids.extend(monomial.ids().map(|id| id.into_inner()));
         }
-        Ok((result, ids))
+        Ok(result)
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<BTreeSet<u64>> {
+    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
         if state.entries.is_empty() {
-            return Ok(BTreeSet::new());
+            return Ok(());
         }
-        let mut used = BTreeSet::new();
         let current = std::mem::take(&mut self.terms);
         for (monomial, coefficient) in current {
-            let (new_monomial, value, ids) = monomial.partial_evaluate(state);
-            used.extend(ids);
+            let (new_monomial, value) = monomial.partial_evaluate(state);
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(value) => {
                     self.add_term(new_monomial, value * coefficient);
@@ -51,7 +47,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
                 }
             }
         }
-        Ok(used)
+        Ok(())
     }
 
     fn required_ids(&self) -> BTreeSet<u64> {
@@ -62,7 +58,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             .collect()
     }
 
-    fn evaluate_samples(&self, _samples: &Samples) -> Result<(Self::SampledOutput, BTreeSet<u64>)> {
+    fn evaluate_samples(&self, _samples: &Samples) -> Result<Self::SampledOutput> {
         todo!()
     }
 }
@@ -118,9 +114,9 @@ mod tests {
                 fn $name(
                     (l1, l2, state) in two_polynomial_and_state::<$monomial>()
                 ) {
-                    let v1 = l1.evaluate(&state).unwrap().0;
-                    let v2 = l2.evaluate(&state).unwrap().0;
-                    let v3 = (&l1 $op &l2).evaluate(&state).unwrap().0;
+                    let v1 = l1.evaluate(&state).unwrap();
+                    let v2 = l2.evaluate(&state).unwrap();
+                    let v3 = (&l1 $op &l2).evaluate(&state).unwrap();
                     prop_assert!((v1 $op v2).abs_diff_eq(&v3, 1e-9));
                 }
             }
@@ -170,9 +166,9 @@ mod tests {
                 fn $name(
                     (mut poly, state, s1, s2) in polynomial_and_state_split::<$monomial>()
                 ) {
-                    let v = poly.evaluate(&state).unwrap().0;
+                    let v = poly.evaluate(&state).unwrap();
                     let _ = poly.partial_evaluate(&s1).unwrap();
-                    let w = poly.evaluate(&s2).unwrap().0;
+                    let w = poly.evaluate(&s2).unwrap();
                     prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
                 }
             }
