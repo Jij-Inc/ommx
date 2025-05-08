@@ -133,9 +133,6 @@
 pub use ocipkg;
 pub use prost::Message;
 
-pub use fnv::FnvHashMap as HashMap;
-pub use fnv::FnvHashSet as HashSet;
-
 // Public modules
 pub mod artifact;
 pub mod dataset;
