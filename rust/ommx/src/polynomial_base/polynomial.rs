@@ -2,9 +2,7 @@ use super::*;
 use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
 use itertools::Itertools;
-use maplit::hashset;
 use proptest::prelude::*;
-use std::collections::HashSet;
 use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
@@ -338,11 +336,11 @@ impl Monomial for MonomialDyn {
         (self, out)
     }
 
-    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {
-                0 => return Just(HashSet::new()).boxed(),
-                1 => return Just(hashset! { MonomialDyn::default() }).boxed(),
+                0 => return Just(Default::default()).boxed(),
+                1 => return Just([MonomialDyn::default()].into_iter().collect()).boxed(),
                 _ => {
                     panic!("Invalid parameters for 0-degree polynomial: {p:?}");
                 }

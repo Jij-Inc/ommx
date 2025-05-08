@@ -19,12 +19,9 @@ pub use polynomial::*;
 pub use quadratic::*;
 
 use crate::{v1::State, Coefficient, VariableID};
+use fnv::{FnvHashMap, FnvHashSet};
 use proptest::strategy::BoxedStrategy;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    hash::Hash,
-};
+use std::{fmt::Debug, hash::Hash};
 
 /// Monomial, without coefficient
 ///
@@ -42,19 +39,19 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     fn partial_evaluate(self, state: &State) -> (Self, f64);
 
     /// Generate non duplicated monomials
-    fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<HashSet<Self>>;
+    fn arbitrary_uniques(parameters: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>>;
 }
 
 /// Base struct for [`Linear`] and other polynomials
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolynomialBase<M: Monomial> {
-    terms: HashMap<M, Coefficient>,
+    terms: FnvHashMap<M, Coefficient>,
 }
 
 impl<M: Monomial> Default for PolynomialBase<M> {
     fn default() -> Self {
         Self {
-            terms: HashMap::new(),
+            terms: Default::default(),
         }
     }
 }
@@ -129,5 +126,51 @@ impl<M: Monomial> PolynomialBase<M> {
             .values()
             .map(|coefficient| coefficient.abs())
             .max()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::random::random_deterministic;
+
+    /// The iteration order must be deterministic
+    #[test]
+    fn test_deterministic() {
+        let p: Linear = random_deterministic(LinearParameters::new(3, 10.into()).unwrap());
+        insta::assert_debug_snapshot!(p.iter().collect::<Vec<_>>(), @r###"
+        [
+            (
+                Variable(
+                    VariableID(
+                        8,
+                    ),
+                ),
+                Coefficient(
+                    -4.973622349033379,
+                ),
+            ),
+            (
+                Variable(
+                    VariableID(
+                        7,
+                    ),
+                ),
+                Coefficient(
+                    -1.0,
+                ),
+            ),
+            (
+                Variable(
+                    VariableID(
+                        10,
+                    ),
+                ),
+                Coefficient(
+                    1.0,
+                ),
+            ),
+        ]
+        "###);
     }
 }

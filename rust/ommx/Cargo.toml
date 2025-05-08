@@ -25,6 +25,7 @@ derive_more.workspace = true
 directories.workspace = true
 env_logger.workspace = true
 flate2.workspace = true
+fnv.workspace = true
 getset.workspace = true
 itertools.workspace = true
 log.workspace = true

@@ -2,7 +2,7 @@ use super::*;
 use crate::{random::unique_integers, VariableID};
 use anyhow::{bail, Result};
 use proptest::prelude::*;
-use std::{fmt::Debug, hash::Hash};
+use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 pub type Linear = PolynomialBase<LinearMonomial>;
 
@@ -136,7 +136,7 @@ impl Monomial for LinearMonomial {
         (self, 1.0)
     }
 
-    fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: LinearParameters) -> BoxedStrategy<FnvHashSet<Self>> {
         if p.is_empty() {
             return Just(HashSet::default()).boxed();
         }
