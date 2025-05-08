@@ -1,6 +1,8 @@
+mod analysis;
 mod constraint_hints;
 mod parse;
 
+pub use analysis::*;
 pub use constraint_hints::*;
 
 use crate::{
