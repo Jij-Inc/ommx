@@ -165,9 +165,9 @@ mod tests {
         #[test]
         fn mul_ref(a in any::<Function>(), b in any::<Function>()) {
             let ans = a.clone() * b.clone();
-            assert_abs_diff_eq!(&a * &b, ans, epsilon = 1e-9);
-            assert_abs_diff_eq!(a.clone() * &b, ans, epsilon = 1e-9);
-            assert_abs_diff_eq!(&a * b, ans, epsilon = 1e-9);
+            assert_abs_diff_eq!(&a * &b, ans);
+            assert_abs_diff_eq!(a.clone() * &b, ans);
+            assert_abs_diff_eq!(&a * b, ans);
         }
 
         #[test]
@@ -183,7 +183,7 @@ mod tests {
 
         #[test]
         fn mul_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
-            assert_abs_diff_eq!(&a * (&b * &c), (&a * &b) * &c, epsilon = 1e-9);
+            assert_abs_diff_eq!(&a * (&b * &c), (&a * &b) * &c);
         }
     }
 }

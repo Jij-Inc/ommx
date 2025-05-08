@@ -216,7 +216,7 @@ mod tests {
 
         #[test]
         fn add_associative(a in any::<Function>(), b in any::<Function>(), c in any::<Function>()) {
-            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c, epsilon = 1e-9);
+            assert_abs_diff_eq!(&a + (&b + &c), (&a + &b) + &c);
         }
     }
 }

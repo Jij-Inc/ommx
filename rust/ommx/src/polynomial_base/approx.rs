@@ -5,7 +5,7 @@ use ::approx::AbsDiffEq;
 impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
     type Epsilon = f64;
     fn default_epsilon() -> Self::Epsilon {
-        f64::EPSILON
+        1e-9
     }
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         let residual = self - other;
@@ -26,9 +26,9 @@ mod tests {
         let zero = PolynomialBase::default();
         let small = PolynomialBase {
             terms: hashmap! {
-                LinearMonomial::Variable(1.into()) => 1e-9.try_into().unwrap(),
+                LinearMonomial::Variable(1.into()) => 1e-11.try_into().unwrap(),
             },
         };
-        assert_abs_diff_eq!(small, zero, epsilon = 1e-8);
+        assert_abs_diff_eq!(small, zero);
     }
 }
