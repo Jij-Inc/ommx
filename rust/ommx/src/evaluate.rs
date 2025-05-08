@@ -298,7 +298,11 @@ impl Evaluate for Constraint {
         Ok(SampledConstraint {
             id: self.id,
             evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: Vec::new(), // FIXME
+            used_decision_variable_ids: self
+                .function()
+                .used_decision_variable_ids()
+                .into_iter()
+                .collect(),
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.clone(),
