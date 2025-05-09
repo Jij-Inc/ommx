@@ -175,6 +175,10 @@ pub fn arbitrary_decision_variables(
             ids.into_iter()
                 .map(VariableID::from)
                 .zip(variables.into_iter())
+                .map(|(id, mut variable)| {
+                    variable.id = id;
+                    (id, variable)
+                })
                 .collect()
         })
         .boxed()

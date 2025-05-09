@@ -100,13 +100,9 @@ impl Arbitrary for Constraint {
     type Parameters = PolynomialParameters;
     type Strategy = BoxedStrategy<Self>;
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
-        (
-            any::<u64>().prop_map(ConstraintID),
-            Function::arbitrary_with(params),
-            Equality::arbitrary(),
-        )
-            .prop_map(|(id, function, equality)| Constraint {
-                id,
+        (Function::arbitrary_with(params), Equality::arbitrary())
+            .prop_map(|(function, equality)| Constraint {
+                id: ConstraintID(0), // Should be replaced with a unique ID
                 function,
                 equality,
                 name: None,
