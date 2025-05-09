@@ -1,7 +1,7 @@
 use super::*;
 use crate::{v1::State, Bound, Evaluate, Kind};
 use ::approx::AbsDiffEq;
-use fnv::FnvHashSet; // approx を use する
+use fnv::FnvHashSet;
 
 /// The result of analyzing the decision variables in an instance.
 ///
