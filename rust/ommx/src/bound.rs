@@ -395,7 +395,7 @@ impl Bound {
         if lower == upper {
             Just(lower).boxed()
         } else {
-            prop_oneof![Just(upper), Just(lower), (lower..=upper)].boxed()
+            (lower..=upper).boxed()
         }
     }
 }
