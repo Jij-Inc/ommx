@@ -1,7 +1,6 @@
 use super::*;
-use crate::v1::decision_variable::Kind;
 use crate::PolynomialParameters;
-use crate::{v1::State, Bound};
+use crate::{v1::State, Bound, KindParameters};
 use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -133,7 +132,7 @@ pub struct InstanceParameters {
     pub num_constraints: usize,
     pub objective: PolynomialParameters,
     pub constraint: PolynomialParameters,
-    pub kinds: Vec<Kind>,
+    pub kinds: KindParameters,
 }
 
 impl Default for InstanceParameters {
@@ -142,7 +141,7 @@ impl Default for InstanceParameters {
             num_constraints: 5,
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
-            kinds: vec![Kind::Continuous, Kind::Integer, Kind::Binary],
+            kinds: KindParameters::default(),
         }
     }
 }
