@@ -116,7 +116,7 @@ impl DecisionVariableAnalysis {
     /// - The values of the state satisfy the bounds of the decision variables.
     pub fn validate_state(&self, state: &State, atol: f64) -> Result<(), StateValidationError> {
         let state_ids: FnvHashSet<VariableID> =
-            state.entries.keys().map(|id| id.clone().into()).collect();
+            state.entries.keys().map(|id| (*id).into()).collect();
         let used_ids = self.used();
 
         if state_ids != used_ids {
