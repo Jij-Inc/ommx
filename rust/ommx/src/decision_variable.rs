@@ -1,6 +1,6 @@
 use crate::{parse::*, v1, Bound};
 use derive_more::{Deref, From};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use proptest::prelude::*;
 
 /// ID for decision variable and parameter.
@@ -25,6 +25,26 @@ impl std::fmt::Display for VariableID {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct KindParameters(FnvHashSet<Kind>);
+
+impl KindParameters {
+    pub fn new(kinds: &[Kind]) -> anyhow::Result<Self> {
+        let inner: FnvHashSet<_> = kinds.iter().cloned().collect();
+        if inner.is_empty() {
+            Err(anyhow::anyhow!("KindParameters must not be empty"))
+        } else {
+            Ok(KindParameters(inner))
+        }
+    }
+}
+
+impl Default for KindParameters {
+    fn default() -> Self {
+        Self::new(&[Kind::Binary, Kind::Integer, Kind::Continuous]).unwrap()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     Continuous,
@@ -35,18 +55,13 @@ pub enum Kind {
 }
 
 impl Arbitrary for Kind {
-    type Parameters = ();
+    type Parameters = KindParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
-        prop_oneof![
-            Just(Kind::Continuous),
-            Just(Kind::Integer),
-            Just(Kind::Binary),
-            Just(Kind::SemiContinuous),
-            Just(Kind::SemiInteger),
-        ]
-        .boxed()
+    fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
+        let kinds_vec: Vec<Kind> = parameters.0.into_iter().collect();
+        debug_assert!(!kinds_vec.is_empty(), "KindParameters must not be empty");
+        proptest::sample::select(kinds_vec).boxed()
     }
 }
 
@@ -84,21 +99,21 @@ pub struct DecisionVariable {
 }
 
 impl Arbitrary for DecisionVariable {
-    type Parameters = (); // Simplified parameters for now
+    type Parameters = KindParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
-        (any::<u64>().prop_map(VariableID), Kind::arbitrary())
-            .prop_flat_map(|(id, kind)| {
+    fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
+        Kind::arbitrary_with(parameters)
+            .prop_flat_map(|kind| {
                 let bound_strategy = if kind == Kind::Binary {
                     Just(Bound::new(0.0, 1.0).unwrap()).boxed()
                 } else {
                     Bound::arbitrary()
                 };
-                (Just(id), Just(kind), bound_strategy)
+                (Just(kind), bound_strategy)
             })
-            .prop_map(|(id, kind, bound)| DecisionVariable {
-                id,
+            .prop_map(|(kind, bound)| DecisionVariable {
+                id: VariableID::from(0), // Should be replaced with a unique ID
                 kind,
                 bound,
                 substituted_value: None,
