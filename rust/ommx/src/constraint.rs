@@ -1,5 +1,6 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
+    random::unique_integers,
     v1, Function, PolynomialParameters,
 };
 use approx::AbsDiffEq;
@@ -186,6 +187,28 @@ impl Parse for Vec<v1::RemovedConstraint> {
         }
         Ok(removed_constraints)
     }
+}
+
+pub fn arbitrary_constraints(
+    size: usize,
+    max_id: ConstraintID,
+    parameters: PolynomialParameters,
+) -> impl Strategy<Value = FnvHashMap<ConstraintID, Constraint>> {
+    let unique_ids_strategy = unique_integers(0, max_id.0, size);
+    let constraints_strategy =
+        proptest::collection::vec(Constraint::arbitrary_with(parameters), size);
+    (unique_ids_strategy, constraints_strategy)
+        .prop_map(|(ids, constraints)| {
+            ids.into_iter()
+                .map(ConstraintID::from)
+                .zip(constraints.into_iter())
+                .map(|(id, mut constraint)| {
+                    constraint.id = id;
+                    (id, constraint)
+                })
+                .collect()
+        })
+        .boxed()
 }
 
 #[cfg(test)]
