@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Bound, Evaluate, Kind};
+use crate::{v1::State, Bound, Evaluate, Kind};
 use fnv::FnvHashSet;
 
 /// The result of analyzing the decision variables in an instance.
@@ -64,6 +64,157 @@ impl DecisionVariableAnalysis {
             .collect();
         self.all.difference(&relevant).cloned().collect()
     }
+
+    pub fn used_binary(&self) -> FnvHashSet<VariableID> {
+        let used_ids = self.used();
+        self.binary()
+            .intersection(&used_ids)
+            .cloned()
+            .collect::<FnvHashSet<VariableID>>()
+    }
+
+    pub fn used_integer(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.integer()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.continuous()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_semi_integer(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.semi_integer()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_semi_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.semi_continuous()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    /// Check the state is valid for this analysis.
+    ///
+    /// The state is **valid** if:
+    /// - The IDs which the state contains equals to `used` exactly.
+    /// - The values of the state satisfy the bounds of the decision variables.
+    pub fn validate_state(&self, state: &State, atol: f64) -> Result<(), StateValidationError> {
+        let state_ids: FnvHashSet<VariableID> =
+            state.entries.keys().map(|id| (*id).into()).collect();
+        let used_ids = self.used();
+
+        if state_ids != used_ids {
+            let extra_in_state: FnvHashSet<VariableID> =
+                state_ids.difference(&used_ids).cloned().collect();
+            let missing_from_state: FnvHashSet<VariableID> =
+                used_ids.difference(&state_ids).cloned().collect();
+            return Err(StateValidationError::MismatchedIDs {
+                extra: extra_in_state,
+                missing: missing_from_state,
+            });
+        }
+
+        for (id, &value) in &state.entries {
+            let id_ref = &VariableID::from(*id);
+            if self.binary.contains(id_ref) {
+                if (value - 0.0).abs() > atol && (value - 1.0).abs() > atol {
+                    return Err(StateValidationError::BinaryValueNotBool { id: *id_ref, value });
+                }
+            } else if let Some(bound) = self.integer.get(id_ref) {
+                if (value.fract()).abs() > atol {
+                    return Err(StateValidationError::NotAnInteger { id: *id_ref, value });
+                }
+                if !bound.contains(value, atol) {
+                    return Err(StateValidationError::ValueOutOfBounds {
+                        id: *id_ref,
+                        value,
+                        bound: *bound,
+                        kind: Kind::Integer,
+                    });
+                }
+            } else if let Some(bound) = self.continuous.get(id_ref) {
+                if !bound.contains(value, atol) {
+                    return Err(StateValidationError::ValueOutOfBounds {
+                        id: *id_ref,
+                        value,
+                        bound: *bound,
+                        kind: Kind::Continuous,
+                    });
+                }
+            } else if let Some(bound) = self.semi_integer.get(id_ref) {
+                if value.abs() > atol {
+                    // If not zero
+                    if (value.fract()).abs() > atol {
+                        return Err(StateValidationError::SemiIntegerNonZeroNotInteger {
+                            id: *id_ref,
+                            value,
+                        });
+                    }
+                    if !bound.contains(value, atol) {
+                        return Err(StateValidationError::ValueOutOfBounds {
+                            id: *id_ref,
+                            value,
+                            bound: *bound,
+                            kind: Kind::SemiInteger,
+                        });
+                    }
+                }
+            } else if let Some(bound) = self.semi_continuous.get(id_ref) {
+                if value.abs() > atol {
+                    // If not zero
+                    if !bound.contains(value, atol) {
+                        return Err(StateValidationError::ValueOutOfBounds {
+                            id: *id_ref,
+                            value,
+                            bound: *bound,
+                            kind: Kind::SemiContinuous,
+                        });
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum StateValidationError {
+    #[error("State IDs do not match used variable IDs. Extra in state: {extra:?}, Missing from state: {missing:?}")]
+    MismatchedIDs {
+        extra: FnvHashSet<VariableID>,
+        missing: FnvHashSet<VariableID>,
+    },
+    #[error(
+        "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
+    )]
+    ValueOutOfBounds {
+        id: VariableID,
+        value: f64,
+        bound: Bound,
+        kind: Kind,
+    },
+    #[error("Value for binary variable {id:?} is not 0.0 or 1.0. Value: {value}")]
+    BinaryValueNotBool { id: VariableID, value: f64 },
+    #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
+    NotAnInteger { id: VariableID, value: f64 },
+    #[error("Non-zero value for semi-integer variable {id:?} is not an integer. Value: {value}")]
+    SemiIntegerNonZeroNotInteger { id: VariableID, value: f64 },
 }
 
 impl Instance {

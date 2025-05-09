@@ -388,6 +388,16 @@ impl Bound {
             }
         }
     }
+
+    pub fn arbitrary_containing_integer(&self, max_abs: u64) -> BoxedStrategy<i64> {
+        let lower = self.lower.max(-(max_abs as f64)).ceil() as i64;
+        let upper = self.upper.min(max_abs as f64).floor() as i64;
+        if lower == upper {
+            Just(lower).boxed()
+        } else {
+            (lower..=upper).boxed()
+        }
+    }
 }
 
 impl Arbitrary for Bound {

@@ -41,12 +41,13 @@ impl Evaluate for Function {
     }
 
     fn partial_evaluate(&mut self, state: &State) -> Result<()> {
-        Ok(match &mut self.function {
+        match &mut self.function {
             Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
             Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
             _ => {}
-        })
+        };
+        Ok(())
     }
 
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
