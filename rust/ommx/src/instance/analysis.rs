@@ -64,6 +64,50 @@ impl DecisionVariableAnalysis {
             .collect();
         self.all.difference(&relevant).cloned().collect()
     }
+
+    pub fn used_binary(&self) -> FnvHashSet<VariableID> {
+        let used_ids = self.used();
+        self.binary()
+            .intersection(&used_ids)
+            .cloned()
+            .collect::<FnvHashSet<VariableID>>()
+    }
+
+    pub fn used_integer(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.integer()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.continuous()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_semi_integer(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.semi_integer()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
+
+    pub fn used_semi_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+        let used_ids = self.used();
+        self.semi_continuous()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect::<FnvHashMap<VariableID, Bound>>()
+    }
 }
 
 impl Instance {
