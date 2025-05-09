@@ -3,6 +3,7 @@ use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1, VariableID,
 };
+use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
 use std::{collections::HashMap, ops::*};
@@ -244,6 +245,19 @@ impl PartialOrd<f64> for Bound {
 impl PartialOrd<Bound> for f64 {
     fn partial_cmp(&self, other: &Bound) -> Option<std::cmp::Ordering> {
         other.partial_cmp(self).map(|o| o.reverse())
+    }
+}
+
+impl AbsDiffEq for Bound {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.lower.abs_diff_eq(&other.lower, epsilon)
+            && self.upper.abs_diff_eq(&other.upper, epsilon)
     }
 }
 

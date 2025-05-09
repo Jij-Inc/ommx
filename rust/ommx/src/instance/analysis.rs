@@ -1,5 +1,6 @@
 use super::*;
 use crate::{v1::State, Bound, Evaluate, Kind};
+use ::approx::AbsDiffEq;
 use fnv::FnvHashSet;
 
 /// The result of analyzing the decision variables in an instance.
@@ -215,6 +216,84 @@ pub enum StateValidationError {
     NotAnInteger { id: VariableID, value: f64 },
     #[error("Non-zero value for semi-integer variable {id:?} is not an integer. Value: {value}")]
     SemiIntegerNonZeroNotInteger { id: VariableID, value: f64 },
+}
+
+/// Check if **used** decision variables has the same bounds
+///
+/// Other decision variables e.g. `fixed` are ignored.
+impl AbsDiffEq for DecisionVariableAnalysis {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        Bound::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        if self.used_binary() != other.used_binary() {
+            return false;
+        }
+
+        let self_integers = self.used_integer();
+        let other_integers = other.used_integer();
+        if self_integers.len() != other_integers.len() {
+            return false;
+        }
+        for (id, bound) in &self_integers {
+            if let Some(other_bound) = other_integers.get(id) {
+                if !bound.abs_diff_eq(other_bound, epsilon) {
+                    return false;
+                }
+            } else {
+                return false; // Not found in other instance
+            }
+        }
+
+        let self_continuous = self.used_continuous();
+        let other_continuous = other.used_continuous();
+        if self_continuous.len() != other_continuous.len() {
+            return false;
+        }
+        for (id, bound) in &self_continuous {
+            if let Some(other_bound) = other_continuous.get(id) {
+                if !bound.abs_diff_eq(other_bound, epsilon) {
+                    return false;
+                }
+            } else {
+                return false; // Not found in other instance
+            }
+        }
+
+        let self_semi_integer = self.used_semi_integer();
+        let other_semi_integer = other.used_semi_integer();
+        if self_semi_integer.len() != other_semi_integer.len() {
+            return false;
+        }
+        for (id, bound) in &self_semi_integer {
+            if let Some(other_bound) = other_semi_integer.get(id) {
+                if !bound.abs_diff_eq(other_bound, epsilon) {
+                    return false;
+                }
+            } else {
+                return false; // Not found in other instance
+            }
+        }
+
+        let self_semi_continuous = self.used_semi_continuous();
+        let other_semi_continuous = other.used_semi_continuous();
+        if self_semi_continuous.len() != other_semi_continuous.len() {
+            return false;
+        }
+        for (id, bound) in &self_semi_continuous {
+            if let Some(other_bound) = other_semi_continuous.get(id) {
+                if !bound.abs_diff_eq(other_bound, epsilon) {
+                    return false;
+                }
+            } else {
+                return false; // Not found in other instance
+            }
+        }
+        true
+    }
 }
 
 impl Instance {
