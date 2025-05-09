@@ -1,4 +1,4 @@
-use crate::{parse::*, v1, Bound};
+use crate::{parse::*, random::unique_integers, v1, Bound};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use proptest::prelude::*;
@@ -161,4 +161,21 @@ impl Parse for Vec<v1::DecisionVariable> {
         }
         Ok(decision_variables)
     }
+}
+
+pub fn arbitrary_decision_variables(
+    size: usize,
+    max_id: VariableID,
+    parameters: KindParameters,
+) -> impl Strategy<Value = FnvHashMap<VariableID, DecisionVariable>> {
+    let unique_ids = unique_integers(0, max_id.into_inner(), size);
+    let variables = proptest::collection::vec(DecisionVariable::arbitrary_with(parameters), size);
+    (unique_ids, variables)
+        .prop_map(|(ids, variables)| {
+            ids.into_iter()
+                .map(VariableID::from)
+                .zip(variables.into_iter())
+                .collect()
+        })
+        .boxed()
 }
