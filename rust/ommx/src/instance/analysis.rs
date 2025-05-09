@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Evaluate, Kind};
+use crate::{Bound, Evaluate, Kind};
 use fnv::FnvHashSet;
 
 /// The result of analyzing the decision variables in an instance.
@@ -11,7 +11,7 @@ use fnv::FnvHashSet;
 ///   are disjoint, and their union is equal to `all`.
 /// - The union of `used_in_objective` and `used_in_constraints` (= `used`), `fixed`,
 ///   and `dependent` are disjoint each other.
-#[derive(Debug, Clone, PartialEq, Eq, getset::Getters)]
+#[derive(Debug, Clone, PartialEq, getset::Getters)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
     #[getset(get = "pub")]
@@ -20,13 +20,13 @@ pub struct DecisionVariableAnalysis {
     #[getset(get = "pub")]
     binary: FnvHashSet<VariableID>,
     #[getset(get = "pub")]
-    integer: FnvHashSet<VariableID>,
+    integer: FnvHashMap<VariableID, Bound>,
     #[getset(get = "pub")]
-    continuous: FnvHashSet<VariableID>,
+    continuous: FnvHashMap<VariableID, Bound>,
     #[getset(get = "pub")]
-    semi_integer: FnvHashSet<VariableID>,
+    semi_integer: FnvHashMap<VariableID, Bound>,
     #[getset(get = "pub")]
-    semi_continuous: FnvHashSet<VariableID>,
+    semi_continuous: FnvHashMap<VariableID, Bound>,
 
     /// The set of decision variables that are used in the objective function.
     #[getset(get = "pub")]
@@ -37,7 +37,7 @@ pub struct DecisionVariableAnalysis {
 
     /// Fixed decision variables
     #[getset(get = "pub")]
-    fixed: FnvHashSet<VariableID>,
+    fixed: FnvHashMap<VariableID, f64>,
     /// Dependent variables
     #[getset(get = "pub")]
     dependent: FnvHashSet<VariableID>,
@@ -59,7 +59,7 @@ impl DecisionVariableAnalysis {
             .iter()
             .chain(self.used_in_constraints.iter())
             .chain(self.dependent.iter())
-            .chain(self.fixed.iter())
+            .chain(self.fixed.keys())
             .cloned()
             .collect();
         self.all.difference(&relevant).cloned().collect()
@@ -69,23 +69,23 @@ impl DecisionVariableAnalysis {
 impl Instance {
     pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
         let mut all = FnvHashSet::default();
-        let mut fixed = FnvHashSet::default();
+        let mut fixed = FnvHashMap::default();
         let mut binary = FnvHashSet::default();
-        let mut integer = FnvHashSet::default();
-        let mut continuous = FnvHashSet::default();
-        let mut semi_integer = FnvHashSet::default();
-        let mut semi_continuous = FnvHashSet::default();
+        let mut integer = FnvHashMap::default();
+        let mut continuous = FnvHashMap::default();
+        let mut semi_integer = FnvHashMap::default();
+        let mut semi_continuous = FnvHashMap::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind {
                 Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id),
-                Kind::Continuous => continuous.insert(*id),
-                Kind::SemiInteger => semi_integer.insert(*id),
-                Kind::SemiContinuous => semi_continuous.insert(*id),
+                Kind::Integer => integer.insert(*id, dv.bound).is_some(),
+                Kind::Continuous => continuous.insert(*id, dv.bound).is_some(),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound).is_some(),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound).is_some(),
             };
             all.insert(*id);
-            if dv.substituted_value.is_some() {
-                fixed.insert(*id);
+            if let Some(value) = dv.substituted_value {
+                fixed.insert(*id, value);
             }
         }
         let used_in_objective = self
