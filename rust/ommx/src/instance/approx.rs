@@ -13,10 +13,12 @@ impl AbsDiffEq for Instance {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // Compare the used decision variables
-        if self.analyze_decision_variables().used() != other.analyze_decision_variables().used() {
+        if !self
+            .analyze_decision_variables()
+            .abs_diff_eq(&other.analyze_decision_variables(), epsilon)
+        {
             return false;
         }
-        // TODO: compare bounds
 
         // Compare the objective function
         // Note that min f(x) and max -f(x) are equivalent
@@ -39,6 +41,7 @@ impl AbsDiffEq for Instance {
         }
 
         // Compare constraints
+        // Note that `removed_constraints` are not considered in the comparison
         for (id, c_self) in &self.constraints {
             match other.constraints.get(id) {
                 Some(c_other) => {
