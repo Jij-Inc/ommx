@@ -832,11 +832,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let (lower_evaluated, _) = encoded.evaluate(&state).unwrap();
+            let lower_evaluated = encoded.evaluate(&state).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let (upper_evaluated, _) = encoded.evaluate(&state).unwrap();
+            let upper_evaluated = encoded.evaluate(&state).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 

@@ -556,7 +556,7 @@ mod tests {
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
-            let (value, _) = f.evaluate(&state).unwrap();
+            let value = f.evaluate(&state).unwrap();
             prop_assert!(bound.contains(value, 1e-7));
         }
 

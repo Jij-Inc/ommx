@@ -13,7 +13,7 @@ macro_rules! define_evaluate_function {
         pub fn $name<'py>(
             function: &Bound<'py, PyBytes>,
             state: &Bound<'py, PyBytes>,
-        ) -> Result<(f64, BTreeSet<u64>)> {
+        ) -> Result<f64> {
             let state = State::decode(state.as_bytes())?;
             let function = <$evaluated>::decode(function.as_bytes())?;
             function.evaluate(&state)
@@ -34,11 +34,11 @@ macro_rules! define_evaluate_object {
             py: Python<'py>,
             function: &Bound<'py, PyBytes>,
             state: &Bound<'py, PyBytes>,
-        ) -> Result<(Bound<'py, PyBytes>, BTreeSet<u64>)> {
+        ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let function = <$evaluated>::decode(function.as_bytes())?;
-            let (evaluated, used_ids) = function.evaluate(&state)?;
-            Ok((PyBytes::new(py, &evaluated.encode_to_vec()), used_ids))
+            let evaluated = function.evaluate(&state)?;
+            Ok(PyBytes::new(py, &evaluated.encode_to_vec()))
         }
     };
 }
@@ -54,11 +54,11 @@ macro_rules! define_partial_evaluate_function {
             py: Python<'py>,
             function: &Bound<'py, PyBytes>,
             state: &Bound<'py, PyBytes>,
-        ) -> Result<(Bound<'py, PyBytes>, BTreeSet<u64>)> {
+        ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let mut function = <$evaluated>::decode(function.as_bytes())?;
-            let set = function.partial_evaluate(&state)?;
-            Ok((PyBytes::new(py, &function.encode_to_vec()), set))
+            function.partial_evaluate(&state)?;
+            Ok(PyBytes::new(py, &function.encode_to_vec()))
         }
     };
 }
@@ -76,11 +76,11 @@ macro_rules! define_partial_evaluate_object {
             py: Python<'py>,
             obj: &Bound<'py, PyBytes>,
             state: &Bound<'py, PyBytes>,
-        ) -> Result<(Bound<'py, PyBytes>, BTreeSet<u64>)> {
+        ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let mut obj = <$evaluated>::decode(obj.as_bytes())?;
-            let set = obj.partial_evaluate(&state)?;
-            Ok((PyBytes::new(py, &obj.encode_to_vec()), set))
+            obj.partial_evaluate(&state)?;
+            Ok(PyBytes::new(py, &obj.encode_to_vec()))
         }
     };
 }
