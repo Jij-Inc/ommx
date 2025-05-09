@@ -1,6 +1,7 @@
 use crate::{parse::*, v1, Bound};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
+use proptest::prelude::*;
 
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
@@ -31,6 +32,22 @@ pub enum Kind {
     Binary,
     SemiContinuous,
     SemiInteger,
+}
+
+impl Arbitrary for Kind {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            Just(Kind::Continuous),
+            Just(Kind::Integer),
+            Just(Kind::Binary),
+            Just(Kind::SemiContinuous),
+            Just(Kind::SemiInteger),
+        ]
+        .boxed()
+    }
 }
 
 impl Parse for v1::decision_variable::Kind {
@@ -64,6 +81,34 @@ pub struct DecisionVariable {
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
+}
+
+impl Arbitrary for DecisionVariable {
+    type Parameters = (); // Simplified parameters for now
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
+        (any::<u64>().prop_map(VariableID), Kind::arbitrary())
+            .prop_flat_map(|(id, kind)| {
+                let bound_strategy = if kind == Kind::Binary {
+                    Just(Bound::new(0.0, 1.0).unwrap()).boxed()
+                } else {
+                    Bound::arbitrary()
+                };
+                (Just(id), Just(kind), bound_strategy)
+            })
+            .prop_map(|(id, kind, bound)| DecisionVariable {
+                id,
+                kind,
+                bound,
+                substituted_value: None,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: FnvHashMap::default(),
+                description: None,
+            })
+            .boxed()
+    }
 }
 
 impl Parse for v1::DecisionVariable {
