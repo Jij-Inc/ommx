@@ -1,4 +1,6 @@
 use super::*;
+use crate::v1::decision_variable::Kind;
+use crate::PolynomialParameters;
 use crate::{v1::State, Bound};
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -115,5 +117,33 @@ impl Instance {
                 },
             )
             .boxed()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InstanceParameters {
+    pub num_constraints: usize,
+    pub objective: PolynomialParameters,
+    pub constraint: PolynomialParameters,
+    pub kinds: Vec<Kind>,
+}
+
+impl Default for InstanceParameters {
+    fn default() -> Self {
+        Self {
+            num_constraints: 5,
+            objective: PolynomialParameters::default(),
+            constraint: PolynomialParameters::default(),
+            kinds: vec![Kind::Continuous, Kind::Integer, Kind::Binary],
+        }
+    }
+}
+
+impl Arbitrary for Instance {
+    type Parameters = InstanceParameters;
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
+        todo!()
     }
 }
