@@ -33,7 +33,7 @@ pub struct DecisionVariableAnalysis {
     used_in_objective: FnvHashSet<VariableID>,
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
-    used_in_constraints: FnvHashSet<VariableID>,
+    used_in_constraints: FnvHashMap<ConstraintID, FnvHashSet<VariableID>>,
 
     /// Fixed decision variables
     #[getset(get = "pub")]
@@ -46,18 +46,18 @@ pub struct DecisionVariableAnalysis {
 impl DecisionVariableAnalysis {
     /// Union of `used_in_objective` and `used_in_constraints`
     pub fn used(&self) -> FnvHashSet<VariableID> {
-        self.used_in_constraints
-            .union(&self.used_in_objective)
-            .cloned()
-            .collect()
+        let mut used = self.used_in_objective.clone();
+        for ids in self.used_in_constraints.values() {
+            used.extend(ids);
+        }
+        used
     }
 
     /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
     pub fn irrelevant(&self) -> FnvHashSet<VariableID> {
         let relevant = self
-            .used_in_objective
+            .used()
             .iter()
-            .chain(self.used_in_constraints.iter())
             .chain(self.dependent.iter())
             .chain(self.fixed.keys())
             .cloned()
@@ -94,14 +94,16 @@ impl Instance {
             .into_iter()
             .map(VariableID::from)
             .collect();
-        let mut used_in_constraints = FnvHashSet::default();
+        let mut used_in_constraints = FnvHashMap::default();
         for constraint in self.constraints.values() {
-            used_in_constraints.extend(
+            used_in_constraints.insert(
+                constraint.id,
                 constraint
                     .function
                     .required_ids()
                     .into_iter()
-                    .map(VariableID::from),
+                    .map(VariableID::from)
+                    .collect(),
             );
         }
         let dependent = self.decision_variable_dependency.keys().cloned().collect();
