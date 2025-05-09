@@ -120,6 +120,14 @@ impl Instance {
     }
 }
 
+impl Arbitrary for Sense {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        prop_oneof![Just(Sense::Minimize), Just(Sense::Maximize)].boxed()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InstanceParameters {
     pub num_constraints: usize,

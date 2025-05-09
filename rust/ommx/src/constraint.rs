@@ -1,10 +1,11 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1, Function,
+    v1, Function, PolynomialParameters,
 };
 use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
+use proptest::prelude::*;
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -79,6 +80,41 @@ impl Parse for v1::Constraint {
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
         })
+    }
+}
+
+impl Arbitrary for Equality {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            Just(Equality::EqualToZero),
+            Just(Equality::LessThanOrEqualToZero),
+        ]
+        .boxed()
+    }
+}
+
+impl Arbitrary for Constraint {
+    type Parameters = PolynomialParameters;
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
+        (
+            any::<u64>().prop_map(ConstraintID),
+            Function::arbitrary_with(params),
+            Equality::arbitrary(),
+        )
+            .prop_map(|(id, function, equality)| Constraint {
+                id,
+                function,
+                equality,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            })
+            .boxed()
     }
 }
 
