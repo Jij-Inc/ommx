@@ -1,5 +1,5 @@
 use super::*;
-use crate::PolynomialParameters;
+use crate::{arbitrary_constraints, Evaluate, PolynomialParameters};
 use crate::{v1::State, Bound, KindParameters};
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -129,16 +129,18 @@ impl Arbitrary for Sense {
 
 #[derive(Debug, Clone)]
 pub struct InstanceParameters {
-    pub num_constraints: usize,
-    pub objective: PolynomialParameters,
-    pub constraint: PolynomialParameters,
-    pub kinds: KindParameters,
+    num_constraints: usize,
+    constraint_max_id: ConstraintID,
+    objective: PolynomialParameters,
+    constraint: PolynomialParameters,
+    kinds: KindParameters,
 }
 
 impl Default for InstanceParameters {
     fn default() -> Self {
         Self {
             num_constraints: 5,
+            constraint_max_id: ConstraintID::from(10),
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
             kinds: KindParameters::default(),
@@ -151,6 +153,53 @@ impl Arbitrary for Instance {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
-        todo!()
+        let objective = Function::arbitrary_with(p.objective);
+        let constraints =
+            arbitrary_constraints(p.num_constraints, p.constraint_max_id, p.constraint);
+        (objective, constraints)
+            .prop_flat_map(move |(objective, constraints)| {
+                let sense = Sense::arbitrary();
+
+                // Collect all required IDs from the objective and constraints
+                let mut ids = objective.required_ids();
+                for (_, c) in &constraints {
+                    ids.extend(c.function.required_ids());
+                }
+                let decision_variable = proptest::collection::vec(
+                    DecisionVariable::arbitrary_with(p.kinds.clone()),
+                    ids.len(),
+                );
+                let decision_variables = decision_variable.prop_map(move |decision_variables| {
+                    ids.iter()
+                        .map(|id| VariableID::from(*id))
+                        .zip(decision_variables)
+                        .map(|(id, mut v)| {
+                            v.id = id;
+                            (id, v)
+                        })
+                        .collect::<FnvHashMap<VariableID, DecisionVariable>>()
+                });
+
+                (
+                    Just(objective),
+                    Just(constraints),
+                    decision_variables,
+                    sense,
+                )
+                    .prop_map(
+                        |(objective, constraints, decision_variables, sense)| Instance {
+                            objective,
+                            constraints,
+                            sense,
+                            decision_variables,
+                            constraint_hints: Default::default(),
+                            parameters: Default::default(),
+                            removed_constraints: Default::default(),
+                            decision_variable_dependency: Default::default(),
+                            description: None,
+                        },
+                    )
+            })
+            .boxed()
     }
 }
