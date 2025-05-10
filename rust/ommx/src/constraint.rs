@@ -1,10 +1,12 @@
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1, Function,
+    random::unique_integers,
+    v1, Function, PolynomialParameters,
 };
 use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
+use proptest::prelude::*;
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -82,6 +84,37 @@ impl Parse for v1::Constraint {
     }
 }
 
+impl Arbitrary for Equality {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_params: Self::Parameters) -> Self::Strategy {
+        prop_oneof![
+            Just(Equality::EqualToZero),
+            Just(Equality::LessThanOrEqualToZero),
+        ]
+        .boxed()
+    }
+}
+
+impl Arbitrary for Constraint {
+    type Parameters = PolynomialParameters;
+    type Strategy = BoxedStrategy<Self>;
+    fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
+        (Function::arbitrary_with(params), Equality::arbitrary())
+            .prop_map(|(function, equality)| Constraint {
+                id: ConstraintID(0), // Should be replaced with a unique ID
+                function,
+                equality,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            })
+            .boxed()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: Constraint,
@@ -154,6 +187,28 @@ impl Parse for Vec<v1::RemovedConstraint> {
         }
         Ok(removed_constraints)
     }
+}
+
+pub fn arbitrary_constraints(
+    size: usize,
+    max_id: ConstraintID,
+    parameters: PolynomialParameters,
+) -> impl Strategy<Value = FnvHashMap<ConstraintID, Constraint>> {
+    let unique_ids_strategy = unique_integers(0, max_id.0, size);
+    let constraints_strategy =
+        proptest::collection::vec(Constraint::arbitrary_with(parameters), size);
+    (unique_ids_strategy, constraints_strategy)
+        .prop_map(|(ids, constraints)| {
+            ids.into_iter()
+                .map(ConstraintID::from)
+                .zip(constraints.into_iter())
+                .map(|(id, mut constraint)| {
+                    constraint.id = id;
+                    (id, constraint)
+                })
+                .collect()
+        })
+        .boxed()
 }
 
 #[cfg(test)]
