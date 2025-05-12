@@ -190,3 +190,17 @@ impl Arbitrary for Instance {
             .boxed()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn test_variable_id_is_defined(instance in Instance::arbitrary()) {
+            for _ids in instance.objective.keys() {
+                todo!()
+            }
+        }
+    }
+}
