@@ -134,6 +134,7 @@ pub struct InstanceParameters {
     objective: PolynomialParameters,
     constraint: PolynomialParameters,
     kinds: KindParameters,
+    max_irrelevant_ids: usize,
 }
 
 impl Default for InstanceParameters {
@@ -144,6 +145,7 @@ impl Default for InstanceParameters {
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
             kinds: KindParameters::default(),
+            max_irrelevant_ids: 5,
         }
     }
 }
@@ -156,8 +158,13 @@ impl Arbitrary for Instance {
         let objective = Function::arbitrary_with(p.objective);
         let constraints =
             arbitrary_constraints(p.num_constraints, p.constraint_max_id, p.constraint);
-        (objective, constraints)
-            .prop_flat_map(move |(objective, constraints)| {
+        // Generate candidates for irrelevant IDs.
+        // Since these IDs are generated without checking against the objective or constraints, some of these may be relevant.
+        let max_id = p.objective.max_id().max(p.constraint.max_id());
+        let irrelevant_candidates =
+            proptest::collection::vec(0..=max_id.into_inner(), 0..=p.max_irrelevant_ids);
+        (objective, constraints, irrelevant_candidates)
+            .prop_flat_map(move |(objective, constraints, irrelevant_candidates)| {
                 // Collect all required IDs from the objective and constraints
                 let mut unique_ids: FnvHashSet<VariableID> = objective
                     .required_ids()
@@ -167,6 +174,11 @@ impl Arbitrary for Instance {
                 for c in constraints.values() {
                     unique_ids.extend(c.function.required_ids().into_iter().map(VariableID::from));
                 }
+                unique_ids.extend(
+                    irrelevant_candidates
+                        .into_iter()
+                        .map(|id| VariableID::from(id)),
+                );
                 (
                     Just(objective),
                     Just(constraints),
