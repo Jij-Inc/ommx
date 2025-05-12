@@ -1,6 +1,7 @@
 use crate::{
     macros::*,
     v1::{linear::Term, Linear, Quadratic},
+    VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -247,7 +248,7 @@ impl fmt::Display for Linear {
         crate::format::format_polynomial(
             f,
             self.into_iter()
-                .map(|(id, c)| (id.into_iter().collect(), c)),
+                .map(|(id, c)| (id.into_iter().map(VariableID::from).collect(), c)),
         )
     }
 }

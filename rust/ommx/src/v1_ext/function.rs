@@ -4,7 +4,7 @@ use crate::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
     },
-    Bound, Bounds, MonomialDyn,
+    Bound, Bounds, MonomialDyn, VariableID,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -105,9 +105,11 @@ impl<'a> IntoIterator for &'a Function {
             Some(FunctionEnum::Constant(c)) => {
                 Box::new(std::iter::once((MonomialDyn::empty(), *c)))
             }
-            Some(FunctionEnum::Linear(linear)) => {
-                Box::new(linear.into_iter().map(|(id, c)| (id.into(), c)))
-            }
+            Some(FunctionEnum::Linear(linear)) => Box::new(
+                linear
+                    .into_iter()
+                    .map(|(id, c)| (id.map(VariableID::from).into(), c)),
+            ),
             Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
             Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
             None => Box::new(std::iter::empty()),
@@ -179,7 +181,7 @@ impl Function {
                 if let Some(replacement) = replacements.get(id) {
                     v = v * replacement.clone();
                 } else {
-                    v = v * Linear::single_term(*id, 1.0);
+                    v = v * Linear::single_term(id.into_inner(), 1.0);
                 }
             }
             out = out + v;
@@ -199,7 +201,7 @@ impl Function {
             }
             let mut cur = Bound::new(1.0, 1.0).unwrap();
             for (id, exp) in ids.chunks() {
-                let b = bounds.get(&id.into()).cloned().unwrap_or_default();
+                let b = bounds.get(&id).cloned().unwrap_or_default();
                 cur *= b.pow(exp as u8);
                 if cur == Bound::default() {
                     return Bound::default();
@@ -556,7 +558,7 @@ mod tests {
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
-            let (value, _) = f.evaluate(&state).unwrap();
+            let value = f.evaluate(&state).unwrap();
             prop_assert!(bound.contains(value, 1e-7));
         }
 

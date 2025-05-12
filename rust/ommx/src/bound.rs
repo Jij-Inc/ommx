@@ -3,6 +3,7 @@ use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1, VariableID,
 };
+use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
 use std::{collections::HashMap, ops::*};
@@ -247,6 +248,19 @@ impl PartialOrd<Bound> for f64 {
     }
 }
 
+impl AbsDiffEq for Bound {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.lower.abs_diff_eq(&other.lower, epsilon)
+            && self.upper.abs_diff_eq(&other.upper, epsilon)
+    }
+}
+
 impl Bound {
     /// Positive or zero, `[0, inf)`
     pub fn positive() -> Self {
@@ -386,6 +400,16 @@ impl Bound {
                     prop_oneof![Just(upper), Just(lower), (lower..=upper)].boxed()
                 }
             }
+        }
+    }
+
+    pub fn arbitrary_containing_integer(&self, max_abs: u64) -> BoxedStrategy<i64> {
+        let lower = self.lower.max(-(max_abs as f64)).ceil() as i64;
+        let upper = self.upper.min(max_abs as f64).floor() as i64;
+        if lower == upper {
+            Just(lower).boxed()
+        } else {
+            (lower..=upper).boxed()
         }
     }
 }

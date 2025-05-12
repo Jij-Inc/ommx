@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
     v1::{Linear, Monomial, Polynomial, Quadratic},
-    MonomialDyn,
+    MonomialDyn, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -40,7 +40,7 @@ impl From<f64> for Polynomial {
 impl From<Linear> for Polynomial {
     fn from(l: Linear) -> Self {
         l.into_iter()
-            .map(|(id, c)| (id.into_iter().collect(), c))
+            .map(|(id, c)| (id.into_iter().map(VariableID::from).collect(), c))
             .collect()
     }
 }
@@ -65,7 +65,11 @@ impl FromIterator<(MonomialDyn, f64)> for Polynomial {
             terms: terms
                 .into_iter()
                 .map(|(ids, coefficient)| Monomial {
-                    ids: ids.into_inner(),
+                    ids: ids
+                        .into_inner()
+                        .into_iter()
+                        .map(|id| id.into_inner())
+                        .collect(),
                     coefficient,
                 })
                 .collect(),
@@ -78,11 +82,12 @@ impl<'a> IntoIterator for &'a Polynomial {
     type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(
-            self.terms
-                .iter()
-                .map(|term| (MonomialDyn::new(term.ids.clone()), term.coefficient)),
-        )
+        Box::new(self.terms.iter().map(|term| {
+            (
+                MonomialDyn::new(term.ids.iter().map(|id| VariableID::from(*id)).collect()),
+                term.coefficient,
+            )
+        }))
     }
 }
 
@@ -246,9 +251,9 @@ mod tests {
     #[test]
     fn format() {
         let p = super::Polynomial::from_iter(vec![
-            (vec![1, 2, 3].into(), 1.0),
-            (vec![2, 3].into(), -1.0),
-            (vec![1, 3, 5, 6].into(), 3.0),
+            (vec![1.into(), 2.into(), 3.into()].into(), 1.0),
+            (vec![2.into(), 3.into()].into(), -1.0),
+            (vec![1.into(), 3.into(), 5.into(), 6.into()].into(), 3.0),
         ]);
         assert_eq!(p.to_string(), "3*x1*x3*x5*x6 + x1*x2*x3 - x2*x3");
     }

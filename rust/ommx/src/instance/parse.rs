@@ -4,7 +4,6 @@ use crate::{
     v1::{self},
     Constraint, ConstraintID, DecisionVariable, VariableID,
 };
-use std::collections::HashMap;
 
 impl Parse for v1::instance::Sense {
     type Output = Sense;
@@ -46,7 +45,7 @@ impl TryFrom<v1::Instance> for Instance {
                 .removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
-        let mut decision_variable_dependency = HashMap::new();
+        let mut decision_variable_dependency = FnvHashMap::default();
         for (id, f) in value.decision_variable_dependency {
             decision_variable_dependency.insert(
                 as_variable_id(&decision_variables, id)
@@ -78,7 +77,7 @@ impl TryFrom<v1::Instance> for Instance {
 }
 
 pub(super) fn as_constraint_id(
-    constraints: &HashMap<ConstraintID, Constraint>,
+    constraints: &FnvHashMap<ConstraintID, Constraint>,
     id: u64,
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
@@ -89,7 +88,7 @@ pub(super) fn as_constraint_id(
 }
 
 pub(super) fn as_variable_id(
-    decision_variables: &HashMap<VariableID, DecisionVariable>,
+    decision_variables: &FnvHashMap<VariableID, DecisionVariable>,
     id: u64,
 ) -> Result<VariableID, ParseError> {
     let id = VariableID::from(id);

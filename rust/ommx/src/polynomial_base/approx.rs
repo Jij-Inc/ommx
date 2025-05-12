@@ -19,15 +19,17 @@ impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
 mod tests {
     use super::*;
     use ::approx::assert_abs_diff_eq;
-    use maplit::hashmap;
 
     #[test]
     fn test_abs_diff_eq() {
         let zero = PolynomialBase::default();
         let small = PolynomialBase {
-            terms: hashmap! {
-                LinearMonomial::Variable(1.into()) => 1e-11.try_into().unwrap(),
-            },
+            terms: [(
+                LinearMonomial::Variable(1.into()),
+                1e-11.try_into().unwrap(),
+            )]
+            .into_iter()
+            .collect(),
         };
         assert_abs_diff_eq!(small, zero);
     }

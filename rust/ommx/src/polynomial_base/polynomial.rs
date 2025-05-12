@@ -2,9 +2,8 @@ use super::*;
 use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
 use itertools::Itertools;
-use maplit::hashset;
 use proptest::prelude::*;
-use std::collections::HashSet;
+use smallvec::{smallvec, SmallVec};
 use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
@@ -30,12 +29,12 @@ impl From<Quadratic> for Polynomial {
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
 /// This is better than `[(1, 2), (2, 3)]` or `{1: 2, 2: 3}` style for low-degree polynomials.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
-pub struct MonomialDyn(Vec<u64>);
+pub struct MonomialDyn(SmallVec<[VariableID; 3]>);
 
 impl From<LinearMonomial> for MonomialDyn {
     fn from(m: LinearMonomial) -> Self {
         match m {
-            LinearMonomial::Variable(id) => Self(vec![id.into_inner()]),
+            LinearMonomial::Variable(id) => Self(smallvec![id]),
             LinearMonomial::Constant => Self::empty(),
         }
     }
@@ -44,10 +43,8 @@ impl From<LinearMonomial> for MonomialDyn {
 impl From<QuadraticMonomial> for MonomialDyn {
     fn from(m: QuadraticMonomial) -> Self {
         match m {
-            QuadraticMonomial::Pair(pair) => {
-                Self(vec![pair.lower().into_inner(), pair.upper().into_inner()])
-            }
-            QuadraticMonomial::Linear(id) => Self(vec![id.into_inner()]),
+            QuadraticMonomial::Pair(pair) => Self(smallvec![pair.lower(), pair.upper()]),
+            QuadraticMonomial::Linear(id) => Self(smallvec![id]),
             QuadraticMonomial::Constant => Self::empty(),
         }
     }
@@ -64,7 +61,7 @@ impl TryFrom<&MonomialDyn> for LinearMonomial {
     type Error = InvalidDegreeError;
     fn try_from(m: &MonomialDyn) -> std::result::Result<Self, InvalidDegreeError> {
         match *m.degree() {
-            1 => Ok(LinearMonomial::Variable(m.0[0].into())),
+            1 => Ok(LinearMonomial::Variable(m.0[0])),
             0 => Ok(LinearMonomial::Constant),
             _ => Err(InvalidDegreeError {
                 degree: m.degree(),
@@ -78,8 +75,8 @@ impl TryFrom<&MonomialDyn> for QuadraticMonomial {
     type Error = InvalidDegreeError;
     fn try_from(m: &MonomialDyn) -> std::result::Result<Self, InvalidDegreeError> {
         match *m.degree() {
-            2 => Ok(QuadraticMonomial::new_pair(m.0[0].into(), m.0[1].into())),
-            1 => Ok(QuadraticMonomial::Linear(m.0[0].into())),
+            2 => Ok(QuadraticMonomial::new_pair(m.0[0], m.0[1])),
+            1 => Ok(QuadraticMonomial::Linear(m.0[0])),
             0 => Ok(QuadraticMonomial::Constant),
             _ => Err(InvalidDegreeError {
                 degree: m.degree(),
@@ -89,14 +86,14 @@ impl TryFrom<&MonomialDyn> for QuadraticMonomial {
     }
 }
 
-impl From<Vec<u64>> for MonomialDyn {
-    fn from(ids: Vec<u64>) -> Self {
+impl From<Vec<VariableID>> for MonomialDyn {
+    fn from(ids: Vec<VariableID>) -> Self {
         Self::new(ids)
     }
 }
 
 impl Deref for MonomialDyn {
-    type Target = [u64];
+    type Target = [VariableID];
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -125,44 +122,62 @@ impl PartialOrd for MonomialDyn {
     }
 }
 
-impl FromIterator<u64> for MonomialDyn {
-    fn from_iter<I: IntoIterator<Item = u64>>(iter: I) -> Self {
+impl FromIterator<VariableID> for MonomialDyn {
+    fn from_iter<I: IntoIterator<Item = VariableID>>(iter: I) -> Self {
         let ids = iter.into_iter().collect::<Vec<_>>();
         Self::new(ids)
     }
 }
 
-impl From<Option<u64>> for MonomialDyn {
-    fn from(id: Option<u64>) -> Self {
+impl From<Option<VariableID>> for MonomialDyn {
+    fn from(id: Option<VariableID>) -> Self {
         id.into_iter().collect()
     }
 }
 
 impl MonomialDyn {
-    pub fn new(ids: Vec<u64>) -> Self {
+    pub fn new(ids: Vec<VariableID>) -> Self {
         let mut ids = ids;
         ids.sort_unstable();
-        Self(ids)
+        Self(ids.into())
     }
 
-    pub fn into_inner(self) -> Vec<u64> {
+    pub fn into_inner(self) -> SmallVec<[VariableID; 3]> {
         self.0
     }
 
     pub fn empty() -> Self {
-        Self(Vec::new())
+        Self(SmallVec::new())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &u64> {
+    pub fn iter(&self) -> impl Iterator<Item = &VariableID> {
         self.0.iter()
     }
 
-    pub fn chunks(&self) -> Vec<(u64, usize)> {
+    pub fn chunks(&self) -> Vec<(VariableID, usize)> {
         self.iter()
             .chunk_by(|&x| x)
             .into_iter()
             .map(|(key, group)| (*key, group.count()))
             .collect::<Vec<_>>()
+    }
+}
+
+impl IntoIterator for MonomialDyn {
+    type Item = VariableID;
+    type IntoIter = <SmallVec<[VariableID; 3]> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a MonomialDyn {
+    type Item = &'a VariableID;
+    type IntoIter = std::slice::Iter<'a, VariableID>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 
@@ -183,7 +198,7 @@ impl Mul<LinearMonomial> for MonomialDyn {
         match other {
             LinearMonomial::Variable(id) => {
                 let mut ids = self.0;
-                ids.push(id.into_inner());
+                ids.push(id);
                 ids.sort_unstable();
                 Self(ids)
             }
@@ -198,8 +213,8 @@ impl Mul<QuadraticMonomial> for MonomialDyn {
         match other {
             QuadraticMonomial::Pair(pair) => {
                 let mut ids = self.0;
-                ids.push(pair.lower().into_inner());
-                ids.push(pair.upper().into_inner());
+                ids.push(pair.lower());
+                ids.push(pair.upper());
                 ids.sort_unstable();
                 Self(ids)
             }
@@ -314,37 +329,35 @@ impl Monomial for MonomialDyn {
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
-        Box::new(self.0.iter().map(|&id| VariableID::from(id)))
+        Box::new(self.0.iter().copied())
     }
 
     fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self> {
-        Some(Self(ids.map(|id| id.into_inner()).collect()))
+        Some(Self(ids.collect()))
     }
 
-    fn partial_evaluate(mut self, state: &State) -> (Self, f64, BTreeSet<u64>) {
+    fn partial_evaluate(mut self, state: &State) -> (Self, f64) {
         let mut i = 0;
-        let mut used = BTreeSet::new();
         let mut out = 1.0;
         while i < self.0.len() {
             let id = self.0[i];
-            if let Some(value) = state.entries.get(&id) {
+            if let Some(value) = state.entries.get(&id.into_inner()) {
                 // This keeps the order of the IDs
                 // Since this `Vec` is usually small, we can use `remove` instead of `swap_remove`
                 self.0.remove(i);
-                used.insert(id);
                 out *= *value;
                 continue;
             }
             i += 1;
         }
-        (self, out, used)
+        (self, out)
     }
 
-    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<HashSet<Self>> {
+    fn arbitrary_uniques(p: Self::Parameters) -> BoxedStrategy<FnvHashSet<Self>> {
         if p.max_degree == 0 {
             match p.num_terms {
-                0 => return Just(HashSet::new()).boxed(),
-                1 => return Just(hashset! { MonomialDyn::default() }).boxed(),
+                0 => return Just(Default::default()).boxed(),
+                1 => return Just([MonomialDyn::default()].into_iter().collect()).boxed(),
                 _ => {
                     panic!("Invalid parameters for 0-degree polynomial: {p:?}");
                 }
@@ -365,7 +378,7 @@ impl Monomial for MonomialDyn {
                 );
                 let sub_parameters = PolynomialParameters {
                     num_terms: p.num_terms - num_largest,
-                    max_degree: p.max_degree - 1,
+                    max_degree: (p.max_degree.into_inner() - 1).into(),
                     max_id: p.max_id,
                 };
                 let sub = MonomialDyn::arbitrary_uniques(sub_parameters);
@@ -421,7 +434,7 @@ mod tests {
             prop_assert_eq!(monomials.len(), p.num_terms);
             for monomial in monomials {
                 for id in monomial.iter() {
-                    prop_assert!(*id <= p.max_id.into_inner());
+                    prop_assert!(*id <= p.max_id);
                 }
             }
         }
