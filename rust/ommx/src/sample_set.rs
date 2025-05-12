@@ -341,21 +341,7 @@ impl SampleSet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::arbitrary_coefficient;
-    use std::collections::HashSet;
-
-    /// Random `State` like `{n: n}`
-    fn arbitrary_state(ids: HashSet<u64>) -> BoxedStrategy<State> {
-        proptest::collection::vec(arbitrary_coefficient(), ids.len())
-            .prop_map(move |coefficients| {
-                let mut state = State::default();
-                for (id, coefficient) in ids.iter().zip(coefficients) {
-                    state.entries.insert(*id, coefficient);
-                }
-                state
-            })
-            .boxed()
-    }
+    use crate::random::arbitrary_state;
 
     proptest! {
         #[test]
