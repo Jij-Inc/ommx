@@ -168,7 +168,7 @@ impl Parse for v1::Monomial {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Monomial";
-        let ids = MonomialDyn::new(self.ids);
+        let ids = MonomialDyn::new(self.ids.into_iter().map(VariableID::from).collect());
         match self.coefficient.try_into() {
             Ok(coefficient) => Ok(Some((ids, coefficient))),
             Err(CoefficientError::Zero) => Ok(None),
@@ -206,7 +206,11 @@ impl From<Polynomial> for v1::Polynomial {
         let mut out = v1::Polynomial::default();
         for (monomial, coefficient) in value.terms {
             out.terms.push(v1::Monomial {
-                ids: monomial.into_inner(),
+                ids: monomial
+                    .into_inner()
+                    .into_iter()
+                    .map(|id| id.into_inner())
+                    .collect(),
                 coefficient: coefficient.into_inner(),
             });
         }
@@ -408,8 +412,14 @@ mod tests {
             polynomial.parse(&()).unwrap(),
             Polynomial {
                 terms: [
-                    (MonomialDyn::new(vec![1, 2]), 3.0.try_into().unwrap()),
-                    (MonomialDyn::new(vec![3, 4]), 5.0.try_into().unwrap()),
+                    (
+                        MonomialDyn::new(vec![1.into(), 2.into()]),
+                        3.0.try_into().unwrap()
+                    ),
+                    (
+                        MonomialDyn::new(vec![3.into(), 4.into()]),
+                        5.0.try_into().unwrap()
+                    ),
                 ]
                 .into_iter()
                 .collect(),

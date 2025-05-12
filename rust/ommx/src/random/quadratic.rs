@@ -65,7 +65,7 @@ mod tests {
             let mut count = 0;
             for (ids, _) in q.into_iter() {
                 for &id in ids.iter() {
-                    prop_assert!(id <= 10);
+                    prop_assert!(id <= 10.into());
                 }
                 count += 1;
             }

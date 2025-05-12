@@ -42,10 +42,7 @@ impl Mul for LinearMonomial {
 impl Mul<LinearMonomial> for QuadraticMonomial {
     type Output = MonomialDyn;
     fn mul(self, rhs: LinearMonomial) -> Self::Output {
-        self.iter()
-            .chain(rhs.iter())
-            .map(|id| id.into_inner())
-            .collect()
+        self.iter().chain(rhs.iter()).collect()
     }
 }
 
@@ -59,10 +56,7 @@ impl Mul<QuadraticMonomial> for LinearMonomial {
 impl Mul for QuadraticMonomial {
     type Output = MonomialDyn;
     fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
-        self.iter()
-            .chain(rhs.iter())
-            .map(|id| id.into_inner())
-            .collect()
+        self.iter().chain(rhs.iter()).collect()
     }
 }
 
