@@ -106,4 +106,14 @@ impl Function {
             Function::Polynomial(p) => Box::new(p.values_mut()),
         }
     }
+
+    pub fn keys(&self) -> Box<dyn Iterator<Item = MonomialDyn> + '_> {
+        match self {
+            Function::Zero => Box::new(std::iter::empty()),
+            Function::Constant(_) => Box::new(std::iter::once(MonomialDyn::default())),
+            Function::Linear(l) => Box::new(l.keys().map(|k| MonomialDyn::from(*k))),
+            Function::Quadratic(q) => Box::new(q.keys().map(|k| MonomialDyn::from(*k))),
+            Function::Polynomial(p) => Box::new(p.keys().cloned()),
+        }
+    }
 }
