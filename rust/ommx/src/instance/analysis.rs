@@ -318,13 +318,20 @@ impl Instance {
                 fixed.insert(*id, value);
             }
         }
-        let used_in_objective = self
+
+        let used_in_objective: FnvHashSet<VariableID> = self
             .objective
             .required_ids()
             .into_iter()
             .map(VariableID::from)
             .collect();
-        let mut used_in_constraints = FnvHashMap::default();
+        debug_assert!(
+            used_in_objective.is_subset(&all),
+            "Objective function uses variables not in the instance"
+        );
+
+        let mut used_in_constraints: FnvHashMap<ConstraintID, FnvHashSet<VariableID>> =
+            FnvHashMap::default();
         for constraint in self.constraints.values() {
             used_in_constraints.insert(
                 constraint.id,
@@ -336,7 +343,18 @@ impl Instance {
                     .collect(),
             );
         }
-        let dependent = self.decision_variable_dependency.keys().cloned().collect();
+        debug_assert!(
+            used_in_constraints.values().all(|ids| ids.is_subset(&all)),
+            "Constraints use variables not in the instance"
+        );
+
+        let dependent: FnvHashSet<VariableID> =
+            self.decision_variable_dependency.keys().cloned().collect();
+        debug_assert!(
+            dependent.is_subset(&all),
+            "Dependent variables not in the instance"
+        );
+
         DecisionVariableAnalysis {
             all,
             fixed,
@@ -348,6 +366,32 @@ impl Instance {
             used_in_objective,
             used_in_constraints,
             dependent,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        // Binary, integer, continuous, semi_integer, and semi_continuous are disjoint
+        // and their union is equal to all.
+        #[test]
+        fn test_kind_partition(instance in Instance::arbitrary()) {
+            let analysis = instance.analyze_decision_variables();
+            prop_assert_eq!(
+                analysis.all.len(),
+                analysis.binary.len() + analysis.integer.len() + analysis.continuous.len()
+                + analysis.semi_integer.len() + analysis.semi_continuous.len()
+            );
+            let mut all = analysis.binary().clone();
+            all.extend(analysis.integer.keys());
+            all.extend(analysis.continuous.keys());
+            all.extend(analysis.semi_integer.keys());
+            all.extend(analysis.semi_continuous.keys());
+            prop_assert_eq!(&all, &analysis.all);
         }
     }
 }
