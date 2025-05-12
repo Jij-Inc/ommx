@@ -1,5 +1,5 @@
 use crate::{
-    random::unique_integers,
+    random::{arbitrary_integer_partition, unique_integers},
     v1::{
         instance::Sense, sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet,
         SampledValues, Samples, Solution, State,
@@ -139,6 +139,7 @@ impl Samples {
 pub struct SamplesParameters {
     num_different_samples: usize,
     num_samples: usize,
+    /// The maximum sample ID. This value is inclusive.
     max_sample_id: u64,
 }
 
@@ -153,7 +154,7 @@ impl SamplesParameters {
                 "num_different_samples({num_different_samples}) must be less than num_samples({num_samples})."
             );
         }
-        if num_samples >= max_sample_id as usize + 1 {
+        if num_samples > max_sample_id as usize + 1 {
             bail!(
                 "num_samples({num_samples}) must be less than max_sample_id({max_sample_id}) + 1."
             );
@@ -167,17 +168,24 @@ impl SamplesParameters {
 }
 
 pub fn arbitrary_samples(
-    params: &SamplesParameters,
+    params: SamplesParameters,
     state_strategy: BoxedStrategy<State>,
 ) -> BoxedStrategy<Samples> {
     unique_integers(0, params.max_sample_id, params.num_samples)
         .prop_flat_map(move |sample_ids| {
-            // FIXME: Only generate `num_different_samples` different samples
-            let states = proptest::collection::vec(state_strategy.clone(), sample_ids.len());
-            states.prop_map(move |states| {
+            let states =
+                proptest::collection::vec(state_strategy.clone(), params.num_different_samples);
+            let partition =
+                arbitrary_integer_partition(sample_ids.len(), params.num_different_samples);
+            (states, partition).prop_map(move |(states, partition)| {
+                let mut base = 0;
                 let mut samples = Samples::default();
-                for (sample_id, state) in sample_ids.iter().zip(states) {
-                    samples.add_sample(*sample_id, state);
+                for (state, size) in states.into_iter().zip(partition) {
+                    samples.entries.push(SamplesEntry {
+                        state: Some(state.clone()),
+                        ids: sample_ids[base..base + size].to_vec(),
+                    });
+                    base += size;
                 }
                 samples
             })
@@ -327,5 +335,40 @@ impl SampleSet {
             evaluated_constraints,
             ..Default::default()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::random::arbitrary_coefficient;
+    use std::collections::HashSet;
+
+    /// Random `State` like `{n: n}`
+    fn arbitrary_state(ids: HashSet<u64>) -> BoxedStrategy<State> {
+        proptest::collection::vec(arbitrary_coefficient(), ids.len())
+            .prop_map(move |coefficients| {
+                let mut state = State::default();
+                for (id, coefficient) in ids.iter().zip(coefficients) {
+                    state.entries.insert(*id, coefficient);
+                }
+                state
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_arbitrary_samples(
+            samples in arbitrary_samples(
+                SamplesParameters::new(10, 100, 1000).unwrap(),
+                arbitrary_state((0..=5).collect())
+            )
+        ) {
+            prop_assert_eq!(samples.entries.len(), 10);
+            prop_assert_eq!(samples.entries.iter().map(|v| v.ids.len()).sum::<usize>(), 100);
+            prop_assert!(samples.entries.iter().all(|v| v.ids.iter().all(|id| *id <= 1000)));
+        }
+
     }
 }
