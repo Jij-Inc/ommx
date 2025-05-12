@@ -177,7 +177,7 @@ impl Arbitrary for Instance {
                 unique_ids.extend(
                     irrelevant_candidates
                         .into_iter()
-                        .map(|id| VariableID::from(id)),
+                        .map(VariableID::from),
                 );
                 (
                     Just(objective),
