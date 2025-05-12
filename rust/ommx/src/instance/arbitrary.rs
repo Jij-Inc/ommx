@@ -1,5 +1,5 @@
 use super::*;
-use crate::{arbitrary_constraints, Evaluate, PolynomialParameters};
+use crate::{arbitrary_constraints, arbitrary_decision_variables, Evaluate, PolynomialParameters};
 use crate::{v1::State, Bound, KindParameters};
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -158,33 +158,20 @@ impl Arbitrary for Instance {
             arbitrary_constraints(p.num_constraints, p.constraint_max_id, p.constraint);
         (objective, constraints)
             .prop_flat_map(move |(objective, constraints)| {
-                let sense = Sense::arbitrary();
-
                 // Collect all required IDs from the objective and constraints
-                let mut ids = objective.required_ids();
+                let mut unique_ids: FnvHashSet<VariableID> = objective
+                    .required_ids()
+                    .into_iter()
+                    .map(VariableID::from)
+                    .collect();
                 for c in constraints.values() {
-                    ids.extend(c.function.required_ids());
+                    unique_ids.extend(c.function.required_ids().into_iter().map(VariableID::from));
                 }
-                let decision_variable = proptest::collection::vec(
-                    DecisionVariable::arbitrary_with(p.kinds.clone()),
-                    ids.len(),
-                );
-                let decision_variables = decision_variable.prop_map(move |decision_variables| {
-                    ids.iter()
-                        .map(|id| VariableID::from(*id))
-                        .zip(decision_variables)
-                        .map(|(id, mut v)| {
-                            v.id = id;
-                            (id, v)
-                        })
-                        .collect::<FnvHashMap<VariableID, DecisionVariable>>()
-                });
-
                 (
                     Just(objective),
                     Just(constraints),
-                    decision_variables,
-                    sense,
+                    arbitrary_decision_variables(unique_ids, p.kinds.clone()),
+                    Sense::arbitrary(),
                 )
                     .prop_map(
                         |(objective, constraints, decision_variables, sense)| Instance {

@@ -163,14 +163,24 @@ impl Parse for Vec<v1::DecisionVariable> {
     }
 }
 
-pub fn arbitrary_decision_variables(
+pub fn arbitrary_unique_variable_ids(
     size: usize,
     max_id: VariableID,
+) -> impl Strategy<Value = FnvHashSet<VariableID>> {
+    unique_integers(0, max_id.into_inner(), size)
+        .prop_map(|ids| ids.into_iter().map(VariableID::from).collect())
+        .boxed()
+}
+
+pub fn arbitrary_decision_variables(
+    unique_ids: FnvHashSet<VariableID>,
     parameters: KindParameters,
 ) -> impl Strategy<Value = FnvHashMap<VariableID, DecisionVariable>> {
-    let unique_ids = unique_integers(0, max_id.into_inner(), size);
-    let variables = proptest::collection::vec(DecisionVariable::arbitrary_with(parameters), size);
-    (unique_ids, variables)
+    let variables = proptest::collection::vec(
+        DecisionVariable::arbitrary_with(parameters),
+        unique_ids.len(),
+    );
+    (Just(unique_ids), variables)
         .prop_map(|(ids, variables)| {
             ids.into_iter()
                 .map(VariableID::from)
