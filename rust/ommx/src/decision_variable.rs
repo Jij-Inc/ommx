@@ -174,7 +174,7 @@ pub fn arbitrary_decision_variables(
         .prop_map(|(ids, variables)| {
             ids.into_iter()
                 .map(VariableID::from)
-                .zip(variables.into_iter())
+                .zip(variables)
                 .map(|(id, mut variable)| {
                     variable.id = id;
                     (id, variable)

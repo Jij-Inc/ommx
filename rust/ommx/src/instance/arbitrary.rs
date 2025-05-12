@@ -162,7 +162,7 @@ impl Arbitrary for Instance {
 
                 // Collect all required IDs from the objective and constraints
                 let mut ids = objective.required_ids();
-                for (_, c) in &constraints {
+                for c in constraints.values() {
                     ids.extend(c.function.required_ids());
                 }
                 let decision_variable = proptest::collection::vec(

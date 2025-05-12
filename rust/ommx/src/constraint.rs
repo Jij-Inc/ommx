@@ -201,7 +201,7 @@ pub fn arbitrary_constraints(
         .prop_map(|(ids, constraints)| {
             ids.into_iter()
                 .map(ConstraintID::from)
-                .zip(constraints.into_iter())
+                .zip(constraints)
                 .map(|(id, mut constraint)| {
                     constraint.id = id;
                     (id, constraint)
