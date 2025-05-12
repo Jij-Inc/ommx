@@ -171,6 +171,7 @@ pub use infeasible_detected::*;
 pub use instance::*;
 pub use offset::*;
 pub use polynomial_base::*;
+pub use sample_set::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {

@@ -1,9 +1,13 @@
-use crate::v1::{
-    instance::Sense, sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet,
-    SampledValues, Samples, Solution, State,
+use crate::{
+    random::unique_integers,
+    v1::{
+        instance::Sense, sampled_values::SampledValuesEntry, samples::SamplesEntry, SampleSet,
+        SampledValues, Samples, Solution, State,
+    },
 };
 use anyhow::{bail, ensure, Context, Result};
 use ordered_float::OrderedFloat;
+use proptest::prelude::*;
 use std::collections::{BTreeSet, HashMap};
 
 impl From<HashMap<OrderedFloat<f64>, Vec<u64>>> for SampledValues {
@@ -129,6 +133,56 @@ impl Samples {
                 .collect::<Result<_>>()?,
         })
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct SamplesParameters {
+    num_different_samples: usize,
+    num_samples: usize,
+    max_sample_id: u64,
+}
+
+impl SamplesParameters {
+    pub fn new(
+        num_different_samples: usize,
+        num_samples: usize,
+        max_sample_id: u64,
+    ) -> Result<Self> {
+        if num_different_samples >= num_samples {
+            bail!(
+                "num_different_samples({num_different_samples}) must be less than num_samples({num_samples})."
+            );
+        }
+        if num_samples >= max_sample_id as usize + 1 {
+            bail!(
+                "num_samples({num_samples}) must be less than max_sample_id({max_sample_id}) + 1."
+            );
+        }
+        Ok(Self {
+            num_different_samples,
+            num_samples,
+            max_sample_id,
+        })
+    }
+}
+
+pub fn arbitrary_samples(
+    params: &SamplesParameters,
+    state_strategy: BoxedStrategy<State>,
+) -> BoxedStrategy<Samples> {
+    unique_integers(0, params.max_sample_id, params.num_samples)
+        .prop_flat_map(move |sample_ids| {
+            // FIXME: Only generate `num_different_samples` different samples
+            let states = proptest::collection::vec(state_strategy.clone(), sample_ids.len());
+            states.prop_map(move |states| {
+                let mut samples = Samples::default();
+                for (sample_id, state) in sample_ids.iter().zip(states) {
+                    samples.add_sample(*sample_id, state);
+                }
+                samples
+            })
+        })
+        .boxed()
 }
 
 impl SampleSet {
