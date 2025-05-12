@@ -393,5 +393,19 @@ mod tests {
             all.extend(analysis.semi_continuous.keys());
             prop_assert_eq!(&all, &analysis.all);
         }
+
+        #[test]
+        fn test_used_partition(instance in Instance::arbitrary()) {
+            let analysis = instance.analyze_decision_variables();
+            let used = analysis.used();
+            prop_assert_eq!(
+                analysis.all.len(),
+                used.len() + analysis.fixed.len() + analysis.dependent.len()
+            );
+            let mut all = used.clone();
+            all.extend(analysis.fixed.keys());
+            all.extend(analysis.dependent.iter());
+            prop_assert_eq!(&all, &analysis.all);
+        }
     }
 }
