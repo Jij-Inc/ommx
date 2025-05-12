@@ -61,7 +61,7 @@ mod tests {
             for (ids, _) in p.into_iter() {
                 prop_assert!(ids.len() <= 3);
                 for &id in ids.iter() {
-                    prop_assert!(id <= 10);
+                    prop_assert!(id <= 10.into());
                 }
                 count += 1;
             }
