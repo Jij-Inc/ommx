@@ -201,7 +201,7 @@ impl Function {
             }
             let mut cur = Bound::new(1.0, 1.0).unwrap();
             for (id, exp) in ids.chunks() {
-                let b = bounds.get(&id.into()).cloned().unwrap_or_default();
+                let b = bounds.get(&id).cloned().unwrap_or_default();
                 cur *= b.pow(exp as u8);
                 if cur == Bound::default() {
                     return Bound::default();
