@@ -182,9 +182,7 @@ pub fn arbitrary_decision_variables(
     );
     (Just(unique_ids), variables)
         .prop_map(|(ids, variables)| {
-            ids.into_iter()
-                .map(VariableID::from)
-                .zip(variables)
+            ids.into_iter().zip(variables)
                 .map(|(id, mut variable)| {
                     variable.id = id;
                     (id, variable)
