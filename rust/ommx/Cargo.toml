@@ -37,6 +37,7 @@ proptest.workspace = true
 prost.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+smallvec.workspace = true
 thiserror.workspace = true
 url.workspace = true
 uuid.workspace = true

@@ -3,6 +3,7 @@ use crate::{random::*, Monomial, VariableID};
 use anyhow::{bail, Result};
 use itertools::Itertools;
 use proptest::prelude::*;
+use smallvec::{smallvec, SmallVec};
 use std::ops::*;
 
 pub type Polynomial = PolynomialBase<MonomialDyn>;
@@ -28,12 +29,12 @@ impl From<Quadratic> for Polynomial {
 /// Note that this can store duplicated IDs. For example, `x1^2 * x2^3` is represented as `[1, 1, 2, 2, 2]`.
 /// This is better than `[(1, 2), (2, 3)]` or `{1: 2, 2: 3}` style for low-degree polynomials.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
-pub struct MonomialDyn(Vec<VariableID>);
+pub struct MonomialDyn(SmallVec<[VariableID; 3]>);
 
 impl From<LinearMonomial> for MonomialDyn {
     fn from(m: LinearMonomial) -> Self {
         match m {
-            LinearMonomial::Variable(id) => Self(vec![id]),
+            LinearMonomial::Variable(id) => Self(smallvec![id]),
             LinearMonomial::Constant => Self::empty(),
         }
     }
@@ -42,8 +43,8 @@ impl From<LinearMonomial> for MonomialDyn {
 impl From<QuadraticMonomial> for MonomialDyn {
     fn from(m: QuadraticMonomial) -> Self {
         match m {
-            QuadraticMonomial::Pair(pair) => Self(vec![pair.lower(), pair.upper()]),
-            QuadraticMonomial::Linear(id) => Self(vec![id]),
+            QuadraticMonomial::Pair(pair) => Self(smallvec![pair.lower(), pair.upper()]),
+            QuadraticMonomial::Linear(id) => Self(smallvec![id]),
             QuadraticMonomial::Constant => Self::empty(),
         }
     }
@@ -138,15 +139,15 @@ impl MonomialDyn {
     pub fn new(ids: Vec<VariableID>) -> Self {
         let mut ids = ids;
         ids.sort_unstable();
-        Self(ids)
+        Self(ids.into())
     }
 
-    pub fn into_inner(self) -> Vec<VariableID> {
+    pub fn into_inner(self) -> SmallVec<[VariableID; 3]> {
         self.0
     }
 
     pub fn empty() -> Self {
-        Self(Vec::new())
+        Self(SmallVec::new())
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &VariableID> {
@@ -164,7 +165,7 @@ impl MonomialDyn {
 
 impl IntoIterator for MonomialDyn {
     type Item = VariableID;
-    type IntoIter = std::vec::IntoIter<VariableID>;
+    type IntoIter = <SmallVec<[VariableID; 3]> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()

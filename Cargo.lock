@@ -1544,6 +1544,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "smallvec",
  "thiserror 2.0.12",
  "url",
  "uuid",
