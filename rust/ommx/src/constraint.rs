@@ -3,6 +3,7 @@ use crate::{
     random::unique_integers,
     v1, Function, PolynomialParameters,
 };
+use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
@@ -189,14 +190,41 @@ impl Parse for Vec<v1::RemovedConstraint> {
     }
 }
 
-pub fn arbitrary_constraints(
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ConstraintIDParameters {
     size: usize,
     max_id: ConstraintID,
+}
+
+impl ConstraintIDParameters {
+    pub fn new(size: usize, max_id: ConstraintID) -> Result<Self> {
+        if size > max_id.0 as usize + 1 {
+            return Err(anyhow!(
+                "size {} is greater than `max_id {} + 1`",
+                size,
+                max_id.0
+            ));
+        }
+        Ok(Self { size, max_id })
+    }
+}
+
+impl Default for ConstraintIDParameters {
+    fn default() -> Self {
+        Self {
+            size: 5,
+            max_id: ConstraintID(10),
+        }
+    }
+}
+
+pub fn arbitrary_constraints(
+    id_parameters: ConstraintIDParameters,
     parameters: PolynomialParameters,
 ) -> impl Strategy<Value = FnvHashMap<ConstraintID, Constraint>> {
-    let unique_ids_strategy = unique_integers(0, max_id.0, size);
+    let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
     let constraints_strategy =
-        proptest::collection::vec(Constraint::arbitrary_with(parameters), size);
+        proptest::collection::vec(Constraint::arbitrary_with(parameters), id_parameters.size);
     (unique_ids_strategy, constraints_strategy)
         .prop_map(|(ids, constraints)| {
             ids.into_iter()

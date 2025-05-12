@@ -1,6 +1,8 @@
 use super::*;
-use crate::{arbitrary_constraints, arbitrary_decision_variables, Evaluate, PolynomialParameters};
-use crate::{v1::State, Bound, KindParameters};
+use crate::{
+    arbitrary_constraints, arbitrary_decision_variables, v1::State, Bound, ConstraintIDParameters,
+    Evaluate, KindParameters, PolynomialParameters,
+};
 use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::HashMap;
@@ -129,19 +131,17 @@ impl Arbitrary for Sense {
 
 #[derive(Debug, Clone)]
 pub struct InstanceParameters {
-    num_constraints: usize,
-    constraint_max_id: ConstraintID,
-    objective: PolynomialParameters,
-    constraint: PolynomialParameters,
-    kinds: KindParameters,
-    max_irrelevant_ids: usize,
+    pub constraint_ids: ConstraintIDParameters,
+    pub objective: PolynomialParameters,
+    pub constraint: PolynomialParameters,
+    pub kinds: KindParameters,
+    pub max_irrelevant_ids: usize,
 }
 
 impl Default for InstanceParameters {
     fn default() -> Self {
         Self {
-            num_constraints: 5,
-            constraint_max_id: ConstraintID::from(10),
+            constraint_ids: ConstraintIDParameters::default(),
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
             kinds: KindParameters::default(),
@@ -156,8 +156,7 @@ impl Arbitrary for Instance {
 
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
         let objective = Function::arbitrary_with(p.objective);
-        let constraints =
-            arbitrary_constraints(p.num_constraints, p.constraint_max_id, p.constraint);
+        let constraints = arbitrary_constraints(p.constraint_ids, p.constraint);
         // Generate candidates for irrelevant IDs.
         // Since these IDs are generated without checking against the objective or constraints, some of these may be relevant.
         let max_id = p.objective.max_id().max(p.constraint.max_id());
@@ -174,11 +173,7 @@ impl Arbitrary for Instance {
                 for c in constraints.values() {
                     unique_ids.extend(c.function.required_ids().into_iter().map(VariableID::from));
                 }
-                unique_ids.extend(
-                    irrelevant_candidates
-                        .into_iter()
-                        .map(VariableID::from),
-                );
+                unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
                 (
                     Just(objective),
                     Just(constraints),
