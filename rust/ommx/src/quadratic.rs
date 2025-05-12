@@ -1,7 +1,7 @@
 use crate::{
     macros::*,
     v1::{Linear, Polynomial, Quadratic},
-    MonomialDyn,
+    MonomialDyn, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -134,7 +134,7 @@ impl<'a> IntoIterator for &'a Quadratic {
         let n = self.columns.len();
         let quad = (0..n).map(move |i| {
             (
-                MonomialDyn::new(vec![self.columns[i], self.rows[i]]),
+                MonomialDyn::new(vec![self.columns[i].into(), self.rows[i].into()]),
                 self.values[i],
             )
         });
@@ -143,7 +143,7 @@ impl<'a> IntoIterator for &'a Quadratic {
                 quad.chain(
                     linear
                         .into_iter()
-                        .map(|(id, c)| (id.into_iter().collect(), c)),
+                        .map(|(id, c)| (id.into_iter().map(VariableID::from).collect(), c)),
                 ),
             )
         } else {

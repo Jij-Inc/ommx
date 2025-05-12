@@ -4,7 +4,7 @@ use crate::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic,
     },
-    Bound, Bounds, MonomialDyn,
+    Bound, Bounds, MonomialDyn, VariableID,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -105,9 +105,11 @@ impl<'a> IntoIterator for &'a Function {
             Some(FunctionEnum::Constant(c)) => {
                 Box::new(std::iter::once((MonomialDyn::empty(), *c)))
             }
-            Some(FunctionEnum::Linear(linear)) => {
-                Box::new(linear.into_iter().map(|(id, c)| (id.into(), c)))
-            }
+            Some(FunctionEnum::Linear(linear)) => Box::new(
+                linear
+                    .into_iter()
+                    .map(|(id, c)| (id.map(VariableID::from).into(), c)),
+            ),
             Some(FunctionEnum::Quadratic(quad)) => Box::new(quad.into_iter()),
             Some(FunctionEnum::Polynomial(poly)) => Box::new(poly.into_iter()),
             None => Box::new(std::iter::empty()),
@@ -179,7 +181,7 @@ impl Function {
                 if let Some(replacement) = replacements.get(id) {
                     v = v * replacement.clone();
                 } else {
-                    v = v * Linear::single_term(*id, 1.0);
+                    v = v * Linear::single_term(id.into_inner(), 1.0);
                 }
             }
             out = out + v;

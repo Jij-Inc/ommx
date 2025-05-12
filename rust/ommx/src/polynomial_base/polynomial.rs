@@ -42,9 +42,7 @@ impl From<LinearMonomial> for MonomialDyn {
 impl From<QuadraticMonomial> for MonomialDyn {
     fn from(m: QuadraticMonomial) -> Self {
         match m {
-            QuadraticMonomial::Pair(pair) => {
-                Self(vec![pair.lower(), pair.upper()])
-            }
+            QuadraticMonomial::Pair(pair) => Self(vec![pair.lower(), pair.upper()]),
             QuadraticMonomial::Linear(id) => Self(vec![id]),
             QuadraticMonomial::Constant => Self::empty(),
         }
@@ -379,7 +377,7 @@ impl Monomial for MonomialDyn {
                 );
                 let sub_parameters = PolynomialParameters {
                     num_terms: p.num_terms - num_largest,
-                    max_degree: p.max_degree - 1,
+                    max_degree: (p.max_degree.into_inner() - 1).max(0).into(),
                     max_id: p.max_id,
                 };
                 let sub = MonomialDyn::arbitrary_uniques(sub_parameters);

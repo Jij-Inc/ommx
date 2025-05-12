@@ -147,7 +147,10 @@ pub fn unique_sorted_ids(
         .prop_map(move |ids| {
             ids.into_iter()
                 .map(|k| {
-                    let tuple = map_k_to_tuple(k, degree, max_id);
+                    let tuple = map_k_to_tuple(k, degree, max_id)
+                        .into_iter()
+                        .map(VariableID::from)
+                        .collect();
                     MonomialDyn::new(tuple)
                 })
                 .collect()

@@ -26,7 +26,12 @@ impl PartialOrd for BinaryIds {
 
 impl From<MonomialDyn> for BinaryIds {
     fn from(ids: MonomialDyn) -> Self {
-        Self(ids.into_inner().into_iter().collect())
+        Self(
+            ids.into_inner()
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
+        )
     }
 }
 
@@ -69,7 +74,12 @@ impl TryFrom<Vec<u64>> for BinaryIdPair {
 impl TryFrom<MonomialDyn> for BinaryIdPair {
     type Error = anyhow::Error;
     fn try_from(ids: MonomialDyn) -> Result<Self, Self::Error> {
-        Self::try_from(ids.into_inner())
+        Self::try_from(
+            ids.into_inner()
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 

@@ -81,7 +81,7 @@ mod tests {
             prop_assert!(function.degree() <= p.max_degree());
             for (monomial, _) in function.iter() {
                 for id in monomial.iter() {
-                    prop_assert!(*id <= p.max_id().into_inner());
+                    prop_assert!(*id <= p.max_id());
                 }
             }
         }
