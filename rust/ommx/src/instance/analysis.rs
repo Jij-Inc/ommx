@@ -394,17 +394,26 @@ mod tests {
             prop_assert_eq!(&all, &analysis.all);
         }
 
+        // Used, fixed, dependent, and irrelevant are disjoint each other, and their union is equal to all.
         #[test]
         fn test_used_partition(instance in Instance::arbitrary()) {
             let analysis = instance.analyze_decision_variables();
             let used = analysis.used();
+            let all_len = analysis.all.len();
+            let used_len = used.len();
+            let fixed_len = analysis.fixed.len();
+            let dependent_len = analysis.dependent.len();
+            let irrelevant_len = analysis.irrelevant().len();
             prop_assert_eq!(
-                analysis.all.len(),
-                used.len() + analysis.fixed.len() + analysis.dependent.len()
+                all_len,
+                used_len + fixed_len + dependent_len + irrelevant_len,
+                "all: {}, used: {}, fixed: {}, dependent: {}, irrelevant: {}",
+                all_len, used_len, fixed_len, dependent_len, irrelevant_len
             );
             let mut all = used.clone();
             all.extend(analysis.fixed.keys());
             all.extend(analysis.dependent.iter());
+            all.extend(analysis.irrelevant());
             prop_assert_eq!(&all, &analysis.all);
         }
     }
