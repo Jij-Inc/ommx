@@ -103,7 +103,7 @@ impl Arbitrary for Constraint {
     fn arbitrary_with(params: Self::Parameters) -> Self::Strategy {
         (Function::arbitrary_with(params), Equality::arbitrary())
             .prop_map(|(function, equality)| Constraint {
-                id: ConstraintID(0), // Should be replaced with a unique ID
+                id: ConstraintID(0), // Should be replaced with a unique ID, but cannot be generated here
                 function,
                 equality,
                 name: None,

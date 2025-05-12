@@ -113,7 +113,7 @@ impl Arbitrary for DecisionVariable {
                 (Just(kind), bound_strategy)
             })
             .prop_map(|(kind, bound)| DecisionVariable {
-                id: VariableID::from(0), // Should be replaced with a unique ID
+                id: VariableID::from(0), // Should be replaced with a unique ID, but cannot be generated here
                 kind,
                 bound,
                 substituted_value: None,
