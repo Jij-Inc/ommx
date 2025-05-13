@@ -1,7 +1,8 @@
 use derive_more::{Deref, From};
-use fnv::FnvHashSet;
+use fnv::FnvHashMap;
 use std::hash::Hash;
 
+#[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct SampleID(u64);
 
@@ -11,24 +12,56 @@ impl SampleID {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Sampled<T>(Vec<(FnvHashSet<SampleID>, T)>);
+#[derive(Debug, Clone)]
+pub struct Sampled<T> {
+    offsets: FnvHashMap<SampleID, usize>,
+    data: Vec<T>,
+}
 
-impl<T> std::ops::Deref for Sampled<T> {
-    type Target = [(FnvHashSet<SampleID>, T)];
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl<T> PartialEq for Sampled<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.offsets.len() != other.offsets.len() {
+            return false;
+        }
+        for (id, offset) in self.offsets.iter() {
+            debug_assert!(*offset < self.data.len());
+            let Some(other_offset) = other.offsets.get(id) else {
+                return false;
+            };
+            debug_assert!(*other_offset < other.data.len());
+            if self.data[*offset] != other.data[*other_offset] {
+                return false;
+            }
+        }
+        true
     }
 }
 
 impl<T> Sampled<T> {
-    pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
-        self.0
-            .iter()
-            .flat_map(|(ids, t)| ids.iter().map(move |id| (id, t)))
+    pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
+        let map = ids.map(|id| (id, 0)).collect();
+        let data = vec![value];
+        Self { offsets: map, data }
     }
 
-    pub fn map<U, F: FnMut(T) -> U>(self, mut f: F) -> Sampled<U> {
-        Sampled(self.0.into_iter().map(|(ids, t)| (ids, f(t))).collect())
+    pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
+        self.offsets.iter().map(move |(id, offset)| {
+            debug_assert!(*offset < self.data.len());
+            (id, &self.data[*offset])
+        })
+    }
+
+    pub fn map<U, F: FnMut(T) -> U>(self, f: F) -> Sampled<U> {
+        Sampled {
+            offsets: self.offsets,
+            data: self.data.into_iter().map(f).collect(),
+        }
+    }
+
+    pub fn num_samples(&self) -> usize {
+        self.offsets.len()
     }
 }
