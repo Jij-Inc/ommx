@@ -58,15 +58,15 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             .collect()
     }
 
-    fn evaluate_samples(&self, _samples: &Samples) -> Result<Self::SampledOutput> {
-        todo!()
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        samples.map(|state| self.evaluate(state))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::arbitrary_state;
+    use crate::{arbitrary_samples, random::arbitrary_state, SamplesParameters};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
 
@@ -178,4 +178,30 @@ mod tests {
     test_partial_evaluate!(LinearMonomial, test_partial_evaluate_linear);
     test_partial_evaluate!(QuadraticMonomial, test_partial_evaluate_quadratic);
     test_partial_evaluate!(MonomialDyn, test_partial_evaluate_polynomial);
+
+    fn polynomial_and_samples<M: Monomial>() -> impl Strategy<Value = (PolynomialBase<M>, Samples)>
+    {
+        PolynomialBase::arbitrary()
+            .prop_flat_map(|poly| {
+                let ids = poly.required_ids();
+                let state = arbitrary_state(ids);
+                let samples = arbitrary_samples(SamplesParameters::default(), state);
+                (Just(poly), samples)
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_evaluate_samples(
+            (poly, samples) in polynomial_and_samples::<LinearMonomial>()
+        ) {
+            let evaluated = poly.evaluate_samples(&samples).unwrap();
+            let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
+                let value = poly.evaluate(state).unwrap();
+                (*parameter_id, value)
+            }).collect();
+            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
+        }
+    }
 }

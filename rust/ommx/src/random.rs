@@ -228,6 +228,30 @@ pub fn arbitrary_state_within_bounds(bounds: &Bounds, max_abs: f64) -> BoxedStra
     stratety.prop_map(|state| state.into()).boxed()
 }
 
+/// Generate random partitions of a sum into n parts at least 1 each.
+///
+/// For example, if `sum = 5` and `n = 3`, it can generate:
+/// `[1, 1, 3]`, `[1, 2, 2]`, `[2, 1, 2]`, `[3, 1, 1]`, `[2, 2, 1]`, etc.
+pub fn arbitrary_integer_partition(sum: usize, n: usize) -> BoxedStrategy<Vec<usize>> {
+    if n == 1 {
+        return Just(vec![sum]).boxed();
+    }
+    if sum == n {
+        return Just(vec![1; n]).boxed();
+    }
+    if sum < n {
+        panic!("sum({sum}) cannot be split into {n} positive parts");
+    }
+    (1..(sum - n))
+        .prop_flat_map(move |x| {
+            arbitrary_integer_partition(sum - x, n - 1).prop_map(move |mut sub| {
+                sub.push(x);
+                sub
+            })
+        })
+        .boxed()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,5 +333,14 @@ mod tests {
         assert_eq!(map_k_to_tuple(17, 3, 3), vec![2, 2, 3]);
         assert_eq!(map_k_to_tuple(18, 3, 3), vec![2, 3, 3]);
         assert_eq!(map_k_to_tuple(19, 3, 3), vec![3, 3, 3]);
+    }
+
+    proptest! {
+        #[test]
+        fn test_arbitrary_integer_partition(partition in arbitrary_integer_partition(5, 3)) {
+            prop_assert_eq!(partition.len(), 3);
+            prop_assert_eq!(partition.iter().sum::<usize>(), 5);
+            prop_assert!(partition.iter().all(|&x| x > 0));
+        }
     }
 }
