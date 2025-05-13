@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use anyhow::{bail, ensure, Context, Result};
+use approx::AbsDiffEq;
 use ordered_float::OrderedFloat;
 use proptest::prelude::*;
 use std::collections::{BTreeSet, HashMap};
@@ -31,6 +32,28 @@ impl FromIterator<(u64, f64)> for SampledValues {
             map.entry(OrderedFloat(v)).or_default().push(k);
         }
         map.into()
+    }
+}
+
+impl AbsDiffEq for SampledValues {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        1e-9
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        let map: HashMap<u64, f64> = self.iter().map(|(k, v)| (*k, *v)).collect();
+        for (k, v) in other.iter() {
+            if let Some(v2) = map.get(k) {
+                if !v.abs_diff_eq(v2, epsilon) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        true
     }
 }
 
