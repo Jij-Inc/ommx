@@ -35,12 +35,8 @@ impl Evaluate for Constraint {
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, value)| match self.equality {
-                Equality::EqualToZero => {
-                    (*sample_id, value.abs() < 1e-6)
-                }
-                Equality::LessThanOrEqualToZero => {
-                    (*sample_id, *value < 1e-6)
-                }
+                Equality::EqualToZero => (*sample_id, value.abs() < 1e-6),
+                Equality::LessThanOrEqualToZero => (*sample_id, *value < 1e-6),
             })
             .collect();
         Ok(SampledConstraint {
