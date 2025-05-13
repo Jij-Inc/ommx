@@ -2,7 +2,6 @@ mod analysis;
 mod approx;
 mod arbitrary;
 mod constraint_hints;
-mod evaluate;
 mod parse;
 
 pub use analysis::*;
