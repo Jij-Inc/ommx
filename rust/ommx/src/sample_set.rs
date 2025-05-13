@@ -58,7 +58,7 @@ impl AbsDiffEq for SampledValues {
 }
 
 impl SampledValues {
-    pub fn constant(value: f64, ids: impl Iterator<Item = u64>) -> Self {
+    pub fn constants(ids: impl Iterator<Item = u64>, value: f64) -> Self {
         Self {
             entries: vec![SampledValuesEntry {
                 value,
@@ -68,7 +68,7 @@ impl SampledValues {
     }
 
     pub fn zeros(ids: impl Iterator<Item = u64>) -> Self {
-        Self::constant(0.0, ids)
+        Self::constants(ids, 0.0)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &f64)> {

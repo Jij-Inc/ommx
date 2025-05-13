@@ -1,5 +1,5 @@
 use super::*;
-use crate::Evaluate;
+use crate::{v1::SampledValues, Evaluate};
 
 impl Evaluate for Function {
     type Output = f64;
@@ -39,11 +39,45 @@ impl Evaluate for Function {
         samples: &crate::v1::Samples,
     ) -> anyhow::Result<Self::SampledOutput> {
         match self {
-            Function::Zero => todo!(),
-            Function::Constant(_) => todo!(),
+            Function::Zero => Ok(SampledValues::zeros(samples.ids().cloned())),
+            Function::Constant(c) => Ok(SampledValues::constants(
+                samples.ids().cloned(),
+                c.into_inner(),
+            )),
             Function::Linear(f) => f.evaluate_samples(samples),
             Function::Quadratic(f) => f.evaluate_samples(samples),
             Function::Polynomial(f) => f.evaluate_samples(samples),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{arbitrary_samples, random::arbitrary_state, v1::Samples, SamplesParameters};
+    use ::approx::AbsDiffEq;
+    use proptest::prelude::*;
+
+    fn function_and_samples() -> impl Strategy<Value = (Function, Samples)> {
+        Function::arbitrary()
+            .prop_flat_map(|f| {
+                let ids = f.required_ids();
+                let state = arbitrary_state(ids);
+                let samples = arbitrary_samples(SamplesParameters::default(), state);
+                (Just(f), samples)
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_evaluate_samples((f, samples) in function_and_samples()) {
+            let evaluated = f.evaluate_samples(&samples).unwrap();
+            let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
+                let value = f.evaluate(state).unwrap();
+                (*parameter_id, value)
+            }).collect();
+            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
         }
     }
 }
