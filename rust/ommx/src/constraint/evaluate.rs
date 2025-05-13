@@ -36,10 +36,10 @@ impl Evaluate for Constraint {
             .iter()
             .map(|(sample_id, value)| match self.equality {
                 Equality::EqualToZero => {
-                    return (*sample_id, value.abs() < 1e-6);
+                    (*sample_id, value.abs() < 1e-6)
                 }
                 Equality::LessThanOrEqualToZero => {
-                    return (*sample_id, *value < 1e-6);
+                    (*sample_id, *value < 1e-6)
                 }
             })
             .collect();
