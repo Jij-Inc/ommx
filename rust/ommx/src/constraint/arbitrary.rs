@@ -1,5 +1,6 @@
 use super::*;
 use crate::{random::unique_integers, Function, PolynomialParameters};
+use anyhow::{anyhow, Result};
 use proptest::prelude::*;
 
 impl Arbitrary for Equality {

@@ -1,11 +1,10 @@
+mod approx;
 mod arbitrary;
 mod parse;
 
 pub use arbitrary::*;
 
 use crate::Function;
-use anyhow::{anyhow, Result};
-use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 
@@ -34,33 +33,9 @@ pub struct Constraint {
     pub description: Option<String>,
 }
 
-impl AbsDiffEq for Constraint {
-    type Epsilon = f64;
-
-    fn default_epsilon() -> Self::Epsilon {
-        Function::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.equality == other.equality && self.function.abs_diff_eq(&other.function, epsilon)
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: Constraint,
     pub removed_reason: String,
     pub removed_reason_parameters: FnvHashMap<String, String>,
-}
-
-impl AbsDiffEq for RemovedConstraint {
-    type Epsilon = f64;
-
-    fn default_epsilon() -> Self::Epsilon {
-        Constraint::default_epsilon()
-    }
-
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.constraint.abs_diff_eq(&other.constraint, epsilon)
-    }
 }
