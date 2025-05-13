@@ -1,5 +1,6 @@
 mod approx;
 mod arbitrary;
+mod evaluate;
 mod parse;
 
 pub use arbitrary::*;
@@ -20,6 +21,12 @@ pub enum Equality {
 /// ID for constraint
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct ConstraintID(u64);
+
+impl ConstraintID {
+    fn into_inner(self) -> u64 {
+        self.0
+    }
+}
 
 /// `ommx.v1.Constraint` with validated, typed fields.
 #[derive(Debug, Clone, PartialEq)]

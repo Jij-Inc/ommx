@@ -21,6 +21,15 @@ impl Parse for v1::Equality {
     }
 }
 
+impl From<Equality> for i32 {
+    fn from(equality: Equality) -> Self {
+        match equality {
+            Equality::EqualToZero => v1::Equality::EqualToZero as i32,
+            Equality::LessThanOrEqualToZero => v1::Equality::LessThanOrEqualToZero as i32,
+        }
+    }
+}
+
 impl Parse for v1::Constraint {
     type Output = Constraint;
     type Context = ();
