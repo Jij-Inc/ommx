@@ -35,6 +35,19 @@ impl FromIterator<(u64, f64)> for SampledValues {
 }
 
 impl SampledValues {
+    pub fn constant(value: f64, ids: impl Iterator<Item = u64>) -> Self {
+        Self {
+            entries: vec![SampledValuesEntry {
+                value,
+                ids: ids.collect(),
+            }],
+        }
+    }
+
+    pub fn zeros(ids: impl Iterator<Item = u64>) -> Self {
+        Self::constant(0.0, ids)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&u64, &f64)> {
         self.entries
             .iter()
@@ -164,6 +177,16 @@ impl SamplesParameters {
             num_samples,
             max_sample_id,
         })
+    }
+}
+
+impl Default for SamplesParameters {
+    fn default() -> Self {
+        Self {
+            num_different_samples: 5,
+            num_samples: 10,
+            max_sample_id: 10,
+        }
     }
 }
 
