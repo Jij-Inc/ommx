@@ -43,3 +43,24 @@ where
         compare(self, other, |a, b| a.abs_diff_eq(b, epsilon.clone()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_partial_eq() {
+        // Different as struct, but mathematical equal
+        let a = Sampled::new(
+            [[SampleID(1), SampleID(2)], [SampleID(5), SampleID(7)]],
+            [1, 2],
+        )
+        .unwrap();
+        let b = Sampled::new(
+            [[SampleID(7), SampleID(5)], [SampleID(1), SampleID(2)]],
+            [2, 1],
+        )
+        .unwrap();
+        assert_eq!(a, b);
+    }
+}
