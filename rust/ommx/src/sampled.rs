@@ -1,4 +1,5 @@
 mod approx;
+mod parse;
 
 use anyhow::{bail, Result};
 use derive_more::{Deref, From};
@@ -21,6 +22,21 @@ pub struct Sampled<T> {
     data: Vec<T>,
 }
 
+impl<T> Default for Sampled<T> {
+    fn default() -> Self {
+        Self {
+            offsets: FnvHashMap::default(),
+            data: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Duplicated sample ID: {id:?}")]
+pub struct DuplicatedSampleIDError {
+    id: SampleID,
+}
+
 impl<T> Sampled<T> {
     pub fn constants(ids: impl Iterator<Item = SampleID>, value: T) -> Self {
         let map = ids.map(|id| (id, 0)).collect();
@@ -28,30 +44,38 @@ impl<T> Sampled<T> {
         Self { offsets: map, data }
     }
 
+    pub fn append(
+        &mut self,
+        ids: impl IntoIterator<Item = SampleID>,
+        value: T,
+    ) -> std::result::Result<(), DuplicatedSampleIDError> {
+        let offset = self.data.len();
+        self.data.push(value);
+        for id in ids {
+            if self.offsets.insert(id, offset).is_some() {
+                return Err(DuplicatedSampleIDError { id });
+            }
+        }
+        Ok(())
+    }
+
     pub fn new<'a, Iter, Inner>(ids: Iter, data: impl IntoIterator<Item = T>) -> Result<Self>
     where
         Iter: IntoIterator<Item = Inner>,
         Inner: IntoIterator<Item = SampleID>,
     {
-        let data = data.into_iter().collect::<Vec<_>>();
-        let mut max_offset = 0;
-        let mut offsets = FnvHashMap::default();
-        for (offset, inner) in ids.into_iter().enumerate() {
-            max_offset = max_offset.max(offset);
-            for id in inner {
-                if offsets.insert(id, offset).is_some() {
-                    bail!("Duplicate sample ID: {:?}", id);
-                }
+        let mut out = Self::default();
+        let mut ids_iter = ids.into_iter();
+        let mut data_iter = data.into_iter();
+        loop {
+            match (ids_iter.next(), data_iter.next()) {
+                (Some(ids), Some(data)) => out.append(ids, data)?,
+                (None, None) => break,
+                (Some(_), None) => bail!("Data length mismatch"),
+                (None, Some(_)) => bail!("Sample IDs length mismatch"),
             }
         }
-        if data.len() != max_offset + 1 {
-            bail!(
-                "Data length ({}) does not match the number of samples ({})",
-                data.len(),
-                max_offset + 1
-            );
-        }
-        Ok(Self { offsets, data })
+        Ok(out)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {

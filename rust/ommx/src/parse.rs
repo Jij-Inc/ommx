@@ -1,6 +1,6 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID, OffsetError,
-    VariableID,
+    SampleID, VariableID,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -91,6 +91,9 @@ pub enum RawParseError {
 
     #[error("Duplicated constraint ID is found in definition: {id:?}")]
     DuplicatedConstraintID { id: ConstraintID },
+
+    #[error("Duplicated sample ID is found: {id:?}")]
+    DuplicatedSampleID { id: SampleID },
 
     #[error("Undefined variable ID is used: {id:?}")]
     UndefinedVariableID { id: VariableID },
