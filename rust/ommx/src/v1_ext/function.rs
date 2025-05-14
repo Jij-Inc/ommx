@@ -2,9 +2,9 @@ use crate::{
     macros::*,
     v1::{
         function::{self, Function as FunctionEnum},
-        Function, Linear, Polynomial, Quadratic,
+        Function, Linear, Polynomial, Quadratic, SampledValues, Samples, State,
     },
-    Bound, Bounds, MonomialDyn, VariableID,
+    Bound, Bounds, Evaluate, MonomialDyn, VariableID,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -423,6 +423,44 @@ impl fmt::Display for Function {
             Some(FunctionEnum::Polynomial(poly)) => write!(f, "{}", poly),
             None => write!(f, "0"),
         }
+    }
+}
+
+impl Evaluate for Function {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State) -> Result<f64> {
+        let out = match &self.function {
+            Some(FunctionEnum::Constant(c)) => *c,
+            Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution)?,
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution)?,
+            Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution)?,
+            None => 0.0,
+        };
+        Ok(out)
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+        match &mut self.function {
+            Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
+            Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
+            _ => {}
+        };
+        Ok(())
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 
