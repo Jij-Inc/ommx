@@ -319,10 +319,8 @@ impl Instance {
             }
         }
 
-        let used_in_objective: FnvHashSet<VariableID> = self
-            .objective
-            .required_ids()
-            .into_iter().collect();
+        let used_in_objective: FnvHashSet<VariableID> =
+            self.objective.required_ids().into_iter().collect();
         debug_assert!(
             used_in_objective.is_subset(&all),
             "Objective function uses variables not in the instance"
@@ -333,10 +331,7 @@ impl Instance {
         for constraint in self.constraints.values() {
             used_in_constraints.insert(
                 constraint.id,
-                constraint
-                    .function
-                    .required_ids()
-                    .into_iter().collect(),
+                constraint.function.required_ids().into_iter().collect(),
             );
         }
         debug_assert!(
