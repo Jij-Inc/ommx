@@ -62,3 +62,36 @@ impl Evaluate for Constraint {
         self.function.required_ids()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{arbitrary_samples, random::arbitrary_state, v1::Samples, SamplesParameters};
+    use proptest::prelude::*;
+
+    fn constraint_and_samples() -> impl Strategy<Value = (Constraint, Samples)> {
+        Constraint::arbitrary()
+            .prop_flat_map(|c| {
+                let ids = c.function.required_ids();
+                let state = arbitrary_state(ids);
+                let samples = arbitrary_samples(SamplesParameters::default(), state);
+                (Just(c), samples)
+            })
+            .boxed()
+    }
+
+    proptest! {
+        #[test]
+        fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
+            let evaluated = c.evaluate_samples(&samples).unwrap();
+            let evaluated_each: FnvHashMap<u64, EvaluatedConstraint> = samples.iter().map(|(parameter_id, state)| {
+                let value = c.evaluate(state).unwrap();
+                (*parameter_id, value)
+            }).collect();
+            for (sample_id, each) in evaluated_each {
+                let extracted = evaluated.get(sample_id).unwrap();
+                prop_assert_eq!(extracted, each)
+            }
+        }
+    }
+}
