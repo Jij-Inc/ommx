@@ -1,8 +1,9 @@
 use crate::{
     macros::*,
-    v1::{Linear, Polynomial, Quadratic},
-    MonomialDyn, VariableID,
+    v1::{Linear, Polynomial, Quadratic, SampledValues, Samples, State},
+    Evaluate, MonomialDyn, VariableID,
 };
+use anyhow::{ensure, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -11,7 +12,7 @@ use std::{
     ops::{Add, Mul},
 };
 
-use super::format::format_polynomial;
+use crate::format::format_polynomial;
 
 impl Zero for Quadratic {
     fn zero() -> Self {
@@ -289,6 +290,88 @@ impl fmt::Display for Quadratic {
             return write!(f, "0");
         }
         format_polynomial(f, self.into_iter())
+    }
+}
+
+impl Evaluate for Quadratic {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State) -> Result<f64> {
+        let mut sum = if let Some(linear) = &self.linear {
+            linear.evaluate(solution)?
+        } else {
+            0.0
+        };
+        for (i, j, value) in
+            itertools::multizip((self.rows.iter(), self.columns.iter(), self.values.iter()))
+        {
+            let u = solution
+                .entries
+                .get(i)
+                .with_context(|| format!("Variable id ({i}) is not found in the solution"))?;
+            let v = solution
+                .entries
+                .get(j)
+                .with_context(|| format!("Variable id ({j}) is not found in the solution"))?;
+            sum += value * u * v;
+        }
+        Ok(sum)
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+        let mut linear = BTreeMap::new();
+        let mut constant = self.linear.as_ref().map_or(0.0, |l| l.constant);
+        for term in self.linear.iter().flat_map(|l| l.terms.iter()) {
+            if let Some(value) = state.entries.get(&term.id) {
+                constant += term.coefficient * value;
+            } else {
+                *linear.entry(term.id).or_insert(0.0) += term.coefficient;
+            }
+        }
+
+        ensure!(self.rows.len() == self.columns.len());
+        ensure!(self.rows.len() == self.values.len());
+        let mut i = 0;
+        while i < self.rows.len() {
+            let (row, column, value) = (self.rows[i], self.columns[i], self.values[i]);
+            match (state.entries.get(&row), state.entries.get(&column)) {
+                (Some(u), Some(v)) => {
+                    constant += value * u * v;
+                }
+                (Some(u), None) => {
+                    *linear.entry(column).or_insert(0.0) += value * u;
+                }
+                (None, Some(v)) => {
+                    *linear.entry(row).or_insert(0.0) += value * v;
+                }
+                _ => {
+                    i += 1;
+                    continue;
+                }
+            }
+            self.rows.swap_remove(i);
+            self.columns.swap_remove(i);
+            self.values.swap_remove(i);
+        }
+        if linear.is_empty() && constant == 0.0 {
+            self.linear = None;
+        } else {
+            self.linear = Some(Linear::new(linear.into_iter(), constant));
+        }
+        Ok(())
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 

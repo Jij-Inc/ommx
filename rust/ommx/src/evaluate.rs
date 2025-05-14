@@ -1,11 +1,10 @@
 use crate::v1::{
-    function::Function as FunctionEnum, linear::Term as LinearTerm, Constraint, Equality,
-    EvaluatedConstraint, Function, Instance, Linear, Monomial, Optimality, Polynomial, Quadratic,
-    Relaxation, RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable,
-    SampledValues, Samples, Solution, State,
+    Constraint, Equality, EvaluatedConstraint, Function, Instance, Optimality, Relaxation,
+    RemovedConstraint, SampleSet, SampledConstraint, SampledDecisionVariable, Samples, Solution,
+    State,
 };
-use anyhow::{bail, ensure, Context, Result};
-use std::collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap};
+use anyhow::{bail, Context, Result};
+use std::collections::{hash_map::Entry as HashMapEntry, BTreeSet, HashMap};
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -23,229 +22,6 @@ pub trait Evaluate {
 
     /// Decision variable IDs required for evaluation
     fn required_ids(&self) -> BTreeSet<u64>;
-}
-
-impl Evaluate for Function {
-    type Output = f64;
-    type SampledOutput = SampledValues;
-
-    fn evaluate(&self, solution: &State) -> Result<f64> {
-        let out = match &self.function {
-            Some(FunctionEnum::Constant(c)) => *c,
-            Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution)?,
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution)?,
-            Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution)?,
-            None => 0.0,
-        };
-        Ok(out)
-    }
-
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
-        match &mut self.function {
-            Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
-            Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
-            _ => {}
-        };
-        Ok(())
-    }
-
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
-            Ok(value)
-        })?;
-        Ok(out)
-    }
-
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
-    }
-}
-
-impl Evaluate for Linear {
-    type Output = f64;
-    type SampledOutput = SampledValues;
-
-    fn evaluate(&self, solution: &State) -> Result<f64> {
-        let mut sum = self.constant;
-        for LinearTerm { id, coefficient } in &self.terms {
-            let s = solution
-                .entries
-                .get(id)
-                .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
-            sum += coefficient * s;
-        }
-        Ok(sum)
-    }
-
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
-        let mut i = 0;
-        while i < self.terms.len() {
-            let LinearTerm { id, coefficient } = self.terms[i];
-            if let Some(value) = state.entries.get(&id) {
-                self.constant += coefficient * value;
-                self.terms.swap_remove(i);
-            } else {
-                i += 1;
-            }
-        }
-        Ok(())
-    }
-
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
-            Ok(value)
-        })?;
-        Ok(out)
-    }
-
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
-    }
-}
-
-impl Evaluate for Quadratic {
-    type Output = f64;
-    type SampledOutput = SampledValues;
-
-    fn evaluate(&self, solution: &State) -> Result<f64> {
-        let mut sum = if let Some(linear) = &self.linear {
-            linear.evaluate(solution)?
-        } else {
-            0.0
-        };
-        for (i, j, value) in
-            itertools::multizip((self.rows.iter(), self.columns.iter(), self.values.iter()))
-        {
-            let u = solution
-                .entries
-                .get(i)
-                .with_context(|| format!("Variable id ({i}) is not found in the solution"))?;
-            let v = solution
-                .entries
-                .get(j)
-                .with_context(|| format!("Variable id ({j}) is not found in the solution"))?;
-            sum += value * u * v;
-        }
-        Ok(sum)
-    }
-
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
-        let mut linear = BTreeMap::new();
-        let mut constant = self.linear.as_ref().map_or(0.0, |l| l.constant);
-        for term in self.linear.iter().flat_map(|l| l.terms.iter()) {
-            if let Some(value) = state.entries.get(&term.id) {
-                constant += term.coefficient * value;
-            } else {
-                *linear.entry(term.id).or_insert(0.0) += term.coefficient;
-            }
-        }
-
-        ensure!(self.rows.len() == self.columns.len());
-        ensure!(self.rows.len() == self.values.len());
-        let mut i = 0;
-        while i < self.rows.len() {
-            let (row, column, value) = (self.rows[i], self.columns[i], self.values[i]);
-            match (state.entries.get(&row), state.entries.get(&column)) {
-                (Some(u), Some(v)) => {
-                    constant += value * u * v;
-                }
-                (Some(u), None) => {
-                    *linear.entry(column).or_insert(0.0) += value * u;
-                }
-                (None, Some(v)) => {
-                    *linear.entry(row).or_insert(0.0) += value * v;
-                }
-                _ => {
-                    i += 1;
-                    continue;
-                }
-            }
-            self.rows.swap_remove(i);
-            self.columns.swap_remove(i);
-            self.values.swap_remove(i);
-        }
-        if linear.is_empty() && constant == 0.0 {
-            self.linear = None;
-        } else {
-            self.linear = Some(Linear::new(linear.into_iter(), constant));
-        }
-        Ok(())
-    }
-
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
-            Ok(value)
-        })?;
-        Ok(out)
-    }
-
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
-    }
-}
-
-impl Evaluate for Polynomial {
-    type Output = f64;
-    type SampledOutput = SampledValues;
-
-    fn evaluate(&self, solution: &State) -> Result<f64> {
-        let mut sum = 0.0;
-        for term in &self.terms {
-            let mut v = term.coefficient;
-            for id in &term.ids {
-                v *= solution
-                    .entries
-                    .get(id)
-                    .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
-            }
-            sum += v;
-        }
-        Ok(sum)
-    }
-
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
-        let mut monomials = BTreeMap::new();
-        for term in self.terms.iter() {
-            let mut value = term.coefficient;
-            if value.abs() <= f64::EPSILON {
-                continue;
-            }
-            let mut ids = Vec::new();
-            for id in term.ids.iter() {
-                if let Some(v) = state.entries.get(id) {
-                    value *= v;
-                } else {
-                    ids.push(*id);
-                }
-            }
-            let coefficient: &mut f64 = monomials.entry(ids.clone()).or_default();
-            *coefficient += value;
-            if coefficient.abs() <= f64::EPSILON {
-                monomials.remove(&ids);
-            }
-        }
-        self.terms = monomials
-            .into_iter()
-            .map(|(ids, coefficient)| Monomial { ids, coefficient })
-            .collect();
-        Ok(())
-    }
-
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
-            Ok(value)
-        })?;
-        Ok(out)
-    }
-
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
-    }
 }
 
 impl Evaluate for Constraint {
@@ -528,7 +304,10 @@ fn eval_dependencies(dependencies: &HashMap<u64, Function>, state: &mut State) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::*;
+    use crate::{
+        random::*,
+        v1::{Linear, Polynomial, Quadratic},
+    };
     use approx::*;
     use maplit::*;
     use proptest::prelude::*;

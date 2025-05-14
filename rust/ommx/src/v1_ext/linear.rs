@@ -1,8 +1,9 @@
 use crate::{
     macros::*,
-    v1::{linear::Term, Linear, Quadratic},
-    VariableID,
+    v1::{linear::Term, Linear, Quadratic, SampledValues, Samples, State},
+    Evaluate, VariableID,
 };
+use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -250,6 +251,49 @@ impl fmt::Display for Linear {
             self.into_iter()
                 .map(|(id, c)| (id.into_iter().map(VariableID::from).collect(), c)),
         )
+    }
+}
+
+impl Evaluate for Linear {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State) -> Result<f64> {
+        let mut sum = self.constant;
+        for Term { id, coefficient } in &self.terms {
+            let s = solution
+                .entries
+                .get(id)
+                .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            sum += coefficient * s;
+        }
+        Ok(sum)
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+        let mut i = 0;
+        while i < self.terms.len() {
+            let Term { id, coefficient } = self.terms[i];
+            if let Some(value) = state.entries.get(&id) {
+                self.constant += coefficient * value;
+                self.terms.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 

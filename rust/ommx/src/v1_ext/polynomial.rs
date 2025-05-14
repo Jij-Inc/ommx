@@ -1,8 +1,9 @@
 use crate::{
     macros::*,
-    v1::{Linear, Monomial, Polynomial, Quadratic},
-    MonomialDyn, VariableID,
+    v1::{Linear, Monomial, Polynomial, Quadratic, SampledValues, Samples, State},
+    Evaluate, MonomialDyn, VariableID,
 };
+use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
@@ -238,6 +239,66 @@ impl fmt::Display for Polynomial {
             return write!(f, "0");
         }
         format_polynomial(f, self.clone().into_iter())
+    }
+}
+
+impl Evaluate for Polynomial {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State) -> Result<f64> {
+        let mut sum = 0.0;
+        for term in &self.terms {
+            let mut v = term.coefficient;
+            for id in &term.ids {
+                v *= solution
+                    .entries
+                    .get(id)
+                    .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            }
+            sum += v;
+        }
+        Ok(sum)
+    }
+
+    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+        let mut monomials = BTreeMap::new();
+        for term in self.terms.iter() {
+            let mut value = term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for id in term.ids.iter() {
+                if let Some(v) = state.entries.get(id) {
+                    value *= v;
+                } else {
+                    ids.push(*id);
+                }
+            }
+            let coefficient: &mut f64 = monomials.entry(ids.clone()).or_default();
+            *coefficient += value;
+            if coefficient.abs() <= f64::EPSILON {
+                monomials.remove(&ids);
+            }
+        }
+        self.terms = monomials
+            .into_iter()
+            .map(|(ids, coefficient)| Monomial { ids, coefficient })
+            .collect();
+        Ok(())
+    }
+
+    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> BTreeSet<u64> {
+        self.used_decision_variable_ids()
     }
 }
 

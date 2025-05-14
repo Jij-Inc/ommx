@@ -156,7 +156,6 @@ mod offset;
 mod parameter;
 mod parametric_instance;
 mod polynomial_base;
-mod quadratic;
 mod sample_set;
 mod solution;
 mod state;
@@ -185,6 +184,7 @@ mod v1_ext {
     mod instance;
     mod linear;
     mod polynomial;
+    mod quadratic;
 }
 
 /// Convert `fnv::FnvHashMap` to `std::collections::HashMap`
