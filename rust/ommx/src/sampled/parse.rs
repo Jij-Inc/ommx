@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     parse::*,
-    v1::{self, samples::SamplesEntry},
+    v1::{self, sampled_values::SampledValuesEntry, samples::SamplesEntry},
 };
 
 impl From<DuplicatedSampleIDError> for RawParseError {
@@ -34,5 +34,63 @@ impl Parse for v1::Samples {
                 .map_err(|e| ParseError::from(e))?;
         }
         Ok(out)
+    }
+}
+
+impl TryFrom<v1::Samples> for Sampled<v1::State> {
+    type Error = ParseError;
+    fn try_from(value: v1::Samples) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl From<Sampled<v1::State>> for v1::Samples {
+    fn from(sampled: Sampled<v1::State>) -> Self {
+        v1::Samples {
+            entries: sampled
+                .chunk()
+                .into_iter()
+                .map(|(state, ids)| SamplesEntry {
+                    state: Some(state),
+                    ids: ids.into_iter().map(|id| id.into_inner()).collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+impl Parse for v1::SampledValues {
+    type Output = Sampled<f64>;
+    // Do not check Value against Instance about variable ID and bound.
+    type Context = ();
+    fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let mut out = Sampled::default();
+        for SampledValuesEntry { value, ids } in self.entries {
+            out.append(ids.into_iter().map(SampleID::from), value)
+                .map_err(|e| ParseError::from(e))?;
+        }
+        Ok(out)
+    }
+}
+
+impl TryFrom<v1::SampledValues> for Sampled<f64> {
+    type Error = ParseError;
+    fn try_from(value: v1::SampledValues) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl From<Sampled<f64>> for v1::SampledValues {
+    fn from(sampled: Sampled<f64>) -> Self {
+        v1::SampledValues {
+            entries: sampled
+                .chunk()
+                .into_iter()
+                .map(|(value, ids)| SampledValuesEntry {
+                    value,
+                    ids: ids.into_iter().map(|id| id.into_inner()).collect(),
+                })
+                .collect(),
+        }
     }
 }

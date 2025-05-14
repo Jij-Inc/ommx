@@ -3,7 +3,7 @@ mod parse;
 
 use anyhow::{bail, Result};
 use derive_more::{Deref, From};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use std::hash::Hash;
 
 #[repr(transparent)]
@@ -94,6 +94,19 @@ impl<T> Sampled<T> {
 
     pub fn num_samples(&self) -> usize {
         self.offsets.len()
+    }
+
+    /// Gather up the sample ID for each sample.
+    pub fn chunk(self) -> Vec<(T, FnvHashSet<SampleID>)> {
+        let mut out = self
+            .data
+            .into_iter()
+            .map(|data| (data, FnvHashSet::default()))
+            .collect::<Vec<_>>();
+        for (id, offset) in &self.offsets {
+            out[*offset].1.insert(*id);
+        }
+        out
     }
 }
 
