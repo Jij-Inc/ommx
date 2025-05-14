@@ -4,6 +4,7 @@ mod arbitrary;
 mod constraint_hints;
 mod evaluate;
 mod parse;
+mod pass;
 
 use std::collections::BTreeMap;
 
