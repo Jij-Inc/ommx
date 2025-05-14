@@ -1,6 +1,8 @@
-use crate::v1::{Samples, State};
+use crate::{
+    v1::{Samples, State},
+    VariableIDSet,
+};
 use anyhow::Result;
-use std::collections::BTreeSet;
 
 /// Evaluate with a [State]
 pub trait Evaluate {
@@ -17,7 +19,7 @@ pub trait Evaluate {
     fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput>;
 
     /// Decision variable IDs required for evaluation
-    fn required_ids(&self) -> BTreeSet<u64>;
+    fn required_ids(&self) -> VariableIDSet;
 }
 
 #[cfg(test)]
@@ -47,11 +49,7 @@ mod tests {
     macro_rules! pair_with_state {
         ($t:ty) => {
             (<$t>::arbitrary(), <$t>::arbitrary()).prop_flat_map(|(f, g)| {
-                let ids = f
-                    .used_decision_variable_ids()
-                    .union(&g.used_decision_variable_ids())
-                    .cloned()
-                    .collect();
+                let ids = f.required_ids().union(&g.required_ids()).cloned().collect();
                 (Just(f), Just(g), arbitrary_state(ids))
             })
         };
@@ -97,7 +95,7 @@ mod tests {
     macro_rules! function_with_state {
         ($t:ty) => {
             <$t>::arbitrary().prop_flat_map(|f| {
-                let ids = f.used_decision_variable_ids();
+                let ids = f.required_ids();
                 (Just(f), arbitrary_state(ids))
             })
         };
@@ -143,7 +141,7 @@ mod tests {
     macro_rules! function_with_split_state {
         ($t:ty) => {
             <$t>::arbitrary().prop_flat_map(|f| {
-                let ids = f.used_decision_variable_ids();
+                let ids = f.required_ids();
                 (Just(f), arbitrary_state(ids))
                     .prop_flat_map(|(f, s)| (Just(f), Just(s.clone()), split_state(s)))
             })
@@ -243,13 +241,13 @@ mod tests {
         #[test]
         fn substitute((f, mut g, mut s) in pair_with_state!(Function)) {
             // Determine ID to be substituted
-            let ids = f.used_decision_variable_ids();
+            let ids = f.required_ids();
             let Some(id) = ids.iter().next().cloned() else { return Ok(()) };
-            g.partial_evaluate(&State { entries: hashmap!{ id => 1.0 }}).unwrap();
-            let substituted = f.substitute(&hashmap!{ id => g.clone() }).unwrap();
+            g.partial_evaluate(&State { entries: hashmap!{ id.into_inner() => 1.0 }}).unwrap();
+            let substituted = f.substitute(&hashmap!{ id.into_inner() => g.clone() }).unwrap();
 
             let g_value = g.evaluate(&s).unwrap();
-            s.entries.insert(id, g_value);
+            s.entries.insert(id.into_inner(), g_value);
 
             let f_value = f.evaluate(&s).unwrap();
             let substituted_value = substituted.evaluate(&s).unwrap();

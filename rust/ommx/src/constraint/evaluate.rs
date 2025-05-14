@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     v1::{EvaluatedConstraint, SampledConstraint},
-    Evaluate, FnvHashMapExt,
+    Evaluate, FnvHashMapExt, VariableIDSet,
 };
 use std::collections::HashMap;
 
@@ -11,7 +11,12 @@ impl Evaluate for Constraint {
 
     fn evaluate(&self, solution: &crate::v1::State) -> anyhow::Result<Self::Output> {
         let evaluated_value = self.function.evaluate(solution)?;
-        let used_decision_variable_ids = self.function.required_ids().into_iter().collect();
+        let used_decision_variable_ids = self
+            .function
+            .required_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect();
         Ok(EvaluatedConstraint {
             id: self.id.into_inner(),
             equality: self.equality.into(),
@@ -42,7 +47,12 @@ impl Evaluate for Constraint {
         Ok(SampledConstraint {
             id: self.id.into_inner(),
             evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: self.function.required_ids().into_iter().collect(),
+            used_decision_variable_ids: self
+                .function
+                .required_ids()
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.to_std(),
@@ -58,7 +68,7 @@ impl Evaluate for Constraint {
         self.function.partial_evaluate(state)
     }
 
-    fn required_ids(&self) -> std::collections::BTreeSet<u64> {
+    fn required_ids(&self) -> VariableIDSet {
         self.function.required_ids()
     }
 }

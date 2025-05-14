@@ -6,6 +6,7 @@ use proptest::prelude::*;
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
+pub type VariableIDSet = FnvHashSet<VariableID>;
 
 impl VariableID {
     pub fn into_inner(&self) -> u64 {

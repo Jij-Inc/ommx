@@ -1,6 +1,5 @@
-use crate::{random::arbitrary_coefficient, v1::State};
+use crate::{random::arbitrary_coefficient, v1::State, VariableIDSet};
 use proptest::prelude::*;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StateParameters {
@@ -38,13 +37,17 @@ impl Arbitrary for State {
     }
 }
 
-pub fn arbitrary_state(ids: BTreeSet<u64>) -> BoxedStrategy<State> {
+pub fn arbitrary_state(ids: VariableIDSet) -> BoxedStrategy<State> {
     (
         proptest::collection::vec(arbitrary_coefficient(), ids.len()),
         Just(ids),
     )
         .prop_map(|(coefficients, ids)| {
-            let entries = ids.into_iter().zip(coefficients).collect();
+            let entries = ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .zip(coefficients)
+                .collect();
             State { entries }
         })
         .boxed()

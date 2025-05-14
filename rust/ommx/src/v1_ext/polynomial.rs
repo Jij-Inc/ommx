@@ -1,13 +1,13 @@
 use crate::{
     macros::*,
     v1::{Linear, Monomial, Polynomial, Quadratic, SampledValues, Samples, State},
-    Evaluate, MonomialDyn, VariableID,
+    Evaluate, MonomialDyn, VariableID, VariableIDSet,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt,
     ops::{Add, Mul},
 };
@@ -93,14 +93,6 @@ impl<'a> IntoIterator for &'a Polynomial {
 }
 
 impl Polynomial {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms
-            .iter()
-            .flat_map(|term| term.ids.iter())
-            .cloned()
-            .collect()
-    }
-
     pub fn degree(&self) -> u32 {
         self.terms
             .iter()
@@ -297,8 +289,11 @@ impl Evaluate for Polynomial {
         Ok(out)
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
+    fn required_ids(&self) -> VariableIDSet {
+        self.terms
+            .iter()
+            .flat_map(|term| term.ids.iter().map(|id| VariableID::from(*id)))
+            .collect()
     }
 }
 

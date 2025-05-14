@@ -3,15 +3,12 @@ use crate::{
         Constraint, Equality, EvaluatedConstraint, Function, RemovedConstraint, SampledConstraint,
         Samples, State,
     },
-    Evaluate,
+    Evaluate, VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
-use std::{
-    borrow::Cow,
-    collections::{BTreeSet, HashMap},
-};
+use std::{borrow::Cow, collections::HashMap};
 
 impl Constraint {
     pub fn function(&self) -> Cow<Function> {
@@ -105,8 +102,9 @@ impl Evaluate for Constraint {
         let evaluated_value = self.function().evaluate(solution)?;
         let used_decision_variable_ids = self
             .function()
-            .used_decision_variable_ids()
+            .required_ids()
             .into_iter()
+            .map(|id| id.into_inner())
             .collect();
         Ok(EvaluatedConstraint {
             id: self.id,
@@ -150,8 +148,9 @@ impl Evaluate for Constraint {
             evaluated_values: Some(evaluated_values),
             used_decision_variable_ids: self
                 .function()
-                .used_decision_variable_ids()
+                .required_ids()
                 .into_iter()
+                .map(|id| id.into_inner())
                 .collect(),
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
@@ -164,10 +163,10 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
+    fn required_ids(&self) -> VariableIDSet {
         self.function
             .as_ref()
-            .map_or(BTreeSet::new(), |f| f.used_decision_variable_ids())
+            .map_or(VariableIDSet::default(), |f| f.required_ids())
     }
 }
 
@@ -204,9 +203,9 @@ impl Evaluate for RemovedConstraint {
         Ok(evaluated)
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
+    fn required_ids(&self) -> VariableIDSet {
         self.constraint
             .as_ref()
-            .map_or(BTreeSet::new(), |c| c.required_ids())
+            .map_or(VariableIDSet::default(), |c| c.required_ids())
     }
 }

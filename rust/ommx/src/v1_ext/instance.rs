@@ -4,8 +4,8 @@ use crate::{
         Linear, Optimality, Parameter, ParametricInstance, Relaxation, RemovedConstraint,
         SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
-    Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
-    {BinaryIdPair, BinaryIds},
+    BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
+    VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -60,19 +60,6 @@ impl Instance {
             .collect()
     }
 
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        let mut used_ids = self.objective().used_decision_variable_ids();
-        for c in &self.constraints {
-            used_ids.extend(c.function().used_decision_variable_ids());
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                used_ids.extend(c.function().used_decision_variable_ids());
-            }
-        }
-        used_ids
-    }
-
     pub fn defined_ids(&self) -> BTreeSet<u64> {
         self.decision_variables
             .iter()
@@ -100,10 +87,10 @@ impl Instance {
 
     /// Validate that all decision variable IDs used in the instance are defined.
     pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.used_decision_variable_ids();
-        let mut defined_ids = BTreeSet::new();
+        let used_ids = self.required_ids();
+        let mut defined_ids = VariableIDSet::default();
         for dv in &self.decision_variables {
-            if !defined_ids.insert(dv.id) {
+            if !defined_ids.insert(dv.id.into()) {
                 bail!("Duplicated definition of decision variable ID: {}", dv.id);
             }
         }
@@ -199,11 +186,11 @@ impl Instance {
         })
     }
 
-    pub fn binary_ids(&self) -> BTreeSet<u64> {
+    pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
             .iter()
             .filter(|dv| dv.kind() == Kind::Binary)
-            .map(|dv| dv.id)
+            .map(|dv| dv.id.into())
             .collect()
     }
 
@@ -256,7 +243,7 @@ impl Instance {
         }
         if !self
             .objective()
-            .used_decision_variable_ids()
+            .required_ids()
             .is_subset(&self.binary_ids())
         {
             bail!("The objective function uses non-binary decision variables.");
@@ -304,7 +291,7 @@ impl Instance {
         }
         if !self
             .objective()
-            .used_decision_variable_ids()
+            .required_ids()
             .is_subset(&self.binary_ids())
         {
             bail!("The objective function uses non-binary decision variables.");
@@ -493,7 +480,7 @@ impl Instance {
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
 
         // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
-        for id in function.used_decision_variable_ids() {
+        for id in function.required_ids() {
             let id = VariableID::from(id);
             let kind = kinds
                 .get(&id)
@@ -591,7 +578,7 @@ impl Instance {
             .as_ref()
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
 
-        for id in f.used_decision_variable_ids() {
+        for id in f.required_ids() {
             let id = VariableID::from(id);
             let kind = kinds
                 .get(&id)
@@ -823,8 +810,17 @@ impl Evaluate for Instance {
         })
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
+    fn required_ids(&self) -> VariableIDSet {
+        let mut used_ids = self.objective().required_ids();
+        for c in &self.constraints {
+            used_ids.extend(c.function().required_ids());
+        }
+        for c in &self.removed_constraints {
+            if let Some(c) = &c.constraint {
+                used_ids.extend(c.function().required_ids());
+            }
+        }
+        used_ids
     }
 }
 

@@ -1,10 +1,9 @@
 use super::*;
 use crate::{
     v1::{SampledValues, Samples, State},
-    Evaluate,
+    Evaluate, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
-use std::collections::BTreeSet;
 
 impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
@@ -50,11 +49,10 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         Ok(())
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
+    fn required_ids(&self) -> VariableIDSet {
         self.terms
             .keys()
             .flat_map(|monomial| monomial.ids())
-            .map(|id| id.into_inner())
             .collect()
     }
 

@@ -1,6 +1,6 @@
-use crate::v1::Parameter;
+use crate::{v1::Parameter, VariableIDSet};
 use proptest::prelude::*;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 impl Arbitrary for Parameter {
     type Parameters = u64;
@@ -35,14 +35,14 @@ impl Arbitrary for Parameter {
     }
 }
 
-pub fn arbitrary_parameters(ids: BTreeSet<u64>) -> BoxedStrategy<Vec<Parameter>> {
+pub fn arbitrary_parameters(ids: VariableIDSet) -> BoxedStrategy<Vec<Parameter>> {
     (
         proptest::collection::vec(Parameter::arbitrary(), ids.len()),
         Just(ids),
     )
         .prop_map(|(mut dvs, used_ids)| {
             for (dv, id) in dvs.iter_mut().zip(used_ids.iter()) {
-                dv.id = *id;
+                dv.id = id.into_inner();
             }
             dvs
         })

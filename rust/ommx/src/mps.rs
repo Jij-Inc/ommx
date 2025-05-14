@@ -62,6 +62,8 @@ mod tests;
 
 use parser::*;
 
+use crate::VariableID;
+
 /// Reads and parses the reader as a gzipped MPS file.
 pub fn load_zipped_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::from_zipped_reader(reader)?;
@@ -148,7 +150,7 @@ pub enum MpsWriteError {
     #[error(
         "Invalid variable ID: Functions in Instance used a variable id {0} that doesn't exist"
     )]
-    InvalidVariableId(u64),
+    InvalidVariableId(VariableID),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }

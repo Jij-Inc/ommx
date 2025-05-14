@@ -1,17 +1,12 @@
 use crate::{
     macros::*,
     v1::{linear::Term, Linear, Quadratic, SampledValues, Samples, State},
-    Evaluate, VariableID,
+    Evaluate, VariableID, VariableIDSet,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    iter::Sum,
-    ops::*,
-};
+use std::{collections::BTreeMap, fmt, iter::Sum, ops::*};
 
 impl Zero for Linear {
     fn zero() -> Self {
@@ -48,10 +43,6 @@ impl Linear {
             terms: vec![Term { id, coefficient }],
             constant: 0.0,
         }
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms.iter().map(|term| term.id).collect()
     }
 
     pub fn degree(&self) -> u32 {
@@ -292,8 +283,11 @@ impl Evaluate for Linear {
         Ok(out)
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
+    fn required_ids(&self) -> VariableIDSet {
+        self.terms
+            .iter()
+            .map(|term| VariableID::from(term.id))
+            .collect()
     }
 }
 
