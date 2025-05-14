@@ -322,9 +322,7 @@ impl Instance {
         let used_in_objective: FnvHashSet<VariableID> = self
             .objective
             .required_ids()
-            .into_iter()
-            .map(VariableID::from)
-            .collect();
+            .into_iter().collect();
         debug_assert!(
             used_in_objective.is_subset(&all),
             "Objective function uses variables not in the instance"
@@ -338,9 +336,7 @@ impl Instance {
                 constraint
                     .function
                     .required_ids()
-                    .into_iter()
-                    .map(VariableID::from)
-                    .collect(),
+                    .into_iter().collect(),
             );
         }
         debug_assert!(

@@ -481,7 +481,6 @@ impl Instance {
 
         // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
         for id in function.required_ids() {
-            let id = VariableID::from(id);
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;
@@ -579,7 +578,6 @@ impl Instance {
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
 
         for id in f.required_ids() {
-            let id = VariableID::from(id);
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;
