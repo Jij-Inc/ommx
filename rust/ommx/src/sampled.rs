@@ -59,7 +59,7 @@ impl<T> Sampled<T> {
         Ok(())
     }
 
-    pub fn new<'a, Iter, Inner>(ids: Iter, data: impl IntoIterator<Item = T>) -> Result<Self>
+    pub fn new<Iter, Inner>(ids: Iter, data: impl IntoIterator<Item = T>) -> Result<Self>
     where
         Iter: IntoIterator<Item = Inner>,
         Inner: IntoIterator<Item = SampleID>,

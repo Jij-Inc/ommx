@@ -31,7 +31,7 @@ impl Parse for v1::Samples {
                 })
             })?;
             out.append(ids.into_iter().map(SampleID::from), state)
-                .map_err(|e| ParseError::from(e))?;
+                .map_err(ParseError::from)?;
         }
         Ok(out)
     }
@@ -67,7 +67,7 @@ impl Parse for v1::SampledValues {
         let mut out = Sampled::default();
         for SampledValuesEntry { value, ids } in self.entries {
             out.append(ids.into_iter().map(SampleID::from), value)
-                .map_err(|e| ParseError::from(e))?;
+                .map_err(ParseError::from)?;
         }
         Ok(out)
     }
