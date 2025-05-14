@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use crate::{random::unique_integers, Function, PolynomialParameters};
 use anyhow::{anyhow, Result};
@@ -65,7 +67,7 @@ impl Default for ConstraintIDParameters {
 pub fn arbitrary_constraints(
     id_parameters: ConstraintIDParameters,
     parameters: PolynomialParameters,
-) -> impl Strategy<Value = FnvHashMap<ConstraintID, Constraint>> {
+) -> impl Strategy<Value = BTreeMap<ConstraintID, Constraint>> {
     let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
     let constraints_strategy =
         proptest::collection::vec(Constraint::arbitrary_with(parameters), id_parameters.size);
