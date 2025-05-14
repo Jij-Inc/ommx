@@ -66,7 +66,7 @@ impl Evaluate for Constraint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{arbitrary_samples, random::arbitrary_state, v1::Samples, SamplesParameters};
+    use crate::{random::*, v1::Samples};
     use proptest::prelude::*;
 
     fn constraint_and_samples() -> impl Strategy<Value = (Constraint, Samples)> {

@@ -66,7 +66,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{arbitrary_samples, random::arbitrary_state, SamplesParameters};
+    use crate::random::*;
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
 

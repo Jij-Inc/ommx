@@ -54,7 +54,7 @@ impl Evaluate for Function {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{arbitrary_samples, random::arbitrary_state, v1::Samples, SamplesParameters};
+    use crate::{random::*, v1::Samples};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
 

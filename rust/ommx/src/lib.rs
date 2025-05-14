@@ -153,12 +153,8 @@ mod infeasible_detected;
 mod instance;
 mod macros;
 mod offset;
-mod parameter;
-mod parametric_instance;
 mod polynomial_base;
-mod sample_set;
 mod solution;
-mod state;
 
 pub use bound::*;
 pub use coefficient::*;
@@ -170,7 +166,6 @@ pub use infeasible_detected::*;
 pub use instance::*;
 pub use offset::*;
 pub use polynomial_base::*;
-pub use sample_set::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
@@ -183,8 +178,12 @@ mod v1_ext {
     mod function;
     mod instance;
     mod linear;
+    mod parameter;
+    mod parametric_instance;
     mod polynomial;
     mod quadratic;
+    mod sample_set;
+    mod state;
 }
 
 /// Convert `fnv::FnvHashMap` to `std::collections::HashMap`
