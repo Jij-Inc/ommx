@@ -1,13 +1,13 @@
 use super::*;
 use crate::{
-    arbitrary_constraints, arbitrary_decision_variables, v1::State, Bound, ConstraintIDParameters,
-    Evaluate, KindParameters, PolynomialParameters,
+    arbitrary_constraints, arbitrary_decision_variables, v1::State, Bounds, ConstraintIDParameters,
+    Evaluate, KindParameters, PolynomialParameters, VariableIDSet,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::HashMap;
 
-fn arbitrary_binary_state(ids: &FnvHashSet<VariableID>) -> BoxedStrategy<State> {
+fn arbitrary_binary_state(ids: &VariableIDSet) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for id in ids {
         let raw_id = id.into_inner();
@@ -21,10 +21,7 @@ fn arbitrary_binary_state(ids: &FnvHashSet<VariableID>) -> BoxedStrategy<State> 
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_integer_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: u64,
-) -> BoxedStrategy<State> {
+fn arbitrary_integer_state(bounds: &Bounds, max_abs: u64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -38,10 +35,7 @@ fn arbitrary_integer_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_integer_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: u64,
-) -> BoxedStrategy<State> {
+fn arbitrary_semi_integer_state(bounds: &Bounds, max_abs: u64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -58,10 +52,7 @@ fn arbitrary_semi_integer_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_continuous_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: f64,
-) -> BoxedStrategy<State> {
+fn arbitrary_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -75,10 +66,7 @@ fn arbitrary_continuous_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_continuous_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: f64,
-) -> BoxedStrategy<State> {
+fn arbitrary_semi_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();

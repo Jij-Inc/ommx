@@ -476,7 +476,7 @@ mod tests {
         let x1 = Linear::single_term(1, 1.0);
         let x2 = Linear::single_term(2, 2.0);
         let f: Function = (x1.clone() + x2 + 1.0).into();
-        let bounds = hashmap! {
+        let bounds = btreemap! {
             VariableID::from(1) => Bound::new(-1.0, 1.0).unwrap(),
             VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
         };

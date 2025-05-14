@@ -6,7 +6,7 @@ use crate::{
 use approx::AbsDiffEq;
 use num::Zero;
 use proptest::prelude::*;
-use std::{collections::HashMap, ops::*};
+use std::{collections::BTreeMap, ops::*};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -40,7 +40,11 @@ impl From<BoundError> for ParseError {
     }
 }
 
-pub type Bounds = HashMap<VariableID, Bound>;
+/// Bound for each decision variable
+///
+/// This uses `BTreeMap` to keep the order of decision variables by their IDs
+/// for intuitive debugging.
+pub type Bounds = BTreeMap<VariableID, Bound>;
 
 /// Bound of a decision variable
 ///

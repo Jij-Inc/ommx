@@ -204,7 +204,7 @@ pub fn multi_choose(n: u64, r: usize) -> u64 {
 }
 
 pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<Bounds> {
-    let mut strategy = Just(HashMap::new()).boxed();
+    let mut strategy = Just(Bounds::default()).boxed();
     for id in ids {
         strategy = (strategy, Bound::arbitrary())
             .prop_map(move |(mut bounds, bound)| {
