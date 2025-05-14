@@ -158,6 +158,7 @@ mod parametric_instance;
 mod polynomial_base;
 mod quadratic;
 mod sample_set;
+mod sampled;
 mod solution;
 mod state;
 
@@ -172,6 +173,7 @@ pub use instance::*;
 pub use offset::*;
 pub use polynomial_base::*;
 pub use sample_set::*;
+pub use sampled::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
