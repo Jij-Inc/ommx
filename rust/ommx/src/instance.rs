@@ -4,13 +4,14 @@ mod arbitrary;
 mod constraint_hints;
 mod parse;
 
+use std::collections::BTreeMap;
+
 pub use analysis::*;
 pub use constraint_hints::*;
 
 use crate::{
     v1, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
 };
-use fnv::FnvHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Sense {
@@ -30,10 +31,10 @@ pub enum Sense {
 pub struct Instance {
     sense: Sense,
     objective: Function,
-    decision_variables: FnvHashMap<VariableID, DecisionVariable>,
-    constraints: FnvHashMap<ConstraintID, Constraint>,
-    removed_constraints: FnvHashMap<ConstraintID, RemovedConstraint>,
-    decision_variable_dependency: FnvHashMap<VariableID, Function>,
+    decision_variables: BTreeMap<VariableID, DecisionVariable>,
+    constraints: BTreeMap<ConstraintID, Constraint>,
+    removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
+    decision_variable_dependency: BTreeMap<VariableID, Function>,
     parameters: Option<v1::Parameters>,
     description: Option<v1::instance::Description>,
     constraint_hints: ConstraintHints,

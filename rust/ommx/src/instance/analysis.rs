@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use super::*;
-use crate::{v1::State, Bound, Evaluate, Kind};
+use crate::{v1::State, Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use ::approx::AbsDiffEq;
 use fnv::FnvHashSet;
 
@@ -16,37 +18,37 @@ use fnv::FnvHashSet;
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
     #[getset(get = "pub")]
-    all: FnvHashSet<VariableID>,
+    all: VariableIDSet,
 
     #[getset(get = "pub")]
-    binary: FnvHashSet<VariableID>,
+    binary: VariableIDSet,
     #[getset(get = "pub")]
-    integer: FnvHashMap<VariableID, Bound>,
+    integer: Bounds,
     #[getset(get = "pub")]
-    continuous: FnvHashMap<VariableID, Bound>,
+    continuous: Bounds,
     #[getset(get = "pub")]
-    semi_integer: FnvHashMap<VariableID, Bound>,
+    semi_integer: Bounds,
     #[getset(get = "pub")]
-    semi_continuous: FnvHashMap<VariableID, Bound>,
+    semi_continuous: Bounds,
 
     /// The set of decision variables that are used in the objective function.
     #[getset(get = "pub")]
-    used_in_objective: FnvHashSet<VariableID>,
+    used_in_objective: VariableIDSet,
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
-    used_in_constraints: FnvHashMap<ConstraintID, FnvHashSet<VariableID>>,
+    used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
 
     /// Fixed decision variables
     #[getset(get = "pub")]
-    fixed: FnvHashMap<VariableID, f64>,
+    fixed: BTreeMap<VariableID, f64>,
     /// Dependent variables
     #[getset(get = "pub")]
-    dependent: FnvHashSet<VariableID>,
+    dependent: VariableIDSet,
 }
 
 impl DecisionVariableAnalysis {
     /// Union of `used_in_objective` and `used_in_constraints`
-    pub fn used(&self) -> FnvHashSet<VariableID> {
+    pub fn used(&self) -> VariableIDSet {
         let mut used = self.used_in_objective.clone();
         for ids in self.used_in_constraints.values() {
             used.extend(ids);
@@ -55,7 +57,7 @@ impl DecisionVariableAnalysis {
     }
 
     /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
-    pub fn irrelevant(&self) -> FnvHashSet<VariableID> {
+    pub fn irrelevant(&self) -> VariableIDSet {
         let relevant = self
             .used()
             .iter()
@@ -66,48 +68,45 @@ impl DecisionVariableAnalysis {
         self.all.difference(&relevant).cloned().collect()
     }
 
-    pub fn used_binary(&self) -> FnvHashSet<VariableID> {
+    pub fn used_binary(&self) -> VariableIDSet {
         let used_ids = self.used();
-        self.binary()
-            .intersection(&used_ids)
-            .cloned()
-            .collect::<FnvHashSet<VariableID>>()
+        self.binary().intersection(&used_ids).cloned().collect()
     }
 
-    pub fn used_integer(&self) -> FnvHashMap<VariableID, Bound> {
+    pub fn used_integer(&self) -> Bounds {
         let used_ids = self.used();
         self.integer()
             .iter()
             .filter(|(id, _)| used_ids.contains(id))
             .map(|(id, bound)| (*id, *bound))
-            .collect::<FnvHashMap<VariableID, Bound>>()
+            .collect()
     }
 
-    pub fn used_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+    pub fn used_continuous(&self) -> Bounds {
         let used_ids = self.used();
         self.continuous()
             .iter()
             .filter(|(id, _)| used_ids.contains(id))
             .map(|(id, bound)| (*id, *bound))
-            .collect::<FnvHashMap<VariableID, Bound>>()
+            .collect()
     }
 
-    pub fn used_semi_integer(&self) -> FnvHashMap<VariableID, Bound> {
+    pub fn used_semi_integer(&self) -> Bounds {
         let used_ids = self.used();
         self.semi_integer()
             .iter()
             .filter(|(id, _)| used_ids.contains(id))
             .map(|(id, bound)| (*id, *bound))
-            .collect::<FnvHashMap<VariableID, Bound>>()
+            .collect()
     }
 
-    pub fn used_semi_continuous(&self) -> FnvHashMap<VariableID, Bound> {
+    pub fn used_semi_continuous(&self) -> Bounds {
         let used_ids = self.used();
         self.semi_continuous()
             .iter()
             .filter(|(id, _)| used_ids.contains(id))
             .map(|(id, bound)| (*id, *bound))
-            .collect::<FnvHashMap<VariableID, Bound>>()
+            .collect()
     }
 
     /// Check the state is valid for this analysis.
@@ -116,8 +115,7 @@ impl DecisionVariableAnalysis {
     /// - The IDs which the state contains equals to `used` exactly.
     /// - The values of the state satisfy the bounds of the decision variables.
     pub fn validate_state(&self, state: &State, atol: f64) -> Result<(), StateValidationError> {
-        let state_ids: FnvHashSet<VariableID> =
-            state.entries.keys().map(|id| (*id).into()).collect();
+        let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
         let used_ids = self.used();
 
         if state_ids != used_ids {
@@ -298,13 +296,13 @@ impl AbsDiffEq for DecisionVariableAnalysis {
 
 impl Instance {
     pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
-        let mut all = FnvHashSet::default();
-        let mut fixed = FnvHashMap::default();
-        let mut binary = FnvHashSet::default();
-        let mut integer = FnvHashMap::default();
-        let mut continuous = FnvHashMap::default();
-        let mut semi_integer = FnvHashMap::default();
-        let mut semi_continuous = FnvHashMap::default();
+        let mut all = VariableIDSet::default();
+        let mut fixed = BTreeMap::default();
+        let mut binary = VariableIDSet::default();
+        let mut integer = Bounds::default();
+        let mut continuous = Bounds::default();
+        let mut semi_integer = Bounds::default();
+        let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind {
                 Kind::Binary => binary.insert(*id),
@@ -319,15 +317,13 @@ impl Instance {
             }
         }
 
-        let used_in_objective: FnvHashSet<VariableID> =
-            self.objective.required_ids().into_iter().collect();
+        let used_in_objective: VariableIDSet = self.objective.required_ids().into_iter().collect();
         debug_assert!(
             used_in_objective.is_subset(&all),
             "Objective function uses variables not in the instance"
         );
 
-        let mut used_in_constraints: FnvHashMap<ConstraintID, FnvHashSet<VariableID>> =
-            FnvHashMap::default();
+        let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
         for constraint in self.constraints.values() {
             used_in_constraints.insert(
                 constraint.id,
@@ -339,8 +335,7 @@ impl Instance {
             "Constraints use variables not in the instance"
         );
 
-        let dependent: FnvHashSet<VariableID> =
-            self.decision_variable_dependency.keys().cloned().collect();
+        let dependent: VariableIDSet = self.decision_variable_dependency.keys().cloned().collect();
         debug_assert!(
             dependent.is_subset(&all),
             "Dependent variables not in the instance"

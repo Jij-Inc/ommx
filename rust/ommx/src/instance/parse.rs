@@ -45,7 +45,7 @@ impl TryFrom<v1::Instance> for Instance {
                 .removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
-        let mut decision_variable_dependency = FnvHashMap::default();
+        let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in value.decision_variable_dependency {
             decision_variable_dependency.insert(
                 as_variable_id(&decision_variables, id)
@@ -77,7 +77,7 @@ impl TryFrom<v1::Instance> for Instance {
 }
 
 pub(super) fn as_constraint_id(
-    constraints: &FnvHashMap<ConstraintID, Constraint>,
+    constraints: &BTreeMap<ConstraintID, Constraint>,
     id: u64,
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
@@ -88,7 +88,7 @@ pub(super) fn as_constraint_id(
 }
 
 pub(super) fn as_variable_id(
-    decision_variables: &FnvHashMap<VariableID, DecisionVariable>,
+    decision_variables: &BTreeMap<VariableID, DecisionVariable>,
     id: u64,
 ) -> Result<VariableID, ParseError> {
     let id = VariableID::from(id);

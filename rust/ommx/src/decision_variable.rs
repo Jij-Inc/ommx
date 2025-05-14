@@ -2,7 +2,7 @@ use crate::{parse::*, random::unique_integers, v1, Bound};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use proptest::prelude::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
@@ -150,10 +150,10 @@ impl Parse for v1::DecisionVariable {
 }
 
 impl Parse for Vec<v1::DecisionVariable> {
-    type Output = FnvHashMap<VariableID, DecisionVariable>;
+    type Output = BTreeMap<VariableID, DecisionVariable>;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut decision_variables = FnvHashMap::default();
+        let mut decision_variables = BTreeMap::default();
         for v in self {
             let v: DecisionVariable = v.parse(&())?;
             let id = v.id;
@@ -177,7 +177,7 @@ pub fn arbitrary_unique_variable_ids(
 pub fn arbitrary_decision_variables(
     unique_ids: FnvHashSet<VariableID>,
     parameters: KindParameters,
-) -> impl Strategy<Value = FnvHashMap<VariableID, DecisionVariable>> {
+) -> impl Strategy<Value = BTreeMap<VariableID, DecisionVariable>> {
     let variables = proptest::collection::vec(
         DecisionVariable::arbitrary_with(parameters),
         unique_ids.len(),

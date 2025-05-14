@@ -1,10 +1,11 @@
+use std::collections::BTreeMap;
+
 use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1,
 };
 use anyhow::Result;
-use fnv::FnvHashMap;
 
 impl Parse for v1::Equality {
     type Output = Equality;
@@ -75,10 +76,10 @@ impl Parse for v1::RemovedConstraint {
 }
 
 impl Parse for Vec<v1::Constraint> {
-    type Output = FnvHashMap<ConstraintID, Constraint>;
+    type Output = BTreeMap<ConstraintID, Constraint>;
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut constraints = FnvHashMap::default();
+        let mut constraints = BTreeMap::default();
         for c in self {
             let c: Constraint = c.parse(&())?;
             let id = c.id;
@@ -91,10 +92,10 @@ impl Parse for Vec<v1::Constraint> {
 }
 
 impl Parse for Vec<v1::RemovedConstraint> {
-    type Output = FnvHashMap<ConstraintID, RemovedConstraint>;
-    type Context = FnvHashMap<ConstraintID, Constraint>;
+    type Output = BTreeMap<ConstraintID, RemovedConstraint>;
+    type Context = BTreeMap<ConstraintID, Constraint>;
     fn parse(self, constraints: &Self::Context) -> Result<Self::Output, ParseError> {
-        let mut removed_constraints = FnvHashMap::default();
+        let mut removed_constraints = BTreeMap::default();
         for c in self {
             let c: RemovedConstraint = c.parse(&())?;
             let id = c.constraint.id;
