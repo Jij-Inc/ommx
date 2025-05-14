@@ -1,13 +1,13 @@
 use crate::{
     macros::*,
     v1::{Linear, Polynomial, Quadratic, SampledValues, Samples, State},
-    Evaluate, MonomialDyn, VariableID,
+    Evaluate, MonomialDyn, VariableID, VariableIDSet,
 };
 use anyhow::{ensure, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt,
     ops::{Add, Mul},
 };
@@ -33,15 +33,6 @@ impl Zero for Quadratic {
 }
 
 impl Quadratic {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.linear
-            .as_ref()
-            .map_or_else(BTreeSet::new, |l| l.used_decision_variable_ids())
-            .into_iter()
-            .chain(self.columns.iter().chain(self.rows.iter()).cloned())
-            .collect()
-    }
-
     pub fn quad_iter(&self) -> impl Iterator<Item = ((u64, u64), f64)> + '_ {
         assert_eq!(self.columns.len(), self.rows.len());
         assert_eq!(self.columns.len(), self.values.len());
@@ -370,8 +361,18 @@ impl Evaluate for Quadratic {
         Ok(out)
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
+    fn required_ids(&self) -> VariableIDSet {
+        self.linear
+            .as_ref()
+            .map_or_else(VariableIDSet::default, |l| l.required_ids())
+            .into_iter()
+            .chain(
+                self.columns
+                    .iter()
+                    .chain(self.rows.iter())
+                    .map(|id| VariableID::from(*id)),
+            )
+            .collect()
     }
 }
 

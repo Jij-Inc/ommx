@@ -4,7 +4,7 @@ use crate::{
         function::{self, Function as FunctionEnum},
         Function, Linear, Polynomial, Quadratic, SampledValues, Samples, State,
     },
-    Bound, Bounds, Evaluate, MonomialDyn, VariableID,
+    Bound, Bounds, Evaluate, MonomialDyn, VariableID, VariableIDSet,
 };
 use anyhow::{Context, Result};
 use approx::AbsDiffEq;
@@ -12,12 +12,7 @@ use num::{
     integer::{gcd, lcm},
     Zero,
 };
-use std::{
-    collections::{BTreeSet, HashMap},
-    fmt,
-    iter::*,
-    ops::*,
-};
+use std::{collections::HashMap, fmt, iter::*, ops::*};
 
 impl Zero for Function {
     fn zero() -> Self {
@@ -118,15 +113,6 @@ impl<'a> IntoIterator for &'a Function {
 }
 
 impl Function {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        match &self.function {
-            Some(FunctionEnum::Linear(linear)) => linear.used_decision_variable_ids(),
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.used_decision_variable_ids(),
-            Some(FunctionEnum::Polynomial(poly)) => poly.used_decision_variable_ids(),
-            _ => BTreeSet::new(),
-        }
-    }
-
     pub fn degree(&self) -> u32 {
         match &self.function {
             Some(FunctionEnum::Constant(_)) => 0,
@@ -459,8 +445,13 @@ impl Evaluate for Function {
         Ok(out)
     }
 
-    fn required_ids(&self) -> BTreeSet<u64> {
-        self.used_decision_variable_ids()
+    fn required_ids(&self) -> VariableIDSet {
+        match &self.function {
+            Some(FunctionEnum::Linear(linear)) => linear.required_ids(),
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.required_ids(),
+            Some(FunctionEnum::Polynomial(poly)) => poly.required_ids(),
+            _ => VariableIDSet::default(),
+        }
     }
 }
 
@@ -587,7 +578,7 @@ mod tests {
         fn evaluate_bound_arb(
             (f, bounds, state) in Function::arbitrary()
                 .prop_flat_map(|f| {
-                    let bounds = arbitrary_bounds(f.used_decision_variable_ids().into_iter().map(VariableID::from));
+                    let bounds = arbitrary_bounds(f.required_ids().into_iter());
                     (Just(f), bounds)
                         .prop_flat_map(|(f, bounds)| {
                             let state = arbitrary_state_within_bounds(&bounds, 1e5);

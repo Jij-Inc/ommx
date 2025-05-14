@@ -5,6 +5,7 @@ use crate::{
         instance::{Description, Sense},
         Function, Instance,
     },
+    Evaluate,
 };
 use anyhow::{bail, Result};
 use proptest::prelude::*;
@@ -136,9 +137,9 @@ impl Arbitrary for Instance {
             arbitrary_constraints(num_constraints, constraint),
         )
             .prop_flat_map(move |(objective, constraints)| {
-                let mut used_ids = objective.used_decision_variable_ids();
+                let mut used_ids = objective.required_ids();
                 for c in &constraints {
-                    used_ids.extend(c.function().used_decision_variable_ids());
+                    used_ids.extend(c.function().required_ids());
                 }
                 let relaxed = if constraints.is_empty() {
                     Just(Vec::new()).boxed()

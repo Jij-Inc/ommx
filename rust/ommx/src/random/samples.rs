@@ -76,14 +76,14 @@ pub fn arbitrary_samples(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::random::arbitrary_state;
+    use crate::{random::arbitrary_state, VariableID};
 
     proptest! {
         #[test]
         fn test_arbitrary_samples(
             samples in arbitrary_samples(
                 SamplesParameters::new(10, 100, 1000).unwrap(),
-                arbitrary_state((0..=5).collect())
+                arbitrary_state((0..=5).map(VariableID::from).collect())
             )
         ) {
             prop_assert_eq!(samples.entries.len(), 10);

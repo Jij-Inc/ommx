@@ -165,13 +165,10 @@ impl Arbitrary for Instance {
         (objective, constraints, irrelevant_candidates)
             .prop_flat_map(move |(objective, constraints, irrelevant_candidates)| {
                 // Collect all required IDs from the objective and constraints
-                let mut unique_ids: FnvHashSet<VariableID> = objective
-                    .required_ids()
-                    .into_iter()
-                    .map(VariableID::from)
-                    .collect();
+                let mut unique_ids: FnvHashSet<VariableID> =
+                    objective.required_ids().into_iter().collect();
                 for c in constraints.values() {
-                    unique_ids.extend(c.function.required_ids().into_iter().map(VariableID::from));
+                    unique_ids.extend(c.function.required_ids().into_iter());
                 }
                 unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
                 (

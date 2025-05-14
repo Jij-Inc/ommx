@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1::SampledValues, Evaluate};
+use crate::{v1::SampledValues, Evaluate, VariableIDSet};
 
 impl Evaluate for Function {
     type Output = f64;
@@ -24,13 +24,12 @@ impl Evaluate for Function {
         }
     }
 
-    fn required_ids(&self) -> std::collections::BTreeSet<u64> {
+    fn required_ids(&self) -> VariableIDSet {
         match self {
-            Function::Zero => std::collections::BTreeSet::new(),
-            Function::Constant(_) => std::collections::BTreeSet::new(),
             Function::Linear(f) => f.required_ids(),
             Function::Quadratic(f) => f.required_ids(),
             Function::Polynomial(f) => f.required_ids(),
+            _ => VariableIDSet::default(),
         }
     }
 

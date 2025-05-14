@@ -2,10 +2,12 @@ use crate::{parse::*, random::unique_integers, v1, Bound};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use proptest::prelude::*;
+use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
+pub type VariableIDSet = BTreeSet<VariableID>;
 
 impl VariableID {
     pub fn into_inner(&self) -> u64 {

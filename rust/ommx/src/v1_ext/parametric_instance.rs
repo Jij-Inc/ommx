@@ -1,6 +1,6 @@
 use crate::{
     v1::{Function, Instance, Parameters, ParametricInstance, State},
-    Evaluate,
+    Evaluate, VariableIDSet,
 };
 use anyhow::{bail, Result};
 use std::{borrow::Cow, collections::BTreeSet};
@@ -91,25 +91,25 @@ impl ParametricInstance {
     }
 
     /// Used decision variable and parameter IDs in the objective and constraints.
-    pub fn used_ids(&self) -> Result<BTreeSet<u64>> {
-        let mut used_ids = self.objective().used_decision_variable_ids();
+    pub fn used_ids(&self) -> Result<VariableIDSet> {
+        let mut used_ids = self.objective().required_ids();
         for c in &self.constraints {
-            used_ids.extend(c.function().used_decision_variable_ids());
+            used_ids.extend(c.function().required_ids());
         }
         Ok(used_ids)
     }
 
     /// Defined decision variable IDs. These IDs may not be used in the objective and constraints.
-    pub fn defined_decision_variable_ids(&self) -> BTreeSet<u64> {
+    pub fn defined_decision_variable_ids(&self) -> VariableIDSet {
         self.decision_variables
             .iter()
-            .map(|dv| dv.id)
-            .collect::<BTreeSet<_>>()
+            .map(|dv| dv.id.into())
+            .collect()
     }
 
     /// Defined parameter IDs. These IDs may not be used in the objective and constraints.
-    pub fn defined_parameter_ids(&self) -> BTreeSet<u64> {
-        self.parameters.iter().map(|p| p.id).collect()
+    pub fn defined_parameter_ids(&self) -> VariableIDSet {
+        self.parameters.iter().map(|p| p.id.into()).collect()
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -119,14 +119,14 @@ impl ParametricInstance {
     }
 
     pub fn validate_ids(&self) -> Result<()> {
-        let mut ids = BTreeSet::new();
+        let mut ids = VariableIDSet::default();
         for dv in &self.decision_variables {
-            if !ids.insert(dv.id) {
+            if !ids.insert(dv.id.into()) {
                 bail!("Duplicate decision variable ID: {}", dv.id);
             }
         }
         for p in &self.parameters {
-            if !ids.insert(p.id) {
+            if !ids.insert(p.id.into()) {
                 bail!("Duplicate parameter ID: {}", p.id);
             }
         }

@@ -7,9 +7,9 @@ use crate::{
         instance::{Description, Sense},
         Function, ParametricInstance,
     },
+    Evaluate, VariableIDSet,
 };
 use proptest::prelude::*;
-use std::collections::BTreeSet;
 
 impl Arbitrary for ParametricInstance {
     type Parameters = InstanceParameters;
@@ -30,9 +30,9 @@ impl Arbitrary for ParametricInstance {
             Just(kinds),
         )
             .prop_flat_map(|(objective, constraints, kinds)| {
-                let mut used_ids = objective.used_decision_variable_ids();
+                let mut used_ids = objective.required_ids();
                 for c in &constraints {
-                    used_ids.extend(c.function().used_decision_variable_ids());
+                    used_ids.extend(c.function().required_ids());
                 }
 
                 (
@@ -84,12 +84,12 @@ impl Arbitrary for ParametricInstance {
     }
 }
 
-fn arbitrary_split(ids: BTreeSet<u64>) -> BoxedStrategy<(BTreeSet<u64>, BTreeSet<u64>)> {
+fn arbitrary_split(ids: VariableIDSet) -> BoxedStrategy<(VariableIDSet, VariableIDSet)> {
     let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
     flips
         .prop_map(move |flips| {
-            let mut used_ids = BTreeSet::new();
-            let mut defined_ids = BTreeSet::new();
+            let mut used_ids = VariableIDSet::default();
+            let mut defined_ids = VariableIDSet::default();
             for (flip, id) in flips.into_iter().zip(ids.iter()) {
                 if flip {
                     used_ids.insert(*id);
