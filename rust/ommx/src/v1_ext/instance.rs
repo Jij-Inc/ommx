@@ -880,7 +880,7 @@ mod tests {
 
             // Put every penalty weights to zero
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
@@ -888,7 +888,7 @@ mod tests {
 
             // Put every penalty weights to two
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
             let substituted = parametric_instance.with_parameters(parameters).unwrap();
             let mut objective = instance.objective().into_owned();
@@ -913,7 +913,7 @@ mod tests {
 
             // Put every penalty weights to zero
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
@@ -921,7 +921,7 @@ mod tests {
 
             // Put every penalty weights to two
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
             let substituted = parametric_instance.with_parameters(parameters).unwrap();
             let mut objective = instance.objective().into_owned();
