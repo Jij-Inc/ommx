@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use approx::AbsDiffEq;
-use ommx::{v1, Message};
+use ommx::{v1, Evaluate, Message};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyBytes};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -274,6 +274,10 @@ impl Function {
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.0.used_decision_variable_ids()
+        self.0
+            .required_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 }

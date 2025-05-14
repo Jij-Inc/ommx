@@ -92,5 +92,5 @@ define_partial_evaluate_object!(Instance, partial_evaluate_instance);
 #[pyfunction]
 pub fn used_decision_variable_ids(function: &Bound<PyBytes>) -> BTreeSet<u64> {
     let function = Function::decode(function.as_bytes()).unwrap();
-    function.used_decision_variable_ids()
+    function.required_ids()
 }

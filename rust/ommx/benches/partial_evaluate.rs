@@ -8,7 +8,6 @@ use ommx::{
     QuadraticParameters, VariableID, VariableIDSet,
 };
 use proptest::prelude::Arbitrary;
-use std::collections::BTreeSet;
 
 fn bench_partial_evaluate<T, Parameters>(
     c: &mut Criterion,
