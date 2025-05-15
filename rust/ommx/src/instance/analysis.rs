@@ -148,66 +148,56 @@ impl DecisionVariableAnalysis {
 
         // Check bounds and integrality
         for (id, &value) in &state.entries {
-            let id_ref = &VariableID::from(*id);
-            if self.binary.contains(id_ref) {
+            let id = &VariableID::from(*id);
+            if self.binary.contains(id) {
                 if (value - 0.0).abs() > atol && (value - 1.0).abs() > atol {
-                    return Err(StateValidationError::BinaryValueNotBool { id: *id_ref, value });
+                    return Err(StateValidationError::BinaryValueNotBool { id: *id, value });
                 }
-            } else if let Some(bound) = self.integer.get(id_ref) {
+            } else if let Some(bound) = self.integer.get(id) {
                 if (value.fract()).abs() > atol {
-                    return Err(StateValidationError::NotAnInteger { id: *id_ref, value });
+                    return Err(StateValidationError::NotAnInteger { id: *id, value });
                 }
-                if !bound.contains(value, atol) {
-                    return Err(StateValidationError::ValueOutOfBounds {
-                        id: *id_ref,
-                        value,
-                        bound: *bound,
-                        kind: Kind::Integer,
-                    });
-                }
-            } else if let Some(bound) = self.continuous.get(id_ref) {
-                if !bound.contains(value, atol) {
-                    return Err(StateValidationError::ValueOutOfBounds {
-                        id: *id_ref,
-                        value,
-                        bound: *bound,
-                        kind: Kind::Continuous,
-                    });
-                }
-            } else if let Some(bound) = self.semi_integer.get(id_ref) {
+                check_bound(*id, value, *bound, Kind::Integer, atol)?;
+            } else if let Some(bound) = self.continuous.get(id) {
+                check_bound(*id, value, *bound, Kind::Continuous, atol)?;
+            } else if let Some(bound) = self.semi_integer.get(id) {
                 if value.abs() > atol {
                     // If not zero
                     if (value.fract()).abs() > atol {
                         return Err(StateValidationError::SemiIntegerNonZeroNotInteger {
-                            id: *id_ref,
+                            id: *id,
                             value,
                         });
                     }
-                    if !bound.contains(value, atol) {
-                        return Err(StateValidationError::ValueOutOfBounds {
-                            id: *id_ref,
-                            value,
-                            bound: *bound,
-                            kind: Kind::SemiInteger,
-                        });
-                    }
+                    check_bound(*id, value, *bound, Kind::SemiInteger, atol)?;
                 }
-            } else if let Some(bound) = self.semi_continuous.get(id_ref) {
+            } else if let Some(bound) = self.semi_continuous.get(id) {
                 if value.abs() > atol {
                     // If not zero
-                    if !bound.contains(value, atol) {
-                        return Err(StateValidationError::ValueOutOfBounds {
-                            id: *id_ref,
-                            value,
-                            bound: *bound,
-                            kind: Kind::SemiContinuous,
-                        });
-                    }
+                    check_bound(*id, value, *bound, Kind::SemiContinuous, atol)?;
                 }
             }
         }
         Ok(state)
     }
+}
+
+fn check_bound(
+    id: VariableID,
+    value: f64,
+    bound: Bound,
+    kind: Kind,
+    atol: f64,
+) -> Result<(), StateValidationError> {
+    if !bound.contains(value, atol) {
+        return Err(StateValidationError::ValueOutOfBounds {
+            id,
+            value,
+            bound,
+            kind,
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
