@@ -419,5 +419,17 @@ mod tests {
             all.extend(analysis.irrelevant());
             prop_assert_eq!(&all, &analysis.all);
         }
+
+        /// Test post-condition
+        #[test]
+        fn test_populate(
+            (instance, state) in Instance::arbitrary()
+                .prop_flat_map(move |instance| instance.arbitrary_state().prop_map(move |state| (instance.clone(), state)))
+        ) {
+            let analysis = instance.analyze_decision_variables();
+            let populated = analysis.populate(state.clone(), 1e-6).unwrap();
+            let populated_ids: VariableIDSet = populated.entries.keys().map(|id| (*id).into()).collect();
+            prop_assert_eq!(populated_ids, analysis.all);
+        }
     }
 }
