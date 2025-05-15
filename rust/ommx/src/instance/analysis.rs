@@ -1,9 +1,7 @@
-use std::collections::BTreeMap;
-
 use super::*;
 use crate::{v1::State, Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use ::approx::AbsDiffEq;
-use fnv::FnvHashSet;
+use std::collections::BTreeMap;
 
 /// The result of analyzing the decision variables in an instance.
 ///
@@ -133,22 +131,22 @@ impl DecisionVariableAnalysis {
     /// Post-condition
     /// --------------
     /// - The IDs of returned [`State`] are the same as [`Self::all`].
-    ///
     pub fn populate(&self, state: State, atol: f64) -> Result<State, StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
-        let used_ids = self.used();
 
-        if state_ids != used_ids {
-            let extra_in_state: FnvHashSet<VariableID> =
-                state_ids.difference(&used_ids).cloned().collect();
-            let missing_from_state: FnvHashSet<VariableID> =
-                used_ids.difference(&state_ids).cloned().collect();
-            return Err(StateValidationError::MismatchedIDs {
-                extra: extra_in_state,
-                missing: missing_from_state,
-            });
+        // Check the IDs in the state are subset of all IDs
+        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        if unknown_ids.len() > 0 {
+            return Err(StateValidationError::UnknownIDs { unknown_ids });
         }
 
+        // Check the state contains every used decision variables
+        let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
+        if missing_ids.len() > 0 {
+            return Err(StateValidationError::MissingRequiredIDs { missing_ids });
+        }
+
+        // Check bounds and integrality
         for (id, &value) in &state.entries {
             let id_ref = &VariableID::from(*id);
             if self.binary.contains(id_ref) {
@@ -214,11 +212,10 @@ impl DecisionVariableAnalysis {
 
 #[derive(Debug, thiserror::Error)]
 pub enum StateValidationError {
-    #[error("State IDs do not match used variable IDs. Extra in state: {extra:?}, Missing from state: {missing:?}")]
-    MismatchedIDs {
-        extra: FnvHashSet<VariableID>,
-        missing: FnvHashSet<VariableID>,
-    },
+    #[error("The state contains some unknown IDs: {unknown_ids:?}")]
+    UnknownIDs { unknown_ids: VariableIDSet },
+    #[error("The state does not contain some required IDs: {missing_ids:?}")]
+    MissingRequiredIDs { missing_ids: VariableIDSet },
     #[error(
         "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
     )]
