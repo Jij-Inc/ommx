@@ -7,13 +7,32 @@ use fnv::FnvHashSet;
 
 /// The result of analyzing the decision variables in an instance.
 ///
+/// Responsibility
+/// ---------------
+/// This struct is responsible for
+///
+/// - Serving kind-based and usage-based partitioning of decision variables to solvers.
+///   Solvers only want to know the mathematical properties of the optimization problem.
+///   They do not need to know the details of the instance, such as the names of the decision
+///   variables and constraints, removed constraints or fixed variables which does not affect the
+///   optimization problem itself.
+///
+/// - Validating the state returned by solvers, and populating the variables which does not passed to the solvers.
+///   - The state by solvers is **valid** if:
+///     - It contains every [`Self::used`] decision variables. Other IDs are allowed as long as consistent with the population result.
+///     - The values for each decision variable are within the bounds.
+///   - [`Self::populate`] checks the state is valid, and populates the state as follows:
+///     - For [`Self::fixed`] ID, the fixed value is used.
+///     - For [`Self::irrelevant`] ID, [`Bound::nearest_to_zero`] is used as the value.
+///     - For [`Self::dependent`] ID, the value is evaluated from other IDs.
+///
 /// Invariants
 /// -----------
-/// - Every field are subset of `all`.
-/// - `binary`, `integer`, `continuous`, `semi_integer`, and `semi_continuous`
-///   are disjoint, and their union is equal to `all`.
-/// - The union of `used_in_objective` and `used_in_constraints` (= `used`), `fixed`,
-///   and `dependent` are disjoint each other.
+/// - Every IDs are subset of [`Self::all`].
+/// - (kind-based partitioning) [`Self::binary`], [`Self::integer`], [`Self::continuous`], [`Self::semi_integer`], and [`Self::semi_continuous`]
+///   are disjoint, and their union is equal to [`Self::all`].
+/// - (usage-based partitioning) The union of [`Self::used_in_objective`] and [`Self::used_in_constraints`] (= [`Self::used`]), [`Self::fixed`],
+///   and [`Self::dependent`] are disjoint each other. Remaining decision variables are [`Self::irrelevant`].
 #[derive(Debug, Clone, PartialEq, getset::Getters)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
@@ -109,12 +128,13 @@ impl DecisionVariableAnalysis {
             .collect()
     }
 
-    /// Check the state is valid for this analysis.
+    /// Check the state is **valid**, and populate the state with the removed decision variables
     ///
-    /// The state is **valid** if:
-    /// - The IDs which the state contains equals to `used` exactly.
-    /// - The values of the state satisfy the bounds of the decision variables.
-    pub fn validate_state(&self, state: &State, atol: f64) -> Result<(), StateValidationError> {
+    /// Post-condition
+    /// --------------
+    /// - The IDs of returned [`State`] are the same as [`Self::all`].
+    ///
+    pub fn populate(&self, state: State, atol: f64) -> Result<State, StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
         let used_ids = self.used();
 
@@ -188,7 +208,7 @@ impl DecisionVariableAnalysis {
                 }
             }
         }
-        Ok(())
+        Ok(state)
     }
 }
 

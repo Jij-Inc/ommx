@@ -10,6 +10,9 @@ impl Evaluate for Instance {
     type SampledOutput = SampleSet;
 
     fn evaluate(&self, state: &v1::State) -> Result<Self::Output> {
+        let analysis = self.analyze_decision_variables();
+        // Check bounds and integrality
+
         // Use required IDs to evaluate the objective and constraints
         let objective = self.objective.evaluate(state)?;
         let evaluated_constraints = self
@@ -19,7 +22,6 @@ impl Evaluate for Instance {
             .collect::<Result<Vec<_>>>()?;
 
         let mut state = state.clone();
-        let analysis = self.analyze_decision_variables();
         // Check fixed variables are consistent
         for (id, value) in analysis.fixed() {
             if let Some(v) = state.entries.get(id) {
