@@ -150,36 +150,33 @@ impl DecisionVariableAnalysis {
         for (id, &value) in &state.entries {
             let id = &VariableID::from(*id);
             if self.binary.contains(id) {
-                if (value - 0.0).abs() > atol && (value - 1.0).abs() > atol {
-                    return Err(StateValidationError::BinaryValueNotBool { id: *id, value });
-                }
+                check_integer(*id, value, atol)?;
+                check_bound(*id, value, Bound::of_binary(), Kind::Binary, atol)?;
             } else if let Some(bound) = self.integer.get(id) {
-                if (value.fract()).abs() > atol {
-                    return Err(StateValidationError::NotAnInteger { id: *id, value });
-                }
+                check_integer(*id, value, atol)?;
                 check_bound(*id, value, *bound, Kind::Integer, atol)?;
             } else if let Some(bound) = self.continuous.get(id) {
                 check_bound(*id, value, *bound, Kind::Continuous, atol)?;
             } else if let Some(bound) = self.semi_integer.get(id) {
                 if value.abs() > atol {
-                    // If not zero
-                    if (value.fract()).abs() > atol {
-                        return Err(StateValidationError::SemiIntegerNonZeroNotInteger {
-                            id: *id,
-                            value,
-                        });
-                    }
+                    check_integer(*id, value, atol)?;
                     check_bound(*id, value, *bound, Kind::SemiInteger, atol)?;
                 }
             } else if let Some(bound) = self.semi_continuous.get(id) {
                 if value.abs() > atol {
-                    // If not zero
                     check_bound(*id, value, *bound, Kind::SemiContinuous, atol)?;
                 }
             }
         }
         Ok(state)
     }
+}
+
+fn check_integer(id: VariableID, value: f64, atol: f64) -> Result<(), StateValidationError> {
+    if value.fract().abs() > atol {
+        return Err(StateValidationError::NotAnInteger { id, value });
+    }
+    Ok(())
 }
 
 fn check_bound(
@@ -215,12 +212,8 @@ pub enum StateValidationError {
         bound: Bound,
         kind: Kind,
     },
-    #[error("Value for binary variable {id:?} is not 0.0 or 1.0. Value: {value}")]
-    BinaryValueNotBool { id: VariableID, value: f64 },
     #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
     NotAnInteger { id: VariableID, value: f64 },
-    #[error("Non-zero value for semi-integer variable {id:?} is not an integer. Value: {value}")]
-    SemiIntegerNonZeroNotInteger { id: VariableID, value: f64 },
 }
 
 /// Check if **used** decision variables has the same bounds
