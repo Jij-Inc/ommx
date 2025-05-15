@@ -131,7 +131,7 @@ impl DecisionVariableAnalysis {
     /// Post-condition
     /// --------------
     /// - The IDs of returned [`State`] are the same as [`Self::all`].
-    pub fn populate(&self, state: State, atol: f64) -> Result<State, StateValidationError> {
+    pub fn populate(&self, mut state: State, atol: f64) -> Result<State, StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
 
         // Check the IDs in the state are subset of all IDs
@@ -168,6 +168,26 @@ impl DecisionVariableAnalysis {
                 }
             }
         }
+
+        // Populate the state with fixed variables
+        for (id, value) in self.fixed() {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    if (entry.get() - value).abs() > atol {
+                        return Err(StateValidationError::FixedVariableInconsistent {
+                            id: *id,
+                            state_value: *entry.get(),
+                            instance_value: *value,
+                        });
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(*value);
+                }
+            }
+        }
+
         Ok(state)
     }
 }
@@ -214,6 +234,12 @@ pub enum StateValidationError {
     },
     #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
     NotAnInteger { id: VariableID, value: f64 },
+    #[error("Value for fixed variable {id:?} is inconsistent. State value: {state_value}, Instance value: {instance_value}")]
+    FixedVariableInconsistent {
+        id: VariableID,
+        state_value: f64,
+        instance_value: f64,
+    },
 }
 
 /// Check if **used** decision variables has the same bounds
