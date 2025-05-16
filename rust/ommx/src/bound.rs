@@ -276,6 +276,10 @@ impl Bound {
         Self::new(f64::NEG_INFINITY, 0.0).unwrap()
     }
 
+    pub fn of_binary() -> Self {
+        Self::new(0.0, 1.0).unwrap()
+    }
+
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
         BoundError::check(lower, upper)?;
         Ok(Self { lower, upper })
