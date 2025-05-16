@@ -64,10 +64,10 @@ impl ParametricInstance {
 
         let state = State::from(parameters.clone());
         if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(&state)?;
+            f.partial_evaluate(&state, 1e-9)?;
         }
         for constraint in self.constraints.iter_mut() {
-            constraint.partial_evaluate(&state)?;
+            constraint.partial_evaluate(&state, 1e-9)?;
         }
 
         Ok(Instance {
