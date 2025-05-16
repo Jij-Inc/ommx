@@ -70,10 +70,8 @@ pub struct DecisionVariableAnalysis {
     #[getset(get = "pub")]
     dependent: VariableIDSet,
     /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
-    ///
-    /// Associated values are the [`Bound::nearest_to_zero`] of the decision variable, which will be populated to the state.
     #[getset(get = "pub")]
-    irrelevant: BTreeMap<VariableID, f64>,
+    irrelevant: BTreeMap<VariableID, (Kind, Bound)>,
 }
 
 impl DecisionVariableAnalysis {
@@ -180,6 +178,25 @@ impl DecisionVariableAnalysis {
             }
         }
         // Populate the state with irrelevant variables
+        for (id, (kind, bound)) in self.irrelevant() {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    let value = *entry.get();
+                    if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
+                        check_integer(*id, value, atol)?;
+                    }
+                    check_bound(*id, value, *bound, *kind, atol)?;
+                }
+                Entry::Vacant(entry) => {
+                    let value = match kind {
+                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
+                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                    };
+                    entry.insert(value);
+                }
+            }
+        }
 
         Ok(state)
     }
@@ -347,12 +364,7 @@ impl Instance {
             .map(|id| {
                 let dv = self.decision_variables.get(id).unwrap(); // subset of all
                 debug_assert!(dv.substituted_value.is_none()); // fixed is subtracted
-                let value = match dv.kind {
-                    Kind::Binary | Kind::Integer => dv.bound.as_integer_bound().nearest_to_zero(),
-                    Kind::Continuous => dv.bound.nearest_to_zero(),
-                    Kind::SemiInteger | Kind::SemiContinuous => 0.0,
-                };
-                (id.clone(), value)
+                (*id, (dv.kind, dv.bound))
             })
             .collect();
 
