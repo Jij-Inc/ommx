@@ -9,8 +9,8 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &crate::v1::State) -> anyhow::Result<Self::Output> {
-        let evaluated_value = self.function.evaluate(solution)?;
+    fn evaluate(&self, solution: &crate::v1::State, _atol: f64) -> anyhow::Result<Self::Output> {
+        let evaluated_value = self.function.evaluate(solution, _atol)?;
         let used_decision_variable_ids = self
             .function
             .required_ids()
@@ -35,8 +35,9 @@ impl Evaluate for Constraint {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
+        _atol: f64,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values = self.function.evaluate_samples(samples)?;
+        let evaluated_values = self.function.evaluate_samples(samples, _atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, value)| match self.equality {
@@ -64,8 +65,8 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State) -> anyhow::Result<()> {
-        self.function.partial_evaluate(state)
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: f64) -> anyhow::Result<()> {
+        self.function.partial_evaluate(state, _atol)
     }
 
     fn required_ids(&self) -> VariableIDSet {
@@ -93,9 +94,9 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
-            let evaluated = c.evaluate_samples(&samples).unwrap();
+            let evaluated = c.evaluate_samples(&samples, 1e-6).unwrap();
             let evaluated_each: FnvHashMap<u64, EvaluatedConstraint> = samples.iter().map(|(parameter_id, state)| {
-                let value = c.evaluate(state).unwrap();
+                let value = c.evaluate(state, 1e-6).unwrap();
                 (*parameter_id, value)
             }).collect();
             for (sample_id, each) in evaluated_each {

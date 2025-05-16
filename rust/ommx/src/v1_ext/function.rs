@@ -416,30 +416,30 @@ impl Evaluate for Function {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State) -> Result<f64> {
+    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
         let out = match &self.function {
             Some(FunctionEnum::Constant(c)) => *c,
-            Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution)?,
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution)?,
-            Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution)?,
+            Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution, _atol)?,
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.evaluate(solution, _atol)?,
+            Some(FunctionEnum::Polynomial(poly)) => poly.evaluate(solution, _atol)?,
             None => 0.0,
         };
         Ok(out)
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
         match &mut self.function {
-            Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state)?,
-            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state)?,
-            Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state)?,
+            Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state, _atol)?,
+            Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state, _atol)?,
+            Some(FunctionEnum::Polynomial(poly)) => poly.partial_evaluate(state, _atol)?,
             _ => {}
         };
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
+            let value = self.evaluate(s, _atol)?;
             Ok(value)
         })?;
         Ok(out)
@@ -587,7 +587,7 @@ mod tests {
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
-            let value = f.evaluate(&state).unwrap();
+            let value = f.evaluate(&state, 1e-9).unwrap();
             prop_assert!(bound.contains(value, 1e-7));
         }
 

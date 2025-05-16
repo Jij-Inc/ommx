@@ -39,7 +39,7 @@ mod tests {
         let state = State {
             entries: hashmap! { 1 => 1.0, 2 => 2.0, 3 => 3.0, 5 => 5.0, 6 => 6.0 },
         };
-        linear.partial_evaluate(&state).unwrap();
+        linear.partial_evaluate(&state, 1e-9).unwrap();
         assert_eq!(linear.constant, 5.0 + 1.0 * 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
         assert_eq!(linear.terms.len(), 1);
         assert_eq!(linear.terms[0].id, 4);
@@ -61,9 +61,9 @@ mod tests {
             proptest! {
                 #[test]
                 fn $name((f, g, s) in pair_with_state!($t)) {
-                    let f_value = f.evaluate(&s).unwrap();
-                    let g_value = g.evaluate(&s).unwrap();
-                    let h_value = (f + g).evaluate(&s).unwrap();
+                    let f_value = f.evaluate(&s, 1e-9).unwrap();
+                    let g_value = g.evaluate(&s, 1e-9).unwrap();
+                    let h_value = (f + g).evaluate(&s, 1e-9).unwrap();
                     prop_assert!(abs_diff_eq!(dbg!(f_value + g_value), dbg!(h_value), epsilon = 1e-9));
                 }
             }
@@ -75,9 +75,9 @@ mod tests {
             proptest! {
                 #[test]
                 fn $name((f, g, s) in pair_with_state!($t)) {
-                    let f_value = f.evaluate(&s).unwrap();
-                    let g_value = g.evaluate(&s).unwrap();
-                    let h_value = (f * g).evaluate(&s).unwrap();
+                    let f_value = f.evaluate(&s, 1e-9).unwrap();
+                    let g_value = g.evaluate(&s, 1e-9).unwrap();
+                    let h_value = (f * g).evaluate(&s, 1e-9).unwrap();
                     prop_assert!(abs_diff_eq!(dbg!(f_value * g_value), dbg!(h_value), epsilon = 1e-9));
                 }
             }
@@ -106,8 +106,8 @@ mod tests {
             proptest! {
                 #[test]
                 fn $name((mut f, s) in function_with_state!($t)) {
-                    let v = f.evaluate(&s).unwrap();
-                    f.partial_evaluate(&s).unwrap();
+                    let v = f.evaluate(&s, 1e-9).unwrap();
+                    f.partial_evaluate(&s, 1e-9).unwrap();
                     let c = dbg!(f).as_constant().expect("Non constant");
                     prop_assert!(abs_diff_eq!(v, c, epsilon = 1e-9));
                 }
@@ -153,9 +153,9 @@ mod tests {
             proptest! {
                 #[test]
                 fn $name((mut f, s, (s1, s2)) in function_with_split_state!($t)) {
-                    let v = f.evaluate(&s).unwrap();
-                    f.partial_evaluate(&s1).unwrap();
-                    let u = f.evaluate(&s2).unwrap();
+                    let v = f.evaluate(&s, 1e-9).unwrap();
+                    f.partial_evaluate(&s1, 1e-9).unwrap();
+                    let u = f.evaluate(&s2, 1e-9).unwrap();
                     prop_assert!(abs_diff_eq!(v, u, epsilon = 1e-9));
                 }
             }
@@ -179,7 +179,7 @@ mod tests {
     proptest! {
         #[test]
         fn evaluate_instance((instance, state) in instance_with_state()) {
-            let solution = instance.evaluate(&state).unwrap();
+            let solution = instance.evaluate(&state, 1e-9).unwrap();
             let mut cids = instance.constraint_ids();
             cids.extend(instance.removed_constraint_ids());
             prop_assert!(solution.constraint_ids() == cids);
@@ -189,7 +189,7 @@ mod tests {
     proptest! {
         #[test]
         fn partial_eval_instance(mut instance in Instance::arbitrary(), state in any::<State>()) {
-            instance.partial_evaluate(&state).unwrap();
+            instance.partial_evaluate(&state, 1e-9).unwrap();
             for v in &instance.decision_variables {
                 if let Some(value) = state.entries.get(&v.id) {
                     prop_assert_eq!(v.substituted_value, Some(*value));
@@ -215,9 +215,9 @@ mod tests {
     proptest! {
         #[test]
         fn partial_eval_instance_to_solution((mut instance, state, (s1, s2)) in instance_with_split_state()) {
-            let solution = instance.evaluate(&state).unwrap();
-            instance.partial_evaluate(&s1).unwrap();
-            let solution1 = instance.evaluate(&s2).unwrap();
+            let solution = instance.evaluate(&state, 1e-9).unwrap();
+            instance.partial_evaluate(&s1, 1e-9).unwrap();
+            let solution1 = instance.evaluate(&s2, 1e-9).unwrap();
             prop_assert_eq!(solution.decision_variable_ids(), solution1.decision_variable_ids());
             prop_assert_eq!(solution.constraint_ids(), solution1.constraint_ids());
             prop_assert_eq!(solution.state, solution1.state);
@@ -227,11 +227,11 @@ mod tests {
     proptest! {
         #[test]
         fn evaluate_samples((instance, state) in instance_with_state()) {
-            let solution = instance.evaluate(&state).unwrap();
+            let solution = instance.evaluate(&state, 1e-9).unwrap();
 
             let mut samples = Samples::default();
             samples.add_sample(0, state);
-            let sample_set = instance.evaluate_samples(&samples).unwrap();
+            let sample_set = instance.evaluate_samples(&samples, 1e-9).unwrap();
 
             prop_assert_eq!(solution, sample_set.get(0).unwrap());
         }
@@ -243,14 +243,14 @@ mod tests {
             // Determine ID to be substituted
             let ids = f.required_ids();
             let Some(id) = ids.iter().next().cloned() else { return Ok(()) };
-            g.partial_evaluate(&State { entries: hashmap!{ id.into_inner() => 1.0 }}).unwrap();
+            g.partial_evaluate(&State { entries: hashmap!{ id.into_inner() => 1.0 } }, 1e-9).unwrap();
             let substituted = f.substitute(&hashmap!{ id.into_inner() => g.clone() }).unwrap();
 
-            let g_value = g.evaluate(&s).unwrap();
+            let g_value = g.evaluate(&s, 1e-9).unwrap();
             s.entries.insert(id.into_inner(), g_value);
 
-            let f_value = f.evaluate(&s).unwrap();
-            let substituted_value = substituted.evaluate(&s).unwrap();
+            let f_value = f.evaluate(&s, 1e-9).unwrap();
+            let substituted_value = substituted.evaluate(&s, 1e-9).unwrap();
 
             prop_assert!(abs_diff_eq!(f_value, substituted_value, epsilon = 1e-9));
         }

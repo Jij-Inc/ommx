@@ -681,12 +681,12 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, _atol: f64) -> Result<Self::Output> {
         self.check_bound(state, 1e-7)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
         for c in &self.constraints {
-            let c = c.evaluate(state)?;
+            let c = c.evaluate(state, 1e-6)?;
             // Only check non-removed constraints for feasibility
             if feasible_relaxed {
                 feasible_relaxed = c.is_feasible(1e-6)?;
@@ -695,14 +695,14 @@ impl Evaluate for Instance {
         }
         let mut feasible = feasible_relaxed;
         for c in &self.removed_constraints {
-            let c = c.evaluate(state)?;
+            let c = c.evaluate(state, 1e-6)?;
             if feasible {
                 feasible = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
 
-        let objective = self.objective().evaluate(state)?;
+        let objective = self.objective().evaluate(state, 1e-9)?;
 
         let mut state = state.clone();
         for v in &self.decision_variables {
@@ -730,35 +730,35 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
             }
         }
         if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(state)?
+            f.partial_evaluate(state, 1e-9)?
         }
         for constraints in &mut self.constraints {
-            constraints.partial_evaluate(state)?;
+            constraints.partial_evaluate(state, 1e-9)?;
         }
         for constraints in &mut self.removed_constraints {
-            constraints.partial_evaluate(state)?;
+            constraints.partial_evaluate(state, 1e-9)?;
         }
         for d in self.decision_variable_dependency.values_mut() {
-            d.partial_evaluate(state)?;
+            d.partial_evaluate(state, 1e-9)?;
         }
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
         // Constraints
         let mut constraints = Vec::new();
         for c in &self.constraints {
-            let evaluated = c.evaluate_samples(samples)?;
+            let evaluated = c.evaluate_samples(samples, 1e-6)?;
             for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
                 if !feasible_ {
                     feasible_relaxed.insert(sample_id, false);
@@ -768,7 +768,7 @@ impl Evaluate for Instance {
         }
         let mut feasible = feasible_relaxed.clone();
         for c in &self.removed_constraints {
-            let v = c.evaluate_samples(samples)?;
+            let v = c.evaluate_samples(samples, 1e-6)?;
             for (sample_id, feasible_) in v.is_feasible(1e-6)? {
                 if !feasible_ {
                     feasible.insert(sample_id, false);
@@ -778,7 +778,7 @@ impl Evaluate for Instance {
         }
 
         // Objective
-        let objectives = self.objective().evaluate_samples(samples)?;
+        let objectives = self.objective().evaluate_samples(samples, 1e-9)?;
 
         // Reconstruct decision variable values
         let mut samples = samples.clone();
@@ -829,7 +829,7 @@ fn eval_dependencies(dependencies: &HashMap<u64, Function>, state: &mut State) -
     let mut not_evaluated = Vec::new();
     loop {
         while let Some((id, f)) = bucket.pop() {
-            match f.evaluate(state) {
+            match f.evaluate(state, 1e-9) {
                 Ok(value) => {
                     state.entries.insert(*id, value);
                 }
@@ -991,11 +991,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state).unwrap();
+            let lower_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state).unwrap();
+            let upper_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
@@ -1004,7 +1004,7 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
                 prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));

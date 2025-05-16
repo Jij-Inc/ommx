@@ -249,7 +249,7 @@ impl Evaluate for Linear {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State) -> Result<f64> {
+    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
         let mut sum = self.constant;
         for Term { id, coefficient } in &self.terms {
             let s = solution
@@ -261,7 +261,7 @@ impl Evaluate for Linear {
         Ok(sum)
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
         let mut i = 0;
         while i < self.terms.len() {
             let Term { id, coefficient } = self.terms[i];
@@ -275,9 +275,9 @@ impl Evaluate for Linear {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
-            let value = self.evaluate(s)?;
+            let value = self.evaluate(s, 1e-9)?;
             Ok(value)
         })?;
         Ok(out)

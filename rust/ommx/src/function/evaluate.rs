@@ -5,21 +5,21 @@ impl Evaluate for Function {
     type Output = f64;
     type SampledOutput = crate::v1::SampledValues;
 
-    fn evaluate(&self, solution: &crate::v1::State) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, solution: &crate::v1::State, _atol: f64) -> anyhow::Result<Self::Output> {
         match self {
             Function::Zero => Ok(0.0),
             Function::Constant(c) => Ok(c.into_inner()),
-            Function::Linear(f) => f.evaluate(solution),
-            Function::Quadratic(f) => f.evaluate(solution),
-            Function::Polynomial(f) => f.evaluate(solution),
+            Function::Linear(f) => f.evaluate(solution, _atol),
+            Function::Quadratic(f) => f.evaluate(solution, _atol),
+            Function::Polynomial(f) => f.evaluate(solution, _atol),
         }
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: f64) -> anyhow::Result<()> {
         match self {
-            Function::Linear(f) => f.partial_evaluate(state),
-            Function::Quadratic(f) => f.partial_evaluate(state),
-            Function::Polynomial(f) => f.partial_evaluate(state),
+            Function::Linear(f) => f.partial_evaluate(state, _atol),
+            Function::Quadratic(f) => f.partial_evaluate(state, _atol),
+            Function::Polynomial(f) => f.partial_evaluate(state, _atol),
             _ => Ok(()),
         }
     }
@@ -36,6 +36,7 @@ impl Evaluate for Function {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
+        _atol: f64,
     ) -> anyhow::Result<Self::SampledOutput> {
         match self {
             Function::Zero => Ok(SampledValues::zeros(samples.ids().cloned())),
@@ -43,9 +44,9 @@ impl Evaluate for Function {
                 samples.ids().cloned(),
                 c.into_inner(),
             )),
-            Function::Linear(f) => f.evaluate_samples(samples),
-            Function::Quadratic(f) => f.evaluate_samples(samples),
-            Function::Polynomial(f) => f.evaluate_samples(samples),
+            Function::Linear(f) => f.evaluate_samples(samples, _atol),
+            Function::Quadratic(f) => f.evaluate_samples(samples, _atol),
+            Function::Polynomial(f) => f.evaluate_samples(samples, _atol),
         }
     }
 }
@@ -71,9 +72,9 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((f, samples) in function_and_samples()) {
-            let evaluated = f.evaluate_samples(&samples).unwrap();
+            let evaluated = f.evaluate_samples(&samples, 1e-9).unwrap();
             let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = f.evaluate(state).unwrap();
+                let value = f.evaluate(state, 1e-9).unwrap();
                 (*parameter_id, value)
             }).collect();
             prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
