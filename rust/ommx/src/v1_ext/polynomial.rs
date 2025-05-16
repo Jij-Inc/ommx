@@ -238,7 +238,7 @@ impl Evaluate for Polynomial {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
+    fn evaluate(&self, solution: &State, atol: f64) -> Result<f64> {
         let mut sum = 0.0;
         for term in &self.terms {
             let mut v = term.coefficient;
@@ -253,7 +253,7 @@ impl Evaluate for Polynomial {
         Ok(sum)
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
         let mut monomials = BTreeMap::new();
         for term in self.terms.iter() {
             let mut value = term.coefficient;
@@ -281,7 +281,7 @@ impl Evaluate for Polynomial {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
             let value = self.evaluate(s, 1e-9)?;
             Ok(value)

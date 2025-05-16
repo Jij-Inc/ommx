@@ -681,7 +681,7 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State, _atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
         self.check_bound(state, 1e-7)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
@@ -730,7 +730,7 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
@@ -751,7 +751,7 @@ impl Evaluate for Instance {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 

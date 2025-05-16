@@ -5,21 +5,21 @@ impl Evaluate for Function {
     type Output = f64;
     type SampledOutput = crate::v1::SampledValues;
 
-    fn evaluate(&self, solution: &crate::v1::State, _atol: f64) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
         match self {
             Function::Zero => Ok(0.0),
             Function::Constant(c) => Ok(c.into_inner()),
-            Function::Linear(f) => f.evaluate(solution, _atol),
-            Function::Quadratic(f) => f.evaluate(solution, _atol),
-            Function::Polynomial(f) => f.evaluate(solution, _atol),
+            Function::Linear(f) => f.evaluate(solution, atol),
+            Function::Quadratic(f) => f.evaluate(solution, atol),
+            Function::Polynomial(f) => f.evaluate(solution, atol),
         }
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: f64) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
         match self {
-            Function::Linear(f) => f.partial_evaluate(state, _atol),
-            Function::Quadratic(f) => f.partial_evaluate(state, _atol),
-            Function::Polynomial(f) => f.partial_evaluate(state, _atol),
+            Function::Linear(f) => f.partial_evaluate(state, atol),
+            Function::Quadratic(f) => f.partial_evaluate(state, atol),
+            Function::Polynomial(f) => f.partial_evaluate(state, atol),
             _ => Ok(()),
         }
     }
@@ -36,7 +36,7 @@ impl Evaluate for Function {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
-        _atol: f64,
+        atol: f64,
     ) -> anyhow::Result<Self::SampledOutput> {
         match self {
             Function::Zero => Ok(SampledValues::zeros(samples.ids().cloned())),
@@ -44,9 +44,9 @@ impl Evaluate for Function {
                 samples.ids().cloned(),
                 c.into_inner(),
             )),
-            Function::Linear(f) => f.evaluate_samples(samples, _atol),
-            Function::Quadratic(f) => f.evaluate_samples(samples, _atol),
-            Function::Polynomial(f) => f.evaluate_samples(samples, _atol),
+            Function::Linear(f) => f.evaluate_samples(samples, atol),
+            Function::Quadratic(f) => f.evaluate_samples(samples, atol),
+            Function::Polynomial(f) => f.evaluate_samples(samples, atol),
         }
     }
 }
