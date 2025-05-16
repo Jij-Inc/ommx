@@ -464,6 +464,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: f64,
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -498,7 +499,7 @@ impl Instance {
         // Check the bound of `a*f`
         // - If `lower > 0`, the constraint is infeasible
         // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
-        let bound = af.evaluate_bound(&bounds).as_integer_bound();
+        let bound = af.evaluate_bound(&bounds).as_integer_bound(atol);
         if bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: ConstraintID::from(constraint_id),
@@ -681,28 +682,28 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State) -> Result<Self::Output> {
-        self.check_bound(state, 1e-7)?;
+    fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
+        self.check_bound(state, atol)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
         for c in &self.constraints {
-            let c = c.evaluate(state)?;
+            let c = c.evaluate(state, atol)?;
             // Only check non-removed constraints for feasibility
             if feasible_relaxed {
-                feasible_relaxed = c.is_feasible(1e-6)?;
+                feasible_relaxed = c.is_feasible(atol)?;
             }
             evaluated_constraints.push(c);
         }
         let mut feasible = feasible_relaxed;
         for c in &self.removed_constraints {
-            let c = c.evaluate(state)?;
+            let c = c.evaluate(state, atol)?;
             if feasible {
-                feasible = c.is_feasible(1e-6)?;
+                feasible = c.is_feasible(atol)?;
             }
             evaluated_constraints.push(c);
         }
 
-        let objective = self.objective().evaluate(state)?;
+        let objective = self.objective().evaluate(state, atol)?;
 
         let mut state = state.clone();
         for v in &self.decision_variables {
@@ -710,7 +711,7 @@ impl Evaluate for Instance {
                 state.entries.insert(v.id, value);
             }
         }
-        eval_dependencies(&self.decision_variable_dependency, &mut state)?;
+        eval_dependencies(&self.decision_variable_dependency, &mut state, atol)?;
         for v in &self.decision_variables {
             if let HashMapEntry::Vacant(e) = state.entries.entry(v.id) {
                 let bound: crate::Bound = v.try_into()?;
@@ -730,36 +731,36 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
             }
         }
         if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(state)?
+            f.partial_evaluate(state, atol)?
         }
         for constraints in &mut self.constraints {
-            constraints.partial_evaluate(state)?;
+            constraints.partial_evaluate(state, atol)?;
         }
         for constraints in &mut self.removed_constraints {
-            constraints.partial_evaluate(state)?;
+            constraints.partial_evaluate(state, atol)?;
         }
         for d in self.decision_variable_dependency.values_mut() {
-            d.partial_evaluate(state)?;
+            d.partial_evaluate(state, atol)?;
         }
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
         // Constraints
         let mut constraints = Vec::new();
         for c in &self.constraints {
-            let evaluated = c.evaluate_samples(samples)?;
-            for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
+            let evaluated = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
                 if !feasible_ {
                     feasible_relaxed.insert(sample_id, false);
                 }
@@ -768,8 +769,8 @@ impl Evaluate for Instance {
         }
         let mut feasible = feasible_relaxed.clone();
         for c in &self.removed_constraints {
-            let v = c.evaluate_samples(samples)?;
-            for (sample_id, feasible_) in v.is_feasible(1e-6)? {
+            let v = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in v.is_feasible(atol)? {
                 if !feasible_ {
                     feasible.insert(sample_id, false);
                 }
@@ -778,12 +779,12 @@ impl Evaluate for Instance {
         }
 
         // Objective
-        let objectives = self.objective().evaluate_samples(samples)?;
+        let objectives = self.objective().evaluate_samples(samples, atol)?;
 
         // Reconstruct decision variable values
         let mut samples = samples.clone();
         for state in samples.states_mut() {
-            eval_dependencies(&self.decision_variable_dependency, state?)?;
+            eval_dependencies(&self.decision_variable_dependency, state?, atol)?;
         }
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
@@ -823,13 +824,17 @@ impl Evaluate for Instance {
 }
 
 // FIXME: This would be better by using a topological sort
-fn eval_dependencies(dependencies: &HashMap<u64, Function>, state: &mut State) -> Result<()> {
+fn eval_dependencies(
+    dependencies: &HashMap<u64, Function>,
+    state: &mut State,
+    atol: f64,
+) -> Result<()> {
     let mut bucket: Vec<_> = dependencies.iter().collect();
     let mut last_size = bucket.len();
     let mut not_evaluated = Vec::new();
     loop {
         while let Some((id, f)) = bucket.pop() {
-            match f.evaluate(state) {
+            match f.evaluate(state, atol) {
                 Ok(value) => {
                     state.entries.insert(*id, value);
                 }
@@ -880,7 +885,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -888,7 +893,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
@@ -913,7 +918,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -921,7 +926,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
@@ -991,11 +996,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state).unwrap();
+            let lower_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state).unwrap();
+            let upper_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
@@ -1004,7 +1009,7 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
                 prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));
@@ -1019,7 +1024,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        eval_dependencies(&dependencies, &mut state).unwrap();
+        eval_dependencies(&dependencies, &mut state, 1e-9).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
 
@@ -1029,7 +1034,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
@@ -1037,6 +1042,6 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
     }
 }

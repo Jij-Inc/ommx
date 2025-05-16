@@ -31,7 +31,7 @@ fn bench_partial_evaluate<T, Parameters>(
                 b.iter_batched_ref(
                     || lin.clone(),
                     |f| {
-                        f.partial_evaluate(state).unwrap();
+                        f.partial_evaluate(state, 1e-9).unwrap();
                     },
                     criterion::BatchSize::SmallInput,
                 )
