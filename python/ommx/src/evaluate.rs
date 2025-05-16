@@ -16,7 +16,7 @@ macro_rules! define_evaluate_function {
         ) -> Result<f64> {
             let state = State::decode(state.as_bytes())?;
             let function = <$evaluated>::decode(function.as_bytes())?;
-            function.evaluate(&state)
+            function.evaluate(&state, 1e-9)
         }
     };
 }
@@ -37,7 +37,7 @@ macro_rules! define_evaluate_object {
         ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let function = <$evaluated>::decode(function.as_bytes())?;
-            let evaluated = function.evaluate(&state)?;
+            let evaluated = function.evaluate(&state, 1e-9)?;
             Ok(PyBytes::new(py, &evaluated.encode_to_vec()))
         }
     };
@@ -57,7 +57,7 @@ macro_rules! define_partial_evaluate_function {
         ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let mut function = <$evaluated>::decode(function.as_bytes())?;
-            function.partial_evaluate(&state)?;
+            function.partial_evaluate(&state, 1e-9)?;
             Ok(PyBytes::new(py, &function.encode_to_vec()))
         }
     };
@@ -79,7 +79,7 @@ macro_rules! define_partial_evaluate_object {
         ) -> Result<Bound<'py, PyBytes>> {
             let state = State::decode(state.as_bytes())?;
             let mut obj = <$evaluated>::decode(obj.as_bytes())?;
-            obj.partial_evaluate(&state)?;
+            obj.partial_evaluate(&state, 1e-9)?;
             Ok(PyBytes::new(py, &obj.encode_to_vec()))
         }
     };

@@ -39,7 +39,7 @@
 //!   let state: State = hashmap! { 1 => 4.0, 2 => 5.0, 3 => 6.0 }.into();
 //!
 //!   // Evaluate the linear function with the state, and get the value and used variable ids
-//!   let value = linear.evaluate(&state).unwrap();
+//!   let value = linear.evaluate(&state, 1e-9).unwrap();
 //!
 //!   assert_eq!(value, 1.0 * 4.0 + 2.0 * 5.0 + 3.0);
 //!   ```

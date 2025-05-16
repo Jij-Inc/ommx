@@ -9,7 +9,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, state: &State) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, _atol: f64) -> Result<Self::Output> {
         let mut result = 0.0;
         for (monomial, coefficient) in self.iter() {
             let mut out = 1.0;
@@ -24,7 +24,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         Ok(result)
     }
 
-    fn partial_evaluate(&mut self, state: &State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
         if state.entries.is_empty() {
             return Ok(());
         }
@@ -56,8 +56,8 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             .collect()
     }
 
-    fn evaluate_samples(&self, samples: &Samples) -> Result<Self::SampledOutput> {
-        samples.map(|state| self.evaluate(state))
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+        samples.map(|state| self.evaluate(state, atol))
     }
 }
 
@@ -78,17 +78,17 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_linear((linear, state) in polynomial_and_state::<LinearMonomial>()) {
-            linear.evaluate(&state).unwrap();
+            linear.evaluate(&state, 1e-9).unwrap();
         }
 
         #[test]
         fn test_evaluate_quadratic((quadratic, state) in polynomial_and_state::<QuadraticMonomial>()) {
-            quadratic.evaluate(&state).unwrap();
+            quadratic.evaluate(&state, 1e-9).unwrap();
         }
 
         #[test]
         fn test_evaluate_polynomial((polynomial, state) in polynomial_and_state::<MonomialDyn>()) {
-            polynomial.evaluate(&state).unwrap();
+            polynomial.evaluate(&state, 1e-9).unwrap();
         }
     }
 
@@ -112,9 +112,9 @@ mod tests {
                 fn $name(
                     (l1, l2, state) in two_polynomial_and_state::<$monomial>()
                 ) {
-                    let v1 = l1.evaluate(&state).unwrap();
-                    let v2 = l2.evaluate(&state).unwrap();
-                    let v3 = (&l1 $op &l2).evaluate(&state).unwrap();
+                    let v1 = l1.evaluate(&state, 1e-9).unwrap();
+                    let v2 = l2.evaluate(&state, 1e-9).unwrap();
+                    let v3 = (&l1 $op &l2).evaluate(&state, 1e-9).unwrap();
                     prop_assert!((v1 $op v2).abs_diff_eq(&v3, 1e-9));
                 }
             }
@@ -164,9 +164,9 @@ mod tests {
                 fn $name(
                     (mut poly, state, s1, s2) in polynomial_and_state_split::<$monomial>()
                 ) {
-                    let v = poly.evaluate(&state).unwrap();
-                    let _ = poly.partial_evaluate(&s1).unwrap();
-                    let w = poly.evaluate(&s2).unwrap();
+                    let v = poly.evaluate(&state, 1e-9).unwrap();
+                    let _ = poly.partial_evaluate(&s1, 1e-9).unwrap();
+                    let w = poly.evaluate(&s2, 1e-9).unwrap();
                     prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
                 }
             }
@@ -194,9 +194,9 @@ mod tests {
         fn test_evaluate_samples(
             (poly, samples) in polynomial_and_samples::<LinearMonomial>()
         ) {
-            let evaluated = poly.evaluate_samples(&samples).unwrap();
+            let evaluated = poly.evaluate_samples(&samples, 1e-9).unwrap();
             let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = poly.evaluate(state).unwrap();
+                let value = poly.evaluate(state, 1e-9).unwrap();
                 (*parameter_id, value)
             }).collect();
             prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
