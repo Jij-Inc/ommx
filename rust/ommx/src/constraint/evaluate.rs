@@ -9,8 +9,8 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
-        let evaluated_value = self.function.evaluate(solution, atol)?;
+    fn evaluate(&self, solution: &crate::v1::State, _atol: f64) -> anyhow::Result<Self::Output> {
+        let evaluated_value = self.function.evaluate(solution, _atol)?;
         let used_decision_variable_ids = self
             .function
             .required_ids()
@@ -65,8 +65,8 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
-        self.function.partial_evaluate(state, atol)
+    fn partial_evaluate(&mut self, state: &crate::v1::State, _atol: f64) -> anyhow::Result<()> {
+        self.function.partial_evaluate(state, _atol)
     }
 
     fn required_ids(&self) -> VariableIDSet {

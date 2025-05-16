@@ -288,9 +288,9 @@ impl Evaluate for Quadratic {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<f64> {
+    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
         let mut sum = if let Some(linear) = &self.linear {
-            linear.evaluate(solution, atol)?
+            linear.evaluate(solution, _atol)?
         } else {
             0.0
         };
@@ -310,7 +310,7 @@ impl Evaluate for Quadratic {
         Ok(sum)
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
         let mut linear = BTreeMap::new();
         let mut constant = self.linear.as_ref().map_or(0.0, |l| l.constant);
         for term in self.linear.iter().flat_map(|l| l.terms.iter()) {
@@ -353,9 +353,9 @@ impl Evaluate for Quadratic {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
-            let value = self.evaluate(s, atol)?;
+            let value = self.evaluate(s, _atol)?;
             Ok(value)
         })?;
         Ok(out)
