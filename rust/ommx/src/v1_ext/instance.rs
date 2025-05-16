@@ -681,12 +681,12 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State, _atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
         self.check_bound(state, 1e-7)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
         for c in &self.constraints {
-            let c = c.evaluate(state, 1e-6)?;
+            let c = c.evaluate(state, atol)?;
             // Only check non-removed constraints for feasibility
             if feasible_relaxed {
                 feasible_relaxed = c.is_feasible(1e-6)?;
@@ -695,14 +695,14 @@ impl Evaluate for Instance {
         }
         let mut feasible = feasible_relaxed;
         for c in &self.removed_constraints {
-            let c = c.evaluate(state, 1e-6)?;
+            let c = c.evaluate(state, atol)?;
             if feasible {
                 feasible = c.is_feasible(1e-6)?;
             }
             evaluated_constraints.push(c);
         }
 
-        let objective = self.objective().evaluate(state, 1e-9)?;
+        let objective = self.objective().evaluate(state, atol)?;
 
         let mut state = state.clone();
         for v in &self.decision_variables {
@@ -710,7 +710,7 @@ impl Evaluate for Instance {
                 state.entries.insert(v.id, value);
             }
         }
-        eval_dependencies(&self.decision_variable_dependency, &mut state)?;
+        eval_dependencies(&self.decision_variable_dependency, &mut state, atol)?;
         for v in &self.decision_variables {
             if let HashMapEntry::Vacant(e) = state.entries.entry(v.id) {
                 let bound: crate::Bound = v.try_into()?;
@@ -730,36 +730,36 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
             }
         }
         if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(state, 1e-9)?
+            f.partial_evaluate(state, atol)?
         }
         for constraints in &mut self.constraints {
-            constraints.partial_evaluate(state, 1e-9)?;
+            constraints.partial_evaluate(state, atol)?;
         }
         for constraints in &mut self.removed_constraints {
-            constraints.partial_evaluate(state, 1e-9)?;
+            constraints.partial_evaluate(state, atol)?;
         }
         for d in self.decision_variable_dependency.values_mut() {
-            d.partial_evaluate(state, 1e-9)?;
+            d.partial_evaluate(state, atol)?;
         }
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
         // Constraints
         let mut constraints = Vec::new();
         for c in &self.constraints {
-            let evaluated = c.evaluate_samples(samples, 1e-6)?;
-            for (sample_id, feasible_) in evaluated.is_feasible(1e-6)? {
+            let evaluated = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
                 if !feasible_ {
                     feasible_relaxed.insert(sample_id, false);
                 }
@@ -768,8 +768,8 @@ impl Evaluate for Instance {
         }
         let mut feasible = feasible_relaxed.clone();
         for c in &self.removed_constraints {
-            let v = c.evaluate_samples(samples, 1e-6)?;
-            for (sample_id, feasible_) in v.is_feasible(1e-6)? {
+            let v = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in v.is_feasible(atol)? {
                 if !feasible_ {
                     feasible.insert(sample_id, false);
                 }
@@ -778,12 +778,12 @@ impl Evaluate for Instance {
         }
 
         // Objective
-        let objectives = self.objective().evaluate_samples(samples, 1e-9)?;
+        let objectives = self.objective().evaluate_samples(samples, atol)?;
 
         // Reconstruct decision variable values
         let mut samples = samples.clone();
         for state in samples.states_mut() {
-            eval_dependencies(&self.decision_variable_dependency, state?)?;
+            eval_dependencies(&self.decision_variable_dependency, state?, atol)?;
         }
         let mut transposed = samples.transpose();
         let decision_variables: Vec<SampledDecisionVariable> = self
@@ -823,13 +823,17 @@ impl Evaluate for Instance {
 }
 
 // FIXME: This would be better by using a topological sort
-fn eval_dependencies(dependencies: &HashMap<u64, Function>, state: &mut State) -> Result<()> {
+fn eval_dependencies(
+    dependencies: &HashMap<u64, Function>,
+    state: &mut State,
+    atol: f64,
+) -> Result<()> {
     let mut bucket: Vec<_> = dependencies.iter().collect();
     let mut last_size = bucket.len();
     let mut not_evaluated = Vec::new();
     loop {
         while let Some((id, f)) = bucket.pop() {
-            match f.evaluate(state, 1e-9) {
+            match f.evaluate(state, atol) {
                 Ok(value) => {
                     state.entries.insert(*id, value);
                 }
@@ -1019,7 +1023,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        eval_dependencies(&dependencies, &mut state).unwrap();
+        eval_dependencies(&dependencies, &mut state, 1e-9).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
 
@@ -1029,7 +1033,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
@@ -1037,6 +1041,6 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
     }
 }

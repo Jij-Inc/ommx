@@ -56,8 +56,8 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             .collect()
     }
 
-    fn evaluate_samples(&self, samples: &Samples, _atol: f64) -> Result<Self::SampledOutput> {
-        samples.map(|state| self.evaluate(state, _atol))
+    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+        samples.map(|state| self.evaluate(state, atol))
     }
 }
 
