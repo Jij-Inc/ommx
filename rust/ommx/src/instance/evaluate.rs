@@ -9,16 +9,16 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &v1::State) -> Result<Self::Output> {
+    fn evaluate(&self, state: &v1::State, atol: f64) -> Result<Self::Output> {
         let analysis = self.analyze_decision_variables();
         // Check bounds and integrality
 
         // Use required IDs to evaluate the objective and constraints
-        let objective = self.objective.evaluate(state)?;
+        let objective = self.objective.evaluate(state, atol)?;
         let evaluated_constraints = self
             .constraints
             .iter()
-            .map(|(_id, constraint)| constraint.evaluate(state))
+            .map(|(_id, constraint)| constraint.evaluate(state, atol))
             .collect::<Result<Vec<_>>>()?;
 
         let mut state = state.clone();
@@ -47,11 +47,11 @@ impl Evaluate for Instance {
         })
     }
 
-    fn evaluate_samples(&self, samples: &v1::Samples) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &v1::Samples, atol: f64) -> Result<Self::SampledOutput> {
         todo!()
     }
 
-    fn partial_evaluate(&mut self, state: &v1::State) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &v1::State, atol: f64) -> Result<()> {
         todo!()
     }
 

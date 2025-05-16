@@ -199,7 +199,7 @@ impl DecisionVariableAnalysis {
         }
         // Populate the state with dependent variables
         for (id, (kind, bound, f)) in self.dependent() {
-            let value = f.evaluate(&state).map_err(|error| {
+            let value = f.evaluate(&state, atol).map_err(|error| {
                 StateValidationError::FailedToEvaluateDependentVariable { id: *id, error }
             })?;
             if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
