@@ -56,6 +56,6 @@ impl Evaluate for Instance {
     }
 
     fn required_ids(&self) -> VariableIDSet {
-        self.analyze_decision_variables().used()
+        self.analyze_decision_variables().used().clone()
     }
 }

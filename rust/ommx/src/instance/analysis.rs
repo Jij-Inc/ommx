@@ -37,6 +37,9 @@ pub struct DecisionVariableAnalysis {
     #[getset(get = "pub")]
     all: VariableIDSet,
 
+    /*
+     * Kind-based partition
+     */
     #[getset(get = "pub")]
     binary: VariableIDSet,
     #[getset(get = "pub")]
@@ -48,43 +51,32 @@ pub struct DecisionVariableAnalysis {
     #[getset(get = "pub")]
     semi_continuous: Bounds,
 
+    /*
+     * Usage-based partition
+     */
     /// The set of decision variables that are used in the objective function.
     #[getset(get = "pub")]
     used_in_objective: VariableIDSet,
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
     used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
-
+    /// The set of decision variables that are used in the objective function or constraints.
+    #[getset(get = "pub")]
+    used: VariableIDSet,
     /// Fixed decision variables
     #[getset(get = "pub")]
     fixed: BTreeMap<VariableID, f64>,
     /// Dependent variables
     #[getset(get = "pub")]
     dependent: VariableIDSet,
+    /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
+    ///
+    /// Associated values are the [`Bound::nearest_to_zero`] of the decision variable, which will be populated to the state.
+    #[getset(get = "pub")]
+    irrelevant: BTreeMap<VariableID, f64>,
 }
 
 impl DecisionVariableAnalysis {
-    /// Union of `used_in_objective` and `used_in_constraints`
-    pub fn used(&self) -> VariableIDSet {
-        let mut used = self.used_in_objective.clone();
-        for ids in self.used_in_constraints.values() {
-            used.extend(ids);
-        }
-        used
-    }
-
-    /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
-    pub fn irrelevant(&self) -> VariableIDSet {
-        let relevant = self
-            .used()
-            .iter()
-            .chain(self.dependent.iter())
-            .chain(self.fixed.keys())
-            .cloned()
-            .collect();
-        self.all.difference(&relevant).cloned().collect()
-    }
-
     pub fn used_binary(&self) -> VariableIDSet {
         let used_ids = self.used();
         self.binary().intersection(&used_ids).cloned().collect()
@@ -187,6 +179,7 @@ impl DecisionVariableAnalysis {
                 }
             }
         }
+        // Populate the state with irrelevant variables
 
         Ok(state)
     }
@@ -351,21 +344,44 @@ impl Instance {
 
         let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
         for constraint in self.constraints.values() {
-            used_in_constraints.insert(
-                constraint.id,
-                constraint.function.required_ids().into_iter().collect(),
+            let required_ids: VariableIDSet =
+                constraint.function.required_ids().into_iter().collect();
+            debug_assert!(
+                required_ids.is_subset(&all),
+                "Constraints use variables not in the instance"
             );
+            used_in_constraints.insert(constraint.id, required_ids);
         }
-        debug_assert!(
-            used_in_constraints.values().all(|ids| ids.is_subset(&all)),
-            "Constraints use variables not in the instance"
-        );
+        let mut used = used_in_objective.clone();
+        for ids in used_in_constraints.values() {
+            used.extend(ids);
+        }
 
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().cloned().collect();
         debug_assert!(
             dependent.is_subset(&all),
             "Dependent variables not in the instance"
         );
+
+        let relevant: VariableIDSet = used
+            .iter()
+            .chain(dependent.iter())
+            .chain(fixed.keys())
+            .cloned()
+            .collect();
+        let irrelevant = all
+            .difference(&relevant)
+            .map(|id| {
+                let dv = self.decision_variables.get(id).unwrap(); // subset of all
+                debug_assert!(dv.substituted_value.is_none()); // fixed is subtracted
+                let value = match dv.kind {
+                    Kind::Binary | Kind::Integer => dv.bound.as_integer_bound().nearest_to_zero(),
+                    Kind::Continuous => dv.bound.nearest_to_zero(),
+                    Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                };
+                (id.clone(), value)
+            })
+            .collect();
 
         DecisionVariableAnalysis {
             all,
@@ -377,7 +393,9 @@ impl Instance {
             semi_continuous,
             used_in_objective,
             used_in_constraints,
+            used,
             dependent,
+            irrelevant,
         }
     }
 }
@@ -425,7 +443,7 @@ mod tests {
             let mut all = used.clone();
             all.extend(analysis.fixed.keys());
             all.extend(analysis.dependent.iter());
-            all.extend(analysis.irrelevant());
+            all.extend(analysis.irrelevant.keys());
             prop_assert_eq!(&all, &analysis.all);
         }
 
