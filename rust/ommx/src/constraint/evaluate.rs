@@ -74,6 +74,37 @@ impl Evaluate for Constraint {
     }
 }
 
+impl Evaluate for RemovedConstraint {
+    type Output = EvaluatedConstraint;
+    type SampledOutput = SampledConstraint;
+
+    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
+        let mut evaluated = self.constraint.evaluate(solution, atol)?;
+        evaluated.removed_reason = Some(self.removed_reason.clone());
+        evaluated.removed_reason_parameters = self.removed_reason_parameters.to_std();
+        Ok(evaluated)
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &crate::v1::Samples,
+        atol: f64,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        let mut evaluated = self.constraint.evaluate_samples(samples, atol)?;
+        evaluated.removed_reason = Some(self.removed_reason.clone());
+        evaluated.removed_reason_parameters = self.removed_reason_parameters.to_std();
+        Ok(evaluated)
+    }
+
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
+        self.constraint.partial_evaluate(state, atol)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.constraint.required_ids()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
