@@ -464,6 +464,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: f64,
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -498,7 +499,7 @@ impl Instance {
         // Check the bound of `a*f`
         // - If `lower > 0`, the constraint is infeasible
         // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
-        let bound = af.evaluate_bound(&bounds).as_integer_bound();
+        let bound = af.evaluate_bound(&bounds).as_integer_bound(atol);
         if bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: ConstraintID::from(constraint_id),
@@ -682,14 +683,14 @@ impl Evaluate for Instance {
     type SampledOutput = SampleSet;
 
     fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
-        self.check_bound(state, 1e-7)?;
+        self.check_bound(state, atol)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
         for c in &self.constraints {
             let c = c.evaluate(state, atol)?;
             // Only check non-removed constraints for feasibility
             if feasible_relaxed {
-                feasible_relaxed = c.is_feasible(1e-6)?;
+                feasible_relaxed = c.is_feasible(atol)?;
             }
             evaluated_constraints.push(c);
         }
@@ -697,7 +698,7 @@ impl Evaluate for Instance {
         for c in &self.removed_constraints {
             let c = c.evaluate(state, atol)?;
             if feasible {
-                feasible = c.is_feasible(1e-6)?;
+                feasible = c.is_feasible(atol)?;
             }
             evaluated_constraints.push(c);
         }
@@ -884,7 +885,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -892,7 +893,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
@@ -917,7 +918,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -925,7 +926,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();

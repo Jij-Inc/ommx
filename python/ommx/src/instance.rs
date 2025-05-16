@@ -90,8 +90,11 @@ impl Instance {
         constraint_id: u64,
         max_integer_range: u64,
     ) -> Result<()> {
-        self.0
-            .convert_inequality_to_equality_with_integer_slack(constraint_id, max_integer_range)
+        self.0.convert_inequality_to_equality_with_integer_slack(
+            constraint_id,
+            max_integer_range,
+            1e-6,
+        )
     }
 
     pub fn add_integer_slack_to_inequality(
@@ -127,7 +130,7 @@ impl ParametricInstance {
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
-        let instance = self.0.clone().with_parameters(parameters.0.clone())?;
+        let instance = self.0.clone().with_parameters(parameters.0.clone(), 1e-6)?;
         Ok(Instance(instance))
     }
 }

@@ -135,10 +135,10 @@ impl Evaluate for Constraint {
             .iter()
             .map(|(sample_id, value)| {
                 if self.equality() == Equality::EqualToZero {
-                    return Ok((*sample_id, value.abs() < 1e-6));
+                    return Ok((*sample_id, value.abs() < atol));
                 }
                 if self.equality() == Equality::LessThanOrEqualToZero {
-                    return Ok((*sample_id, *value < 1e-6));
+                    return Ok((*sample_id, *value < atol));
                 }
                 bail!("Unsupported equality: {:?}", self.equality());
             })
