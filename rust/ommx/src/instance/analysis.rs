@@ -68,7 +68,7 @@ pub struct DecisionVariableAnalysis {
     fixed: BTreeMap<VariableID, f64>,
     /// Dependent variables
     #[getset(get = "pub")]
-    dependent: VariableIDSet,
+    dependent: BTreeMap<VariableID, (Kind, Bound, Function)>,
     /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
     #[getset(get = "pub")]
     irrelevant: BTreeMap<VariableID, (Kind, Bound)>,
@@ -165,7 +165,7 @@ impl DecisionVariableAnalysis {
             match state.entries.entry(id.into_inner()) {
                 Entry::Occupied(entry) => {
                     if (entry.get() - value).abs() > atol {
-                        return Err(StateValidationError::FixedVariableInconsistent {
+                        return Err(StateValidationError::StateValueInconsistent {
                             id: *id,
                             state_value: *entry.get(),
                             instance_value: *value,
@@ -194,6 +194,25 @@ impl DecisionVariableAnalysis {
                         Kind::SemiInteger | Kind::SemiContinuous => 0.0,
                     };
                     entry.insert(value);
+                }
+            }
+        }
+        // Populate the state with dependent variables
+        for (id, (kind, bound, f)) in self.dependent() {
+            let value = f.evaluate(&state).map_err(|error| {
+                StateValidationError::FailedToEvaluateDependentVariable { id: *id, error }
+            })?;
+            if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
+                check_integer(*id, value, atol)?;
+            }
+            check_bound(*id, value, *bound, *kind, atol)?;
+            if let Some(v) = state.entries.insert(id.into_inner(), value) {
+                if (v - value).abs() > atol {
+                    return Err(StateValidationError::StateValueInconsistent {
+                        id: *id,
+                        state_value: v,
+                        instance_value: value,
+                    });
                 }
             }
         }
@@ -244,11 +263,18 @@ pub enum StateValidationError {
     },
     #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
     NotAnInteger { id: VariableID, value: f64 },
-    #[error("Value for fixed variable {id:?} is inconsistent. State value: {state_value}, Instance value: {instance_value}")]
-    FixedVariableInconsistent {
+    #[error("State's value for variable {id:?} is inconsistent to instance. State value: {state_value}, Instance value: {instance_value}")]
+    StateValueInconsistent {
         id: VariableID,
+        /// Value in the state
         state_value: f64,
+        /// Value determined from instance
         instance_value: f64,
+    },
+    #[error("Evaluation of dependent variable {id:?} failed. Error: {error:?}")]
+    FailedToEvaluateDependentVariable {
+        id: VariableID,
+        error: anyhow::Error,
     },
 }
 
@@ -347,15 +373,21 @@ impl Instance {
             used.extend(ids);
         }
 
-        let dependent: VariableIDSet = self.decision_variable_dependency.keys().cloned().collect();
-        debug_assert!(
-            dependent.is_subset(&all),
-            "Dependent variables not in the instance"
-        );
+        let dependent: BTreeMap<VariableID, _> = self
+            .decision_variable_dependency
+            .iter()
+            .map(|(id, f)| {
+                let dv = self
+                    .decision_variables
+                    .get(id)
+                    .expect("Invariant of Instance.decision_variable_dependency is violated");
+                (*id, (dv.kind, dv.bound, f.clone()))
+            })
+            .collect();
 
         let relevant: VariableIDSet = used
             .iter()
-            .chain(dependent.iter())
+            .chain(dependent.keys())
             .chain(fixed.keys())
             .cloned()
             .collect();
@@ -427,7 +459,7 @@ mod tests {
             );
             let mut all = used.clone();
             all.extend(analysis.fixed.keys());
-            all.extend(analysis.dependent.iter());
+            all.extend(analysis.dependent.keys());
             all.extend(analysis.irrelevant.keys());
             prop_assert_eq!(&all, &analysis.all);
         }
