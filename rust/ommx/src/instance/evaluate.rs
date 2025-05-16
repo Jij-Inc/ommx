@@ -15,11 +15,24 @@ impl Evaluate for Instance {
             .populate(state.clone(), atol)?;
 
         let objective = self.objective.evaluate(&state, atol)?;
-        let evaluated_constraints = self
-            .constraints
-            .iter()
-            .map(|(_id, constraint)| constraint.evaluate(&state, atol))
-            .collect::<Result<Vec<_>>>()?;
+
+        let mut evaluated_constraints = Vec::new();
+        let mut feasible_relaxed = true;
+        for constraint in self.constraints.values() {
+            let evaluated = constraint.evaluate(&state, atol)?;
+            if !evaluated.is_feasible(atol)? {
+                feasible_relaxed = false;
+            }
+            evaluated_constraints.push(evaluated);
+        }
+        let mut feasible = feasible_relaxed;
+        for constraint in self.removed_constraints.values() {
+            let evaluated = constraint.evaluate(&state, atol)?;
+            if !evaluated.is_feasible(atol)? {
+                feasible = false;
+            }
+            evaluated_constraints.push(evaluated);
+        }
 
         let decision_variables = self
             .decision_variables
@@ -38,6 +51,8 @@ impl Evaluate for Instance {
             objective,
             evaluated_constraints,
             decision_variables,
+            feasible,
+            feasible_relaxed: Some(feasible_relaxed),
             ..Default::default()
         })
     }
