@@ -339,12 +339,12 @@ impl Instance {
         let mut semi_integer = Bounds::default();
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
-            match dv.kind {
+            match dv.kind() {
                 Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id, dv.bound).is_some(),
-                Kind::Continuous => continuous.insert(*id, dv.bound).is_some(),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound).is_some(),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound).is_some(),
+                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
+                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
             };
             all.insert(*id);
             if let Some(value) = dv.substituted_value {
@@ -381,7 +381,7 @@ impl Instance {
                     .decision_variables
                     .get(id)
                     .expect("Invariant of Instance.decision_variable_dependency is violated");
-                (*id, (dv.kind, dv.bound, f.clone()))
+                (*id, (dv.kind(), dv.bound(), f.clone()))
             })
             .collect();
 
@@ -396,7 +396,7 @@ impl Instance {
             .map(|id| {
                 let dv = self.decision_variables.get(id).unwrap(); // subset of all
                 debug_assert!(dv.substituted_value.is_none()); // fixed is subtracted
-                (*id, (dv.kind, dv.bound))
+                (*id, (dv.kind(), dv.bound()))
             })
             .collect();
 

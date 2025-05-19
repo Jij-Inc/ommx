@@ -38,7 +38,7 @@ impl Evaluate for Instance {
             .decision_variables
             .values()
             .map(|dv| {
-                let id = dv.id.into_inner();
+                let id = dv.id().into_inner();
                 let value = state.entries.get(&id).unwrap(); // Safe unwrap, as we populate the state with the decision variables
                 let mut dv: v1::DecisionVariable = dv.clone().into();
                 dv.substituted_value = Some(*value);
