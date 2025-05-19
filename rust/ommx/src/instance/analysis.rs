@@ -77,7 +77,7 @@ pub struct DecisionVariableAnalysis {
 impl DecisionVariableAnalysis {
     pub fn used_binary(&self) -> VariableIDSet {
         let used_ids = self.used();
-        self.binary().intersection(&used_ids).cloned().collect()
+        self.binary().intersection(used_ids).cloned().collect()
     }
 
     pub fn used_integer(&self) -> Bounds {
@@ -126,13 +126,13 @@ impl DecisionVariableAnalysis {
 
         // Check the IDs in the state are subset of all IDs
         let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
-        if unknown_ids.len() > 0 {
+        if !unknown_ids.is_empty() {
             return Err(StateValidationError::UnknownIDs { unknown_ids });
         }
 
         // Check the state contains every used decision variables
         let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
-        if missing_ids.len() > 0 {
+        if !missing_ids.is_empty() {
             return Err(StateValidationError::MissingRequiredIDs { missing_ids });
         }
 
