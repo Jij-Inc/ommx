@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    v1::{SampleSet, Solution},
+    v1::{Optimality, Relaxation, SampleSet, Solution},
     Evaluate, VariableIDSet,
 };
 use anyhow::Result;
@@ -46,6 +46,7 @@ impl Evaluate for Instance {
             })
             .collect();
 
+        #[allow(deprecated)]
         Ok(Solution {
             state: Some(state.clone()),
             objective,
@@ -53,7 +54,13 @@ impl Evaluate for Instance {
             decision_variables,
             feasible,
             feasible_relaxed: Some(feasible_relaxed),
-            ..Default::default()
+            // feasible_unrelaxed is deprecated, but we need to keep it for backward compatibility
+            feasible_unrelaxed: feasible,
+            // Optimality is only detecable in the context of a solver, and `State` does not store this information.
+            optimality: Optimality::Unspecified as i32,
+            // This field means that the solver relaxes the problem for some reason, and returns a solution for the relaxed problem.
+            // The `removed_constraints` field do not relate to this. This is purely a solver-specific field.
+            relaxation: Relaxation::Unspecified as i32,
         })
     }
 
