@@ -3,7 +3,7 @@ use crate::{
     v1::{Optimality, Relaxation, SampleSet, Solution},
     Evaluate, VariableIDSet,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 
 impl Evaluate for Instance {
     type Output = Solution;
@@ -69,7 +69,29 @@ impl Evaluate for Instance {
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: f64) -> Result<()> {
-        todo!()
+        for (id, value) in state.entries.iter() {
+            let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
+                return Err(anyhow!("Unknown decision variable (ID={id}) in state."));
+            };
+            if let Some(v) = dv.substituted_value {
+                if (v - *value).abs() > atol {
+                    return Err(anyhow!("Substituted value for decision variable (ID={id}) is inconsistent: Previous={v}, New={value}"));
+                }
+            } else {
+                dv.substituted_value = Some(*value);
+            }
+        }
+        self.objective.partial_evaluate(state, atol)?;
+        for constraint in self.constraints.values_mut() {
+            constraint.partial_evaluate(state, atol)?;
+        }
+        for removed in self.removed_constraints.values_mut() {
+            removed.partial_evaluate(state, atol)?;
+        }
+        for f in self.decision_variable_dependency.values_mut() {
+            f.partial_evaluate(state, atol)?;
+        }
+        Ok(())
     }
 
     fn required_ids(&self) -> VariableIDSet {
