@@ -499,7 +499,13 @@ impl Instance {
         // Check the bound of `a*f`
         // - If `lower > 0`, the constraint is infeasible
         // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
-        let bound = af.evaluate_bound(&bounds).as_integer_bound(atol);
+        let bound = af.evaluate_bound(&bounds);
+        let bound = bound.as_integer_bound(atol).ok_or_else(|| {
+            InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound,
+            }
+        })?;
         if bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: ConstraintID::from(constraint_id),

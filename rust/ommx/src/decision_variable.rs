@@ -90,12 +90,16 @@ impl DecisionVariable {
     pub fn set_bound(&mut self, bound: Bound) -> Result<(), DecisionVariableError> {
         todo!()
     }
+
+    pub fn substitute(&mut self, value: f64) -> Result<(), DecisionVariableError> {
+        todo!()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum DecisionVariableError {
     #[error("Bound for ID={id} is inconsistent to kind: kind={kind:?}, bound={bound}")]
-    BoundInconsistent {
+    BoundInconsistentToKind {
         id: VariableID,
         kind: Kind,
         bound: Bound,

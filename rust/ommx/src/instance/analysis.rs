@@ -347,7 +347,7 @@ impl Instance {
                 Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
             };
             all.insert(*id);
-            if let Some(value) = dv.substituted_value {
+            if let Some(value) = dv.substituted_value() {
                 fixed.insert(*id, value);
             }
         }
@@ -395,7 +395,7 @@ impl Instance {
             .difference(&relevant)
             .map(|id| {
                 let dv = self.decision_variables.get(id).unwrap(); // subset of all
-                debug_assert!(dv.substituted_value.is_none()); // fixed is subtracted
+                debug_assert!(dv.substituted_value().is_none()); // fixed is subtracted
                 (*id, (dv.kind(), dv.bound()))
             })
             .collect();
