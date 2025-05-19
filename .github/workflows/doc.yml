@@ -40,9 +40,16 @@ jobs:
       - name: Install OMMX Book dependencies
         run: pip install -r requirements.txt
 
-      - name: Build Jupyter Book
+      - name: Jupyter Book 
+        env:
+          GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
         run: |
-          jupyter-book build docs/${{ matrix.lang }} --warningiserror
+          # Replace GA4_TRACKING_ID placeholder with actual value from secrets
+          # Using | as delimiter to avoid issues with / in the GA4 ID
+          cd ./docs && \
+          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
+          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
+          jupyter-book build ${{ matrix.lang }} --warningiserror
 
       - name: Upload HTML
         uses: actions/upload-artifact@v4

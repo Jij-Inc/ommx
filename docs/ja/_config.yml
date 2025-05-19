@@ -28,6 +28,8 @@ html:
   # favicon: "./logo.png"  # TODO: ロゴが出来たら設定すること
   use_issues_button: true
   use_repository_button: true
+  analytics:
+    google_analytics_id: GA4_TRACKING_ID
 
 launch_buttons:
   notebook_interface: "classic"
