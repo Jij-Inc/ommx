@@ -38,7 +38,7 @@ impl AbsDiffEq for State {
             other
                 .entries
                 .get(key)
-                .map_or(false, |v| (*value - *v).abs() < atol)
+                .is_some_and(|v| (*value - *v).abs() < atol)
         })
     }
 }
