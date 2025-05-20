@@ -50,6 +50,8 @@ impl Kind {
     /// - For [`Kind::SemiInteger`], the bound is also restricted to integer.
     ///   If there is no integer in the bound, on the other hand, returns `[0.0, 0.0]`.
     ///
+    /// As a result, the returned bound, except for `None` case, is guaranteed that there is at least one possible value.
+    ///
     /// Example
     /// --------
     ///
@@ -99,10 +101,8 @@ impl Kind {
 ///
 /// Invariants
 /// ----------
-/// - At least one possible value exists for the pair of `kind` and `bound`.
-///   - If `kind` is `Kind::Integer`, then `bound` must contains at least one integer.
-///     e.g. `kind = Kind::Integer` and `bound = [1.1, 1.9]` is invalid state.
-///   - If `kind` is `Kind::Binary`, then `bound` must contains one of `0.0` or `1.0`.
+/// - `kind` and `bound` are consistent
+///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
 ///
 #[derive(Debug, Clone, PartialEq, CopyGetters)]
 pub struct DecisionVariable {
@@ -128,11 +128,14 @@ impl DecisionVariable {
         kind: Kind,
         bound: Bound,
         substituted_value: Option<f64>,
+        atol: f64,
     ) -> Result<Self, DecisionVariableError> {
         Ok(Self {
             id,
             kind,
-            bound,
+            bound: kind
+                .consistent_bound(bound, atol)
+                .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
             substituted_value,
             name: None,
             subscripts: Vec::new(),
@@ -141,8 +144,16 @@ impl DecisionVariable {
         })
     }
 
-    pub fn set_bound(&mut self, bound: Bound) -> Result<(), DecisionVariableError> {
-        todo!()
+    pub fn set_bound(&mut self, bound: Bound, atol: f64) -> Result<(), DecisionVariableError> {
+        let bound = self.kind.consistent_bound(bound, atol).ok_or(
+            DecisionVariableError::BoundInconsistentToKind {
+                id: self.id,
+                kind: self.kind,
+                bound,
+            },
+        )?;
+        self.bound = bound;
+        Ok(())
     }
 
     pub fn substitute(&mut self, value: f64) -> Result<(), DecisionVariableError> {
