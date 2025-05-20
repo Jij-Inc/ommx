@@ -886,7 +886,7 @@ mod tests {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
@@ -899,7 +899,7 @@ mod tests {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -919,7 +919,7 @@ mod tests {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
@@ -932,7 +932,7 @@ mod tests {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -1012,7 +1012,7 @@ mod tests {
                 partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::new(1e-10).unwrap()));
+                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
             }
         }
     }

@@ -540,13 +540,13 @@ mod tests {
         fn test_as_linear_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = f.clone().as_linear().unwrap();
             // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
-            prop_assert!(f.abs_diff_eq(&Function::from(linear), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(f.abs_diff_eq(&Function::from(linear), crate::ATol::default()));
         }
 
         #[test]
         fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0,  max_id: 10})) {
             let c = f.clone().as_constant().unwrap();
-            prop_assert!(f.abs_diff_eq(&Function::from(c), crate::ATol::new(1e-10).unwrap()));
+            prop_assert!(f.abs_diff_eq(&Function::from(c), crate::ATol::default()));
         }
 
         #[test]

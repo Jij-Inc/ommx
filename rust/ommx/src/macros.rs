@@ -98,7 +98,7 @@ macro_rules! test_algebraic {
             fn test_scalar_distributive(x in any::<$target>(), y in any::<$target>(), a in -1.0..1.0_f64) {
                 let a_xy = a * (x.clone() + y.clone());
                 let ax_ay = a * x + a * y;
-                prop_assert!(a_xy.abs_diff_eq(&ax_ay, crate::ATol::new(1e-10).unwrap()));
+                prop_assert!(a_xy.abs_diff_eq(&ax_ay, crate::ATol::default()));
             }
 
             #[test]
@@ -107,7 +107,7 @@ macro_rules! test_algebraic {
                 let ab_c = ab.clone() + c.clone();
                 let bc = b.clone() + c.clone();
                 let a_bc = a.clone() + bc.clone();
-                prop_assert!(ab_c.abs_diff_eq(&a_bc, crate::ATol::new(1e-10).unwrap()), r#"
+                prop_assert!(ab_c.abs_diff_eq(&a_bc, crate::ATol::default()), r#"
                     a = {a:?}
                     b = {b:?}
                     c = {c:?}
@@ -124,7 +124,7 @@ macro_rules! test_algebraic {
                 let ab_c = ab.clone() * c.clone();
                 let bc = b * c;
                 let a_bc = a * bc.clone();
-                prop_assert!(a_bc.abs_diff_eq(&ab_c, crate::ATol::new(1e-10).unwrap()), r#"
+                prop_assert!(a_bc.abs_diff_eq(&ab_c, crate::ATol::default()), r#"
                     a*b = {ab:?}
                     b*c = {bc:?}
                     (a*b)*c = {ab_c:?}
@@ -139,7 +139,7 @@ macro_rules! test_algebraic {
                 let ab = a.clone() * b.clone();
                 let ac = a.clone() * c.clone();
                 let ab_ac = ab.clone() + ac.clone();
-                prop_assert!(a_bc.abs_diff_eq(&ab_ac, crate::ATol::new(1e-10).unwrap()), r#"
+                prop_assert!(a_bc.abs_diff_eq(&ab_ac, crate::ATol::default()), r#"
                     a = {a:?}
                     b = {b:?}
                     c = {c:?}
