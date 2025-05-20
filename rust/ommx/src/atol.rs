@@ -1,6 +1,6 @@
 use anyhow::bail;
 use ordered_float::NotNan;
-use std::ops::Deref;
+use std::ops::{Add, Deref, Sub};
 
 use crate::Coefficient;
 
@@ -55,5 +55,33 @@ impl PartialOrd<Coefficient> for ATol {
 impl Default for ATol {
     fn default() -> Self {
         ATol(NotNan::new(1e-6).unwrap())
+    }
+}
+
+impl Add<f64> for ATol {
+    type Output = f64;
+    fn add(self, rhs: f64) -> Self::Output {
+        self.into_inner() + rhs
+    }
+}
+
+impl Add<ATol> for f64 {
+    type Output = f64;
+    fn add(self, rhs: ATol) -> Self::Output {
+        self + rhs.into_inner()
+    }
+}
+
+impl Sub<f64> for ATol {
+    type Output = f64;
+    fn sub(self, rhs: f64) -> Self::Output {
+        self.into_inner() - rhs
+    }
+}
+
+impl Sub<ATol> for f64 {
+    type Output = f64;
+    fn sub(self, rhs: ATol) -> Self::Output {
+        self - rhs.into_inner()
     }
 }
