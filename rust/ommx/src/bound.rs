@@ -276,6 +276,10 @@ impl Bound {
         Self::new(f64::NEG_INFINITY, 0.0).unwrap()
     }
 
+    pub fn of_binary() -> Self {
+        Self::new(0.0, 1.0).unwrap()
+    }
+
     pub fn new(lower: f64, upper: f64) -> Result<Self, BoundError> {
         BoundError::check(lower, upper)?;
         Ok(Self { lower, upper })
@@ -307,9 +311,25 @@ impl Bound {
 
     /// Strengthen the bound for integer decision variables
     ///
-    /// Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
-    /// this method rounds to `[ceil(lower-atol), floor(upper+atol)]`
-    pub fn as_integer_bound(&self, atol: crate::ATol) -> Self {
+    /// - Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
+    ///   this method rounds to `[ceil(lower-atol), floor(upper+atol)]`
+    /// - If no integer value is in the bound, return `None`
+    ///
+    /// Examples
+    /// ---------
+    ///
+    /// ```rust
+    /// use ommx::{Bound, BoundError, ATol};
+    ///
+    /// // Rounding with absolute tolerance
+    /// let bound = Bound::new(1.000000000001, 1.99999999999).unwrap();
+    /// assert_eq!(bound.as_integer_bound(ATol::default()).unwrap(), Bound::new(1.0, 2.0).unwrap());
+    ///
+    /// // No integer value exists between 1.1 and 1.9
+    /// let bound = Bound::new(1.1, 1.9).unwrap();
+    /// assert!(bound.as_integer_bound(ATol::default()).is_none());
+    /// ```
+    pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {
             (self.lower - atol).ceil()
         } else {
@@ -320,7 +340,11 @@ impl Bound {
         } else {
             self.upper
         };
-        Self::new(lower, upper).unwrap()
+        if upper < lower {
+            None
+        } else {
+            Some(Self { lower, upper })
+        }
     }
 
     /// `[lower, upper]` with finite `lower` and `upper`
@@ -522,16 +546,6 @@ mod tests {
         Bound::arbitrary()
             .prop_flat_map(|bound| (Just(bound), bound.arbitrary_containing(1e5)))
             .boxed()
-    }
-
-    #[test]
-    fn as_integer_bound() {
-        assert_eq!(
-            Bound::new(1.000000000001, 1.99999999999)
-                .unwrap()
-                .as_integer_bound(crate::ATol::default()),
-            Bound::new(1.0, 2.0).unwrap()
-        )
     }
 
     proptest! {

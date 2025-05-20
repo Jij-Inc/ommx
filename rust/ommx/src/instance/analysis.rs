@@ -308,15 +308,15 @@ impl Instance {
         let mut semi_integer = Bounds::default();
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
-            match dv.kind {
+            match dv.kind() {
                 Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id, dv.bound).is_some(),
-                Kind::Continuous => continuous.insert(*id, dv.bound).is_some(),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound).is_some(),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound).is_some(),
+                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
+                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
             };
             all.insert(*id);
-            if let Some(value) = dv.substituted_value {
+            if let Some(value) = dv.substituted_value() {
                 fixed.insert(*id, value);
             }
         }
