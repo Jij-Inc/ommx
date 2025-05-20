@@ -41,6 +41,60 @@ pub enum Kind {
     SemiInteger,
 }
 
+impl Kind {
+    /// Check and convert the bound to a consistent bound
+    ///
+    /// - For [`Kind::Continuous`] or [`Kind::SemiContinuous`], arbitrary bound is allowed.
+    /// - For [`Kind::Integer`] or [`Kind::Binary`], the bound is restricted to integer or binary.
+    ///   If there is no integer or binary in the bound, [`None`] is returned.
+    /// - For [`Kind::SemiInteger`], the bound is also restricted to integer.
+    ///   If there is no integer in the bound, on the other hand, returns `[0.0, 0.0]`.
+    ///
+    /// Example
+    /// --------
+    ///
+    /// ```rust
+    /// use ommx::{Kind, Bound};
+    ///
+    /// // Any bound is allowed for Kind::Continuous
+    /// assert_eq!(
+    ///     Kind::Continuous.consistent_bound(Bound::new(1.0, 2.0).unwrap(), 1e-6),
+    ///     Some(Bound::new(1.0, 2.0).unwrap())
+    /// );
+    ///
+    /// // For Kind::Integer, the bound is restricted to integer.
+    /// assert_eq!(
+    ///    Kind::Integer.consistent_bound(Bound::new(1.1, 2.9).unwrap(), 1e-6),
+    ///    Some(Bound::new(2.0, 2.0).unwrap())
+    /// );
+    ///
+    /// // And if there is no integer in the bound, None is returned.
+    /// assert_eq!(
+    ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), 1e-6),
+    ///     None
+    /// );
+    /// ```
+    pub fn consistent_bound(&self, bound: Bound, atol: f64) -> Option<Bound> {
+        match self {
+            Kind::Continuous | Kind::SemiContinuous => Some(bound),
+            Kind::Integer => bound.as_integer_bound(atol),
+            Kind::SemiInteger => Some(
+                bound
+                    .as_integer_bound(atol)
+                    .unwrap_or_else(|| Bound::new(0.0, 0.0).unwrap()),
+            ),
+            Kind::Binary => {
+                let bound = bound.as_integer_bound(atol)?;
+                if bound.contains(0.0, atol) || bound.contains(1.0, atol) {
+                    Some(bound)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
 /// The decision variable with metadata.
 ///
 /// Invariants
