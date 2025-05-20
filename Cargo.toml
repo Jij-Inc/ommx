@@ -6,6 +6,7 @@ members = ["rust/ommx", "rust/protogen", "rust/dataset", "python/ommx"]
 version = "2.0.0-rc.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
