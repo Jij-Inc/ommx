@@ -162,7 +162,7 @@ impl DecisionVariable {
         }
         match self.kind {
             Kind::Integer | Kind::Binary | Kind::SemiInteger => {
-                if value.fract().abs() < atol {
+                if value.fract().abs() >= atol {
                     return Err(err());
                 }
             }
