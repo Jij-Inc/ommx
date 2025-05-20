@@ -41,7 +41,7 @@ pub struct DecisionVariableAnalysis {
      * Kind-based partition
      */
     #[getset(get = "pub")]
-    binary: VariableIDSet,
+    binary: Bounds,
     #[getset(get = "pub")]
     integer: Bounds,
     #[getset(get = "pub")]
@@ -75,9 +75,13 @@ pub struct DecisionVariableAnalysis {
 }
 
 impl DecisionVariableAnalysis {
-    pub fn used_binary(&self) -> VariableIDSet {
+    pub fn used_binary(&self) -> Bounds {
         let used_ids = self.used();
-        self.binary().intersection(used_ids).cloned().collect()
+        self.binary()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect()
     }
 
     pub fn used_integer(&self) -> Bounds {
@@ -139,9 +143,9 @@ impl DecisionVariableAnalysis {
         // Check bounds and integrality
         for (id, &value) in &state.entries {
             let id = &VariableID::from(*id);
-            if self.binary.contains(id) {
+            if let Some(bound) = self.binary.get(id) {
                 check_integer(*id, value, atol)?;
-                check_bound(*id, value, Bound::of_binary(), Kind::Binary, atol)?;
+                check_bound(*id, value, *bound, Kind::Binary, atol)?;
             } else if let Some(bound) = self.integer.get(id) {
                 check_integer(*id, value, atol)?;
                 check_bound(*id, value, *bound, Kind::Integer, atol)?;
@@ -334,18 +338,18 @@ impl Instance {
     pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
         let mut all = VariableIDSet::default();
         let mut fixed = BTreeMap::default();
-        let mut binary = VariableIDSet::default();
+        let mut binary = Bounds::default();
         let mut integer = Bounds::default();
         let mut continuous = Bounds::default();
         let mut semi_integer = Bounds::default();
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind() {
-                Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
-                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
+                Kind::Binary => binary.insert(*id, dv.bound()),
+                Kind::Integer => integer.insert(*id, dv.bound()),
+                Kind::Continuous => continuous.insert(*id, dv.bound()),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()),
             };
             all.insert(*id);
             if let Some(value) = dv.substituted_value() {
@@ -434,7 +438,7 @@ mod tests {
                 analysis.binary.len() + analysis.integer.len() + analysis.continuous.len()
                 + analysis.semi_integer.len() + analysis.semi_continuous.len()
             );
-            let mut all = analysis.binary().clone();
+            let mut all: VariableIDSet = analysis.binary.keys().cloned().collect();
             all.extend(analysis.integer.keys());
             all.extend(analysis.continuous.keys());
             all.extend(analysis.semi_integer.keys());
