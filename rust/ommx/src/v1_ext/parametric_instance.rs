@@ -47,7 +47,7 @@ impl From<Parameters> for State {
 
 impl ParametricInstance {
     /// Create a new [Instance] with the given parameters.
-    pub fn with_parameters(mut self, parameters: Parameters, atol: f64) -> Result<Instance> {
+    pub fn with_parameters(mut self, parameters: Parameters, atol: crate::ATol) -> Result<Instance> {
         let required_ids: BTreeSet<u64> = self.parameters.iter().map(|p| p.id).collect();
         let given_ids: BTreeSet<u64> = parameters.entries.keys().cloned().collect();
         if !required_ids.is_subset(&given_ids) {

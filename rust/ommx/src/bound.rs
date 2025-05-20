@@ -309,7 +309,7 @@ impl Bound {
     ///
     /// Since the bound evaluation may be inaccurate due to floating-point arithmetic error,
     /// this method rounds to `[ceil(lower-atol), floor(upper+atol)]`
-    pub fn as_integer_bound(&self, atol: f64) -> Self {
+    pub fn as_integer_bound(&self, atol: crate::ATol) -> Self {
         let lower = if self.lower.is_finite() {
             (self.lower - atol).ceil()
         } else {
@@ -359,7 +359,7 @@ impl Bound {
     }
 
     /// Check the `value` is in the bound with absolute tolerance
-    pub fn contains(&self, value: f64, atol: f64) -> bool {
+    pub fn contains(&self, value: f64, atol: crate::ATol) -> bool {
         self.lower - atol <= value && value <= self.upper + atol
     }
 

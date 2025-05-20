@@ -9,7 +9,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, state: &State, _atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, _atol: crate::ATol) -> Result<Self::Output> {
         let mut result = 0.0;
         for (monomial, coefficient) in self.iter() {
             let mut out = 1.0;
@@ -24,7 +24,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
         Ok(result)
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
         if state.entries.is_empty() {
             return Ok(());
         }
@@ -56,7 +56,7 @@ impl<M: Monomial> Evaluate for PolynomialBase<M> {
             .collect()
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
         samples.map(|state| self.evaluate(state, atol))
     }
 }

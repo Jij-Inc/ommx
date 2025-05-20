@@ -40,7 +40,7 @@ impl Instance {
         Ok(bounds)
     }
 
-    pub fn check_bound(&self, state: &State, atol: f64) -> Result<()> {
+    pub fn check_bound(&self, state: &State, atol: crate::ATol) -> Result<()> {
         let bounds = self.get_bounds()?;
         for (id, value) in state.entries.iter() {
             let id = VariableID::from(*id);
@@ -464,7 +464,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
-        atol: f64,
+        atol: crate::ATol,
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -682,7 +682,7 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output> {
         self.check_bound(state, atol)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
@@ -731,7 +731,7 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
@@ -752,7 +752,7 @@ impl Evaluate for Instance {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
@@ -827,7 +827,7 @@ impl Evaluate for Instance {
 fn eval_dependencies(
     dependencies: &HashMap<u64, Function>,
     state: &mut State,
-    atol: f64,
+    atol: crate::ATol,
 ) -> Result<()> {
     let mut bucket: Vec<_> = dependencies.iter().collect();
     let mut last_size = bucket.len();

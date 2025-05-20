@@ -21,7 +21,7 @@ impl Constraint {
 }
 
 impl EvaluatedConstraint {
-    pub fn is_feasible(&self, atol: f64) -> Result<bool> {
+    pub fn is_feasible(&self, atol: crate::ATol) -> Result<bool> {
         ensure!(atol > 0.0, "atol must be positive");
         if self.equality() == Equality::EqualToZero {
             return Ok(self.evaluated_value.abs() < atol);
@@ -33,7 +33,7 @@ impl EvaluatedConstraint {
 }
 
 impl SampledConstraint {
-    pub fn is_feasible(&self, atol: f64) -> Result<HashMap<u64, bool>> {
+    pub fn is_feasible(&self, atol: crate::ATol) -> Result<HashMap<u64, bool>> {
         ensure!(atol > 0.0, "atol must be positive");
         let values = self
             .evaluated_values
@@ -98,7 +98,7 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<Self::Output> {
         let evaluated_value = self.function().evaluate(solution, atol)?;
         let used_decision_variable_ids = self
             .function()
@@ -121,7 +121,7 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         let Some(f) = self.function.as_mut() else {
             // Since empty function means zero constant, we can return an empty set
             return Ok(());
@@ -129,7 +129,7 @@ impl Evaluate for Constraint {
         f.partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
         let evaluated_values = self.function().evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
@@ -174,7 +174,7 @@ impl Evaluate for RemovedConstraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<Self::Output> {
         let mut out = self
             .constraint
             .as_ref()
@@ -185,14 +185,14 @@ impl Evaluate for RemovedConstraint {
         Ok(out)
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         self.constraint
             .as_mut()
             .context("RemovedConstraint does not contain constraint")?
             .partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
         let mut evaluated = self
             .constraint
             .as_ref()

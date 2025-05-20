@@ -9,7 +9,11 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
+    fn evaluate(
+        &self,
+        solution: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<Self::Output> {
         let evaluated_value = self.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self
             .function
@@ -35,7 +39,7 @@ impl Evaluate for Constraint {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
-        atol: f64,
+        atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated_values = self.function.evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
@@ -65,7 +69,11 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
+    fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<()> {
         self.function.partial_evaluate(state, atol)
     }
 
