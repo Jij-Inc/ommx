@@ -260,8 +260,8 @@ impl AbsDiffEq for Bound {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.lower.abs_diff_eq(&other.lower, epsilon.into_inner())
-            && self.upper.abs_diff_eq(&other.upper, epsilon.into_inner())
+        self.lower.abs_diff_eq(&other.lower, *epsilon)
+            && self.upper.abs_diff_eq(&other.upper, *epsilon)
     }
 }
 

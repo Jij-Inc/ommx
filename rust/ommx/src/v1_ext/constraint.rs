@@ -5,7 +5,7 @@ use crate::{
     },
     Evaluate, VariableIDSet,
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{borrow::Cow, collections::HashMap};
