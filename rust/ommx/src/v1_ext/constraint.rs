@@ -22,7 +22,6 @@ impl Constraint {
 
 impl EvaluatedConstraint {
     pub fn is_feasible(&self, atol: crate::ATol) -> Result<bool> {
-        ensure!(atol > 0.0, "atol must be positive");
         if self.equality() == Equality::EqualToZero {
             return Ok(self.evaluated_value.abs() < *atol);
         } else if self.equality() == Equality::LessThanOrEqualToZero {
@@ -34,7 +33,6 @@ impl EvaluatedConstraint {
 
 impl SampledConstraint {
     pub fn is_feasible(&self, atol: crate::ATol) -> Result<HashMap<u64, bool>> {
-        ensure!(atol > 0.0, "atol must be positive");
         let values = self
             .evaluated_values
             .as_ref()
