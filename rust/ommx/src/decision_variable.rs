@@ -175,17 +175,15 @@ impl DecisionVariable {
                     new_value,
                 });
             }
+        } else if self.consistent_value(new_value, atol) {
+            self.substituted_value = Some(new_value);
         } else {
-            if self.consistent_value(new_value, atol) {
-                self.substituted_value = Some(new_value);
-            } else {
-                return Err(DecisionVariableError::SubstitutedValueInconsistentToKind {
-                    id: self.id,
-                    kind: self.kind,
-                    substituted_value: new_value,
-                    atol,
-                });
-            }
+            return Err(DecisionVariableError::SubstitutedValueInconsistentToKind {
+                id: self.id,
+                kind: self.kind,
+                substituted_value: new_value,
+                atol,
+            });
         }
         Ok(())
     }

@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    v1::{Samples, State},
+    v1::State,
     Bound, Bounds, Evaluate, Kind, VariableIDSet,
 };
 use ::approx::AbsDiffEq;
