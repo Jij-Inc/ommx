@@ -79,7 +79,7 @@ impl AbsDiffEq for Constraint {
     type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::EPSILON
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {

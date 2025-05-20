@@ -347,7 +347,7 @@ impl AbsDiffEq for Function {
     type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {

@@ -631,7 +631,7 @@ impl AbsDiffEq for Instance {
     type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -640,13 +640,13 @@ impl AbsDiffEq for Instance {
         match (self.sense.try_into(), other.sense.try_into()) {
             (Ok(Sense::Minimize), Ok(Sense::Minimize))
             | (Ok(Sense::Maximize), Ok(Sense::Maximize)) => {
-                if !f.abs_diff_eq(&g, epsilon) {
+                if !f.abs_diff_eq(&g, *epsilon) {
                     return false;
                 }
             }
             (Ok(Sense::Minimize), Ok(Sense::Maximize))
             | (Ok(Sense::Maximize), Ok(Sense::Minimize)) => {
-                if !f.abs_diff_eq(&-g.as_ref(), epsilon) {
+                if !f.abs_diff_eq(&-g.as_ref(), *epsilon) {
                     return false;
                 }
             }
@@ -667,7 +667,7 @@ impl AbsDiffEq for Instance {
                 if *eq != c.equality {
                     return false;
                 }
-                if !f.abs_diff_eq(&c.function(), epsilon) {
+                if !f.abs_diff_eq(&c.function(), *epsilon) {
                     return false;
                 }
             } else {

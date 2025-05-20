@@ -215,11 +215,11 @@ impl AbsDiffEq for Linear {
     type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        if !self.constant.abs_diff_eq(&other.constant, epsilon)
+        if !self.constant.abs_diff_eq(&other.constant, *epsilon)
             || self.terms.len() != other.terms.len()
         {
             return false;
@@ -228,7 +228,7 @@ impl AbsDiffEq for Linear {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() <= epsilon)
+            .all(|term| term.coefficient.abs() <= *epsilon)
     }
 }
 

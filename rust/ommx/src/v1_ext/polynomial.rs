@@ -211,7 +211,7 @@ impl AbsDiffEq for Polynomial {
     type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -221,7 +221,7 @@ impl AbsDiffEq for Polynomial {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() < epsilon)
+            .all(|term| term.coefficient.abs() < *epsilon)
     }
 }
 

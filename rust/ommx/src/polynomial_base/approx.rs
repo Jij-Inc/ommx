@@ -5,13 +5,13 @@ use ::approx::AbsDiffEq;
 impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
     type Epsilon = crate::ATol;
     fn default_epsilon() -> Self::Epsilon {
-        1e-9
+        crate::ATol::default()
     }
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         let residual = self - other;
         residual
             .max_coefficient_abs()
-            .is_none_or(|max| max <= epsilon)
+            .is_none_or(|max| max <= *epsilon)
     }
 }
 
