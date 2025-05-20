@@ -1,6 +1,6 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID,
-    DecisionVariableError, OffsetError, VariableID,
+    DecisionVariableError, VariableID,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -109,9 +109,6 @@ pub enum RawParseError {
 
     #[error(transparent)]
     QuadraticParseError(#[from] QuadraticParseError),
-
-    #[error(transparent)]
-    InvalidOffset(#[from] OffsetError),
 
     #[error(transparent)]
     InvalidBound(#[from] BoundError),

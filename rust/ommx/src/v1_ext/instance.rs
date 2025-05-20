@@ -40,7 +40,7 @@ impl Instance {
         Ok(bounds)
     }
 
-    pub fn check_bound(&self, state: &State, atol: f64) -> Result<()> {
+    pub fn check_bound(&self, state: &State, atol: crate::ATol) -> Result<()> {
         let bounds = self.get_bounds()?;
         for (id, value) in state.entries.iter() {
             let id = VariableID::from(*id);
@@ -464,7 +464,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
-        atol: f64,
+        atol: crate::ATol,
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -634,10 +634,10 @@ impl Instance {
 ///   but this regarded them as different problems.
 ///
 impl AbsDiffEq for Instance {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -688,7 +688,7 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output> {
         self.check_bound(state, atol)?;
         let mut evaluated_constraints = Vec::new();
         let mut feasible_relaxed = true;
@@ -737,7 +737,7 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         for v in &mut self.decision_variables {
             if let Some(value) = state.entries.get(&v.id) {
                 v.substituted_value = Some(*value);
@@ -758,7 +758,11 @@ impl Evaluate for Instance {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let mut feasible_relaxed: HashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
@@ -833,7 +837,7 @@ impl Evaluate for Instance {
 fn eval_dependencies(
     dependencies: &HashMap<u64, Function>,
     state: &mut State,
-    atol: f64,
+    atol: crate::ATol,
 ) -> Result<()> {
     let mut bucket: Vec<_> = dependencies.iter().collect();
     let mut last_size = bucket.len();
@@ -891,21 +895,21 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -924,21 +928,21 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -960,7 +964,7 @@ mod tests {
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);
-                prop_assert!(c.abs() > f64::EPSILON);
+                prop_assert!(c.abs() > f64:: EPSILON);
             }
         }
 
@@ -1002,11 +1006,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
+            let lower_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
+            let upper_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
@@ -1015,10 +1019,10 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, crate::ATol::default()).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));
+                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
             }
         }
     }
@@ -1030,7 +1034,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        eval_dependencies(&dependencies, &mut state, 1e-9).unwrap();
+        eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
 
@@ -1040,7 +1044,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
@@ -1048,6 +1052,6 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }

@@ -5,7 +5,11 @@ impl Evaluate for Function {
     type Output = f64;
     type SampledOutput = crate::v1::SampledValues;
 
-    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
+    fn evaluate(
+        &self,
+        solution: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<Self::Output> {
         match self {
             Function::Zero => Ok(0.0),
             Function::Constant(c) => Ok(c.into_inner()),
@@ -15,7 +19,11 @@ impl Evaluate for Function {
         }
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
+    fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<()> {
         match self {
             Function::Linear(f) => f.partial_evaluate(state, atol),
             Function::Quadratic(f) => f.partial_evaluate(state, atol),
@@ -36,7 +44,7 @@ impl Evaluate for Function {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
-        atol: f64,
+        atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         match self {
             Function::Zero => Ok(SampledValues::zeros(samples.ids().cloned())),
@@ -72,12 +80,12 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((f, samples) in function_and_samples()) {
-            let evaluated = f.evaluate_samples(&samples, 1e-9).unwrap();
+            let evaluated = f.evaluate_samples(&samples, crate::ATol::default()).unwrap();
             let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = f.evaluate(state, 1e-9).unwrap();
+                let value = f.evaluate(state, crate::ATol::default()).unwrap();
                 (*parameter_id, value)
             }).collect();
-            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
+            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::default()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
         }
     }
 }

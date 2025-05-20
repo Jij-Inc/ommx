@@ -1,7 +1,7 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError, RawParseError},
-    v1, VariableID,
+    v1, ATol, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -253,15 +253,15 @@ impl PartialOrd<Bound> for f64 {
 }
 
 impl AbsDiffEq for Bound {
-    type Epsilon = f64;
+    type Epsilon = ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.lower.abs_diff_eq(&other.lower, epsilon)
-            && self.upper.abs_diff_eq(&other.upper, epsilon)
+        self.lower.abs_diff_eq(&other.lower, *epsilon)
+            && self.upper.abs_diff_eq(&other.upper, *epsilon)
     }
 }
 
@@ -319,17 +319,17 @@ impl Bound {
     /// ---------
     ///
     /// ```rust
-    /// use ommx::{Bound, BoundError};
+    /// use ommx::{Bound, BoundError, ATol};
     ///
     /// // Rounding with absolute tolerance
     /// let bound = Bound::new(1.000000000001, 1.99999999999).unwrap();
-    /// assert_eq!(bound.as_integer_bound(1e-6).unwrap(), Bound::new(1.0, 2.0).unwrap());
+    /// assert_eq!(bound.as_integer_bound(ATol::default()).unwrap(), Bound::new(1.0, 2.0).unwrap());
     ///
     /// // No integer value exists between 1.1 and 1.9
     /// let bound = Bound::new(1.1, 1.9).unwrap();
-    /// assert!(bound.as_integer_bound(1e-6).is_none());
+    /// assert!(bound.as_integer_bound(ATol::default()).is_none());
     /// ```
-    pub fn as_integer_bound(&self, atol: f64) -> Option<Self> {
+    pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {
             (self.lower - atol).ceil()
         } else {
@@ -383,7 +383,7 @@ impl Bound {
     }
 
     /// Check the `value` is in the bound with absolute tolerance
-    pub fn contains(&self, value: f64, atol: f64) -> bool {
+    pub fn contains(&self, value: f64, atol: crate::ATol) -> bool {
         self.lower - atol <= value && value <= self.upper + atol
     }
 
@@ -551,23 +551,23 @@ mod tests {
     proptest! {
         #[test]
         fn contains((bound, value) in bound_and_containing()) {
-            prop_assert!(bound.contains(value, 1e-9));
+            prop_assert!(bound.contains(value, crate::ATol::default()));
         }
 
         #[test]
         fn add((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
-            prop_assert!((b1 + b2).contains(v1 + v2, 1e-9));
+            prop_assert!((b1 + b2).contains(v1 + v2, crate::ATol::default()));
         }
 
         #[test]
         fn mul((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
-            prop_assert!((b1 * b2).contains(v1 * v2, 1e-9));
+            prop_assert!((b1 * b2).contains(v1 * v2, crate::ATol::default()));
         }
 
         #[test]
         fn pow((b, v) in bound_and_containing()) {
-            prop_assert!(b.pow(2).contains(v.powi(2), 1e-9));
-            prop_assert!(b.pow(3).contains(v.powi(3), 1e-9));
+            prop_assert!(b.pow(2).contains(v.powi(2), crate::ATol::default()));
+            prop_assert!(b.pow(3).contains(v.powi(3), crate::ATol::default()));
         }
     }
 }

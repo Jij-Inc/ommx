@@ -4,7 +4,7 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::Bound;
+use crate::{ATol, Bound};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use std::collections::BTreeSet;
@@ -56,27 +56,27 @@ impl Kind {
     /// --------
     ///
     /// ```rust
-    /// use ommx::{Kind, Bound};
+    /// use ommx::{Kind, Bound, ATol};
     ///
     /// // Any bound is allowed for Kind::Continuous
     /// assert_eq!(
-    ///     Kind::Continuous.consistent_bound(Bound::new(1.0, 2.0).unwrap(), 1e-6),
+    ///     Kind::Continuous.consistent_bound(Bound::new(1.0, 2.0).unwrap(), ATol::default()),
     ///     Some(Bound::new(1.0, 2.0).unwrap())
     /// );
     ///
     /// // For Kind::Integer, the bound is restricted to integer.
     /// assert_eq!(
-    ///    Kind::Integer.consistent_bound(Bound::new(1.1, 2.9).unwrap(), 1e-6),
+    ///    Kind::Integer.consistent_bound(Bound::new(1.1, 2.9).unwrap(), ATol::default()),
     ///    Some(Bound::new(2.0, 2.0).unwrap())
     /// );
     ///
     /// // And if there is no integer in the bound, None is returned.
     /// assert_eq!(
-    ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), 1e-6),
+    ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), ATol::default()),
     ///     None
     /// );
     /// ```
-    pub fn consistent_bound(&self, bound: Bound, atol: f64) -> Option<Bound> {
+    pub fn consistent_bound(&self, bound: Bound, atol: ATol) -> Option<Bound> {
         match self {
             Kind::Continuous | Kind::SemiContinuous => Some(bound),
             Kind::Integer => bound.as_integer_bound(atol),
@@ -103,6 +103,7 @@ impl Kind {
 /// ----------
 /// - `kind` and `bound` are consistent
 ///   - i.e. `bound` is invariant under `|bound| kind.consistent_bound(bound, atol).unwrap()` for appropriate `atol`.
+/// - If `substituted_value` is set, it is consistent to `kind` and `bound`.
 ///
 #[derive(Debug, Clone, PartialEq, CopyGetters)]
 pub struct DecisionVariable {
@@ -128,33 +129,77 @@ impl DecisionVariable {
         kind: Kind,
         bound: Bound,
         substituted_value: Option<f64>,
-        atol: f64,
+        atol: ATol,
     ) -> Result<Self, DecisionVariableError> {
-        Ok(Self {
+        let mut new = Self {
             id,
             kind,
             bound: kind
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
-            substituted_value,
+            substituted_value: None, // will be set later
             name: None,
             subscripts: Vec::new(),
             parameters: FnvHashMap::default(),
             description: None,
-        })
+        };
+        if let Some(substituted_value) = substituted_value {
+            new.check_value_consistency(substituted_value, atol)?;
+            new.substituted_value = Some(substituted_value);
+        }
+        Ok(new)
     }
 
-    pub fn consistent_value(&self, value: f64, atol: f64) -> bool {
+    /// Check if the substituted value is consistent to the bound and kind
+    ///
+    /// Example
+    /// --------
+    ///
+    /// ```rust
+    /// use ommx::{DecisionVariable, Kind, Bound, ATol};
+    ///
+    /// let dv = DecisionVariable::new(
+    ///     0.into(),
+    ///     Kind::Integer,
+    ///     Bound::new(0.0, 2.0).unwrap(),
+    ///     None,
+    ///     ATol::default(),
+    /// ).unwrap();
+    ///
+    /// // 1 \in [0, 2]
+    /// assert!(dv.check_value_consistency(1.0, ATol::default()).is_ok());
+    /// // 3 \in [0, 2]
+    /// assert!(dv.check_value_consistency(3.0, ATol::default()).is_err());
+    /// // 0.5 \in [0, 2], but not consistent to Kind::Integer
+    /// assert!(dv.check_value_consistency(0.5, ATol::default()).is_err());
+    /// ```
+    pub fn check_value_consistency(
+        &self,
+        value: f64,
+        atol: ATol,
+    ) -> Result<(), DecisionVariableError> {
+        let err = || DecisionVariableError::SubstitutedValueInconsistent {
+            id: self.id,
+            kind: self.kind,
+            bound: self.bound,
+            substituted_value: value,
+            atol,
+        };
         if !self.bound.contains(value, atol) {
-            return false;
+            return Err(err());
         }
         match self.kind {
-            Kind::Continuous | Kind::SemiContinuous => true,
-            Kind::Integer | Kind::Binary | Kind::SemiInteger => value.fract().abs() < atol,
+            Kind::Integer | Kind::Binary | Kind::SemiInteger => {
+                if value.fract().abs() >= atol {
+                    return Err(err());
+                }
+            }
+            _ => {}
         }
+        Ok(())
     }
 
-    pub fn set_bound(&mut self, bound: Bound, atol: f64) -> Result<(), DecisionVariableError> {
+    pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
                 id: self.id,
@@ -166,7 +211,7 @@ impl DecisionVariable {
         Ok(())
     }
 
-    pub fn substitute(&mut self, new_value: f64, atol: f64) -> Result<(), DecisionVariableError> {
+    pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
         if let Some(previous_value) = self.substituted_value {
             if (new_value - previous_value).abs() > atol {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
@@ -175,15 +220,9 @@ impl DecisionVariable {
                     new_value,
                 });
             }
-        } else if self.consistent_value(new_value, atol) {
-            self.substituted_value = Some(new_value);
         } else {
-            return Err(DecisionVariableError::SubstitutedValueInconsistentToKind {
-                id: self.id,
-                kind: self.kind,
-                substituted_value: new_value,
-                atol,
-            });
+            self.check_value_consistency(new_value, atol)?;
+            self.substituted_value = Some(new_value);
         }
         Ok(())
     }
@@ -205,11 +244,12 @@ pub enum DecisionVariableError {
         new_value: f64,
     },
 
-    #[error("Substituted value for ID={id} is inconsistent to kind: kind={kind:?}, substituted_value={substituted_value}, atol={atol}")]
-    SubstitutedValueInconsistentToKind {
+    #[error("Substituted value for ID={id} is inconsistent: kind={kind:?}, bound={bound}, substituted_value={substituted_value}, atol={atol:?}")]
+    SubstitutedValueInconsistent {
         id: VariableID,
         kind: Kind,
+        bound: Bound,
         substituted_value: f64,
-        atol: f64,
+        atol: ATol,
     },
 }

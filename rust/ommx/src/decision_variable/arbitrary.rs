@@ -44,14 +44,14 @@ impl Arbitrary for DecisionVariable {
         (Kind::arbitrary_with(parameters), Bound::arbitrary())
             .prop_filter_map("Bound must be consistent with Kind", |(kind, bound)| {
                 // FIXME: Constructive approach to generate bounds for faster testing
-                let bound = kind.consistent_bound(bound, 1e-6)?;
+                let bound = kind.consistent_bound(bound, ATol::default())?;
                 Some((kind, bound))
             })
             .prop_map(|(kind, bound)| DecisionVariable {
                 id: VariableID::from(0), // Should be replaced with a unique ID, but cannot be generated here
                 kind,
                 bound,
-                substituted_value: None,
+                substituted_value: None, // To keep consistency in Instance level, keep this None here.
                 name: None,
                 subscripts: Vec::new(),
                 parameters: FnvHashMap::default(),

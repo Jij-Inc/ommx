@@ -300,7 +300,8 @@ fn bounds_almost_equal(a: &Bounds, b: &Bounds, atol: f64) -> bool {
 ///
 /// Other decision variables e.g. `fixed` are ignored.
 impl AbsDiffEq for DecisionVariableAnalysis {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
+
     fn default_epsilon() -> Self::Epsilon {
         Bound::default_epsilon()
     }
@@ -343,7 +344,12 @@ impl Instance {
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind() {
+            match dv.kind() {
                 Kind::Binary => binary.insert(*id),
+                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
+                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
                 Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
                 Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
                 Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),

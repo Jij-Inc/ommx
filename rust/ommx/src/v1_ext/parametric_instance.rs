@@ -47,7 +47,11 @@ impl From<Parameters> for State {
 
 impl ParametricInstance {
     /// Create a new [Instance] with the given parameters.
-    pub fn with_parameters(mut self, parameters: Parameters, atol: f64) -> Result<Instance> {
+    pub fn with_parameters(
+        mut self,
+        parameters: Parameters,
+        atol: crate::ATol,
+    ) -> Result<Instance> {
         let required_ids: BTreeSet<u64> = self.parameters.iter().map(|p| p.id).collect();
         let given_ids: BTreeSet<u64> = parameters.entries.keys().cloned().collect();
         if !required_ids.is_subset(&given_ids) {
@@ -166,10 +170,10 @@ mod tests {
         #[test]
         fn test_parametric_instance_conversion(instance in Instance::arbitrary()) {
             let parametric_instance: ParametricInstance = instance.clone().into();
-            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default(), 1e-9).unwrap();
+            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default(), crate::ATol::default()).unwrap();
             prop_assert_eq!(&converted_instance.parameters, &Some(Parameters::default()));
             prop_assert!(
-                abs_diff_eq!(instance, converted_instance, epsilon = 1e-10),
+                abs_diff_eq!(instance, converted_instance),
                 "\nLeft : {:?}\nRight: {:?}", instance, converted_instance
             );
         }
