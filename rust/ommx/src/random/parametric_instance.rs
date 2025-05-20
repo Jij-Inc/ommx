@@ -1,13 +1,13 @@
 use crate::{
     random::{
         arbitrary_constraints, arbitrary_decision_variables, arbitrary_parameters,
-        InstanceParameters,
+        arbitrary_split_ids, InstanceParameters,
     },
     v1::{
         instance::{Description, Sense},
         Function, ParametricInstance,
     },
-    Evaluate, VariableIDSet,
+    Evaluate,
 };
 use proptest::prelude::*;
 
@@ -38,7 +38,7 @@ impl Arbitrary for ParametricInstance {
                 (
                     Just(objective),
                     Just(constraints),
-                    arbitrary_split(used_ids),
+                    arbitrary_split_ids(used_ids),
                 )
                     .prop_flat_map(
                         move |(objective, constraints, (decision_variable_ids, parameter_ids))| {
@@ -82,22 +82,4 @@ impl Arbitrary for ParametricInstance {
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
-}
-
-fn arbitrary_split(ids: VariableIDSet) -> BoxedStrategy<(VariableIDSet, VariableIDSet)> {
-    let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
-    flips
-        .prop_map(move |flips| {
-            let mut used_ids = VariableIDSet::default();
-            let mut defined_ids = VariableIDSet::default();
-            for (flip, id) in flips.into_iter().zip(ids.iter()) {
-                if flip {
-                    used_ids.insert(*id);
-                } else {
-                    defined_ids.insert(*id);
-                }
-            }
-            (used_ids, defined_ids)
-        })
-        .boxed()
 }

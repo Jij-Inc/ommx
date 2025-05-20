@@ -1,27 +1,47 @@
-use std::collections::BTreeMap;
-
 use super::*;
-use crate::{v1::State, Bound, Bounds, Evaluate, Kind, VariableIDSet};
+use crate::{v1::State, ATol, Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use ::approx::AbsDiffEq;
-use fnv::FnvHashSet;
+use std::collections::BTreeMap;
 
 /// The result of analyzing the decision variables in an instance.
 ///
+/// Responsibility
+/// ---------------
+/// This struct is responsible for
+///
+/// - Serving kind-based and usage-based partitioning of decision variables to solvers.
+///   Solvers only want to know the mathematical properties of the optimization problem.
+///   They do not need to know the details of the instance, such as the names of the decision
+///   variables and constraints, removed constraints or fixed variables which does not affect the
+///   optimization problem itself.
+///
+/// - Validating the state returned by solvers, and populating the variables which does not passed to the solvers.
+///   - The state by solvers is **valid** if:
+///     - It contains every [`Self::used`] decision variables. Other IDs are allowed as long as consistent with the population result.
+///     - The values for each decision variable are within the bounds.
+///   - [`Self::populate`] checks the state is valid, and populates the state as follows:
+///     - For [`Self::fixed`] ID, the fixed value is used.
+///     - For [`Self::irrelevant`] ID, [`Bound::nearest_to_zero`] is used as the value.
+///     - For [`Self::dependent`] ID, the value is evaluated from other IDs.
+///
 /// Invariants
 /// -----------
-/// - Every field are subset of `all`.
-/// - `binary`, `integer`, `continuous`, `semi_integer`, and `semi_continuous`
-///   are disjoint, and their union is equal to `all`.
-/// - The union of `used_in_objective` and `used_in_constraints` (= `used`), `fixed`,
-///   and `dependent` are disjoint each other.
+/// - Every IDs are subset of [`Self::all`].
+/// - (kind-based partitioning) [`Self::binary`], [`Self::integer`], [`Self::continuous`], [`Self::semi_integer`], and [`Self::semi_continuous`]
+///   are disjoint, and their union is equal to [`Self::all`].
+/// - (usage-based partitioning) The union of [`Self::used_in_objective`] and [`Self::used_in_constraints`] (= [`Self::used`]), [`Self::fixed`],
+///   and [`Self::dependent`] are disjoint each other. Remaining decision variables are [`Self::irrelevant`].
 #[derive(Debug, Clone, PartialEq, getset::Getters)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
     #[getset(get = "pub")]
     all: VariableIDSet,
 
+    /*
+     * Kind-based partition
+     */
     #[getset(get = "pub")]
-    binary: VariableIDSet,
+    binary: Bounds,
     #[getset(get = "pub")]
     integer: Bounds,
     #[getset(get = "pub")]
@@ -31,46 +51,37 @@ pub struct DecisionVariableAnalysis {
     #[getset(get = "pub")]
     semi_continuous: Bounds,
 
+    /*
+     * Usage-based partition
+     */
     /// The set of decision variables that are used in the objective function.
     #[getset(get = "pub")]
     used_in_objective: VariableIDSet,
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
     used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
-
+    /// The set of decision variables that are used in the objective function or constraints.
+    #[getset(get = "pub")]
+    used: VariableIDSet,
     /// Fixed decision variables
     #[getset(get = "pub")]
     fixed: BTreeMap<VariableID, f64>,
     /// Dependent variables
     #[getset(get = "pub")]
-    dependent: VariableIDSet,
+    dependent: BTreeMap<VariableID, (Kind, Bound, Function)>,
+    /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
+    #[getset(get = "pub")]
+    irrelevant: BTreeMap<VariableID, (Kind, Bound)>,
 }
 
 impl DecisionVariableAnalysis {
-    /// Union of `used_in_objective` and `used_in_constraints`
-    pub fn used(&self) -> VariableIDSet {
-        let mut used = self.used_in_objective.clone();
-        for ids in self.used_in_constraints.values() {
-            used.extend(ids);
-        }
-        used
-    }
-
-    /// The set of decision variables that are not used in the objective or constraints and are not fixed or dependent.
-    pub fn irrelevant(&self) -> VariableIDSet {
-        let relevant = self
-            .used()
-            .iter()
-            .chain(self.dependent.iter())
-            .chain(self.fixed.keys())
-            .cloned()
-            .collect();
-        self.all.difference(&relevant).cloned().collect()
-    }
-
-    pub fn used_binary(&self) -> VariableIDSet {
+    pub fn used_binary(&self) -> Bounds {
         let used_ids = self.used();
-        self.binary().intersection(&used_ids).cloned().collect()
+        self.binary()
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, bound)| (*id, *bound))
+            .collect()
     }
 
     pub fn used_integer(&self) -> Bounds {
@@ -109,100 +120,142 @@ impl DecisionVariableAnalysis {
             .collect()
     }
 
-    /// Check the state is valid for this analysis.
+    /// Check the state is **valid**, and populate the state with the removed decision variables
     ///
-    /// The state is **valid** if:
-    /// - The IDs which the state contains equals to `used` exactly.
-    /// - The values of the state satisfy the bounds of the decision variables.
-    pub fn validate_state(
-        &self,
-        state: &State,
-        atol: crate::ATol,
-    ) -> Result<(), StateValidationError> {
+    /// Post-condition
+    /// --------------
+    /// - The IDs of returned [`State`] are the same as [`Self::all`].
+    pub fn populate(&self, mut state: State, atol: ATol) -> Result<State, StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
-        let used_ids = self.used();
 
-        if state_ids != used_ids {
-            let extra_in_state: FnvHashSet<VariableID> =
-                state_ids.difference(&used_ids).cloned().collect();
-            let missing_from_state: FnvHashSet<VariableID> =
-                used_ids.difference(&state_ids).cloned().collect();
-            return Err(StateValidationError::MismatchedIDs {
-                extra: extra_in_state,
-                missing: missing_from_state,
-            });
+        // Check the IDs in the state are subset of all IDs
+        let unknown_ids: VariableIDSet = state_ids.difference(&self.all).cloned().collect();
+        if !unknown_ids.is_empty() {
+            return Err(StateValidationError::UnknownIDs { unknown_ids });
         }
 
+        // Check the state contains every used decision variables
+        let missing_ids: VariableIDSet = self.used().difference(&state_ids).cloned().collect();
+        if !missing_ids.is_empty() {
+            return Err(StateValidationError::MissingRequiredIDs { missing_ids });
+        }
+
+        // Check bounds and integrality
         for (id, &value) in &state.entries {
-            let id_ref = &VariableID::from(*id);
-            if self.binary.contains(id_ref) {
-                if (value - 0.0).abs() > *atol && (value - 1.0).abs() > *atol {
-                    return Err(StateValidationError::BinaryValueNotBool { id: *id_ref, value });
+            let id = &VariableID::from(*id);
+            if let Some(bound) = self.binary.get(id) {
+                check_integer(*id, value, atol)?;
+                check_bound(*id, value, *bound, Kind::Binary, atol)?;
+            } else if let Some(bound) = self.integer.get(id) {
+                check_integer(*id, value, atol)?;
+                check_bound(*id, value, *bound, Kind::Integer, atol)?;
+            } else if let Some(bound) = self.continuous.get(id) {
+                check_bound(*id, value, *bound, Kind::Continuous, atol)?;
+            } else if let Some(bound) = self.semi_integer.get(id) {
+                if value.abs() > atol {
+                    check_integer(*id, value, atol)?;
+                    check_bound(*id, value, *bound, Kind::SemiInteger, atol)?;
                 }
-            } else if let Some(bound) = self.integer.get(id_ref) {
-                if (value.fract()).abs() > *atol {
-                    return Err(StateValidationError::NotAnInteger { id: *id_ref, value });
-                }
-                if !bound.contains(value, atol) {
-                    return Err(StateValidationError::ValueOutOfBounds {
-                        id: *id_ref,
-                        value,
-                        bound: *bound,
-                        kind: Kind::Integer,
-                    });
-                }
-            } else if let Some(bound) = self.continuous.get(id_ref) {
-                if !bound.contains(value, atol) {
-                    return Err(StateValidationError::ValueOutOfBounds {
-                        id: *id_ref,
-                        value,
-                        bound: *bound,
-                        kind: Kind::Continuous,
-                    });
-                }
-            } else if let Some(bound) = self.semi_integer.get(id_ref) {
-                if value.abs() > *atol {
-                    // If not zero
-                    if (value.fract()).abs() > *atol {
-                        return Err(StateValidationError::SemiIntegerNonZeroNotInteger {
-                            id: *id_ref,
-                            value,
-                        });
-                    }
-                    if !bound.contains(value, atol) {
-                        return Err(StateValidationError::ValueOutOfBounds {
-                            id: *id_ref,
-                            value,
-                            bound: *bound,
-                            kind: Kind::SemiInteger,
-                        });
-                    }
-                }
-            } else if let Some(bound) = self.semi_continuous.get(id_ref) {
-                if value.abs() > *atol {
-                    // If not zero
-                    if !bound.contains(value, atol) {
-                        return Err(StateValidationError::ValueOutOfBounds {
-                            id: *id_ref,
-                            value,
-                            bound: *bound,
-                            kind: Kind::SemiContinuous,
-                        });
-                    }
+            } else if let Some(bound) = self.semi_continuous.get(id) {
+                if value.abs() > atol {
+                    check_bound(*id, value, *bound, Kind::SemiContinuous, atol)?;
                 }
             }
         }
-        Ok(())
+
+        // Populate the state with fixed variables
+        for (id, value) in self.fixed() {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    if (entry.get() - value).abs() > atol {
+                        return Err(StateValidationError::StateValueInconsistent {
+                            id: *id,
+                            state_value: *entry.get(),
+                            instance_value: *value,
+                        });
+                    }
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(*value);
+                }
+            }
+        }
+        // Populate the state with irrelevant variables
+        for (id, (kind, bound)) in self.irrelevant() {
+            use std::collections::hash_map::Entry;
+            match state.entries.entry(id.into_inner()) {
+                Entry::Occupied(entry) => {
+                    let value = *entry.get();
+                    if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
+                        check_integer(*id, value, atol)?;
+                    }
+                    check_bound(*id, value, *bound, *kind, atol)?;
+                }
+                Entry::Vacant(entry) => {
+                    let value = match kind {
+                        Kind::Binary | Kind::Integer | Kind::Continuous => bound.nearest_to_zero(),
+                        Kind::SemiInteger | Kind::SemiContinuous => 0.0,
+                    };
+                    entry.insert(value);
+                }
+            }
+        }
+        // Populate the state with dependent variables
+        for (id, (kind, bound, f)) in self.dependent() {
+            let value = f.evaluate(&state, atol).map_err(|error| {
+                StateValidationError::FailedToEvaluateDependentVariable { id: *id, error }
+            })?;
+            if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
+                check_integer(*id, value, atol)?;
+            }
+            check_bound(*id, value, *bound, *kind, atol)?;
+            if let Some(v) = state.entries.insert(id.into_inner(), value) {
+                if (v - value).abs() > atol {
+                    return Err(StateValidationError::StateValueInconsistent {
+                        id: *id,
+                        state_value: v,
+                        instance_value: value,
+                    });
+                }
+            }
+        }
+
+        Ok(state)
     }
+}
+
+fn check_integer(id: VariableID, value: f64, atol: ATol) -> Result<(), StateValidationError> {
+    if value.fract().abs() > atol {
+        return Err(StateValidationError::NotAnInteger { id, value });
+    }
+    Ok(())
+}
+
+fn check_bound(
+    id: VariableID,
+    value: f64,
+    bound: Bound,
+    kind: Kind,
+    atol: ATol,
+) -> Result<(), StateValidationError> {
+    if !bound.contains(value, atol) {
+        return Err(StateValidationError::ValueOutOfBounds {
+            id,
+            value,
+            bound,
+            kind,
+        });
+    }
+    Ok(())
 }
 
 #[derive(Debug, thiserror::Error)]
 pub enum StateValidationError {
-    #[error("State IDs do not match used variable IDs. Extra in state: {extra:?}, Missing from state: {missing:?}")]
-    MismatchedIDs {
-        extra: FnvHashSet<VariableID>,
-        missing: FnvHashSet<VariableID>,
-    },
+    #[error("The state contains some unknown IDs: {unknown_ids:?}")]
+    UnknownIDs { unknown_ids: VariableIDSet },
+    #[error("The state does not contain some required IDs: {missing_ids:?}")]
+    MissingRequiredIDs { missing_ids: VariableIDSet },
     #[error(
         "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
     )]
@@ -212,12 +265,36 @@ pub enum StateValidationError {
         bound: Bound,
         kind: Kind,
     },
-    #[error("Value for binary variable {id:?} is not 0.0 or 1.0. Value: {value}")]
-    BinaryValueNotBool { id: VariableID, value: f64 },
     #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
     NotAnInteger { id: VariableID, value: f64 },
-    #[error("Non-zero value for semi-integer variable {id:?} is not an integer. Value: {value}")]
-    SemiIntegerNonZeroNotInteger { id: VariableID, value: f64 },
+    #[error("State's value for variable {id:?} is inconsistent to instance. State value: {state_value}, Instance value: {instance_value}")]
+    StateValueInconsistent {
+        id: VariableID,
+        /// Value in the state
+        state_value: f64,
+        /// Value determined from instance
+        instance_value: f64,
+    },
+    #[error("Evaluation of dependent variable {id:?} failed. Error: {error:?}")]
+    FailedToEvaluateDependentVariable {
+        id: VariableID,
+        error: anyhow::Error,
+    },
+}
+
+fn bounds_almost_equal(a: &Bounds, b: &Bounds, atol: ATol) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    for ((a_id, a_bound), (b_id, b_bound)) in a.iter().zip(b.iter()) {
+        if a_id != b_id {
+            return false;
+        }
+        if !a_bound.abs_diff_eq(b_bound, atol) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Check if **used** decision variables has the same bounds
@@ -229,70 +306,29 @@ impl AbsDiffEq for DecisionVariableAnalysis {
     fn default_epsilon() -> Self::Epsilon {
         Bound::default_epsilon()
     }
-
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         if self.used_binary() != other.used_binary() {
             return false;
         }
-
-        let self_integers = self.used_integer();
-        let other_integers = other.used_integer();
-        if self_integers.len() != other_integers.len() {
+        if !bounds_almost_equal(&self.used_integer(), &other.used_integer(), epsilon) {
             return false;
         }
-        for (id, bound) in &self_integers {
-            if let Some(other_bound) = other_integers.get(id) {
-                if !bound.abs_diff_eq(other_bound, epsilon) {
-                    return false;
-                }
-            } else {
-                return false; // Not found in other instance
-            }
-        }
-
-        let self_continuous = self.used_continuous();
-        let other_continuous = other.used_continuous();
-        if self_continuous.len() != other_continuous.len() {
+        if !bounds_almost_equal(&self.used_continuous(), &other.used_continuous(), epsilon) {
             return false;
         }
-        for (id, bound) in &self_continuous {
-            if let Some(other_bound) = other_continuous.get(id) {
-                if !bound.abs_diff_eq(other_bound, epsilon) {
-                    return false;
-                }
-            } else {
-                return false; // Not found in other instance
-            }
-        }
-
-        let self_semi_integer = self.used_semi_integer();
-        let other_semi_integer = other.used_semi_integer();
-        if self_semi_integer.len() != other_semi_integer.len() {
+        if !bounds_almost_equal(
+            &self.used_semi_integer(),
+            &other.used_semi_integer(),
+            epsilon,
+        ) {
             return false;
         }
-        for (id, bound) in &self_semi_integer {
-            if let Some(other_bound) = other_semi_integer.get(id) {
-                if !bound.abs_diff_eq(other_bound, epsilon) {
-                    return false;
-                }
-            } else {
-                return false; // Not found in other instance
-            }
-        }
-
-        let self_semi_continuous = self.used_semi_continuous();
-        let other_semi_continuous = other.used_semi_continuous();
-        if self_semi_continuous.len() != other_semi_continuous.len() {
+        if !bounds_almost_equal(
+            &self.used_semi_continuous(),
+            &other.used_semi_continuous(),
+            epsilon,
+        ) {
             return false;
-        }
-        for (id, bound) in &self_semi_continuous {
-            if let Some(other_bound) = other_semi_continuous.get(id) {
-                if !bound.abs_diff_eq(other_bound, epsilon) {
-                    return false;
-                }
-            } else {
-                return false; // Not found in other instance
-            }
         }
         true
     }
@@ -302,18 +338,18 @@ impl Instance {
     pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
         let mut all = VariableIDSet::default();
         let mut fixed = BTreeMap::default();
-        let mut binary = VariableIDSet::default();
+        let mut binary = Bounds::default();
         let mut integer = Bounds::default();
         let mut continuous = Bounds::default();
         let mut semi_integer = Bounds::default();
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind() {
-                Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
-                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
+                Kind::Binary => binary.insert(*id, dv.bound()),
+                Kind::Integer => integer.insert(*id, dv.bound()),
+                Kind::Continuous => continuous.insert(*id, dv.bound()),
+                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()),
+                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()),
             };
             all.insert(*id);
             if let Some(value) = dv.substituted_value() {
@@ -329,21 +365,45 @@ impl Instance {
 
         let mut used_in_constraints: BTreeMap<ConstraintID, VariableIDSet> = BTreeMap::default();
         for constraint in self.constraints.values() {
-            used_in_constraints.insert(
-                constraint.id,
-                constraint.function.required_ids().into_iter().collect(),
+            let required_ids: VariableIDSet =
+                constraint.function.required_ids().into_iter().collect();
+            debug_assert!(
+                required_ids.is_subset(&all),
+                "Constraints use variables not in the instance"
             );
+            used_in_constraints.insert(constraint.id, required_ids);
         }
-        debug_assert!(
-            used_in_constraints.values().all(|ids| ids.is_subset(&all)),
-            "Constraints use variables not in the instance"
-        );
+        let mut used = used_in_objective.clone();
+        for ids in used_in_constraints.values() {
+            used.extend(ids);
+        }
 
-        let dependent: VariableIDSet = self.decision_variable_dependency.keys().cloned().collect();
-        debug_assert!(
-            dependent.is_subset(&all),
-            "Dependent variables not in the instance"
-        );
+        let dependent: BTreeMap<VariableID, _> = self
+            .decision_variable_dependency
+            .iter()
+            .map(|(id, f)| {
+                let dv = self
+                    .decision_variables
+                    .get(id)
+                    .expect("Invariant of Instance.decision_variable_dependency is violated");
+                (*id, (dv.kind(), dv.bound(), f.clone()))
+            })
+            .collect();
+
+        let relevant: VariableIDSet = used
+            .iter()
+            .chain(dependent.keys())
+            .chain(fixed.keys())
+            .cloned()
+            .collect();
+        let irrelevant = all
+            .difference(&relevant)
+            .map(|id| {
+                let dv = self.decision_variables.get(id).unwrap(); // subset of all
+                debug_assert!(dv.substituted_value().is_none()); // fixed is subtracted
+                (*id, (dv.kind(), dv.bound()))
+            })
+            .collect();
 
         DecisionVariableAnalysis {
             all,
@@ -355,7 +415,9 @@ impl Instance {
             semi_continuous,
             used_in_objective,
             used_in_constraints,
+            used,
             dependent,
+            irrelevant,
         }
     }
 }
@@ -376,7 +438,7 @@ mod tests {
                 analysis.binary.len() + analysis.integer.len() + analysis.continuous.len()
                 + analysis.semi_integer.len() + analysis.semi_continuous.len()
             );
-            let mut all = analysis.binary().clone();
+            let mut all: VariableIDSet = analysis.binary.keys().cloned().collect();
             all.extend(analysis.integer.keys());
             all.extend(analysis.continuous.keys());
             all.extend(analysis.semi_integer.keys());
@@ -402,9 +464,21 @@ mod tests {
             );
             let mut all = used.clone();
             all.extend(analysis.fixed.keys());
-            all.extend(analysis.dependent.iter());
-            all.extend(analysis.irrelevant());
+            all.extend(analysis.dependent.keys());
+            all.extend(analysis.irrelevant.keys());
             prop_assert_eq!(&all, &analysis.all);
+        }
+
+        /// Test post-condition
+        #[test]
+        fn test_populate(
+            (instance, state) in Instance::arbitrary()
+                .prop_flat_map(move |instance| instance.arbitrary_state().prop_map(move |state| (instance.clone(), state)))
+        ) {
+            let analysis = instance.analyze_decision_variables();
+            let populated = analysis.populate(state.clone(), ATol::default()).unwrap();
+            let populated_ids: VariableIDSet = populated.entries.keys().map(|id| (*id).into()).collect();
+            prop_assert_eq!(populated_ids, analysis.all);
         }
     }
 }

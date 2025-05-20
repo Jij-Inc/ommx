@@ -1,4 +1,6 @@
-use crate::v1::State;
+use approx::AbsDiffEq;
+
+use crate::{v1::State, ATol};
 use std::collections::HashMap;
 
 impl From<HashMap<u64, f64>> for State {
@@ -21,5 +23,27 @@ impl IntoIterator for State {
 
     fn into_iter(self) -> Self::IntoIter {
         self.entries.into_iter()
+    }
+}
+
+impl AbsDiffEq for State {
+    type Epsilon = ATol;
+
+    fn default_epsilon() -> Self::Epsilon {
+        ATol::default()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, atol: Self::Epsilon) -> bool {
+        self.entries.len() == other.entries.len()
+            && self.entries.iter().all(|(key, value)| {
+                other
+                    .entries
+                    .get(key)
+                    .is_some_and(|v| (*value - *v).abs() < atol)
+            })
+            && other
+                .entries
+                .keys()
+                .all(|key| self.entries.contains_key(key))
     }
 }
