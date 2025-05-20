@@ -220,7 +220,7 @@ pub enum StateValidationError {
 ///
 /// Other decision variables e.g. `fixed` are ignored.
 impl AbsDiffEq for DecisionVariableAnalysis {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         Bound::default_epsilon()

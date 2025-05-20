@@ -628,7 +628,7 @@ impl Instance {
 ///   but this regarded them as different problems.
 ///
 impl AbsDiffEq for Instance {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()

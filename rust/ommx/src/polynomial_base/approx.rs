@@ -3,7 +3,7 @@ use ::approx::AbsDiffEq;
 
 /// Compare two polynomial by maximum coefficient difference.
 impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
     fn default_epsilon() -> Self::Epsilon {
         1e-9
     }

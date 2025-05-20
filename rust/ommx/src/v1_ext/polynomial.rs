@@ -208,7 +208,7 @@ impl_neg_by_mul!(Polynomial);
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Polynomial {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()

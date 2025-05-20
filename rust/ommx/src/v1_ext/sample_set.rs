@@ -32,7 +32,7 @@ impl FromIterator<(u64, f64)> for SampledValues {
 }
 
 impl AbsDiffEq for SampledValues {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         1e-9

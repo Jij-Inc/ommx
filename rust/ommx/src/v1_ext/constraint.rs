@@ -76,7 +76,7 @@ impl SampledConstraint {
 }
 
 impl AbsDiffEq for Constraint {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::EPSILON

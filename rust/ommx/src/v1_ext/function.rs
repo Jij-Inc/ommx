@@ -344,7 +344,7 @@ impl Product for Function {
 }
 
 impl AbsDiffEq for Function {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()

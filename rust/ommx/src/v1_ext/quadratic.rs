@@ -245,7 +245,7 @@ impl_neg_by_mul!(Quadratic);
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Quadratic {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()

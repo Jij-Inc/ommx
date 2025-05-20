@@ -1,7 +1,7 @@
 use crate::{
     macros::{impl_add_inverse, impl_mul_inverse},
     parse::{Parse, ParseError, RawParseError},
-    v1, VariableID,
+    v1, ATol, VariableID,
 };
 use approx::AbsDiffEq;
 use num::Zero;
@@ -253,15 +253,15 @@ impl PartialOrd<Bound> for f64 {
 }
 
 impl AbsDiffEq for Bound {
-    type Epsilon = f64;
+    type Epsilon = ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.lower.abs_diff_eq(&other.lower, epsilon)
-            && self.upper.abs_diff_eq(&other.upper, epsilon)
+        self.lower.abs_diff_eq(&other.lower, epsilon.into_inner())
+            && self.upper.abs_diff_eq(&other.upper, epsilon.into_inner())
     }
 }
 

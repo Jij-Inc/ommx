@@ -212,7 +212,7 @@ impl Mul for Linear {
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Linear {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         f64::default_epsilon()

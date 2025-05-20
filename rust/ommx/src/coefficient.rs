@@ -2,6 +2,8 @@ use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
 
+use crate::ATol;
+
 #[derive(Debug, thiserror::Error)]
 pub enum CoefficientError {
     #[error("Coefficient must be non-zero")]
@@ -126,5 +128,17 @@ impl PartialEq<f64> for Coefficient {
 impl PartialOrd<f64> for Coefficient {
     fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
         Some(self.into_inner().total_cmp(other))
+    }
+}
+
+impl PartialEq<ATol> for Coefficient {
+    fn eq(&self, other: &ATol) -> bool {
+        self.into_inner() == other.into_inner()
+    }
+}
+
+impl PartialOrd<ATol> for Coefficient {
+    fn partial_cmp(&self, other: &ATol) -> Option<std::cmp::Ordering> {
+        self.into_inner().partial_cmp(&other.into_inner())
     }
 }
