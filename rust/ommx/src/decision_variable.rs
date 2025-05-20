@@ -144,6 +144,16 @@ impl DecisionVariable {
         })
     }
 
+    pub fn consistent_value(&self, value: f64, atol: f64) -> bool {
+        if !self.bound.contains(value, atol) {
+            return false;
+        }
+        match self.kind {
+            Kind::Continuous | Kind::SemiContinuous => true,
+            Kind::Integer | Kind::Binary | Kind::SemiInteger => value.fract().abs() < atol,
+        }
+    }
+
     pub fn set_bound(&mut self, bound: Bound, atol: f64) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
@@ -156,8 +166,28 @@ impl DecisionVariable {
         Ok(())
     }
 
-    pub fn substitute(&mut self, value: f64) -> Result<(), DecisionVariableError> {
-        todo!()
+    pub fn substitute(&mut self, new_value: f64, atol: f64) -> Result<(), DecisionVariableError> {
+        if let Some(previous_value) = self.substituted_value {
+            if (new_value - previous_value).abs() > atol {
+                return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                    id: self.id,
+                    previous_value,
+                    new_value,
+                });
+            }
+        } else {
+            if self.consistent_value(new_value, atol) {
+                self.substituted_value = Some(new_value);
+            } else {
+                return Err(DecisionVariableError::SubstitutedValueInconsistentToKind {
+                    id: self.id,
+                    kind: self.kind,
+                    substituted_value: new_value,
+                    atol,
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -170,10 +200,18 @@ pub enum DecisionVariableError {
         bound: Bound,
     },
 
-    #[error("Substituted variable for ID={id} is inconsistent: previous={previous_value}, new={new_value}")]
-    SubstitutedVariableInconsistent {
+    #[error("Substituted value for ID={id} cannot be overwrite: previous={previous_value}, new={new_value}")]
+    SubstitutedValueOverwrite {
         id: VariableID,
         previous_value: f64,
         new_value: f64,
+    },
+
+    #[error("Substituted value for ID={id} is inconsistent to kind: kind={kind:?}, substituted_value={substituted_value}, atol={atol}")]
+    SubstitutedValueInconsistentToKind {
+        id: VariableID,
+        kind: Kind,
+        substituted_value: f64,
+        atol: f64,
     },
 }

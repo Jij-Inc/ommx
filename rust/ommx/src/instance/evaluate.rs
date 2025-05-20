@@ -73,7 +73,7 @@ impl Evaluate for Instance {
             let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
                 return Err(anyhow!("Unknown decision variable (ID={id}) in state."));
             };
-            dv.substitute(*value)?;
+            dv.substitute(*value, atol)?;
         }
         self.objective.partial_evaluate(state, atol)?;
         for constraint in self.constraints.values_mut() {
