@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     v1::{EvaluatedConstraint, SampledConstraint},
-    Evaluate, FnvHashMapExt, VariableIDSet,
+    ATol, Evaluate, FnvHashMapExt, VariableIDSet,
 };
 use std::collections::HashMap;
 
@@ -86,7 +86,7 @@ impl Evaluate for RemovedConstraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
+    fn evaluate(&self, solution: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
         let mut evaluated = self.constraint.evaluate(solution, atol)?;
         evaluated.removed_reason = Some(self.removed_reason.clone());
         evaluated.removed_reason_parameters = self.removed_reason_parameters.to_std();
@@ -96,7 +96,7 @@ impl Evaluate for RemovedConstraint {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
-        atol: f64,
+        atol: ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let mut evaluated = self.constraint.evaluate_samples(samples, atol)?;
         evaluated.removed_reason = Some(self.removed_reason.clone());
@@ -104,7 +104,7 @@ impl Evaluate for RemovedConstraint {
         Ok(evaluated)
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {
         self.constraint.partial_evaluate(state, atol)
     }
 

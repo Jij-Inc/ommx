@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     v1::{Optimality, Relaxation, SampleSet, SampledDecisionVariable, Solution},
-    Evaluate, VariableIDSet,
+    ATol, Evaluate, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ impl Evaluate for Instance {
     type Output = Solution;
     type SampledOutput = SampleSet;
 
-    fn evaluate(&self, state: &v1::State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self
             .analyze_decision_variables()
             .populate(state.clone(), atol)?;
@@ -65,7 +65,7 @@ impl Evaluate for Instance {
         })
     }
 
-    fn evaluate_samples(&self, samples: &v1::Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
         // Populate the decision variables in the samples
         let samples = {
             let analysis = self.analyze_decision_variables();
@@ -131,7 +131,7 @@ impl Evaluate for Instance {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &v1::State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         for (id, value) in state.entries.iter() {
             let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
                 return Err(anyhow!("Unknown decision variable (ID={id}) in state."));

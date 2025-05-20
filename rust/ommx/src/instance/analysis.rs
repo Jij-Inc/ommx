@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    v1::State,
-    Bound, Bounds, Evaluate, Kind, VariableIDSet,
-};
+use crate::{v1::State, ATol, Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use ::approx::AbsDiffEq;
 use std::collections::BTreeMap;
 
@@ -124,7 +121,7 @@ impl DecisionVariableAnalysis {
     /// Post-condition
     /// --------------
     /// - The IDs of returned [`State`] are the same as [`Self::all`].
-    pub fn populate(&self, mut state: State, atol: f64) -> Result<State, StateValidationError> {
+    pub fn populate(&self, mut state: State, atol: ATol) -> Result<State, StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
 
         // Check the IDs in the state are subset of all IDs
@@ -224,7 +221,7 @@ impl DecisionVariableAnalysis {
     }
 }
 
-fn check_integer(id: VariableID, value: f64, atol: f64) -> Result<(), StateValidationError> {
+fn check_integer(id: VariableID, value: f64, atol: ATol) -> Result<(), StateValidationError> {
     if value.fract().abs() > atol {
         return Err(StateValidationError::NotAnInteger { id, value });
     }
@@ -236,7 +233,7 @@ fn check_bound(
     value: f64,
     bound: Bound,
     kind: Kind,
-    atol: f64,
+    atol: ATol,
 ) -> Result<(), StateValidationError> {
     if !bound.contains(value, atol) {
         return Err(StateValidationError::ValueOutOfBounds {
@@ -281,7 +278,7 @@ pub enum StateValidationError {
     },
 }
 
-fn bounds_almost_equal(a: &Bounds, b: &Bounds, atol: f64) -> bool {
+fn bounds_almost_equal(a: &Bounds, b: &Bounds, atol: ATol) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -344,12 +341,7 @@ impl Instance {
         let mut semi_continuous = Bounds::default();
         for (id, dv) in &self.decision_variables {
             match dv.kind() {
-            match dv.kind() {
                 Kind::Binary => binary.insert(*id),
-                Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
-                Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
-                Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
-                Kind::SemiContinuous => semi_continuous.insert(*id, dv.bound()).is_some(),
                 Kind::Integer => integer.insert(*id, dv.bound()).is_some(),
                 Kind::Continuous => continuous.insert(*id, dv.bound()).is_some(),
                 Kind::SemiInteger => semi_integer.insert(*id, dv.bound()).is_some(),
@@ -480,7 +472,7 @@ mod tests {
                 .prop_flat_map(move |instance| instance.arbitrary_state().prop_map(move |state| (instance.clone(), state)))
         ) {
             let analysis = instance.analyze_decision_variables();
-            let populated = analysis.populate(state.clone(), 1e-6).unwrap();
+            let populated = analysis.populate(state.clone(), ATol::default()).unwrap();
             let populated_ids: VariableIDSet = populated.entries.keys().map(|id| (*id).into()).collect();
             prop_assert_eq!(populated_ids, analysis.all);
         }
