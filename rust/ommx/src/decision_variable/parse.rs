@@ -53,19 +53,24 @@ impl Parse for v1::DecisionVariable {
     type Context = ();
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.DecisionVariable";
-        Ok(DecisionVariable {
-            id: VariableID(self.id),
-            kind: self.kind().parse_as(&(), message, "kind")?,
-            bound: self
-                .bound
-                .unwrap_or_default()
-                .parse_as(&(), message, "bound")?,
-            substituted_value: self.substituted_value,
-            name: self.name,
-            subscripts: self.subscripts,
-            parameters: self.parameters.into_iter().collect(),
-            description: self.description,
-        })
+        let kind = self.kind().parse_as(&(), message, "kind")?;
+        let bound = self
+            .bound
+            .unwrap_or_default()
+            .parse_as(&(), message, "bound")?;
+        let mut dv = DecisionVariable::new(
+            VariableID(self.id),
+            kind,
+            bound,
+            self.substituted_value,
+            1e-6, // FIXME: user should provide this
+        )
+        .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
+        dv.name = self.name;
+        dv.subscripts = self.subscripts;
+        dv.parameters = self.parameters.into_iter().collect();
+        dv.description = self.description;
+        Ok(dv)
     }
 }
 
@@ -115,5 +120,28 @@ impl From<DecisionVariable> for v1::DecisionVariable {
             parameters: parameters.into_iter().collect(),
             description,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_decision_variable() {
+        let dv = v1::DecisionVariable {
+            id: 1,
+            kind: v1::decision_variable::Kind::Integer as i32,
+            bound: Some(v1::Bound {
+                lower: 1.1,
+                upper: 1.9,
+            }),
+            ..Default::default()
+        };
+        insta::assert_snapshot!(dv.parse(&()).unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.DecisionVariable[bound]
+        Bound for ID=1 is inconsistent to kind: kind=Integer, bound=[1.1, 1.9]
+        "###);
     }
 }

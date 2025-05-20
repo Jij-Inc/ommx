@@ -1,6 +1,6 @@
 use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID, OffsetError,
-    VariableID,
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID,
+    DecisionVariableError, OffsetError, VariableID,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -115,6 +115,9 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InvalidBound(#[from] BoundError),
+
+    #[error(transparent)]
+    InvalidDecisionVariable(#[from] DecisionVariableError),
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]
