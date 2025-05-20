@@ -145,6 +145,29 @@ impl DecisionVariable {
         })
     }
 
+    /// Check if the substituted value is consistent to the bound and kind
+    ///
+    /// Example
+    /// --------
+    ///
+    /// ```rust
+    /// use ommx::{DecisionVariable, Kind, Bound};
+    ///
+    /// let dv = DecisionVariable::new(
+    ///     0.into(),
+    ///     Kind::Integer,
+    ///     Bound::new(0.0, 2.0).unwrap(),
+    ///     None,
+    ///     1e-6,
+    /// ).unwrap();
+    ///
+    /// // 1 \in [0, 2]
+    /// assert!(dv.check_value_consistency(1.0, 1e-6).is_ok());
+    /// // 3 \in [0, 2]
+    /// assert!(dv.check_value_consistency(3.0, 1e-6).is_err());
+    /// // 0.5 \in [0, 2], but not consistent to Kind::Integer
+    /// assert!(dv.check_value_consistency(0.5, 1e-6).is_err());
+    /// ```
     pub fn check_value_consistency(
         &self,
         value: f64,
