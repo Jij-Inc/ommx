@@ -40,6 +40,18 @@ impl PartialOrd<f64> for ATol {
     }
 }
 
+impl PartialEq<ATol> for f64 {
+    fn eq(&self, other: &ATol) -> bool {
+        *self == other.into_inner()
+    }
+}
+
+impl PartialOrd<ATol> for f64 {
+    fn partial_cmp(&self, other: &ATol) -> Option<std::cmp::Ordering> {
+        self.partial_cmp(&other.into_inner())
+    }
+}
+
 impl PartialEq<Coefficient> for ATol {
     fn eq(&self, other: &Coefficient) -> bool {
         self.into_inner() == other.into_inner()

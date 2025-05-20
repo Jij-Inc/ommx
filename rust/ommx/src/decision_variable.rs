@@ -4,7 +4,7 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::Bound;
+use crate::{ATol, Bound};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use std::collections::BTreeSet;
@@ -76,7 +76,7 @@ impl Kind {
     ///     None
     /// );
     /// ```
-    pub fn consistent_bound(&self, bound: Bound, atol: f64) -> Option<Bound> {
+    pub fn consistent_bound(&self, bound: Bound, atol: ATol) -> Option<Bound> {
         match self {
             Kind::Continuous | Kind::SemiContinuous => Some(bound),
             Kind::Integer => bound.as_integer_bound(atol),
@@ -129,7 +129,7 @@ impl DecisionVariable {
         kind: Kind,
         bound: Bound,
         substituted_value: Option<f64>,
-        atol: f64,
+        atol: ATol,
     ) -> Result<Self, DecisionVariableError> {
         Ok(Self {
             id,
@@ -171,7 +171,7 @@ impl DecisionVariable {
     pub fn check_value_consistency(
         &self,
         value: f64,
-        atol: f64,
+        atol: ATol,
     ) -> Result<(), DecisionVariableError> {
         let err = || DecisionVariableError::SubstitutedValueInconsistent {
             id: self.id,
@@ -194,7 +194,7 @@ impl DecisionVariable {
         Ok(())
     }
 
-    pub fn set_bound(&mut self, bound: Bound, atol: f64) -> Result<(), DecisionVariableError> {
+    pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
                 id: self.id,
@@ -206,7 +206,7 @@ impl DecisionVariable {
         Ok(())
     }
 
-    pub fn substitute(&mut self, new_value: f64, atol: f64) -> Result<(), DecisionVariableError> {
+    pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
         if let Some(previous_value) = self.substituted_value {
             if (new_value - previous_value).abs() > atol {
                 return Err(DecisionVariableError::SubstitutedValueOverwrite {
@@ -239,12 +239,12 @@ pub enum DecisionVariableError {
         new_value: f64,
     },
 
-    #[error("Substituted value for ID={id} is inconsistent: kind={kind:?}, bound={bound}, substituted_value={substituted_value}, atol={atol}")]
+    #[error("Substituted value for ID={id} is inconsistent: kind={kind:?}, bound={bound}, substituted_value={substituted_value}, atol={atol:?}")]
     SubstitutedValueInconsistent {
         id: VariableID,
         kind: Kind,
         bound: Bound,
         substituted_value: f64,
-        atol: f64,
+        atol: ATol,
     },
 }

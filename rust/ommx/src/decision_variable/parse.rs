@@ -63,7 +63,7 @@ impl Parse for v1::DecisionVariable {
             kind,
             bound,
             self.substituted_value,
-            1e-6, // FIXME: user should provide this
+            ATol::default(), // FIXME: user should provide this
         )
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
         dv.name = self.name;

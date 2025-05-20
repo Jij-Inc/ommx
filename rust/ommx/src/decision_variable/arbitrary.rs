@@ -44,7 +44,7 @@ impl Arbitrary for DecisionVariable {
         (Kind::arbitrary_with(parameters), Bound::arbitrary())
             .prop_filter_map("Bound must be consistent with Kind", |(kind, bound)| {
                 // FIXME: Constructive approach to generate bounds for faster testing
-                let bound = kind.consistent_bound(bound, 1e-6)?;
+                let bound = kind.consistent_bound(bound, ATol::default())?;
                 Some((kind, bound))
             })
             .prop_map(|(kind, bound)| DecisionVariable {
