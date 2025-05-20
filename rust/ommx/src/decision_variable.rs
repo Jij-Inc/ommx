@@ -131,18 +131,23 @@ impl DecisionVariable {
         substituted_value: Option<f64>,
         atol: ATol,
     ) -> Result<Self, DecisionVariableError> {
-        Ok(Self {
+        let mut new = Self {
             id,
             kind,
             bound: kind
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
-            substituted_value,
+            substituted_value: None, // will be set later
             name: None,
             subscripts: Vec::new(),
             parameters: FnvHashMap::default(),
             description: None,
-        })
+        };
+        if let Some(substituted_value) = substituted_value {
+            new.check_value_consistency(substituted_value, atol)?;
+            new.substituted_value = Some(substituted_value);
+        }
+        Ok(new)
     }
 
     /// Check if the substituted value is consistent to the bound and kind
