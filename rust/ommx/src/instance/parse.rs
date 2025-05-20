@@ -20,6 +20,21 @@ impl Parse for v1::instance::Sense {
     }
 }
 
+impl From<Sense> for v1::instance::Sense {
+    fn from(value: Sense) -> Self {
+        match value {
+            Sense::Minimize => v1::instance::Sense::Minimize,
+            Sense::Maximize => v1::instance::Sense::Maximize,
+        }
+    }
+}
+
+impl From<Sense> for i32 {
+    fn from(value: Sense) -> Self {
+        v1::instance::Sense::from(value).into()
+    }
+}
+
 impl TryFrom<v1::Instance> for Instance {
     type Error = ParseError;
     fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {

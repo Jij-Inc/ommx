@@ -1,5 +1,8 @@
 use super::*;
-use crate::{v1::State, Bound, Bounds, Evaluate, Kind, VariableIDSet};
+use crate::{
+    v1::{Samples, State},
+    Bound, Bounds, Evaluate, Kind, VariableIDSet,
+};
 use ::approx::AbsDiffEq;
 use std::collections::BTreeMap;
 

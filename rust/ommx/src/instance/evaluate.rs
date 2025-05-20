@@ -1,9 +1,10 @@
 use super::*;
 use crate::{
-    v1::{Optimality, Relaxation, SampleSet, Solution},
+    v1::{Optimality, Relaxation, SampleSet, SampledDecisionVariable, Solution},
     Evaluate, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 
 impl Evaluate for Instance {
     type Output = Solution;
@@ -65,7 +66,69 @@ impl Evaluate for Instance {
     }
 
     fn evaluate_samples(&self, samples: &v1::Samples, atol: f64) -> Result<Self::SampledOutput> {
-        todo!()
+        // Populate the decision variables in the samples
+        let samples = {
+            let analysis = self.analyze_decision_variables();
+            let mut samples = samples.clone();
+            for sample in samples.states_mut() {
+                let sample = sample?;
+                let state = std::mem::take(sample);
+                let state = analysis.populate(state, atol)?;
+                *sample = state;
+            }
+            samples
+        };
+
+        let mut feasible_relaxed: HashMap<u64, bool> =
+            samples.ids().map(|id| (*id, true)).collect();
+
+        // Constraints
+        let mut constraints = Vec::new();
+        for c in self.constraints.values() {
+            let evaluated = c.evaluate_samples(&samples, atol)?;
+            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
+                if !feasible_ {
+                    feasible_relaxed.insert(sample_id, false);
+                }
+            }
+            constraints.push(evaluated);
+        }
+        let mut feasible = feasible_relaxed.clone();
+        for c in self.removed_constraints.values() {
+            let v = c.evaluate_samples(&samples, atol)?;
+            for (sample_id, feasible_) in v.is_feasible(atol)? {
+                if !feasible_ {
+                    feasible.insert(sample_id, false);
+                }
+            }
+            constraints.push(v);
+        }
+
+        // Objective
+        let objectives = self.objective().evaluate_samples(&samples, atol)?;
+
+        // Reconstruct decision variable values
+        let mut transposed = samples.transpose();
+        let decision_variables: Vec<SampledDecisionVariable> = self
+            .decision_variables
+            .values()
+            .map(|d| -> Result<_> {
+                Ok(SampledDecisionVariable {
+                    decision_variable: Some(d.clone().into()),
+                    samples: transposed.remove(&d.id().into_inner()),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives: Some(objectives),
+            constraints,
+            feasible_relaxed,
+            feasible,
+            sense: self.sense.into(),
+            ..Default::default()
+        })
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: f64) -> Result<()> {
