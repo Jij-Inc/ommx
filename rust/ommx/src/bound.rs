@@ -319,15 +319,15 @@ impl Bound {
     /// ---------
     ///
     /// ```rust
-    /// use ommx::{Bound, BoundError};
+    /// use ommx::{Bound, BoundError, ATol};
     ///
     /// // Rounding with absolute tolerance
     /// let bound = Bound::new(1.000000000001, 1.99999999999).unwrap();
-    /// assert_eq!(bound.as_integer_bound(1e-6).unwrap(), Bound::new(1.0, 2.0).unwrap());
+    /// assert_eq!(bound.as_integer_bound(ATol::default()).unwrap(), Bound::new(1.0, 2.0).unwrap());
     ///
     /// // No integer value exists between 1.1 and 1.9
     /// let bound = Bound::new(1.1, 1.9).unwrap();
-    /// assert!(bound.as_integer_bound(1e-6).is_none());
+    /// assert!(bound.as_integer_bound(ATol::default()).is_none());
     /// ```
     pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {

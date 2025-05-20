@@ -56,23 +56,23 @@ impl Kind {
     /// --------
     ///
     /// ```rust
-    /// use ommx::{Kind, Bound};
+    /// use ommx::{Kind, Bound, ATol};
     ///
     /// // Any bound is allowed for Kind::Continuous
     /// assert_eq!(
-    ///     Kind::Continuous.consistent_bound(Bound::new(1.0, 2.0).unwrap(), 1e-6),
+    ///     Kind::Continuous.consistent_bound(Bound::new(1.0, 2.0).unwrap(), ATol::default()),
     ///     Some(Bound::new(1.0, 2.0).unwrap())
     /// );
     ///
     /// // For Kind::Integer, the bound is restricted to integer.
     /// assert_eq!(
-    ///    Kind::Integer.consistent_bound(Bound::new(1.1, 2.9).unwrap(), 1e-6),
+    ///    Kind::Integer.consistent_bound(Bound::new(1.1, 2.9).unwrap(), ATol::default()),
     ///    Some(Bound::new(2.0, 2.0).unwrap())
     /// );
     ///
     /// // And if there is no integer in the bound, None is returned.
     /// assert_eq!(
-    ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), 1e-6),
+    ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), ATol::default()),
     ///     None
     /// );
     /// ```
@@ -151,22 +151,22 @@ impl DecisionVariable {
     /// --------
     ///
     /// ```rust
-    /// use ommx::{DecisionVariable, Kind, Bound};
+    /// use ommx::{DecisionVariable, Kind, Bound, ATol};
     ///
     /// let dv = DecisionVariable::new(
     ///     0.into(),
     ///     Kind::Integer,
     ///     Bound::new(0.0, 2.0).unwrap(),
     ///     None,
-    ///     1e-6,
+    ///     ATol::default(),
     /// ).unwrap();
     ///
     /// // 1 \in [0, 2]
-    /// assert!(dv.check_value_consistency(1.0, 1e-6).is_ok());
+    /// assert!(dv.check_value_consistency(1.0, ATol::default()).is_ok());
     /// // 3 \in [0, 2]
-    /// assert!(dv.check_value_consistency(3.0, 1e-6).is_err());
+    /// assert!(dv.check_value_consistency(3.0, ATol::default()).is_err());
     /// // 0.5 \in [0, 2], but not consistent to Kind::Integer
-    /// assert!(dv.check_value_consistency(0.5, 1e-6).is_err());
+    /// assert!(dv.check_value_consistency(0.5, ATol::default()).is_err());
     /// ```
     pub fn check_value_consistency(
         &self,
