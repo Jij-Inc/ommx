@@ -142,6 +142,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod atol;
 mod bound;
 mod coefficient;
 mod constraint;
@@ -155,6 +156,7 @@ mod macros;
 mod polynomial_base;
 mod solution;
 
+pub use atol::*;
 pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
