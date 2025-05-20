@@ -5,7 +5,7 @@ use crate::{
     },
     Evaluate, VariableIDSet,
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{bail, Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{borrow::Cow, collections::HashMap};
@@ -21,20 +21,18 @@ impl Constraint {
 }
 
 impl EvaluatedConstraint {
-    pub fn is_feasible(&self, atol: f64) -> Result<bool> {
-        ensure!(atol > 0.0, "atol must be positive");
+    pub fn is_feasible(&self, atol: crate::ATol) -> Result<bool> {
         if self.equality() == Equality::EqualToZero {
-            return Ok(self.evaluated_value.abs() < atol);
+            return Ok(self.evaluated_value.abs() < *atol);
         } else if self.equality() == Equality::LessThanOrEqualToZero {
-            return Ok(self.evaluated_value < atol);
+            return Ok(self.evaluated_value < *atol);
         }
         bail!("Unsupported equality: {:?}", self.equality());
     }
 }
 
 impl SampledConstraint {
-    pub fn is_feasible(&self, atol: f64) -> Result<HashMap<u64, bool>> {
-        ensure!(atol > 0.0, "atol must be positive");
+    pub fn is_feasible(&self, atol: crate::ATol) -> Result<HashMap<u64, bool>> {
         let values = self
             .evaluated_values
             .as_ref()
@@ -42,12 +40,12 @@ impl SampledConstraint {
         if self.equality() == Equality::EqualToZero {
             return Ok(values
                 .iter()
-                .map(|(id, value)| (*id, value.abs() < atol))
+                .map(|(id, value)| (*id, value.abs() < *atol))
                 .collect());
         } else if self.equality() == Equality::LessThanOrEqualToZero {
             return Ok(values
                 .iter()
-                .map(|(id, value)| (*id, *value < atol))
+                .map(|(id, value)| (*id, *value < *atol))
                 .collect());
         }
         bail!("Unsupported equality: {:?}", self.equality());
@@ -76,10 +74,10 @@ impl SampledConstraint {
 }
 
 impl AbsDiffEq for Constraint {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::EPSILON
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -98,7 +96,7 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<Self::Output> {
         let evaluated_value = self.function().evaluate(solution, atol)?;
         let used_decision_variable_ids = self
             .function()
@@ -121,7 +119,7 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         let Some(f) = self.function.as_mut() else {
             // Since empty function means zero constant, we can return an empty set
             return Ok(());
@@ -129,16 +127,20 @@ impl Evaluate for Constraint {
         f.partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let evaluated_values = self.function().evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, value)| {
                 if self.equality() == Equality::EqualToZero {
-                    return Ok((*sample_id, value.abs() < atol));
+                    return Ok((*sample_id, value.abs() < *atol));
                 }
                 if self.equality() == Equality::LessThanOrEqualToZero {
-                    return Ok((*sample_id, *value < atol));
+                    return Ok((*sample_id, *value < *atol));
                 }
                 bail!("Unsupported equality: {:?}", self.equality());
             })
@@ -174,7 +176,7 @@ impl Evaluate for RemovedConstraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<Self::Output> {
+    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<Self::Output> {
         let mut out = self
             .constraint
             .as_ref()
@@ -185,14 +187,18 @@ impl Evaluate for RemovedConstraint {
         Ok(out)
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         self.constraint
             .as_mut()
             .context("RemovedConstraint does not contain constraint")?
             .partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let mut evaluated = self
             .constraint
             .as_ref()

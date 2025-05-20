@@ -208,10 +208,10 @@ impl_neg_by_mul!(Polynomial);
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Polynomial {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -221,7 +221,7 @@ impl AbsDiffEq for Polynomial {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() < epsilon)
+            .all(|term| term.coefficient.abs() < *epsilon)
     }
 }
 
@@ -238,7 +238,7 @@ impl Evaluate for Polynomial {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
+    fn evaluate(&self, solution: &State, _atol: crate::ATol) -> Result<f64> {
         let mut sum = 0.0;
         for term in &self.terms {
             let mut v = term.coefficient;
@@ -253,7 +253,7 @@ impl Evaluate for Polynomial {
         Ok(sum)
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
         let mut monomials = BTreeMap::new();
         for term in self.terms.iter() {
             let mut value = term.coefficient;
@@ -281,7 +281,11 @@ impl Evaluate for Polynomial {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
             let value = self.evaluate(s, atol)?;
             Ok(value)

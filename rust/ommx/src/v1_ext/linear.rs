@@ -212,14 +212,14 @@ impl Mul for Linear {
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Linear {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        if !self.constant.abs_diff_eq(&other.constant, epsilon)
+        if !self.constant.abs_diff_eq(&other.constant, *epsilon)
             || self.terms.len() != other.terms.len()
         {
             return false;
@@ -228,7 +228,7 @@ impl AbsDiffEq for Linear {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() <= epsilon)
+            .all(|term| term.coefficient.abs() <= *epsilon)
     }
 }
 
@@ -249,7 +249,7 @@ impl Evaluate for Linear {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State, _atol: f64) -> Result<f64> {
+    fn evaluate(&self, solution: &State, _atol: crate::ATol) -> Result<f64> {
         let mut sum = self.constant;
         for Term { id, coefficient } in &self.terms {
             let s = solution
@@ -261,7 +261,7 @@ impl Evaluate for Linear {
         Ok(sum)
     }
 
-    fn partial_evaluate(&mut self, state: &State, _atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
         let mut i = 0;
         while i < self.terms.len() {
             let Term { id, coefficient } = self.terms[i];
@@ -275,7 +275,11 @@ impl Evaluate for Linear {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
             let value = self.evaluate(s, atol)?;
             Ok(value)

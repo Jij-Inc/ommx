@@ -5,7 +5,7 @@ use crate::Sense;
 use std::ops::Neg;
 
 impl AbsDiffEq for Instance {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         Function::default_epsilon()

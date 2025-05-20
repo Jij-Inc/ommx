@@ -344,10 +344,10 @@ impl Product for Function {
 }
 
 impl AbsDiffEq for Function {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -356,7 +356,7 @@ impl AbsDiffEq for Function {
         match (lhs, rhs) {
             // Same order
             (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => {
-                lhs.abs_diff_eq(rhs, epsilon)
+                lhs.abs_diff_eq(rhs, *epsilon)
             }
             (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
             (FunctionEnum::Quadratic(lhs), FunctionEnum::Quadratic(rhs)) => {
@@ -416,7 +416,7 @@ impl Evaluate for Function {
     type Output = f64;
     type SampledOutput = SampledValues;
 
-    fn evaluate(&self, solution: &State, atol: f64) -> Result<f64> {
+    fn evaluate(&self, solution: &State, atol: crate::ATol) -> Result<f64> {
         let out = match &self.function {
             Some(FunctionEnum::Constant(c)) => *c,
             Some(FunctionEnum::Linear(linear)) => linear.evaluate(solution, atol)?,
@@ -427,7 +427,7 @@ impl Evaluate for Function {
         Ok(out)
     }
 
-    fn partial_evaluate(&mut self, state: &State, atol: f64) -> Result<()> {
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
         match &mut self.function {
             Some(FunctionEnum::Linear(linear)) => linear.partial_evaluate(state, atol)?,
             Some(FunctionEnum::Quadratic(quadratic)) => quadratic.partial_evaluate(state, atol)?,
@@ -437,7 +437,11 @@ impl Evaluate for Function {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: f64) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
             let value = self.evaluate(s, atol)?;
             Ok(value)
@@ -540,13 +544,13 @@ mod tests {
         fn test_as_linear_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = f.clone().as_linear().unwrap();
             // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
-            prop_assert!(f.abs_diff_eq(&Function::from(linear), 1e-10));
+            prop_assert!(f.abs_diff_eq(&Function::from(linear), crate::ATol::default()));
         }
 
         #[test]
         fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0,  max_id: 10})) {
             let c = f.clone().as_constant().unwrap();
-            prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
+            prop_assert!(f.abs_diff_eq(&Function::from(c), crate::ATol::default()));
         }
 
         #[test]
@@ -587,8 +591,8 @@ mod tests {
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
-            let value = f.evaluate(&state, 1e-9).unwrap();
-            prop_assert!(bound.contains(value, 1e-7));
+            let value = f.evaluate(&state, crate::ATol::default()).unwrap();
+            prop_assert!(bound.contains(value, crate::ATol::default()));
         }
 
         #[test]

@@ -9,7 +9,11 @@ impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
     type SampledOutput = SampledConstraint;
 
-    fn evaluate(&self, solution: &crate::v1::State, atol: f64) -> anyhow::Result<Self::Output> {
+    fn evaluate(
+        &self,
+        solution: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<Self::Output> {
         let evaluated_value = self.function.evaluate(solution, atol)?;
         let used_decision_variable_ids = self
             .function
@@ -35,14 +39,14 @@ impl Evaluate for Constraint {
     fn evaluate_samples(
         &self,
         samples: &crate::v1::Samples,
-        atol: f64,
+        atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated_values = self.function.evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, value)| match self.equality {
-                Equality::EqualToZero => (*sample_id, value.abs() < atol),
-                Equality::LessThanOrEqualToZero => (*sample_id, *value < atol),
+                Equality::EqualToZero => (*sample_id, value.abs() < *atol),
+                Equality::LessThanOrEqualToZero => (*sample_id, *value < *atol),
             })
             .collect();
         Ok(SampledConstraint {
@@ -65,7 +69,11 @@ impl Evaluate for Constraint {
         })
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: f64) -> anyhow::Result<()> {
+    fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<()> {
         self.function.partial_evaluate(state, atol)
     }
 
@@ -94,9 +102,9 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
-            let evaluated = c.evaluate_samples(&samples, 1e-6).unwrap();
+            let evaluated = c.evaluate_samples(&samples, crate::ATol::default()).unwrap();
             let evaluated_each: FnvHashMap<u64, EvaluatedConstraint> = samples.iter().map(|(parameter_id, state)| {
-                let value = c.evaluate(state, 1e-6).unwrap();
+                let value = c.evaluate(state, crate::ATol::default()).unwrap();
                 (*parameter_id, value)
             }).collect();
             for (sample_id, each) in evaluated_each {
