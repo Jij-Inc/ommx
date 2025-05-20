@@ -24,9 +24,9 @@ impl EvaluatedConstraint {
     pub fn is_feasible(&self, atol: crate::ATol) -> Result<bool> {
         ensure!(atol > 0.0, "atol must be positive");
         if self.equality() == Equality::EqualToZero {
-            return Ok(self.evaluated_value.abs() < atol);
+            return Ok(self.evaluated_value.abs() < *atol);
         } else if self.equality() == Equality::LessThanOrEqualToZero {
-            return Ok(self.evaluated_value < atol);
+            return Ok(self.evaluated_value < *atol);
         }
         bail!("Unsupported equality: {:?}", self.equality());
     }
@@ -42,12 +42,12 @@ impl SampledConstraint {
         if self.equality() == Equality::EqualToZero {
             return Ok(values
                 .iter()
-                .map(|(id, value)| (*id, value.abs() < atol))
+                .map(|(id, value)| (*id, value.abs() < *atol))
                 .collect());
         } else if self.equality() == Equality::LessThanOrEqualToZero {
             return Ok(values
                 .iter()
-                .map(|(id, value)| (*id, *value < atol))
+                .map(|(id, value)| (*id, *value < *atol))
                 .collect());
         }
         bail!("Unsupported equality: {:?}", self.equality());
@@ -135,10 +135,10 @@ impl Evaluate for Constraint {
             .iter()
             .map(|(sample_id, value)| {
                 if self.equality() == Equality::EqualToZero {
-                    return Ok((*sample_id, value.abs() < atol));
+                    return Ok((*sample_id, value.abs() < *atol));
                 }
                 if self.equality() == Equality::LessThanOrEqualToZero {
-                    return Ok((*sample_id, *value < atol));
+                    return Ok((*sample_id, *value < *atol));
                 }
                 bail!("Unsupported equality: {:?}", self.equality());
             })
