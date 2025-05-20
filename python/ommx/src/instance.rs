@@ -59,7 +59,9 @@ impl Instance {
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
-        Ok(SampleSet(self.0.evaluate_samples(&samples.0, ommx::ATol::default())?))
+        Ok(SampleSet(
+            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
+        ))
     }
 
     pub fn relax_constraint(
@@ -130,7 +132,10 @@ impl ParametricInstance {
     }
 
     pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
-        let instance = self.0.clone().with_parameters(parameters.0.clone(), ommx::ATol::default())?;
+        let instance = self
+            .0
+            .clone()
+            .with_parameters(parameters.0.clone(), ommx::ATol::default())?;
         Ok(Instance(instance))
     }
 }

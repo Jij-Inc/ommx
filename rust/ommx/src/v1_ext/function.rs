@@ -437,7 +437,11 @@ impl Evaluate for Function {
         Ok(())
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let out = samples.map(|s| {
             let value = self.evaluate(s, atol)?;
             Ok(value)

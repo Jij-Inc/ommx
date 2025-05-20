@@ -114,7 +114,11 @@ impl DecisionVariableAnalysis {
     /// The state is **valid** if:
     /// - The IDs which the state contains equals to `used` exactly.
     /// - The values of the state satisfy the bounds of the decision variables.
-    pub fn validate_state(&self, state: &State, atol: crate::ATol) -> Result<(), StateValidationError> {
+    pub fn validate_state(
+        &self,
+        state: &State,
+        atol: crate::ATol,
+    ) -> Result<(), StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
         let used_ids = self.used();
 

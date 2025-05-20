@@ -129,7 +129,11 @@ impl Evaluate for Constraint {
         f.partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let evaluated_values = self.function().evaluate_samples(samples, atol)?;
         let feasible: HashMap<u64, bool> = evaluated_values
             .iter()
@@ -192,7 +196,11 @@ impl Evaluate for RemovedConstraint {
             .partial_evaluate(state, atol)
     }
 
-    fn evaluate_samples(&self, samples: &Samples, atol: crate::ATol) -> Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
         let mut evaluated = self
             .constraint
             .as_ref()

@@ -1,9 +1,9 @@
 use anyhow::Result;
+use ommx::ATol;
 use ommx::{
     v1::{Constraint, Function, Instance, Linear, Polynomial, Quadratic, State},
     Evaluate, Message,
 };
-use ommx::ATol;
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeSet;
 
