@@ -2,8 +2,6 @@ use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
 
-use crate::Offset;
-
 #[derive(Debug, thiserror::Error)]
 pub enum CoefficientError {
     #[error("Coefficient must be non-zero")]
@@ -47,13 +45,6 @@ impl TryFrom<f64> for Coefficient {
             return Err(CoefficientError::Zero);
         }
         Ok(Self(NotNan::new(value).unwrap())) // Safe because we checked the value is not NaN
-    }
-}
-
-impl TryFrom<Offset> for Coefficient {
-    type Error = CoefficientError;
-    fn try_from(value: Offset) -> Result<Self, Self::Error> {
-        Self::try_from(value.into_inner())
     }
 }
 

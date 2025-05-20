@@ -152,7 +152,6 @@ mod function;
 mod infeasible_detected;
 mod instance;
 mod macros;
-mod offset;
 mod polynomial_base;
 mod solution;
 
@@ -164,7 +163,6 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
-pub use offset::*;
 pub use polynomial_base::*;
 
 /// Module created from `ommx.v1` proto files
