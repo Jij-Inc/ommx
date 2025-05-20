@@ -34,11 +34,13 @@ impl AbsDiffEq for State {
     }
 
     fn abs_diff_eq(&self, other: &Self, atol: Self::Epsilon) -> bool {
-        self.entries.iter().all(|(key, value)| {
-            other
-                .entries
-                .get(key)
-                .is_some_and(|v| (*value - *v).abs() < atol)
-        })
+        self.entries.len() == other.entries.len()
+            && self.entries.iter().all(|(key, value)| {
+                other
+                    .entries
+                    .get(key)
+                    .is_some_and(|v| (*value - *v).abs() < atol)
+            })
+            && other.entries.keys().all(|key| self.entries.contains_key(key))
     }
 }
