@@ -41,14 +41,11 @@ impl Arbitrary for DecisionVariable {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(parameters: Self::Parameters) -> Self::Strategy {
-        Kind::arbitrary_with(parameters)
-            .prop_flat_map(|kind| {
-                let bound_strategy = if kind == Kind::Binary {
-                    Just(Bound::new(0.0, 1.0).unwrap()).boxed()
-                } else {
-                    Bound::arbitrary()
-                };
-                (Just(kind), bound_strategy)
+        (Kind::arbitrary_with(parameters), Bound::arbitrary())
+            .prop_filter_map("Bound must be consistent with Kind", |(kind, bound)| {
+                // FIXME: Constructive approach to generate bounds for faster testing
+                let bound = kind.consistent_bound(bound, 1e-6)?;
+                Some((kind, bound))
             })
             .prop_map(|(kind, bound)| DecisionVariable {
                 id: VariableID::from(0), // Should be replaced with a unique ID, but cannot be generated here
