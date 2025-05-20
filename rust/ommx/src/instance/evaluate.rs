@@ -155,3 +155,45 @@ impl Evaluate for Instance {
         self.analyze_decision_variables().used().clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::random::arbitrary_split_state;
+    use ::approx::AbsDiffEq;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn test_evaluate_instance(
+            (instance, state) in Instance::arbitrary()
+                .prop_flat_map(|instance| {
+                    let state = instance.arbitrary_state();
+                    (Just(instance), state)
+                })
+        ) {
+            let analysis = instance.analyze_decision_variables();
+            let solution = instance.evaluate(&state, ATol::default()).unwrap();
+            // Must be populated
+            let ids: VariableIDSet = solution.state.unwrap().entries.keys().map(|id| VariableID::from(*id)).collect();
+            prop_assert_eq!(&ids, analysis.all());
+        }
+
+        #[test]
+        fn partial_evaluate(
+            (mut instance, state, (u, v)) in Instance::arbitrary()
+                .prop_flat_map(|instance| {
+                    let state = instance.arbitrary_state();
+                    (Just(instance), state).prop_flat_map(|(instance, state)| {
+                        let split = arbitrary_split_state(&state);
+                        (Just(instance), Just(state), split)
+                    })
+                })
+        ) {
+            let s1 = instance.evaluate(&state, ATol::default()).unwrap();
+            instance.partial_evaluate(&u, ATol::default()).unwrap();
+            let s2 = instance.evaluate(&v, ATol::default()).unwrap();
+            prop_assert!(s1.state.unwrap().abs_diff_eq(&s2.state.unwrap(), ATol::default()));
+        }
+    }
+}

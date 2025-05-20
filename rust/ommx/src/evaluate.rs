@@ -122,31 +122,12 @@ mod tests {
     partial_evaluate_to_constant!(Polynomial, polynomial_partial_evaluate_to_constant);
     partial_evaluate_to_constant!(Function, function_partial_evaluate_to_constant);
 
-    fn split_state(state: State) -> BoxedStrategy<(State, State)> {
-        let ids: Vec<(u64, f64)> = state.entries.into_iter().collect();
-        let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
-        (Just(ids), flips)
-            .prop_map(|(ids, flips)| {
-                let mut a = State::default();
-                let mut b = State::default();
-                for (flip, (id, value)) in flips.into_iter().zip(ids.into_iter()) {
-                    if flip {
-                        a.entries.insert(id, value);
-                    } else {
-                        b.entries.insert(id, value);
-                    }
-                }
-                (a, b)
-            })
-            .boxed()
-    }
-
     macro_rules! function_with_split_state {
         ($t:ty) => {
             <$t>::arbitrary().prop_flat_map(|f| {
                 let ids = f.required_ids();
                 (Just(f), arbitrary_state(ids))
-                    .prop_flat_map(|(f, s)| (Just(f), Just(s.clone()), split_state(s)))
+                    .prop_flat_map(|(f, s)| (Just(f), Just(s.clone()), arbitrary_split_state(&s)))
             })
         };
     }
@@ -209,7 +190,11 @@ mod tests {
                 let bounds = instance.get_bounds().expect("Invalid Bound in Instance");
                 let state = arbitrary_state_within_bounds(&bounds, 100.0);
                 (Just(instance), state).prop_flat_map(|(instance, state)| {
-                    (Just(instance), Just(state.clone()), split_state(state))
+                    (
+                        Just(instance),
+                        Just(state.clone()),
+                        arbitrary_split_state(&state),
+                    )
                 })
             })
             .boxed()
