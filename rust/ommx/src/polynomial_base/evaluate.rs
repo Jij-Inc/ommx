@@ -78,17 +78,17 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_linear((linear, state) in polynomial_and_state::<LinearMonomial>()) {
-            linear.evaluate(&state, 1e-9).unwrap();
+            linear.evaluate(&state, crate::ATol::default()).unwrap();
         }
 
         #[test]
         fn test_evaluate_quadratic((quadratic, state) in polynomial_and_state::<QuadraticMonomial>()) {
-            quadratic.evaluate(&state, 1e-9).unwrap();
+            quadratic.evaluate(&state, crate::ATol::default()).unwrap();
         }
 
         #[test]
         fn test_evaluate_polynomial((polynomial, state) in polynomial_and_state::<MonomialDyn>()) {
-            polynomial.evaluate(&state, 1e-9).unwrap();
+            polynomial.evaluate(&state, crate::ATol::default()).unwrap();
         }
     }
 
@@ -112,9 +112,9 @@ mod tests {
                 fn $name(
                     (l1, l2, state) in two_polynomial_and_state::<$monomial>()
                 ) {
-                    let v1 = l1.evaluate(&state, 1e-9).unwrap();
-                    let v2 = l2.evaluate(&state, 1e-9).unwrap();
-                    let v3 = (&l1 $op &l2).evaluate(&state, 1e-9).unwrap();
+                    let v1 = l1.evaluate(&state, crate::ATol::default()).unwrap();
+                    let v2 = l2.evaluate(&state, crate::ATol::default()).unwrap();
+                    let v3 = (&l1 $op &l2).evaluate(&state, crate::ATol::default()).unwrap();
                     prop_assert!((v1 $op v2).abs_diff_eq(&v3, 1e-9));
                 }
             }
@@ -164,9 +164,9 @@ mod tests {
                 fn $name(
                     (mut poly, state, s1, s2) in polynomial_and_state_split::<$monomial>()
                 ) {
-                    let v = poly.evaluate(&state, 1e-9).unwrap();
-                    let _ = poly.partial_evaluate(&s1, 1e-9).unwrap();
-                    let w = poly.evaluate(&s2, 1e-9).unwrap();
+                    let v = poly.evaluate(&state, crate::ATol::default()).unwrap();
+                    let _ = poly.partial_evaluate(&s1, crate::ATol::default()).unwrap();
+                    let w = poly.evaluate(&s2, crate::ATol::default()).unwrap();
                     prop_assert!(w.abs_diff_eq(&v, 1e-9), "poly = {poly:?}, w = {w}, v = {v}");
                 }
             }
@@ -194,9 +194,9 @@ mod tests {
         fn test_evaluate_samples(
             (poly, samples) in polynomial_and_samples::<LinearMonomial>()
         ) {
-            let evaluated = poly.evaluate_samples(&samples, 1e-9).unwrap();
+            let evaluated = poly.evaluate_samples(&samples, crate::ATol::default()).unwrap();
             let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = poly.evaluate(state, 1e-9).unwrap();
+                let value = poly.evaluate(state, crate::ATol::default()).unwrap();
                 (*parameter_id, value)
             }).collect();
             prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::default()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");

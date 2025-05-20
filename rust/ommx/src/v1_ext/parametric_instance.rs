@@ -166,7 +166,7 @@ mod tests {
         #[test]
         fn test_parametric_instance_conversion(instance in Instance::arbitrary()) {
             let parametric_instance: ParametricInstance = instance.clone().into();
-            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default(), 1e-9).unwrap();
+            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default(), crate::ATol::default()).unwrap();
             prop_assert_eq!(&converted_instance.parameters, &Some(Parameters::default()));
             prop_assert!(
                 abs_diff_eq!(instance, converted_instance),

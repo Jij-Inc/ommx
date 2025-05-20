@@ -80,9 +80,9 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((f, samples) in function_and_samples()) {
-            let evaluated = f.evaluate_samples(&samples, 1e-9).unwrap();
+            let evaluated = f.evaluate_samples(&samples, crate::ATol::default()).unwrap();
             let evaluated_each: SampledValues = samples.iter().map(|(parameter_id, state)| {
-                let value = f.evaluate(state, 1e-9).unwrap();
+                let value = f.evaluate(state, crate::ATol::default()).unwrap();
                 (*parameter_id, value)
             }).collect();
             prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::default()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");

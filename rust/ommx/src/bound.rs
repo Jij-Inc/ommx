@@ -529,7 +529,7 @@ mod tests {
         assert_eq!(
             Bound::new(1.000000000001, 1.99999999999)
                 .unwrap()
-                .as_integer_bound(1e-6),
+                .as_integer_bound(crate::ATol::default()),
             Bound::new(1.0, 2.0).unwrap()
         )
     }
@@ -537,23 +537,23 @@ mod tests {
     proptest! {
         #[test]
         fn contains((bound, value) in bound_and_containing()) {
-            prop_assert!(bound.contains(value, 1e-9));
+            prop_assert!(bound.contains(value, crate::ATol::default()));
         }
 
         #[test]
         fn add((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
-            prop_assert!((b1 + b2).contains(v1 + v2, 1e-9));
+            prop_assert!((b1 + b2).contains(v1 + v2, crate::ATol::default()));
         }
 
         #[test]
         fn mul((b1, v1) in bound_and_containing(), (b2, v2) in bound_and_containing()) {
-            prop_assert!((b1 * b2).contains(v1 * v2, 1e-9));
+            prop_assert!((b1 * b2).contains(v1 * v2, crate::ATol::default()));
         }
 
         #[test]
         fn pow((b, v) in bound_and_containing()) {
-            prop_assert!(b.pow(2).contains(v.powi(2), 1e-9));
-            prop_assert!(b.pow(3).contains(v.powi(3), 1e-9));
+            prop_assert!(b.pow(2).contains(v.powi(2), crate::ATol::default()));
+            prop_assert!(b.pow(3).contains(v.powi(3), crate::ATol::default()));
         }
     }
 }

@@ -885,7 +885,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -893,7 +893,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
@@ -918,7 +918,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
             prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
@@ -926,7 +926,7 @@ mod tests {
             let parameters = Parameters {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters, 1e-6).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
@@ -954,7 +954,7 @@ mod tests {
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);
-                prop_assert!(c.abs() > f64::EPSILON);
+                prop_assert!(c.abs() > f64:: EPSILON);
             }
         }
 
@@ -996,11 +996,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
+            let lower_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state, 1e-9).unwrap();
+            let upper_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
@@ -1009,7 +1009,7 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, crate::ATol::default()).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
                 prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
@@ -1024,7 +1024,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        eval_dependencies(&dependencies, &mut state, 1e-9).unwrap();
+        eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
 
@@ -1034,7 +1034,7 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
@@ -1042,6 +1042,6 @@ mod tests {
             4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
             5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
         };
-        assert!(eval_dependencies(&dependencies, &mut state, 1e-9).is_err());
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }

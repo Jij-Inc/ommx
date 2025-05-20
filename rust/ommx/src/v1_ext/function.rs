@@ -587,8 +587,8 @@ mod tests {
                 })
         ) {
             let bound = f.evaluate_bound(&bounds);
-            let value = f.evaluate(&state, 1e-9).unwrap();
-            prop_assert!(bound.contains(value, 1e-7));
+            let value = f.evaluate(&state, crate::ATol::default()).unwrap();
+            prop_assert!(bound.contains(value, crate::ATol::default()));
         }
 
         #[test]

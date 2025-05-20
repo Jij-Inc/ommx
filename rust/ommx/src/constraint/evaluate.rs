@@ -102,9 +102,9 @@ mod tests {
     proptest! {
         #[test]
         fn test_evaluate_samples((c, samples) in constraint_and_samples()) {
-            let evaluated = c.evaluate_samples(&samples, 1e-6).unwrap();
+            let evaluated = c.evaluate_samples(&samples, crate::ATol::default()).unwrap();
             let evaluated_each: FnvHashMap<u64, EvaluatedConstraint> = samples.iter().map(|(parameter_id, state)| {
-                let value = c.evaluate(state, 1e-6).unwrap();
+                let value = c.evaluate(state, crate::ATol::default()).unwrap();
                 (*parameter_id, value)
             }).collect();
             for (sample_id, each) in evaluated_each {
