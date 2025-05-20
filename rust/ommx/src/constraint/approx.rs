@@ -2,7 +2,7 @@ use super::*;
 use ::approx::AbsDiffEq;
 
 impl AbsDiffEq for Constraint {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         Function::default_epsilon()
@@ -14,7 +14,7 @@ impl AbsDiffEq for Constraint {
 }
 
 impl AbsDiffEq for RemovedConstraint {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         Constraint::default_epsilon()

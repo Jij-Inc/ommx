@@ -32,17 +32,17 @@ impl FromIterator<(u64, f64)> for SampledValues {
 }
 
 impl AbsDiffEq for SampledValues {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        1e-9
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         let map: HashMap<u64, f64> = self.iter().map(|(k, v)| (*k, *v)).collect();
         for (k, v) in other.iter() {
             if let Some(v2) = map.get(k) {
-                if !v.abs_diff_eq(v2, epsilon) {
+                if !v.abs_diff_eq(v2, *epsilon) {
                     return false;
                 }
             } else {

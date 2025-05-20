@@ -30,7 +30,7 @@ impl Linear {
     }
 
     pub fn almost_equal(&self, other: &Linear, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, atol)
+        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
 
     pub fn __repr__(&self) -> String {
@@ -78,7 +78,7 @@ impl Quadratic {
     }
 
     pub fn almost_equal(&self, other: &Quadratic, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, atol)
+        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
 
     pub fn __repr__(&self) -> String {
@@ -134,7 +134,7 @@ impl Polynomial {
     }
 
     pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, atol)
+        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
 
     pub fn __repr__(&self) -> String {
@@ -218,7 +218,7 @@ impl Function {
     }
 
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, atol)
+        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
 
     pub fn __repr__(&self) -> String {

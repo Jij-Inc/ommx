@@ -1,11 +1,12 @@
 use super::*;
+use crate::ATol;
 use ::approx::AbsDiffEq;
 
 impl AbsDiffEq for Function {
-    type Epsilon = f64;
+    type Epsilon = ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        1e-9
+        ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {

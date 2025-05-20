@@ -114,7 +114,11 @@ impl DecisionVariableAnalysis {
     /// The state is **valid** if:
     /// - The IDs which the state contains equals to `used` exactly.
     /// - The values of the state satisfy the bounds of the decision variables.
-    pub fn validate_state(&self, state: &State, atol: f64) -> Result<(), StateValidationError> {
+    pub fn validate_state(
+        &self,
+        state: &State,
+        atol: crate::ATol,
+    ) -> Result<(), StateValidationError> {
         let state_ids: VariableIDSet = state.entries.keys().map(|id| (*id).into()).collect();
         let used_ids = self.used();
 
@@ -132,11 +136,11 @@ impl DecisionVariableAnalysis {
         for (id, &value) in &state.entries {
             let id_ref = &VariableID::from(*id);
             if self.binary.contains(id_ref) {
-                if (value - 0.0).abs() > atol && (value - 1.0).abs() > atol {
+                if (value - 0.0).abs() > *atol && (value - 1.0).abs() > *atol {
                     return Err(StateValidationError::BinaryValueNotBool { id: *id_ref, value });
                 }
             } else if let Some(bound) = self.integer.get(id_ref) {
-                if (value.fract()).abs() > atol {
+                if (value.fract()).abs() > *atol {
                     return Err(StateValidationError::NotAnInteger { id: *id_ref, value });
                 }
                 if !bound.contains(value, atol) {
@@ -157,9 +161,9 @@ impl DecisionVariableAnalysis {
                     });
                 }
             } else if let Some(bound) = self.semi_integer.get(id_ref) {
-                if value.abs() > atol {
+                if value.abs() > *atol {
                     // If not zero
-                    if (value.fract()).abs() > atol {
+                    if (value.fract()).abs() > *atol {
                         return Err(StateValidationError::SemiIntegerNonZeroNotInteger {
                             id: *id_ref,
                             value,
@@ -175,7 +179,7 @@ impl DecisionVariableAnalysis {
                     }
                 }
             } else if let Some(bound) = self.semi_continuous.get(id_ref) {
-                if value.abs() > atol {
+                if value.abs() > *atol {
                     // If not zero
                     if !bound.contains(value, atol) {
                         return Err(StateValidationError::ValueOutOfBounds {
@@ -220,7 +224,7 @@ pub enum StateValidationError {
 ///
 /// Other decision variables e.g. `fixed` are ignored.
 impl AbsDiffEq for DecisionVariableAnalysis {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
         Bound::default_epsilon()

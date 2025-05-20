@@ -39,7 +39,7 @@
 //!   let state: State = hashmap! { 1 => 4.0, 2 => 5.0, 3 => 6.0 }.into();
 //!
 //!   // Evaluate the linear function with the state, and get the value and used variable ids
-//!   let value = linear.evaluate(&state, 1e-9).unwrap();
+//!   let value = linear.evaluate(&state, ommx::ATol::default()).unwrap();
 //!
 //!   assert_eq!(value, 1.0 * 4.0 + 2.0 * 5.0 + 3.0);
 //!   ```
@@ -142,6 +142,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod atol;
 mod bound;
 mod coefficient;
 mod constraint;
@@ -155,6 +156,7 @@ mod macros;
 mod polynomial_base;
 mod solution;
 
+pub use atol::*;
 pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
