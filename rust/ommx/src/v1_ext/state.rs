@@ -41,6 +41,9 @@ impl AbsDiffEq for State {
                     .get(key)
                     .is_some_and(|v| (*value - *v).abs() < atol)
             })
-            && other.entries.keys().all(|key| self.entries.contains_key(key))
+            && other
+                .entries
+                .keys()
+                .all(|key| self.entries.contains_key(key))
     }
 }
