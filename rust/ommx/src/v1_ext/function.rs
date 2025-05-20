@@ -356,7 +356,7 @@ impl AbsDiffEq for Function {
         match (lhs, rhs) {
             // Same order
             (FunctionEnum::Constant(lhs), FunctionEnum::Constant(rhs)) => {
-                lhs.abs_diff_eq(rhs, epsilon)
+                lhs.abs_diff_eq(rhs, *epsilon)
             }
             (FunctionEnum::Linear(lhs), FunctionEnum::Linear(rhs)) => lhs.abs_diff_eq(rhs, epsilon),
             (FunctionEnum::Quadratic(lhs), FunctionEnum::Quadratic(rhs)) => {
@@ -540,13 +540,13 @@ mod tests {
         fn test_as_linear_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 5, max_degree: 1, max_id: 10})) {
             let linear = f.clone().as_linear().unwrap();
             // `Function::Constant(c)` and `Function::Linear(Linear { terms: [], constant: c })` are mathematically same, but not structurally same.
-            prop_assert!(f.abs_diff_eq(&Function::from(linear), 1e-10));
+            prop_assert!(f.abs_diff_eq(&Function::from(linear), crate::ATol::new(1e-10).unwrap()));
         }
 
         #[test]
         fn test_as_constant_roundtrip(f in Function::arbitrary_with(FunctionParameters{ num_terms: 1, max_degree: 0,  max_id: 10})) {
             let c = f.clone().as_constant().unwrap();
-            prop_assert!(f.abs_diff_eq(&Function::from(c), 1e-10));
+            prop_assert!(f.abs_diff_eq(&Function::from(c), crate::ATol::new(1e-10).unwrap()));
         }
 
         #[test]

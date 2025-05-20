@@ -640,13 +640,13 @@ impl AbsDiffEq for Instance {
         match (self.sense.try_into(), other.sense.try_into()) {
             (Ok(Sense::Minimize), Ok(Sense::Minimize))
             | (Ok(Sense::Maximize), Ok(Sense::Maximize)) => {
-                if !f.abs_diff_eq(&g, *epsilon) {
+                if !f.abs_diff_eq(&g, epsilon) {
                     return false;
                 }
             }
             (Ok(Sense::Minimize), Ok(Sense::Maximize))
             | (Ok(Sense::Maximize), Ok(Sense::Minimize)) => {
-                if !f.abs_diff_eq(&-g.as_ref(), *epsilon) {
+                if !f.abs_diff_eq(&-g.as_ref(), epsilon) {
                     return false;
                 }
             }
@@ -667,7 +667,7 @@ impl AbsDiffEq for Instance {
                 if *eq != c.equality {
                     return false;
                 }
-                if !f.abs_diff_eq(&c.function(), *epsilon) {
+                if !f.abs_diff_eq(&c.function(), epsilon) {
                     return false;
                 }
             } else {
@@ -886,7 +886,7 @@ mod tests {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
@@ -899,7 +899,7 @@ mod tests {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
         }
 
         #[test]
@@ -919,7 +919,7 @@ mod tests {
                 entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
             let substituted = parametric_instance.clone().with_parameters(parameters, 1e-6).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
@@ -932,7 +932,7 @@ mod tests {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::new(1e-10).unwrap()));
         }
 
         #[test]
@@ -1012,7 +1012,7 @@ mod tests {
                 partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, 1e-9).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));
+                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::new(1e-10).unwrap()));
             }
         }
     }

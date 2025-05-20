@@ -199,7 +199,7 @@ mod tests {
                 let value = poly.evaluate(state, 1e-9).unwrap();
                 (*parameter_id, value)
             }).collect();
-            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, 1e-9), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
+            prop_assert!(evaluated.abs_diff_eq(&evaluated_each, crate::ATol::new(1e-9).unwrap()), "evaluated = {evaluated:?}, evaluated_each = {evaluated_each:?}");
         }
     }
 }

@@ -254,12 +254,12 @@ impl AbsDiffEq for Quadratic {
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         match (&self.linear, &other.linear) {
             (Some(l), Some(r)) => {
-                if !l.abs_diff_eq(r, *epsilon) {
+                if !l.abs_diff_eq(r, epsilon) {
                     return false;
                 }
             }
             (Some(l), None) | (None, Some(l)) => {
-                if !l.abs_diff_eq(&Linear::zero(), *epsilon) {
+                if !l.abs_diff_eq(&Linear::zero(), epsilon) {
                     return false;
                 }
             }
@@ -267,7 +267,7 @@ impl AbsDiffEq for Quadratic {
         }
         let sub = self.clone() - other.clone();
         for (_, value) in sub.into_iter() {
-            if !value.abs_diff_eq(&0.0, *epsilon) {
+            if !value.abs_diff_eq(&0.0, epsilon.into_inner()) {
                 return false;
             }
         }
