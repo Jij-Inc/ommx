@@ -35,18 +35,18 @@ impl From<Sense> for i32 {
     }
 }
 
-impl TryFrom<v1::Instance> for Instance {
-    type Error = ParseError;
-    fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {
+impl Parse for v1::Instance {
+    type Output = Instance;
+    type Context = ();
+    fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Instance";
-        let sense = value.sense().parse_as(&(), message, "sense")?;
+        let sense = self.sense().parse_as(&(), message, "sense")?;
 
         let decision_variables =
-            value
-                .decision_variables
+            self.decision_variables
                 .parse_as(&(), message, "decision_variables")?;
 
-        let objective = value
+        let objective = self
             .objective
             .ok_or(RawParseError::MissingField {
                 message,
@@ -54,14 +54,13 @@ impl TryFrom<v1::Instance> for Instance {
             })?
             .parse_as(&(), message, "objective")?;
 
-        let constraints = value.constraints.parse_as(&(), message, "constraints")?;
+        let constraints = self.constraints.parse_as(&(), message, "constraints")?;
         let removed_constraints =
-            value
-                .removed_constraints
+            self.removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
         let mut decision_variable_dependency = BTreeMap::default();
-        for (id, f) in value.decision_variable_dependency {
+        for (id, f) in self.decision_variable_dependency {
             decision_variable_dependency.insert(
                 as_variable_id(&decision_variables, id)
                     .map_err(|e| e.context(message, "decision_variable_dependency"))?,
@@ -70,24 +69,31 @@ impl TryFrom<v1::Instance> for Instance {
         }
 
         let context = (decision_variables, constraints);
-        let constraint_hints = if let Some(hints) = value.constraint_hints {
+        let constraint_hints = if let Some(hints) = self.constraint_hints {
             hints.parse_as(&context, message, "constraint_hints")?
         } else {
             Default::default()
         };
         let (decision_variables, constraints) = context;
 
-        Ok(Self {
+        Ok(Instance {
             sense,
             objective,
             constraints,
             decision_variables,
             removed_constraints,
             decision_variable_dependency,
-            parameters: value.parameters,
-            description: value.description,
+            parameters: self.parameters,
+            description: self.description,
             constraint_hints,
         })
+    }
+}
+
+impl TryFrom<v1::Instance> for Instance {
+    type Error = ParseError;
+    fn try_from(value: v1::Instance) -> Result<Self, Self::Error> {
+        value.parse(&())
     }
 }
 
