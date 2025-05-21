@@ -1,5 +1,5 @@
 ---
-applyTo: "rust/ommx/**/*.rs"
+applyTo: "rust/**/*"
 ---
 
 # Rust SDK (ommx crate) Development Guidelines
