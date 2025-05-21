@@ -35,6 +35,30 @@ impl From<Sense> for i32 {
     }
 }
 
+impl From<Constraint> for v1::Constraint {
+    fn from(value: Constraint) -> Self {
+        Self {
+            id: *value.id,
+            equality: value.equality.into(),
+            function: Some(value.function.into()),
+            name: value.name,
+            subscripts: value.subscripts,
+            parameters: value.parameters.into_iter().collect(),
+            description: value.description,
+        }
+    }
+}
+
+impl From<RemovedConstraint> for v1::RemovedConstraint {
+    fn from(value: RemovedConstraint) -> Self {
+        Self {
+            constraint: Some(value.constraint.into()),
+            removed_reason: value.removed_reason,
+            removed_reason_parameters: value.removed_reason_parameters.into_iter().collect(),
+        }
+    }
+}
+
 impl Parse for v1::Instance {
     type Output = Instance;
     type Context = ();
@@ -97,6 +121,42 @@ impl TryFrom<v1::Instance> for Instance {
     }
 }
 
+impl From<Instance> for v1::Instance {
+    fn from(value: Instance) -> Self {
+        let decision_variables = value
+            .decision_variables
+            .into_iter()
+            .map(|(_, dv)| dv.into())
+            .collect();
+        let constraints = value
+            .constraints
+            .into_iter()
+            .map(|(_, c)| c.into())
+            .collect();
+        let removed_constraints = value
+            .removed_constraints
+            .into_iter()
+            .map(|(_, rc)| rc.into())
+            .collect();
+        let decision_variable_dependency = value
+            .decision_variable_dependency
+            .into_iter()
+            .map(|(id, dep)| (id.into(), dep.into()))
+            .collect();
+        Self {
+            sense: v1::instance::Sense::from(value.sense).into(),
+            decision_variables,
+            objective: Some(value.objective.into()),
+            constraints,
+            removed_constraints,
+            decision_variable_dependency,
+            parameters: value.parameters,
+            description: value.description,
+            constraint_hints: Some(value.constraint_hints.into()),
+        }
+    }
+}
+
 pub(super) fn as_constraint_id(
     constraints: &BTreeMap<ConstraintID, Constraint>,
     id: u64,
@@ -117,4 +177,20 @@ pub(super) fn as_variable_id(
         return Err(RawParseError::UndefinedVariableID { id }.into());
     }
     Ok(id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::instance::Instance;
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        fn instance_roundtrip(original_instance in Instance::arbitrary()) {
+            let v1_instance: v1::Instance = original_instance.clone().into();
+            let roundtripped_instance = Instance::try_from(v1_instance).unwrap();
+            assert_eq!(original_instance, roundtripped_instance);
+        }
+    }
 }
