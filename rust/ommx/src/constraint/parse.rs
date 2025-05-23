@@ -22,12 +22,18 @@ impl Parse for v1::Equality {
     }
 }
 
+impl From<Equality> for v1::Equality {
+    fn from(value: Equality) -> Self {
+        match value {
+            Equality::EqualToZero => v1::Equality::EqualToZero,
+            Equality::LessThanOrEqualToZero => v1::Equality::LessThanOrEqualToZero,
+        }
+    }
+}
+
 impl From<Equality> for i32 {
     fn from(equality: Equality) -> Self {
-        match equality {
-            Equality::EqualToZero => v1::Equality::EqualToZero as i32,
-            Equality::LessThanOrEqualToZero => v1::Equality::LessThanOrEqualToZero as i32,
-        }
+        v1::Equality::from(equality).into()
     }
 }
 

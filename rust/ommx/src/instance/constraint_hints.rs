@@ -117,3 +117,39 @@ impl Parse for v1::ConstraintHints {
         })
     }
 }
+
+impl From<OneHot> for v1::OneHot {
+    fn from(value: OneHot) -> Self {
+        Self {
+            constraint_id: *value.id,
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<Sos1> for v1::Sos1 {
+    fn from(value: Sos1) -> Self {
+        Self {
+            binary_constraint_id: *value.binary_constraint_id,
+            big_m_constraint_ids: value.big_m_constraint_ids.into_iter().map(|c| *c).collect(),
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<ConstraintHints> for v1::ConstraintHints {
+    fn from(value: ConstraintHints) -> Self {
+        Self {
+            one_hot_constraints: value
+                .one_hot_constraints
+                .into_iter()
+                .map(|oh| oh.into())
+                .collect(),
+            sos1_constraints: value
+                .sos1_constraints
+                .into_iter()
+                .map(|s| s.into())
+                .collect(),
+        }
+    }
+}
