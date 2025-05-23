@@ -125,18 +125,14 @@ impl From<Instance> for v1::Instance {
     fn from(value: Instance) -> Self {
         let decision_variables = value
             .decision_variables
-            .into_iter()
-            .map(|(_, dv)| dv.into())
+            .into_values()
+            .map(|dv| dv.into())
             .collect();
-        let constraints = value
-            .constraints
-            .into_iter()
-            .map(|(_, c)| c.into())
-            .collect();
+        let constraints = value.constraints.into_values().map(|c| c.into()).collect();
         let removed_constraints = value
             .removed_constraints
-            .into_iter()
-            .map(|(_, rc)| rc.into())
+            .into_values()
+            .map(|rc| rc.into())
             .collect();
         let decision_variable_dependency = value
             .decision_variable_dependency
