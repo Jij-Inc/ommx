@@ -40,12 +40,12 @@ pyo3 = { version = "0.23.5", features = ["anyhow", "abi3-py38"] }
 pyo3-log = "0.12.4"
 pyo3-stub-gen = "0.7.0"
 serde = { version = "1.0.219", features = ["derive"] }
-serde-pyobject = "0.6.1"
+serde-pyobject = "0.6.2"
 serde_json = "1.0.140"
 smallvec = "1.15.0"
 thiserror = "2.0.12"
 url = "2.5.3"
-uuid = { version = "1.16.0", features = ["v4"] }
+uuid = { version = "1.17.0", features = ["v4"] }
 zip = "2.6.1"
 
 [profile.release]
