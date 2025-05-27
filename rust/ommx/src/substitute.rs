@@ -19,9 +19,10 @@ pub struct ClassifiedAssignments<'a> {
 }
 
 impl<'a> ClassifiedAssignments<'a> {
-    /// Creates a `ClassifiedAssignments` instance by categorizing functions
-    /// from an `Assignments` map.
-    pub fn from_external(external_assignments: &'a Assignments) -> Self {
+    /// Creates a `ClassifiedAssignments` instance by categorizing functions from an `Assignments` map.
+    ///
+    /// This method is an alternative to the `From<&'a Assignments>` implementation.
+    pub fn classify(assignments: &'a Assignments) -> Self {
         let mut classified = ClassifiedAssignments {
             zeros: FnvHashSet::default(),
             constants: FnvHashMap::default(),
@@ -30,7 +31,7 @@ impl<'a> ClassifiedAssignments<'a> {
             polynomials: FnvHashMap::default(),
         };
 
-        for (var_id, func_to_assign) in external_assignments.iter() {
+        for (var_id, func_to_assign) in assignments.iter() {
             match func_to_assign {
                 Function::Zero => {
                     classified.zeros.insert(*var_id);
@@ -50,6 +51,13 @@ impl<'a> ClassifiedAssignments<'a> {
             }
         }
         classified
+    }
+}
+
+impl<'a> From<&'a Assignments> for ClassifiedAssignments<'a> {
+    /// Converts an `&Assignments` map into `ClassifiedAssignments` by categorizing its functions.
+    fn from(assignments: &'a Assignments) -> Self {
+        ClassifiedAssignments::classify(assignments)
     }
 }
 
@@ -90,7 +98,7 @@ pub trait Substitute: Clone {
     /// This method has a default implementation that creates `ClassifiedAssignments`
     /// from the input `assignments` and then calls `substitute_classified`.
     fn substitute(&self, assignments: &Assignments) -> Self::Output {
-        let classified = ClassifiedAssignments::from_external(assignments);
+        let classified = ClassifiedAssignments::from(assignments);
         self.substitute_classified(&classified)
     }
 
