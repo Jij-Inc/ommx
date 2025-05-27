@@ -84,6 +84,43 @@ A fundamental architectural decision for the Rust SDK (version 2.0.0 and onwards
 - `ommx::v1::Instance`: Protobuf-generated struct, use only for serializing/deserializing `ommx::Instance`.
 - This pattern applies to other core OMMX entities like `Function`, `Constraint`, `Variable`, etc. (e.g., `ommx::Function` vs. `ommx::v1::Function`).
 
+## Property-Based Testing Guidelines
+
+When implementing property-based tests (using `proptest`) for mathematical operations in OMMX:
+
+### Test Data Generation Strategies
+
+**Leverage Existing `arbitrary_xxx` Functions:**
+- OMMX provides `arbitrary_xxx` helper functions for generating test data (e.g., `arbitrary_state`).
+- Always prefer using existing generators before creating new ones.
+- Example: Use `arbitrary_state(variable_ids)` to generate consistent test states.
+
+**Create Reusable Test Utilities:**
+- When implementing new test data generators, follow the `arbitrary_xxx` naming convention.
+- Make useful generators public so they can be reused across different test modules.
+- Consider adding them to appropriate modules (e.g., `ommx::random`) for broader availability.
+
+**Test Flow Pattern:**
+1. Generate base mathematical structure (polynomial, function)
+2. Extract required variable IDs
+3. Use `arbitrary_state` or similar generators for test state creation
+4. Apply transformation
+5. Generate transformed state if needed
+6. Verify evaluation equivalence
+
+### Postcondition Categories (Examples)
+
+- **Evaluation Equivalence**: For transformations, verify that evaluation results remain equivalent before and after transformation (e.g., `original.evaluate(state) == transformed.evaluate(transformed_state)`)
+- **Algebraic Properties**: Additivity, scalar multiplication, linearity preservation
+- **Structural Properties**: Degree bounds, coefficient preservation, variable set management
+
+### Common Pitfalls in Property Tests
+
+- **State Coverage**: Ensure generated states cover all variables required for evaluation
+- **Numerical Precision**: Use appropriate tolerance for floating-point comparisons in evaluation equivalence
+- **Floating-Point Comparison**: When comparing mathematical structures like `PolynomialBase` after transformations, use `approx` crate's `AbsDiffEq` trait for tolerance-based equality checks instead of exact equality, as floating-point operations introduce numerical errors even in mathematically equivalent transformations
+- **Edge Case Coverage**: Include boundary conditions like empty inputs, zero values, and extreme ranges
+
 ## Common Pitfalls / Frequently Made Mistakes
 
 - **Incorrect `Coefficient` Creation:** When creating a `Coefficient` from an `f64` value, always use `Coefficient::try_from(value).unwrap()` instead of `Coefficient::from(value)`.
