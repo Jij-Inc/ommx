@@ -25,6 +25,10 @@ pub enum CoefficientError {
 pub struct Coefficient(NotNan<f64>);
 
 impl Coefficient {
+    pub fn one() -> Self {
+        Self(NotNan::new(1.0).unwrap())
+    }
+
     pub fn into_inner(self) -> f64 {
         self.0.into_inner()
     }

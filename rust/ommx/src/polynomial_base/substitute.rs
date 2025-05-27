@@ -1,6 +1,7 @@
 use crate::{
     substitute::{ClassifiedAssignments, LinearAssignments, Substitute, SubstituteWithLinears},
-    Linear, LinearMonomial, Monomial, Polynomial, PolynomialBase, Quadratic, QuadraticMonomial,
+    Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase, Quadratic,
+    QuadraticMonomial,
 };
 
 impl<M> Substitute for PolynomialBase<M>
@@ -50,5 +51,22 @@ impl SubstituteWithLinears for QuadraticMonomial {
                 .into(),
             QuadraticMonomial::Constant => Quadratic::one(),
         }
+    }
+}
+
+impl SubstituteWithLinears for MonomialDyn {
+    type Output = Polynomial;
+    fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output {
+        let mut substituted = Polynomial::one();
+        let mut non_substituted = Vec::new();
+        for var_id in self.iter() {
+            if let Some(linear_func) = linear_assignments.get(var_id) {
+                substituted = &substituted * linear_func;
+            } else {
+                non_substituted.push(*var_id);
+            }
+        }
+        let non_substituted = Polynomial::from(MonomialDyn::from(non_substituted));
+        &substituted * &non_substituted
     }
 }
