@@ -10,7 +10,7 @@ where
 {
     type Output = Self;
     fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output {
-        let mut substituted = Self::one();
+        let mut substituted = Self::default();
         for (monomial, coefficient) in self.terms.iter() {
             let sub_monomial = monomial.substitute_with_linears(linear_assignments);
             for (m, c) in sub_monomial.terms {
