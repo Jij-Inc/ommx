@@ -45,5 +45,9 @@ A fundamental architectural decision for the Rust SDK (version 2.0.0 and onwards
 *   `ommx::v1::Instance`: Protobuf-generated struct, use only for serializing/deserializing `ommx::Instance`.
 *   This pattern applies to other core OMMX entities like `Function`, `Constraint`, `Variable`, etc. (e.g., `ommx::Function` vs. `ommx::v1::Function`).
 
+## Common Pitfalls / Frequently Made Mistakes
+
+*   **Incorrect `Coefficient` Creation:** When creating a `Coefficient` from an `f64` value, always use `Coefficient::try_from(value).unwrap()` instead of `Coefficient::from(value)`.
+
 By adhering to these guidelines, we aim to create a more maintainable, robust, and idiomatic Rust SDK.
 
