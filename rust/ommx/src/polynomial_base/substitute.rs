@@ -1,8 +1,7 @@
 use crate::{
     substitute::{ClassifiedAssignments, Substitute},
-    Linear, Monomial, Polynomial, PolynomialBase, VariableID,
+    Monomial, Polynomial, PolynomialBase,
 };
-use fnv::FnvHashMap;
 
 impl<M> Substitute for PolynomialBase<M>
 where
@@ -14,10 +13,6 @@ where
         &self,
         classified_assignments: &ClassifiedAssignments,
     ) -> Self::Output {
-        todo!()
-    }
-
-    fn substitute_with_linears(&self, linear_assignments: &FnvHashMap<VariableID, Linear>) -> Self {
         todo!()
     }
 }

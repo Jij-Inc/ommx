@@ -2,6 +2,7 @@ use crate::{decision_variable::VariableID, Coefficient, Function, Linear, Polyno
 use fnv::{FnvHashMap, FnvHashSet};
 
 pub type Assignments = FnvHashMap<VariableID, Function>;
+pub type LinearAssignments = FnvHashMap<VariableID, Linear>;
 
 /// Holds classified assignment data, borrowing from an original `Assignments` map.
 ///
@@ -115,17 +116,27 @@ pub trait Substitute: Clone {
         let classified = ClassifiedAssignments::from(assignments);
         self.substitute_classified(&classified)
     }
+}
+
+/// A trait for types that can have their variables substituted exclusively with `Linear` functions.
+///
+/// This specialized substitution is often used when the degree of the expression
+/// is expected not to increase, or to simplify expressions by replacing variables
+/// with linear forms. The `Output` type allows for flexibility in the result,
+/// for instance, a `Linear` function might become a `Constant` (represented as `Function`)
+/// after substitution.
+pub trait SubstituteWithLinears: Clone {
+    /// The type returned by the `substitute_with_linears` method.
+    type Output;
 
     /// Substitutes variables in `self` exclusively with `Linear` functions.
-    ///
-    /// This specialized substitution guarantees that the degree of the expression
-    /// will not increase. The structural type of `Self` is generally preserved
-    /// (e.g., a `Linear` function remains `Linear`, a `Quadratic` remains `Quadratic`).
-    /// If simplification occurs (e.g., a `Linear` function becomes a constant),
-    /// the returned `Self` should represent this simplified form within its own type.
     ///
     /// # Arguments
     /// * `linear_assignments`: A map from `VariableID` to the `Linear` function
     ///   that should replace it.
-    fn substitute_with_linears(&self, linear_assignments: &FnvHashMap<VariableID, Linear>) -> Self;
+    ///
+    /// # Returns
+    /// A new object of type `Self::Output` representing the expression after
+    /// substitution with linear functions.
+    fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output;
 }
