@@ -47,7 +47,7 @@ impl SubstituteWithLinears for QuadraticMonomial {
                     .substitute_with_linears(linear_assignments);
                 let u_sub = LinearMonomial::Variable(pair.upper())
                     .substitute_with_linears(linear_assignments);
-                (&l_sub * &u_sub).into()
+                &l_sub * &u_sub
             }
             QuadraticMonomial::Linear(id) => LinearMonomial::Variable(*id)
                 .substitute_with_linears(linear_assignments)
@@ -77,7 +77,7 @@ impl SubstituteWithLinears for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Coefficient;
+    use crate::{Coefficient, VariableID};
     use fnv::FnvHashMap;
 
     #[test]
@@ -97,12 +97,42 @@ mod tests {
         assignments.insert(0.into(), assign_x0);
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Linear::single_term(
-            LinearMonomial::Variable(1.into()),
-            Coefficient::try_from(1.0).unwrap(),
-        ) + Linear::from(Coefficient::try_from(3.0).unwrap());
+        let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
+            + Linear::from(Coefficient::try_from(3.0).unwrap());
 
         let result = poly.substitute_with_linears(&assignments);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn substitute_linear_to_quadratic() {
+        // q = 2 * x0 * x1
+        let q = Quadratic::single_term(
+            (VariableID::from(0), VariableID::from(1)).into(),
+            Coefficient::try_from(2.0).unwrap(),
+        );
+
+        let mut assignments: LinearAssignments = FnvHashMap::default();
+
+        // x0 = 2*x1 + 1
+        assignments.insert(
+            0.into(),
+            Linear::single_term(
+                LinearMonomial::Variable(1.into()),
+                Coefficient::try_from(2.0).unwrap(),
+            ) + Linear::one(),
+        );
+
+        // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
+        let ans = Quadratic::single_term(
+            (VariableID::from(1), VariableID::from(1)).into(),
+            Coefficient::try_from(4.0).unwrap(),
+        ) + Quadratic::single_term(
+            VariableID::from(1).into(),
+            Coefficient::try_from(2.0).unwrap(),
+        );
+
+        let result = q.substitute_with_linears(&assignments);
+        assert_eq!(result, ans);
     }
 }
