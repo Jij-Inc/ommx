@@ -1,3 +1,4 @@
+use num::One;
 use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
@@ -101,6 +102,12 @@ impl Sub for Coefficient {
     type Output = Option<Self>;
     fn sub(self, rhs: Self) -> Self::Output {
         self + (-rhs)
+    }
+}
+
+impl One for Coefficient {
+    fn one() -> Self {
+        Coefficient(NotNan::new(1.0).unwrap())
     }
 }
 
