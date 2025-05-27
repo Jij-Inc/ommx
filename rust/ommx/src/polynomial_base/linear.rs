@@ -6,6 +6,14 @@ use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 pub type Linear = PolynomialBase<LinearMonomial>;
 
+impl From<LinearMonomial> for Linear {
+    fn from(monomial: LinearMonomial) -> Self {
+        let mut polynomial = Self::default();
+        polynomial.add_term(monomial, Coefficient::try_from(1.0).unwrap());
+        polynomial
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, getset::CopyGetters)]
 pub struct LinearParameters {
     #[getset(get_copy = "pub")]

@@ -58,6 +58,12 @@ impl<M: Monomial> Default for PolynomialBase<M> {
 }
 
 impl<M: Monomial> PolynomialBase<M> {
+    pub fn one() -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(M::default(), Coefficient::try_from(1.0).unwrap());
+        Self { terms }
+    }
+
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {

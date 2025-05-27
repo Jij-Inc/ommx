@@ -1,6 +1,6 @@
 use crate::{
-    substitute::{ClassifiedAssignments, Substitute},
-    Monomial, Polynomial, PolynomialBase,
+    substitute::{ClassifiedAssignments, LinearAssignments, Substitute, SubstituteWithLinears},
+    Linear, LinearMonomial, Monomial, Polynomial, PolynomialBase,
 };
 
 impl<M> Substitute for PolynomialBase<M>
@@ -14,5 +14,21 @@ where
         classified_assignments: &ClassifiedAssignments,
     ) -> Self::Output {
         todo!()
+    }
+}
+
+impl SubstituteWithLinears for LinearMonomial {
+    type Output = Linear;
+    fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output {
+        match self {
+            LinearMonomial::Variable(id) => {
+                if let Some(linear_func) = linear_assignments.get(id) {
+                    linear_func.clone()
+                } else {
+                    Linear::from(*self)
+                }
+            }
+            LinearMonomial::Constant => Linear::one(),
+        }
     }
 }
