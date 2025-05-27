@@ -64,12 +64,22 @@ impl<'a> From<&'a Assignments> for ClassifiedAssignments<'a> {
 /// A trait for types that can have their variables substituted with functions.
 ///
 /// This trait provides a common interface for performing substitution operations
-/// on various mathematical expressions like `Function`, `Linear`, `Quadratic`,
-/// `Polynomial`, and even higher-level structures like `Instance`.
+/// on various mathematical expressions within the `ommx` crate, such as
+/// `Function` (and its variants `Linear`, `Quadratic`, `Polynomial`),
+/// and potentially higher-level structures like `Instance`.
+///
+/// The primary method to implement is `substitute_classified`, which takes
+/// pre-categorized assignment data for potentially optimized processing.
+/// The `substitute` method, which takes a general `Assignments` map,
+/// has a default implementation that uses `substitute_classified`.
 pub trait Substitute: Clone {
     /// The type returned by the general `substitute` method.
     /// This allows for transformations where the resulting type might differ
-    /// from the original (e.g., a `Linear` function becoming a `Quadratic`
+    /// from the original. For example:
+    /// - If `Self` is `Linear` and a `Quadratic` function is substituted into it,
+    ///   the `Output` will likely be `Function` (specifically, `Function::Quadratic`).
+    /// - If `Self` is `Function`, the `Output` will also be `Function`.
+    /// - If `Self` is `Instance`, the `Output` will be `Instance`.
     /// function after substitution, thus best represented as a `Function`).
     type Output;
 
@@ -77,7 +87,8 @@ pub trait Substitute: Clone {
     ///
     /// This is the primary method that implementers should provide, containing
     /// the core substitution logic that leverages the categorized assignments
-    /// for potentially staged and optimized processing.
+    /// (e.g., handling zeros, constants, linears, and higher-order functions
+    /// in distinct, optimized stages).
     ///
     /// # Arguments
     /// * `classified_assignments`: A reference to `ClassifiedAssignments`
@@ -95,8 +106,11 @@ pub trait Substitute: Clone {
     /// as keys in the `assignments` map. If a variable in `self` is not
     /// present in `assignments`, it remains unchanged.
     ///
-    /// This method has a default implementation that creates `ClassifiedAssignments`
-    /// from the input `assignments` and then calls `substitute_classified`.
+    /// This method has a default implementation that first converts the input
+    /// `assignments` into `ClassifiedAssignments` and then calls
+    /// `substitute_classified`. Implementers typically only need to provide
+    /// `substitute_classified`.
+    ///
     fn substitute(&self, assignments: &Assignments) -> Self::Output {
         let classified = ClassifiedAssignments::from(assignments);
         self.substitute_classified(&classified)
