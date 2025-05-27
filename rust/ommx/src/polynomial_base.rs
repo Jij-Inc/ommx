@@ -10,6 +10,7 @@ mod mul;
 mod parse;
 mod polynomial;
 mod quadratic;
+mod substitute;
 
 pub use binary_ids::*;
 pub use degree::*;
