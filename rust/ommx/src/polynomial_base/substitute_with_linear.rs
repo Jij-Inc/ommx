@@ -1,20 +1,23 @@
 use crate::{
-    substitute::{ClassifiedAssignments, LinearAssignments, Substitute, SubstituteWithLinears},
+    substitute::{LinearAssignments, SubstituteWithLinears},
     Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase, Quadratic,
     QuadraticMonomial,
 };
 
-impl<M> Substitute for PolynomialBase<M>
+impl<M> SubstituteWithLinears for PolynomialBase<M>
 where
-    M: Monomial,
+    M: Monomial + SubstituteWithLinears<Output = Self>,
 {
-    type Output = Polynomial;
-
-    fn substitute_classified(
-        &self,
-        classified_assignments: &ClassifiedAssignments,
-    ) -> Self::Output {
-        todo!()
+    type Output = Self;
+    fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output {
+        let mut substituted = Self::one();
+        for (monomial, coefficient) in self.terms.iter() {
+            let sub_monomial = monomial.substitute_with_linears(linear_assignments);
+            for (m, c) in sub_monomial.terms {
+                substituted.add_term(m, c * *coefficient);
+            }
+        }
+        substituted
     }
 }
 
