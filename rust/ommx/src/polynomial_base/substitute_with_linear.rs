@@ -73,3 +73,36 @@ impl SubstituteWithLinears for MonomialDyn {
         &substituted * &non_substituted
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Coefficient;
+    use fnv::FnvHashMap;
+
+    #[test]
+    fn substitute_linear_to_linear() {
+        // Poly: 2.0 * x0 + 1.0
+        let poly = Linear::single_term(
+            LinearMonomial::Variable(0.into()),
+            Coefficient::try_from(2.0).unwrap(),
+        ) + Linear::one();
+
+        // Assignments: x0 = 0.5 * x1 + 1.0
+        let assign_x0 = Linear::single_term(
+            LinearMonomial::Variable(1.into()),
+            Coefficient::try_from(0.5).unwrap(),
+        ) + Linear::one();
+        let mut assignments: LinearAssignments = FnvHashMap::default();
+        assignments.insert(0.into(), assign_x0);
+
+        // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
+        let expected = Linear::single_term(
+            LinearMonomial::Variable(1.into()),
+            Coefficient::try_from(1.0).unwrap(),
+        ) + Linear::from(Coefficient::try_from(3.0).unwrap());
+
+        let result = poly.substitute_with_linears(&assignments);
+        assert_eq!(result, expected);
+    }
+}

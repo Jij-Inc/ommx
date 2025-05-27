@@ -1,5 +1,17 @@
 use super::*;
 
+impl<M: Monomial> PolynomialBase<M> {
+    pub fn new(terms: FnvHashMap<M, Coefficient>) -> Self {
+        Self { terms }
+    }
+
+    pub fn single_term(term: M, coefficient: Coefficient) -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(term, coefficient);
+        Self { terms }
+    }
+}
+
 impl<M1: Monomial, M2: Monomial> TryFrom<&PolynomialBase<M1>> for PolynomialBase<M2>
 where
     M2: for<'a> TryFrom<&'a M1, Error = InvalidDegreeError>,

@@ -73,7 +73,7 @@ impl<'a> From<&'a Assignments> for ClassifiedAssignments<'a> {
 /// pre-categorized assignment data for potentially optimized processing.
 /// The `substitute` method, which takes a general `Assignments` map,
 /// has a default implementation that uses `substitute_classified`.
-pub trait Substitute: Clone {
+pub trait Substitute {
     /// The type returned by the general `substitute` method.
     /// This allows for transformations where the resulting type might differ
     /// from the original. For example:
@@ -125,7 +125,7 @@ pub trait Substitute: Clone {
 /// with linear forms. The `Output` type allows for flexibility in the result,
 /// for instance, a `Linear` function might become a `Constant` (represented as `Function`)
 /// after substitution.
-pub trait SubstituteWithLinears: Clone {
+pub trait SubstituteWithLinears {
     /// The type returned by the `substitute_with_linears` method.
     type Output;
 
