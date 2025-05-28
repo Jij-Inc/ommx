@@ -2,6 +2,7 @@ use crate::{decision_variable::VariableID, Evaluate, Linear};
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
+use proptest::prelude::*;
 
 use super::error::RecursiveAssignmentError;
 
@@ -60,6 +61,25 @@ impl AcyclicLinearAssignments {
         topo_order
             .into_iter()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
+    }
+}
+
+impl Arbitrary for AcyclicLinearAssignments {
+    type Parameters = ();
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+        // Generate a random acyclic graph of assignments
+        let strategy = proptest::collection::vec(
+            ((0..100_u64).prop_map(VariableID::from), Linear::arbitrary()),
+            0..=10,
+        )
+        .prop_filter_map("Acyclic", |assignments| {
+            AcyclicLinearAssignments::new(assignments).ok()
+        })
+        .boxed();
+
+        strategy
     }
 }
 
