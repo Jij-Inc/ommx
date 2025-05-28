@@ -7,7 +7,7 @@ mod linear_assignments;
 
 pub use assignments::Assignments;
 pub use error::RecursiveAssignmentError;
-pub use linear_assignments::LinearAssignments;
+pub use linear_assignments::AcyclicLinearAssignments;
 
 /// Holds classified assignment data, borrowing from an original `Assignments` map.
 ///
@@ -137,13 +137,16 @@ pub trait SubstituteWithLinears {
     /// Substitutes variables in `self` exclusively with `Linear` functions.
     ///
     /// # Arguments
-    /// * `linear_assignments`: A map from `VariableID` to the `Linear` function
-    ///   that should replace it.
+    /// * `linear_assignments`: An iterator of `(VariableID, Linear)` pairs representing
+    ///   the variables to replace and their corresponding linear functions.
     ///
     /// # Returns
     /// A new object of type `Self::Output` representing the expression after
     /// substitution with linear functions.
-    fn substitute_with_linears(&self, linear_assignments: &LinearAssignments) -> Self::Output;
+    fn substitute_with_linears(
+        &self,
+        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
+    ) -> Self::Output;
 }
 
 #[cfg(test)]
