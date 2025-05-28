@@ -62,6 +62,10 @@ impl AcyclicLinearAssignments {
             .into_iter()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
     }
+
+    pub fn keys(&self) -> impl Iterator<Item = VariableID> + '_ {
+        self.assignments.keys().copied()
+    }
 }
 
 impl Arbitrary for AcyclicLinearAssignments {

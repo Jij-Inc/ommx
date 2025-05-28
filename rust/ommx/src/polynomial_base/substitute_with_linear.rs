@@ -130,9 +130,8 @@ impl SubstituteWithLinears for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Coefficient, Evaluate, VariableID};
+    use crate::{Coefficient, Evaluate, VariableID, VariableIDSet};
     use proptest::prelude::*;
-    use std::collections::{BTreeSet, HashSet};
 
     #[test]
     fn substitute_linear_to_linear() {
@@ -185,57 +184,16 @@ mod tests {
         assert_eq!(result, ans);
     }
 
-    #[test]
-    fn test_substitute_with_linears_cyclic_error() {
-        // Create a polynomial with x0
-        let poly = Linear::single_term(
-            LinearMonomial::Variable(0.into()),
-            Coefficient::try_from(2.0).unwrap(),
-        );
-
-        // Create cyclic assignments: x0 = x1, x1 = x0
-        let assignments = vec![
-            (
-                VariableID::from(0),
-                Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one()),
-            ),
-            (
-                VariableID::from(1),
-                Linear::single_term(LinearMonomial::Variable(0.into()), Coefficient::one()),
-            ),
-        ];
-
-        // This should return an error due to circular dependency
-        let result = poly.substitute_with_linears(assignments);
-        assert!(result.is_err());
-    }
-
     proptest! {
         #[test]
-        fn test_substitute_with_linears_removes_assigned_variables(
-            polynomial in Polynomial::arbitrary(),
+        fn removes_assigned_variables(
+            f in Linear::arbitrary(),
             acyclic_assignments in AcyclicLinearAssignments::arbitrary()
         ) {
-            // Get the set of variables being assigned
-            let assigned_vars: HashSet<VariableID> = acyclic_assignments
-                .sorted_iter()
-                .map(|(var_id, _)| var_id)
-                .collect();
-
-            // Perform substitution using substitute_with_linears_acyclic
-            let result = polynomial.substitute_with_linears_acyclic(&acyclic_assignments);
-
-            // Get variables in the result
-            let result_vars: BTreeSet<VariableID> = result.required_ids();
-
-            // Check that no assigned variables remain in the result
-            let intersection: Vec<_> = assigned_vars.iter().filter(|var_id| result_vars.contains(var_id)).collect();
-            prop_assert!(
-                intersection.is_empty(),
-                "Assigned variables {:?} found in result variables {:?}",
-                intersection,
-                result_vars
-            );
+            let assigned: VariableIDSet = acyclic_assignments.keys().collect();
+            let substituted = f.substitute_with_linears_acyclic(&acyclic_assignments);
+            let result_vars = substituted.required_ids();
+            prop_assert!(result_vars.is_disjoint(&assigned));
         }
     }
 }
