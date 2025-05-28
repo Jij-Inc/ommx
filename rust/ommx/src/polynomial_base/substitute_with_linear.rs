@@ -130,7 +130,9 @@ impl SubstituteWithLinears for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Coefficient, VariableID};
+    use crate::{Coefficient, Evaluate, VariableID};
+    use proptest::prelude::*;
+    use std::collections::{BTreeSet, HashSet};
 
     #[test]
     fn substitute_linear_to_linear() {
@@ -206,5 +208,34 @@ mod tests {
         // This should return an error due to circular dependency
         let result = poly.substitute_with_linears(assignments);
         assert!(result.is_err());
+    }
+
+    proptest! {
+        #[test]
+        fn test_substitute_with_linears_removes_assigned_variables(
+            polynomial in Polynomial::arbitrary(),
+            acyclic_assignments in AcyclicLinearAssignments::arbitrary()
+        ) {
+            // Get the set of variables being assigned
+            let assigned_vars: HashSet<VariableID> = acyclic_assignments
+                .sorted_iter()
+                .map(|(var_id, _)| var_id)
+                .collect();
+
+            // Perform substitution using substitute_with_linears_acyclic
+            let result = polynomial.substitute_with_linears_acyclic(&acyclic_assignments);
+
+            // Get variables in the result
+            let result_vars: BTreeSet<VariableID> = result.required_ids();
+
+            // Check that no assigned variables remain in the result
+            let intersection: Vec<_> = assigned_vars.iter().filter(|var_id| result_vars.contains(var_id)).collect();
+            prop_assert!(
+                intersection.is_empty(),
+                "Assigned variables {:?} found in result variables {:?}",
+                intersection,
+                result_vars
+            );
+        }
     }
 }
