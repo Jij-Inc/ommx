@@ -1,6 +1,6 @@
 use crate::{
     substitute::{AcyclicLinearAssignments, SubstituteWithLinears},
-    Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase, Quadratic,
+    Evaluate, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase, Quadratic,
     QuadraticMonomial, VariableID,
 };
 use fnv::FnvHashMap;
@@ -26,6 +26,23 @@ where
             }
         }
         substituted
+    }
+
+    fn substitute_with_linear(
+        &self,
+        assigned: VariableID,
+        linear: Linear,
+    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        // Check for self-assignment (x = x + ...)
+        if linear.required_ids().contains(&assigned) {
+            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+        }
+        let mut substituted = Self::default();
+        for (monomial, coefficient) in self.terms.iter() {
+            substituted +=
+                *coefficient * monomial.substitute_with_linear(assigned, linear.clone())?;
+        }
+        Ok(substituted)
     }
 }
 
@@ -79,6 +96,28 @@ impl SubstituteWithLinears for LinearMonomial {
             LinearMonomial::Constant => Linear::one(),
         }
     }
+
+    fn substitute_with_linear(
+        &self,
+        assigned: VariableID,
+        linear: Linear,
+    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        // Check for self-assignment (x = x + ...)
+        if linear.required_ids().contains(&assigned) {
+            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+        }
+
+        match self {
+            LinearMonomial::Variable(id) => {
+                if *id == assigned {
+                    Ok(linear)
+                } else {
+                    Ok(Linear::from(*self))
+                }
+            }
+            LinearMonomial::Constant => Ok(Linear::one()),
+        }
+    }
 }
 
 impl SubstituteWithLinears for QuadraticMonomial {
@@ -100,6 +139,33 @@ impl SubstituteWithLinears for QuadraticMonomial {
                 .substitute_with_linears_acyclic(acyclic_assignments)
                 .into(),
             QuadraticMonomial::Constant => Quadratic::one(),
+        }
+    }
+
+    fn substitute_with_linear(
+        &self,
+        assigned: VariableID,
+        linear: Linear,
+    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        // Check for self-assignment (x = x + ...)
+        if linear.required_ids().contains(&assigned) {
+            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+        }
+
+        match self {
+            QuadraticMonomial::Pair(pair) => {
+                let l_sub = LinearMonomial::Variable(pair.lower())
+                    .substitute_with_linear(assigned, linear.clone())?;
+                let u_sub = LinearMonomial::Variable(pair.upper())
+                    .substitute_with_linear(assigned, linear)?;
+                Ok(&l_sub * &u_sub)
+            }
+            QuadraticMonomial::Linear(id) => {
+                let result =
+                    LinearMonomial::Variable(*id).substitute_with_linear(assigned, linear)?;
+                Ok(result.into())
+            }
+            QuadraticMonomial::Constant => Ok(Quadratic::one()),
         }
     }
 }
@@ -124,6 +190,29 @@ impl SubstituteWithLinears for MonomialDyn {
         }
         let non_substituted = Polynomial::from(MonomialDyn::from(non_substituted));
         &substituted * &non_substituted
+    }
+
+    fn substitute_with_linear(
+        &self,
+        assigned: VariableID,
+        linear: Linear,
+    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        // Check for self-assignment (x = x + ...)
+        if linear.required_ids().contains(&assigned) {
+            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+        }
+
+        let mut substituted = Polynomial::one();
+        let mut non_substituted = Vec::new();
+        for var_id in self.iter() {
+            if *var_id == assigned {
+                substituted = &substituted * &linear;
+            } else {
+                non_substituted.push(*var_id);
+            }
+        }
+        let non_substituted = Polynomial::from(MonomialDyn::from(non_substituted));
+        Ok(&substituted * &non_substituted)
     }
 }
 

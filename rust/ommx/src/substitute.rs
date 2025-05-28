@@ -172,6 +172,12 @@ pub trait SubstituteWithLinears {
         let acyclic_assignments = AcyclicLinearAssignments::new(linear_assignments)?;
         Ok(self.substitute_with_linears_acyclic(&acyclic_assignments))
     }
+
+    fn substitute_with_linear(
+        &self,
+        assigned: VariableID,
+        linear: Linear,
+    ) -> Result<Self::Output, RecursiveAssignmentError>;
 }
 
 #[cfg(test)]
