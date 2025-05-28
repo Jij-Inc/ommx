@@ -10,20 +10,11 @@ where
     M: Monomial + SubstituteWithLinears<Output = Self>,
 {
     type Output = Self;
-    fn substitute_with_linears(
-        &self,
-        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
-    ) -> Self::Output {
-        let acyclic_assignments = match AcyclicLinearAssignments::new(linear_assignments) {
-            Ok(assignments) => assignments,
-            Err(_) => {
-                // If there are cycles in the assignments, we can't proceed safely
-                // For now, return self unchanged. In the future, this could be handled
-                // differently based on requirements.
-                return self.clone();
-            }
-        };
 
+    fn substitute_with_linears_acyclic(
+        &self,
+        acyclic_assignments: &AcyclicLinearAssignments,
+    ) -> Self::Output {
         let assignments_map: FnvHashMap<VariableID, &Linear> =
             acyclic_assignments.sorted_iter().collect();
 
@@ -56,28 +47,31 @@ where
         &self,
         linear_assignments: &FnvHashMap<VariableID, &Linear>,
     ) -> Self::Output {
-        // Create a temporary collection that implements the old interface
+        // Create a temporary collection that implements the new interface
         let assignments_map: FnvHashMap<VariableID, Linear> = linear_assignments
             .iter()
             .map(|(&id, &linear)| (id, linear.clone()))
             .collect();
         let assignments_vec: Vec<(VariableID, Linear)> = assignments_map.into_iter().collect();
-        self.substitute_with_linears(assignments_vec)
+        // We use unwrap here since this is an internal method and cycles should not occur
+        // in the context where this is called (from substitute_with_linears_acyclic)
+        self.substitute_with_linears(assignments_vec).unwrap()
     }
 }
 
 impl SubstituteWithLinears for LinearMonomial {
     type Output = Linear;
-    fn substitute_with_linears(
+
+    fn substitute_with_linears_acyclic(
         &self,
-        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
+        acyclic_assignments: &AcyclicLinearAssignments,
     ) -> Self::Output {
-        let assignments_map: FnvHashMap<VariableID, Linear> =
-            linear_assignments.into_iter().collect();
+        let assignments_map: FnvHashMap<VariableID, &Linear> =
+            acyclic_assignments.sorted_iter().collect();
         match self {
             LinearMonomial::Variable(id) => {
                 if let Some(linear_func) = assignments_map.get(id) {
-                    linear_func.clone()
+                    (*linear_func).clone()
                 } else {
                     Linear::from(*self)
                 }
@@ -90,32 +84,20 @@ impl SubstituteWithLinears for LinearMonomial {
 impl SubstituteWithLinears for QuadraticMonomial {
     type Output = Quadratic;
 
-    fn substitute_with_linears(
+    fn substitute_with_linears_acyclic(
         &self,
-        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
+        acyclic_assignments: &AcyclicLinearAssignments,
     ) -> Self::Output {
-        let assignments_map: FnvHashMap<VariableID, Linear> =
-            linear_assignments.into_iter().collect();
         match self {
             QuadraticMonomial::Pair(pair) => {
-                let l_sub = LinearMonomial::Variable(pair.lower()).substitute_with_linears(
-                    assignments_map
-                        .iter()
-                        .map(|(&id, linear)| (id, linear.clone())),
-                );
-                let u_sub = LinearMonomial::Variable(pair.upper()).substitute_with_linears(
-                    assignments_map
-                        .iter()
-                        .map(|(&id, linear)| (id, linear.clone())),
-                );
+                let l_sub = LinearMonomial::Variable(pair.lower())
+                    .substitute_with_linears_acyclic(acyclic_assignments);
+                let u_sub = LinearMonomial::Variable(pair.upper())
+                    .substitute_with_linears_acyclic(acyclic_assignments);
                 &l_sub * &u_sub
             }
             QuadraticMonomial::Linear(id) => LinearMonomial::Variable(*id)
-                .substitute_with_linears(
-                    assignments_map
-                        .iter()
-                        .map(|(&id, linear)| (id, linear.clone())),
-                )
+                .substitute_with_linears_acyclic(acyclic_assignments)
                 .into(),
             QuadraticMonomial::Constant => Quadratic::one(),
         }
@@ -124,17 +106,18 @@ impl SubstituteWithLinears for QuadraticMonomial {
 
 impl SubstituteWithLinears for MonomialDyn {
     type Output = Polynomial;
-    fn substitute_with_linears(
+
+    fn substitute_with_linears_acyclic(
         &self,
-        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
+        acyclic_assignments: &AcyclicLinearAssignments,
     ) -> Self::Output {
-        let assignments_map: FnvHashMap<VariableID, Linear> =
-            linear_assignments.into_iter().collect();
+        let assignments_map: FnvHashMap<VariableID, &Linear> =
+            acyclic_assignments.sorted_iter().collect();
         let mut substituted = Polynomial::one();
         let mut non_substituted = Vec::new();
         for var_id in self.iter() {
             if let Some(linear_func) = assignments_map.get(var_id) {
-                substituted = &substituted * linear_func;
+                substituted = &substituted * *linear_func;
             } else {
                 non_substituted.push(*var_id);
             }
@@ -168,7 +151,7 @@ mod tests {
         let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
-        let result = poly.substitute_with_linears(assignments);
+        let result = poly.substitute_with_linears(assignments).unwrap();
         assert_eq!(result, expected);
     }
 
@@ -196,7 +179,32 @@ mod tests {
             Coefficient::try_from(2.0).unwrap(),
         );
 
-        let result = q.substitute_with_linears(assignments);
+        let result = q.substitute_with_linears(assignments).unwrap();
         assert_eq!(result, ans);
+    }
+
+    #[test]
+    fn test_substitute_with_linears_cyclic_error() {
+        // Create a polynomial with x0
+        let poly = Linear::single_term(
+            LinearMonomial::Variable(0.into()),
+            Coefficient::try_from(2.0).unwrap(),
+        );
+
+        // Create cyclic assignments: x0 = x1, x1 = x0
+        let assignments = vec![
+            (
+                VariableID::from(0),
+                Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one()),
+            ),
+            (
+                VariableID::from(1),
+                Linear::single_term(LinearMonomial::Variable(0.into()), Coefficient::one()),
+            ),
+        ];
+
+        // This should return an error due to circular dependency
+        let result = poly.substitute_with_linears(assignments);
+        assert!(result.is_err());
     }
 }
