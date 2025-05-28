@@ -78,7 +78,6 @@ impl SubstituteWithLinears for MonomialDyn {
 mod tests {
     use super::*;
     use crate::{Coefficient, VariableID};
-    use fnv::FnvHashMap;
 
     #[test]
     fn substitute_linear_to_linear() {
@@ -93,8 +92,8 @@ mod tests {
             LinearMonomial::Variable(1.into()),
             Coefficient::try_from(0.5).unwrap(),
         ) + Linear::one();
-        let mut assignments: LinearAssignments = FnvHashMap::default();
-        assignments.insert(0.into(), assign_x0);
+        let mut assignments = LinearAssignments::new();
+        assignments.insert(0.into(), assign_x0).unwrap();
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
         let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
@@ -112,16 +111,18 @@ mod tests {
             Coefficient::try_from(2.0).unwrap(),
         );
 
-        let mut assignments: LinearAssignments = FnvHashMap::default();
+        let mut assignments = LinearAssignments::new();
 
         // x0 = 2*x1 + 1
-        assignments.insert(
-            0.into(),
-            Linear::single_term(
-                LinearMonomial::Variable(1.into()),
-                Coefficient::try_from(2.0).unwrap(),
-            ) + Linear::one(),
-        );
+        assignments
+            .insert(
+                0.into(),
+                Linear::single_term(
+                    LinearMonomial::Variable(1.into()),
+                    Coefficient::try_from(2.0).unwrap(),
+                ) + Linear::one(),
+            )
+            .unwrap();
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
         let ans = Quadratic::single_term(
