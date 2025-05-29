@@ -4,7 +4,7 @@ mod assignments;
 mod error;
 
 pub use assignments::AcyclicAssignments;
-pub use error::RecursiveAssignmentError;
+pub use error::{RecursiveAssignmentError, SubstitutionError};
 
 /// A trait for types that can have their variables substituted exclusively with `Function` functions.
 ///
@@ -47,11 +47,11 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// # Returns
     /// A `Result` containing either:
     /// - `Ok(Self::Output)`: The expression after substitution with linear functions
-    /// - `Err(RecursiveAssignmentError)`: If the assignments contain circular dependencies
+    /// - `Err(SubstitutionError)`: If the assignments contain circular dependencies
     fn substitute(
         self,
         assignments: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<Function, RecursiveAssignmentError> {
+    ) -> Result<Function, SubstitutionError> {
         let acyclic = AcyclicAssignments::new(assignments)?;
         Ok(self.substitute_acyclic(&acyclic))
     }
@@ -60,5 +60,5 @@ pub trait Substitute: Clone + Sized + Into<Function> {
         self,
         assigned: VariableID,
         linear: &Function,
-    ) -> Result<Function, RecursiveAssignmentError>;
+    ) -> Result<Function, SubstitutionError>;
 }

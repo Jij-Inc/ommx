@@ -13,10 +13,12 @@ where
         self,
         assigned: VariableID,
         f: &Function,
-    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
+    ) -> Result<Function, crate::substitute::SubstitutionError> {
         // Check for self-assignment (x = x + ...)
         if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
+                var_id: assigned,
+            });
         }
         let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
@@ -31,10 +33,12 @@ impl Substitute for LinearMonomial {
         self,
         assigned: VariableID,
         f: &Function,
-    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
+    ) -> Result<Function, crate::substitute::SubstitutionError> {
         // Check for self-assignment (x = x + ...)
         if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
+                var_id: assigned,
+            });
         }
 
         match self {
@@ -55,10 +59,12 @@ impl Substitute for QuadraticMonomial {
         self,
         assigned: VariableID,
         f: &Function,
-    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
+    ) -> Result<Function, crate::substitute::SubstitutionError> {
         // Check for self-assignment (x = x + ...)
         if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
+                var_id: assigned,
+            });
         }
 
         match self {
@@ -69,7 +75,7 @@ impl Substitute for QuadraticMonomial {
             }
             QuadraticMonomial::Linear(id) => {
                 let result = LinearMonomial::Variable(id).substitute_one(assigned, f)?;
-                Ok(result.into())
+                Ok(result)
             }
             QuadraticMonomial::Constant => Ok(Function::one()),
         }
@@ -81,10 +87,12 @@ impl Substitute for MonomialDyn {
         self,
         assigned: VariableID,
         f: &Function,
-    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
+    ) -> Result<Function, crate::substitute::SubstitutionError> {
         // Check for self-assignment (x = x + ...)
         if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
+            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
+                var_id: assigned,
+            });
         }
 
         let mut substituted = Function::one();

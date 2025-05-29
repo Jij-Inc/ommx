@@ -6,21 +6,21 @@ impl Substitute for Function {
         self,
         assigned: VariableID,
         f: &Function,
-    ) -> Result<Self, crate::substitute::RecursiveAssignmentError> {
+    ) -> Result<Self, crate::substitute::SubstitutionError> {
         match self {
             Function::Zero => Ok(Function::Zero),
             Function::Constant(c) => Ok(Function::Constant(c)),
             Function::Linear(l) => {
                 let substituted = l.substitute_one(assigned, f)?;
-                Ok(Function::from(substituted))
+                Ok(substituted)
             }
             Function::Quadratic(q) => {
                 let substituted = q.substitute_one(assigned, f)?;
-                Ok(Function::from(substituted))
+                Ok(substituted)
             }
             Function::Polynomial(p) => {
                 let substituted = p.substitute_one(assigned, f)?;
-                Ok(Function::from(substituted))
+                Ok(substituted)
             }
         }
     }

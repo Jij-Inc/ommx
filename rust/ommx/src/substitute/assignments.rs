@@ -4,7 +4,7 @@ use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
 use proptest::prelude::*;
 
-use super::error::RecursiveAssignmentError;
+use super::error::SubstitutionError;
 
 /// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
@@ -18,7 +18,7 @@ pub struct AcyclicAssignments {
 impl AcyclicAssignments {
     pub fn new(
         iter: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<Self, RecursiveAssignmentError> {
+    ) -> Result<Self, SubstitutionError> {
         let assignments: FnvHashMap<VariableID, Function> = iter.into_iter().collect();
         let mut dependency = DiGraphMap::new();
 
@@ -40,7 +40,7 @@ impl AcyclicAssignments {
             // Find a variable that participates in a cycle for error reporting
             // We can use any variable that's part of a strongly connected component
             for &var_id in assignments.keys() {
-                return Err(RecursiveAssignmentError { var_id });
+                return Err(SubstitutionError::CyclicAssignmentDetected { var_id });
             }
             // This should never be reached if assignments is non-empty
             unreachable!("Found cycle but no variables in assignments");
