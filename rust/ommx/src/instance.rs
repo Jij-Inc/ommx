@@ -80,22 +80,25 @@ impl Instance {
             description,
             constraint_hints,
         };
-        
+
         instance.validate_all_invariants()?;
-        
+
         Ok(instance)
     }
-    
+
     fn validate_all_invariants(&self) -> anyhow::Result<()> {
         let v1_instance: crate::v1::Instance = self.clone().into();
         v1_instance.validate()?;
-        
+
         for &dep_var_id in self.decision_variable_dependency.keys() {
             if !self.decision_variables.contains_key(&dep_var_id) {
-                anyhow::bail!("Decision variable dependency key {} is not defined in decision_variables", dep_var_id);
+                anyhow::bail!(
+                    "Decision variable dependency key {} is not defined in decision_variables",
+                    dep_var_id
+                );
             }
         }
-        
+
         Ok(())
     }
 }
@@ -114,14 +117,16 @@ mod tests {
             Bound::new(-1.0, 1.0).unwrap(),
             None,
             ATol::default(),
-        ).unwrap();
+        )
+        .unwrap();
         let var2 = DecisionVariable::new(
             VariableID::from(2),
             Kind::Continuous,
             Bound::new(-1.0, 1.0).unwrap(),
             None,
             ATol::default(),
-        ).unwrap();
+        )
+        .unwrap();
         vars.insert(VariableID::from(1), var1);
         vars.insert(VariableID::from(2), var2);
         vars
@@ -148,7 +153,7 @@ mod tests {
         let constraints = create_valid_constraints();
         let removed_constraints = BTreeMap::new();
         let decision_variable_dependency = BTreeMap::new();
-        
+
         let result = Instance::try_new(
             Sense::Minimize,
             Function::Zero,
@@ -160,8 +165,11 @@ mod tests {
             None,
             ConstraintHints::default(),
         );
-        
-        assert!(result.is_ok(), "Valid instance should be created successfully");
+
+        assert!(
+            result.is_ok(),
+            "Valid instance should be created successfully"
+        );
     }
 
     #[test]
@@ -169,10 +177,10 @@ mod tests {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
         let removed_constraints = BTreeMap::new();
-        
+
         let mut decision_variable_dependency = BTreeMap::new();
         decision_variable_dependency.insert(VariableID::from(999), Function::Zero);
-        
+
         let result = Instance::try_new(
             Sense::Minimize,
             Function::Zero,
@@ -184,8 +192,11 @@ mod tests {
             None,
             ConstraintHints::default(),
         );
-        
-        assert!(result.is_err(), "Instance with invalid dependency should fail");
+
+        assert!(
+            result.is_err(),
+            "Instance with invalid dependency should fail"
+        );
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Decision variable dependency key 999 is not defined"));
     }
@@ -194,7 +205,7 @@ mod tests {
     fn test_try_new_duplicate_constraint_ids() {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
-        
+
         let mut removed_constraints = BTreeMap::new();
         let constraint_id = ConstraintID::from(1);
         let removed_constraint = RemovedConstraint {
@@ -211,7 +222,7 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
         removed_constraints.insert(constraint_id, removed_constraint);
-        
+
         let result = Instance::try_new(
             Sense::Minimize,
             Function::Zero,
@@ -223,8 +234,11 @@ mod tests {
             None,
             ConstraintHints::default(),
         );
-        
-        assert!(result.is_err(), "Instance with duplicate constraint IDs should fail");
+
+        assert!(
+            result.is_err(),
+            "Instance with duplicate constraint IDs should fail"
+        );
     }
 
     #[test]
@@ -232,10 +246,10 @@ mod tests {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
         let removed_constraints = BTreeMap::new();
-        
+
         let mut decision_variable_dependency = BTreeMap::new();
         decision_variable_dependency.insert(VariableID::from(1), Function::Zero);
-        
+
         let result = Instance::try_new(
             Sense::Minimize,
             Function::Zero,
@@ -247,7 +261,10 @@ mod tests {
             None,
             ConstraintHints::default(),
         );
-        
-        assert!(result.is_ok(), "Instance with valid dependency should succeed");
+
+        assert!(
+            result.is_ok(),
+            "Instance with valid dependency should succeed"
+        );
     }
 }
