@@ -81,15 +81,58 @@ impl Instance {
             constraint_hints,
         };
 
-        instance.validate_all_invariants()?;
+        instance.validate()?;
 
         Ok(instance)
     }
 
-    fn validate_all_invariants(&self) -> anyhow::Result<()> {
-        let v1_instance: crate::v1::Instance = self.clone().into();
-        v1_instance.validate()?;
+    ///
+    /// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
+    /// - Key of `constraints` and `removed_constraints` are disjoint.
+    /// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
+    ///
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.validate_decision_variable_ids()?;
 
+        self.validate_constraint_ids()?;
+
+        self.validate_decision_variable_dependency_keys()?;
+
+        Ok(())
+    }
+
+    fn validate_decision_variable_ids(&self) -> anyhow::Result<()> {
+        let used_ids = self.required_ids();
+        let defined_ids: std::collections::HashSet<_> =
+            self.decision_variables.keys().cloned().collect();
+
+        if !used_ids.is_subset(&defined_ids) {
+            let undefined_ids: Vec<_> = used_ids.difference(&defined_ids).collect();
+            anyhow::bail!("Undefined decision variable IDs: {:?}", undefined_ids);
+        }
+
+        Ok(())
+    }
+
+    fn validate_constraint_ids(&self) -> anyhow::Result<()> {
+        let mut map = std::collections::HashSet::new();
+
+        for &constraint_id in self.constraints.keys() {
+            if !map.insert(constraint_id) {
+                anyhow::bail!("Duplicated constraint ID: {:?}", constraint_id);
+            }
+        }
+
+        for &constraint_id in self.removed_constraints.keys() {
+            if !map.insert(constraint_id) {
+                anyhow::bail!("Duplicated constraint ID: {:?}", constraint_id);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn validate_decision_variable_dependency_keys(&self) -> anyhow::Result<()> {
         for &dep_var_id in self.decision_variable_dependency.keys() {
             if !self.decision_variables.contains_key(&dep_var_id) {
                 anyhow::bail!(
@@ -100,6 +143,27 @@ impl Instance {
         }
 
         Ok(())
+    }
+
+    fn required_ids(&self) -> std::collections::HashSet<VariableID> {
+        use crate::Evaluate;
+
+        let mut used_ids = std::collections::HashSet::new();
+        used_ids.extend(self.objective.required_ids());
+
+        for constraint in self.constraints.values() {
+            used_ids.extend(constraint.function.required_ids());
+        }
+
+        for removed_constraint in self.removed_constraints.values() {
+            used_ids.extend(removed_constraint.constraint.function.required_ids());
+        }
+
+        for function in self.decision_variable_dependency.values() {
+            used_ids.extend(function.required_ids());
+        }
+
+        used_ids
     }
 }
 
