@@ -57,6 +57,7 @@ impl Instance {
     /// - Key of `constraints` and `removed_constraints` are disjoint.
     /// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
     ///
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         sense: Sense,
         objective: Function,
