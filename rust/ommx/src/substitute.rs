@@ -130,9 +130,9 @@ pub trait Substitute {
 /// with linear forms. The `Output` type allows for flexibility in the result,
 /// for instance, a `Linear` function might become a `Constant` (represented as `Function`)
 /// after substitution.
-pub trait SubstituteWithLinears {
+pub trait SubstituteWithLinears: Clone + Sized {
     /// The type returned by the `substitute_with_linears` method.
-    type Output;
+    type Output: From<Self> + SubstituteWithLinears;
 
     /// Substitutes variables in `self` exclusively with `Linear` functions using acyclic assignments.
     ///
@@ -174,7 +174,7 @@ pub trait SubstituteWithLinears {
     }
 
     fn substitute_with_linear(
-        &self,
+        self,
         assigned: VariableID,
         linear: Linear,
     ) -> Result<Self::Output, RecursiveAssignmentError>;

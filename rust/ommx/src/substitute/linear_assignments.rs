@@ -51,6 +51,10 @@ impl AcyclicLinearAssignments {
         })
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.assignments.is_empty()
+    }
+
     // Get the assignments in a topologically sorted order.
     pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Linear)> {
         // Get topological order of the dependency graph

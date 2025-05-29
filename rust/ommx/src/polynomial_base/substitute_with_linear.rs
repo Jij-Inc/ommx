@@ -29,7 +29,7 @@ where
     }
 
     fn substitute_with_linear(
-        &self,
+        self,
         assigned: VariableID,
         linear: Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
@@ -38,9 +38,9 @@ where
             return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
         }
         let mut substituted = Self::default();
-        for (monomial, coefficient) in self.terms.iter() {
+        for (monomial, coefficient) in self.terms {
             substituted +=
-                *coefficient * monomial.substitute_with_linear(assigned, linear.clone())?;
+                coefficient * monomial.substitute_with_linear(assigned, linear.clone())?;
         }
         Ok(substituted)
     }
@@ -98,7 +98,7 @@ impl SubstituteWithLinears for LinearMonomial {
     }
 
     fn substitute_with_linear(
-        &self,
+        self,
         assigned: VariableID,
         linear: Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
@@ -109,10 +109,10 @@ impl SubstituteWithLinears for LinearMonomial {
 
         match self {
             LinearMonomial::Variable(id) => {
-                if *id == assigned {
+                if id == assigned {
                     Ok(linear)
                 } else {
-                    Ok(Linear::from(*self))
+                    Ok(Linear::from(self))
                 }
             }
             LinearMonomial::Constant => Ok(Linear::one()),
@@ -143,7 +143,7 @@ impl SubstituteWithLinears for QuadraticMonomial {
     }
 
     fn substitute_with_linear(
-        &self,
+        self,
         assigned: VariableID,
         linear: Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
@@ -162,7 +162,7 @@ impl SubstituteWithLinears for QuadraticMonomial {
             }
             QuadraticMonomial::Linear(id) => {
                 let result =
-                    LinearMonomial::Variable(*id).substitute_with_linear(assigned, linear)?;
+                    LinearMonomial::Variable(id).substitute_with_linear(assigned, linear)?;
                 Ok(result.into())
             }
             QuadraticMonomial::Constant => Ok(Quadratic::one()),
@@ -193,7 +193,7 @@ impl SubstituteWithLinears for MonomialDyn {
     }
 
     fn substitute_with_linear(
-        &self,
+        self,
         assigned: VariableID,
         linear: Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
