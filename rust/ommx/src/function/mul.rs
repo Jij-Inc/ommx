@@ -1,3 +1,4 @@
+use num::One;
 use std::ops::{Mul, MulAssign};
 
 use super::*;
@@ -86,6 +87,14 @@ macro_rules! impl_mul_via_mul_assign {
                 self
             }
         }
+
+        impl Mul<Function> for $rhs {
+            type Output = Function;
+            fn mul(self, mut rhs: Function) -> Self::Output {
+                rhs.mul_assign(self);
+                rhs
+            }
+        }
     };
     () => {};
 }
@@ -146,10 +155,9 @@ impl Mul for &Function {
     }
 }
 
-impl Mul<Function> for &Function {
-    type Output = Function;
-    fn mul(self, rhs: Function) -> Self::Output {
-        rhs * self
+impl One for Function {
+    fn one() -> Self {
+        Function::Constant(Coefficient::one())
     }
 }
 

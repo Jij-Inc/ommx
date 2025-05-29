@@ -1,4 +1,4 @@
-use crate::{Linear, VariableID};
+use crate::{Function, VariableID};
 
 mod assignments;
 mod error;
@@ -6,21 +6,18 @@ mod error;
 pub use assignments::AcyclicAssignments;
 pub use error::RecursiveAssignmentError;
 
-/// A trait for types that can have their variables substituted exclusively with `Linear` functions.
+/// A trait for types that can have their variables substituted exclusively with `Function` functions.
 ///
 /// This specialized substitution is often used when the degree of the expression
 /// is expected not to increase, or to simplify expressions by replacing variables
 /// with linear forms. The `Output` type allows for flexibility in the result,
-/// for instance, a `Linear` function might become a `Constant` (represented as `Function`)
+/// for instance, a `Function` function might become a `Constant` (represented as `Function`)
 /// after substitution.
-pub trait Substitute: Clone + Sized {
-    /// The type returned by the `substitute_with_linears` method.
-    type Output: From<Self> + Substitute<Output = Self::Output>;
-
-    /// Substitutes variables in `self` exclusively with `Linear` functions using acyclic assignments.
+pub trait Substitute: Clone + Sized + Into<Function> {
+    /// Substitutes variables in `self` exclusively with `Function` functions using acyclic assignments.
     ///
     /// This is the primary method that implementers should provide. It takes
-    /// an `AcyclicLinearAssignments` which guarantees no circular dependencies.
+    /// an `AcyclicFunctionAssignments` which guarantees no circular dependencies.
     ///
     /// # Arguments
     /// * `acyclic_assignments`: An `AcyclicAssignments` containing the
@@ -29,22 +26,22 @@ pub trait Substitute: Clone + Sized {
     /// # Returns
     /// A new object of type `Self::Output` representing the expression after
     /// substitution with linear functions.
-    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Self::Output {
-        let mut out: Self::Output = self.into();
+    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Function {
+        let mut out: Function = self.into();
         for (id, l) in acyclic.sorted_iter() {
-            out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicLinearAssignments`
+            out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicFunctionAssignments`
         }
         out
     }
 
-    /// Substitutes variables in `self` exclusively with `Linear` functions.
+    /// Substitutes variables in `self` exclusively with `Function` functions.
     ///
-    /// This method has a default implementation that creates an `AcyclicLinearAssignments`
+    /// This method has a default implementation that creates an `AcyclicFunctionAssignments`
     /// from the input iterator and calls `substitute_with_linears_acyclic`. If the
     /// assignments contain cycles, an error is returned.
     ///
     /// # Arguments
-    /// * `linear_assignments`: An iterator of `(VariableID, Linear)` pairs representing
+    /// * `linear_assignments`: An iterator of `(VariableID, Function)` pairs representing
     ///   the variables to replace and their corresponding linear functions.
     ///
     /// # Returns
@@ -53,8 +50,8 @@ pub trait Substitute: Clone + Sized {
     /// - `Err(RecursiveAssignmentError)`: If the assignments contain circular dependencies
     fn substitute(
         self,
-        assignments: impl IntoIterator<Item = (VariableID, Linear)>,
-    ) -> Result<Self::Output, RecursiveAssignmentError> {
+        assignments: impl IntoIterator<Item = (VariableID, Function)>,
+    ) -> Result<Function, RecursiveAssignmentError> {
         let acyclic = AcyclicAssignments::new(assignments)?;
         Ok(self.substitute_acyclic(&acyclic))
     }
@@ -62,6 +59,6 @@ pub trait Substitute: Clone + Sized {
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, RecursiveAssignmentError>;
+        linear: &Function,
+    ) -> Result<Function, RecursiveAssignmentError>;
 }

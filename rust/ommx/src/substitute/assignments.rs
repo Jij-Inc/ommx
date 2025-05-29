@@ -1,4 +1,4 @@
-use crate::{decision_variable::VariableID, Evaluate, Linear};
+use crate::{decision_variable::VariableID, Evaluate, Function};
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
@@ -6,20 +6,20 @@ use proptest::prelude::*;
 
 use super::error::RecursiveAssignmentError;
 
-/// Represents a set of assignment rules (`VariableID` -> `Linear`)
+/// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
 #[derive(Debug, Clone)]
 pub struct AcyclicAssignments {
-    assignments: FnvHashMap<VariableID, Linear>,
+    assignments: FnvHashMap<VariableID, Function>,
     // The directed graph representing dependencies between assignments, assigned -> required.
     dependency: DiGraphMap<VariableID, ()>,
 }
 
 impl AcyclicAssignments {
     pub fn new(
-        iter: impl IntoIterator<Item = (VariableID, Linear)>,
+        iter: impl IntoIterator<Item = (VariableID, Function)>,
     ) -> Result<Self, RecursiveAssignmentError> {
-        let assignments: FnvHashMap<VariableID, Linear> = iter.into_iter().collect();
+        let assignments: FnvHashMap<VariableID, Function> = iter.into_iter().collect();
         let mut dependency = DiGraphMap::new();
 
         // Add all variables being assigned to as nodes
@@ -57,7 +57,7 @@ impl AcyclicAssignments {
     }
 
     // Get the assignments in a topologically sorted order.
-    pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Linear)> {
+    pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
         // Get topological order of the dependency graph
         let topo_order = algo::toposort(&self.dependency, None)
             .expect("Graph should be acyclic by construction");
@@ -80,7 +80,10 @@ impl Arbitrary for AcyclicAssignments {
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         // Generate a random acyclic graph of assignments
         proptest::collection::vec(
-            ((0..100_u64).prop_map(VariableID::from), Linear::arbitrary()),
+            (
+                (0..100_u64).prop_map(VariableID::from),
+                Function::arbitrary(),
+            ),
             0..=10,
         )
         .prop_filter_map("Acyclic", |assignments| {
@@ -105,17 +108,19 @@ mod tests {
         let assignments = vec![
             (
                 x1_id,
-                PolynomialBase::single_term(
+                (PolynomialBase::single_term(
                     LinearMonomial::Variable(x2_id),
                     Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()),
+                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()))
+                .into(),
             ),
             (
                 x2_id,
-                PolynomialBase::single_term(
+                (PolynomialBase::single_term(
                     LinearMonomial::Variable(x3_id),
                     Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()),
+                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
+                .into(),
             ),
         ];
 
@@ -142,17 +147,19 @@ mod tests {
         let assignments = vec![
             (
                 x1_id,
-                PolynomialBase::single_term(
+                (PolynomialBase::single_term(
                     LinearMonomial::Variable(x2_id),
                     Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()),
+                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()))
+                .into(),
             ),
             (
                 x2_id,
-                PolynomialBase::single_term(
+                (PolynomialBase::single_term(
                     LinearMonomial::Variable(x1_id),
                     Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()),
+                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
+                .into(),
             ),
         ];
 
@@ -167,10 +174,11 @@ mod tests {
         // Create x1 = x1 + 2 (self-reference, should fail)
         let assignments = vec![(
             x1_id,
-            PolynomialBase::single_term(
+            (PolynomialBase::single_term(
                 LinearMonomial::Variable(x1_id),
                 Coefficient::try_from(1.0).unwrap(),
-            ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()),
+            ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
+            .into(),
         )];
 
         let result = AcyclicAssignments::new(assignments);

@@ -1,118 +1,110 @@
 use crate::{
-    substitute::Substitute, Evaluate, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial,
-    PolynomialBase, Quadratic, QuadraticMonomial, VariableID,
+    substitute::Substitute, Coefficient, Evaluate, Function, Linear, LinearMonomial, Monomial,
+    MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
 };
+use num::One;
 
 impl<M> Substitute for PolynomialBase<M>
 where
-    M: Monomial + Substitute<Output = Self>,
+    M: Monomial + Substitute,
+    PolynomialBase<M>: Into<Function>,
 {
-    type Output = Self;
-
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        f: &Function,
+    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
-        if linear.required_ids().contains(&assigned) {
+        if f.required_ids().contains(&assigned) {
             return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
         }
-        let mut substituted = Self::default();
+        let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
-            substituted += coefficient * monomial.substitute_one(assigned, linear)?;
+            substituted += coefficient * monomial.substitute_one(assigned, f)?;
         }
         Ok(substituted)
     }
 }
 
 impl Substitute for LinearMonomial {
-    type Output = Linear;
-
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        f: &Function,
+    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
-        if linear.required_ids().contains(&assigned) {
+        if f.required_ids().contains(&assigned) {
             return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
         }
 
         match self {
             LinearMonomial::Variable(id) => {
                 if id == assigned {
-                    Ok(linear.clone())
+                    Ok(f.clone())
                 } else {
-                    Ok(Linear::from(self))
+                    Ok(Linear::from(self).into())
                 }
             }
-            LinearMonomial::Constant => Ok(Linear::one()),
+            LinearMonomial::Constant => Ok(Function::Constant(Coefficient::one())),
         }
     }
 }
 
 impl Substitute for QuadraticMonomial {
-    type Output = Quadratic;
-
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        f: &Function,
+    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
-        if linear.required_ids().contains(&assigned) {
+        if f.required_ids().contains(&assigned) {
             return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
         }
 
         match self {
             QuadraticMonomial::Pair(pair) => {
-                let l_sub =
-                    LinearMonomial::Variable(pair.lower()).substitute_one(assigned, linear)?;
-                let u_sub =
-                    LinearMonomial::Variable(pair.upper()).substitute_one(assigned, linear)?;
+                let l_sub = LinearMonomial::Variable(pair.lower()).substitute_one(assigned, f)?;
+                let u_sub = LinearMonomial::Variable(pair.upper()).substitute_one(assigned, f)?;
                 Ok(&l_sub * &u_sub)
             }
             QuadraticMonomial::Linear(id) => {
-                let result = LinearMonomial::Variable(id).substitute_one(assigned, linear)?;
+                let result = LinearMonomial::Variable(id).substitute_one(assigned, f)?;
                 Ok(result.into())
             }
-            QuadraticMonomial::Constant => Ok(Quadratic::one()),
+            QuadraticMonomial::Constant => Ok(Function::one()),
         }
     }
 }
 
 impl Substitute for MonomialDyn {
-    type Output = Polynomial;
-
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        f: &Function,
+    ) -> Result<Function, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
-        if linear.required_ids().contains(&assigned) {
+        if f.required_ids().contains(&assigned) {
             return Err(crate::substitute::RecursiveAssignmentError { var_id: assigned });
         }
 
-        let mut substituted = Polynomial::one();
+        let mut substituted = Function::one();
         let mut non_substituted = Vec::new();
         for var_id in self.iter() {
             if *var_id == assigned {
-                substituted = &substituted * &linear;
+                substituted *= f;
             } else {
                 non_substituted.push(*var_id);
             }
         }
-        let non_substituted = Polynomial::from(MonomialDyn::from(non_substituted));
-        Ok(&substituted * &non_substituted)
+        substituted *= Polynomial::from(MonomialDyn::from(non_substituted));
+        Ok(substituted)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AcyclicAssignments, Coefficient, Evaluate, VariableID, VariableIDSet};
+    use crate::{AcyclicAssignments, Coefficient, Quadratic, VariableIDSet};
     use proptest::prelude::*;
 
     #[test]
@@ -128,14 +120,14 @@ mod tests {
             LinearMonomial::Variable(1.into()),
             Coefficient::try_from(0.5).unwrap(),
         ) + Linear::one();
-        let assignments = vec![(0.into(), assign_x0)];
+        let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
         let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
         let result = poly.substitute(assignments).unwrap();
-        assert_eq!(result, expected);
+        assert_eq!(result, expected.into());
     }
 
     #[test]
@@ -151,7 +143,7 @@ mod tests {
             LinearMonomial::Variable(1.into()),
             Coefficient::try_from(2.0).unwrap(),
         ) + Linear::one();
-        let assignments = vec![(0.into(), assign_x0)];
+        let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
         let ans = Quadratic::single_term(
@@ -163,7 +155,7 @@ mod tests {
         );
 
         let result = q.substitute(assignments).unwrap();
-        assert_eq!(result, ans);
+        assert_eq!(result, ans.into());
     }
 
     proptest! {

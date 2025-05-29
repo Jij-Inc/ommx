@@ -2,26 +2,24 @@ use super::*;
 use crate::{Substitute, VariableID};
 
 impl Substitute for Function {
-    type Output = Self;
-
     fn substitute_one(
         self,
         assigned: VariableID,
-        linear: &Linear,
-    ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
+        f: &Function,
+    ) -> Result<Self, crate::substitute::RecursiveAssignmentError> {
         match self {
             Function::Zero => Ok(Function::Zero),
             Function::Constant(c) => Ok(Function::Constant(c)),
             Function::Linear(l) => {
-                let substituted = l.substitute_one(assigned, linear)?;
+                let substituted = l.substitute_one(assigned, f)?;
                 Ok(Function::from(substituted))
             }
             Function::Quadratic(q) => {
-                let substituted = q.substitute_one(assigned, linear)?;
+                let substituted = q.substitute_one(assigned, f)?;
                 Ok(Function::from(substituted))
             }
             Function::Polynomial(p) => {
-                let substituted = p.substitute_one(assigned, linear)?;
+                let substituted = p.substitute_one(assigned, f)?;
                 Ok(Function::from(substituted))
             }
         }

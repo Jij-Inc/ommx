@@ -1,4 +1,5 @@
 use super::*;
+use crate::Function;
 
 impl<M: Monomial> PolynomialBase<M> {
     pub fn new(terms: FnvHashMap<M, Coefficient>) -> Self {
@@ -59,5 +60,15 @@ impl<M: Monomial> From<Coefficient> for PolynomialBase<M> {
         let mut terms = FnvHashMap::default();
         terms.insert(M::default(), c);
         Self { terms }
+    }
+}
+
+impl<M: Monomial> From<M> for Function
+where
+    Function: From<PolynomialBase<M>>,
+{
+    fn from(value: M) -> Self {
+        let p: PolynomialBase<M> = value.into();
+        Function::from(p)
     }
 }
