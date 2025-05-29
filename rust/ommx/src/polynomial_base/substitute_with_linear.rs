@@ -174,10 +174,14 @@ mod tests {
             f in Linear::arbitrary(),
             acyclic_assignments in AcyclicLinearAssignments::arbitrary()
         ) {
+            let original = f.required_ids();
             let assigned: VariableIDSet = acyclic_assignments.keys().collect();
             let substituted = f.substitute_with_linears_acyclic(&acyclic_assignments);
             let result_vars = substituted.required_ids();
-            prop_assert!(result_vars.is_disjoint(&assigned));
+            prop_assert!(
+                result_vars.is_disjoint(&assigned),
+                "orignail={original:?}, assigned={assigned:?}, variables after substituted={result_vars:?}",
+            );
         }
     }
 }

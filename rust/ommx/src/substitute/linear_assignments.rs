@@ -11,6 +11,7 @@ use super::error::RecursiveAssignmentError;
 #[derive(Debug, Clone)]
 pub struct AcyclicLinearAssignments {
     assignments: FnvHashMap<VariableID, Linear>,
+    // The directed graph representing dependencies between assignments, assigned -> required.
     dependency: DiGraphMap<VariableID, ()>,
 }
 
@@ -30,7 +31,7 @@ impl AcyclicLinearAssignments {
         for (&assigned_var, linear) in &assignments {
             for required_var in linear.required_ids() {
                 // Add edge from required_var to assigned_var (dependency direction)
-                dependency.add_edge(required_var, assigned_var, ());
+                dependency.add_edge(assigned_var, required_var, ());
             }
         }
 
@@ -78,16 +79,14 @@ impl Arbitrary for AcyclicLinearAssignments {
 
     fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
         // Generate a random acyclic graph of assignments
-        let strategy = proptest::collection::vec(
+        proptest::collection::vec(
             ((0..100_u64).prop_map(VariableID::from), Linear::arbitrary()),
             0..=10,
         )
         .prop_filter_map("Acyclic", |assignments| {
             AcyclicLinearAssignments::new(assignments).ok()
         })
-        .boxed();
-
-        strategy
+        .boxed()
     }
 }
 
@@ -120,20 +119,18 @@ mod tests {
             ),
         ];
 
+        // When substituting this assignment to x1,
+        // x1 <- x2 + 1
+        // x2 <- x3 + 2
+        // and yields x1 = (x3 + 2) + 1 = x3 + 3
         let acyclic_assignments = AcyclicLinearAssignments::new(assignments).unwrap();
 
-        // Test that sorted_iter works
-        let sorted: Vec<_> = acyclic_assignments.sorted_iter().collect();
-        assert_eq!(sorted.len(), 2);
-
-        // x2 should come before x1 in topological order since x1 depends on x2
-        let var_order: Vec<_> = sorted.iter().map(|(var_id, _)| *var_id).collect();
-        let x2_pos = var_order.iter().position(|&v| v == x2_id).unwrap();
-        let x1_pos = var_order.iter().position(|&v| v == x1_id).unwrap();
-        assert!(
-            x2_pos < x1_pos,
-            "x2 should come before x1 in topological order"
-        );
+        let mut iter = acyclic_assignments.sorted_iter();
+        let (id, _) = iter.next().unwrap();
+        assert_eq!(id, x1_id);
+        let (id, _) = iter.next().unwrap();
+        assert_eq!(id, x2_id);
+        assert!(iter.next().is_none(), "There should be no more assignments");
     }
 
     #[test]
