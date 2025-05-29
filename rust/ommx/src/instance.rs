@@ -55,18 +55,13 @@ impl Instance {
     ///
     /// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
     /// - Key of `constraints` and `removed_constraints` are disjoint.
-    /// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
     ///
-    #[allow(clippy::too_many_arguments)]
-    pub fn try_new(
+    pub fn new(
         sense: Sense,
         objective: Function,
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
         removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
-        decision_variable_dependency: BTreeMap<VariableID, Function>,
-        parameters: Option<v1::Parameters>,
-        description: Option<v1::instance::Description>,
         constraint_hints: ConstraintHints,
     ) -> anyhow::Result<Self> {
         let instance = Instance {
@@ -75,9 +70,9 @@ impl Instance {
             decision_variables,
             constraints,
             removed_constraints,
-            decision_variable_dependency,
-            parameters,
-            description,
+            decision_variable_dependency: BTreeMap::new(),
+            parameters: None,
+            description: None,
             constraint_hints,
         };
 
@@ -93,9 +88,7 @@ impl Instance {
     ///
     pub fn validate(&self) -> anyhow::Result<()> {
         self.validate_decision_variable_ids()?;
-
         self.validate_constraint_ids()?;
-
         self.validate_decision_variable_dependency_keys()?;
 
         Ok(())
@@ -103,14 +96,13 @@ impl Instance {
 
     fn validate_decision_variable_ids(&self) -> anyhow::Result<()> {
         let used_ids = self.required_ids();
-        let defined_ids: std::collections::HashSet<_> =
+        let defined_ids: std::collections::HashSet<_> = 
             self.decision_variables.keys().cloned().collect();
 
         if !used_ids.is_subset(&defined_ids) {
             let undefined_ids: Vec<_> = used_ids.difference(&defined_ids).collect();
             anyhow::bail!("Undefined decision variable IDs: {:?}", undefined_ids);
         }
-
         Ok(())
     }
 
@@ -128,7 +120,6 @@ impl Instance {
                 anyhow::bail!("Duplicated constraint ID: {:?}", constraint_id);
             }
         }
-
         Ok(())
     }
 
@@ -141,13 +132,11 @@ impl Instance {
                 );
             }
         }
-
         Ok(())
     }
 
     fn required_ids(&self) -> std::collections::HashSet<VariableID> {
         use crate::Evaluate;
-
         let mut used_ids = std::collections::HashSet::new();
         used_ids.extend(self.objective.required_ids());
 
@@ -164,6 +153,34 @@ impl Instance {
         }
 
         used_ids
+    }
+
+    pub fn minimize() -> Self {
+        Self {
+            sense: Sense::Minimize,
+            objective: Function::Zero,
+            decision_variables: BTreeMap::new(),
+            constraints: BTreeMap::new(),
+            removed_constraints: BTreeMap::new(),
+            decision_variable_dependency: BTreeMap::new(),
+            parameters: None,
+            description: None,
+            constraint_hints: ConstraintHints::default(),
+        }
+    }
+
+    pub fn maximize() -> Self {
+        Self {
+            sense: Sense::Maximize,
+            objective: Function::Zero,
+            decision_variables: BTreeMap::new(),
+            constraints: BTreeMap::new(),
+            removed_constraints: BTreeMap::new(),
+            decision_variable_dependency: BTreeMap::new(),
+            parameters: None,
+            description: None,
+            constraint_hints: ConstraintHints::default(),
+        }
     }
 }
 
@@ -212,21 +229,17 @@ mod tests {
     }
 
     #[test]
-    fn test_try_new_valid_instance() {
+    fn test_new_valid_instance() {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
         let removed_constraints = BTreeMap::new();
-        let decision_variable_dependency = BTreeMap::new();
 
-        let result = Instance::try_new(
+        let result = Instance::new(
             Sense::Minimize,
             Function::Zero,
             decision_variables,
             constraints,
             removed_constraints,
-            decision_variable_dependency,
-            None,
-            None,
             ConstraintHints::default(),
         );
 
@@ -237,36 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn test_try_new_invalid_decision_variable_dependency() {
-        let decision_variables = create_valid_decision_variables();
-        let constraints = create_valid_constraints();
-        let removed_constraints = BTreeMap::new();
-
-        let mut decision_variable_dependency = BTreeMap::new();
-        decision_variable_dependency.insert(VariableID::from(999), Function::Zero);
-
-        let result = Instance::try_new(
-            Sense::Minimize,
-            Function::Zero,
-            decision_variables,
-            constraints,
-            removed_constraints,
-            decision_variable_dependency,
-            None,
-            None,
-            ConstraintHints::default(),
-        );
-
-        assert!(
-            result.is_err(),
-            "Instance with invalid dependency should fail"
-        );
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("Decision variable dependency key 999 is not defined"));
-    }
-
-    #[test]
-    fn test_try_new_duplicate_constraint_ids() {
+    fn test_new_duplicate_constraint_ids() {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
 
@@ -287,48 +271,18 @@ mod tests {
         };
         removed_constraints.insert(constraint_id, removed_constraint);
 
-        let result = Instance::try_new(
+        let result = Instance::new(
             Sense::Minimize,
             Function::Zero,
             decision_variables,
             constraints,
             removed_constraints,
-            BTreeMap::new(),
-            None,
-            None,
             ConstraintHints::default(),
         );
 
         assert!(
             result.is_err(),
             "Instance with duplicate constraint IDs should fail"
-        );
-    }
-
-    #[test]
-    fn test_try_new_valid_decision_variable_dependency() {
-        let decision_variables = create_valid_decision_variables();
-        let constraints = create_valid_constraints();
-        let removed_constraints = BTreeMap::new();
-
-        let mut decision_variable_dependency = BTreeMap::new();
-        decision_variable_dependency.insert(VariableID::from(1), Function::Zero);
-
-        let result = Instance::try_new(
-            Sense::Minimize,
-            Function::Zero,
-            decision_variables,
-            constraints,
-            removed_constraints,
-            decision_variable_dependency,
-            None,
-            None,
-            ConstraintHints::default(),
-        );
-
-        assert!(
-            result.is_ok(),
-            "Instance with valid dependency should succeed"
         );
     }
 }
