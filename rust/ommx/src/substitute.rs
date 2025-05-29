@@ -1,10 +1,10 @@
 use crate::{Linear, VariableID};
 
+mod assignments;
 mod error;
-mod linear_assignments;
 
+pub use assignments::AcyclicLinearAssignments;
 pub use error::RecursiveAssignmentError;
-pub use linear_assignments::AcyclicLinearAssignments;
 
 /// A trait for types that can have their variables substituted exclusively with `Linear` functions.
 ///
@@ -13,9 +13,9 @@ pub use linear_assignments::AcyclicLinearAssignments;
 /// with linear forms. The `Output` type allows for flexibility in the result,
 /// for instance, a `Linear` function might become a `Constant` (represented as `Function`)
 /// after substitution.
-pub trait SubstituteWithLinears: Clone + Sized {
+pub trait Substitute: Clone + Sized {
     /// The type returned by the `substitute_with_linears` method.
-    type Output: From<Self> + SubstituteWithLinears<Output = Self::Output>;
+    type Output: From<Self> + Substitute<Output = Self::Output>;
 
     /// Substitutes variables in `self` exclusively with `Linear` functions using acyclic assignments.
     ///
@@ -29,13 +29,10 @@ pub trait SubstituteWithLinears: Clone + Sized {
     /// # Returns
     /// A new object of type `Self::Output` representing the expression after
     /// substitution with linear functions.
-    fn substitute_with_linears_acyclic(
-        self,
-        acyclic_assignments: &AcyclicLinearAssignments,
-    ) -> Self::Output {
+    fn substitute_acyclic(self, acyclic_assignments: &AcyclicLinearAssignments) -> Self::Output {
         let mut out: Self::Output = self.into();
         for (id, l) in acyclic_assignments.sorted_iter() {
-            out = out.substitute_with_linear(id, l).unwrap(); // Checked when creating `AcyclicLinearAssignments`
+            out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicLinearAssignments`
         }
         out
     }
@@ -54,15 +51,15 @@ pub trait SubstituteWithLinears: Clone + Sized {
     /// A `Result` containing either:
     /// - `Ok(Self::Output)`: The expression after substitution with linear functions
     /// - `Err(RecursiveAssignmentError)`: If the assignments contain circular dependencies
-    fn substitute_with_linears(
+    fn substitute(
         self,
-        linear_assignments: impl IntoIterator<Item = (VariableID, Linear)>,
+        assignments: impl IntoIterator<Item = (VariableID, Linear)>,
     ) -> Result<Self::Output, RecursiveAssignmentError> {
-        let acyclic_assignments = AcyclicLinearAssignments::new(linear_assignments)?;
-        Ok(self.substitute_with_linears_acyclic(&acyclic_assignments))
+        let acyclic = AcyclicLinearAssignments::new(assignments)?;
+        Ok(self.substitute_acyclic(&acyclic))
     }
 
-    fn substitute_with_linear(
+    fn substitute_one(
         self,
         assigned: VariableID,
         linear: &Linear,

@@ -1,15 +1,15 @@
 use crate::{
-    substitute::SubstituteWithLinears, Evaluate, Linear, LinearMonomial, Monomial, MonomialDyn,
-    Polynomial, PolynomialBase, Quadratic, QuadraticMonomial, VariableID,
+    substitute::Substitute, Evaluate, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial,
+    PolynomialBase, Quadratic, QuadraticMonomial, VariableID,
 };
 
-impl<M> SubstituteWithLinears for PolynomialBase<M>
+impl<M> Substitute for PolynomialBase<M>
 where
-    M: Monomial + SubstituteWithLinears<Output = Self>,
+    M: Monomial + Substitute<Output = Self>,
 {
     type Output = Self;
 
-    fn substitute_with_linear(
+    fn substitute_one(
         self,
         assigned: VariableID,
         linear: &Linear,
@@ -20,16 +20,16 @@ where
         }
         let mut substituted = Self::default();
         for (monomial, coefficient) in self.terms {
-            substituted += coefficient * monomial.substitute_with_linear(assigned, linear)?;
+            substituted += coefficient * monomial.substitute_one(assigned, linear)?;
         }
         Ok(substituted)
     }
 }
 
-impl SubstituteWithLinears for LinearMonomial {
+impl Substitute for LinearMonomial {
     type Output = Linear;
 
-    fn substitute_with_linear(
+    fn substitute_one(
         self,
         assigned: VariableID,
         linear: &Linear,
@@ -52,10 +52,10 @@ impl SubstituteWithLinears for LinearMonomial {
     }
 }
 
-impl SubstituteWithLinears for QuadraticMonomial {
+impl Substitute for QuadraticMonomial {
     type Output = Quadratic;
 
-    fn substitute_with_linear(
+    fn substitute_one(
         self,
         assigned: VariableID,
         linear: &Linear,
@@ -67,15 +67,14 @@ impl SubstituteWithLinears for QuadraticMonomial {
 
         match self {
             QuadraticMonomial::Pair(pair) => {
-                let l_sub = LinearMonomial::Variable(pair.lower())
-                    .substitute_with_linear(assigned, linear)?;
-                let u_sub = LinearMonomial::Variable(pair.upper())
-                    .substitute_with_linear(assigned, linear)?;
+                let l_sub =
+                    LinearMonomial::Variable(pair.lower()).substitute_one(assigned, linear)?;
+                let u_sub =
+                    LinearMonomial::Variable(pair.upper()).substitute_one(assigned, linear)?;
                 Ok(&l_sub * &u_sub)
             }
             QuadraticMonomial::Linear(id) => {
-                let result =
-                    LinearMonomial::Variable(id).substitute_with_linear(assigned, linear)?;
+                let result = LinearMonomial::Variable(id).substitute_one(assigned, linear)?;
                 Ok(result.into())
             }
             QuadraticMonomial::Constant => Ok(Quadratic::one()),
@@ -83,10 +82,10 @@ impl SubstituteWithLinears for QuadraticMonomial {
     }
 }
 
-impl SubstituteWithLinears for MonomialDyn {
+impl Substitute for MonomialDyn {
     type Output = Polynomial;
 
-    fn substitute_with_linear(
+    fn substitute_one(
         self,
         assigned: VariableID,
         linear: &Linear,
@@ -135,7 +134,7 @@ mod tests {
         let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
-        let result = poly.substitute_with_linears(assignments).unwrap();
+        let result = poly.substitute(assignments).unwrap();
         assert_eq!(result, expected);
     }
 
@@ -163,7 +162,7 @@ mod tests {
             Coefficient::try_from(2.0).unwrap(),
         );
 
-        let result = q.substitute_with_linears(assignments).unwrap();
+        let result = q.substitute(assignments).unwrap();
         assert_eq!(result, ans);
     }
 
@@ -175,7 +174,7 @@ mod tests {
         ) {
             let original = f.required_ids();
             let assigned: VariableIDSet = acyclic_assignments.keys().collect();
-            let substituted = f.substitute_with_linears_acyclic(&acyclic_assignments);
+            let substituted = f.substitute_acyclic(&acyclic_assignments);
             let result_vars = substituted.required_ids();
             prop_assert!(
                 result_vars.is_disjoint(&assigned),
