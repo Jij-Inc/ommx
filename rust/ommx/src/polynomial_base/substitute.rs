@@ -112,7 +112,7 @@ impl Substitute for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AcyclicLinearAssignments, Coefficient, Evaluate, VariableID, VariableIDSet};
+    use crate::{AcyclicAssignments, Coefficient, Evaluate, VariableID, VariableIDSet};
     use proptest::prelude::*;
 
     #[test]
@@ -170,7 +170,7 @@ mod tests {
         #[test]
         fn removes_assigned_variables(
             f in Linear::arbitrary(),
-            acyclic_assignments in AcyclicLinearAssignments::arbitrary()
+            acyclic_assignments in AcyclicAssignments::arbitrary()
         ) {
             let original = f.required_ids();
             let assigned: VariableIDSet = acyclic_assignments.keys().collect();

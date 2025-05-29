@@ -9,13 +9,13 @@ use super::error::RecursiveAssignmentError;
 /// Represents a set of assignment rules (`VariableID` -> `Linear`)
 /// that has been validated to be free of any circular dependencies.
 #[derive(Debug, Clone)]
-pub struct AcyclicLinearAssignments {
+pub struct AcyclicAssignments {
     assignments: FnvHashMap<VariableID, Linear>,
     // The directed graph representing dependencies between assignments, assigned -> required.
     dependency: DiGraphMap<VariableID, ()>,
 }
 
-impl AcyclicLinearAssignments {
+impl AcyclicAssignments {
     pub fn new(
         iter: impl IntoIterator<Item = (VariableID, Linear)>,
     ) -> Result<Self, RecursiveAssignmentError> {
@@ -73,7 +73,7 @@ impl AcyclicLinearAssignments {
     }
 }
 
-impl Arbitrary for AcyclicLinearAssignments {
+impl Arbitrary for AcyclicAssignments {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
 
@@ -84,7 +84,7 @@ impl Arbitrary for AcyclicLinearAssignments {
             0..=10,
         )
         .prop_filter_map("Acyclic", |assignments| {
-            AcyclicLinearAssignments::new(assignments).ok()
+            AcyclicAssignments::new(assignments).ok()
         })
         .boxed()
     }
@@ -123,7 +123,7 @@ mod tests {
         // x1 <- x2 + 1
         // x2 <- x3 + 2
         // and yields x1 = (x3 + 2) + 1 = x3 + 3
-        let acyclic_assignments = AcyclicLinearAssignments::new(assignments).unwrap();
+        let acyclic_assignments = AcyclicAssignments::new(assignments).unwrap();
 
         let mut iter = acyclic_assignments.sorted_iter();
         let (id, _) = iter.next().unwrap();
@@ -156,7 +156,7 @@ mod tests {
             ),
         ];
 
-        let result = AcyclicLinearAssignments::new(assignments);
+        let result = AcyclicAssignments::new(assignments);
         assert!(result.is_err());
     }
 
@@ -173,7 +173,7 @@ mod tests {
             ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()),
         )];
 
-        let result = AcyclicLinearAssignments::new(assignments);
+        let result = AcyclicAssignments::new(assignments);
         assert!(result.is_err());
     }
 }

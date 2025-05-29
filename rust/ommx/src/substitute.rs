@@ -3,7 +3,7 @@ use crate::{Linear, VariableID};
 mod assignments;
 mod error;
 
-pub use assignments::AcyclicLinearAssignments;
+pub use assignments::AcyclicAssignments;
 pub use error::RecursiveAssignmentError;
 
 /// A trait for types that can have their variables substituted exclusively with `Linear` functions.
@@ -23,15 +23,15 @@ pub trait Substitute: Clone + Sized {
     /// an `AcyclicLinearAssignments` which guarantees no circular dependencies.
     ///
     /// # Arguments
-    /// * `acyclic_assignments`: An `AcyclicLinearAssignments` containing the
+    /// * `acyclic_assignments`: An `AcyclicAssignments` containing the
     ///   linear functions to substitute, already validated to be acyclic.
     ///
     /// # Returns
     /// A new object of type `Self::Output` representing the expression after
     /// substitution with linear functions.
-    fn substitute_acyclic(self, acyclic_assignments: &AcyclicLinearAssignments) -> Self::Output {
+    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Self::Output {
         let mut out: Self::Output = self.into();
-        for (id, l) in acyclic_assignments.sorted_iter() {
+        for (id, l) in acyclic.sorted_iter() {
             out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicLinearAssignments`
         }
         out
@@ -55,7 +55,7 @@ pub trait Substitute: Clone + Sized {
         self,
         assignments: impl IntoIterator<Item = (VariableID, Linear)>,
     ) -> Result<Self::Output, RecursiveAssignmentError> {
-        let acyclic = AcyclicLinearAssignments::new(assignments)?;
+        let acyclic = AcyclicAssignments::new(assignments)?;
         Ok(self.substitute_acyclic(&acyclic))
     }
 
