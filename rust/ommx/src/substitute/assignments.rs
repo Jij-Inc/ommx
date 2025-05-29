@@ -90,7 +90,7 @@ impl Arbitrary for AcyclicAssignments {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Coefficient, LinearMonomial, PolynomialBase};
+    use crate::{Coefficient, LinearMonomial};
 
     #[test]
     fn test_acyclic_linear_assignments_acyclic() {
@@ -102,19 +102,11 @@ mod tests {
         let assignments = vec![
             (
                 x1_id,
-                (PolynomialBase::single_term(
-                    LinearMonomial::Variable(x2_id),
-                    Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()))
-                .into(),
+                (LinearMonomial::Variable(x2_id) + Coefficient::try_from(1.0).unwrap()).into(),
             ),
             (
                 x2_id,
-                (PolynomialBase::single_term(
-                    LinearMonomial::Variable(x3_id),
-                    Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
-                .into(),
+                (LinearMonomial::Variable(x3_id) + Coefficient::try_from(2.0).unwrap()).into(),
             ),
         ];
 
@@ -141,19 +133,11 @@ mod tests {
         let assignments = vec![
             (
                 x1_id,
-                (PolynomialBase::single_term(
-                    LinearMonomial::Variable(x2_id),
-                    Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(1.0).unwrap()))
-                .into(),
+                (LinearMonomial::Variable(x2_id) + Coefficient::try_from(1.0).unwrap()).into(),
             ),
             (
                 x2_id,
-                (PolynomialBase::single_term(
-                    LinearMonomial::Variable(x1_id),
-                    Coefficient::try_from(1.0).unwrap(),
-                ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
-                .into(),
+                (LinearMonomial::Variable(x1_id) + Coefficient::try_from(2.0).unwrap()).into(),
             ),
         ];
 
@@ -168,11 +152,7 @@ mod tests {
         // Create x1 = x1 + 2 (self-reference, should fail)
         let assignments = vec![(
             x1_id,
-            (PolynomialBase::single_term(
-                LinearMonomial::Variable(x1_id),
-                Coefficient::try_from(1.0).unwrap(),
-            ) + PolynomialBase::from(Coefficient::try_from(2.0).unwrap()))
-            .into(),
+            (LinearMonomial::Variable(x1_id) + Coefficient::try_from(2.0).unwrap()).into(),
         )];
 
         let result = AcyclicAssignments::new(assignments);
