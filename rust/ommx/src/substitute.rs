@@ -152,7 +152,7 @@ pub trait SubstituteWithLinears: Clone + Sized {
     ) -> Self::Output {
         let mut out: Self::Output = self.into();
         for (id, l) in acyclic_assignments.sorted_iter() {
-            out = out.substitute_with_linear(id, l.clone()).unwrap(); // Checked when creating `AcyclicLinearAssignments`
+            out = out.substitute_with_linear(id, l).unwrap(); // Checked when creating `AcyclicLinearAssignments`
         }
         out
     }
@@ -182,7 +182,7 @@ pub trait SubstituteWithLinears: Clone + Sized {
     fn substitute_with_linear(
         self,
         assigned: VariableID,
-        linear: Linear,
+        linear: &Linear,
     ) -> Result<Self::Output, RecursiveAssignmentError>;
 }
 

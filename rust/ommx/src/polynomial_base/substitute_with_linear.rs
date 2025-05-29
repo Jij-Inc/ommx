@@ -12,7 +12,7 @@ where
     fn substitute_with_linear(
         self,
         assigned: VariableID,
-        linear: Linear,
+        linear: &Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
         if linear.required_ids().contains(&assigned) {
@@ -20,8 +20,7 @@ where
         }
         let mut substituted = Self::default();
         for (monomial, coefficient) in self.terms {
-            substituted +=
-                coefficient * monomial.substitute_with_linear(assigned, linear.clone())?;
+            substituted += coefficient * monomial.substitute_with_linear(assigned, linear)?;
         }
         Ok(substituted)
     }
@@ -33,7 +32,7 @@ impl SubstituteWithLinears for LinearMonomial {
     fn substitute_with_linear(
         self,
         assigned: VariableID,
-        linear: Linear,
+        linear: &Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
         if linear.required_ids().contains(&assigned) {
@@ -43,7 +42,7 @@ impl SubstituteWithLinears for LinearMonomial {
         match self {
             LinearMonomial::Variable(id) => {
                 if id == assigned {
-                    Ok(linear)
+                    Ok(linear.clone())
                 } else {
                     Ok(Linear::from(self))
                 }
@@ -59,7 +58,7 @@ impl SubstituteWithLinears for QuadraticMonomial {
     fn substitute_with_linear(
         self,
         assigned: VariableID,
-        linear: Linear,
+        linear: &Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
         if linear.required_ids().contains(&assigned) {
@@ -69,7 +68,7 @@ impl SubstituteWithLinears for QuadraticMonomial {
         match self {
             QuadraticMonomial::Pair(pair) => {
                 let l_sub = LinearMonomial::Variable(pair.lower())
-                    .substitute_with_linear(assigned, linear.clone())?;
+                    .substitute_with_linear(assigned, linear)?;
                 let u_sub = LinearMonomial::Variable(pair.upper())
                     .substitute_with_linear(assigned, linear)?;
                 Ok(&l_sub * &u_sub)
@@ -90,7 +89,7 @@ impl SubstituteWithLinears for MonomialDyn {
     fn substitute_with_linear(
         self,
         assigned: VariableID,
-        linear: Linear,
+        linear: &Linear,
     ) -> Result<Self::Output, crate::substitute::RecursiveAssignmentError> {
         // Check for self-assignment (x = x + ...)
         if linear.required_ids().contains(&assigned) {
