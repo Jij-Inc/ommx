@@ -1,5 +1,5 @@
 use super::MpsWriteError;
-use crate::{mps::ObjSense, v1, Evaluate};
+use crate::{mps::ObjSense, v1};
 use std::{collections::HashMap, io::Write};
 
 pub(crate) const OBJ_NAME: &str = "OBJ";

@@ -61,7 +61,6 @@ impl Instance {
         objective: Function,
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-        removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
         constraint_hints: ConstraintHints,
     ) -> anyhow::Result<Self> {
         let instance = Instance {
@@ -69,7 +68,7 @@ impl Instance {
             objective,
             decision_variables,
             constraints,
-            removed_constraints,
+            removed_constraints: BTreeMap::new(),
             decision_variable_dependency: BTreeMap::new(),
             parameters: None,
             description: None,
@@ -95,9 +94,11 @@ impl Instance {
     }
 
     fn validate_decision_variable_ids(&self) -> anyhow::Result<()> {
+        use crate::Evaluate;
+        use std::collections::BTreeSet;
+
         let used_ids = self.required_ids();
-        let defined_ids: std::collections::HashSet<_> = 
-            self.decision_variables.keys().cloned().collect();
+        let defined_ids: BTreeSet<_> = self.decision_variables.keys().cloned().collect();
 
         if !used_ids.is_subset(&defined_ids) {
             let undefined_ids: Vec<_> = used_ids.difference(&defined_ids).collect();
@@ -133,26 +134,6 @@ impl Instance {
             }
         }
         Ok(())
-    }
-
-    fn required_ids(&self) -> std::collections::HashSet<VariableID> {
-        use crate::Evaluate;
-        let mut used_ids = std::collections::HashSet::new();
-        used_ids.extend(self.objective.required_ids());
-
-        for constraint in self.constraints.values() {
-            used_ids.extend(constraint.function.required_ids());
-        }
-
-        for removed_constraint in self.removed_constraints.values() {
-            used_ids.extend(removed_constraint.constraint.function.required_ids());
-        }
-
-        for function in self.decision_variable_dependency.values() {
-            used_ids.extend(function.required_ids());
-        }
-
-        used_ids
     }
 
     pub fn minimize() -> Self {
@@ -232,14 +213,12 @@ mod tests {
     fn test_new_valid_instance() {
         let decision_variables = create_valid_decision_variables();
         let constraints = create_valid_constraints();
-        let removed_constraints = BTreeMap::new();
 
         let result = Instance::new(
             Sense::Minimize,
             Function::Zero,
             decision_variables,
             constraints,
-            removed_constraints,
             ConstraintHints::default(),
         );
 
@@ -252,13 +231,33 @@ mod tests {
     #[test]
     fn test_new_duplicate_constraint_ids() {
         let decision_variables = create_valid_decision_variables();
-        let constraints = create_valid_constraints();
 
-        let mut removed_constraints = BTreeMap::new();
+        let mut constraints = BTreeMap::new();
         let constraint_id = ConstraintID::from(1);
+        let constraint = Constraint {
+            id: constraint_id,
+            function: Function::Zero,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(constraint_id, constraint);
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            Function::Zero,
+            decision_variables,
+            constraints,
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Add a duplicate constraint ID to removed_constraints
         let removed_constraint = RemovedConstraint {
             constraint: Constraint {
-                id: constraint_id,
+                id: constraint_id, // Same ID as in constraints
                 function: Function::Zero,
                 equality: Equality::EqualToZero,
                 name: None,
@@ -269,20 +268,15 @@ mod tests {
             removed_reason: "Test".to_string(),
             removed_reason_parameters: Default::default(),
         };
-        removed_constraints.insert(constraint_id, removed_constraint);
+        instance
+            .removed_constraints
+            .insert(constraint_id, removed_constraint);
 
-        let result = Instance::new(
-            Sense::Minimize,
-            Function::Zero,
-            decision_variables,
-            constraints,
-            removed_constraints,
-            ConstraintHints::default(),
-        );
+        let result = instance.validate();
 
         assert!(
             result.is_err(),
-            "Instance with duplicate constraint IDs should fail"
+            "Instance with duplicate constraint IDs should fail validation"
         );
     }
 }
