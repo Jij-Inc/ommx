@@ -1,5 +1,5 @@
 use super::MpsWriteError;
-use crate::{mps::ObjSense, v1};
+use crate::{mps::ObjSense, v1, VariableID};
 use std::{collections::HashMap, io::Write};
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
@@ -187,7 +187,7 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
     for dvar_id in instance.defined_ids().into_iter() {
         let dvar = var_by_id
             .get(&dvar_id)
-            .ok_or(MpsWriteError::InvalidVariableId(dvar_id))?;
+            .ok_or(MpsWriteError::InvalidVariableId(VariableID::from(dvar_id)))?;
         let name = dvar_name(dvar);
         if let Some(bound) = &dvar.bound {
             let (low_kind, up_kind) = match dvar.kind {
