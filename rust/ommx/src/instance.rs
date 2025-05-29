@@ -21,14 +21,6 @@ pub enum Sense {
     Maximize,
 }
 
-/// Instance, represents a mathematical optimization problem.
-///
-/// Invariants
-/// -----------
-/// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
-/// - Key of `constraints` and `removed_constraints` are disjoint.
-/// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
-///
 #[derive(Debug, Clone, PartialEq, getset::Getters)]
 pub struct Instance {
     #[getset(get = "pub")]
@@ -52,10 +44,6 @@ pub struct Instance {
 }
 
 impl Instance {
-    ///
-    /// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
-    /// - Key of `constraints` and `removed_constraints` are disjoint.
-    ///
     pub fn new(
         sense: Sense,
         objective: Function,
@@ -80,11 +68,6 @@ impl Instance {
         Ok(instance)
     }
 
-    ///
-    /// - All `VariableID`s in `Function`s contained both directly and indirectly must be keys of `decision_variables`.
-    /// - Key of `constraints` and `removed_constraints` are disjoint.
-    /// - The keys of `decision_variable_dependency` are also keys of `decision_variables`.
-    ///
     pub fn validate(&self) -> anyhow::Result<()> {
         self.validate_decision_variable_ids()?;
         self.validate_constraint_ids()?;
@@ -254,7 +237,6 @@ mod tests {
         )
         .unwrap();
 
-        // Add a duplicate constraint ID to removed_constraints
         let removed_constraint = RemovedConstraint {
             constraint: Constraint {
                 id: constraint_id, // Same ID as in constraints
