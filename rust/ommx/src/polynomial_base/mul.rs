@@ -27,47 +27,27 @@ impl<M: Monomial> Mul<PolynomialBase<M>> for Coefficient {
 }
 
 // Add support for Coefficient * Monomial operations for specific monomial types
-impl Mul<LinearMonomial> for Coefficient {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn mul(self, rhs: LinearMonomial) -> Self::Output {
-        self * PolynomialBase::from(rhs)
-    }
+macro_rules! impl_coefficient_monomial_mul {
+    ($monomial:ty) => {
+        impl Mul<$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn mul(self, rhs: $monomial) -> Self::Output {
+                self * PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Mul<Coefficient> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn mul(self, rhs: Coefficient) -> Self::Output {
+                rhs * self
+            }
+        }
+    };
 }
 
-impl Mul<Coefficient> for LinearMonomial {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn mul(self, rhs: Coefficient) -> Self::Output {
-        rhs * self
-    }
-}
-
-impl Mul<QuadraticMonomial> for Coefficient {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
-        self * PolynomialBase::from(rhs)
-    }
-}
-
-impl Mul<Coefficient> for QuadraticMonomial {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn mul(self, rhs: Coefficient) -> Self::Output {
-        rhs * self
-    }
-}
-
-impl Mul<MonomialDyn> for Coefficient {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn mul(self, rhs: MonomialDyn) -> Self::Output {
-        self * PolynomialBase::from(rhs)
-    }
-}
-
-impl Mul<Coefficient> for MonomialDyn {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn mul(self, rhs: Coefficient) -> Self::Output {
-        rhs * self
-    }
-}
+impl_coefficient_monomial_mul!(LinearMonomial);
+impl_coefficient_monomial_mul!(QuadraticMonomial);
+impl_coefficient_monomial_mul!(MonomialDyn);
 
 impl Mul for LinearMonomial {
     type Output = QuadraticMonomial;

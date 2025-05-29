@@ -36,89 +36,41 @@ impl<M: Monomial> AddAssign<Coefficient> for PolynomialBase<M> {
 }
 
 // Add support for Monomial + Monomial operations for specific monomial types
-impl Add for LinearMonomial {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs)
-    }
+macro_rules! impl_monomial_add {
+    ($monomial:ty) => {
+        impl Add for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self) + PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Add<&$monomial> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: &Self) -> Self::Output {
+                PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        impl Add<$monomial> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: $monomial) -> Self::Output {
+                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Add for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
+            }
+        }
+    };
 }
 
-impl Add<&LinearMonomial> for LinearMonomial {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn add(self, rhs: &Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
-    }
-}
-
-impl Add<LinearMonomial> for &LinearMonomial {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn add(self, rhs: LinearMonomial) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
-    }
-}
-
-impl Add for &LinearMonomial {
-    type Output = PolynomialBase<LinearMonomial>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
-    }
-}
-
-impl Add for QuadraticMonomial {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs)
-    }
-}
-
-impl Add<&QuadraticMonomial> for QuadraticMonomial {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn add(self, rhs: &Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
-    }
-}
-
-impl Add<QuadraticMonomial> for &QuadraticMonomial {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn add(self, rhs: QuadraticMonomial) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
-    }
-}
-
-impl Add for &QuadraticMonomial {
-    type Output = PolynomialBase<QuadraticMonomial>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
-    }
-}
-
-impl Add for MonomialDyn {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs)
-    }
-}
-
-impl Add<&MonomialDyn> for MonomialDyn {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: &Self) -> Self::Output {
-        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
-    }
-}
-
-impl Add<MonomialDyn> for &MonomialDyn {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: MonomialDyn) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
-    }
-}
-
-impl Add for &MonomialDyn {
-    type Output = PolynomialBase<MonomialDyn>;
-    fn add(self, rhs: Self) -> Self::Output {
-        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
-    }
-}
+impl_monomial_add!(LinearMonomial);
+impl_monomial_add!(QuadraticMonomial);
+impl_monomial_add!(MonomialDyn);
 
 impl<M: Monomial> Add for PolynomialBase<M> {
     type Output = Self;
