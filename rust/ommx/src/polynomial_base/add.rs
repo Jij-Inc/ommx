@@ -1,4 +1,5 @@
 use super::*;
+use crate::{LinearMonomial, MonomialDyn, QuadraticMonomial};
 use num::Zero;
 use std::{
     iter::Sum,
@@ -31,6 +32,91 @@ impl<M: Monomial> AddAssign for PolynomialBase<M> {
 impl<M: Monomial> AddAssign<Coefficient> for PolynomialBase<M> {
     fn add_assign(&mut self, rhs: Coefficient) {
         self.add_term(M::default(), rhs);
+    }
+}
+
+// Add support for Monomial + Monomial operations for specific monomial types
+impl Add for LinearMonomial {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add<&LinearMonomial> for LinearMonomial {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn add(self, rhs: &Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+    }
+}
+
+impl Add<LinearMonomial> for &LinearMonomial {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn add(self, rhs: LinearMonomial) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add for &LinearMonomial {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
+    }
+}
+
+impl Add for QuadraticMonomial {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add<&QuadraticMonomial> for QuadraticMonomial {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn add(self, rhs: &Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+    }
+}
+
+impl Add<QuadraticMonomial> for &QuadraticMonomial {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn add(self, rhs: QuadraticMonomial) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add for &QuadraticMonomial {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
+    }
+}
+
+impl Add for MonomialDyn {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add<&MonomialDyn> for MonomialDyn {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: &Self) -> Self::Output {
+        PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+    }
+}
+
+impl Add<MonomialDyn> for &MonomialDyn {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: MonomialDyn) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+    }
+}
+
+impl Add for &MonomialDyn {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: Self) -> Self::Output {
+        PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
     }
 }
 
@@ -159,10 +245,32 @@ impl<M: Monomial> Zero for PolynomialBase<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::VariableID;
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
 
     type Linear = PolynomialBase<LinearMonomial>;
+
+    #[test]
+    fn test_monomial_add() {
+        // Test LinearMonomial + LinearMonomial
+        let x1 = LinearMonomial::Variable(VariableID::from(1));
+        let x2 = LinearMonomial::Variable(VariableID::from(2));
+        let result = x1 + x2;
+
+        // Improved syntax using new operators
+        let expected = Coefficient::one() * x1 + Coefficient::one() * x2;
+        assert_abs_diff_eq!(result, expected);
+
+        // Test QuadraticMonomial + QuadraticMonomial
+        let q1 = QuadraticMonomial::Linear(VariableID::from(1));
+        let q2 = QuadraticMonomial::Linear(VariableID::from(2));
+        let result = q1 + q2;
+
+        // Improved syntax using new operators
+        let expected = Coefficient::one() * q1 + Coefficient::one() * q2;
+        assert_abs_diff_eq!(result, expected);
+    }
 
     proptest! {
         /// Check four implementations of Add yields the same result

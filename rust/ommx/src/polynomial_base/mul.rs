@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Coefficient, MonomialDyn};
+use crate::{Coefficient, LinearMonomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Mul, MulAssign};
 
 impl<M: Monomial> MulAssign<Coefficient> for PolynomialBase<M> {
@@ -23,6 +23,49 @@ impl<M: Monomial> Mul<PolynomialBase<M>> for Coefficient {
     fn mul(self, mut rhs: PolynomialBase<M>) -> Self::Output {
         rhs *= self;
         rhs
+    }
+}
+
+// Add support for Coefficient * Monomial operations for specific monomial types
+impl Mul<LinearMonomial> for Coefficient {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn mul(self, rhs: LinearMonomial) -> Self::Output {
+        self * PolynomialBase::from(rhs)
+    }
+}
+
+impl Mul<Coefficient> for LinearMonomial {
+    type Output = PolynomialBase<LinearMonomial>;
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Mul<QuadraticMonomial> for Coefficient {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn mul(self, rhs: QuadraticMonomial) -> Self::Output {
+        self * PolynomialBase::from(rhs)
+    }
+}
+
+impl Mul<Coefficient> for QuadraticMonomial {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        rhs * self
+    }
+}
+
+impl Mul<MonomialDyn> for Coefficient {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn mul(self, rhs: MonomialDyn) -> Self::Output {
+        self * PolynomialBase::from(rhs)
+    }
+}
+
+impl Mul<Coefficient> for MonomialDyn {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        rhs * self
     }
 }
 
@@ -99,5 +142,44 @@ where
 {
     fn mul_assign(&mut self, rhs: &PolynomialBase<M2>) {
         *self = &*self * rhs;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::VariableID;
+    use ::approx::assert_abs_diff_eq;
+
+    #[test]
+    fn test_coefficient_monomial_mul() {
+        // Test Coefficient * LinearMonomial
+        let coef = Coefficient::try_from(2.0).unwrap();
+        let x1 = LinearMonomial::Variable(VariableID::from(1));
+        let result = coef * x1;
+
+        // Expected result is the same as coefficient * monomial
+        let expected = coef * x1;
+        assert_abs_diff_eq!(result, expected);
+
+        // Test LinearMonomial * Coefficient
+        let result = x1 * coef;
+        // Should be the same as coefficient * monomial
+        let expected = coef * x1;
+        assert_abs_diff_eq!(result, expected);
+
+        // Test Coefficient * QuadraticMonomial
+        let q1 = QuadraticMonomial::Linear(VariableID::from(1));
+        let result = coef * q1;
+
+        // Expected result is the same as coefficient * monomial
+        let expected = coef * q1;
+        assert_abs_diff_eq!(result, expected);
+
+        // Test QuadraticMonomial * Coefficient
+        let result = q1 * coef;
+        // Should be the same as coefficient * monomial
+        let expected = coef * q1;
+        assert_abs_diff_eq!(result, expected);
     }
 }

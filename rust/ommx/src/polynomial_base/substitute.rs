@@ -112,26 +112,41 @@ impl Substitute for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AcyclicAssignments, Coefficient, Quadratic, VariableIDSet};
+    use crate::{AcyclicAssignments, Coefficient, QuadraticMonomial, VariableIDSet};
     use proptest::prelude::*;
 
     #[test]
     fn substitute_linear_to_linear() {
-        // Poly: 2.0 * x0 + 1.0
-        let poly = Linear::single_term(
-            LinearMonomial::Variable(0.into()),
-            Coefficient::try_from(2.0).unwrap(),
-        ) + Linear::one();
+        // Poly: 2.0 * x0 + 1.0 (using improved syntax)
+        let poly = Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(0.into())
+            + Linear::one();
 
         // Assignments: x0 = 0.5 * x1 + 1.0
-        let assign_x0 = Linear::single_term(
-            LinearMonomial::Variable(1.into()),
-            Coefficient::try_from(0.5).unwrap(),
-        ) + Linear::one();
+        let assign_x0 = Coefficient::try_from(0.5).unwrap() * LinearMonomial::Variable(1.into())
+            + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Linear::single_term(LinearMonomial::Variable(1.into()), Coefficient::one())
+        let expected = Coefficient::one() * LinearMonomial::Variable(1.into())
+            + Linear::from(Coefficient::try_from(3.0).unwrap());
+
+        let result = poly.substitute(assignments).unwrap();
+        assert_eq!(result, expected.into());
+    }
+
+    #[test]
+    fn substitute_linear_to_linear_improved_syntax() {
+        // Poly: 2.0 * x0 + 1.0 (using improved syntax)
+        let poly = Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(0.into())
+            + Linear::one();
+
+        // Assignments: x0 = 0.5 * x1 + 1.0
+        let assign_x0 = Coefficient::try_from(0.5).unwrap() * LinearMonomial::Variable(1.into())
+            + Linear::one();
+        let assignments = vec![(0.into(), assign_x0.into())];
+
+        // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
+        let expected = LinearMonomial::Variable(1.into()) * Coefficient::one()
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
         let result = poly.substitute(assignments).unwrap();
@@ -140,27 +155,19 @@ mod tests {
 
     #[test]
     fn substitute_linear_to_quadratic() {
-        // q = 2 * x0 * x1
-        let q = Quadratic::single_term(
-            (VariableID::from(0), VariableID::from(1)).into(),
-            Coefficient::try_from(2.0).unwrap(),
-        );
+        // q = 2 * x0 * x1 (using improved syntax)
+        let q = Coefficient::try_from(2.0).unwrap()
+            * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1)));
 
         // x0 = 2*x1 + 1
-        let assign_x0 = Linear::single_term(
-            LinearMonomial::Variable(1.into()),
-            Coefficient::try_from(2.0).unwrap(),
-        ) + Linear::one();
+        let assign_x0 = Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(1.into())
+            + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
-        let ans = Quadratic::single_term(
-            (VariableID::from(1), VariableID::from(1)).into(),
-            Coefficient::try_from(4.0).unwrap(),
-        ) + Quadratic::single_term(
-            VariableID::from(1).into(),
-            Coefficient::try_from(2.0).unwrap(),
-        );
+        let ans = Coefficient::try_from(4.0).unwrap()
+            * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1)))
+            + Coefficient::try_from(2.0).unwrap() * QuadraticMonomial::from(VariableID::from(1));
 
         let result = q.substitute(assignments).unwrap();
         assert_eq!(result, ans.into());
