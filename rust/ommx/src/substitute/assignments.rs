@@ -37,13 +37,7 @@ impl AcyclicAssignments {
 
         // Check if the dependency graph is acyclic
         if algo::is_cyclic_directed(&dependency) {
-            // Find a variable that participates in a cycle for error reporting
-            // We can use any variable that's part of a strongly connected component
-            for &var_id in assignments.keys() {
-                return Err(SubstitutionError::CyclicAssignmentDetected { var_id });
-            }
-            // This should never be reached if assignments is non-empty
-            unreachable!("Found cycle but no variables in assignments");
+            return Err(SubstitutionError::CyclicAssignmentDetected);
         }
 
         Ok(Self {

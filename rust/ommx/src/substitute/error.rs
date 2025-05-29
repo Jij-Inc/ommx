@@ -6,10 +6,10 @@ pub enum SubstitutionError {
     /// Error indicating that a recursive assignment was attempted.
     #[error("Recursive assignment detected: variable {var_id} cannot be assigned to a function that depends on itself")]
     RecursiveAssignment { var_id: VariableID },
-    
+
     /// Error indicating that a cycle was detected in the assignment graph.
-    #[error("Cyclic assignment detected: variable {var_id} participates in a circular dependency")]
-    CyclicAssignmentDetected { var_id: VariableID },
+    #[error("Cyclic assignment detected: circular dependency found in variable assignments")]
+    CyclicAssignmentDetected,
 }
 
 /// Legacy alias for backward compatibility
