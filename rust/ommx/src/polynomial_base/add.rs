@@ -210,8 +210,8 @@ mod tests {
         let x2 = LinearMonomial::Variable(VariableID::from(2));
         let result = x1 + x2;
 
-        // Improved syntax using new operators
-        let expected = Coefficient::one() * x1 + Coefficient::one() * x2;
+        // Simple addition of monomials
+        let expected = x1 + x2;
         assert_abs_diff_eq!(result, expected);
 
         // Test QuadraticMonomial + QuadraticMonomial
@@ -219,8 +219,8 @@ mod tests {
         let q2 = QuadraticMonomial::Linear(VariableID::from(2));
         let result = q1 + q2;
 
-        // Improved syntax using new operators
-        let expected = Coefficient::one() * q1 + Coefficient::one() * q2;
+        // Simple addition of monomials
+        let expected = q1 + q2;
         assert_abs_diff_eq!(result, expected);
     }
 

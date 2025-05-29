@@ -127,7 +127,7 @@ mod tests {
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Coefficient::one() * LinearMonomial::Variable(1.into())
+        let expected = Linear::from(LinearMonomial::Variable(1.into()))
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
         let result = poly.substitute(assignments).unwrap();
@@ -146,7 +146,7 @@ mod tests {
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = LinearMonomial::Variable(1.into()) * Coefficient::one()
+        let expected = Linear::from(LinearMonomial::Variable(1.into()))
             + Linear::from(Coefficient::try_from(3.0).unwrap());
 
         let result = poly.substitute(assignments).unwrap();
