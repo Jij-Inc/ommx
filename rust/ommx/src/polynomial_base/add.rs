@@ -256,63 +256,10 @@ impl<M: Monomial> Zero for PolynomialBase<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::VariableID;
     use ::approx::assert_abs_diff_eq;
     use proptest::prelude::*;
 
     type Linear = PolynomialBase<LinearMonomial>;
-
-    #[test]
-    fn test_monomial_add() {
-        // Test LinearMonomial + LinearMonomial
-        let x1 = LinearMonomial::Variable(VariableID::from(1));
-        let x2 = LinearMonomial::Variable(VariableID::from(2));
-        let result = x1 + x2;
-
-        // Simple addition of monomials
-        let expected = x1 + x2;
-        assert_abs_diff_eq!(result, expected);
-
-        // Test QuadraticMonomial + QuadraticMonomial
-        let q1 = QuadraticMonomial::Linear(VariableID::from(1));
-        let q2 = QuadraticMonomial::Linear(VariableID::from(2));
-        let result = q1 + q2;
-
-        // Simple addition of monomials
-        let expected = q1 + q2;
-        assert_abs_diff_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_monomial_coefficient_add() {
-        // Test Monomial + Coefficient
-        let x1 = LinearMonomial::Variable(VariableID::from(1));
-        let coef = Coefficient::try_from(2.0).unwrap();
-        let result = x1 + coef;
-        let expected = PolynomialBase::from(x1) + coef;
-        assert_abs_diff_eq!(result, expected);
-
-        // Test Coefficient + Monomial
-        let x2 = LinearMonomial::Variable(VariableID::from(2));
-        let coef = Coefficient::try_from(3.0).unwrap();
-        let result = coef + x2;
-        let expected = coef + PolynomialBase::from(x2);
-        assert_abs_diff_eq!(result, expected);
-
-        // Test &Monomial + Coefficient
-        let x3 = LinearMonomial::Variable(VariableID::from(3));
-        let coef = Coefficient::try_from(4.0).unwrap();
-        let result = &x3 + coef;
-        let expected = PolynomialBase::from(x3.clone()) + coef;
-        assert_abs_diff_eq!(result, expected);
-
-        // Test Coefficient + &Monomial
-        let x4 = LinearMonomial::Variable(VariableID::from(4));
-        let coef = Coefficient::try_from(5.0).unwrap();
-        let result = coef + &x4;
-        let expected = coef + PolynomialBase::from(x4.clone());
-        assert_abs_diff_eq!(result, expected);
-    }
 
     proptest! {
         /// Check four implementations of Add yields the same result

@@ -21,6 +21,7 @@ pub use quadratic::*;
 
 use crate::{v1::State, Coefficient, VariableID};
 use fnv::{FnvHashMap, FnvHashSet};
+use num::One;
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
