@@ -11,6 +11,3 @@ pub enum SubstitutionError {
     #[error("Cyclic assignment detected: circular dependency found in variable assignments")]
     CyclicAssignmentDetected,
 }
-
-/// Legacy alias for backward compatibility
-pub type RecursiveAssignmentError = SubstitutionError;

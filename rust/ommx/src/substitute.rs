@@ -4,7 +4,7 @@ mod assignments;
 mod error;
 
 pub use assignments::AcyclicAssignments;
-pub use error::{RecursiveAssignmentError, SubstitutionError};
+pub use error::SubstitutionError;
 
 /// A trait for types that can have their variables substituted exclusively with `Function` functions.
 ///
