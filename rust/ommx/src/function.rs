@@ -10,6 +10,7 @@ mod evaluate;
 mod mul;
 mod parse;
 mod sub;
+mod substitute;
 
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///

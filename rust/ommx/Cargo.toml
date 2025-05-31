@@ -34,6 +34,7 @@ maplit.workspace = true
 num.workspace = true
 ocipkg.workspace = true
 ordered-float.workspace = true
+petgraph.workspace = true
 proptest.workspace = true
 prost.workspace = true
 serde.workspace = true

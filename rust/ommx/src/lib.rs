@@ -155,6 +155,7 @@ mod instance;
 mod macros;
 mod polynomial_base;
 mod solution;
+mod substitute;
 
 pub use atol::*;
 pub use bound::*;
@@ -166,6 +167,7 @@ pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
 pub use polynomial_base::*;
+pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {

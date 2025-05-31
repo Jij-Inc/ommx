@@ -10,6 +10,7 @@ mod mul;
 mod parse;
 mod polynomial;
 mod quadratic;
+mod substitute;
 
 pub use binary_ids::*;
 pub use degree::*;
@@ -20,6 +21,7 @@ pub use quadratic::*;
 
 use crate::{v1::State, Coefficient, VariableID};
 use fnv::{FnvHashMap, FnvHashSet};
+use num::One;
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
@@ -56,7 +58,21 @@ impl<M: Monomial> Default for PolynomialBase<M> {
     }
 }
 
+impl<M: Monomial> From<M> for PolynomialBase<M> {
+    fn from(monomial: M) -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(monomial, Coefficient::one());
+        Self { terms }
+    }
+}
+
 impl<M: Monomial> PolynomialBase<M> {
+    pub fn one() -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(M::default(), Coefficient::try_from(1.0).unwrap());
+        Self { terms }
+    }
+
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {
