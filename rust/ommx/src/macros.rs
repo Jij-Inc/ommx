@@ -1,6 +1,6 @@
 //! Additional trait implementations for generated codes
 
-/// Creates a [`Coefficient`] from a floating-point literal.
+/// Creates a [`crate::Coefficient`] from a floating-point literal.
 ///
 /// This macro is a convenience wrapper around `Coefficient::try_from().unwrap()`
 /// for use with compile-time known floating-point literals. It should only be used
@@ -43,7 +43,7 @@ macro_rules! coeff {
     };
 }
 
-/// Creates a [`LinearMonomial`] from a variable ID literal.
+/// Creates a [`crate::LinearMonomial`] from a variable ID literal.
 ///
 /// This macro is a convenience wrapper for creating linear monomials from integer literals
 /// representing variable IDs.
@@ -68,7 +68,7 @@ macro_rules! linear {
     };
 }
 
-/// Creates a [`QuadraticMonomial`] from variable ID literals.
+/// Creates a [`crate::QuadraticMonomial`] from variable ID literals.
 ///
 /// This macro supports creating quadratic monomials in multiple forms:
 /// - `quadratic!(id)` creates a linear term within the quadratic space
@@ -100,7 +100,7 @@ macro_rules! quadratic {
     };
 }
 
-/// Creates a [`MonomialDyn`] from variable ID literals.
+/// Creates a [`crate::MonomialDyn`] from variable ID literals.
 ///
 /// This macro creates a general monomial from one or more variable ID literals.
 /// The degree of the monomial depends on the number of variables provided.
