@@ -13,7 +13,7 @@
 /// # Examples
 ///
 /// ```
-/// use ommx::{coeff, LinearMonomial, VariableID};
+/// use ommx::{coeff, linear, LinearMonomial, VariableID};
 ///
 /// // Create coefficients from literals
 /// let c1 = coeff!(2.5);
@@ -21,8 +21,8 @@
 /// let c3 = coeff!(0.5);
 ///
 /// // Use in expressions
-/// let expr = c1 * LinearMonomial::Variable(VariableID::from(1))
-///     + c2 * LinearMonomial::Variable(VariableID::from(2));
+/// let expr = c1 * linear!(1)
+///     + c2 * linear!(2);
 /// ```
 ///
 /// # Note

@@ -134,32 +134,32 @@ mod tests {
     #[test]
     fn test_coefficient_monomial_mul() {
         // Test Coefficient * LinearMonomial
-        let coef = Coefficient::try_from(2.0).unwrap();
+        let coeff = Coefficient::try_from(2.0).unwrap();
         let x1 = LinearMonomial::Variable(VariableID::from(1));
-        let result = coef * x1;
+        let result = coeff * x1;
 
         // Expected result is the same as coefficient * monomial
-        let expected = coef * x1;
+        let expected = coeff * x1;
         assert_abs_diff_eq!(result, expected);
 
         // Test LinearMonomial * Coefficient
-        let result = x1 * coef;
+        let result = x1 * coeff;
         // Should be the same as coefficient * monomial
-        let expected = coef * x1;
+        let expected = coeff * x1;
         assert_abs_diff_eq!(result, expected);
 
         // Test Coefficient * QuadraticMonomial
         let q1 = QuadraticMonomial::Linear(VariableID::from(1));
-        let result = coef * q1;
+        let result = coeff * q1;
 
         // Expected result is the same as coefficient * monomial
-        let expected = coef * q1;
+        let expected = coeff * q1;
         assert_abs_diff_eq!(result, expected);
 
         // Test QuadraticMonomial * Coefficient
-        let result = q1 * coef;
+        let result = q1 * coeff;
         // Should be the same as coefficient * monomial
-        let expected = coef * q1;
+        let expected = coeff * q1;
         assert_abs_diff_eq!(result, expected);
     }
 }
