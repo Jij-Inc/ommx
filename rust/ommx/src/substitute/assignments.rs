@@ -50,6 +50,14 @@ impl AcyclicAssignments {
         self.assignments.is_empty()
     }
 
+    pub fn len(&self) -> usize {
+        self.assignments.len()
+    }
+
+    pub fn get(&self, id: &VariableID) -> Option<&Function> {
+        self.assignments.get(id)
+    }
+
     // Get the assignments in a topologically sorted order.
     pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
         // Get topological order of the dependency graph
