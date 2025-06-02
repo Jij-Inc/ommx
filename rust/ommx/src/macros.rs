@@ -1,5 +1,48 @@
 //! Additional trait implementations for generated codes
 
+/// Creates a [`Coefficient`] from a floating-point literal.
+///
+/// This macro is a convenience wrapper around `Coefficient::try_from().unwrap()`
+/// for use with compile-time known floating-point literals. It should only be used
+/// when the value is guaranteed to be valid (non-zero, finite, not NaN).
+///
+/// # Panics
+///
+/// Panics if the literal value is zero, infinite, or NaN.
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{coeff, LinearMonomial, VariableID};
+///
+/// // Create coefficients from literals
+/// let c1 = coeff!(2.5);
+/// let c2 = coeff!(-1.0);
+/// let c3 = coeff!(0.5);
+///
+/// // Use in expressions
+/// let expr = c1 * LinearMonomial::Variable(VariableID::from(1))
+///     + c2 * LinearMonomial::Variable(VariableID::from(2));
+/// ```
+///
+/// # Note
+///
+/// For runtime values or when error handling is needed, use `Coefficient::try_from()` instead:
+///
+/// ```
+/// use ommx::Coefficient;
+///
+/// let runtime_value = 3.14;
+/// let coeff = Coefficient::try_from(runtime_value)?;
+/// # Ok::<(), ommx::CoefficientError>(())
+/// ```
+#[macro_export]
+macro_rules! coeff {
+    ($literal:literal) => {
+        $crate::Coefficient::try_from($literal).unwrap()
+    };
+}
+
 macro_rules! impl_add_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Add<$rhs> for $lhs {

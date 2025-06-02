@@ -26,8 +26,8 @@ mod tests {
 
     #[test]
     fn test_abs_diff_eq() {
-        let f = Function::from(Coefficient::try_from(1.0).unwrap());
-        let g = Function::from(Coefficient::try_from(1.0 + 1e-10).unwrap());
+        let f = Function::from(crate::coeff!(1.0));
+        let g = Function::from(crate::coeff!(1.0000000001));
         assert_abs_diff_eq!(f, g);
     }
 }

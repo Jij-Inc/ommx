@@ -69,7 +69,7 @@ impl<M: Monomial> From<M> for PolynomialBase<M> {
 impl<M: Monomial> PolynomialBase<M> {
     pub fn one() -> Self {
         let mut terms = FnvHashMap::default();
-        terms.insert(M::default(), Coefficient::try_from(1.0).unwrap());
+        terms.insert(M::default(), crate::coeff!(1.0));
         Self { terms }
     }
 

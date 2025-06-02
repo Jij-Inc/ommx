@@ -17,18 +17,18 @@ pub use error::SubstitutionError;
 /// Basic substitution of a variable in a linear function:
 ///
 /// ```
-/// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute};
+/// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute};
 ///
 /// // Create f(x1, x2) = 2*x1 + 3*x2 + 1
 /// let f = Function::from(
-///     Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(VariableID::from(1))
-///     + Coefficient::try_from(3.0).unwrap() * LinearMonomial::Variable(VariableID::from(2))
-///     + Coefficient::try_from(1.0).unwrap()
+///     coeff!(2.0) * LinearMonomial::Variable(VariableID::from(1))
+///     + coeff!(3.0) * LinearMonomial::Variable(VariableID::from(2))
+///     + coeff!(1.0)
 /// );
 ///
 /// // Substitute x1 = x3 + 5
 /// let substitution = Function::from(
-///     LinearMonomial::Variable(VariableID::from(3)) + Coefficient::try_from(5.0).unwrap()
+///     LinearMonomial::Variable(VariableID::from(3)) + coeff!(5.0)
 /// );
 ///
 /// let result = f.substitute_one(VariableID::from(1), &substitution).unwrap();
@@ -44,11 +44,11 @@ pub use error::SubstitutionError;
 /// When attempting to substitute a variable with an expression that contains the variable itself:
 ///
 /// ```
-/// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute, SubstitutionError};
+/// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute, SubstitutionError};
 ///
 /// // Try to substitute x1 = x1 + 2 (illegal self-reference)
 /// let x1 = Function::from(LinearMonomial::Variable(VariableID::from(1)));
-/// let self_ref = x1.clone() + Function::from(Coefficient::try_from(2.0).unwrap());
+/// let self_ref = x1.clone() + Function::from(coeff!(2.0));
 ///
 /// let result = x1.substitute_one(VariableID::from(1), &self_ref);
 /// assert!(matches!(result, Err(SubstitutionError::RecursiveAssignment { var_id }) if var_id == VariableID::from(1)));
@@ -59,17 +59,17 @@ pub use error::SubstitutionError;
 /// When attempting to substitute variables with cyclic dependencies:
 ///
 /// ```
-/// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute, SubstitutionError};
+/// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute, SubstitutionError};
 ///
 /// // Try to create cyclic substitution: x1 = x2 + 1, x2 = x1 + 2
 /// let assignments = vec![
 ///     (
 ///         VariableID::from(1),
-///         Function::from(LinearMonomial::Variable(VariableID::from(2))) + Function::from(Coefficient::try_from(1.0).unwrap())
+///         Function::from(LinearMonomial::Variable(VariableID::from(2))) + Function::from(coeff!(1.0))
 ///     ),
 ///     (
 ///         VariableID::from(2),
-///         Function::from(LinearMonomial::Variable(VariableID::from(1))) + Function::from(Coefficient::try_from(2.0).unwrap())
+///         Function::from(LinearMonomial::Variable(VariableID::from(1))) + Function::from(coeff!(2.0))
 ///     ),
 /// ];
 ///
@@ -81,22 +81,22 @@ pub use error::SubstitutionError;
 /// # Complex Example with Multiple Substitutions
 ///
 /// ```
-/// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute};
+/// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute};
 ///
 /// // Create f(x1, x2, x3) = x1 + 2*x2 + 3*x3
 /// let f = Function::from(LinearMonomial::Variable(VariableID::from(1)))
-///     + Function::from(Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(VariableID::from(2)))
-///     + Function::from(Coefficient::try_from(3.0).unwrap() * LinearMonomial::Variable(VariableID::from(3)));
+///     + Function::from(coeff!(2.0) * LinearMonomial::Variable(VariableID::from(2)))
+///     + Function::from(coeff!(3.0) * LinearMonomial::Variable(VariableID::from(3)));
 ///
 /// // Create substitutions: x1 = x4 + 1, x2 = 2*x4 + x5
 /// let assignments = vec![
 ///     (
 ///         VariableID::from(1),
-///         Function::from(LinearMonomial::Variable(VariableID::from(4))) + Function::from(Coefficient::try_from(1.0).unwrap())
+///         Function::from(LinearMonomial::Variable(VariableID::from(4))) + Function::from(coeff!(1.0))
 ///     ),
 ///     (
 ///         VariableID::from(2),
-///         Function::from(Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(VariableID::from(4)))
+///         Function::from(coeff!(2.0) * LinearMonomial::Variable(VariableID::from(4)))
 ///             + Function::from(LinearMonomial::Variable(VariableID::from(5)))
 ///     ),
 /// ];
@@ -122,7 +122,7 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// # Example
     ///
     /// ```
-    /// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute, AcyclicAssignments};
+    /// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute, AcyclicAssignments};
     ///
     /// // Create f(x1, x2) = x1 + x2
     /// let f = Function::from(
@@ -134,11 +134,11 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// let assignments = vec![
     ///     (
     ///         VariableID::from(1),
-    ///         Function::from(LinearMonomial::Variable(VariableID::from(3)) + Coefficient::try_from(1.0).unwrap())
+    ///         Function::from(LinearMonomial::Variable(VariableID::from(3)) + coeff!(1.0))
     ///     ),
     ///     (
     ///         VariableID::from(2),
-    ///         Function::from(LinearMonomial::Variable(VariableID::from(4)) + Coefficient::try_from(2.0).unwrap())
+    ///         Function::from(LinearMonomial::Variable(VariableID::from(4)) + coeff!(2.0))
     ///     ),
     /// ];
     ///
@@ -176,13 +176,13 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// # Example
     ///
     /// ```
-    /// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute};
+    /// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute};
     ///
     /// let f = Function::from(LinearMonomial::Variable(VariableID::from(1)));
     ///
     /// // Valid substitution
     /// let assignments = vec![
-    ///     (VariableID::from(1), Function::from(Coefficient::try_from(5.0).unwrap()))
+    ///     (VariableID::from(1), Function::from(coeff!(5.0)))
     /// ];
     /// let result = f.substitute(assignments).unwrap();
     /// ```
@@ -212,17 +212,17 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// # Example
     ///
     /// ```
-    /// use ommx::{Function, LinearMonomial, Coefficient, VariableID, Substitute};
+    /// use ommx::{Function, LinearMonomial, coeff, VariableID, Substitute};
     ///
     /// // f(x1) = 2*x1 + 3
     /// let f = Function::from(
-    ///     Coefficient::try_from(2.0).unwrap() * LinearMonomial::Variable(VariableID::from(1))
-    ///     + Coefficient::try_from(3.0).unwrap()
+    ///     coeff!(2.0) * LinearMonomial::Variable(VariableID::from(1))
+    ///     + coeff!(3.0)
     /// );
     ///
     /// // Substitute x1 = x2 + 1
     /// let substitution = Function::from(
-    ///     LinearMonomial::Variable(VariableID::from(2)) + Coefficient::try_from(1.0).unwrap()
+    ///     LinearMonomial::Variable(VariableID::from(2)) + coeff!(1.0)
     /// );
     ///
     /// let result = f.substitute_one(VariableID::from(1), &substitution).unwrap();
