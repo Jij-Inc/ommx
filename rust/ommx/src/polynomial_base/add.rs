@@ -69,7 +69,7 @@ impl<M: Monomial> Add<&PolynomialBase<M>> for Coefficient {
 impl<M: Monomial> Add<M> for PolynomialBase<M> {
     type Output = Self;
     fn add(mut self, rhs: M) -> Self::Output {
-        self.add_term(rhs, crate::coeff!(1.0));
+        self.add_term(rhs, coeff!(1.0));
         self
     }
 }
@@ -77,7 +77,7 @@ impl<M: Monomial> Add<M> for PolynomialBase<M> {
 impl<M: Monomial> Add<&M> for PolynomialBase<M> {
     type Output = Self;
     fn add(mut self, rhs: &M) -> Self::Output {
-        self.add_term(rhs.clone(), crate::coeff!(1.0));
+        self.add_term(rhs.clone(), coeff!(1.0));
         self
     }
 }
@@ -160,7 +160,7 @@ macro_rules! impl_monomial_add {
         impl Add<PolynomialBase<$monomial>> for $monomial {
             type Output = PolynomialBase<$monomial>;
             fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
-                rhs.add_term(self, crate::coeff!(1.0));
+                rhs.add_term(self, coeff!(1.0));
                 rhs
             }
         }
@@ -175,7 +175,7 @@ macro_rules! impl_monomial_add {
         impl Add<PolynomialBase<$monomial>> for &$monomial {
             type Output = PolynomialBase<$monomial>;
             fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
-                rhs.add_term(self.clone(), crate::coeff!(1.0));
+                rhs.add_term(self.clone(), coeff!(1.0));
                 rhs
             }
         }

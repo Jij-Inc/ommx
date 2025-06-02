@@ -19,7 +19,7 @@ pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
-use crate::{v1::State, Coefficient, VariableID};
+use crate::{coeff, v1::State, Coefficient, VariableID};
 use fnv::{FnvHashMap, FnvHashSet};
 use num::One;
 use proptest::strategy::BoxedStrategy;
@@ -69,7 +69,7 @@ impl<M: Monomial> From<M> for PolynomialBase<M> {
 impl<M: Monomial> PolynomialBase<M> {
     pub fn one() -> Self {
         let mut terms = FnvHashMap::default();
-        terms.insert(M::default(), crate::coeff!(1.0));
+        terms.insert(M::default(), coeff!(1.0));
         Self { terms }
     }
 

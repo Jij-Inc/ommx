@@ -22,12 +22,13 @@ impl AbsDiffEq for Function {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coeff;
     use ::approx::assert_abs_diff_eq;
 
     #[test]
     fn test_abs_diff_eq() {
-        let f = Function::from(crate::coeff!(1.0));
-        let g = Function::from(crate::coeff!(1.0000000001));
+        let f = Function::from(coeff!(1.0));
+        let g = Function::from(coeff!(1.0000000001));
         assert_abs_diff_eq!(f, g);
     }
 }

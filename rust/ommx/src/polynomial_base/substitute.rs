@@ -112,20 +112,20 @@ impl Substitute for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AcyclicAssignments, QuadraticMonomial, VariableID, VariableIDSet};
+    use crate::{coeff, linear, AcyclicAssignments, QuadraticMonomial, VariableID, VariableIDSet};
     use proptest::prelude::*;
 
     #[test]
     fn substitute_linear_to_linear() {
         // Poly: 2.0 * x0 + 1.0 (using improved syntax)
-        let poly = crate::coeff!(2.0) * crate::linear!(0) + Linear::one();
+        let poly = coeff!(2.0) * linear!(0) + Linear::one();
 
         // Assignments: x0 = 0.5 * x1 + 1.0
-        let assign_x0 = crate::coeff!(0.5) * crate::linear!(1) + Linear::one();
+        let assign_x0 = coeff!(0.5) * linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Linear::from(crate::linear!(1) + crate::coeff!(3.0));
+        let expected = Linear::from(linear!(1) + coeff!(3.0));
 
         let result = poly.substitute(assignments).unwrap();
         assert_eq!(result, expected.into());
@@ -134,14 +134,14 @@ mod tests {
     #[test]
     fn substitute_linear_to_linear_improved_syntax() {
         // Poly: 2.0 * x0 + 1.0 (using improved syntax)
-        let poly = crate::coeff!(2.0) * crate::linear!(0) + Linear::one();
+        let poly = coeff!(2.0) * linear!(0) + Linear::one();
 
         // Assignments: x0 = 0.5 * x1 + 1.0
-        let assign_x0 = crate::coeff!(0.5) * crate::linear!(1) + Linear::one();
+        let assign_x0 = coeff!(0.5) * linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected = Linear::from(crate::linear!(1) + crate::coeff!(3.0));
+        let expected = Linear::from(linear!(1) + coeff!(3.0));
 
         let result = poly.substitute(assignments).unwrap();
         assert_eq!(result, expected.into());
@@ -150,17 +150,15 @@ mod tests {
     #[test]
     fn substitute_linear_to_quadratic() {
         // q = 2 * x0 * x1 (using improved syntax)
-        let q = crate::coeff!(2.0)
-            * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1)));
+        let q = coeff!(2.0) * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1)));
 
         // x0 = 2*x1 + 1
-        let assign_x0 = crate::coeff!(2.0) * crate::linear!(1) + Linear::one();
+        let assign_x0 = coeff!(2.0) * linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1
-        let ans = crate::coeff!(4.0)
-            * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1)))
-            + crate::coeff!(2.0) * QuadraticMonomial::from(VariableID::from(1));
+        let ans = coeff!(4.0) * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1)))
+            + coeff!(2.0) * QuadraticMonomial::from(VariableID::from(1));
 
         let result = q.substitute(assignments).unwrap();
         assert_eq!(result, ans.into());

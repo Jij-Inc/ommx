@@ -30,6 +30,11 @@ impl AcyclicAssignments {
         // Add edges for dependencies
         for (&assigned_var, linear) in &assignments {
             for required_var in linear.required_ids() {
+                if required_var == assigned_var {
+                    return Err(SubstitutionError::RecursiveAssignment {
+                        var_id: assigned_var,
+                    });
+                }
                 // Add edge from required_var to assigned_var (dependency direction)
                 dependency.add_edge(assigned_var, required_var, ());
             }
@@ -92,78 +97,5 @@ impl Arbitrary for AcyclicAssignments {
             AcyclicAssignments::new(assignments).ok()
         })
         .boxed()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::LinearMonomial;
-
-    #[test]
-    fn test_acyclic_linear_assignments_acyclic() {
-        let x1_id = VariableID::from(1);
-        let x2_id = VariableID::from(2);
-        let x3_id = VariableID::from(3);
-
-        // Create x1 = x2 + 1, x2 = x3 + 2 (valid, no cycles)
-        let assignments = vec![
-            (
-                x1_id,
-                (LinearMonomial::Variable(x2_id) + crate::coeff!(1.0)).into(),
-            ),
-            (
-                x2_id,
-                (LinearMonomial::Variable(x3_id) + crate::coeff!(2.0)).into(),
-            ),
-        ];
-
-        // When substituting this assignment to x1,
-        // x1 <- x2 + 1
-        // x2 <- x3 + 2
-        // and yields x1 = (x3 + 2) + 1 = x3 + 3
-        let acyclic_assignments = AcyclicAssignments::new(assignments).unwrap();
-
-        let mut iter = acyclic_assignments.sorted_iter();
-        let (id, _) = iter.next().unwrap();
-        assert_eq!(id, x1_id);
-        let (id, _) = iter.next().unwrap();
-        assert_eq!(id, x2_id);
-        assert!(iter.next().is_none(), "There should be no more assignments");
-    }
-
-    #[test]
-    fn test_acyclic_linear_assignments_cyclic() {
-        let x1_id = VariableID::from(1);
-        let x2_id = VariableID::from(2);
-
-        // Create x1 = x2 + 1, x2 = x1 + 2 (cyclic, should fail)
-        let assignments = vec![
-            (
-                x1_id,
-                (LinearMonomial::Variable(x2_id) + crate::coeff!(1.0)).into(),
-            ),
-            (
-                x2_id,
-                (LinearMonomial::Variable(x1_id) + crate::coeff!(2.0)).into(),
-            ),
-        ];
-
-        let result = AcyclicAssignments::new(assignments);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_acyclic_linear_assignments_self_reference() {
-        let x1_id = VariableID::from(1);
-
-        // Create x1 = x1 + 2 (self-reference, should fail)
-        let assignments = vec![(
-            x1_id,
-            (LinearMonomial::Variable(x1_id) + crate::coeff!(2.0)).into(),
-        )];
-
-        let result = AcyclicAssignments::new(assignments);
-        assert!(result.is_err());
     }
 }

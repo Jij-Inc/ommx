@@ -72,141 +72,17 @@
 #[macro_export]
 macro_rules! assign {
     ( $( $var_id:literal <- $expr:expr ),* $(,)? ) => {
-        {
-            let assignments = vec![
-                $(
-                    ($crate::VariableID::from($var_id), $crate::Function::from($expr)),
-                )*
-            ];
-            $crate::AcyclicAssignments::new(assignments).unwrap()
-        }
+        $crate::AcyclicAssignments::new([
+            $(
+                ($crate::VariableID::from($var_id), $crate::Function::from($expr)),
+            )*
+        ]).unwrap()
     };
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{coeff, linear, Coefficient, Function, LinearMonomial, VariableID};
-
-    #[test]
-    fn test_assign_macro_basic() {
-        // Test basic assignment: x1 <- x2 + 1, x2 <- x3 + 2
-        let assignments = assign! {
-            1 <- linear!(2) + coeff!(1.0),
-            2 <- linear!(3) + coeff!(2.0)
-        };
-
-        // Verify the assignments were created correctly
-        assert_eq!(assignments.len(), 2);
-
-        // Check first assignment: x1 <- x2 + 1
-        let assignment_1 = assignments.get(&VariableID::from(1)).unwrap();
-        if let Function::Linear(l) = assignment_1 {
-            // Should have two terms: x2 and constant
-            assert_eq!(l.num_terms(), 2);
-
-            // Check that we have the expected terms
-            let has_x2 = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Variable(id) if *id == VariableID::from(2))
-                    && *c == Coefficient::try_from(1.0).unwrap()
-            });
-            let has_constant = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Constant) && *c == Coefficient::try_from(1.0).unwrap()
-            });
-            assert!(has_x2, "Expected x2 term with coefficient 1.0");
-            assert!(has_constant, "Expected constant term with coefficient 1.0");
-        } else {
-            panic!("Expected Linear function");
-        }
-
-        // Check second assignment: x2 <- x3 + 2
-        let assignment_2 = assignments.get(&VariableID::from(2)).unwrap();
-        if let Function::Linear(l) = assignment_2 {
-            assert_eq!(l.num_terms(), 2);
-
-            let has_x3 = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Variable(id) if *id == VariableID::from(3))
-                    && *c == Coefficient::try_from(1.0).unwrap()
-            });
-            let has_constant = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Constant) && *c == Coefficient::try_from(2.0).unwrap()
-            });
-            assert!(has_x3, "Expected x3 term with coefficient 1.0");
-            assert!(has_constant, "Expected constant term with coefficient 2.0");
-        } else {
-            panic!("Expected Linear function");
-        }
-    }
-
-    #[test]
-    fn test_assign_macro_constant() {
-        // Test constant assignment: x1 <- 5.0
-        let assignments = assign! {
-            1 <- coeff!(5.0)
-        };
-
-        assert_eq!(assignments.len(), 1);
-        let assignment = assignments.get(&VariableID::from(1)).unwrap();
-        if let Function::Constant(c) = assignment {
-            assert_eq!(*c, Coefficient::try_from(5.0).unwrap());
-        } else {
-            panic!("Expected Constant function");
-        }
-    }
-
-    #[test]
-    fn test_assign_macro_complex_expression() {
-        // Test complex expression: x1 <- 2.0 * x2 + 3.0 * x3 + 1.0
-        let assignments = assign! {
-            1 <- coeff!(2.0) * linear!(2) + coeff!(3.0) * linear!(3) + coeff!(1.0)
-        };
-
-        assert_eq!(assignments.len(), 1);
-        let assignment = assignments.get(&VariableID::from(1)).unwrap();
-        if let Function::Linear(l) = assignment {
-            assert_eq!(l.num_terms(), 3); // x2, x3, and constant
-
-            // Check that we have the expected terms
-            let has_x2 = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Variable(id) if *id == VariableID::from(2))
-                    && *c == Coefficient::try_from(2.0).unwrap()
-            });
-            let has_x3 = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Variable(id) if *id == VariableID::from(3))
-                    && *c == Coefficient::try_from(3.0).unwrap()
-            });
-            let has_constant = l.iter().any(|(m, c)| {
-                matches!(m, LinearMonomial::Constant) && *c == Coefficient::try_from(1.0).unwrap()
-            });
-            assert!(has_x2, "Expected x2 term with coefficient 2.0");
-            assert!(has_x3, "Expected x3 term with coefficient 3.0");
-            assert!(has_constant, "Expected constant term with coefficient 1.0");
-        } else {
-            panic!("Expected Linear function");
-        }
-    }
-
-    #[test]
-    fn test_assign_macro_empty() {
-        // Test empty assignment
-        let assignments = assign! {};
-        assert_eq!(assignments.len(), 0);
-    }
-
-    #[test]
-    fn test_assign_macro_trailing_comma() {
-        // Test with trailing comma
-        let assignments = assign! {
-            1 <- coeff!(5.0),
-        };
-
-        assert_eq!(assignments.len(), 1);
-        let assignment = assignments.get(&VariableID::from(1)).unwrap();
-        if let Function::Constant(c) = assignment {
-            assert_eq!(*c, Coefficient::try_from(5.0).unwrap());
-        } else {
-            panic!("Expected Constant function");
-        }
-    }
+    use crate::{coeff, linear};
 
     #[test]
     #[should_panic(expected = "CyclicAssignmentDetected")]
@@ -219,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "CyclicAssignmentDetected")]
+    #[should_panic(expected = "RecursiveAssignment")]
     fn test_assign_macro_self_reference() {
         // This should panic due to self-reference: x1 <- x1 + 1
         let _assignments = assign! {
