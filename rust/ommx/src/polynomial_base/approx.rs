@@ -18,18 +18,16 @@ impl<M: Monomial> AbsDiffEq for PolynomialBase<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linear;
     use ::approx::assert_abs_diff_eq;
 
     #[test]
     fn test_abs_diff_eq() {
         let zero = PolynomialBase::default();
         let small = PolynomialBase {
-            terms: [(
-                LinearMonomial::Variable(1.into()),
-                1e-11.try_into().unwrap(),
-            )]
-            .into_iter()
-            .collect(),
+            terms: [(linear!(1), 1e-11.try_into().unwrap())]
+                .into_iter()
+                .collect(),
         };
         assert_abs_diff_eq!(small, zero);
     }

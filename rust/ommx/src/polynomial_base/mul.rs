@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Coefficient, MonomialDyn};
+use crate::{Coefficient, LinearMonomial, MonomialDyn, QuadraticMonomial};
 use std::ops::{Mul, MulAssign};
 
 impl<M: Monomial> MulAssign<Coefficient> for PolynomialBase<M> {
@@ -25,6 +25,29 @@ impl<M: Monomial> Mul<PolynomialBase<M>> for Coefficient {
         rhs
     }
 }
+
+// Add support for Coefficient * Monomial operations for specific monomial types
+macro_rules! impl_coefficient_monomial_mul {
+    ($monomial:ty) => {
+        impl Mul<$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn mul(self, rhs: $monomial) -> Self::Output {
+                self * PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Mul<Coefficient> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn mul(self, rhs: Coefficient) -> Self::Output {
+                rhs * self
+            }
+        }
+    };
+}
+
+impl_coefficient_monomial_mul!(LinearMonomial);
+impl_coefficient_monomial_mul!(QuadraticMonomial);
+impl_coefficient_monomial_mul!(MonomialDyn);
 
 impl Mul for LinearMonomial {
     type Output = QuadraticMonomial;
