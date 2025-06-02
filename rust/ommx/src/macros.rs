@@ -56,6 +56,10 @@ macro_rules! coeff {
 /// // Create a linear monomial for variable x1
 /// let x1 = linear!(1);
 /// assert_eq!(x1, LinearMonomial::Variable(VariableID::from(1)));
+///
+/// // You can use this macro instead of constructing LinearMonomial::Variable directly
+/// let x2 = linear!(2);
+/// let x3 = linear!(3);
 /// ```
 #[macro_export]
 macro_rules! linear {

@@ -118,15 +118,14 @@ mod tests {
     #[test]
     fn substitute_linear_to_linear() {
         // Poly: 2.0 * x0 + 1.0 (using improved syntax)
-        let poly = crate::coeff!(2.0) * LinearMonomial::Variable(0.into()) + Linear::one();
+        let poly = crate::coeff!(2.0) * crate::linear!(0) + Linear::one();
 
         // Assignments: x0 = 0.5 * x1 + 1.0
-        let assign_x0 = crate::coeff!(0.5) * LinearMonomial::Variable(1.into()) + Linear::one();
+        let assign_x0 = crate::coeff!(0.5) * crate::linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected =
-            Linear::from(LinearMonomial::Variable(1.into())) + Linear::from(crate::coeff!(3.0));
+        let expected = Linear::from(crate::linear!(1) + crate::coeff!(3.0));
 
         let result = poly.substitute(assignments).unwrap();
         assert_eq!(result, expected.into());
@@ -135,15 +134,14 @@ mod tests {
     #[test]
     fn substitute_linear_to_linear_improved_syntax() {
         // Poly: 2.0 * x0 + 1.0 (using improved syntax)
-        let poly = crate::coeff!(2.0) * LinearMonomial::Variable(0.into()) + Linear::one();
+        let poly = crate::coeff!(2.0) * crate::linear!(0) + Linear::one();
 
         // Assignments: x0 = 0.5 * x1 + 1.0
-        let assign_x0 = crate::coeff!(0.5) * LinearMonomial::Variable(1.into()) + Linear::one();
+        let assign_x0 = crate::coeff!(0.5) * crate::linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
-        let expected =
-            Linear::from(LinearMonomial::Variable(1.into())) + Linear::from(crate::coeff!(3.0));
+        let expected = Linear::from(crate::linear!(1) + crate::coeff!(3.0));
 
         let result = poly.substitute(assignments).unwrap();
         assert_eq!(result, expected.into());
@@ -156,7 +154,7 @@ mod tests {
             * QuadraticMonomial::from((VariableID::from(0), VariableID::from(1)));
 
         // x0 = 2*x1 + 1
-        let assign_x0 = crate::coeff!(2.0) * LinearMonomial::Variable(1.into()) + Linear::one();
+        let assign_x0 = crate::coeff!(2.0) * crate::linear!(1) + Linear::one();
         let assignments = vec![(0.into(), assign_x0.into())];
 
         // 2 * (2 * x1 + 1) * x1 = 4 * x1^2 + 2 * x1

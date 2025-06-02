@@ -135,7 +135,7 @@ mod tests {
     fn test_coefficient_monomial_mul() {
         // Test Coefficient * LinearMonomial
         let coeff = Coefficient::try_from(2.0).unwrap();
-        let x1 = LinearMonomial::Variable(VariableID::from(1));
+        let x1 = crate::linear!(1);
         let result = coeff * x1;
 
         // Expected result is the same as coefficient * monomial
