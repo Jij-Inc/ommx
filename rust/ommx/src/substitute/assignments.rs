@@ -35,7 +35,8 @@ impl AcyclicAssignments {
                         var_id: assigned_var,
                     });
                 }
-                // Add edge from required_var to assigned_var (dependency direction)
+                // Add edge from assigned variable to required variable
+                // to keep the order of topological sorting correct
                 dependency.add_edge(assigned_var, required_var, ());
             }
         }
