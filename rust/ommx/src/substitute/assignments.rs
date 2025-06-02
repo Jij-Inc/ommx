@@ -1,10 +1,9 @@
+use super::error::SubstitutionError;
 use crate::{decision_variable::VariableID, Evaluate, Function};
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
 use proptest::prelude::*;
-
-use super::error::SubstitutionError;
 
 /// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
@@ -82,21 +81,36 @@ impl AcyclicAssignments {
 }
 
 impl Arbitrary for AcyclicAssignments {
-    type Parameters = ();
+    type Parameters = AcyclicAssignmentsParameters;
     type Strategy = BoxedStrategy<Self>;
 
-    fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+    fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
         // Generate a random acyclic graph of assignments
         proptest::collection::vec(
             (
-                (0..100_u64).prop_map(VariableID::from),
-                Function::arbitrary(),
+                (0..=p.function_parameters.max_id().into_inner()).prop_map(VariableID::from),
+                Function::arbitrary_with(p.function_parameters),
             ),
-            0..=10,
+            0..=p.max_assignments,
         )
         .prop_filter_map("Acyclic", |assignments| {
             AcyclicAssignments::new(assignments).ok()
         })
         .boxed()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AcyclicAssignmentsParameters {
+    pub max_assignments: usize,
+    pub function_parameters: <Function as Arbitrary>::Parameters,
+}
+
+impl Default for AcyclicAssignmentsParameters {
+    fn default() -> Self {
+        Self {
+            max_assignments: 10,
+            function_parameters: <Function as Arbitrary>::Parameters::default(),
+        }
     }
 }
