@@ -20,11 +20,7 @@ pub use error::SubstitutionError;
 /// use ommx::{Function, LinearMonomial, coeff, linear, VariableID, Substitute};
 ///
 /// // Create f(x1, x2) = 2*x1 + 3*x2 + 1
-/// let f = Function::from(
-///     coeff!(2.0) * linear!(1)
-///     + coeff!(3.0) * linear!(2)
-///     + coeff!(1.0)
-/// );
+/// let f = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(1.0));
 ///
 /// // Substitute x1 = x3 + 5
 /// let substitution = Function::from(
@@ -48,7 +44,7 @@ pub use error::SubstitutionError;
 ///
 /// // Try to substitute x1 = x1 + 2 (illegal self-reference)
 /// let x1 = Function::from(linear!(1));
-/// let self_ref = x1.clone() + Function::from(coeff!(2.0));
+/// let self_ref = Function::from(linear!(1) + coeff!(2.0));
 ///
 /// let result = x1.substitute_one(VariableID::from(1), &self_ref);
 /// assert!(matches!(result, Err(SubstitutionError::RecursiveAssignment { var_id }) if var_id == VariableID::from(1)));
@@ -63,14 +59,8 @@ pub use error::SubstitutionError;
 ///
 /// // Try to create cyclic substitution: x1 = x2 + 1, x2 = x1 + 2
 /// let assignments = vec![
-///     (
-///         VariableID::from(1),
-///         Function::from(linear!(2)) + Function::from(coeff!(1.0))
-///     ),
-///     (
-///         VariableID::from(2),
-///         Function::from(linear!(1)) + Function::from(coeff!(2.0))
-///     ),
+///     (VariableID::from(1), Function::from(linear!(2) + coeff!(1.0))),
+///     (VariableID::from(2), Function::from(linear!(1) + coeff!(2.0))),
 /// ];
 ///
 /// let f = Function::from(linear!(1));
@@ -84,20 +74,21 @@ pub use error::SubstitutionError;
 /// use ommx::{Function, LinearMonomial, coeff, linear, VariableID, Substitute};
 ///
 /// // Create f(x1, x2, x3) = x1 + 2*x2 + 3*x3
-/// let f = Function::from(linear!(1))
-///     + Function::from(coeff!(2.0) * linear!(2))
-///     + Function::from(coeff!(3.0) * linear!(3));
+/// let f = Function::from(
+///     linear!(1)
+///     + coeff!(2.0) * linear!(2)
+///     + coeff!(3.0) * linear!(3)
+/// );
 ///
 /// // Create substitutions: x1 = x4 + 1, x2 = 2*x4 + x5
 /// let assignments = vec![
 ///     (
 ///         VariableID::from(1),
-///         Function::from(linear!(4)) + Function::from(coeff!(1.0))
+///         Function::from(linear!(4) + coeff!(1.0))
 ///     ),
 ///     (
 ///         VariableID::from(2),
-///         Function::from(coeff!(2.0) * linear!(4))
-///             + Function::from(linear!(5))
+///         Function::from(coeff!(2.0) * linear!(4) + linear!(5))
 ///     ),
 /// ];
 ///
@@ -215,10 +206,10 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// use ommx::{Function, coeff, linear, VariableID, Substitute};
     ///
     /// // f(x1) = 2*x1 + 3
-    /// let f = Function::from(coeff!(2.0) * linear!(1)) + Function::from(coeff!(3.0));
+    /// let f = Function::from(coeff!(2.0) * linear!(1) + coeff!(3.0));
     ///
     /// // Substitute x1 = x2 + 1
-    /// let substitution = Function::from(linear!(2)) + Function::from(coeff!(1.0));
+    /// let substitution = Function::from(linear!(2) + coeff!(1.0));
     ///
     /// let result = f.substitute_one(VariableID::from(1), &substitution).unwrap();
     /// // Result: 2*(x2 + 1) + 3 = 2*x2 + 5
