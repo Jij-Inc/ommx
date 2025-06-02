@@ -1,8 +1,8 @@
-/// Creates an [`AcyclicAssignments`] from assignment expressions.
+/// Creates an [`crate::AcyclicAssignments`] from assignment expressions.
 ///
 /// This macro provides a convenient syntax for creating substitution assignments
 /// using the syntax `assign! { var_id <- expression, ... }`. The macro validates
-/// that the assignments are acyclic and returns an [`AcyclicAssignments`] object.
+/// that the assignments are acyclic and returns an [`crate::AcyclicAssignments`] object.
 ///
 /// # Syntax
 ///
@@ -16,14 +16,14 @@
 ///
 /// Where:
 /// - `var_id` is a literal integer representing the variable ID
-/// - `expression` is any expression that can be converted to a [`Function`]
+/// - `expression` is any expression that can be converted to a [`crate::Function`]
 ///
 /// # Examples
 ///
 /// Basic usage with linear expressions:
 ///
 /// ```
-/// use ommx::{assign, coeff, linear, Function};
+/// use ommx::{assign, coeff, linear};
 ///
 /// // Create assignments: x1 <- x2 + 1, x2 <- x3 + 2
 /// let assignments = assign! {
@@ -35,7 +35,7 @@
 /// Using with more complex expressions:
 ///
 /// ```
-/// use ommx::{assign, coeff, linear, Function};
+/// use ommx::{assign, coeff, linear};
 ///
 /// // Create assignments with different expression types
 /// let assignments = assign! {
@@ -54,7 +54,7 @@
 /// # Note
 ///
 /// For runtime creation of assignments where error handling is needed,
-/// use [`AcyclicAssignments::new()`] directly:
+/// use [`crate::AcyclicAssignments::new()`] directly:
 ///
 /// ```
 /// use ommx::{AcyclicAssignments, Function, VariableID, coeff, linear};
