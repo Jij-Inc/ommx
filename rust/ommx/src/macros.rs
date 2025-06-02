@@ -43,6 +43,85 @@ macro_rules! coeff {
     };
 }
 
+/// Creates a [`LinearMonomial`] from a variable ID literal.
+///
+/// This macro is a convenience wrapper for creating linear monomials from integer literals
+/// representing variable IDs.
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{linear, LinearMonomial, VariableID};
+///
+/// // Create a linear monomial for variable x1
+/// let x1 = linear!(1);
+/// assert_eq!(x1, LinearMonomial::Variable(VariableID::from(1)));
+/// ```
+#[macro_export]
+macro_rules! linear {
+    ($id:literal) => {
+        $crate::LinearMonomial::Variable($crate::VariableID::from($id))
+    };
+}
+
+/// Creates a [`QuadraticMonomial`] from variable ID literals.
+///
+/// This macro supports creating quadratic monomials in multiple forms:
+/// - `quadratic!(id)` creates a linear term within the quadratic space
+/// - `quadratic!(id1, id2)` creates a quadratic pair term
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{quadratic, QuadraticMonomial, VariableID};
+///
+/// // Create a linear term in quadratic space (x1)
+/// let x1 = quadratic!(1);
+/// assert_eq!(x1, QuadraticMonomial::Linear(VariableID::from(1)));
+///
+/// // Create a quadratic pair term (x1 * x2)
+/// let x1_x2 = quadratic!(1, 2);
+/// assert_eq!(x1_x2, QuadraticMonomial::new_pair(VariableID::from(1), VariableID::from(2)));
+/// ```
+#[macro_export]
+macro_rules! quadratic {
+    ($id:literal) => {
+        $crate::QuadraticMonomial::Linear($crate::VariableID::from($id))
+    };
+    ($id1:literal, $id2:literal) => {
+        $crate::QuadraticMonomial::new_pair(
+            $crate::VariableID::from($id1),
+            $crate::VariableID::from($id2),
+        )
+    };
+}
+
+/// Creates a [`MonomialDyn`] from variable ID literals.
+///
+/// This macro creates a general monomial from one or more variable ID literals.
+/// The degree of the monomial depends on the number of variables provided.
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{monomial, MonomialDyn, VariableID};
+///
+/// // Create a linear monomial (x1)
+/// let x1 = monomial!(1);
+///
+/// // Create a quadratic monomial (x1 * x2)
+/// let x1_x2 = monomial!(1, 2);
+///
+/// // Create a cubic monomial (x1 * x2 * x3)
+/// let x1_x2_x3 = monomial!(1, 2, 3);
+/// ```
+#[macro_export]
+macro_rules! monomial {
+    ($($id:literal),+) => {
+        $crate::MonomialDyn::new(vec![$($crate::VariableID::from($id)),+])
+    };
+}
+
 macro_rules! impl_add_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Add<$rhs> for $lhs {
