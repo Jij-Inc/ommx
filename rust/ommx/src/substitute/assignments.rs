@@ -80,6 +80,27 @@ impl AcyclicAssignments {
     }
 }
 
+impl PartialEq for AcyclicAssignments {
+    fn eq(&self, other: &Self) -> bool {
+        // First check if assignments are equal
+        if self.assignments != other.assignments {
+            return false;
+        }
+
+        // Check if dependency graphs have the same nodes
+        let self_nodes: std::collections::BTreeSet<_> = self.dependency.nodes().collect();
+        let other_nodes: std::collections::BTreeSet<_> = other.dependency.nodes().collect();
+        if self_nodes != other_nodes {
+            return false;
+        }
+
+        // Check if dependency graphs have the same edges
+        let self_edges: std::collections::BTreeSet<_> = self.dependency.all_edges().collect();
+        let other_edges: std::collections::BTreeSet<_> = other.dependency.all_edges().collect();
+        self_edges == other_edges
+    }
+}
+
 impl Arbitrary for AcyclicAssignments {
     type Parameters = AcyclicAssignmentsParameters;
     type Strategy = BoxedStrategy<Self>;
