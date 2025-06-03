@@ -75,6 +75,7 @@ impl Instance {
         let context = (decision_variables, constraints);
         let constraint_hints = hints.parse(&context)?;
 
+        // Validate undefined VariableID using Evaluate::required_ids
         let instance = Instance {
             sense,
             objective,
@@ -88,6 +89,7 @@ impl Instance {
         };
         for id in instance.required_ids() {
             if !instance.decision_variables.contains_key(&id) {
+                // FIXME: This should returns all undefined VariableIDs, not just the first one.
                 return Err(InstanceError::UndefinedVariableID { id }.into());
             }
         }
