@@ -2,7 +2,7 @@ use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, DecisionVariable, VariableID,
+    Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
 };
 
 impl Parse for v1::instance::Sense {
@@ -159,7 +159,9 @@ pub(super) fn as_constraint_id(
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
     if !constraints.contains_key(&id) {
-        return Err(RawParseError::UndefinedConstraintID { id }.into());
+        return Err(
+            RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
+        );
     }
     Ok(id)
 }
@@ -170,7 +172,7 @@ pub(super) fn as_variable_id(
 ) -> Result<VariableID, ParseError> {
     let id = VariableID::from(id);
     if !decision_variables.contains_key(&id) {
-        return Err(RawParseError::UndefinedVariableID { id }.into());
+        return Err(RawParseError::InstanceError(InstanceError::UndefinedVariableID { id }).into());
     }
     Ok(id)
 }

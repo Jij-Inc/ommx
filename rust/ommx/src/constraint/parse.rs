@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
-    v1,
+    v1, InstanceError,
 };
 use anyhow::Result;
 
@@ -90,7 +90,10 @@ impl Parse for Vec<v1::Constraint> {
             let c: Constraint = c.parse(&())?;
             let id = c.id;
             if constraints.insert(id, c).is_some() {
-                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
+                        .into(),
+                );
             }
         }
         Ok(constraints)
@@ -106,10 +109,16 @@ impl Parse for Vec<v1::RemovedConstraint> {
             let c: RemovedConstraint = c.parse(&())?;
             let id = c.constraint.id;
             if constraints.contains_key(&id) {
-                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
+                        .into(),
+                );
             }
             if removed_constraints.insert(id, c).is_some() {
-                return Err(RawParseError::DuplicatedConstraintID { id }.into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
+                        .into(),
+                );
             }
         }
         Ok(removed_constraints)
