@@ -22,6 +22,12 @@ pub enum Equality {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct ConstraintID(u64);
 
+impl std::fmt::Display for ConstraintID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl ConstraintID {
     fn into_inner(self) -> u64 {
         self.0

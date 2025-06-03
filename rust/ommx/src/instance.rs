@@ -2,6 +2,7 @@ mod analysis;
 mod approx;
 mod arbitrary;
 mod constraint_hints;
+mod error;
 mod evaluate;
 mod parse;
 mod pass;
@@ -10,6 +11,7 @@ use std::collections::BTreeMap;
 
 pub use analysis::*;
 pub use constraint_hints::*;
+pub use error::*;
 
 use crate::{
     v1, Constraint, ConstraintID, DecisionVariable, Function, RemovedConstraint, VariableID,
@@ -21,6 +23,14 @@ pub enum Sense {
     Maximize,
 }
 
+/// Instance, represents a mathematical optimization problem.
+///
+/// Invariants
+/// -----------
+/// - [`Self::decision_variables`] contains all decision variables used in the problem.
+/// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
+/// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+///
 #[derive(Debug, Clone, PartialEq, getset::Getters)]
 pub struct Instance {
     #[getset(get = "pub")]
@@ -35,12 +45,20 @@ pub struct Instance {
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
     decision_variable_dependency: BTreeMap<VariableID, Function>,
-    #[getset(get = "pub")]
-    parameters: Option<v1::Parameters>,
-    #[getset(get = "pub")]
-    description: Option<v1::instance::Description>,
+
+    /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
+    ///
+    /// Note
+    /// -----
+    /// This struct does not validate the hints in mathematical sense.
+    /// Only checks the decision variable and constraint IDs are valid.
     #[getset(get = "pub")]
     constraint_hints: ConstraintHints,
+
+    // Optional fields for additional metadata.
+    // These fields are public since arbitrary values can be set without validation.
+    pub parameters: Option<v1::Parameters>,
+    pub description: Option<v1::instance::Description>,
 }
 
 impl Instance {
