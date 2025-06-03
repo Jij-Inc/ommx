@@ -159,7 +159,9 @@ pub(super) fn as_constraint_id(
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
     if !constraints.contains_key(&id) {
-        return Err(RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into());
+        return Err(
+            RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
+        );
     }
     Ok(id)
 }
