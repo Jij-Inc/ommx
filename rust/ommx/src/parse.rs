@@ -1,6 +1,6 @@
 use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID,
-    DecisionVariableError, VariableID,
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
+    InstanceError,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -86,23 +86,8 @@ pub enum RawParseError {
     #[error("Enum ({enum_name}) value is unspecified.")]
     UnspecifiedEnum { enum_name: &'static str },
 
-    #[error("Duplicated variable ID is found in definition: {id:?}")]
-    DuplicatedVariableID { id: VariableID },
-
-    #[error("Duplicated constraint ID is found in definition: {id:?}")]
-    DuplicatedConstraintID { id: ConstraintID },
-
-    #[error("Undefined variable ID is used: {id:?}")]
-    UndefinedVariableID { id: VariableID },
-
-    #[error("Undefined constraint ID is used: {id:?}")]
-    UndefinedConstraintID { id: ConstraintID },
-
-    #[error("Non-unique variable ID is found where uniqueness is required: {id:?}")]
-    NonUniqueVariableID { id: VariableID },
-
-    #[error("Non-unique constraint ID is found where uniqueness is required: {id:?}")]
-    NonUniqueConstraintID { id: ConstraintID },
+    #[error(transparent)]
+    InstanceError(#[from] InstanceError),
 
     #[error(transparent)]
     InvalidCoefficient(#[from] CoefficientError),

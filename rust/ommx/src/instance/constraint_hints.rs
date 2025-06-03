@@ -2,7 +2,7 @@ use super::parse::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, DecisionVariable, VariableID,
+    Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -30,8 +30,10 @@ impl Parse for v1::OneHot {
             let id = as_variable_id(decision_variable, *v)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(RawParseError::NonUniqueVariableID { id }
-                    .context(message, "decision_variables"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
         Ok(OneHot {
@@ -66,8 +68,10 @@ impl Parse for v1::Sos1 {
             let id = as_constraint_id(constraints, *id)
                 .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
             if !big_m_constraint_ids.insert(id) {
-                return Err(RawParseError::NonUniqueConstraintID { id }
-                    .context(message, "big_m_constraint_ids"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueConstraintID { id })
+                        .context(message, "big_m_constraint_ids"),
+                );
             }
         }
         let mut variables = BTreeSet::new();
@@ -75,8 +79,10 @@ impl Parse for v1::Sos1 {
             let id = as_variable_id(decision_variable, *id)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(RawParseError::NonUniqueVariableID { id }
-                    .context(message, "decision_variables"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
         Ok(Sos1 {
