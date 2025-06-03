@@ -150,6 +150,31 @@ impl DecisionVariable {
         Ok(new)
     }
 
+    pub fn binary(id: VariableID) -> Self {
+        // substituted_value is None, so it is always valid
+        Self::new(id, Kind::Binary, Bound::of_binary(), None, ATol::default()).unwrap()
+    }
+
+    pub fn integer(id: VariableID, bound: Bound) -> Self {
+        // substituted_value is None, so it is always valid
+        Self::new(id, Kind::Integer, bound, None, ATol::default()).unwrap()
+    }
+
+    pub fn continuous(id: VariableID, bound: Bound) -> Self {
+        // substituted_value is None, so it is always valid
+        Self::new(id, Kind::Continuous, bound, None, ATol::default()).unwrap()
+    }
+
+    pub fn semi_integer(id: VariableID, bound: Bound) -> Self {
+        // substituted_value is None, so it is always valid
+        Self::new(id, Kind::SemiInteger, bound, None, ATol::default()).unwrap()
+    }
+
+    pub fn semi_continuous(id: VariableID, bound: Bound) -> Self {
+        // substituted_value is None, so it is always valid
+        Self::new(id, Kind::SemiContinuous, bound, None, ATol::default()).unwrap()
+    }
+
     /// Check if the substituted value is consistent to the bound and kind
     ///
     /// Example

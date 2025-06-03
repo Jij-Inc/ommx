@@ -15,7 +15,7 @@ pub use error::*;
 
 use crate::{
     parse::Parse, v1, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    RemovedConstraint, VariableID,
+    RemovedConstraint, VariableID, VariableIDSet,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -70,29 +70,253 @@ impl Instance {
         constraints: BTreeMap<ConstraintID, Constraint>,
         constraint_hints: ConstraintHints,
     ) -> anyhow::Result<Self> {
+        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
+        for id in objective.required_ids() {
+            if !variable_ids.contains(&id) {
+                return Err(InstanceError::UndefinedVariableID { id }.into());
+            }
+        }
+        for constraint in constraints.values() {
+            for id in constraint.required_ids() {
+                if !variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
+
         // Validate constraint_hints using Parse trait
         let hints: v1::ConstraintHints = constraint_hints.into();
         let context = (decision_variables, constraints);
         let constraint_hints = hints.parse(&context)?;
 
-        // Validate undefined VariableID using Evaluate::required_ids
-        let instance = Instance {
+        Ok(Instance {
             sense,
             objective,
             decision_variables: context.0,
             constraints: context.1,
             removed_constraints: BTreeMap::new(),
             decision_variable_dependency: BTreeMap::new(),
+            constraint_hints,
             parameters: None,
             description: None,
-            constraint_hints,
-        };
-        for id in instance.required_ids() {
-            if !instance.decision_variables.contains_key(&id) {
-                // FIXME: This should returns all undefined VariableIDs, not just the first one.
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        coeff,
+        constraint::{Constraint, ConstraintID, Equality},
+        polynomial_base::{Linear, LinearMonomial},
+        Coefficient, DecisionVariable, Function, VariableID,
+    };
+    use fnv::FnvHashMap;
+    use std::collections::BTreeSet;
+
+    /// Helper function to create a simple constraint
+    fn create_constraint(id: u64, variable_id: u64) -> Constraint {
+        let linear = Linear::single_term(LinearMonomial::Variable(variable_id.into()), coeff!(1.0));
+        Constraint {
+            id: ConstraintID::from(id),
+            function: Function::Linear(linear),
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: FnvHashMap::default(),
+            description: None,
         }
-        Ok(instance)
+    }
+
+    #[test]
+    fn test_instance_new_fails_with_undefined_variable_in_objective() {
+        // Create decision variables that do not include variable ID 999
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        // Create objective function that uses undefined variable ID 999
+        let linear = Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(999)),
+            Coefficient::try_from(1.0).unwrap(),
+        );
+        let objective = Function::Linear(linear);
+
+        let constraints = BTreeMap::new();
+        let constraint_hints = ConstraintHints::default();
+
+        // This should fail because variable ID 999 is used in objective but not defined
+        insta::assert_snapshot!(
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r#"Undefined variable ID is used: VariableID(999)"#
+        );
+    }
+
+    #[test]
+    fn test_instance_new_fails_with_undefined_variable_in_constraint() {
+        // Create decision variables that do not include variable ID 999
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        // Create simple objective function using defined variables
+        let linear = Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            Coefficient::try_from(1.0).unwrap(),
+        );
+        let objective = Function::Linear(linear);
+
+        // Create constraint that uses undefined variable ID 999
+        let mut constraints = BTreeMap::new();
+        constraints.insert(ConstraintID::from(1), create_constraint(1, 999));
+
+        let constraint_hints = ConstraintHints::default();
+
+        // This should fail because variable ID 999 is used in constraint but not defined
+        insta::assert_snapshot!(
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r#"Undefined variable ID is used: VariableID(999)"#
+        );
+    }
+
+    #[test]
+    fn test_instance_new_fails_with_undefined_variable_in_constraint_hints() {
+        // Create decision variables that do not include variable ID 999
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        // Create simple objective function using defined variables
+        let linear = Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            Coefficient::try_from(1.0).unwrap(),
+        );
+        let objective = Function::Linear(linear);
+
+        // Create constraint using defined variables
+        let mut constraints = BTreeMap::new();
+        constraints.insert(ConstraintID::from(1), create_constraint(1, 1));
+
+        // Create constraint hints with OneHot that references undefined variable ID 999
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(999)); // undefined variable
+
+        let one_hot = OneHot {
+            id: ConstraintID::from(1),
+            variables,
+        };
+
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![one_hot],
+            sos1_constraints: vec![],
+        };
+
+        insta::assert_snapshot!(
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r###"
+            Traceback for OMMX Message parse error:
+            └─ommx.v1.ConstraintHints[one_hot_constraints]
+              └─ommx.v1.OneHot[decision_variables]
+            Undefined variable ID is used: VariableID(999)
+            "###
+        );
+    }
+
+    #[test]
+    fn test_instance_new_fails_with_undefined_constraint_in_constraint_hints() {
+        // Create decision variables
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        // Create simple objective function using defined variables
+        let linear = Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            Coefficient::try_from(1.0).unwrap(),
+        );
+        let objective = Function::Linear(linear);
+
+        // Create constraint with ID 1
+        let mut constraints = BTreeMap::new();
+        constraints.insert(ConstraintID::from(1), create_constraint(1, 1));
+
+        // Create constraint hints with OneHot that references undefined constraint ID 999
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(2));
+
+        let one_hot = OneHot {
+            id: ConstraintID::from(999), // undefined constraint ID
+            variables,
+        };
+
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![one_hot],
+            sos1_constraints: vec![],
+        };
+
+        insta::assert_snapshot!(
+            Instance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r###"
+            Traceback for OMMX Message parse error:
+            └─ommx.v1.ConstraintHints[one_hot_constraints]
+              └─ommx.v1.OneHot[constraint_id]
+            Undefined constraint ID is used: ConstraintID(999)
+            "###
+        );
     }
 }
