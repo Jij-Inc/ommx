@@ -1,4 +1,5 @@
 use super::*;
+use crate::{LinearMonomial, MonomialDyn, QuadraticMonomial};
 use num::Zero;
 use std::{
     iter::Sum,
@@ -33,6 +34,164 @@ impl<M: Monomial> AddAssign<Coefficient> for PolynomialBase<M> {
         self.add_term(M::default(), rhs);
     }
 }
+
+impl<M: Monomial> Add<Coefficient> for PolynomialBase<M> {
+    type Output = Self;
+    fn add(mut self, rhs: Coefficient) -> Self::Output {
+        self += rhs;
+        self
+    }
+}
+
+impl<M: Monomial> Add<PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn add(self, mut rhs: PolynomialBase<M>) -> Self::Output {
+        rhs += self;
+        rhs
+    }
+}
+
+impl<M: Monomial> Add<Coefficient> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn add(self, rhs: Coefficient) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl<M: Monomial> Add<&PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn add(self, rhs: &PolynomialBase<M>) -> Self::Output {
+        self + rhs.clone()
+    }
+}
+
+// Add support for PolynomialBase<M> + M operations
+impl<M: Monomial> Add<M> for PolynomialBase<M> {
+    type Output = Self;
+    fn add(mut self, rhs: M) -> Self::Output {
+        self.add_term(rhs, coeff!(1.0));
+        self
+    }
+}
+
+impl<M: Monomial> Add<&M> for PolynomialBase<M> {
+    type Output = Self;
+    fn add(mut self, rhs: &M) -> Self::Output {
+        self.add_term(rhs.clone(), coeff!(1.0));
+        self
+    }
+}
+
+impl<M: Monomial> Add<M> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn add(self, rhs: M) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl<M: Monomial> Add<&M> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn add(self, rhs: &M) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+// Add support for Monomial + Monomial operations for specific monomial types
+macro_rules! impl_monomial_add {
+    ($monomial:ty) => {
+        impl Add for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self) + PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Add<&$monomial> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: &Self) -> Self::Output {
+                PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        impl Add<$monomial> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: $monomial) -> Self::Output {
+                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Add for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        // Add support for Monomial + Coefficient operations
+        impl Add<Coefficient> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self) + rhs
+            }
+        }
+
+        impl Add<$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: $monomial) -> Self::Output {
+                self + PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Add<Coefficient> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self.clone()) + rhs
+            }
+        }
+
+        impl Add<&$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: &$monomial) -> Self::Output {
+                self + PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        // Add support for Monomial + PolynomialBase operations
+        impl Add<PolynomialBase<$monomial>> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
+                rhs.add_term(self, coeff!(1.0));
+                rhs
+            }
+        }
+
+        impl Add<&PolynomialBase<$monomial>> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self + rhs.clone()
+            }
+        }
+
+        impl Add<PolynomialBase<$monomial>> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
+                rhs.add_term(self.clone(), coeff!(1.0));
+                rhs
+            }
+        }
+
+        impl Add<&PolynomialBase<$monomial>> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn add(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self.clone() + rhs.clone()
+            }
+        }
+    };
+}
+
+impl_monomial_add!(LinearMonomial);
+impl_monomial_add!(QuadraticMonomial);
+impl_monomial_add!(MonomialDyn);
 
 impl<M: Monomial> Add for PolynomialBase<M> {
     type Output = Self;
