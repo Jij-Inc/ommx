@@ -7,6 +7,8 @@ mod macros;
 pub use assignments::AcyclicAssignments;
 pub use error::SubstitutionError;
 
+use crate::Evaluate;
+
 /// A trait for substituting decision variables with other functions in mathematical expressions.
 ///
 /// This trait enables the replacement of decision variables with arbitrary functions,
@@ -228,4 +230,14 @@ pub trait Substitute: Sized {
         assigned: VariableID,
         linear: &Function,
     ) -> Result<Self::Output, SubstitutionError>;
+}
+
+pub(crate) fn check_self_assignment(
+    assigned: VariableID,
+    f: &Function,
+) -> Result<(), SubstitutionError> {
+    if f.required_ids().contains(&assigned) {
+        return Err(SubstitutionError::RecursiveAssignment { var_id: assigned });
+    }
+    Ok(())
 }

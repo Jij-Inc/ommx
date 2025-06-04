@@ -1,5 +1,6 @@
 use super::error::SubstitutionError;
 use crate::{
+    check_self_assignment,
     decision_variable::VariableID,
     v1::{Samples, State},
     ATol, Evaluate, Function, Substitute, VariableIDSet,
@@ -230,11 +231,7 @@ impl Substitute for AcyclicAssignments {
         assigned: VariableID,
         function: &Function,
     ) -> Result<Self::Output, SubstitutionError> {
-        // Check for self-assignment (x = x + ...)
-        if function.required_ids().contains(&assigned) {
-            return Err(SubstitutionError::RecursiveAssignment { var_id: assigned });
-        }
-
+        check_self_assignment(assigned, function)?;
         // Apply substitution to each assignment function
         let mut new_assignments = Vec::new();
         for (var_id, func) in self.assignments {

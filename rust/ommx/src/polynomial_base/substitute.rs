@@ -1,6 +1,6 @@
 use crate::{
-    substitute::Substitute, Coefficient, Evaluate, Function, Linear, LinearMonomial, Monomial,
-    MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
+    check_self_assignment, substitute::Substitute, Coefficient, Function, Linear, LinearMonomial,
+    Monomial, MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
 };
 use num::One;
 
@@ -16,12 +16,7 @@ where
         assigned: VariableID,
         f: &Function,
     ) -> Result<Function, crate::substitute::SubstitutionError> {
-        // Check for self-assignment (x = x + ...)
-        if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
-                var_id: assigned,
-            });
-        }
+        check_self_assignment(assigned, f)?;
         let mut substituted = Function::Zero;
         for (monomial, coefficient) in self.terms {
             substituted += coefficient * monomial.substitute_one(assigned, f)?;
@@ -38,13 +33,7 @@ impl Substitute for LinearMonomial {
         assigned: VariableID,
         f: &Function,
     ) -> Result<Function, crate::substitute::SubstitutionError> {
-        // Check for self-assignment (x = x + ...)
-        if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
-                var_id: assigned,
-            });
-        }
-
+        check_self_assignment(assigned, f)?;
         match self {
             LinearMonomial::Variable(id) => {
                 if id == assigned {
@@ -65,13 +54,7 @@ impl Substitute for QuadraticMonomial {
         assigned: VariableID,
         f: &Function,
     ) -> Result<Function, crate::substitute::SubstitutionError> {
-        // Check for self-assignment (x = x + ...)
-        if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
-                var_id: assigned,
-            });
-        }
-
+        check_self_assignment(assigned, f)?;
         match self {
             QuadraticMonomial::Pair(pair) => {
                 let l_sub = LinearMonomial::Variable(pair.lower()).substitute_one(assigned, f)?;
@@ -94,13 +77,7 @@ impl Substitute for MonomialDyn {
         assigned: VariableID,
         f: &Function,
     ) -> Result<Function, crate::substitute::SubstitutionError> {
-        // Check for self-assignment (x = x + ...)
-        if f.required_ids().contains(&assigned) {
-            return Err(crate::substitute::SubstitutionError::RecursiveAssignment {
-                var_id: assigned,
-            });
-        }
-
+        check_self_assignment(assigned, f)?;
         let mut substituted = Function::one();
         let mut non_substituted = Vec::new();
         for var_id in self.iter() {
