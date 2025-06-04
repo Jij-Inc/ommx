@@ -2,7 +2,7 @@ use super::error::SubstitutionError;
 use crate::{
     decision_variable::VariableID,
     v1::{Samples, State},
-    ATol, Evaluate, Function, VariableIDSet,
+    ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
 use anyhow::Result;
 use fnv::FnvHashMap;
@@ -219,5 +219,31 @@ impl Evaluate for AcyclicAssignments {
             .values()
             .flat_map(|function| function.required_ids())
             .collect()
+    }
+}
+
+impl Substitute for AcyclicAssignments {
+    type Output = Self;
+
+    fn substitute_one(
+        self,
+        assigned: VariableID,
+        function: &Function,
+    ) -> Result<Self::Output, SubstitutionError> {
+        // Check for self-assignment (x = x + ...)
+        if function.required_ids().contains(&assigned) {
+            return Err(SubstitutionError::RecursiveAssignment { var_id: assigned });
+        }
+
+        // Apply substitution to each assignment function
+        let mut new_assignments = Vec::new();
+        for (var_id, func) in self.assignments {
+            let substituted_func = func.substitute_one(assigned, function)?;
+            new_assignments.push((var_id, substituted_func));
+        }
+
+        // Create new AcyclicAssignments with substituted functions
+        // This will rebuild the dependency graph and check for cycles
+        Self::new(new_assignments)
     }
 }
