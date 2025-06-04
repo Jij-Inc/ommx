@@ -238,9 +238,57 @@ impl Substitute for AcyclicAssignments {
             let substituted_func = func.substitute_one(assigned, function)?;
             new_assignments.push((var_id, substituted_func));
         }
+        new_assignments.push((assigned, function.clone()));
 
         // Create new AcyclicAssignments with substituted functions
         // This will rebuild the dependency graph and check for cycles
         Self::new(new_assignments)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{assign, coeff, linear};
+
+    #[test]
+    fn test_substitute_acyclic_success() {
+        // Create initial assignments: x1 <- x2 + x3
+        let initial = assign! {
+            1 <- linear!(2) + linear!(3)
+        };
+
+        // Substitute x3 <- x4 + 1
+        let substitution = assign! {
+            3 <- linear!(4) + coeff!(1.0)
+        };
+
+        // Expected result: x1 <- x2 + x4 + 1, x3 <- x4 + 1
+        let expected = assign! {
+            1 <- linear!(2) + linear!(4) + coeff!(1.0),
+            3 <- linear!(4) + coeff!(1.0)
+        };
+
+        let result = initial.substitute_acyclic(&substitution).unwrap();
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_substitute_acyclic_fail() {
+        // Create initial assignments: x1 <- x2 + x3
+        let initial = assign! {
+            1 <- linear!(2) + linear!(3)
+        };
+
+        // Substitute x3 <- x1 + 1
+        // This causes a cyclic dependency
+        let substitution = assign! {
+            3 <- linear!(1) + coeff!(1.0)
+        };
+
+        insta::assert_snapshot!(
+            initial.substitute_acyclic(&substitution).unwrap_err(),
+            @"Recursive assignment detected: variable 1 cannot be assigned to a function that depends on itself"
+        );
     }
 }

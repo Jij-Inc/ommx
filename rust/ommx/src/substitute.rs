@@ -142,15 +142,18 @@ pub trait Substitute: Sized {
     /// let result = f.substitute_acyclic(&acyclic);
     /// // Result: (x3 + 1) + (x4 + 2) = x3 + x4 + 3
     /// ```
-    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Self::Output
+    fn substitute_acyclic(
+        self,
+        acyclic: &AcyclicAssignments,
+    ) -> Result<Self::Output, SubstitutionError>
     where
         Self::Output: From<Self> + Substitute<Output = Self::Output>,
     {
         let mut out: Self::Output = self.into();
         for (id, l) in acyclic.sorted_iter() {
-            out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicFunctionAssignments`
+            out = out.substitute_one(id, l)?;
         }
-        out
+        Ok(out)
     }
 
     /// Performs substitution with cycle detection and validation.
@@ -193,7 +196,7 @@ pub trait Substitute: Sized {
         Self::Output: From<Self> + Substitute<Output = Self::Output>,
     {
         let acyclic = AcyclicAssignments::new(assignments)?;
-        Ok(self.substitute_acyclic(&acyclic))
+        self.substitute_acyclic(&acyclic)
     }
 
     /// Substitutes a single variable with a function.

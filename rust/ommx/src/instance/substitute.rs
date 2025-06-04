@@ -1,5 +1,5 @@
 use super::*;
-use crate::{AcyclicAssignments, Function, Substitute, SubstitutionError, VariableID};
+use crate::{Function, Substitute, SubstitutionError, VariableID};
 
 impl Substitute for Instance {
     type Output = Self;

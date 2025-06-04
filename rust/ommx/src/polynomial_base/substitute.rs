@@ -114,7 +114,7 @@ mod tests {
         // 2.0 * (0.5 * x1 + 1.0) + 1.0 = x1 + 3.0
         let expected = Linear::from(linear!(1) + coeff!(3.0));
 
-        let result = poly.substitute_acyclic(&assignments);
+        let result = poly.substitute_acyclic(&assignments).unwrap();
         assert_eq!(result, expected.into());
     }
 
@@ -132,7 +132,7 @@ mod tests {
         let ans = coeff!(4.0) * QuadraticMonomial::from((VariableID::from(1), VariableID::from(1)))
             + coeff!(2.0) * QuadraticMonomial::from(VariableID::from(1));
 
-        let result = q.substitute_acyclic(&assignments);
+        let result = q.substitute_acyclic(&assignments).unwrap();
         assert_eq!(result, ans.into());
     }
 
@@ -144,7 +144,7 @@ mod tests {
         ) {
             let original = f.required_ids();
             let assigned: VariableIDSet = acyclic_assignments.keys().collect();
-            let substituted = f.substitute_acyclic(&acyclic_assignments);
+            let substituted = f.substitute_acyclic(&acyclic_assignments).unwrap();
             let result_vars = substituted.required_ids();
             prop_assert!(
                 result_vars.is_disjoint(&assigned),
