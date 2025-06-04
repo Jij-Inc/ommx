@@ -1,5 +1,10 @@
 use super::error::SubstitutionError;
-use crate::{decision_variable::VariableID, Evaluate, Function};
+use crate::{
+    decision_variable::VariableID,
+    v1::{Samples, State},
+    ATol, Evaluate, Function, VariableIDSet,
+};
+use anyhow::Result;
 use fnv::FnvHashMap;
 use petgraph::algo;
 use petgraph::prelude::DiGraphMap;
@@ -161,5 +166,58 @@ impl Default for AcyclicAssignmentsParameters {
             max_assignments: 10,
             function_parameters: <Function as Arbitrary>::Parameters::default(),
         }
+    }
+}
+
+impl Evaluate for AcyclicAssignments {
+    type Output = FnvHashMap<VariableID, f64>;
+    type SampledOutput = FnvHashMap<VariableID, crate::v1::SampledValues>;
+
+    fn evaluate(&self, state: &State, atol: ATol) -> Result<Self::Output> {
+        let mut result = FnvHashMap::default();
+        let mut extended_state = state.clone();
+
+        // Evaluate assignments in topological order
+        for (var_id, function) in self.sorted_iter() {
+            let value = function.evaluate(&extended_state, atol)?;
+            result.insert(var_id, value);
+            extended_state.entries.insert(var_id.into_inner(), value);
+        }
+
+        Ok(result)
+    }
+
+    fn partial_evaluate(&mut self, state: &State, atol: ATol) -> Result<()> {
+        // Create new assignments with partial evaluation applied
+        let mut new_assignments = Vec::new();
+
+        for (var_id, function) in self.assignments.iter() {
+            let mut function_clone = function.clone();
+            function_clone.partial_evaluate(state, atol)?;
+            new_assignments.push((*var_id, function_clone));
+        }
+
+        // Rebuild using new method to ensure acyclicity is maintained
+        *self = Self::new(new_assignments)?;
+        Ok(())
+    }
+
+    fn evaluate_samples(&self, samples: &Samples, atol: ATol) -> Result<Self::SampledOutput> {
+        let mut result = FnvHashMap::default();
+
+        // For each assignment in topological order
+        for (var_id, function) in self.sorted_iter() {
+            let sampled_values = function.evaluate_samples(samples, atol)?;
+            result.insert(var_id, sampled_values);
+        }
+
+        Ok(result)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.assignments
+            .values()
+            .flat_map(|function| function.required_ids())
+            .collect()
     }
 }
