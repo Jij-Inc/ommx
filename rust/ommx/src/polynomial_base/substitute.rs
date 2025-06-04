@@ -96,7 +96,8 @@ impl Substitute for MonomialDyn {
 mod tests {
     use super::*;
     use crate::{
-        assign, coeff, linear, AcyclicAssignments, QuadraticMonomial, VariableID, VariableIDSet,
+        assign, coeff, linear, AcyclicAssignments, Evaluate, QuadraticMonomial, VariableID,
+        VariableIDSet,
     };
     use proptest::prelude::*;
 
