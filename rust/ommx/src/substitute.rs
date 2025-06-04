@@ -145,16 +145,7 @@ pub trait Substitute: Sized {
     fn substitute_acyclic(
         self,
         acyclic: &AcyclicAssignments,
-    ) -> Result<Self::Output, SubstitutionError>
-    where
-        Self::Output: From<Self> + Substitute<Output = Self::Output>,
-    {
-        let mut out: Self::Output = self.into();
-        for (id, l) in acyclic.sorted_iter() {
-            out = out.substitute_one(id, l)?;
-        }
-        Ok(out)
-    }
+    ) -> Result<Self::Output, SubstitutionError>;
 
     /// Performs substitution with cycle detection and validation.
     ///
@@ -243,4 +234,55 @@ pub(crate) fn check_self_assignment(
         return Err(SubstitutionError::RecursiveAssignment { var_id: assigned });
     }
     Ok(())
+}
+
+pub fn substitute<T>(
+    substituted: &mut T,
+    assignments: impl IntoIterator<Item = (VariableID, Function)>,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute(assignments)?;
+    Ok(())
+}
+
+pub fn substitute_one<T>(
+    substituted: &mut T,
+    assigned: VariableID,
+    linear: &Function,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute_one(assigned, linear)?;
+    Ok(())
+}
+
+pub fn substitute_acyclic<T>(
+    substituted: &mut T,
+    acyclic: &AcyclicAssignments,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute_acyclic(acyclic)?;
+    Ok(())
+}
+
+pub(crate) fn substitute_acyclic_default<T, Output>(
+    substituted: T,
+    acyclic: &AcyclicAssignments,
+) -> Result<Output, SubstitutionError>
+where
+    Output: From<T> + Substitute<Output = Output>,
+{
+    let mut out: Output = substituted.into();
+    for (id, l) in acyclic.sorted_iter() {
+        out = out.substitute_one(id, l)?;
+    }
+    Ok(out)
 }

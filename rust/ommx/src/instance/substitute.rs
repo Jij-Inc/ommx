@@ -1,8 +1,15 @@
 use super::*;
-use crate::{Function, Substitute, SubstitutionError, VariableID};
+use crate::{substitute_acyclic_default, Function, Substitute, SubstitutionError, VariableID};
 
 impl Substitute for Instance {
     type Output = Self;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_default(self, acyclic)
+    }
 
     fn substitute_one(
         mut self,

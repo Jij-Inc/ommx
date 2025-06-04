@@ -1,6 +1,7 @@
 use crate::{
-    check_self_assignment, substitute::Substitute, Coefficient, Function, Linear, LinearMonomial,
-    Monomial, MonomialDyn, Polynomial, PolynomialBase, QuadraticMonomial, VariableID,
+    check_self_assignment, substitute::Substitute, substitute_acyclic_default, Coefficient,
+    Function, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase,
+    QuadraticMonomial, VariableID,
 };
 use num::One;
 
@@ -10,6 +11,17 @@ where
     PolynomialBase<M>: Into<Function>,
 {
     type Output = Function;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        let mut out: Function = self.into();
+        for (id, l) in acyclic.sorted_iter() {
+            out = out.substitute_one(id, l)?;
+        }
+        Ok(out)
+    }
 
     fn substitute_one(
         self,
@@ -27,6 +39,13 @@ where
 
 impl Substitute for LinearMonomial {
     type Output = Function;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_default(self, acyclic)
+    }
 
     fn substitute_one(
         self,
@@ -49,6 +68,14 @@ impl Substitute for LinearMonomial {
 
 impl Substitute for QuadraticMonomial {
     type Output = Function;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_default(self, acyclic)
+    }
+
     fn substitute_one(
         self,
         assigned: VariableID,
@@ -72,6 +99,14 @@ impl Substitute for QuadraticMonomial {
 
 impl Substitute for MonomialDyn {
     type Output = Function;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_default(self, acyclic)
+    }
+
     fn substitute_one(
         self,
         assigned: VariableID,

@@ -2,6 +2,7 @@ use super::error::SubstitutionError;
 use crate::{
     check_self_assignment,
     decision_variable::VariableID,
+    substitute_acyclic_default,
     v1::{Samples, State},
     ATol, Evaluate, Function, Substitute, VariableIDSet,
 };
@@ -225,6 +226,13 @@ impl Evaluate for AcyclicAssignments {
 
 impl Substitute for AcyclicAssignments {
     type Output = Self;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_default(self, acyclic)
+    }
 
     fn substitute_one(
         self,
