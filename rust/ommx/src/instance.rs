@@ -6,6 +6,7 @@ mod error;
 mod evaluate;
 mod parse;
 mod pass;
+mod substitute;
 
 use std::collections::BTreeMap;
 
