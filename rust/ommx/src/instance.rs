@@ -14,8 +14,8 @@ pub use constraint_hints::*;
 pub use error::*;
 
 use crate::{
-    parse::Parse, v1, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    RemovedConstraint, VariableID, VariableIDSet,
+    parse::Parse, v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate,
+    Function, RemovedConstraint, VariableID, VariableIDSet,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -45,7 +45,7 @@ pub struct Instance {
     #[getset(get = "pub")]
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
-    decision_variable_dependency: BTreeMap<VariableID, Function>,
+    decision_variable_dependency: AcyclicAssignments,
 
     /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
     ///
@@ -95,7 +95,7 @@ impl Instance {
             decision_variables: context.0,
             constraints: context.1,
             removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: BTreeMap::new(),
+            decision_variable_dependency: AcyclicAssignments::default(),
             constraint_hints,
             parameters: None,
             description: None,

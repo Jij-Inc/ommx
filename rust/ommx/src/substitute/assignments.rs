@@ -7,7 +7,7 @@ use proptest::prelude::*;
 
 /// Represents a set of assignment rules (`VariableID` -> `Function`)
 /// that has been validated to be free of any circular dependencies.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AcyclicAssignments {
     assignments: FnvHashMap<VariableID, Function>,
     // The directed graph representing dependencies between assignments, assigned -> required.
@@ -63,6 +63,10 @@ impl AcyclicAssignments {
         self.assignments.get(id)
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = (&VariableID, &Function)> {
+        self.assignments.iter()
+    }
+
     // Get the assignments in a topologically sorted order.
     pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
         // Get topological order of the dependency graph
@@ -113,6 +117,15 @@ impl PartialEq for AcyclicAssignments {
         let self_edges: std::collections::BTreeSet<_> = self.dependency.all_edges().collect();
         let other_edges: std::collections::BTreeSet<_> = other.dependency.all_edges().collect();
         self_edges == other_edges
+    }
+}
+
+impl IntoIterator for AcyclicAssignments {
+    type Item = (VariableID, Function);
+    type IntoIter = <FnvHashMap<VariableID, Function> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.assignments.into_iter()
     }
 }
 

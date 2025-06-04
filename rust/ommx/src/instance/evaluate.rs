@@ -145,9 +145,8 @@ impl Evaluate for Instance {
         for removed in self.removed_constraints.values_mut() {
             removed.partial_evaluate(state, atol)?;
         }
-        for f in self.decision_variable_dependency.values_mut() {
-            f.partial_evaluate(state, atol)?;
-        }
+        todo!();
+
         Ok(())
     }
 
