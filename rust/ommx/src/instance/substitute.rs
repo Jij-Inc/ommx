@@ -1,5 +1,7 @@
 use super::*;
-use crate::{substitute_acyclic_default, Function, Substitute, SubstitutionError, VariableID};
+use crate::{
+    substitute_acyclic_default, substitute_one, Function, Substitute, SubstitutionError, VariableID,
+};
 
 impl Substitute for Instance {
     type Output = Self;
@@ -17,7 +19,7 @@ impl Substitute for Instance {
         function: &Function,
     ) -> Result<Self::Output, SubstitutionError> {
         // Apply substitution to the objective function
-        self.objective = self.objective.clone().substitute_one(assigned, function)?;
+        substitute_one(&mut self.objective, assigned, function)?;
 
         // Apply substitution to all constraints
         for constraint in self.constraints.values_mut() {
