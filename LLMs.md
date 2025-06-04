@@ -4,6 +4,8 @@
 - [Introduction](#introduction)
 - [Switch Language](#switch-language)
   - [日本語](https://jij-inc.github.io/ommx/ja/)
+- [AI Assistant](#ai-assistant)
+  - [DeepWiki](https://deepwiki.com/Jij-Inc/ommx)
 - [Tutorial](#tutorial)
   - [Solve With Ommx Adapter](#solve-with-ommx-adapter)
   - [Tsp Sampling With Openjij Adapter](#tsp-sampling-with-openjij-adapter)
