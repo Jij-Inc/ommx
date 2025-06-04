@@ -6,9 +6,11 @@ use num::One;
 
 impl<M> Substitute for PolynomialBase<M>
 where
-    M: Monomial + Substitute,
+    M: Monomial + Substitute<Output = Function>,
     PolynomialBase<M>: Into<Function>,
 {
+    type Output = Function;
+
     fn substitute_one(
         self,
         assigned: VariableID,
@@ -29,6 +31,8 @@ where
 }
 
 impl Substitute for LinearMonomial {
+    type Output = Function;
+
     fn substitute_one(
         self,
         assigned: VariableID,
@@ -55,6 +59,7 @@ impl Substitute for LinearMonomial {
 }
 
 impl Substitute for QuadraticMonomial {
+    type Output = Function;
     fn substitute_one(
         self,
         assigned: VariableID,
@@ -83,6 +88,7 @@ impl Substitute for QuadraticMonomial {
 }
 
 impl Substitute for MonomialDyn {
+    type Output = Function;
     fn substitute_one(
         self,
         assigned: VariableID,

@@ -2,6 +2,8 @@ use super::*;
 use crate::{Substitute, VariableID};
 
 impl Substitute for Function {
+    type Output = Self;
+
     fn substitute_one(
         self,
         assigned: VariableID,

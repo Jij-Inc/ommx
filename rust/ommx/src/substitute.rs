@@ -96,7 +96,9 @@ pub use error::SubstitutionError;
 /// let result = f.substitute(assignments).unwrap();
 /// // Result: (x4 + 1) + 2*(2*x4 + x5) + 3*x3 = 5*x4 + 2*x5 + 3*x3 + 1
 /// ```
-pub trait Substitute: Clone + Sized + Into<Function> {
+pub trait Substitute: Sized {
+    type Output;
+
     /// Performs substitution using pre-validated acyclic assignments.
     ///
     /// This method is more efficient than [`substitute`](Self::substitute) when you already
@@ -138,8 +140,11 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// let result = f.substitute_acyclic(&acyclic);
     /// // Result: (x3 + 1) + (x4 + 2) = x3 + x4 + 3
     /// ```
-    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Function {
-        let mut out: Function = self.into();
+    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Self::Output
+    where
+        Self::Output: From<Self> + Substitute<Output = Self::Output>,
+    {
+        let mut out: Self::Output = self.into();
         for (id, l) in acyclic.sorted_iter() {
             out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicFunctionAssignments`
         }
@@ -181,7 +186,10 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     fn substitute(
         self,
         assignments: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<Function, SubstitutionError> {
+    ) -> Result<Self::Output, SubstitutionError>
+    where
+        Self::Output: From<Self> + Substitute<Output = Self::Output>,
+    {
         let acyclic = AcyclicAssignments::new(assignments)?;
         Ok(self.substitute_acyclic(&acyclic))
     }
@@ -219,5 +227,5 @@ pub trait Substitute: Clone + Sized + Into<Function> {
         self,
         assigned: VariableID,
         linear: &Function,
-    ) -> Result<Function, SubstitutionError>;
+    ) -> Result<Self::Output, SubstitutionError>;
 }
