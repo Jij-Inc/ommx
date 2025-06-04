@@ -8,6 +8,10 @@ parts:
     chapters:
       - url: https://jij-inc.github.io/ommx/en/
         title: "English"
+  - caption: "AI Assistant"
+    chapters:
+      - url: https://deepwiki.com/Jij-Inc/ommx
+        title: "DeepWiki"
   - caption: "Tutorial"
     chapters:
       - file: tutorial/solve_with_ommx_adapter
