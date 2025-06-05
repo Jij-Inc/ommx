@@ -1,4 +1,4 @@
-use crate::{Function, VariableID};
+use crate::{Evaluate, Function, VariableID};
 
 mod assignments;
 mod error;
@@ -6,8 +6,6 @@ mod macros;
 
 pub use assignments::AcyclicAssignments;
 pub use error::SubstitutionError;
-
-use crate::Evaluate;
 
 /// A trait for substituting decision variables with other functions in mathematical expressions.
 ///
@@ -182,10 +180,7 @@ pub trait Substitute: Sized {
     fn substitute(
         self,
         assignments: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<Self::Output, SubstitutionError>
-    where
-        Self::Output: From<Self> + Substitute<Output = Self::Output>,
-    {
+    ) -> Result<Self::Output, SubstitutionError> {
         let acyclic = AcyclicAssignments::new(assignments)?;
         self.substitute_acyclic(&acyclic)
     }
@@ -236,6 +231,7 @@ pub(crate) fn check_self_assignment(
     Ok(())
 }
 
+/// In-place version of [`Substitute::substitute`].
 pub fn substitute<T>(
     substituted: &mut T,
     assignments: impl IntoIterator<Item = (VariableID, Function)>,
@@ -248,6 +244,7 @@ where
     Ok(())
 }
 
+/// In-place version of [`Substitute::substitute_one`].
 pub fn substitute_one<T>(
     substituted: &mut T,
     assigned: VariableID,
@@ -261,6 +258,7 @@ where
     Ok(())
 }
 
+/// In-place version of [`Substitute::substitute_acyclic`].
 pub fn substitute_acyclic<T>(
     substituted: &mut T,
     acyclic: &AcyclicAssignments,
@@ -273,6 +271,7 @@ where
     Ok(())
 }
 
+/// Default implementation of [`Substitute::substitute_acyclic`] using [`Substitute::substitute_one`].
 pub(crate) fn substitute_acyclic_via_one<T, Output>(
     substituted: T,
     acyclic: &AcyclicAssignments,
@@ -287,14 +286,12 @@ where
     Ok(out)
 }
 
-pub(crate) fn substitute_one_via_acyclic<T, Output>(
+/// Default implementation of [`Substitute::substitute_one`] using [`Substitute::substitute_acyclic`].
+pub(crate) fn substitute_one_via_acyclic<T: Substitute>(
     substituted: T,
     assigned: VariableID,
     f: &Function,
-) -> Result<Output, SubstitutionError>
-where
-    T: Substitute<Output = Output>,
-{
+) -> Result<<T as Substitute>::Output, SubstitutionError> {
     let acyclic = AcyclicAssignments::new([(assigned, f.clone())])?;
     substituted.substitute_acyclic(&acyclic)
 }
