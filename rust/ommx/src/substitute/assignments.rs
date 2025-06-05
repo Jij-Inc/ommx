@@ -74,15 +74,21 @@ impl AcyclicAssignments {
         self.assignments.iter()
     }
 
-    // Get the assignments in a topologically sorted order.
-    pub fn sorted_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
-        // Get topological order of the dependency graph
-        let topo_order = algo::toposort(&self.dependency, None)
-            .expect("Graph should be acyclic by construction");
+    fn sorted_ids(&self) -> Vec<VariableID> {
+        algo::toposort(&self.dependency, None).expect("Graph should be acyclic by construction")
+    }
 
-        // Create iterator that yields assignments in topological order
-        topo_order
+    // Get the assignments in a topologically sorted order.
+    pub fn substitution_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
+        self.sorted_ids()
             .into_iter()
+            .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
+    }
+
+    pub fn evaluation_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
+        self.sorted_ids()
+            .into_iter()
+            .rev()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
     }
 
@@ -182,7 +188,7 @@ impl Evaluate for AcyclicAssignments {
         //
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
         // we first evaluate x1 = 3, then x4 = 4. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 4}.
-        for (var_id, function) in self.sorted_iter() {
+        for (var_id, function) in self.evaluation_order_iter() {
             let value = function.evaluate(&extended_state, atol)?;
             extended_state.entries.insert(var_id.into_inner(), value);
         }
@@ -208,7 +214,7 @@ impl Evaluate for AcyclicAssignments {
         let mut result = FnvHashMap::default();
 
         // For each assignment in topological order
-        for (var_id, function) in self.sorted_iter() {
+        for (var_id, function) in self.substitution_order_iter() {
             let sampled_values = function.evaluate_samples(samples, atol)?;
             result.insert(var_id, sampled_values);
         }

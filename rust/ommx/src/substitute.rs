@@ -280,7 +280,7 @@ where
     Output: From<T> + Substitute<Output = Output>,
 {
     let mut out: Output = substituted.into();
-    for (id, l) in acyclic.sorted_iter() {
+    for (id, l) in acyclic.substitution_order_iter() {
         out = out.substitute_one(id, l)?;
     }
     Ok(out)

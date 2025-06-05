@@ -17,7 +17,7 @@ where
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
         let mut out: Function = self.into();
-        for (id, l) in acyclic.sorted_iter() {
+        for (id, l) in acyclic.substitution_order_iter() {
             out = out.substitute_one(id, l)?;
         }
         Ok(out)
