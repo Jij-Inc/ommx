@@ -143,21 +143,6 @@ impl AcyclicAssignments {
     pub fn keys(&self) -> impl Iterator<Item = VariableID> + '_ {
         self.assignments.keys().copied()
     }
-
-    /// Merge another `AcyclicAssignments` into this one.
-    /// Returns an error if the merge would create a cyclic dependency.
-    pub fn merge(&mut self, other: AcyclicAssignments) -> Result<(), SubstitutionError> {
-        let current = std::mem::take(&mut self.assignments);
-        *self = Self::new(current.into_iter().chain(other.assignments.into_iter()))?;
-        Ok(())
-    }
-
-    /// Create a new `AcyclicAssignments` by merging two existing ones.
-    /// Returns an error if the merge would create a cyclic dependency.
-    pub fn merged(mut self, other: AcyclicAssignments) -> Result<Self, SubstitutionError> {
-        self.merge(other)?;
-        Ok(self)
-    }
 }
 
 impl PartialEq for AcyclicAssignments {

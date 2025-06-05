@@ -46,21 +46,9 @@ pub struct Constraint {
     pub description: Option<String>,
 }
 
-impl Constraint {
-    pub fn set_function(&mut self, function: Function) {
-        self.function = function;
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: Constraint,
     pub removed_reason: String,
     pub removed_reason_parameters: FnvHashMap<String, String>,
-}
-
-impl RemovedConstraint {
-    pub fn constraint_mut(&mut self) -> Option<&mut Constraint> {
-        Some(&mut self.constraint)
-    }
 }
