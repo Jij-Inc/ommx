@@ -172,21 +172,21 @@ impl Default for AcyclicAssignmentsParameters {
 }
 
 impl Evaluate for AcyclicAssignments {
-    type Output = FnvHashMap<VariableID, f64>;
+    type Output = State;
     type SampledOutput = FnvHashMap<VariableID, crate::v1::SampledValues>;
 
     fn evaluate(&self, state: &State, atol: ATol) -> Result<Self::Output> {
-        let mut result = FnvHashMap::default();
         let mut extended_state = state.clone();
 
         // Evaluate assignments in topological order
+        //
+        // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
+        // we first evaluate x1 = 3, then x4 = 4. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 4}.
         for (var_id, function) in self.sorted_iter() {
             let value = function.evaluate(&extended_state, atol)?;
-            result.insert(var_id, value);
             extended_state.entries.insert(var_id.into_inner(), value);
         }
-
-        Ok(result)
+        Ok(extended_state)
     }
 
     fn partial_evaluate(&mut self, state: &State, atol: ATol) -> Result<()> {
@@ -298,5 +298,27 @@ mod tests {
             initial.substitute_acyclic(&substitution).unwrap_err(),
             @"Recursive assignment detected: variable 1 cannot be assigned to a function that depends on itself"
         );
+    }
+
+    #[test]
+    fn test_evaluate_topological_order() {
+        // Test case based on the comment in evaluate method:
+        // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
+        // we first evaluate x1 = 3, then x4 = 4. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 4}.
+
+        let assignments = assign! {
+            1 <- linear!(2) + linear!(3),  // x1 <- x2 + x3
+            4 <- linear!(1) + coeff!(2.0)  // x4 <- x1 + 2
+        };
+
+        let state = State::from_iter(vec![(2, 1.0), (3, 2.0)]); // {x2: 1, x3: 2}
+
+        let result = assignments.evaluate(&state, ATol::default()).unwrap();
+
+        // Expected extended state: {x1: 3, x2: 1, x3: 2, x4: 4}
+        assert_eq!(result.entries[&1], 3.0); // x1 = x2 + x3 = 1 + 2 = 3
+        assert_eq!(result.entries[&2], 1.0); // x2 = 1 (original)
+        assert_eq!(result.entries[&3], 2.0); // x3 = 2 (original)
+        assert_eq!(result.entries[&4], 5.0); // x4 = x1 + 2 = 3 + 2 = 5
     }
 }
