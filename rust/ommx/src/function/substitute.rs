@@ -1,7 +1,16 @@
 use super::*;
-use crate::{Substitute, VariableID};
+use crate::{substitute_acyclic_via_one, Substitute, VariableID};
 
 impl Substitute for Function {
+    type Output = Self;
+
+    fn substitute_acyclic(
+        self,
+        acyclic: &crate::AcyclicAssignments,
+    ) -> Result<Self::Output, crate::SubstitutionError> {
+        substitute_acyclic_via_one(self, acyclic)
+    }
+
     fn substitute_one(
         self,
         assigned: VariableID,

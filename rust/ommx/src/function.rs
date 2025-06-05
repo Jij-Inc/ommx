@@ -15,8 +15,9 @@ mod substitute;
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///
 /// This can be up to polynomial currently, but it will be extended to exponential and logarithm in the future.
-#[derive(Debug, Clone, PartialEq, From)]
+#[derive(Debug, Clone, PartialEq, From, Default)]
 pub enum Function {
+    #[default]
     Zero,
     /// Non-zero constant
     Constant(Coefficient),

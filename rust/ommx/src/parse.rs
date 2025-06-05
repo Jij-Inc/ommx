@@ -1,6 +1,6 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
-    InstanceError,
+    InstanceError, SubstitutionError,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -88,6 +88,9 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InstanceError(#[from] InstanceError),
+
+    #[error(transparent)]
+    SubstitutionError(#[from] SubstitutionError),
 
     #[error(transparent)]
     InvalidCoefficient(#[from] CoefficientError),

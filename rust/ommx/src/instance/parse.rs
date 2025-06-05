@@ -91,6 +91,8 @@ impl Parse for v1::Instance {
                 f.parse_as(&(), message, "decision_variable_dependency")?,
             );
         }
+        let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
+            .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
 
         let context = (decision_variables, constraints);
         let constraint_hints = if let Some(hints) = self.constraint_hints {

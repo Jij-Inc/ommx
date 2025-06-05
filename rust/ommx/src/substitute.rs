@@ -1,4 +1,4 @@
-use crate::{Function, VariableID};
+use crate::{Evaluate, Function, VariableID};
 
 mod assignments;
 mod error;
@@ -96,7 +96,9 @@ pub use error::SubstitutionError;
 /// let result = f.substitute(assignments).unwrap();
 /// // Result: (x4 + 1) + 2*(2*x4 + x5) + 3*x3 = 5*x4 + 2*x5 + 3*x3 + 1
 /// ```
-pub trait Substitute: Clone + Sized + Into<Function> {
+pub trait Substitute: Sized {
+    type Output;
+
     /// Performs substitution using pre-validated acyclic assignments.
     ///
     /// This method is more efficient than [`substitute`](Self::substitute) when you already
@@ -138,13 +140,10 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     /// let result = f.substitute_acyclic(&acyclic);
     /// // Result: (x3 + 1) + (x4 + 2) = x3 + x4 + 3
     /// ```
-    fn substitute_acyclic(self, acyclic: &AcyclicAssignments) -> Function {
-        let mut out: Function = self.into();
-        for (id, l) in acyclic.sorted_iter() {
-            out = out.substitute_one(id, l).unwrap(); // Checked when creating `AcyclicFunctionAssignments`
-        }
-        out
-    }
+    fn substitute_acyclic(
+        self,
+        acyclic: &AcyclicAssignments,
+    ) -> Result<Self::Output, SubstitutionError>;
 
     /// Performs substitution with cycle detection and validation.
     ///
@@ -181,9 +180,9 @@ pub trait Substitute: Clone + Sized + Into<Function> {
     fn substitute(
         self,
         assignments: impl IntoIterator<Item = (VariableID, Function)>,
-    ) -> Result<Function, SubstitutionError> {
+    ) -> Result<Self::Output, SubstitutionError> {
         let acyclic = AcyclicAssignments::new(assignments)?;
-        Ok(self.substitute_acyclic(&acyclic))
+        self.substitute_acyclic(&acyclic)
     }
 
     /// Substitutes a single variable with a function.
@@ -219,5 +218,80 @@ pub trait Substitute: Clone + Sized + Into<Function> {
         self,
         assigned: VariableID,
         linear: &Function,
-    ) -> Result<Function, SubstitutionError>;
+    ) -> Result<Self::Output, SubstitutionError>;
+}
+
+pub(crate) fn check_self_assignment(
+    assigned: VariableID,
+    f: &Function,
+) -> Result<(), SubstitutionError> {
+    if f.required_ids().contains(&assigned) {
+        return Err(SubstitutionError::RecursiveAssignment { var_id: assigned });
+    }
+    Ok(())
+}
+
+/// In-place version of [`Substitute::substitute`].
+pub fn substitute<T>(
+    substituted: &mut T,
+    assignments: impl IntoIterator<Item = (VariableID, Function)>,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute(assignments)?;
+    Ok(())
+}
+
+/// In-place version of [`Substitute::substitute_one`].
+pub fn substitute_one<T>(
+    substituted: &mut T,
+    assigned: VariableID,
+    linear: &Function,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute_one(assigned, linear)?;
+    Ok(())
+}
+
+/// In-place version of [`Substitute::substitute_acyclic`].
+pub fn substitute_acyclic<T>(
+    substituted: &mut T,
+    acyclic: &AcyclicAssignments,
+) -> Result<(), SubstitutionError>
+where
+    T: Substitute<Output = T> + Default,
+{
+    let inner = std::mem::take(substituted);
+    *substituted = inner.substitute_acyclic(acyclic)?;
+    Ok(())
+}
+
+/// Default implementation of [`Substitute::substitute_acyclic`] using [`Substitute::substitute_one`].
+pub(crate) fn substitute_acyclic_via_one<T, Output>(
+    substituted: T,
+    acyclic: &AcyclicAssignments,
+) -> Result<Output, SubstitutionError>
+where
+    Output: From<T> + Substitute<Output = Output>,
+{
+    let mut out: Output = substituted.into();
+    for (id, l) in acyclic.substitution_order_iter() {
+        out = out.substitute_one(id, l)?;
+    }
+    Ok(out)
+}
+
+/// Default implementation of [`Substitute::substitute_one`] using [`Substitute::substitute_acyclic`].
+pub(crate) fn substitute_one_via_acyclic<T: Substitute>(
+    substituted: T,
+    assigned: VariableID,
+    f: &Function,
+) -> Result<<T as Substitute>::Output, SubstitutionError> {
+    let acyclic = AcyclicAssignments::new([(assigned, f.clone())])?;
+    substituted.substitute_acyclic(&acyclic)
 }
