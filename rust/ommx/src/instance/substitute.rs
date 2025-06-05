@@ -11,6 +11,29 @@ impl Substitute for Instance {
         mut self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
+        // Get the set of variables being substituted
+        let substituted_variables: std::collections::BTreeSet<VariableID> =
+            acyclic.iter().map(|(var_id, _)| *var_id).collect();
+
+        // Identify constraint IDs that depend on substituted variables
+        let mut affected_constraint_ids = std::collections::BTreeSet::new();
+
+        // Check active constraints
+        for (constraint_id, constraint) in &self.constraints {
+            let required_ids = constraint.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                affected_constraint_ids.insert(*constraint_id);
+            }
+        }
+
+        // Check removed constraints
+        for (constraint_id, removed_constraint) in &self.removed_constraints {
+            let required_ids = removed_constraint.constraint.required_ids();
+            if !required_ids.is_disjoint(&substituted_variables) {
+                affected_constraint_ids.insert(*constraint_id);
+            }
+        }
+
         // Apply substitution to the objective function
         substitute_acyclic(&mut self.objective, acyclic)?;
 
@@ -26,6 +49,23 @@ impl Substitute for Instance {
 
         // Apply substitution to the existing decision_variable_dependency
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
+
+        // Remove constraint hints that reference affected constraints
+        //
+        // FIXME
+        // ------
+        // - Currently, we remove all affected constraint hints, but some can still be valid.
+        //   - e.g. an one-hot constraint x1 + x2 = 1 is still one-hot after substituting x1 = x3 + x4.
+        self.constraint_hints
+            .one_hot_constraints
+            .retain(|hint| !affected_constraint_ids.contains(&hint.id));
+        self.constraint_hints.sos1_constraints.retain(|hint| {
+            !affected_constraint_ids.contains(&hint.binary_constraint_id)
+                && hint
+                    .big_m_constraint_ids
+                    .is_disjoint(&affected_constraint_ids)
+        });
+
         Ok(self)
     }
 
@@ -95,5 +135,219 @@ mod tests {
             .decision_variable_dependency
             .get(&VariableID::from(1))
             .is_some());
+    }
+
+    #[test]
+    fn test_constraint_hints_removal_on_substitute() {
+        use crate::instance::constraint_hints::{OneHot, Sos1};
+
+        // Create decision variables
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::binary(VariableID::from(3)),
+        );
+
+        // Create constraint that depends on x1: x1 + x2 == 1 (constraint_id=1)
+        let mut constraints = BTreeMap::new();
+        let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
+        let constraint1 = Constraint {
+            id: ConstraintID::from(1),
+            function: constraint1_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), constraint1);
+
+        // Create constraint that doesn't depend on x1: x2 + x3 == 1 (constraint_id=2)
+        let constraint2_function = Function::from(linear!(2) + linear!(3) + coeff!(-1.0));
+        let constraint2 = Constraint {
+            id: ConstraintID::from(2),
+            function: constraint2_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(2), constraint2);
+
+        // Create constraint hints
+        let one_hot_for_constraint1 = OneHot {
+            id: ConstraintID::from(1),
+            variables: [VariableID::from(1), VariableID::from(2)]
+                .into_iter()
+                .collect(),
+        };
+        let one_hot_for_constraint2 = OneHot {
+            id: ConstraintID::from(2),
+            variables: [VariableID::from(2), VariableID::from(3)]
+                .into_iter()
+                .collect(),
+        };
+        let sos1 = Sos1 {
+            binary_constraint_id: ConstraintID::from(1),
+            big_m_constraint_ids: [ConstraintID::from(2)].into_iter().collect(),
+            variables: [
+                VariableID::from(1),
+                VariableID::from(2),
+                VariableID::from(3),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![one_hot_for_constraint1, one_hot_for_constraint2],
+            sos1_constraints: vec![sos1],
+        };
+
+        // Create objective
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            constraint_hints,
+        )
+        .unwrap();
+
+        // Before substitution, verify we have 2 OneHot constraints and 1 SOS1 constraint
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 2);
+        assert_eq!(instance.constraint_hints.sos1_constraints.len(), 1);
+
+        // Substitute x1 with a constant: x1 = 1
+        let substitution = Function::from(coeff!(1.0));
+        let result = instance
+            .substitute_one(VariableID::from(1), &substitution)
+            .unwrap();
+
+        // After substitution:
+        // - OneHot for constraint1 should be removed (constraint1 depends on x1)
+        // - OneHot for constraint2 should remain (constraint2 doesn't depend on x1)
+        // - SOS1 should be removed (it references constraint1 which depends on x1)
+        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(
+            result.constraint_hints.one_hot_constraints[0].id,
+            ConstraintID::from(2)
+        );
+        assert_eq!(result.constraint_hints.sos1_constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_constraint_hints_removal_with_removed_constraints() {
+        use crate::instance::constraint_hints::OneHot;
+
+        // Create decision variables
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::binary(VariableID::from(3)),
+        );
+
+        // Create active constraint: x1 + x2 == 1 (constraint_id=1)
+        let mut constraints = BTreeMap::new();
+        let constraint1_function = Function::from(linear!(1) + linear!(2) + coeff!(-1.0));
+        let constraint1 = Constraint {
+            id: ConstraintID::from(1),
+            function: constraint1_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), constraint1);
+
+        // Create removed constraint that depends on x1: x1 + x3 == 1 (constraint_id=2)
+        let mut removed_constraints = BTreeMap::new();
+        let removed_constraint_function = Function::from(linear!(1) + linear!(3) + coeff!(-1.0));
+        let removed_constraint_inner = Constraint {
+            id: ConstraintID::from(2),
+            function: removed_constraint_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        let removed_constraint = RemovedConstraint {
+            constraint: removed_constraint_inner,
+            removed_reason: "test".to_string(),
+            removed_reason_parameters: Default::default(),
+        };
+        removed_constraints.insert(ConstraintID::from(2), removed_constraint);
+
+        // Create constraint hints - OneHot for removed constraint should also be removed
+        let one_hot_for_active = OneHot {
+            id: ConstraintID::from(1),
+            variables: [VariableID::from(1), VariableID::from(2)]
+                .into_iter()
+                .collect(),
+        };
+        let one_hot_for_removed = OneHot {
+            id: ConstraintID::from(2),
+            variables: [VariableID::from(1), VariableID::from(3)]
+                .into_iter()
+                .collect(),
+        };
+
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![one_hot_for_active, one_hot_for_removed],
+            sos1_constraints: vec![],
+        };
+
+        // Create objective
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+
+        // Create instance directly since new() only accepts active constraints
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Manually set removed constraints and constraint hints
+        instance.removed_constraints = removed_constraints;
+        instance.constraint_hints = constraint_hints;
+
+        // Before substitution, verify we have 2 OneHot constraints
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 2);
+
+        // Substitute x1 with a constant: x1 = 1
+        let substitution = Function::from(coeff!(1.0));
+        let result = instance
+            .substitute_one(VariableID::from(1), &substitution)
+            .unwrap();
+
+        // After substitution:
+        // Both OneHot constraints should be removed because:
+        // - constraint1 (active) depends on x1
+        // - constraint2 (removed) also depends on x1
+        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 0);
     }
 }
