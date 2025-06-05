@@ -1,49 +1,40 @@
 use super::*;
 use crate::{
-    substitute_acyclic_default, substitute_one, Function, Substitute, SubstitutionError, VariableID,
+    substitute_acyclic, substitute_one_via_acyclic, Function, Substitute, SubstitutionError,
+    VariableID,
 };
 
 impl Substitute for Instance {
     type Output = Self;
 
     fn substitute_acyclic(
-        self,
+        mut self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_default(self, acyclic)
-    }
-
-    fn substitute_one(
-        mut self,
-        assigned: VariableID,
-        function: &Function,
-    ) -> Result<Self::Output, SubstitutionError> {
         // Apply substitution to the objective function
-        substitute_one(&mut self.objective, assigned, function)?;
+        substitute_acyclic(&mut self.objective, acyclic)?;
 
         // Apply substitution to all constraints
         for constraint in self.constraints.values_mut() {
-            constraint.function = constraint
-                .function
-                .clone()
-                .substitute_one(assigned, function)?;
+            substitute_acyclic(&mut constraint.function, acyclic)?;
         }
 
         // Apply substitution to all removed constraints
         for removed_constraint in self.removed_constraints.values_mut() {
-            removed_constraint.constraint.function = removed_constraint
-                .constraint
-                .function
-                .clone()
-                .substitute_one(assigned, function)?;
+            substitute_acyclic(&mut removed_constraint.constraint.function, acyclic)?;
         }
 
         // Apply substitution to the existing decision_variable_dependency
-        self.decision_variable_dependency = self
-            .decision_variable_dependency
-            .clone()
-            .substitute_one(assigned, function)?;
+        substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
         Ok(self)
+    }
+
+    fn substitute_one(
+        self,
+        assigned: VariableID,
+        f: &Function,
+    ) -> Result<Self::Output, SubstitutionError> {
+        substitute_one_via_acyclic(self, assigned, f)
     }
 }
 

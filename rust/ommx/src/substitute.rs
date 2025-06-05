@@ -273,7 +273,7 @@ where
     Ok(())
 }
 
-pub(crate) fn substitute_acyclic_default<T, Output>(
+pub(crate) fn substitute_acyclic_via_one<T, Output>(
     substituted: T,
     acyclic: &AcyclicAssignments,
 ) -> Result<Output, SubstitutionError>
@@ -285,4 +285,16 @@ where
         out = out.substitute_one(id, l)?;
     }
     Ok(out)
+}
+
+pub(crate) fn substitute_one_via_acyclic<T, Output>(
+    substituted: T,
+    assigned: VariableID,
+    f: &Function,
+) -> Result<Output, SubstitutionError>
+where
+    T: Substitute<Output = Output>,
+{
+    let acyclic = AcyclicAssignments::new([(assigned, f.clone())])?;
+    substituted.substitute_acyclic(&acyclic)
 }

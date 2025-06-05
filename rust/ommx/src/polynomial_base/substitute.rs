@@ -1,5 +1,5 @@
 use crate::{
-    check_self_assignment, substitute::Substitute, substitute_acyclic_default, Coefficient,
+    check_self_assignment, substitute::Substitute, substitute_acyclic_via_one, Coefficient,
     Function, Linear, LinearMonomial, Monomial, MonomialDyn, Polynomial, PolynomialBase,
     QuadraticMonomial, VariableID,
 };
@@ -44,7 +44,7 @@ impl Substitute for LinearMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_default(self, acyclic)
+        substitute_acyclic_via_one(self, acyclic)
     }
 
     fn substitute_one(
@@ -73,7 +73,7 @@ impl Substitute for QuadraticMonomial {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_default(self, acyclic)
+        substitute_acyclic_via_one(self, acyclic)
     }
 
     fn substitute_one(
@@ -104,7 +104,7 @@ impl Substitute for MonomialDyn {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
-        substitute_acyclic_default(self, acyclic)
+        substitute_acyclic_via_one(self, acyclic)
     }
 
     fn substitute_one(
