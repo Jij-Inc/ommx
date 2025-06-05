@@ -78,13 +78,61 @@ impl AcyclicAssignments {
         algo::toposort(&self.dependency, None).expect("Graph should be acyclic by construction")
     }
 
-    // Get the assignments in a topologically sorted order.
+    /// Get the assignments in substitution order (variables that need to be replaced first).
+    ///
+    /// This order is used when performing substitution operations where variables
+    /// that are depended upon by others should be substituted first.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use ommx::{assign, linear, coeff, AcyclicAssignments};
+    /// let assignments = assign! {
+    ///     1 <- linear!(2) + linear!(3),  // x1 <- x2 + x3
+    ///     4 <- linear!(1) + coeff!(2.0)  // x4 <- x1 + 2
+    /// };
+    ///
+    /// let order: Vec<_> = assignments.substitution_order_iter()
+    ///     .map(|(id, _)| id.into_inner())
+    ///     .collect();
+    ///     /// // x4 comes before x1 in substitution order because x4 has deeper dependencies
+    /// assert_eq!(order, vec![4, 1]);
+    /// ```
     pub fn substitution_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
         self.sorted_ids()
             .into_iter()
             .filter_map(move |var_id| self.assignments.get(&var_id).map(|linear| (var_id, linear)))
     }
 
+    /// Get the assignments in evaluation order (variables that should be evaluated first).
+    ///
+    /// This order is used when evaluating assignments where variables that are
+    /// required by others should be evaluated first.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use ommx::{assign, linear, coeff, AcyclicAssignments, v1::State, ATol, Evaluate};
+    /// let assignments = assign! {
+    ///     1 <- linear!(2) + linear!(3),  // x1 <- x2 + x3
+    ///     4 <- linear!(1) + coeff!(2.0)  // x4 <- x1 + 2
+    /// };
+    ///
+    /// let order: Vec<_> = assignments.evaluation_order_iter()
+    ///     .map(|(id, _)| id.into_inner())
+    ///     .collect();
+    ///     /// // x1 comes before x4 in evaluation order because x1 must be evaluated before x4
+    /// assert_eq!(order, vec![1, 4]);
+    ///
+    /// // When evaluating with state {x2: 1, x3: 2}:
+    /// let state = State::from_iter(vec![(2, 1.0), (3, 2.0)]);
+    /// let result = assignments.evaluate(&state, ATol::default()).unwrap();
+    ///
+    /// // First x1 = x2 + x3 = 1 + 2 = 3 is computed
+    /// // Then x4 = x1 + 2 = 3 + 2 = 5 is computed
+    /// assert_eq!(result.entries[&1], 3.0);
+    /// assert_eq!(result.entries[&4], 5.0);
+    /// ```
     pub fn evaluation_order_iter(&self) -> impl Iterator<Item = (VariableID, &Function)> {
         self.sorted_ids()
             .into_iter()
@@ -187,7 +235,7 @@ impl Evaluate for AcyclicAssignments {
         // Evaluate assignments in topological order
         //
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
-        // we first evaluate x1 = 3, then x4 = 4. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 4}.
+        // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
         for (var_id, function) in self.evaluation_order_iter() {
             let value = function.evaluate(&extended_state, atol)?;
             extended_state.entries.insert(var_id.into_inner(), value);
@@ -310,7 +358,7 @@ mod tests {
     fn test_evaluate_topological_order() {
         // Test case based on the comment in evaluate method:
         // When the assignment is x1 <- x2 + x3, x4 <- x1 + 2, and state is {x2: 1, x3: 2},
-        // we first evaluate x1 = 3, then x4 = 4. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 4}.
+        // we first evaluate x1 = 3, then x4 = 5. Finally returns extended state {x1: 3, x2: 1, x3: 2, x4: 5}.
 
         let assignments = assign! {
             1 <- linear!(2) + linear!(3),  // x1 <- x2 + x3
