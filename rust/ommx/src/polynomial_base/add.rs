@@ -232,6 +232,40 @@ impl<M: Monomial> Add<PolynomialBase<M>> for &PolynomialBase<M> {
     }
 }
 
+// Special implementations for MonomialDyn + LinearMonomial/QuadraticMonomial
+impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<MonomialDyn> {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(MonomialDyn::from(monomial.clone()), *coeff);
+        }
+        result
+    }
+}
+
+impl Add<&PolynomialBase<QuadraticMonomial>> for &PolynomialBase<MonomialDyn> {
+    type Output = PolynomialBase<MonomialDyn>;
+    fn add(self, rhs: &PolynomialBase<QuadraticMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(MonomialDyn::from(monomial.clone()), *coeff);
+        }
+        result
+    }
+}
+
+impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<QuadraticMonomial> {
+    type Output = PolynomialBase<QuadraticMonomial>;
+    fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
+        let mut result = self.clone();
+        for (monomial, coeff) in rhs {
+            result.add_term(QuadraticMonomial::from(monomial.clone()), *coeff);
+        }
+        result
+    }
+}
+
 impl<M: Monomial> Sum for PolynomialBase<M> {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         iter.fold(Self::default(), Add::add)

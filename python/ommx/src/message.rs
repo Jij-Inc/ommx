@@ -41,11 +41,11 @@ impl Linear {
     }
 
     pub fn __add__(&self, rhs: &Linear) -> Linear {
-        Linear(self.0.clone() + rhs.0.clone())
+        Linear(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Linear) -> Linear {
-        Linear(self.0.clone() - rhs.0.clone())
+        Linear(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Linear) -> Quadratic {
@@ -92,15 +92,15 @@ impl Quadratic {
     }
 
     pub fn __add__(&self, rhs: &Quadratic) -> Quadratic {
-        Quadratic(self.0.clone() + rhs.0.clone())
+        Quadratic(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Quadratic) -> Quadratic {
-        Quadratic(self.0.clone() - rhs.0.clone())
+        Quadratic(&self.0 - &rhs.0)
     }
 
-    pub fn __mul__(&self, _rhs: &Quadratic) -> Polynomial {
-        todo!()
+    pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
+        Polynomial(&self.0 * &rhs.0)
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Quadratic> {
@@ -108,8 +108,8 @@ impl Quadratic {
         Ok(Quadratic(&self.0 + coeff))
     }
 
-    pub fn add_linear(&self, _linear: &Linear) -> Quadratic {
-        todo!()
+    pub fn add_linear(&self, linear: &Linear) -> Quadratic {
+        Quadratic(&self.0 + &linear.0)
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Quadratic> {
@@ -117,8 +117,8 @@ impl Quadratic {
         Ok(Quadratic(self.0.clone() * coeff))
     }
 
-    pub fn mul_linear(&self, _linear: &Linear) -> Polynomial {
-        todo!()
+    pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(&self.0 * &linear.0)
     }
 }
 
@@ -158,8 +158,8 @@ impl Polynomial {
         Polynomial(&self.0 - &rhs.0)
     }
 
-    pub fn __mul__(&self, _rhs: &Polynomial) -> Polynomial {
-        todo!()
+    pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
+        Polynomial(&self.0 * &rhs.0)
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Polynomial> {
@@ -167,12 +167,12 @@ impl Polynomial {
         Ok(Polynomial(&self.0 + coeff))
     }
 
-    pub fn add_linear(&self, _linear: &Linear) -> Polynomial {
-        todo!()
+    pub fn add_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(&self.0 + &linear.0)
     }
 
-    pub fn add_quadratic(&self, _quadratic: &Quadratic) -> Polynomial {
-        todo!()
+    pub fn add_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
+        Polynomial(&self.0 + &quadratic.0)
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Polynomial> {
@@ -180,12 +180,12 @@ impl Polynomial {
         Ok(Polynomial(self.0.clone() * coeff))
     }
 
-    pub fn mul_linear(&self, _linear: &Linear) -> Polynomial {
-        todo!()
+    pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
+        Polynomial(&self.0 * &linear.0)
     }
 
-    pub fn mul_quadratic(&self, _quadratic: &Quadratic) -> Polynomial {
-        todo!()
+    pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
+        Polynomial(&self.0 * &quadratic.0)
     }
 }
 
@@ -239,49 +239,49 @@ impl Function {
     }
 
     pub fn __add__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() + rhs.0.clone())
+        Function(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() - rhs.0.clone())
+        Function(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() * rhs.0.clone())
+        Function(&self.0 * &rhs.0)
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
         let coeff: Coefficient = scalar.try_into()?;
-        Ok(Function(self.0.clone() + coeff))
+        Ok(Function(&self.0 + coeff))
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Function {
-        Function(self.0.clone() + linear.0.clone())
+        Function(&self.0 + &linear.0)
     }
 
     pub fn add_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(self.0.clone() + quadratic.0.clone())
+        Function(&self.0 + &quadratic.0)
     }
 
     pub fn add_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(self.0.clone() + polynomial.0.clone())
+        Function(&self.0 + &polynomial.0)
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Function> {
         let coeff: Coefficient = scalar.try_into()?;
-        Ok(Function(self.0.clone() * coeff))
+        Ok(Function(&self.0 * coeff))
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Function {
-        Function(self.0.clone() * linear.0.clone())
+        Function(&self.0 * &linear.0)
     }
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(self.0.clone() * quadratic.0.clone())
+        Function(&self.0 * &quadratic.0)
     }
 
     pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(self.0.clone() * polynomial.0.clone())
+        Function(&self.0 * &polynomial.0)
     }
 
     pub fn content_factor(&self) -> Result<f64> {
