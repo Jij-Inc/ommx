@@ -67,3 +67,84 @@ pub fn format_polynomial(
     }
     Ok(())
 }
+
+impl<M> fmt::Display for crate::PolynomialBase<M>
+where
+    M: crate::Monomial + Into<MonomialDyn>,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.num_terms() == 0 {
+            return write!(f, "0");
+        }
+        format_polynomial(
+            f,
+            self.iter()
+                .map(|(monomial, coefficient)| (monomial.clone().into(), coefficient.into_inner())),
+        )
+    }
+}
+
+impl fmt::Display for crate::Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            crate::Function::Zero => write!(f, "0"),
+            crate::Function::Constant(c) => write!(f, "{}", c.into_inner()),
+            crate::Function::Linear(linear) => write!(f, "{}", linear),
+            crate::Function::Quadratic(quadratic) => write!(f, "{}", quadratic),
+            crate::Function::Polynomial(polynomial) => write!(f, "{}", polynomial),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{coeff, linear, quadratic, Linear};
+
+    #[test]
+    fn test_polynomial_base_display_empty() {
+        let poly: Linear = Linear::default();
+        assert_eq!(format!("{}", poly), "0");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_single_term() {
+        let poly = coeff!(3.0) * linear!(1);
+        assert_eq!(format!("{}", poly), "3*x1");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_constant() {
+        let poly = Linear::from(coeff!(5.0));
+        assert_eq!(format!("{}", poly), "5");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_multiple_terms() {
+        let poly = coeff!(2.0) * linear!(1) - coeff!(3.0) * linear!(2) + coeff!(1.0);
+
+        let result = format!("{}", poly);
+        // Terms should be sorted by degree (highest first), then lexicographically
+        assert_eq!(result, "2*x1 - 3*x2 + 1");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_quadratic() {
+        let poly = coeff!(4.0) * quadratic!(1, 2) - coeff!(2.0) * quadratic!(1) + coeff!(3.0);
+
+        let result = format!("{}", poly);
+        // Quadratic term should come first (highest degree), then linear, then constant
+        assert_eq!(result, "4*x1*x2 - 2*x1 + 3");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_coefficient_one() {
+        let poly = coeff!(1.0) * linear!(1);
+        assert_eq!(format!("{}", poly), "x1");
+    }
+
+    #[test]
+    fn test_polynomial_base_display_coefficient_negative_one() {
+        let poly = coeff!(-1.0) * linear!(1);
+        assert_eq!(format!("{}", poly), "-x1");
+    }
+}

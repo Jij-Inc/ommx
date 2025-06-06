@@ -161,6 +161,42 @@ impl One for Function {
     }
 }
 
+// Add support for &Function operations with references
+impl Mul<&Coefficient> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Coefficient) -> Self::Output {
+        self.clone() * *rhs
+    }
+}
+
+impl Mul<Coefficient> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Linear> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Linear) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Quadratic> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Quadratic) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Polynomial> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Polynomial) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
 // Add property-based tests for multiplication of Function
 #[cfg(test)]
 mod tests {

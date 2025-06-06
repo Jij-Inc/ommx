@@ -20,8 +20,12 @@ pub use polynomial::*;
 pub use quadratic::*;
 
 use crate::{coeff, v1::State, Coefficient, VariableID};
+use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
-use num::One;
+use num::{
+    integer::{gcd, lcm},
+    One,
+};
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
@@ -143,6 +147,30 @@ impl<M: Monomial> PolynomialBase<M> {
             .map(|coefficient| coefficient.abs())
             .max()
     }
+
+    /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
+    ///
+    /// This returns `Coefficient::one()` for zero polynomial. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    pub fn content_factor(&self) -> Result<Coefficient> {
+        let mut numer_gcd = 0;
+        let mut denom_lcm: i64 = 1;
+        for coefficient in self.terms.values() {
+            let r = num::Rational64::approximate_float(coefficient.into_inner())
+                .context("Cannot approximate coefficient in 64-bit rational")?;
+            numer_gcd = gcd(numer_gcd, *r.numer());
+            denom_lcm
+                .checked_mul(*r.denom())
+                .context("Overflow detected while evaluating minimal integer coefficient multiplier. This means it is hard to make the all coefficient integer")?;
+            denom_lcm = lcm(denom_lcm, *r.denom());
+        }
+
+        if numer_gcd == 0 {
+            Ok(Coefficient::one())
+        } else {
+            let result = (denom_lcm as f64 / numer_gcd as f64).abs();
+            Coefficient::try_from(result).context("Content factor should be non-zero")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -188,5 +216,46 @@ mod tests {
             ),
         ]
         "###);
+    }
+
+    #[test]
+    fn test_content_factor() {
+        use crate::linear;
+        use ::approx::assert_abs_diff_eq;
+
+        // Test with simple rational coefficients
+        // 1/2 * x1 + 1/3 * x2 => content factor should be 6
+        let p = coeff!(0.5) * linear!(1) + Coefficient::try_from(1.0 / 3.0).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_abs_diff_eq!(factor.into_inner(), 6.0);
+
+        // Test with integer coefficients (should return 1)
+        let p = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_eq!(factor, Coefficient::one());
+
+        // Test with zero polynomial (empty terms)
+        let p: Linear = PolynomialBase::default();
+        let factor = p.content_factor().unwrap();
+        assert_eq!(factor, Coefficient::one());
+
+        // Test with more complex rational coefficients
+        // 2/3 * x1 + 2/5 * x2 => content factor should be 15/2
+        let p = Coefficient::try_from(2.0 / 3.0).unwrap() * linear!(1)
+            + Coefficient::try_from(2.0 / 5.0).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_abs_diff_eq!(factor.into_inner(), 15.0 / 2.0);
+
+        // Test with PI (irrational numbers)
+        use std::f64::consts::PI;
+        let p = Coefficient::try_from(PI).unwrap() * linear!(1)
+            + Coefficient::try_from(2.0 * PI).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        // For PI and 2*PI, the content factor should be approximately 1/PI
+        assert_abs_diff_eq!(factor.into_inner(), 1.0 / PI);
     }
 }

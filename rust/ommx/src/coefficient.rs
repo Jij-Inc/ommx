@@ -1,4 +1,4 @@
-use num::One;
+use num::{traits::Inv, One};
 use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
@@ -108,6 +108,14 @@ impl Sub for Coefficient {
 impl One for Coefficient {
     fn one() -> Self {
         Coefficient(NotNan::new(1.0).unwrap())
+    }
+}
+
+impl Inv for Coefficient {
+    type Output = Self;
+    fn inv(self) -> Self::Output {
+        // Non-zero coefficient is invertible
+        Self(self.0.into_inner().recip().try_into().unwrap())
     }
 }
 

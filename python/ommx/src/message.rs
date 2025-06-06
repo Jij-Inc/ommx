@@ -2,35 +2,38 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use approx::AbsDiffEq;
-use ommx::{v1, Evaluate, Message};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyBytes};
+use ommx::{v1, Coefficient, Evaluate, Message, Parse};
+use pyo3::{prelude::*, types::PyBytes};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Linear(v1::Linear);
+pub struct Linear(ommx::Linear);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Linear {
     #[staticmethod]
-    pub fn single_term(id: u64, coefficient: f64) -> Self {
-        Self(v1::Linear::single_term(id, coefficient))
+    pub fn single_term(id: u64, coefficient: f64) -> Result<Self> {
+        Ok(Self(ommx::Linear::single_term(
+            id.into(),
+            coefficient.try_into()?,
+        )))
     }
 
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let inner = v1::Linear::decode(bytes.as_bytes())
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self(inner))
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = v1::Linear::decode(bytes.as_bytes())?;
+        Ok(Self(Parse::parse(inner, &())?))
     }
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let bytes = self.0.encode_to_vec();
+        let inner: v1::Linear = self.0.clone().into();
+        let bytes = Message::encode_to_vec(&inner);
         Ok(PyBytes::new(py, &bytes))
     }
 
-    pub fn almost_equal(&self, other: &Linear, atol: f64) -> bool {
-        self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
+    pub fn almost_equal(&self, other: &Linear, atol: f64) -> Result<bool> {
+        Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?))
     }
 
     pub fn __repr__(&self) -> String {
@@ -38,42 +41,45 @@ impl Linear {
     }
 
     pub fn __add__(&self, rhs: &Linear) -> Linear {
-        Linear(self.0.clone() + rhs.0.clone())
+        Linear(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Linear) -> Linear {
-        Linear(self.0.clone() - rhs.0.clone())
+        Linear(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Linear) -> Quadratic {
-        Quadratic(self.0.clone() * rhs.0.clone())
+        Quadratic(&self.0 * &rhs.0)
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Linear {
-        Linear(self.0.clone() + scalar)
+    pub fn add_scalar(&self, scalar: f64) -> Result<Linear> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Linear(&self.0 + coeff))
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Linear {
-        Linear(self.0.clone() * scalar)
+    pub fn mul_scalar(&self, scalar: f64) -> Result<Linear> {
+        let scalar: Coefficient = scalar.try_into()?;
+        Ok(Linear(self.0.clone() * scalar))
     }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Quadratic(v1::Quadratic);
+pub struct Quadratic(ommx::Quadratic);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Quadratic {
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let inner = v1::Quadratic::decode(bytes.as_bytes())
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self(inner))
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = v1::Quadratic::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner, &())?;
+        Ok(Self(parsed))
     }
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let bytes = self.0.encode_to_vec();
+        let inner: v1::Quadratic = self.0.clone().into();
+        let bytes = Message::encode_to_vec(&inner);
         Ok(PyBytes::new(py, &bytes))
     }
 
@@ -86,50 +92,53 @@ impl Quadratic {
     }
 
     pub fn __add__(&self, rhs: &Quadratic) -> Quadratic {
-        Quadratic(self.0.clone() + rhs.0.clone())
+        Quadratic(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Quadratic) -> Quadratic {
-        Quadratic(self.0.clone() - rhs.0.clone())
+        Quadratic(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
-        Polynomial(self.0.clone() * rhs.0.clone())
+        Polynomial(&self.0 * &rhs.0)
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Quadratic {
-        Quadratic(self.0.clone() + scalar)
+    pub fn add_scalar(&self, scalar: f64) -> Result<Quadratic> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Quadratic(&self.0 + coeff))
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Quadratic {
-        Quadratic(self.0.clone() + linear.0.clone())
+        Quadratic(&self.0 + &linear.0)
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Quadratic {
-        Quadratic(self.0.clone() * scalar)
+    pub fn mul_scalar(&self, scalar: f64) -> Result<Quadratic> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Quadratic(self.0.clone() * coeff))
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
-        Polynomial(self.0.clone() * linear.0.clone())
+        Polynomial(&self.0 * &linear.0)
     }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Polynomial(v1::Polynomial);
+pub struct Polynomial(ommx::Polynomial);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Polynomial {
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let inner = v1::Polynomial::decode(bytes.as_bytes())
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self(inner))
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = v1::Polynomial::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner, &())?;
+        Ok(Self(parsed))
     }
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let bytes = self.0.encode_to_vec();
+        let inner: v1::Polynomial = self.0.clone().into();
+        let bytes = Message::encode_to_vec(&inner);
         Ok(PyBytes::new(py, &bytes))
     }
 
@@ -142,78 +151,82 @@ impl Polynomial {
     }
 
     pub fn __add__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(self.0.clone() + rhs.0.clone())
+        Polynomial(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(self.0.clone() - rhs.0.clone())
+        Polynomial(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(self.0.clone() * rhs.0.clone())
+        Polynomial(&self.0 * &rhs.0)
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Polynomial {
-        Polynomial(self.0.clone() + scalar)
+    pub fn add_scalar(&self, scalar: f64) -> Result<Polynomial> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Polynomial(&self.0 + coeff))
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Polynomial {
-        Polynomial(self.0.clone() + linear.0.clone())
+        Polynomial(&self.0 + &linear.0)
     }
 
     pub fn add_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
-        Polynomial(self.0.clone() + quadratic.0.clone())
+        Polynomial(&self.0 + &quadratic.0)
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Polynomial {
-        Polynomial(self.0.clone() * scalar)
+    pub fn mul_scalar(&self, scalar: f64) -> Result<Polynomial> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Polynomial(self.0.clone() * coeff))
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
-        Polynomial(self.0.clone() * linear.0.clone())
+        Polynomial(&self.0 * &linear.0)
     }
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
-        Polynomial(self.0.clone() * quadratic.0.clone())
+        Polynomial(&self.0 * &quadratic.0)
     }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Function(v1::Function);
+pub struct Function(ommx::Function);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Function {
     #[staticmethod]
-    pub fn from_scalar(scalar: f64) -> Self {
-        Self(v1::Function::from(scalar))
+    pub fn from_scalar(scalar: f64) -> Result<Self> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Self(ommx::Function::from(coeff)))
     }
 
     #[staticmethod]
     pub fn from_linear(linear: &Linear) -> Self {
-        Self(v1::Function::from(linear.0.clone()))
+        Self(ommx::Function::from(linear.0.clone()))
     }
 
     #[staticmethod]
     pub fn from_quadratic(quadratic: &Quadratic) -> Self {
-        Self(v1::Function::from(quadratic.0.clone()))
+        Self(ommx::Function::from(quadratic.0.clone()))
     }
 
     #[staticmethod]
     pub fn from_polynomial(polynomial: &Polynomial) -> Self {
-        Self(v1::Function::from(polynomial.0.clone()))
+        Self(ommx::Function::from(polynomial.0.clone()))
     }
 
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> PyResult<Self> {
-        let inner = v1::Function::decode(bytes.as_bytes())
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
-        Ok(Self(inner))
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = v1::Function::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner, &())?;
+        Ok(Self(parsed))
     }
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let bytes = self.0.encode_to_vec();
+        let inner: v1::Function = self.0.clone().into();
+        let bytes = Message::encode_to_vec(&inner);
         Ok(PyBytes::new(py, &bytes))
     }
 
@@ -226,51 +239,53 @@ impl Function {
     }
 
     pub fn __add__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() + rhs.0.clone())
+        Function(&self.0 + &rhs.0)
     }
 
     pub fn __sub__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() - rhs.0.clone())
+        Function(&self.0 - &rhs.0)
     }
 
     pub fn __mul__(&self, rhs: &Function) -> Function {
-        Function(self.0.clone() * rhs.0.clone())
+        Function(&self.0 * &rhs.0)
     }
 
-    pub fn add_scalar(&self, scalar: f64) -> Function {
-        Function(self.0.clone() + scalar)
+    pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Function(&self.0 + coeff))
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Function {
-        Function(self.0.clone() + linear.0.clone())
+        Function(&self.0 + &linear.0)
     }
 
     pub fn add_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(self.0.clone() + quadratic.0.clone())
+        Function(&self.0 + &quadratic.0)
     }
 
     pub fn add_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(self.0.clone() + polynomial.0.clone())
+        Function(&self.0 + &polynomial.0)
     }
 
-    pub fn mul_scalar(&self, scalar: f64) -> Function {
-        Function(self.0.clone() * scalar)
+    pub fn mul_scalar(&self, scalar: f64) -> Result<Function> {
+        let coeff: Coefficient = scalar.try_into()?;
+        Ok(Function(&self.0 * coeff))
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Function {
-        Function(self.0.clone() * linear.0.clone())
+        Function(&self.0 * &linear.0)
     }
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Function {
-        Function(self.0.clone() * quadratic.0.clone())
+        Function(&self.0 * &quadratic.0)
     }
 
     pub fn mul_polynomial(&self, polynomial: &Polynomial) -> Function {
-        Function(self.0.clone() * polynomial.0.clone())
+        Function(&self.0 * &polynomial.0)
     }
 
     pub fn content_factor(&self) -> Result<f64> {
-        self.0.content_factor()
+        self.0.content_factor().map(|c| c.into_inner())
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {

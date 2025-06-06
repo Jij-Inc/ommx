@@ -188,6 +188,42 @@ impl Neg for Function {
     }
 }
 
+// Add support for &Function operations with references
+impl Add<&Coefficient> for &Function {
+    type Output = Function;
+    fn add(self, rhs: &Coefficient) -> Self::Output {
+        self.clone() + *rhs
+    }
+}
+
+impl Add<Coefficient> for &Function {
+    type Output = Function;
+    fn add(self, rhs: Coefficient) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl Add<&Linear> for &Function {
+    type Output = Function;
+    fn add(self, rhs: &Linear) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl Add<&Quadratic> for &Function {
+    type Output = Function;
+    fn add(self, rhs: &Quadratic) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
+impl Add<&Polynomial> for &Function {
+    type Output = Function;
+    fn add(self, rhs: &Polynomial) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
