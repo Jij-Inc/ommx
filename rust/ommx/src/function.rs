@@ -1,6 +1,6 @@
 use crate::{Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic};
 use derive_more::From;
-use num::Zero;
+use num::{traits::Inv, One, Zero};
 use std::{borrow::Cow, fmt::Debug};
 
 mod add;
@@ -116,6 +116,19 @@ impl Function {
             Function::Linear(l) => Box::new(l.keys().map(|k| MonomialDyn::from(*k))),
             Function::Quadratic(q) => Box::new(q.keys().map(|k| MonomialDyn::from(*k))),
             Function::Polynomial(p) => Box::new(p.keys().cloned()),
+        }
+    }
+
+    /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
+    ///
+    /// This returns `1` for zero function. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    pub fn content_factor(&self) -> anyhow::Result<Coefficient> {
+        match self {
+            Function::Zero => Ok(Coefficient::one()),
+            Function::Constant(c) => Ok(c.inv()),
+            Function::Linear(l) => l.content_factor(),
+            Function::Quadratic(q) => q.content_factor(),
+            Function::Polynomial(p) => p.content_factor(),
         }
     }
 }

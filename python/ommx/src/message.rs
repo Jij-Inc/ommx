@@ -285,7 +285,7 @@ impl Function {
     }
 
     pub fn content_factor(&self) -> Result<f64> {
-        todo!()
+        self.0.content_factor().map(|c| c.into_inner())
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
