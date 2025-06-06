@@ -238,7 +238,7 @@ impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<MonomialDyn> {
     fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
         let mut result = self.clone();
         for (monomial, coeff) in rhs {
-            result.add_term(MonomialDyn::from(monomial.clone()), *coeff);
+            result.add_term(MonomialDyn::from(*monomial), *coeff);
         }
         result
     }
@@ -249,7 +249,7 @@ impl Add<&PolynomialBase<QuadraticMonomial>> for &PolynomialBase<MonomialDyn> {
     fn add(self, rhs: &PolynomialBase<QuadraticMonomial>) -> Self::Output {
         let mut result = self.clone();
         for (monomial, coeff) in rhs {
-            result.add_term(MonomialDyn::from(monomial.clone()), *coeff);
+            result.add_term(MonomialDyn::from(*monomial), *coeff);
         }
         result
     }
@@ -260,7 +260,7 @@ impl Add<&PolynomialBase<LinearMonomial>> for &PolynomialBase<QuadraticMonomial>
     fn add(self, rhs: &PolynomialBase<LinearMonomial>) -> Self::Output {
         let mut result = self.clone();
         for (monomial, coeff) in rhs {
-            result.add_term(QuadraticMonomial::from(monomial.clone()), *coeff);
+            result.add_term(QuadraticMonomial::from(*monomial), *coeff);
         }
         result
     }
