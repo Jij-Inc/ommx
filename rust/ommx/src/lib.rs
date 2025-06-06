@@ -166,6 +166,7 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use parse::*;
 pub use polynomial_base::*;
 pub use substitute::*;
 
