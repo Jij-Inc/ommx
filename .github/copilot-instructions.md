@@ -123,7 +123,19 @@ When implementing property-based tests (using `proptest`) for mathematical opera
 
 ## Common Pitfalls / Frequently Made Mistakes
 
-- **Incorrect `Coefficient` Creation:** When creating a `Coefficient` from an `f64` value, always use `Coefficient::try_from(value).unwrap()` instead of `Coefficient::from(value)`.
+- **Incorrect `Coefficient` Creation:** When creating a `Coefficient` from an `f64` value, always use `Coefficient::try_from(value).unwrap()` instead of `Coefficient::from(value)`. In test code and documentation, prefer using the `coeff!` macro for cleaner syntax (e.g., `coeff!(1.5)` instead of `Coefficient::try_from(1.5).unwrap()`).
+
+## Macros for Test Code and Documentation
+
+When writing test code and documentation examples, prefer using OMMX convenience macros for better readability and conciseness:
+
+- **`coeff!` macro**: Use `coeff!(value)` instead of `Coefficient::try_from(value).unwrap()` for creating coefficients.
+- **`linear!` macro**: Use `linear!(id)` for creating `ommx::Linear` monomials from variable ID literals (e.g., `linear!(1)` creates a linear monomial for variable x1).
+- **`quadratic!` macro**: Use `quadratic!(id)` for linear terms in quadratic space or `quadratic!(id1, id2)` for quadratic pair terms.
+- **`monomial!` macro**: Use `monomial!(id1, id2, ...)` for creating general monomials of any degree from variable ID literals.
+- **`assign!` macro**: Use `assign! { var_id <- expression, ... }` for creating acyclic variable assignments in test scenarios.
+
+**Important Note**: These macros accept only compile-time literals, not runtime values. For runtime values, use the corresponding constructor functions (e.g., `Coefficient::try_from()`, `LinearMonomial::Variable()`, etc.). These macros provide cleaner, more readable syntax in examples while maintaining the same functionality as their verbose counterparts.
 
 ## General Guidance
 - If relevant, consider the ommx library's conventions and APIs. Please ask if you need more specific details about ommx.
