@@ -84,6 +84,18 @@ where
     }
 }
 
+impl fmt::Display for crate::Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            crate::Function::Zero => write!(f, "0"),
+            crate::Function::Constant(c) => write!(f, "{}", c.into_inner()),
+            crate::Function::Linear(linear) => write!(f, "{}", linear),
+            crate::Function::Quadratic(quadratic) => write!(f, "{}", quadratic),
+            crate::Function::Polynomial(polynomial) => write!(f, "{}", polynomial),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{coeff, linear, quadratic, Linear};

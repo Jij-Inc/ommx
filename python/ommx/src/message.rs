@@ -37,7 +37,7 @@ impl Linear {
     }
 
     pub fn __repr__(&self) -> String {
-        todo!()
+        format!("Linear({})", self.0)
     }
 
     pub fn __add__(&self, rhs: &Linear) -> Linear {
@@ -88,7 +88,7 @@ impl Quadratic {
     }
 
     pub fn __repr__(&self) -> String {
-        todo!()
+        format!("Quadratic({})", self.0)
     }
 
     pub fn __add__(&self, rhs: &Quadratic) -> Quadratic {
@@ -147,7 +147,7 @@ impl Polynomial {
     }
 
     pub fn __repr__(&self) -> String {
-        todo!()
+        format!("Polynomial({})", self.0)
     }
 
     pub fn __add__(&self, rhs: &Polynomial) -> Polynomial {
@@ -235,7 +235,7 @@ impl Function {
     }
 
     pub fn __repr__(&self) -> String {
-        todo!()
+        format!("Function({})", self.0)
     }
 
     pub fn __add__(&self, rhs: &Function) -> Function {
