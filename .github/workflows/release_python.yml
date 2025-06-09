@@ -19,7 +19,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.13t
+          args: --release --out dist --interpreter 3.9 3.13t
           working-directory: ./python/ommx
           manylinux: manylinux_2_28
 
@@ -40,7 +40,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.13t
+          args: --release --out dist --interpreter 3.9 3.13t
           working-directory: ./python/ommx
 
       - name: Upload wheels
@@ -57,10 +57,7 @@ jobs:
         uses: actions/checkout@v4
       # Windows requires local Python
       - name: Setup Python
-        # TODO: Bump to v* type version, once 9e62be8 is inclued in release
-        # It must be at least STRICTLY newer than v5.4.0.
-        # Original PR: https://github.com/actions/setup-python/pull/973
-        uses: actions/setup-python@9e62be81b28222addecf85e47571213eb7680449
+        uses: actions/setup-python@v5.6.0
         with:
           python-version: 3.13t
           cache: "pip"
@@ -68,7 +65,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.8 3.13t
+          args: --release --out dist --interpreter 3.9 3.13t
           working-directory: ./python/ommx
 
       - name: Upload wheels
