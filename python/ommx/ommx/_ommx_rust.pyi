@@ -193,9 +193,7 @@ class ParametricInstance:
 
 class Polynomial:
     def __new__(
-        cls,
-        terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float],
-        atol: builtins.float = 1e-06,
+        cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
     ): ...
     @staticmethod
     def decode(bytes: bytes) -> Polynomial: ...

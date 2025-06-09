@@ -2,7 +2,7 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse};
+use ommx::{v1, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse};
 use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
@@ -321,13 +321,18 @@ pub struct Polynomial(ommx::Polynomial);
 #[pymethods]
 impl Polynomial {
     #[new]
-    #[pyo3(signature = (terms, atol=ATol::default().into_inner()))]
-    pub fn new(terms: BTreeMap<Vec<u64>, f64>, atol: f64) -> Result<Self> {
+    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> Result<Self> {
         let mut out = ommx::Polynomial::default();
         for (ids, coeff) in terms {
-            if coeff.abs() > atol {
-                let key = MonomialDyn::from_iter(ids.into_iter().map(|id| id.into()));
-                out.add_term(key, coeff.try_into()?);
+            match TryInto::<Coefficient>::try_into(coeff) {
+                Ok(coeff) => {
+                    let key = MonomialDyn::from_iter(ids.into_iter().map(|id| id.into()));
+                    out.add_term(key, coeff);
+                }
+                Err(CoefficientError::Zero) => {
+                    // Skip zero coefficients
+                }
+                Err(e) => return Err(e.into()),
             }
         }
         Ok(Self(out))
