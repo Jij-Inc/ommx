@@ -2,8 +2,8 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::LinearMonomial;
-use ommx::{v1, Coefficient, Evaluate, Message, Parse};
+use ommx::{v1, ATol, Coefficient, Evaluate, Message, Parse};
+use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -133,15 +133,18 @@ impl Quadratic {
         // Convert to VariableID and Coefficient
         let col_ids: Vec<_> = columns.into_iter().map(|id| id.into()).collect();
         let row_ids: Vec<_> = rows.into_iter().map(|id| id.into()).collect();
-        let coeffs: Result<Vec<_>> = values.into_iter().map(|v| v.try_into().map_err(anyhow::Error::from)).collect();
-        
+        let coeffs: Result<Vec<_>> = values
+            .into_iter()
+            .map(|v| v.try_into().map_err(anyhow::Error::from))
+            .collect();
+
         let mut quadratic = ommx::Quadratic::from_coo(col_ids, row_ids, coeffs?)?;
-        
+
         // Add linear part if provided
         if let Some(linear) = linear {
             quadratic = quadratic + &linear.0;
         }
-        
+
         Ok(Self(quadratic))
     }
 
@@ -212,7 +215,12 @@ impl Quadratic {
         self.0
             .quadratic_terms()
             .into_iter()
-            .map(|(pair, coeff)| ((pair.lower().into_inner(), pair.upper().into_inner()), coeff.into_inner()))
+            .map(|(pair, coeff)| {
+                (
+                    (pair.lower().into_inner(), pair.upper().into_inner()),
+                    coeff.into_inner(),
+                )
+            })
             .collect()
     }
 
@@ -240,19 +248,16 @@ pub struct Polynomial(ommx::Polynomial);
 #[pymethods]
 impl Polynomial {
     #[new]
-    #[pyo3(signature = (terms))]
-    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> Result<Self> {
-        // Convert to the format expected by Rust SDK
-        let mut converted_terms = std::collections::HashMap::default();
+    #[pyo3(signature = (terms, atol=ATol::default().into_inner()))]
+    pub fn new(terms: BTreeMap<Vec<u64>, f64>, atol: f64) -> Result<Self> {
+        let mut out = ommx::Polynomial::default();
         for (ids, coeff) in terms {
-            if coeff != 0.0 {
-                let variable_ids: Vec<ommx::VariableID> = ids.into_iter().map(|id| id.into()).collect();
-                let coefficient: ommx::Coefficient = coeff.try_into().map_err(anyhow::Error::from)?;
-                converted_terms.insert(variable_ids, coefficient);
+            if coeff.abs() > atol {
+                let key = MonomialDyn::from_iter(ids.into_iter().map(|id| id.into()));
+                out.add_term(key, coeff.try_into()?);
             }
         }
-        
-        Ok(Self(ommx::Polynomial::from_terms(converted_terms)))
+        Ok(Self(out))
     }
 
     #[staticmethod]
@@ -316,8 +321,7 @@ impl Polynomial {
 
     pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
         self.0
-            .terms()
-            .into_iter()
+            .iter()
             .map(|(ids, coeff)| {
                 let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
                 (u64_ids, coeff.into_inner())

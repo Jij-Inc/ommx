@@ -391,29 +391,6 @@ impl Monomial for MonomialDyn {
     }
 }
 
-impl Polynomial {
-    /// Get all terms as a map from variable ID vector to coefficient
-    /// These are always non-zero, so we return Coefficient
-    pub fn terms(&self) -> FnvHashMap<Vec<VariableID>, Coefficient> {
-        self.iter()
-            .map(|(monomial, coeff)| {
-                let ids: Vec<VariableID> = monomial.iter().copied().collect();
-                (ids, *coeff)
-            })
-            .collect()
-    }
-
-    /// Create a new polynomial from a map of variable ID vectors to coefficients
-    pub fn from_terms(terms: FnvHashMap<Vec<VariableID>, Coefficient>) -> Self {
-        let mut result = Self::default();
-        for (ids, coeff) in terms {
-            let monomial = MonomialDyn::new(ids);
-            result.add_term(monomial, coeff);
-        }
-        result
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
