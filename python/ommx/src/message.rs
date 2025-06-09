@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{v1, Coefficient, Evaluate, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -76,6 +77,14 @@ impl Linear {
     pub fn mul_scalar(&self, scalar: f64) -> Result<Linear> {
         let scalar: Coefficient = scalar.try_into()?;
         Ok(Linear(self.0.clone() * scalar))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (terms, constant=0.0))]
+    pub fn new(terms: BTreeMap<u64, f64>, constant: f64) -> Result<Self> {
+        let linear = ommx::v1::Linear::new(terms.into_iter(), constant);
+        let parsed = ommx::Parse::parse(linear, &())?;
+        Ok(Self(parsed))
     }
 }
 
