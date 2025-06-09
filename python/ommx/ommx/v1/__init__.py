@@ -261,7 +261,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if not isinstance(objective, Function):
                 objective = Function(objective)
             raw_objective = _Function()
-            raw_objective.FromString(objective.to_bytes())
+            raw_objective.ParseFromString(objective.to_bytes())
         else:
             raw_objective = objective
 
