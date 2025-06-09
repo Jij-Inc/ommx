@@ -297,6 +297,20 @@ impl Quadratic {
         );
         Ok(Self(inner))
     }
+
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
+        use ommx::{Evaluate, Message};
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.evaluate(&state, ommx::ATol::default())
+    }
+
+    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Quadratic> {
+        use ommx::Message;
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let mut inner = self.0.clone();
+        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        Ok(Quadratic(inner))
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -408,6 +422,20 @@ impl Polynomial {
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
         );
         Ok(Self(inner))
+    }
+
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
+        use ommx::{Evaluate, Message};
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.evaluate(&state, ommx::ATol::default())
+    }
+
+    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Polynomial> {
+        use ommx::Message;
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let mut inner = self.0.clone();
+        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        Ok(Polynomial(inner))
     }
 }
 
@@ -551,5 +579,19 @@ impl Function {
             ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
         );
         Ok(Self(inner))
+    }
+
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
+        use ommx::{Evaluate, Message};
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.evaluate(&state, ommx::ATol::default())
+    }
+
+    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Function> {
+        use ommx::Message;
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let mut inner = self.0.clone();
+        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        Ok(Function(inner))
     }
 }

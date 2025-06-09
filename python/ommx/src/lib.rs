@@ -51,14 +51,8 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Rng>()?;
 
     // Evaluate
-    m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_polynomial, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_function, m)?)?;
     m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
     m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;

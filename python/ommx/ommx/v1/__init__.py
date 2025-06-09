@@ -2534,12 +2534,10 @@ class Quadratic(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_quadratic(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -2563,10 +2561,8 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_quadratic(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Quadratic.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Quadratic.from_raw(new_raw)
 
     @property
     def linear(self) -> Linear | None:
@@ -2701,12 +2697,10 @@ class Polynomial(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_polynomial(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -2730,10 +2724,8 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_polynomial(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Polynomial.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
         return self.raw.__repr__()
@@ -2881,12 +2873,10 @@ class Function(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_function(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Function:
         """
@@ -2910,10 +2900,8 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_function(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Function.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
         """
