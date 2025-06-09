@@ -2462,8 +2462,7 @@ class Linear(AsConstraint):
             return Linear.from_raw(self.raw.mul_scalar(other))
         if isinstance(other, (DecisionVariable, Linear)):
             rhs = Linear.from_object(other)
-            raise NotImplementedError()
-            # return Quadratic.from_raw(self.raw * rhs.raw)
+            return Quadratic.from_raw(self.raw * rhs.raw)
         return NotImplemented
 
     def __rmul__(self, other):
@@ -2835,7 +2834,7 @@ class Function(AsConstraint):
         elif isinstance(inner, _ommx_rust.Function):
             self.raw = inner
         elif isinstance(inner, _Function):
-            self.from_bytes(inner.SerializeToString())
+            self.raw = _ommx_rust.Function.decode(inner.SerializeToString())
         else:
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
