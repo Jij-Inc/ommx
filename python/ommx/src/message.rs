@@ -10,6 +10,7 @@ use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Linear(ommx::Linear);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -121,6 +122,29 @@ pub struct Quadratic(ommx::Quadratic);
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Quadratic {
+    #[new]
+    #[pyo3(signature = (columns, rows, values, linear=None))]
+    pub fn new(
+        columns: Vec<u64>,
+        rows: Vec<u64>,
+        values: Vec<f64>,
+        linear: Option<Linear>,
+    ) -> Result<Self> {
+        // Convert to VariableID and Coefficient
+        let col_ids: Vec<_> = columns.into_iter().map(|id| id.into()).collect();
+        let row_ids: Vec<_> = rows.into_iter().map(|id| id.into()).collect();
+        let coeffs: Result<Vec<_>> = values.into_iter().map(|v| v.try_into().map_err(anyhow::Error::from)).collect();
+        
+        let mut quadratic = ommx::Quadratic::from_coo(col_ids, row_ids, coeffs?)?;
+        
+        // Add linear part if provided
+        if let Some(linear) = linear {
+            quadratic = quadratic + &linear.0;
+        }
+        
+        Ok(Self(quadratic))
+    }
+
     #[staticmethod]
     pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = v1::Quadratic::decode(bytes.as_bytes())?;
@@ -172,6 +196,26 @@ impl Quadratic {
         Polynomial(&self.0 * &linear.0)
     }
 
+    pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .linear_terms()
+            .into_iter()
+            .map(|(id, coeff)| (id.into_inner(), coeff.into_inner()))
+            .collect()
+    }
+
+    pub fn constant_term(&self) -> f64 {
+        self.0.constant_term()
+    }
+
+    pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
+        self.0
+            .quadratic_terms()
+            .into_iter()
+            .map(|(pair, coeff)| ((pair.lower().into_inner(), pair.upper().into_inner()), coeff.into_inner()))
+            .collect()
+    }
+
     #[staticmethod]
     #[pyo3(signature = (
         rng,
@@ -195,6 +239,22 @@ pub struct Polynomial(ommx::Polynomial);
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Polynomial {
+    #[new]
+    #[pyo3(signature = (terms))]
+    pub fn new(terms: BTreeMap<Vec<u64>, f64>) -> Result<Self> {
+        // Convert to the format expected by Rust SDK
+        let mut converted_terms = std::collections::HashMap::default();
+        for (ids, coeff) in terms {
+            if coeff != 0.0 {
+                let variable_ids: Vec<ommx::VariableID> = ids.into_iter().map(|id| id.into()).collect();
+                let coefficient: ommx::Coefficient = coeff.try_into().map_err(anyhow::Error::from)?;
+                converted_terms.insert(variable_ids, coefficient);
+            }
+        }
+        
+        Ok(Self(ommx::Polynomial::from_terms(converted_terms)))
+    }
+
     #[staticmethod]
     pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = v1::Polynomial::decode(bytes.as_bytes())?;
@@ -252,6 +312,17 @@ impl Polynomial {
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
         Polynomial(&self.0 * &quadratic.0)
+    }
+
+    pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
+        self.0
+            .terms()
+            .into_iter()
+            .map(|(ids, coeff)| {
+                let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
+                (u64_ids, coeff.into_inner())
+            })
+            .collect()
     }
 
     #[staticmethod]
@@ -375,6 +446,17 @@ impl Function {
             .required_ids()
             .into_iter()
             .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
+        self.0
+            .terms()
+            .into_iter()
+            .map(|(ids, coeff)| {
+                let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
+                (u64_ids, coeff.into_inner())
+            })
             .collect()
     }
 

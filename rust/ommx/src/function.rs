@@ -1,4 +1,5 @@
-use crate::{Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic};
+use crate::{Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic, VariableID};
+use fnv::FnvHashMap;
 use derive_more::From;
 use num::{traits::Inv, One, Zero};
 use std::{borrow::Cow, fmt::Debug};
@@ -130,5 +131,16 @@ impl Function {
             Function::Quadratic(q) => q.content_factor(),
             Function::Polynomial(p) => p.content_factor(),
         }
+    }
+
+    /// Get all terms as a map from variable ID vector to coefficient
+    /// These are always non-zero, so we return Coefficient
+    pub fn terms(&self) -> FnvHashMap<Vec<VariableID>, Coefficient> {
+        self.iter()
+            .map(|(monomial, coeff)| {
+                let ids: Vec<VariableID> = monomial.iter().copied().collect();
+                (ids, *coeff)
+            })
+            .collect()
     }
 }

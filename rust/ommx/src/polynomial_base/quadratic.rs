@@ -3,6 +3,7 @@ use crate::{
     random::{multi_choose, unique_integer_pairs},
     Monomial, VariableID,
 };
+use fnv::FnvHashMap;
 use anyhow::{bail, Result};
 use derive_more::From;
 use proptest::prelude::*;
@@ -65,6 +66,53 @@ impl From<Linear> for Quadratic {
         Self {
             terms: l.terms.into_iter().map(|(k, v)| (k.into(), v)).collect(),
         }
+    }
+}
+
+impl Quadratic {
+    /// Get linear terms as a map from variable ID to coefficient
+    /// These are always non-zero, so we return Coefficient
+    pub fn linear_terms(&self) -> FnvHashMap<VariableID, Coefficient> {
+        self.terms
+            .iter()
+            .filter_map(|(monomial, coeff)| match monomial {
+                QuadraticMonomial::Linear(id) => Some((*id, *coeff)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Get constant term, zero if not present
+    pub fn constant_term(&self) -> f64 {
+        self.get(&QuadraticMonomial::Constant)
+            .map(|c| c.into_inner())
+            .unwrap_or(0.0)
+    }
+
+    /// Get quadratic terms as a map from variable ID pair to coefficient
+    /// These are always non-zero, so we return Coefficient
+    pub fn quadratic_terms(&self) -> FnvHashMap<VariableIDPair, Coefficient> {
+        self.terms
+            .iter()
+            .filter_map(|(monomial, coeff)| match monomial {
+                QuadraticMonomial::Pair(pair) => Some((*pair, *coeff)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Create a new quadratic from lists of columns, rows, and values
+    pub fn from_coo(
+        columns: impl IntoIterator<Item = VariableID>,
+        rows: impl IntoIterator<Item = VariableID>,
+        values: impl IntoIterator<Item = Coefficient>,
+    ) -> Result<Self> {
+        let mut result = Self::default();
+        for ((col, row), val) in columns.into_iter().zip(rows).zip(values) {
+            let pair = VariableIDPair::new(col, row);
+            result.add_term(QuadraticMonomial::Pair(pair), val);
+        }
+        Ok(result)
     }
 }
 
