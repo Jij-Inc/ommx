@@ -7,6 +7,7 @@ mod instance;
 mod message;
 mod mps;
 mod qplib;
+mod random;
 
 pub use artifact::*;
 pub use builder::*;
@@ -17,6 +18,7 @@ pub use instance::*;
 pub use message::*;
 pub use mps::*;
 pub use qplib::*;
+pub use random::*;
 
 use pyo3::prelude::*;
 
@@ -44,6 +46,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
+
+    // Random
+    m.add_class::<Rng>()?;
 
     // Evaluate
     m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;

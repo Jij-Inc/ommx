@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
+use crate::Rng;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{v1, Coefficient, Evaluate, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};
+use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -18,6 +19,21 @@ impl Linear {
             id.into(),
             coefficient.try_into()?,
         )))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (
+        rng,
+        num_terms=ommx::LinearParameters::default().num_terms(),
+        max_id=ommx::LinearParameters::default().max_id().into_inner()
+    ))]
+    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> Result<Self> {
+        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+        let inner: ommx::Linear = ommx::random::random(
+            &mut rng,
+            ommx::LinearParameters::new(num_terms, max_id.into())?,
+        );
+        Ok(Self(inner))
     }
 
     #[staticmethod]
