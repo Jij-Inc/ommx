@@ -249,8 +249,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         | DecisionVariable
         | Linear
         | Quadratic
-        | Polynomial
-        | _Function,
+        | Polynomial,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
@@ -263,7 +262,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=as_function(objective),
+                objective=Function(objective),
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -387,7 +386,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
         """
-        self.raw.objective.CopyFrom(as_function(value))
+        self.raw.objective.CopyFrom(Function(value))
 
     @property
     def sense(self) -> _Instance.Sense.ValueType:
@@ -1522,8 +1521,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         | DecisionVariable
         | Linear
         | Quadratic
-        | Polynomial
-        | _Function,
+        | Polynomial,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
@@ -1537,7 +1535,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=as_function(objective),
+                objective=Function(objective),
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -2799,38 +2797,46 @@ class Function(AsConstraint):
         | Linear
         | Quadratic
         | Polynomial
-        | _Function,
     ):
-        self.raw = as_function(inner)
+        if isinstance(inner, (int, float)):
+            self.raw = _ommx_rust.Function.from_scalar(inner)
+        elif isinstance(inner, DecisionVariable):
+            self.raw = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.single_term(inner.raw.id, 1)
+            )
+        elif isinstance(inner, Linear):
+            self.raw = _ommx_rust.Function.from_linear(inner.raw)
+        elif isinstance(inner, Quadratic):
+            self.raw = _ommx_rust.Function.from_quadratic(inner.raw)
+        elif isinstance(inner, Polynomial):
+            self.raw = _ommx_rust.Function.from_polynomial(inner.raw)
+        else:
+            raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
     @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        if self.raw.HasField("constant"):
-            return {(): self.raw.constant}
-        if self.raw.HasField("linear"):
-            return Linear.from_raw(self.raw.linear).terms
-        if self.raw.HasField("quadratic"):
-            return Quadratic.from_raw(self.raw.quadratic).terms
-        if self.raw.HasField("polynomial"):
-            return Polynomial.from_raw(self.raw.polynomial).terms
-        raise ValueError("Unknown function type")
+    def terms(self) -> dict[list[int], float]:
+        return self.raw.terms()
+
+    @staticmethod
+    def from_raw(raw: _ommx_rust.Function) -> Function:
+        new = Function(0)
+        new.raw = raw
+        return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Function:
         new = Function(0)
-        new.raw.ParseFromString(data)
+        new.raw = _ommx_rust.Function.decode(data)
         return new
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
         """
         Compare two functions have almost equal coefficients as a polynomial
         """
-        lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal(other.raw, atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2895,9 +2901,7 @@ class Function(AsConstraint):
         """
         Get the IDs of decision variables used in the function.
         """
-        return _ommx_rust.Function.decode(
-            self.raw.SerializeToString()
-        ).used_decision_variable_ids()
+        return self.raw.used_decision_variable_ids()
 
     def content_factor(self) -> float:
         r"""
@@ -2933,10 +2937,10 @@ class Function(AsConstraint):
         In practice, you must check if the multiplier is enough small.
 
         """
-        return _ommx_rust.Function.decode(self.raw.SerializeToString()).content_factor()
+        return self.raw.content_factor()
 
     def __repr__(self) -> str:
-        return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
     def __add__(
         self,
@@ -2955,23 +2959,16 @@ class Function(AsConstraint):
                 _ommx_rust.Linear.single_term(other.raw.id, 1)
             )
         elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_linear(other.raw)
         elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(
-                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_quadratic(other.raw)
         elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(
-                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_polynomial(other.raw)
         elif isinstance(other, Function):
-            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+            rhs = other.raw
         else:
             return NotImplemented
-        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        return Function.from_bytes((new + rhs).encode())
+        return Function.from_raw(self.raw + rhs)
 
     def __radd__(self, other):
         return self + other
@@ -3008,23 +3005,16 @@ class Function(AsConstraint):
                 _ommx_rust.Linear.single_term(other.raw.id, 1)
             )
         elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_linear(other.raw)
         elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(
-                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_quadratic(other.raw)
         elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(
-                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_polynomial(other.raw)
         elif isinstance(other, Function):
-            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+            rhs = other.raw
         else:
             return NotImplemented
-        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        return Function.from_bytes((new * rhs).encode())
+        return Function.from_raw(self.raw * rhs)
 
     def __rmul__(self, other):
         return self * other
@@ -3091,7 +3081,7 @@ class Constraint:
 
         self.raw = _Constraint(
             id=id,
-            function=as_function(function),
+            function=Function(function),
             equality=equality,
             name=name,
             description=description,
