@@ -250,16 +250,20 @@ class Instance(InstanceBase, UserAnnotationBase):
         | Linear
         | Quadratic
         | Polynomial
-        | Function,
+        | Function
+        | _Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
-        if not isinstance(objective, Function):
-            objective = Function(objective)
-        raw_objective = _Function()
-        raw_objective.FromString(objective.to_bytes())
+        if not isinstance(objective, _Function):
+            if not isinstance(objective, Function):
+                objective = Function(objective)
+            raw_objective = _Function()
+            raw_objective.FromString(objective.to_bytes())
+        else:
+            raw_objective = objective
 
         return Instance(
             _Instance(
