@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
+from functools import singledispatchmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -2270,35 +2271,46 @@ class Linear(AsConstraint):
 
     """
 
-    raw: _Linear
+    raw: _ommx_rust.Linear
 
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
-        self.raw = _Linear(
-            terms=[
-                _Linear.Term(id=id, coefficient=coefficient)
-                for id, coefficient in terms.items()
-            ],
-            constant=constant,
-        )
+        self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
 
-    @staticmethod
-    def from_raw(raw: _Linear) -> Linear:
+    @singledispatchmethod
+    @classmethod
+    def from_object(cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear) -> Linear:
+        if isinstance(obj, Linear):
+            return obj
+        raise TypeError( f"Cannot create Linear from {type(obj).__name__}. ")
+
+    @from_object.register(_ommx_rust.Linear)
+    @classmethod
+    def from_raw(cls, obj: _ommx_rust.Linear) -> Linear:
         new = Linear(terms={})
-        new.raw = raw
+        new.raw = obj
         return new
+
+    @from_object.register(float)
+    @classmethod
+    def from_float(cls, obj: float) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
+
+    @from_object.register(int)
+    @classmethod
+    def from_integer(cls, obj: int) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
+
+    @from_object.register(DecisionVariable)
+    @classmethod
+    def from_decision_variable(cls, obj: DecisionVariable) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
 
     @property
     def linear_terms(self) -> dict[int, float]:
         """
-        Get the terms of the linear function as a dictionary
+        Get the terms of the linear function as a dictionary, except for the constant term.
         """
-        out = {}
-        for term in self.raw.terms:
-            if term.id not in out:
-                out[term.id] = term.coefficient
-            else:
-                out[term.id] += term.coefficient
-        return out
+        return self.raw.linear_terms()
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
@@ -2314,16 +2326,15 @@ class Linear(AsConstraint):
         """
         Get the constant term of the linear function
         """
-        return self.raw.constant
+        return self.raw.constant_term()
 
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
-        new = Linear(terms={})
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.Linear.decode(data)
+        return Linear.from_raw(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     @deprecated("Use almost_equal method instead.")
     def equals_to(self, other: Linear) -> bool:
@@ -2336,9 +2347,7 @@ class Linear(AsConstraint):
         """
         Compare two linear functions have almost equal coefficients and constant.
         """
-        lhs = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal( other.raw, atol=atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2394,29 +2403,24 @@ class Linear(AsConstraint):
         return Linear.from_bytes(new)
 
     def __repr__(self) -> str:
-        return f"Linear({_ommx_rust.Linear.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
-    def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            self.raw.constant += other
-            return self
-        if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Linear.from_bytes((new + rhs).encode())
-        if isinstance(other, Linear):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Linear.from_bytes((new + rhs).encode())
-        return NotImplemented
+    def __add__(self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            return Linear.from_raw(self.raw + rhs.raw)
+        except TypeError:
+            return NotImplemented
 
     def __radd__(self, other):
         return self + other
 
-    def __sub__(self, other: int | float | DecisionVariable | Linear) -> Linear:
-        if isinstance(other, (int, float, DecisionVariable, Linear)):
-            return self + (-other)
-        return NotImplemented
+    def __sub__(self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            return Linear.from_raw(self.raw - rhs.raw)
+        except TypeError:
+            return NotImplemented
 
     def __rsub__(self, other):
         return -self + other
@@ -2428,19 +2432,14 @@ class Linear(AsConstraint):
     def __mul__(self, other: DecisionVariable | Linear) -> Quadratic: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear
+        self, other: int | float | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear | Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            return Linear.from_bytes(new.mul_scalar(other).encode())
-        if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Quadratic.from_bytes((new * rhs).encode())
-        if isinstance(other, Linear):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Quadratic.from_bytes((new * rhs).encode())
+        if isinstance(other, (float, int)):
+            return Linear.from_raw(self.raw.mul_scalar(other))
+        if isinstance(other, (DecisionVariable, Linear)):
+            rhs = Linear.from_object(other)
+            raise NotImplementedError()
+            # return Quadratic.from_raw(self.raw * rhs.raw)
         return NotImplemented
 
     def __rmul__(self, other):
