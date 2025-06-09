@@ -2,7 +2,7 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{v1, ATol, Coefficient, Evaluate, Message, Monomial, Parse};
+use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse};
 use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
@@ -26,18 +26,23 @@ impl Linear {
 
     #[staticmethod]
     pub fn single_term(id: u64, coefficient: f64) -> Result<Self> {
-        Ok(Self(ommx::Linear::single_term(
-            id.into(),
-            coefficient.try_into()?,
-        )))
+        match TryInto::<Coefficient>::try_into(coefficient) {
+            Ok(coeff) => Ok(Self(ommx::Linear::single_term(id.into(), coeff))),
+            Err(CoefficientError::Zero) => Ok(Self(ommx::Linear::default())),
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[staticmethod]
     pub fn constant(constant: f64) -> Result<Self> {
-        Ok(Self(ommx::Linear::single_term(
-            LinearMonomial::Constant,
-            constant.try_into()?,
-        )))
+        match TryInto::<Coefficient>::try_into(constant) {
+            Ok(coeff) => Ok(Self(ommx::Linear::single_term(
+                LinearMonomial::Constant,
+                coeff,
+            ))),
+            Err(CoefficientError::Zero) => Ok(Self(ommx::Linear::default())), // Return zero if constant is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     #[staticmethod]
@@ -105,13 +110,19 @@ impl Linear {
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Linear> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Linear(&self.0 + coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Linear(&self.0 + coeff)),
+            Err(CoefficientError::Zero) => Ok(Linear(self.0.clone())), // Return unchanged if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Linear> {
-        let scalar: Coefficient = scalar.try_into()?;
-        Ok(Linear(self.0.clone() * scalar))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Linear(self.0.clone() * coeff)),
+            Err(CoefficientError::Zero) => Ok(Linear(ommx::Linear::default())), // Return zero if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 }
 
@@ -130,15 +141,33 @@ impl Quadratic {
         values: Vec<f64>,
         linear: Option<Linear>,
     ) -> Result<Self> {
-        // Convert to VariableID and Coefficient
+        // Convert to VariableID and Coefficient, filtering out zero values
         let col_ids: Vec<_> = columns.into_iter().map(|id| id.into()).collect();
         let row_ids: Vec<_> = rows.into_iter().map(|id| id.into()).collect();
-        let coeffs: Result<Vec<_>> = values
-            .into_iter()
-            .map(|v| v.try_into().map_err(anyhow::Error::from))
-            .collect();
 
-        let mut quadratic = ommx::Quadratic::from_coo(col_ids, row_ids, coeffs?)?;
+        let mut filtered_cols = Vec::new();
+        let mut filtered_rows = Vec::new();
+        let mut filtered_coeffs = Vec::new();
+
+        for ((col_id, row_id), value) in col_ids.into_iter().zip(row_ids).zip(values) {
+            match TryInto::<Coefficient>::try_into(value) {
+                Ok(coeff) => {
+                    filtered_cols.push(col_id);
+                    filtered_rows.push(row_id);
+                    filtered_coeffs.push(coeff);
+                }
+                Err(CoefficientError::Zero) => {
+                    // Skip zero coefficients
+                    continue;
+                }
+                Err(e) => {
+                    return Err(e.into()); // Return error for NaN or infinite
+                }
+            }
+        }
+
+        let mut quadratic =
+            ommx::Quadratic::from_coo(filtered_cols, filtered_rows, filtered_coeffs)?;
 
         // Add linear part if provided
         if let Some(linear) = linear {
@@ -182,8 +211,11 @@ impl Quadratic {
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Quadratic> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Quadratic(&self.0 + coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Quadratic(&self.0 + coeff)),
+            Err(CoefficientError::Zero) => Ok(Quadratic(self.0.clone())), // Return unchanged if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Quadratic {
@@ -191,8 +223,11 @@ impl Quadratic {
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Quadratic> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Quadratic(self.0.clone() * coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Quadratic(self.0.clone() * coeff)),
+            Err(CoefficientError::Zero) => Ok(Quadratic(ommx::Quadratic::default())), // Return zero if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
@@ -304,8 +339,11 @@ impl Polynomial {
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Polynomial> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Polynomial(&self.0 + coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Polynomial(&self.0 + coeff)),
+            Err(CoefficientError::Zero) => Ok(Polynomial(self.0.clone())), // Return unchanged if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Polynomial {
@@ -317,8 +355,11 @@ impl Polynomial {
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Polynomial> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Polynomial(self.0.clone() * coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Polynomial(self.0.clone() * coeff)),
+            Err(CoefficientError::Zero) => Ok(Polynomial(ommx::Polynomial::default())), // Return zero if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
@@ -365,8 +406,11 @@ pub struct Function(ommx::Function);
 impl Function {
     #[staticmethod]
     pub fn from_scalar(scalar: f64) -> Result<Self> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Self(ommx::Function::from(coeff)))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
+            Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())), // Return zero function if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     #[staticmethod]
@@ -418,8 +462,11 @@ impl Function {
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Function(&self.0 + coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Function(&self.0 + coeff)),
+            Err(CoefficientError::Zero) => Ok(Function(self.0.clone())), // Return unchanged if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn add_linear(&self, linear: &Linear) -> Function {
@@ -435,8 +482,11 @@ impl Function {
     }
 
     pub fn mul_scalar(&self, scalar: f64) -> Result<Function> {
-        let coeff: Coefficient = scalar.try_into()?;
-        Ok(Function(&self.0 * coeff))
+        match TryInto::<Coefficient>::try_into(scalar) {
+            Ok(coeff) => Ok(Function(&self.0 * coeff)),
+            Err(CoefficientError::Zero) => Ok(Function(ommx::Function::default())), // Return zero if scalar is zero
+            Err(e) => Err(e.into()), // Return error for NaN or infinite
+        }
     }
 
     pub fn mul_linear(&self, linear: &Linear) -> Function {
