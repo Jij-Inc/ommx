@@ -10,9 +10,6 @@ from functools import singledispatchmethod
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
-from .quadratic_pb2 import Quadratic as _Quadratic
-from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
-from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import (
     Equality,
     Constraint as _Constraint,

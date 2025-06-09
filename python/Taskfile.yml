@@ -75,6 +75,15 @@ tasks:
     cmds:
       - task: ommx:bench
 
+  lint:
+    desc: Run ruff check for all Python projects
+    cmds:
+      - task: ommx:lint
+      - task: ommx-openjij-adapter:lint
+      - task: ommx-python-mip-adapter:lint
+      - task: ommx-pyscipopt-adapter:lint
+      - task: ommx-highs-adapter:lint
+
   set-version:
     desc: Set the version for all Python projects
     cmds:

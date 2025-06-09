@@ -13,3 +13,9 @@ tasks:
       - uv run pytest -vv --doctest-modules
       - uv run pyright
       - uv run markdown-code-runner --verbose README.md
+      - task: lint
+
+  lint:
+    desc: Lint by ruff check
+    cmds:
+      - uv run ruff check

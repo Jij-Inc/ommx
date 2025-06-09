@@ -12,6 +12,7 @@ tasks:
     cmds:
       - task: pytest
       - task: pyright
+      - task: lint
 
   test-ci:
     desc: Run tests for OMMX Python SDK (CI mode; without pyright)
@@ -28,6 +29,11 @@ tasks:
     desc: Type check OMMX Python SDK
     cmds:
       - uv run pyright
+
+  lint:
+    desc: Lint by ruff check
+    cmds:
+      - uv run ruff check
 
   bench:
     desc: Run benchmarks for OMMX Python SDK
