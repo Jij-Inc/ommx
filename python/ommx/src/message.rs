@@ -1,9 +1,10 @@
-use std::collections::BTreeSet;
+use crate::Rng;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{v1, Coefficient, Evaluate, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};
+use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -18,6 +19,21 @@ impl Linear {
             id.into(),
             coefficient.try_into()?,
         )))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (
+        rng,
+        num_terms=ommx::LinearParameters::default().num_terms(),
+        max_id=ommx::LinearParameters::default().max_id().into_inner()
+    ))]
+    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> Result<Self> {
+        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+        let inner: ommx::Linear = ommx::random::random(
+            &mut rng,
+            ommx::LinearParameters::new(num_terms, max_id.into())?,
+        );
+        Ok(Self(inner))
     }
 
     #[staticmethod]
@@ -120,6 +136,21 @@ impl Quadratic {
     pub fn mul_linear(&self, linear: &Linear) -> Polynomial {
         Polynomial(&self.0 * &linear.0)
     }
+
+    #[staticmethod]
+    #[pyo3(signature = (
+        rng,
+        num_terms=ommx::QuadraticParameters::default().num_terms(),
+        max_id=ommx::QuadraticParameters::default().max_id().into_inner()
+    ))]
+    pub fn random(rng: &Rng, num_terms: usize, max_id: u64) -> Result<Self> {
+        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+        let inner: ommx::Quadratic = ommx::random::random(
+            &mut rng,
+            ommx::QuadraticParameters::new(num_terms, max_id.into())?,
+        );
+        Ok(Self(inner))
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -186,6 +217,22 @@ impl Polynomial {
 
     pub fn mul_quadratic(&self, quadratic: &Quadratic) -> Polynomial {
         Polynomial(&self.0 * &quadratic.0)
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (
+        rng,
+        num_terms=ommx::PolynomialParameters::default().num_terms(),
+        max_degree=ommx::PolynomialParameters::default().max_degree().into_inner(),
+        max_id=ommx::PolynomialParameters::default().max_id().into_inner()
+    ))]
+    pub fn random(rng: &Rng, num_terms: usize, max_degree: u32, max_id: u64) -> Result<Self> {
+        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+        let inner: ommx::Polynomial = ommx::random::random(
+            &mut rng,
+            ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
+        );
+        Ok(Self(inner))
     }
 }
 
@@ -294,5 +341,21 @@ impl Function {
             .into_iter()
             .map(|id| id.into_inner())
             .collect()
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (
+        rng,
+        num_terms=ommx::PolynomialParameters::default().num_terms(),
+        max_degree=ommx::PolynomialParameters::default().max_degree().into_inner(),
+        max_id=ommx::PolynomialParameters::default().max_id().into_inner()
+    ))]
+    pub fn random(rng: &Rng, num_terms: usize, max_degree: u32, max_id: u64) -> Result<Self> {
+        let mut rng = rng.lock().map_err(|_| anyhow!("Cannot get lock for RNG"))?;
+        let inner: ommx::Function = ommx::random::random(
+            &mut rng,
+            ommx::PolynomialParameters::new(num_terms, max_degree.into(), max_id.into())?,
+        );
+        Ok(Self(inner))
     }
 }
