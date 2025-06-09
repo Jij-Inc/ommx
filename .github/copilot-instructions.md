@@ -1,118 +1,85 @@
 # Coding Standards
-
 - Write all comments in English.
 - Add code comments only when necessary to explain complex logic or the reasoning behind a decision (the "why", not the "what"). Avoid obvious comments.
 - Ensure comments are about the code itself, not about the author or the process of writing the code.
 
 # Project Context
 
+OMMX is a library for standardizing mathematical optimization data formats using Protocol Buffers. The core logic is implemented in Rust with Python wrappers, creating a mixed Rust/Python project using PyO3/Maturin.
+
 ## Core Technologies & Languages
-- This project, ommx, primarily uses Rust and Python.
-- When generating Rust code, adhere to idiomatic Rust practices and the standard library.
-- When generating Python code, follow PEP 8 guidelines and use type hints where appropriate.
+- The project primarily uses Rust and Python.
+- Serialization and deserialization use Protocol Buffers (`.proto` files).
+- Python integration is handled via PyO3/Maturin.
+- Python dependencies are managed with `uv`, Rust dependencies with `cargo`.
+- Complex build/test tasks are managed via `Taskfile.yml`.
 
 ## Architectural Principles
-- The main logic of this project is primarily implemented in Rust, with Python acting as a wrapper or interface to utilize this Rust core. Future development should adhere to this principle.
-- A core goal of OMMX is to standardize data formats for mathematical optimization using Protocol Buffers.
-- Serialization and deserialization code for Rust and Python is generated from `.proto` files.
+- The main logic is primarily implemented in Rust, with Python as a wrapper or interface.
+- Protobuf-generated structs (e.g., `ommx::v1::Instance`) are for serialization/deserialization only.
+- Idiomatic Rust structs (e.g., `ommx::Instance`) are used for core logic, internal operations, and public-facing APIs.
+- Data flow:
+  1. When reading OMMX data: Deserialize to Protobuf structs → Convert to idiomatic Rust structs → Use internally.
+  2. When writing: Convert idiomatic Rust structs to Protobuf structs → Serialize.
 
 ## Repository Structure Overview
-- **`proto/`**: Protocol Buffer definitions for OMMX data structures
-- **`python/`**: Python-related code
-    - `ommx/`: Core Python SDK (mixed Rust/Python project using PyO3/Maturin)
-    - `ommx-*-adapter/`: Adapter packages for various optimization solvers
-- **`rust/`**: Rust crates
-    - `ommx/`: Core Rust implementation of the OMMX library
-    - `protogen/`: Utility for generating Rust code from Protocol Buffer definitions
-    - `dataset/`: Convert existing datasets like MIPLIB as OMMX Artifacts
-- **`docs/`**: Project documentation (API reference, user guides)
+- **`proto/`**: Protocol Buffer definitions
+- **`python/`**: Python-related code  
+  - `ommx/`: Core Python SDK (mixed Rust/Python)  
+  - `ommx-*-adapter/`: Adapter packages for various solvers
+- **`rust/`**: Rust crates  
+  - `ommx/`: Core Rust implementation  
+  - `protogen/`: Utility for generating Rust code from `.proto`  
+  - `dataset/`: Tools for converting existing datasets (e.g., MIPLIB)
+- **`docs/`**: Project documentation
+
+## Testing & Build Commands
+- **Python**  
+  - `task python`: Sync dependencies and run all Python tests  
+  - `task python:test`: Run tests for all Python packages  
+  - `task python:ommx:test`: Test main SDK (pytest + type checking)  
+  - `task python:ommx:pyright`: Type checking only  
+- **Rust**  
+  - `task rust:test`: Run Rust tests  
+  - `task rust:check`: `cargo check`  
+  - `task rust:clippy`: Lint with clippy  
+  - `task rust:doc`: Generate Rust documentation
 
 ## Development Workflow & Tooling
-- This project uses `Taskfile.yml` to manage and execute complex commands. To understand available commands, refer to the `Taskfile.yml` files located in the root directory and various subdirectories (e.g., `rust/`, `python/`, `docs/`).
+- `Taskfile.yml` is used for running common commands (build, test, lint).
+- For Python projects, `ommx` is built with PyO3/Maturin and published as a mixed Rust/Python package.
+- Protobuf files are in `proto/`, with generated code in `rust/protogen` or `python/ommx/_proto`.
 
 # Python SDK Development Guidelines
 
 ## Dependency Management
-- The Python SDK uses `uv` for dependency management.
-- The core `ommx` package, located in `python/ommx/`, is a mixed Rust/Python project built with PyO3 and maturin.
+- Python dependencies are managed by `uv`.
+- The `python/ommx/` directory is a mixed Rust/Python project.
 
 ## Package Structure
-- The repository contains multiple Python packages. The core `ommx` package serves as a dependency for various adapter projects (`ommx-*-adapter`).
-- The `python/ommx/` directory is structured as a Maturin mixed Rust/Python project.
-- When a user imports the package in Python (e.g., `import ommx`), the primary Python module loaded is `python/ommx/ommx/__init__.py`.
-- The Rust-native components are made available as a submodule, typically `ommx._ommx_rust`.
+- `ommx` acts as the core Python SDK.
+- `ommx/_ommx_rust` exposes Rust-native components.
+- Other packages (e.g., `ommx-*-adapter`) depend on this core SDK.
 
 # Rust SDK Development Guidelines
 
-## Core Design Principle: Idiomatic Rust Structures vs. Protobuf-Generated Structures
-
-A fundamental architectural decision for the Rust SDK (version 2.0.0 and onwards) is the separation of concerns between idiomatic Rust structures and structures auto-generated from Protocol Buffer (`.proto`) definitions.
-
-**1. Idiomatic Rust Structures (e.g., `ommx::Instance`, `ommx::Function`):**
-- These are the primary structures to be used for all **core logic, internal operations, and public-facing APIs** of the SDK.
-- They should be designed following Rust best practices and idiomatic patterns.
-- **Goal:** Provide a developer-friendly, type-safe, and efficient interface for working with OMMX data within Rust.
-
-**2. Protobuf-Generated Structures (e.g., `ommx::v1::Instance`, `ommx::v1::Function`):**
-- These structures are automatically generated from the `.proto` files (e.g., those in `proto/ommx/v1/`).
-- Their **sole purpose** is for **serialization and deserialization** of data to and from the OMMX binary format.
-- They should **not** be used directly for implementing core SDK logic or in public APIs beyond the raw serialization/deserialization layer.
-
-## Data Flow Expectation
-
-**Reading OMMX data:**
-1. Deserialize binary data into Protobuf-generated structs (e.g., `ommx::v1::Instance`).
-2. Convert/map these Protobuf-generated structs into their corresponding idiomatic Rust structs (e.g., `ommx::Instance`).
-3. Use the idiomatic Rust structs for all subsequent operations.
-
-**Writing OMMX data:**
-1. Convert/map idiomatic Rust structs (e.g., `ommx::Instance`) into their corresponding Protobuf-generated structs (e.g., `ommx::v1::Instance`).
-2. Serialize the Protobuf-generated structs into binary data.
-
-## Transition and Current State
-
-- This architectural shift is an **ongoing process**.
-- You may find parts of the existing codebase where Protobuf-generated structs (`ommx::v1::*`) are still used directly in logic that should ideally use idiomatic Rust structs.
-- **When developing new features or refactoring existing code:**
-  - Prioritize the use of idiomatic Rust structs for all logic.
-  - Implement the necessary conversions to/from the `ommx::v1::*` Protobuf structs at the serialization boundaries.
-  - If you encounter legacy code directly using `ommx::v1::*` for logic, and it's within the scope of your task, consider refactoring it to align with this new principle.
-
-## Summary of Key Types
-
-- `ommx::Instance`: Preferred idiomatic Rust struct for representing an optimization instance.
-- `ommx::v1::Instance`: Protobuf-generated struct, use only for serializing/deserializing `ommx::Instance`.
-- This pattern applies to other core OMMX entities like `Function`, `Constraint`, `Variable`, etc. (e.g., `ommx::Function` vs. `ommx::v1::Function`).
+## Core Design Principle
+- Use idiomatic Rust structs (e.g., `ommx::Instance`, `ommx::Function`) for all logic.
+- Use Protobuf-generated structs (e.g., `ommx::v1::Instance`) only at serialization/deserialization boundaries.
 
 ## Property-Based Testing Guidelines
+- Use existing `arbitrary_xxx` functions for generating test data.
+- Verify evaluation equivalence with tolerance-based comparisons using the `approx` crate.
 
-When implementing property-based tests (using `proptest`) for mathematical operations in OMMX:
+## Common Pitfalls
+- Create `Coefficient` via `Coefficient::try_from(value).unwrap()` or use the `coeff!` macro.
+- Avoid exact floating-point comparisons; use tolerance-based checks.
 
-### Test Data Generation Strategies
+## Macros for Test Code
+- `coeff!(value)` to create a Coefficient.
+- `linear!(id)`, `quadratic!(...)`, `monomial!(...)`, `assign! { ... }` for concise test cases.
 
-**Leverage Existing `arbitrary_xxx` Functions:**
-- OMMX provides `arbitrary_xxx` helper functions for generating test data (e.g., `arbitrary_state`).
-- Always prefer using existing generators before creating new ones.
-- Example: Use `arbitrary_state(variable_ids)` to generate consistent test states.
-
-**Create Reusable Test Utilities:**
-- When implementing new test data generators, follow the `arbitrary_xxx` naming convention.
-- Make useful generators public so they can be reused across different test modules.
-- Consider adding them to appropriate modules (e.g., `ommx::random`) for broader availability.
-
-**Test Flow Pattern:**
-1. Generate base mathematical structure (polynomial, function)
-2. Extract required variable IDs
-3. Use `arbitrary_state` or similar generators for test state creation
-4. Apply transformation
-5. Generate transformed state if needed
-6. Verify evaluation equivalence
-
-### Postcondition Categories (Examples)
-
-- **Evaluation Equivalence**: For transformations, verify that evaluation results remain equivalent before and after transformation (e.g., `original.evaluate(state) == transformed.evaluate(transformed_state)`)
-- **Algebraic Properties**: Additivity, scalar multiplication, linearity preservation
-- **Structural Properties**: Degree bounds, coefficient preservation, variable set management
+以上で、CLAUDE.md（作業途中のメモ部分をのぞく）の内容を反映したcopilot-instructions.mdの更新版です。- **Structural Properties**: Degree bounds, coefficient preservation, variable set management
 
 ### Common Pitfalls in Property Tests
 
