@@ -3,7 +3,6 @@ use crate::{
     random::{multi_choose, unique_integer_pairs},
     Monomial, VariableID,
 };
-use fnv::FnvHashMap;
 use anyhow::{bail, Result};
 use derive_more::From;
 use proptest::prelude::*;
@@ -70,37 +69,6 @@ impl From<Linear> for Quadratic {
 }
 
 impl Quadratic {
-    /// Get linear terms as a map from variable ID to coefficient
-    /// These are always non-zero, so we return Coefficient
-    pub fn linear_terms(&self) -> FnvHashMap<VariableID, Coefficient> {
-        self.terms
-            .iter()
-            .filter_map(|(monomial, coeff)| match monomial {
-                QuadraticMonomial::Linear(id) => Some((*id, *coeff)),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Get constant term, zero if not present
-    pub fn constant_term(&self) -> f64 {
-        self.get(&QuadraticMonomial::Constant)
-            .map(|c| c.into_inner())
-            .unwrap_or(0.0)
-    }
-
-    /// Get quadratic terms as a map from variable ID pair to coefficient
-    /// These are always non-zero, so we return Coefficient
-    pub fn quadratic_terms(&self) -> FnvHashMap<VariableIDPair, Coefficient> {
-        self.terms
-            .iter()
-            .filter_map(|(monomial, coeff)| match monomial {
-                QuadraticMonomial::Pair(pair) => Some((*pair, *coeff)),
-                _ => None,
-            })
-            .collect()
-    }
-
     /// Create a new quadratic from lists of columns, rows, and values
     pub fn from_coo(
         columns: impl IntoIterator<Item = VariableID>,
@@ -212,6 +180,20 @@ impl Monomial for QuadraticMonomial {
 
     fn max_degree() -> Degree {
         2.into()
+    }
+
+    fn as_linear(&self) -> Option<VariableID> {
+        match self {
+            Self::Linear(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    fn as_quadratic(&self) -> Option<VariableIDPair> {
+        match self {
+            Self::Pair(pair) => Some(*pair),
+            _ => None,
+        }
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
