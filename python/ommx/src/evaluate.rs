@@ -7,7 +7,6 @@ use ommx::{
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeSet;
 
-
 macro_rules! define_evaluate_object {
     ($evaluated:ty, $name:ident) => {
         #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
@@ -27,8 +26,6 @@ macro_rules! define_evaluate_object {
 
 define_evaluate_object!(Constraint, evaluate_constraint);
 define_evaluate_object!(Instance, evaluate_instance);
-
-
 
 macro_rules! define_partial_evaluate_object {
     ($evaluated:ty, $name:ident) => {
