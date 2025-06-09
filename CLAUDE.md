@@ -38,10 +38,11 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 ### Protocol Buffers to Rust/PyO3 Migration
 The project is actively migrating from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
 
-**Core Mathematical Objects**:
+**Core Mathematical Objects** (Completed):
 - `Linear`, `Quadratic`, `Polynomial`, `Function` classes now use Rust implementations
 - Located in `python/ommx/src/message.rs` and exposed via `_ommx_rust` module
 - Python wrappers in `python/ommx/ommx/v1/__init__.py` use `.raw` attribute pattern
+- All evaluation methods migrated to instance methods (`.evaluate()`, `.partial_evaluate()`)
 
 **Migration Pattern**:
 ```python
@@ -51,15 +52,27 @@ class Linear(AsConstraint):
     
     def __init__(self, *, terms: dict[int, float], constant: float = 0):
         self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
+    
+    def evaluate(self, state: State) -> float:
+        return self.raw.evaluate(to_state(state).SerializeToString())
 ```
+
+**Pending Migration**:
+- `Constraint` classes - migrating to Rust implementations
+- `Instance` classes - migrating to Rust implementations
+- Additional protocol buffer types as needed
 
 **Key Implementation Details**:
 - Python classes are thin wrappers around Rust core types
 - Protocol Buffers serialization/deserialization handled by Rust
 - Mathematical operations (add, subtract, multiply) implemented in Rust
-- Evaluation and partial evaluation functions in Rust for performance
+- Object-oriented evaluation API with instance methods for better encapsulation
 
-**Known Issue Resolved**: Protocol Buffers method calls must use `ParseFromString()` not `FromString()` for proper deserialization during the migration period.
+**Migration Progress**: 
+- ✅ Mathematical functions (`Linear`, `Quadratic`, `Polynomial`, `Function`)
+- 🔄 Constraint types (in progress)
+- 🔄 Instance types (planned)
+- Deprecated global evaluation functions removed
 
 ## Development Commands
 
@@ -79,7 +92,7 @@ task python:upgrade
 **Testing:**
 ```bash
 # Run all tests
-task python:test        # Python tests (includes type checking)
+task python:test        # Python tests (includes linting, type checking, and pytest)
 task rust:test         # Rust tests only
 task python:test-ci    # CI mode (no pyright for main ommx package)
 ```
@@ -88,6 +101,9 @@ task python:test-ci    # CI mode (no pyright for main ommx package)
 ```bash
 # Format Python code
 task python:format
+
+# Python linting
+task python:lint         # Run ruff check on all Python packages
 
 # Rust linting
 task rust:clippy
@@ -123,8 +139,8 @@ task book_ja          # Japanese Jupyter Book
 ## Testing Strategy
 
 **Python Testing:**
-- Main package: pytest + pyright type checking + doctests
-- Adapters: pytest with solver-specific integration tests
+- Main package: ruff linting + pytest + pyright type checking + doctests
+- Adapters: ruff linting + pytest with solver-specific integration tests
 - CI mode available for environments without pyright
 
 **Rust Testing:**
