@@ -68,6 +68,22 @@ impl From<Linear> for Quadratic {
     }
 }
 
+impl Quadratic {
+    /// Create a new quadratic from lists of columns, rows, and values
+    pub fn from_coo(
+        columns: impl IntoIterator<Item = VariableID>,
+        rows: impl IntoIterator<Item = VariableID>,
+        values: impl IntoIterator<Item = Coefficient>,
+    ) -> Result<Self> {
+        let mut result = Self::default();
+        for ((col, row), val) in columns.into_iter().zip(rows).zip(values) {
+            let pair = VariableIDPair::new(col, row);
+            result.add_term(QuadraticMonomial::Pair(pair), val);
+        }
+        Ok(result)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableIDPair {
     lower: VariableID,
@@ -164,6 +180,20 @@ impl Monomial for QuadraticMonomial {
 
     fn max_degree() -> Degree {
         2.into()
+    }
+
+    fn as_linear(&self) -> Option<VariableID> {
+        match self {
+            Self::Linear(id) => Some(*id),
+            _ => None,
+        }
+    }
+
+    fn as_quadratic(&self) -> Option<VariableIDPair> {
+        match self {
+            Self::Pair(pair) => Some(*pair),
+            _ => None,
+        }
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {

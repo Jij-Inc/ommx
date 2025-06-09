@@ -1,5 +1,5 @@
 use super::*;
-use crate::{random::*, Monomial, VariableID};
+use crate::{random::*, Monomial, VariableID, VariableIDPair};
 use anyhow::{bail, Result};
 use itertools::Itertools;
 use proptest::prelude::*;
@@ -326,6 +326,22 @@ impl Monomial for MonomialDyn {
 
     fn max_degree() -> Degree {
         u32::MAX.into()
+    }
+
+    fn as_linear(&self) -> Option<VariableID> {
+        if self.0.len() == 1 {
+            Some(self.0[0])
+        } else {
+            None
+        }
+    }
+
+    fn as_quadratic(&self) -> Option<VariableIDPair> {
+        if self.0.len() == 2 {
+            Some(VariableIDPair::new(self.0[0], self.0[1]))
+        } else {
+            None
+        }
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
