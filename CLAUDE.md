@@ -11,6 +11,56 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - **Python SDK**: Main package `ommx` and multiple solver adapters in `python/`
 - **Documentation**: Jupyter Books in English/Japanese and API references
 
+## Architecture
+
+### Multi-Language Design
+- **Rust**: Core implementation with performance-critical operations
+- **Python**: High-level API and solver integrations via PyO3 bindings
+- **Protocol Buffers**: Language-agnostic message schema for interoperability
+
+### Workspace Structure
+- **Rust Workspace**: `rust/ommx/`, `rust/protogen/`, `rust/dataset/`
+- **Python Workspace**: Multiple packages under `python/` managed by uv
+- **Shared Versioning**: Python packages versioned together, Rust independent
+
+### Key Components
+1. **Message Schema** (`proto/`): Core data structures for optimization problems, constraints, solutions
+2. **Rust SDK** (`rust/ommx/`): Core algorithms, parsing, evaluation, artifact management
+3. **Python SDK** (`python/ommx/`): PyO3 bindings to Rust + Python-specific utilities
+4. **Solver Adapters** (`python/ommx-*-adapter/`): Integrations with OSS optimization solvers
+
+### Protocol Buffer Generation
+- Rust: Generated at build time via `build.rs`
+- Python: Pre-generated files committed to repo, regenerated via `task proto:python`
+
+## Current Implementation Status (Dec 2024)
+
+### Protocol Buffers to Rust/PyO3 Migration
+The project is actively migrating from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+
+**Core Mathematical Objects**:
+- `Linear`, `Quadratic`, `Polynomial`, `Function` classes now use Rust implementations
+- Located in `python/ommx/src/message.rs` and exposed via `_ommx_rust` module
+- Python wrappers in `python/ommx/ommx/v1/__init__.py` use `.raw` attribute pattern
+
+**Migration Pattern**:
+```python
+# New pattern: Rust implementation wrapped in Python
+class Linear(AsConstraint):
+    raw: _ommx_rust.Linear  # Rust implementation
+    
+    def __init__(self, *, terms: dict[int, float], constant: float = 0):
+        self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
+```
+
+**Key Implementation Details**:
+- Python classes are thin wrappers around Rust core types
+- Protocol Buffers serialization/deserialization handled by Rust
+- Mathematical operations (add, subtract, multiply) implemented in Rust
+- Evaluation and partial evaluation functions in Rust for performance
+
+**Known Issue Resolved**: Protocol Buffers method calls must use `ParseFromString()` not `FromString()` for proper deserialization during the migration period.
+
 ## Development Commands
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
@@ -70,28 +120,6 @@ task book_ja          # Japanese Jupyter Book
 - `task python:ommx-pyscipopt-adapter:test`
 - `task python:ommx-highs-adapter:test`
 
-## Architecture
-
-### Multi-Language Design
-- **Rust**: Core implementation with performance-critical operations
-- **Python**: High-level API and solver integrations via PyO3 bindings
-- **Protocol Buffers**: Language-agnostic message schema for interoperability
-
-### Workspace Structure
-- **Rust Workspace**: `rust/ommx/`, `rust/protogen/`, `rust/dataset/`
-- **Python Workspace**: Multiple packages under `python/` managed by uv
-- **Shared Versioning**: Python packages versioned together, Rust independent
-
-### Key Components
-1. **Message Schema** (`proto/`): Core data structures for optimization problems, constraints, solutions
-2. **Rust SDK** (`rust/ommx/`): Core algorithms, parsing, evaluation, artifact management
-3. **Python SDK** (`python/ommx/`): PyO3 bindings to Rust + Python-specific utilities
-4. **Solver Adapters** (`python/ommx-*-adapter/`): Integrations with OSS optimization solvers
-
-### Protocol Buffer Generation
-- Rust: Generated at build time via `build.rs`
-- Python: Pre-generated files committed to repo, regenerated via `task proto:python`
-
 ## Testing Strategy
 
 **Python Testing:**
@@ -122,3 +150,10 @@ task book_ja          # Japanese Jupyter Book
 - **Type Checking**: pyright for Python type checking
 
 When making changes, always run the appropriate linting/testing commands before committing.
+
+## Important Notes for Development
+
+1. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
+2. **Test Coverage**: The test suite includes 27 tests covering core functionality, QUBO conversion, MPS format handling, and doctests
+3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
+4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
