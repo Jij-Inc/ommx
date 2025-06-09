@@ -249,12 +249,18 @@ class Instance(InstanceBase, UserAnnotationBase):
         | DecisionVariable
         | Linear
         | Quadratic
-        | Polynomial,
+        | Polynomial
+        | Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
+        if not isinstance(objective, Function):
+            objective = Function(objective)
+        raw_objective = _Function()
+        raw_objective.FromString(objective.to_bytes())
+
         return Instance(
             _Instance(
                 description=description,
@@ -262,7 +268,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=Function(objective),
+                objective=raw_objective,
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -386,7 +392,11 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
         """
-        self.raw.objective.CopyFrom(Function(value))
+        if isinstance(value, Function):
+            f = value
+        else:
+            f = Function(value)
+        self.raw.objective.FromString(f.to_bytes())
 
     @property
     def sense(self) -> _Instance.Sense.ValueType:
@@ -833,7 +843,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
-        self.raw.objective.CopyFrom(obj.raw)
+        self.raw.objective.FromString(obj.to_bytes())
         return True
 
     def as_maximization_problem(self) -> bool:
@@ -883,7 +893,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MAXIMIZE
         obj = -self.objective
-        self.raw.objective.CopyFrom(obj.raw)
+        self.raw.objective.FromString(obj.to_bytes())
         return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
@@ -1521,13 +1531,19 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         | DecisionVariable
         | Linear
         | Quadratic
-        | Polynomial,
+        | Polynomial
+        | Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
         description: Optional[_Instance.Description] = None,
     ) -> ParametricInstance:
+        if not isinstance(objective, Function):
+            objective = Function(objective)
+        raw_objective = _Function()
+        raw_objective.ParseFromString(objective.to_bytes())
+
         return ParametricInstance(
             _ParametricInstance(
                 description=description,
@@ -1535,7 +1551,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=Function(objective),
+                objective=raw_objective,
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -2797,6 +2813,8 @@ class Function(AsConstraint):
         | Linear
         | Quadratic
         | Polynomial
+        | _ommx_rust.Function
+        | _Function,
     ):
         if isinstance(inner, (int, float)):
             self.raw = _ommx_rust.Function.from_scalar(inner)
@@ -2810,6 +2828,10 @@ class Function(AsConstraint):
             self.raw = _ommx_rust.Function.from_quadratic(inner.raw)
         elif isinstance(inner, Polynomial):
             self.raw = _ommx_rust.Function.from_polynomial(inner.raw)
+        elif isinstance(inner, _ommx_rust.Function):
+            self.raw = inner
+        elif isinstance(inner, _Function):
+            self.from_bytes(inner.SerializeToString())
         else:
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
@@ -3079,9 +3101,14 @@ class Constraint:
         if id > Constraint._counter:
             Constraint._counter = id + 1
 
+        if not isinstance(function, Function):
+            function = Function(function)
+        raw_function = _Function()
+        raw_function.ParseFromString(function.to_bytes())
+
         self.raw = _Constraint(
             id=id,
-            function=Function(function),
+            function=raw_function,
             equality=equality,
             name=name,
             description=description,
