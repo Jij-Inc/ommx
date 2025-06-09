@@ -124,6 +124,20 @@ impl Linear {
             Err(e) => Err(e.into()), // Return error for NaN or infinite
         }
     }
+
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
+        use ommx::{Evaluate, Message};
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.evaluate(&state, ommx::ATol::default())
+    }
+
+    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Linear> {
+        use ommx::Message;
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let mut inner = self.0.clone();
+        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        Ok(Linear(inner))
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

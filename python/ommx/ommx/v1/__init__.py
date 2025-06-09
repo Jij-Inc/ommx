@@ -2388,12 +2388,10 @@ class Linear(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_linear(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -2414,10 +2412,8 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new = _ommx_rust.partial_evaluate_linear(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Linear.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
         return self.raw.__repr__()

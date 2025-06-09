@@ -23,7 +23,6 @@ macro_rules! define_evaluate_function {
 }
 
 define_evaluate_function!(Function, evaluate_function);
-define_evaluate_function!(Linear, evaluate_linear);
 define_evaluate_function!(Quadratic, evaluate_quadratic);
 define_evaluate_function!(Polynomial, evaluate_polynomial);
 
@@ -64,7 +63,6 @@ macro_rules! define_partial_evaluate_function {
     };
 }
 
-define_partial_evaluate_function!(Linear, partial_evaluate_linear);
 define_partial_evaluate_function!(Quadratic, partial_evaluate_quadratic);
 define_partial_evaluate_function!(Polynomial, partial_evaluate_polynomial);
 define_partial_evaluate_function!(Function, partial_evaluate_function);
