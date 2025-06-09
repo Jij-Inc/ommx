@@ -400,7 +400,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             f = value
         else:
             f = Function(value)
-        self.raw.objective.FromString(f.to_bytes())
+        self.raw.objective.ParseFromString(f.to_bytes())
 
     @property
     def sense(self) -> _Instance.Sense.ValueType:
@@ -847,7 +847,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
-        self.raw.objective.FromString(obj.to_bytes())
+        self.raw.objective.ParseFromString(obj.to_bytes())
         return True
 
     def as_maximization_problem(self) -> bool:
@@ -897,7 +897,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MAXIMIZE
         obj = -self.objective
-        self.raw.objective.FromString(obj.to_bytes())
+        self.raw.objective.ParseFromString(obj.to_bytes())
         return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
