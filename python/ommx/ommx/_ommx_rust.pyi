@@ -243,6 +243,7 @@ class Quadratic:
     def quadratic_terms(
         self,
     ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]: ...
+    def terms(self) -> builtins.dict[builtins.list[builtins.int], builtins.float]: ...
     @staticmethod
     def random(
         rng: Rng, num_terms: builtins.int = 5, max_id: builtins.int = 10

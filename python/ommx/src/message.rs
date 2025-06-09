@@ -2,7 +2,7 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{v1, ATol, Coefficient, Evaluate, Message, Parse};
+use ommx::{v1, ATol, Coefficient, Evaluate, Message, Monomial, Parse};
 use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
@@ -220,6 +220,16 @@ impl Quadratic {
                     (pair.lower().into_inner(), pair.upper().into_inner()),
                     coeff.into_inner(),
                 )
+            })
+            .collect()
+    }
+
+    pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
+        self.0
+            .iter()
+            .map(|(monomial, coeff)| {
+                let u64_ids: Vec<u64> = monomial.ids().map(|id| id.into_inner()).collect();
+                (u64_ids, coeff.into_inner())
             })
             .collect()
     }
