@@ -455,8 +455,7 @@ impl Function {
 
     pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
         self.0
-            .terms()
-            .into_iter()
+            .iter()
             .map(|(ids, coeff)| {
                 let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
                 (u64_ids, coeff.into_inner())
