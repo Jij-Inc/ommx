@@ -204,6 +204,69 @@ def test_to_qubo_invalid_penalty_option():
     )
 
 
+def test_to_hubo_penalty_weight():
+    # 2nd degree and lower should have the same behavior as to_qubo()
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[0] == 0).set_id(123), (x[1] == 1).set_id(456)],
+        sense=Instance.MINIMIZE,
+    )
+    # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
+    hubo, h_offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
+    qubo, q_offset = instance.to_qubo(penalty_weights={123: 1.0, 456: 2.0})
+    assert qubo == hubo
+    assert q_offset == h_offset
+
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] * x[1] * x[2],
+        constraints=[(x[0] == 0).set_id(123), (x[1] == 1).set_id(456)],
+        sense=Instance.MINIMIZE,
+    )
+    hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
+    assert hubo == {}
+    assert offset == 0.0
+
+
+def test_to_hubo_continuous():
+    x = [DecisionVariable.continuous(i, lower=-1.23, upper=4.56) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + x[1] >= 7.89).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    with pytest.raises(ValueError) as e:
+        instance.to_hubo()
+    assert (
+        str(e.value)
+        == "Continuous variables are not supported in HUBO conversion: IDs=[0, 1, 2]"
+    )
+
+
+def test_to_hubo_invalid_penalty_option():
+    x = [
+        DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i])
+        for i in range(2)
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=sum(x),
+        constraints=[(x[0] + 2 * x[1] <= 3).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+
+    with pytest.raises(ValueError) as e:
+        instance.to_hubo(uniform_penalty_weight=1.0, penalty_weights={0: 2.0})
+    assert (
+        str(e.value)
+        == "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+    )
+
+
 def test_evaluate_irrelevant_binary_variable():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(

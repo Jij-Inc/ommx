@@ -692,7 +692,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.get_removed_constraint(0)
         RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
 
-        The solver will returns the solution, which only contains the log-encoded binary variables like:
+        Solvers will return solutions which only contain log-encoded binary variables like:
 
         >>> state = {
         ...     3: 1, 4: 1,  # x0 = 0 + (2-1)*1 = 2
@@ -779,6 +779,103 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         self.log_encode()
         qubo = self.as_qubo_format()
+
+        if is_converted_to_minimize:
+            # Convert back to maximization
+            self.as_maximization_problem()
+
+        return qubo
+
+    def to_hubo(
+        self,
+        *,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 31,
+    ) -> tuple[dict[tuple[int, int], float], float]:
+        r"""Convert the instance to a HUBO format
+
+        This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
+
+        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        2. Check continuous variables and raise error if exists.
+        3. Log-encode integer variables by :py:meth:`log_encode`.
+        4. Convert inequality constraints
+
+            * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+            * If failed, :py:meth:`add_integer_slack_to_inequality`
+
+        5. Convert to HUBO with (uniform) penalty method
+
+            * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
+            * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+            * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+
+        6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
+
+        Please see the documentation for `to_qubo` for more information, or the
+        documentation for each individual method for additional details. The
+        difference between this and `to_qubo` is that this method isn't
+        restricted to quadratic or linear problems. If you want to customize the
+        conversion, use the individual methods above manually.
+
+        .. important::
+
+            The above process is not stable, and subject to change for better HUBO generation in the future versions.
+            If you wish to keep the compatibility, please use the methods above manually.
+
+        """
+        is_converted_to_minimize = self.as_minimization_problem()
+
+        continuous_variables = [
+            var.id
+            for var in self.get_decision_variables()
+            if var.kind == DecisionVariable.CONTINUOUS
+        ]
+        if len(continuous_variables) > 0:
+            raise ValueError(
+                f"Continuous variables are not supported in HUBO conversion: IDs={continuous_variables}"
+            )
+
+        # Prepare inequality constraints
+        ineq_ids = [
+            c.id
+            for c in self.get_constraints()
+            if c.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        ]
+        for ineq_id in ineq_ids:
+            try:
+                self.convert_inequality_to_equality_with_integer_slack(
+                    ineq_id, inequality_integer_slack_max_range
+                )
+            except RuntimeError:
+                self.add_integer_slack_to_inequality(
+                    ineq_id, inequality_integer_slack_max_range
+                )
+
+        # Penalty method
+        if self.get_constraints():
+            if uniform_penalty_weight is not None and penalty_weights:
+                raise ValueError(
+                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                )
+            if penalty_weights:
+                pi = self.penalty_method()
+                weights = {
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                }
+                unconstrained = pi.with_parameters(weights)
+            else:
+                if uniform_penalty_weight is None:
+                    # If both are None, defaults to uniform_penalty_weight = 1.0
+                    uniform_penalty_weight = 1.0
+                pi = self.uniform_penalty_method()
+                weight = pi.get_parameters()[0]
+                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
+            self.raw = unconstrained.raw
+
+        self.log_encode()
+        qubo = self.as_hubo_format()
 
         if is_converted_to_minimize:
             # Convert back to maximization
@@ -897,6 +994,18 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_qubo_format()
+
+    def as_hubo_format(self) -> tuple[dict[tuple[int, ...], float], float]:
+        """
+        Convert unconstrained quadratic instance to a dictionary-based HUBO format.
+
+        .. note::
+            This is a single-purpose method to only convert the format, not to execute any conversion of the instance.
+            Use :py:meth:`to_hubo` driver for the full HUBO conversion.
+
+        """
+        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        return instance.as_hubo_format()
 
     def as_pubo_format(self) -> dict[tuple[int, ...], float]:
         """
@@ -3069,13 +3178,9 @@ class Function(AsConstraint):
 
     def __mul__(
         self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
+        other: (
+            int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+        ),
     ) -> Function:
         if isinstance(other, float) or isinstance(other, int):
             rhs = _ommx_rust.Function.from_scalar(other)
