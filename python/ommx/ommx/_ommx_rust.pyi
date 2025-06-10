@@ -92,7 +92,6 @@ class Bound:
     def nearest_to_zero(self) -> builtins.float: ...
     def intersection(self, other: Bound) -> typing.Optional[Bound]: ...
     def __repr__(self) -> builtins.str: ...
-    def __str__(self) -> builtins.str: ...
 
 class Constraint:
     r"""
@@ -104,6 +103,8 @@ class Constraint:
     equality: builtins.int
     name: builtins.str
     subscripts: builtins.list[builtins.int]
+    description: builtins.str
+    parameters: builtins.dict[builtins.str, builtins.str]
     def __new__(
         cls,
         id: builtins.int,
@@ -111,18 +112,56 @@ class Constraint:
         equality: builtins.int,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
     ): ...
-    @staticmethod
-    def equal_to_zero(
-        id: builtins.int, function: Function, name: typing.Optional[builtins.str] = None
-    ) -> Constraint: ...
-    @staticmethod
-    def less_than_or_equal_to_zero(
-        id: builtins.int, function: Function, name: typing.Optional[builtins.str] = None
-    ) -> Constraint: ...
     @staticmethod
     def decode(bytes: bytes) -> Constraint: ...
     def encode(self) -> bytes: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name of the constraint
+        """
+        ...
+
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts of the constraint
+        """
+        ...
+
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Add subscripts to the constraint
+        """
+        ...
+
+    def set_id(self, id: builtins.int) -> None:
+        r"""
+        Set the ID of the constraint
+        """
+        ...
+
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description of the constraint
+        """
+        ...
+
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Set the parameters of the constraint
+        """
+        ...
+
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a parameter to the constraint
+        """
+        ...
+
     def __repr__(self) -> builtins.str: ...
 
 class DecisionVariable:
@@ -198,7 +237,6 @@ class DecisionVariable:
     @staticmethod
     def decode(bytes: bytes) -> DecisionVariable: ...
     def encode(self) -> bytes: ...
-    def to_protobuf(self) -> typing.Any: ...
     def __repr__(self) -> builtins.str: ...
 
 class DecisionVariableAnalysis:
@@ -440,6 +478,9 @@ class RemovedConstraint:
             typing.Mapping[builtins.str, builtins.str]
         ] = None,
     ): ...
+    @staticmethod
+    def decode(bytes: bytes) -> RemovedConstraint: ...
+    def encode(self) -> bytes: ...
     def __repr__(self) -> builtins.str: ...
 
 class Rng:

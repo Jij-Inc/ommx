@@ -271,7 +271,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 ],
                 objective=raw_objective,
                 constraints=[
-                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                    c.to_protobuf() if isinstance(c, Constraint) else c for c in constraints
                 ],
                 sense=sense,
             )
@@ -413,13 +413,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Get constraints as a list of :class:`Constraint` instances.
         """
-        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+        return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
+        return [RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints]
 
     def evaluate(self, state: ToState) -> Solution:
         r"""
@@ -1586,7 +1586,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                 ],
                 objective=raw_objective,
                 constraints=[
-                    c.raw if isinstance(c, Constraint) else c for c in constraints
+                    c.to_protobuf() if isinstance(c, Constraint) else c for c in constraints
                 ],
                 sense=sense,
                 parameters=[
@@ -1614,13 +1614,13 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         """
         Get constraints as a list of :class:`Constraint
         """
-        return [Constraint.from_raw(raw) for raw in self.raw.constraints]
+        return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [RemovedConstraint(raw) for raw in self.raw.removed_constraints]
+        return [RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints]
 
     def get_parameters(self) -> list[Parameter]:
         """
@@ -3124,7 +3124,7 @@ class Constraint:
 
     """
 
-    raw: _Constraint
+    raw: _ommx_rust.Constraint
     _counter: int = 0
 
     EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
@@ -3155,21 +3155,22 @@ class Constraint:
 
         if not isinstance(function, Function):
             function = Function(function)
-        raw_function = _Function()
-        raw_function.ParseFromString(function.to_bytes())
 
-        self.raw = _Constraint(
+        # Convert Equality enum to integer for Rust
+        equality_int = 1 if equality == Equality.EQUALITY_EQUAL_TO_ZERO else 2
+
+        self.raw = _ommx_rust.Constraint(
             id=id,
-            function=raw_function,
-            equality=equality,
+            function=function.raw,
+            equality=equality_int,
             name=name,
-            description=description,
             subscripts=subscripts,
-            parameters=parameters,
+            description=description,
+            parameters=parameters or {},
         )
 
     @staticmethod
-    def from_raw(raw: _Constraint) -> Constraint:
+    def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
         new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
         new.raw = raw
         Constraint._counter = max(Constraint._counter, raw.id + 1)
@@ -3177,37 +3178,58 @@ class Constraint:
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
-        raw = _Constraint()
-        raw.ParseFromString(data)
-        new = Constraint(function=0, equality=Equality.EQUALITY_EQUAL_TO_ZERO)
-        new.raw = raw
-        Constraint._counter = max(Constraint._counter, raw.id + 1)
-        return new
+        rust_constraint = _ommx_rust.Constraint.decode(data)
+        return Constraint.from_raw(rust_constraint)
+
+    @staticmethod
+    def from_protobuf(pb_constraint: _Constraint) -> Constraint:
+        """Convert from protobuf Constraint to Rust Constraint via serialization"""
+        data = pb_constraint.SerializeToString()
+        return Constraint.from_bytes(data)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
+
+    def to_protobuf(self) -> _Constraint:
+        """Convert to protobuf Constraint"""
+        pb_constraint = _Constraint()
+        pb_constraint.ParseFromString(self.to_bytes())
+        return pb_constraint
 
     def set_id(self, id: int) -> Constraint:
         """
         Overwrite the constraint ID.
         """
-        self.raw.id = id
+        self.raw.set_id(id)
         return self
 
     def add_name(self, name: str) -> Constraint:
-        self.raw.name = name
+        """
+        Add or update the name of the constraint.
+        """
+        self.raw.set_name(name)
         return self
 
     def add_description(self, description: str) -> Constraint:
-        self.raw.description = description
+        """
+        Add or update the description of the constraint.
+        """
+        self.raw.set_description(description)
         return self
 
     def add_subscripts(self, subscripts: list[int]) -> Constraint:
-        self.raw.subscripts.extend(subscripts)
+        """
+        Add subscripts to the constraint.
+        """
+        self.raw.add_subscripts(subscripts)
         return self
 
     def add_parameters(self, parameters: dict[str, str]) -> Constraint:
-        self.raw.parameters.update(parameters)
+        """
+        Add or update parameters of the constraint.
+        """
+        for key, value in parameters.items():
+            self.raw.add_parameter(key, value)
         return self
 
     @property
@@ -3220,15 +3242,24 @@ class Constraint:
 
     @property
     def equality(self) -> Equality.ValueType:
-        return self.raw.equality
+        # Convert Rust equality (int) to protobuf Equality enum
+        rust_equality = self.raw.equality
+        if rust_equality == 1:
+            return Equality.EQUALITY_EQUAL_TO_ZERO
+        elif rust_equality == 2:
+            return Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        else:
+            return Equality.EQUALITY_UNSPECIFIED
 
     @property
     def name(self) -> str | None:
-        return self.raw.name if self.raw.HasField("name") else None
+        name = self.raw.name
+        return name if name else None
 
     @property
     def description(self) -> str | None:
-        return self.raw.description if self.raw.HasField("description") else None
+        desc = self.raw.description
+        return desc if desc else None
 
     @property
     def subscripts(self) -> list[int]:
@@ -3236,28 +3267,37 @@ class Constraint:
 
     @property
     def parameters(self) -> dict[str, str]:
-        return dict(self.raw.parameters)
+        return self.raw.parameters
 
     def __repr__(self) -> str:
-        if self.raw.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+        if self.raw.equality == 1:  # EQUALITY_EQUAL_TO_ZERO
             return f"Constraint({self.function.__repr__()} == 0)"
-        if self.raw.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+        if self.raw.equality == 2:  # EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
             return f"Constraint({self.function.__repr__()} <= 0)"
         return self.raw.__repr__()
 
     def _as_pandas_entry(self) -> dict:
         c = self.raw
+        # Convert Rust equality to protobuf equivalent for _equality function
+        equality_for_display = (
+            Equality.EQUALITY_EQUAL_TO_ZERO if c.equality == 1
+            else Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO if c.equality == 2
+            else Equality.EQUALITY_UNSPECIFIED
+        )
+        # Convert Rust function to protobuf for _function_type
+        pb_function = _Function()
+        pb_function.ParseFromString(c.function.encode())
         return {
             "id": c.id,
-            "equality": _equality(c.equality),
-            "type": _function_type(c.function),
+            "equality": _equality(equality_for_display),
+            "type": _function_type(pb_function),
             "used_ids": _ommx_rust.used_decision_variable_ids(
-                c.function.SerializeToString()
+                c.function.encode()
             ),
-            "name": c.name if c.HasField("name") else NA,
+            "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
-            "description": c.description if c.HasField("description") else NA,
-        } | {f"parameters.{key}": value for key, value in c.parameters.items()}
+            "description": NA,  # Description not supported in Rust implementation
+        }  # Parameters not supported in Rust implementation
 
 
 @dataclass
@@ -3266,7 +3306,19 @@ class RemovedConstraint:
     Constraints removed while preprocessing
     """
 
-    raw: _RemovedConstraint
+    raw: _ommx_rust.RemovedConstraint
+
+    def __init__(self, raw: _ommx_rust.RemovedConstraint):
+        self.raw = raw
+
+    @staticmethod
+    def from_protobuf(pb_removed_constraint: _RemovedConstraint) -> RemovedConstraint:
+        """Convert from protobuf RemovedConstraint to Rust RemovedConstraint"""
+        # Use Rust decode method to convert Protocol Buffer to Rust implementation
+        rust_removed_constraint = _ommx_rust.RemovedConstraint.decode(
+            pb_removed_constraint.SerializeToString()
+        )
+        return RemovedConstraint(rust_removed_constraint)
 
     def __repr__(self) -> str:
         reason = f"reason={self.removed_reason}"
@@ -3283,11 +3335,18 @@ class RemovedConstraint:
 
     @property
     def equality(self) -> Equality.ValueType:
-        return self.raw.constraint.equality
+        # Convert Rust equality (int) to protobuf Equality enum
+        rust_equality = self.raw.constraint.equality
+        if rust_equality == 1:
+            return Equality.EQUALITY_EQUAL_TO_ZERO
+        elif rust_equality == 2:
+            return Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+        else:
+            return Equality.EQUALITY_UNSPECIFIED
 
     @property
     def id(self) -> int:
-        return self.raw.constraint.id
+        return self.raw.id
 
     @property
     def function(self) -> Function:
@@ -3295,17 +3354,13 @@ class RemovedConstraint:
 
     @property
     def name(self) -> str | None:
-        return (
-            self.raw.constraint.name if self.raw.constraint.HasField("name") else None
-        )
+        name = self.raw.name
+        return name if name else None
 
     @property
     def description(self) -> str | None:
-        return (
-            self.raw.constraint.description
-            if self.raw.constraint.HasField("description")
-            else None
-        )
+        desc = self.raw.constraint.description
+        return desc if desc else None
 
     @property
     def subscripts(self) -> list[int]:
@@ -3313,7 +3368,7 @@ class RemovedConstraint:
 
     @property
     def parameters(self) -> dict[str, str]:
-        return dict(self.raw.constraint.parameters)
+        return self.raw.constraint.parameters
 
     @property
     def removed_reason(self) -> str:
@@ -3321,7 +3376,7 @@ class RemovedConstraint:
 
     @property
     def removed_reason_parameters(self) -> dict[str, str]:
-        return dict(self.raw.removed_reason_parameters)
+        return self.raw.removed_reason_parameters
 
     def _as_pandas_entry(self) -> dict:
         return (

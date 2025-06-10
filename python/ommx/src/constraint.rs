@@ -18,13 +18,15 @@ pub struct Constraint(pub ommx::Constraint);
 #[pymethods]
 impl Constraint {
     #[new]
-    #[pyo3(signature = (id, function, equality, name=None, subscripts=None))]
+    #[pyo3(signature = (id, function, equality, name=None, subscripts=None, description=None, parameters=HashMap::default()))]
     pub fn new(
         id: u64,
         function: Function,
         equality: u32,
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
+        description: Option<String>,
+        parameters: HashMap<String, String>,
     ) -> Result<Self> {
         let constraint_id = ConstraintID::from(id);
         let rust_equality = match equality {
@@ -39,8 +41,8 @@ impl Constraint {
             equality: rust_equality,
             name,
             subscripts: subscripts.unwrap_or_default(),
-            parameters: FnvHashMap::default(),
-            description: None,
+            parameters: parameters.into_iter().collect(),
+            description,
         };
 
         Ok(Self(constraint))
@@ -74,26 +76,14 @@ impl Constraint {
         self.0.subscripts.clone()
     }
 
-    #[staticmethod]
-    #[pyo3(signature = (id, function, name=None))]
-    pub fn equal_to_zero(id: u64, function: Function, name: Option<String>) -> Result<Self> {
-        Self::new(
-            id, function, 1, // EQUALITY_EQUAL_TO_ZERO
-            name, None,
-        )
+    #[getter]
+    pub fn description(&self) -> String {
+        self.0.description.clone().unwrap_or_default()
     }
 
-    #[staticmethod]
-    #[pyo3(signature = (id, function, name=None))]
-    pub fn less_than_or_equal_to_zero(
-        id: u64,
-        function: Function,
-        name: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id, function, 2, // EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-            name, None,
-        )
+    #[getter]
+    pub fn parameters(&self) -> HashMap<String, String> {
+        self.0.parameters.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
     }
 
     #[staticmethod]
@@ -106,6 +96,41 @@ impl Constraint {
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let inner: ommx::v1::Constraint = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    }
+
+    /// Set the name of the constraint
+    pub fn set_name(&mut self, name: String) {
+        self.0.name = Some(name);
+    }
+
+    /// Set the subscripts of the constraint
+    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) {
+        self.0.subscripts = subscripts;
+    }
+
+    /// Add subscripts to the constraint
+    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) {
+        self.0.subscripts.extend(subscripts);
+    }
+
+    /// Set the ID of the constraint
+    pub fn set_id(&mut self, id: u64) {
+        self.0.id = ConstraintID::from(id);
+    }
+
+    /// Set the description of the constraint
+    pub fn set_description(&mut self, description: String) {
+        self.0.description = Some(description);
+    }
+
+    /// Set the parameters of the constraint
+    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) {
+        self.0.parameters = parameters.into_iter().collect();
+    }
+
+    /// Add a parameter to the constraint
+    pub fn add_parameter(&mut self, key: String, value: String) {
+        self.0.parameters.insert(key, value);
     }
 
     pub fn __repr__(&self) -> String {
@@ -175,6 +200,18 @@ impl RemovedConstraint {
     #[getter]
     pub fn name(&self) -> String {
         self.0.constraint.name.clone().unwrap_or_default()
+    }
+
+    #[staticmethod]
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::RemovedConstraint::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner, &())?;
+        Ok(Self(parsed))
+    }
+
+    pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let inner: ommx::v1::RemovedConstraint = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
     pub fn __repr__(&self) -> String {

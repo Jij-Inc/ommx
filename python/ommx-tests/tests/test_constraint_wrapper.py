@@ -11,7 +11,7 @@ def test_constraint_creation():
     function = rust.Function.from_linear(linear)
 
     # Create constraint: x1 + 2 = 0
-    constraint = rust.Constraint.equal_to_zero(1, function, "test_constraint")
+    constraint = rust.Constraint(1, function, 1, "test_constraint")  # 1 = EqualToZero
 
     assert constraint.id == 1
     assert constraint.equality == 1  # EqualToZero
@@ -26,9 +26,7 @@ def test_constraint_less_than_or_equal():
     function = rust.Function.from_linear(linear)
 
     # Create constraint: 2*x2 - 5 <= 0
-    constraint = rust.Constraint.less_than_or_equal_to_zero(
-        2, function, "leq_constraint"
-    )
+    constraint = rust.Constraint(2, function, 2, "leq_constraint")  # 2 = LessThanOrEqualToZero
 
     assert constraint.id == 2
     assert constraint.equality == 2  # LessThanOrEqualToZero
@@ -64,7 +62,7 @@ def test_constraint_function_access():
     linear = rust.Linear({1: 3.0, 2: -1.0}, 10.0)
     function = rust.Function.from_linear(linear)
 
-    constraint = rust.Constraint.equal_to_zero(5, function, "access_test")
+    constraint = rust.Constraint(5, function, 1, "access_test")  # 1 = EqualToZero
 
     # Access the function from constraint
     retrieved_function = constraint.function
@@ -77,12 +75,12 @@ def test_constraint_repr():
     function = rust.Function.from_linear(linear)
 
     # Test EqualToZero representation
-    constraint1 = rust.Constraint.equal_to_zero(1, function, "eq_test")
+    constraint1 = rust.Constraint(1, function, 1, "eq_test")  # 1 = EqualToZero
     repr_str1 = repr(constraint1)
     assert 'Constraint(id=1, equality=EqualToZero, name="eq_test")' == repr_str1
 
     # Test LessThanOrEqualToZero representation
-    constraint2 = rust.Constraint.less_than_or_equal_to_zero(2, function, "leq_test")
+    constraint2 = rust.Constraint(2, function, 2, "leq_test")  # 2 = LessThanOrEqualToZero
     repr_str2 = repr(constraint2)
     assert (
         'Constraint(id=2, equality=LessThanOrEqualToZero, name="leq_test")' == repr_str2
@@ -104,7 +102,7 @@ def test_constraint_empty_name():
     function = rust.Function.from_linear(linear)
 
     # Create constraint without name
-    constraint = rust.Constraint.equal_to_zero(1, function, None)
+    constraint = rust.Constraint(1, function, 1, None)  # 1 = EqualToZero
 
     assert constraint.id == 1
     assert constraint.name == ""  # Should return empty string for None name
