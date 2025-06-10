@@ -5,13 +5,11 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
+from functools import singledispatchmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
-from .quadratic_pb2 import Quadratic as _Quadratic
-from .polynomial_pb2 import Polynomial as _Polynomial, Monomial as _Monomial
-from .linear_pb2 import Linear as _Linear
 from .constraint_pb2 import (
     Equality,
     Constraint as _Constraint,
@@ -249,12 +247,21 @@ class Instance(InstanceBase, UserAnnotationBase):
         | Linear
         | Quadratic
         | Polynomial
+        | Function
         | _Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
+        if not isinstance(objective, _Function):
+            if not isinstance(objective, Function):
+                objective = Function(objective)
+            raw_objective = _Function()
+            raw_objective.ParseFromString(objective.to_bytes())
+        else:
+            raw_objective = objective
+
         return Instance(
             _Instance(
                 description=description,
@@ -262,7 +269,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=as_function(objective),
+                objective=raw_objective,
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -386,7 +393,11 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
         """
-        self.raw.objective.CopyFrom(as_function(value))
+        if isinstance(value, Function):
+            f = value
+        else:
+            f = Function(value)
+        self.raw.objective.ParseFromString(f.to_bytes())
 
     @property
     def sense(self) -> _Instance.Sense.ValueType:
@@ -833,7 +844,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
-        self.raw.objective.CopyFrom(obj.raw)
+        self.raw.objective.ParseFromString(obj.to_bytes())
         return True
 
     def as_maximization_problem(self) -> bool:
@@ -883,7 +894,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             return False
         self.raw.sense = Instance.MAXIMIZE
         obj = -self.objective
-        self.raw.objective.CopyFrom(obj.raw)
+        self.raw.objective.ParseFromString(obj.to_bytes())
         return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
@@ -1522,13 +1533,18 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         | Linear
         | Quadratic
         | Polynomial
-        | _Function,
+        | Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _Instance.Sense.ValueType,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
         description: Optional[_Instance.Description] = None,
     ) -> ParametricInstance:
+        if not isinstance(objective, Function):
+            objective = Function(objective)
+        raw_objective = _Function()
+        raw_objective.ParseFromString(objective.to_bytes())
+
         return ParametricInstance(
             _ParametricInstance(
                 description=description,
@@ -1536,7 +1552,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                     v.raw if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
-                objective=as_function(objective),
+                objective=raw_objective,
                 constraints=[
                     c.raw if isinstance(c, Constraint) else c for c in constraints
                 ],
@@ -2270,35 +2286,48 @@ class Linear(AsConstraint):
 
     """
 
-    raw: _Linear
+    raw: _ommx_rust.Linear
 
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
-        self.raw = _Linear(
-            terms=[
-                _Linear.Term(id=id, coefficient=coefficient)
-                for id, coefficient in terms.items()
-            ],
-            constant=constant,
-        )
+        self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
 
-    @staticmethod
-    def from_raw(raw: _Linear) -> Linear:
+    @singledispatchmethod
+    @classmethod
+    def from_object(
+        cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
+    ) -> Linear:
+        if isinstance(obj, Linear):
+            return obj
+        raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
+
+    @from_object.register(_ommx_rust.Linear)
+    @classmethod
+    def from_raw(cls, obj: _ommx_rust.Linear) -> Linear:
         new = Linear(terms={})
-        new.raw = raw
+        new.raw = obj
         return new
+
+    @from_object.register(float)
+    @classmethod
+    def from_float(cls, obj: float) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
+
+    @from_object.register(int)
+    @classmethod
+    def from_integer(cls, obj: int) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
+
+    @from_object.register(DecisionVariable)
+    @classmethod
+    def from_decision_variable(cls, obj: DecisionVariable) -> Linear:
+        return Linear.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
 
     @property
     def linear_terms(self) -> dict[int, float]:
         """
-        Get the terms of the linear function as a dictionary
+        Get the terms of the linear function as a dictionary, except for the constant term.
         """
-        out = {}
-        for term in self.raw.terms:
-            if term.id not in out:
-                out[term.id] = term.coefficient
-            else:
-                out[term.id] += term.coefficient
-        return out
+        return self.raw.linear_terms()
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
@@ -2314,16 +2343,15 @@ class Linear(AsConstraint):
         """
         Get the constant term of the linear function
         """
-        return self.raw.constant
+        return self.raw.constant_term()
 
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
-        new = Linear(terms={})
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.Linear.decode(data)
+        return Linear.from_raw(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     @deprecated("Use almost_equal method instead.")
     def equals_to(self, other: Linear) -> bool:
@@ -2336,9 +2364,7 @@ class Linear(AsConstraint):
         """
         Compare two linear functions have almost equal coefficients and constant.
         """
-        lhs = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal(other.raw, atol=atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2362,12 +2388,10 @@ class Linear(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_linear(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -2388,35 +2412,32 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new = _ommx_rust.partial_evaluate_linear(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Linear.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
-        return f"Linear({_ommx_rust.Linear.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
-    def __add__(self, other: int | float | DecisionVariable | Linear) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            self.raw.constant += other
-            return self
-        if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Linear.from_bytes((new + rhs).encode())
-        if isinstance(other, Linear):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Linear.from_bytes((new + rhs).encode())
-        return NotImplemented
+    def __add__(
+        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+    ) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            return Linear.from_raw(self.raw + rhs.raw)
+        except TypeError:
+            return NotImplemented
 
     def __radd__(self, other):
         return self + other
 
-    def __sub__(self, other: int | float | DecisionVariable | Linear) -> Linear:
-        if isinstance(other, (int, float, DecisionVariable, Linear)):
-            return self + (-other)
-        return NotImplemented
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+    ) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            return Linear.from_raw(self.raw - rhs.raw)
+        except TypeError:
+            return NotImplemented
 
     def __rsub__(self, other):
         return -self + other
@@ -2428,19 +2449,13 @@ class Linear(AsConstraint):
     def __mul__(self, other: DecisionVariable | Linear) -> Quadratic: ...
 
     def __mul__(
-        self, other: int | float | DecisionVariable | Linear
+        self, other: int | float | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear | Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            return Linear.from_bytes(new.mul_scalar(other).encode())
-        if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Quadratic.from_bytes((new * rhs).encode())
-        if isinstance(other, Linear):
-            new = _ommx_rust.Linear.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Quadratic.from_bytes((new * rhs).encode())
+        if isinstance(other, (float, int)):
+            return Linear.from_raw(self.raw.mul_scalar(other))
+        if isinstance(other, (DecisionVariable, Linear)):
+            rhs = Linear.from_object(other)
+            return Quadratic.from_raw(self.raw * rhs.raw)
         return NotImplemented
 
     def __rmul__(self, other):
@@ -2457,7 +2472,7 @@ class Linear(AsConstraint):
 
 @dataclass
 class Quadratic(AsConstraint):
-    raw: _Quadratic
+    raw: _ommx_rust.Quadratic
 
     def __init__(
         self,
@@ -2467,35 +2482,32 @@ class Quadratic(AsConstraint):
         values: Iterable[float | int],
         linear: Optional[Linear] = None,
     ):
-        self.raw = _Quadratic(
-            columns=columns,
-            rows=rows,
-            values=values,
+        self.raw = _ommx_rust.Quadratic(
+            columns=list(columns),
+            rows=list(rows),
+            values=[float(v) for v in values],
             linear=linear.raw if linear else None,
         )
 
     @staticmethod
-    def from_raw(raw: _Quadratic) -> Quadratic:
+    def from_raw(raw: _ommx_rust.Quadratic) -> Quadratic:
         new = Quadratic(columns=[], rows=[], values=[])
         new.raw = raw
         return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Quadratic:
-        new = Quadratic(columns=[], rows=[], values=[])
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.Quadratic.decode(data)
+        return Quadratic.from_raw(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
         """
         Compare two quadratic functions have almost equal coefficients
         """
-        lhs = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal(other.raw, atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2522,12 +2534,10 @@ class Quadratic(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_quadratic(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -2551,53 +2561,40 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_quadratic(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Quadratic.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Quadratic.from_raw(new_raw)
 
     @property
     def linear(self) -> Linear | None:
-        if self.raw.HasField("linear"):
-            return Linear.from_raw(self.raw.linear)
+        linear_terms = self.raw.linear_terms()
+        constant = self.raw.constant_term()
+        if linear_terms or constant != 0.0:
+            return Linear(terms=linear_terms, constant=constant)
         return None
 
     @property
     def quad_terms(self) -> dict[tuple[int, int], float]:
-        assert len(self.raw.columns) == len(self.raw.rows) == len(self.raw.values)
-        out = {}
-        for column, row, value in zip(self.raw.columns, self.raw.rows, self.raw.values):
-            if (column, row) not in out:
-                out[(column, row)] = value
-            else:
-                out[(column, row)] += value
-        return out
+        return self.raw.quadratic_terms()
 
     @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        return self.quad_terms | (self.linear.terms if self.linear else {})
+    def terms(self) -> dict[list[int], float]:
+        return self.raw.terms()
 
     def __repr__(self) -> str:
-        return f"Quadratic({_ommx_rust.Quadratic.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
     def __add__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic:
         if isinstance(other, float) or isinstance(other, int):
-            self.raw.linear.constant += other
-            return self
+            return Quadratic.from_raw(self.raw.add_scalar(other))
         if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Quadratic.from_bytes((new.add_linear(rhs)).encode())
+            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+            return Quadratic.from_raw(self.raw.add_linear(other_linear.raw))
         if isinstance(other, Linear):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Quadratic.from_bytes((new.add_linear(rhs)).encode())
+            return Quadratic.from_raw(self.raw.add_linear(other.raw))
         if isinstance(other, Quadratic):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            return Quadratic.from_bytes((new + rhs).encode())
+            return Quadratic.from_raw(self.raw + other.raw)
         return NotImplemented
 
     def __radd__(self, other):
@@ -2606,9 +2603,7 @@ class Quadratic(AsConstraint):
     def __sub__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic:
-        if isinstance(other, (int, float, DecisionVariable, Linear, Quadratic)):
-            return self + (-other)
-        return NotImplemented
+        return self + (-other)
 
     def __rsub__(self, other):
         return -self + other
@@ -2623,20 +2618,14 @@ class Quadratic(AsConstraint):
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic | Polynomial:
         if isinstance(other, float) or isinstance(other, int):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            return Quadratic.from_bytes(new.mul_scalar(other).encode())
+            return Quadratic.from_raw(self.raw.mul_scalar(other))
         if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Polynomial.from_bytes(new.mul_linear(rhs).encode())
+            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+            return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes((new.mul_linear(rhs)).encode())
+            return Polynomial.from_raw(self.raw.mul_linear(other.raw))
         if isinstance(other, Quadratic):
-            new = _ommx_rust.Quadratic.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes((new * rhs).encode())
+            return Polynomial.from_raw(self.raw * other.raw)
         return NotImplemented
 
     def __rmul__(self, other):
@@ -2653,50 +2642,35 @@ class Quadratic(AsConstraint):
 
 @dataclass
 class Polynomial(AsConstraint):
-    raw: _Polynomial
+    raw: _ommx_rust.Polynomial
 
-    def __init__(self, *, terms: dict[Iterable[int], float | int] = {}):
-        self.raw = _Polynomial(
-            terms=[
-                _Monomial(ids=ids, coefficient=coefficient)
-                for ids, coefficient in terms.items()
-            ]
-        )
+    def __init__(self, *, terms: dict[Sequence[int], float | int] = {}):
+        self.raw = _ommx_rust.Polynomial(terms=terms)
 
     @staticmethod
-    def from_raw(raw: _Polynomial) -> Polynomial:
+    def from_raw(raw: _ommx_rust.Polynomial) -> Polynomial:
         new = Polynomial()
         new.raw = raw
         return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Polynomial:
-        new = Polynomial()
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.Polynomial.decode(data)
+        return Polynomial.from_raw(raw)
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
-        out = {}
-        for term in self.raw.terms:
-            term.ids.sort()
-            key = tuple(term.ids)
-            if key in out:
-                out[key] += term.coefficient
-            else:
-                out[key] = term.coefficient
-        return out
+        raw_terms = self.raw.terms()
+        return {tuple(ids): coeff for ids, coeff in raw_terms.items()}
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
         """
         Compare two polynomial have almost equal coefficients
         """
-        lhs = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal(other.raw, atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2723,12 +2697,10 @@ class Polynomial(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_polynomial(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -2752,36 +2724,26 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_polynomial(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Polynomial.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
-        return f"Polynomial({_ommx_rust.Polynomial.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
     def __add__(
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(other, float) or isinstance(other, int):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            return Polynomial.from_bytes(new.add_scalar(other).encode())
+            return Polynomial.from_raw(self.raw.add_scalar(other))
         if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Polynomial.from_bytes(new.add_linear(rhs).encode())
+            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+            return Polynomial.from_raw(self.raw.add_linear(other_linear.raw))
         if isinstance(other, Linear):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes(new.add_linear(rhs).encode())
+            return Polynomial.from_raw(self.raw.add_linear(other.raw))
         if isinstance(other, Quadratic):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes(new.add_quadratic(rhs).encode())
+            return Polynomial.from_raw(self.raw.add_quadratic(other.raw))
         if isinstance(other, Polynomial):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes((new + rhs).encode())
+            return Polynomial.from_raw(self.raw + other.raw)
         return NotImplemented
 
     def __radd__(self, other):
@@ -2803,24 +2765,16 @@ class Polynomial(AsConstraint):
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
     ) -> Polynomial:
         if isinstance(other, float) or isinstance(other, int):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            return Polynomial.from_bytes(new.mul_scalar(other).encode())
+            return Polynomial.from_raw(self.raw.mul_scalar(other))
         if isinstance(other, DecisionVariable):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.single_term(other.raw.id, 1)
-            return Polynomial.from_bytes(new.mul_linear(rhs).encode())
+            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
+            return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
         if isinstance(other, Linear):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes(new.mul_linear(rhs).encode())
+            return Polynomial.from_raw(self.raw.mul_linear(other.raw))
         if isinstance(other, Quadratic):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes(new.mul_quadratic(rhs).encode())
+            return Polynomial.from_raw(self.raw.mul_quadratic(other.raw))
         if isinstance(other, Polynomial):
-            new = _ommx_rust.Polynomial.decode(self.raw.SerializeToString())
-            rhs = _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            return Polynomial.from_bytes((new * rhs).encode())
+            return Polynomial.from_raw(self.raw * other.raw)
         return NotImplemented
 
     def __rmul__(self, other):
@@ -2835,37 +2789,9 @@ class Polynomial(AsConstraint):
         )
 
 
-def as_function(
-    f: int
-    | float
-    | DecisionVariable
-    | Linear
-    | Quadratic
-    | Polynomial
-    | _Function
-    | Function,
-) -> _Function:
-    if isinstance(f, (int, float)):
-        return _Function(constant=f)
-    elif isinstance(f, DecisionVariable):
-        return _Function(linear=Linear(terms={f.raw.id: 1}).raw)
-    elif isinstance(f, Linear):
-        return _Function(linear=f.raw)
-    elif isinstance(f, Quadratic):
-        return _Function(quadratic=f.raw)
-    elif isinstance(f, Polynomial):
-        return _Function(polynomial=f.raw)
-    elif isinstance(f, _Function):
-        return f
-    elif isinstance(f, Function):
-        return f.raw
-    else:
-        raise ValueError(f"Unknown function type: {type(f)}")
-
-
 @dataclass
 class Function(AsConstraint):
-    raw: _Function
+    raw: _ommx_rust.Function
 
     def __init__(
         self,
@@ -2875,38 +2801,52 @@ class Function(AsConstraint):
         | Linear
         | Quadratic
         | Polynomial
+        | _ommx_rust.Function
         | _Function,
     ):
-        self.raw = as_function(inner)
+        if isinstance(inner, (int, float)):
+            self.raw = _ommx_rust.Function.from_scalar(inner)
+        elif isinstance(inner, DecisionVariable):
+            self.raw = _ommx_rust.Function.from_linear(
+                _ommx_rust.Linear.single_term(inner.raw.id, 1)
+            )
+        elif isinstance(inner, Linear):
+            self.raw = _ommx_rust.Function.from_linear(inner.raw)
+        elif isinstance(inner, Quadratic):
+            self.raw = _ommx_rust.Function.from_quadratic(inner.raw)
+        elif isinstance(inner, Polynomial):
+            self.raw = _ommx_rust.Function.from_polynomial(inner.raw)
+        elif isinstance(inner, _ommx_rust.Function):
+            self.raw = inner
+        elif isinstance(inner, _Function):
+            self.raw = _ommx_rust.Function.decode(inner.SerializeToString())
+        else:
+            raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
     @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        if self.raw.HasField("constant"):
-            return {(): self.raw.constant}
-        if self.raw.HasField("linear"):
-            return Linear.from_raw(self.raw.linear).terms
-        if self.raw.HasField("quadratic"):
-            return Quadratic.from_raw(self.raw.quadratic).terms
-        if self.raw.HasField("polynomial"):
-            return Polynomial.from_raw(self.raw.polynomial).terms
-        raise ValueError("Unknown function type")
+    def terms(self) -> dict[list[int], float]:
+        return self.raw.terms()
+
+    @staticmethod
+    def from_raw(raw: _ommx_rust.Function) -> Function:
+        new = Function(0)
+        new.raw = raw
+        return new
 
     @staticmethod
     def from_bytes(data: bytes) -> Function:
         new = Function(0)
-        new.raw.ParseFromString(data)
+        new.raw = _ommx_rust.Function.decode(data)
         return new
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
 
     def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
         """
         Compare two functions have almost equal coefficients as a polynomial
         """
-        lhs = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
-        return lhs.almost_equal(rhs, atol)
+        return self.raw.almost_equal(other.raw, atol)
 
     def evaluate(self, state: ToState) -> float:
         """
@@ -2933,12 +2873,10 @@ class Function(AsConstraint):
             >>> f.evaluate({1: 3})
             Traceback (most recent call last):
             ...
-            RuntimeError: Variable id (2) is not found in the solution
+            RuntimeError: Missing entry for id: 2
 
         """
-        return _ommx_rust.evaluate_function(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        return self.raw.evaluate(to_state(state).SerializeToString())
 
     def partial_evaluate(self, state: ToState) -> Function:
         """
@@ -2962,18 +2900,14 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new = _ommx_rust.partial_evaluate_function(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Function.from_bytes(new)
+        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
         """
         Get the IDs of decision variables used in the function.
         """
-        return _ommx_rust.Function.decode(
-            self.raw.SerializeToString()
-        ).used_decision_variable_ids()
+        return self.raw.used_decision_variable_ids()
 
     def content_factor(self) -> float:
         r"""
@@ -3009,10 +2943,10 @@ class Function(AsConstraint):
         In practice, you must check if the multiplier is enough small.
 
         """
-        return _ommx_rust.Function.decode(self.raw.SerializeToString()).content_factor()
+        return self.raw.content_factor()
 
     def __repr__(self) -> str:
-        return f"Function({_ommx_rust.Function.decode(self.raw.SerializeToString()).__repr__()})"
+        return self.raw.__repr__()
 
     def __add__(
         self,
@@ -3031,23 +2965,16 @@ class Function(AsConstraint):
                 _ommx_rust.Linear.single_term(other.raw.id, 1)
             )
         elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_linear(other.raw)
         elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(
-                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_quadratic(other.raw)
         elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(
-                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_polynomial(other.raw)
         elif isinstance(other, Function):
-            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+            rhs = other.raw
         else:
             return NotImplemented
-        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        return Function.from_bytes((new + rhs).encode())
+        return Function.from_raw(self.raw + rhs)
 
     def __radd__(self, other):
         return self + other
@@ -3084,23 +3011,16 @@ class Function(AsConstraint):
                 _ommx_rust.Linear.single_term(other.raw.id, 1)
             )
         elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_linear(other.raw)
         elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(
-                _ommx_rust.Quadratic.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_quadratic(other.raw)
         elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(
-                _ommx_rust.Polynomial.decode(other.raw.SerializeToString())
-            )
+            rhs = _ommx_rust.Function.from_polynomial(other.raw)
         elif isinstance(other, Function):
-            rhs = _ommx_rust.Function.decode(other.raw.SerializeToString())
+            rhs = other.raw
         else:
             return NotImplemented
-        new = _ommx_rust.Function.decode(self.raw.SerializeToString())
-        return Function.from_bytes((new * rhs).encode())
+        return Function.from_raw(self.raw * rhs)
 
     def __rmul__(self, other):
         return self * other
@@ -3165,9 +3085,14 @@ class Constraint:
         if id > Constraint._counter:
             Constraint._counter = id + 1
 
+        if not isinstance(function, Function):
+            function = Function(function)
+        raw_function = _Function()
+        raw_function.ParseFromString(function.to_bytes())
+
         self.raw = _Constraint(
             id=id,
-            function=as_function(function),
+            function=raw_function,
             equality=equality,
             name=name,
             description=description,

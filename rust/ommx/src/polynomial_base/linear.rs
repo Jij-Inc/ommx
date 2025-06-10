@@ -1,5 +1,5 @@
 use super::*;
-use crate::{random::unique_integers, VariableID};
+use crate::{random::unique_integers, VariableID, VariableIDPair};
 use anyhow::{bail, Result};
 use proptest::prelude::*;
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
@@ -110,6 +110,17 @@ impl Monomial for LinearMonomial {
 
     fn max_degree() -> Degree {
         1.into()
+    }
+
+    fn as_linear(&self) -> Option<VariableID> {
+        match self {
+            LinearMonomial::Variable(id) => Some(*id),
+            LinearMonomial::Constant => None,
+        }
+    }
+
+    fn as_quadratic(&self) -> Option<VariableIDPair> {
+        None
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID>> {
