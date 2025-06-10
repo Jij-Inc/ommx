@@ -1,6 +1,8 @@
 mod artifact;
 mod builder;
+mod constraint;
 mod dataset;
+mod decision_variable;
 mod descriptor;
 mod evaluate;
 mod instance;
@@ -11,7 +13,9 @@ mod random;
 
 pub use artifact::*;
 pub use builder::*;
+pub use constraint::*;
 pub use dataset::*;
+pub use decision_variable::*;
 pub use descriptor::*;
 pub use evaluate::*;
 pub use instance::*;
