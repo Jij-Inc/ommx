@@ -1,4 +1,4 @@
-use crate::message::{VariableBound, Function};
+use crate::message::{Function, VariableBound};
 use anyhow::Result;
 use ommx::{Evaluate, Message, Parse};
 use pyo3::{
@@ -379,9 +379,9 @@ impl DecisionVariable {
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
     ) -> Result<Self> {
-        use ommx::{VariableID, Kind, ATol};
         use fnv::FnvHashMap;
-        
+        use ommx::{ATol, Kind, VariableID};
+
         let variable_id = VariableID::from(id);
         let rust_kind = match kind {
             1 => Kind::Binary,
@@ -391,7 +391,7 @@ impl DecisionVariable {
             5 => Kind::SemiContinuous,
             _ => return Err(anyhow::anyhow!("Invalid kind: {}", kind).into()),
         };
-        
+
         let mut decision_variable = ommx::DecisionVariable::new(
             variable_id,
             rust_kind,
@@ -399,12 +399,12 @@ impl DecisionVariable {
             None, // substituted_value
             ATol::default(),
         )?;
-        
+
         decision_variable.name = name;
         decision_variable.subscripts = subscripts.unwrap_or_default();
         decision_variable.parameters = FnvHashMap::default();
         decision_variable.description = None;
-        
+
         Ok(Self(decision_variable))
     }
 
@@ -464,11 +464,8 @@ impl DecisionVariable {
             upper.unwrap_or(f64::INFINITY),
         )?);
         Self::new(
-            id,
-            2, // KIND_INTEGER
-            bound,
-            name,
-            None,
+            id, 2, // KIND_INTEGER
+            bound, name, None,
         )
     }
 
@@ -485,11 +482,8 @@ impl DecisionVariable {
             upper.unwrap_or(f64::INFINITY),
         )?);
         Self::new(
-            id,
-            3, // KIND_CONTINUOUS
-            bound,
-            name,
-            None,
+            id, 3, // KIND_CONTINUOUS
+            bound, name, None,
         )
     }
 
@@ -523,16 +517,16 @@ impl Constraint {
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
     ) -> Result<Self> {
-        use ommx::{ConstraintID, Equality};
         use fnv::FnvHashMap;
-        
+        use ommx::{ConstraintID, Equality};
+
         let constraint_id = ConstraintID::from(id);
         let rust_equality = match equality {
             1 => Equality::EqualToZero,
             2 => Equality::LessThanOrEqualToZero,
             _ => return Err(anyhow::anyhow!("Invalid equality: {}", equality).into()),
         };
-        
+
         let constraint = ommx::Constraint {
             id: constraint_id,
             function: function.0,
@@ -542,7 +536,7 @@ impl Constraint {
             parameters: FnvHashMap::default(),
             description: None,
         };
-        
+
         Ok(Self(constraint))
     }
 
@@ -578,23 +572,21 @@ impl Constraint {
     #[pyo3(signature = (id, function, name=None))]
     pub fn equal_to_zero(id: u64, function: Function, name: Option<String>) -> Result<Self> {
         Self::new(
-            id,
-            function,
-            1, // EQUALITY_EQUAL_TO_ZERO
-            name,
-            None,
+            id, function, 1, // EQUALITY_EQUAL_TO_ZERO
+            name, None,
         )
     }
 
     #[staticmethod]
     #[pyo3(signature = (id, function, name=None))]
-    pub fn less_than_or_equal_to_zero(id: u64, function: Function, name: Option<String>) -> Result<Self> {
+    pub fn less_than_or_equal_to_zero(
+        id: u64,
+        function: Function,
+        name: Option<String>,
+    ) -> Result<Self> {
         Self::new(
-            id,
-            function,
-            2, // EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-            name,
-            None,
+            id, function, 2, // EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            name, None,
         )
     }
 
@@ -628,7 +620,7 @@ impl RemovedConstraint {
         removed_reason_parameters: Option<HashMap<String, String>>,
     ) -> Self {
         use fnv::FnvHashMap;
-        
+
         let removed_constraint = ommx::RemovedConstraint {
             constraint: constraint.0,
             removed_reason,
@@ -636,7 +628,7 @@ impl RemovedConstraint {
                 .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
                 .unwrap_or_default(),
         };
-        
+
         Self(removed_constraint)
     }
 
@@ -652,7 +644,9 @@ impl RemovedConstraint {
 
     #[getter]
     pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
-        self.0.removed_reason_parameters.iter()
+        self.0
+            .removed_reason_parameters
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
