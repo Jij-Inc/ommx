@@ -1,8 +1,8 @@
 use crate::message::VariableBound;
 use anyhow::Result;
-use fnv::FnvHashMap;
-use ommx::{ATol, Kind, Message, Parse, VariableID};
+use ommx::{v1, ATol, Message, Parse, VariableID};
 use pyo3::{prelude::*, types::PyBytes};
+use std::collections::HashMap;
 
 /// DecisionVariable wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -14,27 +14,22 @@ pub struct DecisionVariable(pub ommx::DecisionVariable);
 #[pymethods]
 impl DecisionVariable {
     #[new]
-    #[pyo3(signature = (id, kind, bound, name=None, subscripts=None))]
+    #[pyo3(signature = (id, kind, bound, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
     pub fn new(
         id: u64,
-        kind: u32,
+        kind: i32,
         bound: VariableBound,
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
     ) -> Result<Self> {
         let variable_id = VariableID::from(id);
-        let rust_kind = match kind {
-            1 => Kind::Binary,
-            2 => Kind::Integer,
-            3 => Kind::Continuous,
-            4 => Kind::SemiInteger,
-            5 => Kind::SemiContinuous,
-            _ => return Err(anyhow::anyhow!("Invalid kind: {}", kind).into()),
-        };
+        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
 
         let mut decision_variable = ommx::DecisionVariable::new(
             variable_id,
-            rust_kind,
+            kind,
             bound.0,
             None, // substituted_value
             ATol::default(),
@@ -42,8 +37,8 @@ impl DecisionVariable {
 
         decision_variable.name = name;
         decision_variable.subscripts = subscripts.unwrap_or_default();
-        decision_variable.parameters = FnvHashMap::default();
-        decision_variable.description = None;
+        decision_variable.parameters = parameters.into_iter().collect();
+        decision_variable.description = description;
 
         Ok(Self(decision_variable))
     }
@@ -54,14 +49,9 @@ impl DecisionVariable {
     }
 
     #[getter]
-    pub fn kind(&self) -> u32 {
-        match self.0.kind() {
-            ommx::Kind::Binary => 1,
-            ommx::Kind::Integer => 2,
-            ommx::Kind::Continuous => 3,
-            ommx::Kind::SemiInteger => 4,
-            ommx::Kind::SemiContinuous => 5,
-        }
+    pub fn kind(&self) -> i32 {
+        let kind: v1::decision_variable::Kind = self.0.kind().into();
+        kind as i32
     }
 
     #[getter]
@@ -80,50 +70,126 @@ impl DecisionVariable {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, name=None))]
-    pub fn binary(id: u64, name: Option<String>) -> Result<Self> {
+    #[pyo3(signature = (id, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
+    pub fn binary(
+        id: u64,
+        name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> Result<Self> {
         Self::new(
             id,
             1, // KIND_BINARY
             VariableBound(ommx::Bound::of_binary()),
             name,
-            None,
+            subscripts,
+            parameters,
+            description,
         )
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None))]
+    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
     pub fn integer(
         id: u64,
         lower: Option<f64>,
         upper: Option<f64>,
         name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
     ) -> Result<Self> {
         let bound = VariableBound(ommx::Bound::new(
             lower.unwrap_or(f64::NEG_INFINITY),
             upper.unwrap_or(f64::INFINITY),
         )?);
         Self::new(
-            id, 2, // KIND_INTEGER
-            bound, name, None,
+            id,
+            2, // KIND_INTEGER
+            bound,
+            name,
+            subscripts,
+            parameters,
+            description,
         )
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None))]
+    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
     pub fn continuous(
         id: u64,
         lower: Option<f64>,
         upper: Option<f64>,
         name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
     ) -> Result<Self> {
         let bound = VariableBound(ommx::Bound::new(
             lower.unwrap_or(f64::NEG_INFINITY),
             upper.unwrap_or(f64::INFINITY),
         )?);
         Self::new(
-            id, 3, // KIND_CONTINUOUS
-            bound, name, None,
+            id,
+            3, // KIND_CONTINUOUS
+            bound,
+            name,
+            subscripts,
+            parameters,
+            description,
+        )
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
+    pub fn semi_integer(
+        id: u64,
+        lower: Option<f64>,
+        upper: Option<f64>,
+        name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> Result<Self> {
+        let bound = VariableBound(ommx::Bound::new(
+            lower.unwrap_or(f64::NEG_INFINITY),
+            upper.unwrap_or(f64::INFINITY),
+        )?);
+        Self::new(
+            id,
+            4, // KIND_SEMI_INTEGER
+            bound,
+            name,
+            subscripts,
+            parameters,
+            description,
+        )
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
+    pub fn semi_continuous(
+        id: u64,
+        lower: Option<f64>,
+        upper: Option<f64>,
+        name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+        parameters: HashMap<String, String>,
+        description: Option<String>,
+    ) -> Result<Self> {
+        let bound = VariableBound(ommx::Bound::new(
+            lower.unwrap_or(f64::NEG_INFINITY),
+            upper.unwrap_or(f64::INFINITY),
+        )?);
+        Self::new(
+            id,
+            5, // KIND_SEMI_CONTINUOUS
+            bound,
+            name,
+            subscripts,
+            parameters,
+            description,
         )
     }
 

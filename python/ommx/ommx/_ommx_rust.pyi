@@ -142,10 +142,16 @@ class DecisionVariable:
         bound: Bound,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
     ): ...
     @staticmethod
     def binary(
-        id: builtins.int, name: typing.Optional[builtins.str] = None
+        id: builtins.int,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable: ...
     @staticmethod
     def integer(
@@ -153,6 +159,9 @@ class DecisionVariable:
         lower: typing.Optional[builtins.float] = None,
         upper: typing.Optional[builtins.float] = None,
         name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable: ...
     @staticmethod
     def continuous(
@@ -160,6 +169,29 @@ class DecisionVariable:
         lower: typing.Optional[builtins.float] = None,
         upper: typing.Optional[builtins.float] = None,
         name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def semi_integer(
+        id: builtins.int,
+        lower: typing.Optional[builtins.float] = None,
+        upper: typing.Optional[builtins.float] = None,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def semi_continuous(
+        id: builtins.int,
+        lower: typing.Optional[builtins.float] = None,
+        upper: typing.Optional[builtins.float] = None,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
     ) -> DecisionVariable: ...
     @staticmethod
     def decode(bytes: bytes) -> DecisionVariable: ...
