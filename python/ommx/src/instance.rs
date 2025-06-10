@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ommx::{Evaluate, Message, Parse, Substitute};
+use ommx::{Evaluate, Message, Parse};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
@@ -17,18 +17,12 @@ impl Instance {
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::Instance::decode(bytes.as_bytes())?;
         let parsed = Parse::parse(inner.clone(), &())?;
-        inner.validate()?;
         Ok(Self(parsed))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        inner.validate()
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -78,16 +72,16 @@ impl Instance {
         removed_reason: String,
         removed_reason_parameters: HashMap<String, String>,
     ) -> Result<()> {
-        let mut inner: ommx::v1::Instance = self.0.clone().into();
-        inner.relax_constraint(constraint_id, removed_reason, removed_reason_parameters)?;
-        self.0 = Parse::parse(inner, &())?;
+        self.0.relax_constraint(
+            constraint_id.into(),
+            removed_reason,
+            removed_reason_parameters,
+        )?;
         Ok(())
     }
 
     pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        let mut inner: ommx::v1::Instance = self.0.clone().into();
-        inner.restore_constraint(constraint_id)?;
-        self.0 = Parse::parse(inner, &())?;
+        self.0.restore_constraint(constraint_id.into())?;
         Ok(())
     }
 
