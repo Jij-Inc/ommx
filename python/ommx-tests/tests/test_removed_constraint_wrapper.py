@@ -1,6 +1,5 @@
 """Test RemovedConstraint PyO3 wrapper functionality."""
 
-import pytest
 import ommx._ommx_rust as rust
 
 
