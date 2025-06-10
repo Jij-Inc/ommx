@@ -1,6 +1,5 @@
 """Test decision_variable_analysis API implementation."""
 
-import pytest
 from ommx.v1 import DecisionVariable, Instance
 
 
@@ -99,9 +98,9 @@ def test_bound_wrapper_functionality():
     assert bound.lower == 0.0
     assert bound.upper == 1.0
     assert bound.width() == 1.0
-    assert bound.is_finite() == True
-    assert bound.contains(0.5, 0.001) == True
-    assert bound.contains(-0.1, 0.001) == False
+    assert bound.is_finite()
+    assert bound.contains(0.5, 0.001)
+    assert not bound.contains(-0.1, 0.001)
     assert bound.nearest_to_zero() == 0.0
 
     # Test string representations

@@ -28,12 +28,14 @@ tasks:
   pyright:
     desc: Type check OMMX Python SDK
     cmds:
-      - uv run pyright
+      - uv run pyright python/ommx python/ommx-tests
+    dir: ../..
 
   lint:
     desc: Lint by ruff check
     cmds:
-      - uv run ruff check
+      - uv run ruff check python/ommx python/ommx-tests
+    dir: ../..
 
   bench:
     desc: Run benchmarks for OMMX Python SDK
