@@ -2,7 +2,7 @@ use super::*;
 use anyhow::{anyhow, Result};
 
 impl Instance {
-    pub fn relax(
+    pub fn relax_constraint(
         &mut self,
         id: ConstraintID,
         removed_reason: String,
@@ -23,7 +23,7 @@ impl Instance {
         Ok(())
     }
 
-    pub fn restore(&mut self, id: ConstraintID) -> Result<()> {
+    pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let rc = self
             .removed_constraints
             .remove(&id)

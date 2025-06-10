@@ -40,7 +40,8 @@ The project is actively migrating from Protocol Buffers auto-generated Python cl
 
 **Core Mathematical Objects** (Completed):
 - `Linear`, `Quadratic`, `Polynomial`, `Function` classes now use Rust implementations
-- Located in `python/ommx/src/message.rs` and exposed via `_ommx_rust` module
+- `DecisionVariableAnalysis` and `Bound` classes provide comprehensive variable analysis
+- Located in `python/ommx/src/message.rs` and `python/ommx/src/instance.rs`, exposed via `_ommx_rust` module
 - Python wrappers in `python/ommx/ommx/v1/__init__.py` use `.raw` attribute pattern
 - All evaluation methods migrated to instance methods (`.evaluate()`, `.partial_evaluate()`)
 
@@ -70,6 +71,7 @@ class Linear(AsConstraint):
 
 **Migration Progress**: 
 - ✅ Mathematical functions (`Linear`, `Quadratic`, `Polynomial`, `Function`)
+- ✅ Decision variable analysis (`DecisionVariableAnalysis`, `Bound`)
 - 🔄 Constraint types (in progress)
 - 🔄 Instance types (planned)
 - Deprecated global evaluation functions removed
@@ -170,6 +172,6 @@ When making changes, always run the appropriate linting/testing commands before 
 ## Important Notes for Development
 
 1. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-2. **Test Coverage**: The test suite includes 27 tests covering core functionality, QUBO conversion, MPS format handling, and doctests
+2. **Test Coverage**: The test suite includes 30 tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, and doctests
 3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
