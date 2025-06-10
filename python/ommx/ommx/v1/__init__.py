@@ -3887,7 +3887,7 @@ class Bound:
         return Bound.__new__(Bound).__init_from_raw__(result)
 
     def __repr__(self) -> str:
-        return f"Bound(lower={self.lower()}, upper={self.upper()})"
+        return f"Bound(lower={self.lower}, upper={self.upper})"
 
     def __str__(self) -> str:
         return self.raw.__str__()

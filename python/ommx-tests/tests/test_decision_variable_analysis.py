@@ -38,8 +38,8 @@ def test_decision_variable_analysis_basic():
     assert len(binary_vars) == 3
     for var_id, bound in binary_vars.items():
         assert var_id in {0, 1, 2}
-        assert bound.lower() == 0.0
-        assert bound.upper() == 1.0
+        assert bound.lower == 0.0
+        assert bound.upper == 1.0
 
 
 def test_decision_variable_analysis_mixed_types():
@@ -63,20 +63,20 @@ def test_decision_variable_analysis_mixed_types():
     # Test binary variables
     binary_vars = analysis.used_binary()
     assert 0 in binary_vars
-    assert binary_vars[0].lower() == 0.0
-    assert binary_vars[0].upper() == 1.0
+    assert binary_vars[0].lower == 0.0
+    assert binary_vars[0].upper == 1.0
 
     # Test integer variables
     integer_vars = analysis.used_integer()
     assert 1 in integer_vars
-    assert integer_vars[1].lower() == 0.0
-    assert integer_vars[1].upper() == 5.0
+    assert integer_vars[1].lower == 0.0
+    assert integer_vars[1].upper == 5.0
 
     # Test continuous variables
     continuous_vars = analysis.used_continuous()
     assert 2 in continuous_vars
-    assert continuous_vars[2].lower() == 0.0
-    assert continuous_vars[2].upper() == 10.0
+    assert continuous_vars[2].lower == 0.0
+    assert continuous_vars[2].upper == 10.0
 
 
 def test_bound_wrapper_functionality():
@@ -96,8 +96,8 @@ def test_bound_wrapper_functionality():
     bound = binary_vars[0]
 
     # Test bound methods
-    assert bound.lower() == 0.0
-    assert bound.upper() == 1.0
+    assert bound.lower == 0.0
+    assert bound.upper == 1.0
     assert bound.width() == 1.0
     assert bound.is_finite() == True
     assert bound.contains(0.5, 0.001) == True
