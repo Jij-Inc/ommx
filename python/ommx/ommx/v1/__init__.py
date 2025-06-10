@@ -603,7 +603,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return _ommx_rust.Instance.from_bytes(
             self.to_bytes()
-        ).used_decision_variable_ids()
+        ).required_ids()
 
     def to_qubo(
         self,
@@ -2907,7 +2907,7 @@ class Function(AsConstraint):
         """
         Get the IDs of decision variables used in the function.
         """
-        return self.raw.used_decision_variable_ids()
+        return self.raw.required_ids()
 
     def content_factor(self) -> float:
         r"""

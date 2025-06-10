@@ -558,7 +558,7 @@ impl Function {
         self.0.content_factor().map(|c| c.into_inner())
     }
 
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+    pub fn required_ids(&self) -> BTreeSet<u64> {
         self.0
             .required_ids()
             .into_iter()

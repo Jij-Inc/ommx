@@ -25,7 +25,7 @@ impl Instance {
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+    pub fn required_ids(&self) -> BTreeSet<u64> {
         self.0
             .required_ids()
             .into_iter()
