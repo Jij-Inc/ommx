@@ -67,11 +67,13 @@ The Instance class migration follows this phased approach:
    - Factory methods for binary, integer, continuous variables
    - All tests passing and committed
 
-2. **Phase 2: 🔄 Next** - Additional PyO3 wrappers
-   - `Constraint` PyO3 wrapper implementation
-   - `RemovedConstraint` PyO3 wrapper implementation
+2. **Phase 2: ✅ Completed** - Additional PyO3 wrappers
+   - ✅ `Constraint` PyO3 wrapper implementation with factory methods and getters
+   - ✅ `RemovedConstraint` PyO3 wrapper implementation with complete functionality
+   - All wrappers follow native Rust type pattern for optimal performance
+   - Comprehensive test suites (15 test cases total) covering all functionality
 
-3. **Phase 3: 📋 Planned** - Rust Instance API extension
+3. **Phase 3: 🔄 Next** - Rust Instance API extension
    - Add getter methods (`get_objective`, `get_sense`, `get_decision_variables`, `get_constraints`)
    - Add `from_components` constructor method to Rust Instance
 
@@ -89,14 +91,24 @@ The Instance class migration follows this phased approach:
 - Protocol Buffers serialization/deserialization handled by Rust
 - Mathematical operations (add, subtract, multiply) implemented in Rust
 - Object-oriented evaluation API with instance methods for better encapsulation
-- Use native Rust types (`ommx::DecisionVariable`) rather than Protocol Buffer types for better performance
+- Use native Rust types (`ommx::DecisionVariable`, `ommx::Constraint`, `ommx::RemovedConstraint`) rather than Protocol Buffer types for better performance
+
+**Phase 2 Completed Features**:
+- **DecisionVariable wrapper**: Factory methods (binary, integer, continuous), property getters, proper type validation
+- **Constraint wrapper**: Direct constructor, factory methods (equal_to_zero, less_than_or_equal_to_zero), function access
+- **RemovedConstraint wrapper**: Complete parameter handling, original constraint access, convenience methods
+- **Type Safety**: Full pyright type checking support with auto-generated stub files
+- **Testing**: 15 comprehensive test cases covering all wrapper functionality
+- **Performance**: Native Rust type usage eliminates Protocol Buffer conversion overhead
 
 **Migration Progress**: 
 - ✅ Mathematical functions (`Linear`, `Quadratic`, `Polynomial`, `Function`)
 - ✅ Decision variable analysis (`DecisionVariableAnalysis`, `Bound`)
 - ✅ DecisionVariable PyO3 wrapper (Phase 1 complete)
-- 🔄 Instance migration (Phase 2 in progress)
-- 📋 Constraint types (Phase 2 planned)
+- ✅ Constraint PyO3 wrapper (Phase 2 complete)
+- ✅ RemovedConstraint PyO3 wrapper (Phase 2 complete)
+- 🔄 Instance migration (Phase 3 in progress - Rust API extension)
+- 📋 Python Instance class migration (Phase 4 planned)
 - Deprecated global evaluation functions removed
 
 ## Development Commands
@@ -195,7 +207,7 @@ When making changes, always run the appropriate linting/testing commands before 
 ## Important Notes for Development
 
 1. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-2. **Test Coverage**: The test suite includes 30 tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, and doctests
+2. **Test Coverage**: The test suite includes 44 tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
 3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
@@ -210,13 +222,19 @@ When making changes, always run the appropriate linting/testing commands before 
 ### Instance Migration Guidelines
 When working on the Protocol Buffer to Rust Instance migration:
 
-1. **Small Incremental Changes**: Add one PyO3 wrapper at a time (DecisionVariable ✅, next: Constraint, then RemovedConstraint)
+1. **Small Incremental Changes**: Add one PyO3 wrapper at a time (DecisionVariable ✅, Constraint ✅, RemovedConstraint ✅)
 2. **Test-Driven Development**: Ensure `cargo check` passes and all tests pass before each commit
-3. **Use Native Rust Types**: Prefer `ommx::DecisionVariable` over `ommx::v1::DecisionVariable` (Protocol Buffer types)
+3. **Use Native Rust Types**: Prefer `ommx::DecisionVariable`, `ommx::Constraint` over Protocol Buffer types (ommx::v1::*)
 4. **Proper Error Handling**: Use `anyhow::Result` for proper error propagation in PyO3 wrappers
-5. **API Consistency**: Follow existing patterns from DecisionVariable wrapper implementation
+5. **API Consistency**: Follow established patterns from completed wrapper implementations
+6. **Type Safety**: Always regenerate stub files and run pyright after adding new wrappers
 
-### Current Development Status
-- **Completed**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
-- **Next Steps**: Follow the 5-phase roadmap outlined in the migration status above
+### Current Development Status (December 2024)
+- **Phase 1 ✅**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
+- **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive functionality
+- **Phase 3 🔄**: Next - Extend Rust Instance API with getter methods and from_components constructor
+- **Key Achievements**: 44 tests passing, full type safety, native Rust performance
 - **Key Principles**: Small changes, test coverage, and maintaining compatibility throughout the migration
+
+## Memories
+- ほとんどの作業はrootで行うように記述されています。ここのタスクが終わったらrootにcdするようにしてください
