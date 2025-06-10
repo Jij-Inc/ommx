@@ -1,4 +1,4 @@
-use crate::message::VariableBound;
+use crate::message::{VariableBound, Function};
 use anyhow::Result;
 use ommx::{Evaluate, Message, Parse};
 use pyo3::{
@@ -501,6 +501,112 @@ impl DecisionVariable {
             self.name(),
             self.0.bound().lower(),
             self.0.bound().upper()
+        )
+    }
+}
+
+/// Constraint wrapper for Python
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[derive(Clone)]
+pub struct Constraint(pub ommx::Constraint);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Constraint {
+    #[new]
+    #[pyo3(signature = (id, function, equality, name=None, subscripts=None))]
+    pub fn new(
+        id: u64,
+        function: Function,
+        equality: u32,
+        name: Option<String>,
+        subscripts: Option<Vec<i64>>,
+    ) -> Result<Self> {
+        use ommx::{ConstraintID, Equality};
+        use fnv::FnvHashMap;
+        
+        let constraint_id = ConstraintID::from(id);
+        let rust_equality = match equality {
+            1 => Equality::EqualToZero,
+            2 => Equality::LessThanOrEqualToZero,
+            _ => return Err(anyhow::anyhow!("Invalid equality: {}", equality).into()),
+        };
+        
+        let constraint = ommx::Constraint {
+            id: constraint_id,
+            function: function.0,
+            equality: rust_equality,
+            name,
+            subscripts: subscripts.unwrap_or_default(),
+            parameters: FnvHashMap::default(),
+            description: None,
+        };
+        
+        Ok(Self(constraint))
+    }
+
+    #[getter]
+    pub fn id(&self) -> u64 {
+        self.0.id.into_inner()
+    }
+
+    #[getter]
+    pub fn function(&self) -> Function {
+        Function(self.0.function.clone())
+    }
+
+    #[getter]
+    pub fn equality(&self) -> u32 {
+        match self.0.equality {
+            ommx::Equality::EqualToZero => 1,
+            ommx::Equality::LessThanOrEqualToZero => 2,
+        }
+    }
+
+    #[getter]
+    pub fn name(&self) -> String {
+        self.0.name.clone().unwrap_or_default()
+    }
+
+    #[getter]
+    pub fn subscripts(&self) -> Vec<i64> {
+        self.0.subscripts.clone()
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (id, function, name=None))]
+    pub fn equal_to_zero(id: u64, function: Function, name: Option<String>) -> Result<Self> {
+        Self::new(
+            id,
+            function,
+            1, // EQUALITY_EQUAL_TO_ZERO
+            name,
+            None,
+        )
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (id, function, name=None))]
+    pub fn less_than_or_equal_to_zero(id: u64, function: Function, name: Option<String>) -> Result<Self> {
+        Self::new(
+            id,
+            function,
+            2, // EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            name,
+            None,
+        )
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "Constraint(id={}, equality={}, name=\"{}\")",
+            self.id(),
+            match self.0.equality {
+                ommx::Equality::EqualToZero => "EqualToZero",
+                ommx::Equality::LessThanOrEqualToZero => "LessThanOrEqualToZero",
+            },
+            self.name()
         )
     }
 }

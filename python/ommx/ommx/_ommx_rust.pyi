@@ -94,6 +94,72 @@ class Bound:
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+class Constraint:
+    r"""
+    Constraint wrapper for Python
+    """
+
+    id: builtins.int
+    function: Function
+    equality: builtins.int
+    name: builtins.str
+    subscripts: builtins.list[builtins.int]
+    def __new__(
+        cls,
+        id: builtins.int,
+        function: Function,
+        equality: builtins.int,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+    ): ...
+    @staticmethod
+    def equal_to_zero(
+        id: builtins.int, function: Function, name: typing.Optional[builtins.str] = None
+    ) -> Constraint: ...
+    @staticmethod
+    def less_than_or_equal_to_zero(
+        id: builtins.int, function: Function, name: typing.Optional[builtins.str] = None
+    ) -> Constraint: ...
+    def __repr__(self) -> builtins.str: ...
+
+class DecisionVariable:
+    r"""
+    DecisionVariable wrapper for Python
+    """
+
+    id: builtins.int
+    kind: builtins.int
+    bound: Bound
+    name: builtins.str
+    subscripts: builtins.list[builtins.int]
+    def __new__(
+        cls,
+        id: builtins.int,
+        kind: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Optional[typing.Sequence[builtins.int]] = None,
+    ): ...
+    @staticmethod
+    def binary(
+        id: builtins.int, name: typing.Optional[builtins.str] = None
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def integer(
+        id: builtins.int,
+        lower: typing.Optional[builtins.float] = None,
+        upper: typing.Optional[builtins.float] = None,
+        name: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def continuous(
+        id: builtins.int,
+        lower: typing.Optional[builtins.float] = None,
+        upper: typing.Optional[builtins.float] = None,
+        name: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    def __repr__(self) -> builtins.str: ...
+
 class DecisionVariableAnalysis:
     def used_binary(self) -> builtins.dict[builtins.int, Bound]: ...
     def used_integer(self) -> builtins.dict[builtins.int, Bound]: ...

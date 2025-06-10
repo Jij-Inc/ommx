@@ -452,7 +452,8 @@ impl Polynomial {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Function(ommx::Function);
+#[derive(Clone)]
+pub struct Function(pub ommx::Function);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]

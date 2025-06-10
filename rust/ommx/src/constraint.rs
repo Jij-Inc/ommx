@@ -29,7 +29,7 @@ impl std::fmt::Display for ConstraintID {
 }
 
 impl ConstraintID {
-    fn into_inner(self) -> u64 {
+    pub fn into_inner(self) -> u64 {
         self.0
     }
 }
