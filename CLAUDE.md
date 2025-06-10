@@ -239,3 +239,4 @@ When working on the Protocol Buffer to Rust Instance migration:
 ## Memories
 - ほとんどの作業はrootで行うように記述されています。ここのタスクが終わったらrootにcdするようにしてください
 - v1_ext以下はommx::v1::*に対する実装なので参照せず、変更してはいけません
+- Pythonのテストコードを新たに追加する時は python/ommx-tests/tests に追加して pytest で実行します
