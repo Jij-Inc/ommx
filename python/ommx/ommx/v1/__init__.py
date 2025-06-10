@@ -271,7 +271,8 @@ class Instance(InstanceBase, UserAnnotationBase):
                 ],
                 objective=raw_objective,
                 constraints=[
-                    c.to_protobuf() if isinstance(c, Constraint) else c for c in constraints
+                    c.to_protobuf() if isinstance(c, Constraint) else c
+                    for c in constraints
                 ],
                 sense=sense,
             )
@@ -407,7 +408,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
-        return [DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables]
+        return [
+            DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
+        ]
 
     def get_constraints(self) -> list[Constraint]:
         """
@@ -419,7 +422,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints]
+        return [
+            RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
+        ]
 
     def evaluate(self, state: ToState) -> Solution:
         r"""
@@ -1586,7 +1591,8 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                 ],
                 objective=raw_objective,
                 constraints=[
-                    c.to_protobuf() if isinstance(c, Constraint) else c for c in constraints
+                    c.to_protobuf() if isinstance(c, Constraint) else c
+                    for c in constraints
                 ],
                 sense=sense,
                 parameters=[
@@ -1608,7 +1614,9 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
-        return [DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables]
+        return [
+            DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
+        ]
 
     def get_constraints(self) -> list[Constraint]:
         """
@@ -1620,7 +1628,9 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints]
+        return [
+            RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
+        ]
 
     def get_parameters(self) -> list[Parameter]:
         """
@@ -2109,10 +2119,10 @@ class DecisionVariable(VariableBase):
             _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS: 5,
         }
         rust_kind = kind_mapping.get(kind, 3)  # default to continuous
-        
+
         # Create Rust bound
         rust_bound = _ommx_rust.Bound(lower, upper)
-        
+
         # Create Rust DecisionVariable
         rust_dv = _ommx_rust.DecisionVariable(
             id=id,
@@ -2123,7 +2133,7 @@ class DecisionVariable(VariableBase):
             parameters=parameters or {},
             description=description,
         )
-        
+
         return DecisionVariable(rust_dv)
 
     @staticmethod
@@ -3280,8 +3290,10 @@ class Constraint:
         c = self.raw
         # Convert Rust equality to protobuf equivalent for _equality function
         equality_for_display = (
-            Equality.EQUALITY_EQUAL_TO_ZERO if c.equality == 1
-            else Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO if c.equality == 2
+            Equality.EQUALITY_EQUAL_TO_ZERO
+            if c.equality == 1
+            else Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            if c.equality == 2
             else Equality.EQUALITY_UNSPECIFIED
         )
         # Convert Rust function to protobuf for _function_type
@@ -3291,9 +3303,7 @@ class Constraint:
             "id": c.id,
             "equality": _equality(equality_for_display),
             "type": _function_type(pb_function),
-            "used_ids": _ommx_rust.used_decision_variable_ids(
-                c.function.encode()
-            ),
+            "used_ids": _ommx_rust.used_decision_variable_ids(c.function.encode()),
             "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
             "description": NA,  # Description not supported in Rust implementation
@@ -3611,7 +3621,9 @@ class SampleSet(UserAnnotationBase):
     @property
     def decision_variables(self) -> DataFrame:
         df = DataFrame(
-            DecisionVariable.from_bytes(v.decision_variable.SerializeToString())._as_pandas_entry()
+            DecisionVariable.from_bytes(
+                v.decision_variable.SerializeToString()
+            )._as_pandas_entry()
             | {id: value for id, value in SampledValues(v.samples)}
             for v in self.raw.decision_variables
         )

@@ -31,7 +31,9 @@ def test_removed_constraint_no_parameters():
     # Create a constraint
     linear = rust.Linear({2: 2.0}, -5.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(2, function, 2, "leq_constraint")  # 2 = LessThanOrEqualToZero
+    constraint = rust.Constraint(
+        2, function, 2, "leq_constraint"
+    )  # 2 = LessThanOrEqualToZero
 
     # Create removed constraint without parameters
     removed_constraint = rust.RemovedConstraint(
@@ -102,7 +104,9 @@ def test_removed_constraint_complex_parameters():
     """Test RemovedConstraint with complex parameter structure."""
     linear = rust.Linear({1: 1.0, 2: -1.0}, 0.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(5, function, 2, "complex_test")  # 2 = LessThanOrEqualToZero
+    constraint = rust.Constraint(
+        5, function, 2, "complex_test"
+    )  # 2 = LessThanOrEqualToZero
 
     complex_params = {
         "solver": "highs",

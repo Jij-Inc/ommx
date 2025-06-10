@@ -10,8 +10,6 @@ from ommx.adapter import InfeasibleDetected
 from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
 
 
-
-
 def test_error_nonlinear_objective():
     # Objective function: 2.3 * x * x
     ommx_instance = Instance.from_components(

@@ -2,10 +2,7 @@ use crate::message::Function;
 use anyhow::Result;
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Equality, Message, Parse};
-use pyo3::{
-    prelude::*,
-    types::PyBytes,
-};
+use pyo3::{prelude::*, types::PyBytes};
 use std::collections::HashMap;
 
 /// Constraint wrapper for Python
@@ -83,7 +80,11 @@ impl Constraint {
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0.parameters.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.0
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     #[staticmethod]

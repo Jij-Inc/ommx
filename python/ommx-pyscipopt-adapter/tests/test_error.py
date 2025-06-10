@@ -10,8 +10,6 @@ from ommx.adapter import InfeasibleDetected
 from ommx.v1 import Constraint, Instance, DecisionVariable, Polynomial
 
 
-
-
 def test_error_polynomial_objective():
     # Objective function: 2.3 * x * x * x
     ommx_instance = Instance.from_components(
@@ -44,7 +42,6 @@ def test_error_nonlinear_constraint():
     assert "Constraints must be either `constant`, `linear` or `quadratic`." in str(
         e.value
     )
-
 
 
 def test_error_not_optimized_model():

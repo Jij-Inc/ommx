@@ -26,7 +26,9 @@ def test_constraint_less_than_or_equal():
     function = rust.Function.from_linear(linear)
 
     # Create constraint: 2*x2 - 5 <= 0
-    constraint = rust.Constraint(2, function, 2, "leq_constraint")  # 2 = LessThanOrEqualToZero
+    constraint = rust.Constraint(
+        2, function, 2, "leq_constraint"
+    )  # 2 = LessThanOrEqualToZero
 
     assert constraint.id == 2
     assert constraint.equality == 2  # LessThanOrEqualToZero
@@ -80,7 +82,9 @@ def test_constraint_repr():
     assert 'Constraint(id=1, equality=EqualToZero, name="eq_test")' == repr_str1
 
     # Test LessThanOrEqualToZero representation
-    constraint2 = rust.Constraint(2, function, 2, "leq_test")  # 2 = LessThanOrEqualToZero
+    constraint2 = rust.Constraint(
+        2, function, 2, "leq_test"
+    )  # 2 = LessThanOrEqualToZero
     repr_str2 = repr(constraint2)
     assert (
         'Constraint(id=2, equality=LessThanOrEqualToZero, name="leq_test")' == repr_str2

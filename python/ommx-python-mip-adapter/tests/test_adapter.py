@@ -11,7 +11,6 @@ from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
 
-
 def test_error_nonlinear_objective():
     # Objective function: 2.3 * x * x
     ommx_instance = Instance.from_components(
