@@ -1,10 +1,11 @@
+use crate::message::VariableBound;
 use anyhow::Result;
 use ommx::{Evaluate, Message, Parse};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -120,6 +121,111 @@ impl Instance {
         let result = inner.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
         self.0 = Parse::parse(inner, &())?;
         Ok(result)
+    }
+
+    pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
+        DecisionVariableAnalysis(self.0.analyze_decision_variables())
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct DecisionVariableAnalysis(ommx::DecisionVariableAnalysis);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl DecisionVariableAnalysis {
+    pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_binary()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_integer(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_integer()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_continuous(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_continuous()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_semi_integer(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_semi_integer()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_semi_continuous(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_semi_continuous()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.used().iter().map(|id| id.into_inner()).collect()
+    }
+
+    pub fn all_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.all().iter().map(|id| id.into_inner()).collect()
+    }
+
+    pub fn used_in_objective(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_objective()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_constraints()
+            .iter()
+            .map(|(constraint_id, variable_ids)| {
+                (
+                    **constraint_id,
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn fixed(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .fixed()
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect()
+    }
+
+    pub fn irrelevant(&self) -> BTreeSet<u64> {
+        self.0
+            .irrelevant()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn dependent(&self) -> BTreeSet<u64> {
+        self.0
+            .dependent()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
     }
 }
 
