@@ -1,6 +1,7 @@
 use crate::message::{Function, VariableBound};
 use anyhow::Result;
-use ommx::{Evaluate, Message, Parse};
+use fnv::FnvHashMap;
+use ommx::{ATol, ConstraintID, Equality, Evaluate, Kind, Message, Parse, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
@@ -19,6 +20,82 @@ impl Instance {
         let inner = ommx::v1::Instance::decode(bytes.as_bytes())?;
         let parsed = Parse::parse(inner.clone(), &())?;
         Ok(Self(parsed))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints))]
+    pub fn from_components(
+        sense: u32,
+        objective: Function,
+        decision_variables: HashMap<u64, DecisionVariable>,
+        constraints: HashMap<u64, Constraint>,
+    ) -> Result<Self> {
+        let rust_sense = match sense {
+            1 => ommx::Sense::Minimize,
+            2 => ommx::Sense::Maximize,
+            _ => return Err(anyhow::anyhow!("Invalid sense: {}", sense).into()),
+        };
+
+        let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
+            decision_variables
+                .into_iter()
+                .map(|(id, var)| (VariableID::from(id), var.0))
+                .collect();
+
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+            .into_iter()
+            .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
+            .collect();
+
+        let instance = ommx::Instance::new(
+            rust_sense,
+            objective.0,
+            rust_decision_variables,
+            rust_constraints,
+            ommx::ConstraintHints::default(),
+        )?;
+
+        Ok(Self(instance))
+    }
+
+    pub fn get_sense(&self) -> u32 {
+        match self.0.sense() {
+            ommx::Sense::Minimize => 1,
+            ommx::Sense::Maximize => 2,
+        }
+    }
+
+    pub fn get_objective(&self) -> Function {
+        Function(self.0.objective().clone())
+    }
+
+    pub fn get_decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+        self.0
+            .decision_variables()
+            .iter()
+            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
+            .collect()
+    }
+
+    pub fn get_constraints(&self) -> HashMap<u64, Constraint> {
+        self.0
+            .constraints()
+            .iter()
+            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .collect()
+    }
+
+    pub fn get_removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+        self.0
+            .removed_constraints()
+            .iter()
+            .map(|(id, removed_constraint)| {
+                (
+                    id.into_inner(),
+                    RemovedConstraint(removed_constraint.clone()),
+                )
+            })
+            .collect()
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
@@ -379,9 +456,6 @@ impl DecisionVariable {
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
     ) -> Result<Self> {
-        use fnv::FnvHashMap;
-        use ommx::{ATol, Kind, VariableID};
-
         let variable_id = VariableID::from(id);
         let rust_kind = match kind {
             1 => Kind::Binary,
@@ -517,9 +591,6 @@ impl Constraint {
         name: Option<String>,
         subscripts: Option<Vec<i64>>,
     ) -> Result<Self> {
-        use fnv::FnvHashMap;
-        use ommx::{ConstraintID, Equality};
-
         let constraint_id = ConstraintID::from(id);
         let rust_equality = match equality {
             1 => Equality::EqualToZero,
@@ -619,8 +690,6 @@ impl RemovedConstraint {
         removed_reason: String,
         removed_reason_parameters: Option<HashMap<String, String>>,
     ) -> Self {
-        use fnv::FnvHashMap;
-
         let removed_constraint = ommx::RemovedConstraint {
             constraint: constraint.0,
             removed_reason,
