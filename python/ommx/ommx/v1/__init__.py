@@ -16,7 +16,6 @@ from .constraint_pb2 import (
     RemovedConstraint as _RemovedConstraint,
 )
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
-from .decision_variables_pb2 import Bound as _Bound
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
@@ -465,9 +464,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   binary    0.0    1.0         []    1.0
-        1   binary    0.0    1.0         []    0.0
-        2   binary    0.0    1.0         []    0.0
+        0   binary   -0.0    1.0         []    1.0
+        1   binary   -0.0    1.0         []    0.0
+        2   binary   -0.0    1.0         []    0.0
 
         If the value is out of the range, this raises an error:
 
@@ -520,9 +519,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   binary    0.0    1.0         []    1.0
-        1   binary    0.0    1.0         []    0.0
-        2   binary    0.0    1.0         []    0.0
+        0   binary   -0.0    1.0         []    1.0
+        1   binary   -0.0    1.0         []    0.0
+        2   binary   -0.0    1.0         []    0.0
         
         """
         out = _ommx_rust.evaluate_instance(
@@ -685,15 +684,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   integer    0.0    2.0                x        [0]
-        1   integer    0.0    2.0                x        [1]
-        2   integer    0.0    3.0       ommx.slack        [0]
-        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
-        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
-        5    binary    0.0    1.0  ommx.log_encode     [1, 0]
-        6    binary    0.0    1.0  ommx.log_encode     [1, 1]
-        7    binary    0.0    1.0  ommx.log_encode     [2, 0]
-        8    binary    0.0    1.0  ommx.log_encode     [2, 1]
+        0   integer   -0.0    2.0                x        [0]
+        1   integer   -0.0    2.0                x        [1]
+        2   integer   -0.0    3.0       ommx.slack        [0]
+        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary   -0.0    1.0  ommx.log_encode     [1, 0]
+        6    binary   -0.0    1.0  ommx.log_encode     [1, 1]
+        7    binary   -0.0    1.0  ommx.log_encode     [2, 0]
+        8    binary   -0.0    1.0  ommx.log_encode     [2, 1]
 
         * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
 
@@ -719,15 +718,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts  value
         id                                                          
-        0   integer    0.0    2.0                x        [0]    2.0
-        1   integer    0.0    2.0                x        [1]    0.0
-        2   integer    0.0    3.0       ommx.slack        [0]    1.0
-        3    binary    0.0    1.0  ommx.log_encode     [0, 0]    1.0
-        4    binary    0.0    1.0  ommx.log_encode     [0, 1]    1.0
-        5    binary    0.0    1.0  ommx.log_encode     [1, 0]    0.0
-        6    binary    0.0    1.0  ommx.log_encode     [1, 1]    0.0
-        7    binary    0.0    1.0  ommx.log_encode     [2, 0]    1.0
-        8    binary    0.0    1.0  ommx.log_encode     [2, 1]    0.0
+        0   integer   -0.0    2.0                x        [0]    2.0
+        1   integer   -0.0    2.0                x        [1]    0.0
+        2   integer   -0.0    3.0       ommx.slack        [0]    1.0
+        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]    1.0
+        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]    1.0
+        5    binary   -0.0    1.0  ommx.log_encode     [1, 0]    0.0
+        6    binary   -0.0    1.0  ommx.log_encode     [1, 1]    0.0
+        7    binary   -0.0    1.0  ommx.log_encode     [2, 0]    1.0
+        8    binary   -0.0    1.0  ommx.log_encode     [2, 1]    0.0
 
         >>> solution.objective
         2.0
@@ -1246,13 +1245,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   integer    0.0    3.0                x        [0]
-        1   integer    0.0    3.0                x        [1]
-        2   integer    0.0    3.0                x        [2]
-        3    binary    0.0    1.0  ommx.log_encode     [0, 0]
-        4    binary    0.0    1.0  ommx.log_encode     [0, 1]
-        5    binary    0.0    1.0  ommx.log_encode     [2, 0]
-        6    binary    0.0    1.0  ommx.log_encode     [2, 1]
+        0   integer   -0.0    3.0                x        [0]
+        1   integer   -0.0    3.0                x        [1]
+        2   integer   -0.0    3.0                x        [2]
+        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]
+        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]
+        5    binary   -0.0    1.0  ommx.log_encode     [2, 0]
+        6    binary   -0.0    1.0  ommx.log_encode     [2, 1]
 
         The `subscripts` of the new binary variables must be two elements in form of :math:`[i, j]` where
 
@@ -1348,10 +1347,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   integer    0.0    3.0           x        [0]
-        1   integer    0.0    3.0           x        [1]
-        2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    5.0  ommx.slack        [0]
+        0   integer   -0.0    3.0           x        [0]
+        1   integer   -0.0    3.0           x        [1]
+        2   integer   -0.0    3.0           x        [2]
+        3   integer   -0.0    5.0  ommx.slack        [0]
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
@@ -1424,10 +1423,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   integer    0.0    3.0           x        [0]
-        1   integer    0.0    3.0           x        [1]
-        2   integer    0.0    3.0           x        [2]
-        3   integer    0.0    2.0  ommx.slack        [0]
+        0   integer   -0.0    3.0           x        [0]
+        1   integer   -0.0    3.0           x        [1]
+        2   integer   -0.0    3.0           x        [2]
+        3   integer   -0.0    2.0  ommx.slack        [0]
 
         In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
@@ -3403,9 +3402,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
-        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
-        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        0   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        1   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
 
     :meth:`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
 
@@ -3417,9 +3416,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
-        0   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        1   binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        0   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        1   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
 
     Of course, the sample of smallest objective value is returned for minimization problems.
 
