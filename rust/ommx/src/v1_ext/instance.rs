@@ -4,8 +4,8 @@ use crate::{
         Linear, Optimality, Parameter, ParametricInstance, Relaxation, RemovedConstraint,
         SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
-    BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
-    VariableIDSet,
+    BinaryIdPair, BinaryIdSeq, BinaryIds, Bound, Bounds, ConstraintID, Evaluate,
+    InfeasibleDetected, VariableID, VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -324,7 +324,7 @@ impl Instance {
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     ///
-    pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
+    pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIdSeq, f64>, f64)> {
         if self.sense() == Sense::Maximize {
             bail!("HUBO format is only for minimization problems.");
         }
@@ -347,7 +347,7 @@ impl Instance {
             if ids.is_empty() {
                 constant += c;
             } else {
-                let key = BinaryIds::from(ids);
+                let key = BinaryIdSeq::from(ids);
                 let value = quad.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
                 if value.abs() < f64::EPSILON {
                     quad.remove(&key);
