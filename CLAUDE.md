@@ -95,10 +95,11 @@ The Instance class migration follows this phased approach:
 
 **Phase 2 Completed Features**:
 - **DecisionVariable wrapper**: Factory methods (binary, integer, continuous), property getters, proper type validation
-- **Constraint wrapper**: Direct constructor, factory methods (equal_to_zero, less_than_or_equal_to_zero), function access
-- **RemovedConstraint wrapper**: Complete parameter handling, original constraint access, convenience methods
+- **Constraint wrapper**: Direct constructor, comprehensive metadata management, encode/decode methods, factory methods (equal_to_zero, less_than_or_equal_to_zero), function access
+- **RemovedConstraint wrapper**: Complete parameter handling, original constraint access, convenience methods, encode/decode methods
+- **Metadata Management**: Full support for constraint names, descriptions, subscripts, and parameters with efficient Rust implementation
 - **Type Safety**: Full pyright type checking support with auto-generated stub files
-- **Testing**: 15 comprehensive test cases covering all wrapper functionality
+- **Testing**: Comprehensive test suites (221 test cases for constraint metadata) covering all wrapper functionality
 - **Performance**: Native Rust type usage eliminates Protocol Buffer conversion overhead
 
 **Migration Progress**: 
@@ -207,14 +208,14 @@ When making changes, always run the appropriate linting/testing commands before 
 ## Important Notes for Development
 
 1. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-2. **Test Coverage**: The test suite includes 44 tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
+2. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers (221 test cases for metadata management), and doctests
 3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
 ## Development Guidance
 
 ### General Development Principles
-- Rustのコードを変更する時は必ず小さい単位で変更を行い、都度cargo checkが通ることを確認してください
+- When modifying Rust code, always make small incremental changes and ensure `cargo check` passes at each step
 - Always run `task python:test` after making changes to ensure all tests pass
 - Use incremental approach: implement one component at a time, test, then commit
 - Maintain backward compatibility during migration phases
@@ -231,14 +232,14 @@ When working on the Protocol Buffer to Rust Instance migration:
 
 ### Current Development Status (December 2024)
 - **Phase 1 ✅**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
-- **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive functionality
+- **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive metadata management, encode/decode methods, and full functionality
 - **Phase 3 🔄**: Next - Extend Rust Instance API with getter methods and from_components constructor
-- **Key Achievements**: 44 tests passing, full type safety, native Rust performance
+- **Key Achievements**: Complete wrapper implementations with 221 test cases for constraint metadata, full type safety, native Rust performance
 - **Key Principles**: Small changes, test coverage, and maintaining compatibility throughout the migration
 
-## Memories
-- ほとんどの作業はrootで行うように記述されています。ここのタスクが終わったらrootにcdするようにしてください
-- v1_ext以下はommx::v1::*に対する実装なので参照せず、変更してはいけません
-- Pythonのテストコードを新たに追加する時は python/ommx-tests/tests に追加して pytest で実行します
-- インラインでテストを作って実行しようとしてはいけません
-- python -c で直接テストコードを動かすのは絶対に禁止です
+## Development Notes
+- Most tasks should be performed from the repository root directory. Always return to root after completing tasks
+- v1_ext directory contains implementations for ommx::v1::* types and should not be referenced or modified
+- When adding new Python test code, add it to python/ommx-tests/tests and run with pytest
+- Do not create inline tests or try to execute them directly
+- Running test code directly with `python -c` is strictly prohibited
