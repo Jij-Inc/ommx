@@ -2228,7 +2228,8 @@ class DecisionVariable(VariableBase):
 
     @property
     def bound(self) -> Bound:
-        return self.raw.bound
+        pb_bound = self.raw.bound
+        return Bound(lower=pb_bound.lower, upper=pb_bound.upper)
 
     @property
     def subscripts(self) -> list[int]:
@@ -3852,10 +3853,12 @@ class Bound:
         self.raw = raw
         return self
 
+    @property
     def lower(self) -> float:
         """Get the lower bound."""
         return self.raw.lower()
 
+    @property
     def upper(self) -> float:
         """Get the upper bound."""
         return self.raw.upper()
