@@ -1,7 +1,7 @@
-use crate::message::Function;
+use crate::{message::Function, Equality};
 use anyhow::{anyhow, Result};
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Equality, Message, Parse};
+use ommx::{ConstraintID, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::HashMap;
 
@@ -19,18 +19,14 @@ impl Constraint {
     pub fn new(
         id: u64,
         function: Function,
-        equality: u32,
+        equality: Equality,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> Result<Self> {
         let constraint_id = ConstraintID::from(id);
-        let rust_equality = match equality {
-            1 => Equality::EqualToZero,
-            2 => Equality::LessThanOrEqualToZero,
-            _ => return Err(anyhow!("Invalid equality: {}", equality)),
-        };
+        let rust_equality = equality.to_rust();
 
         let constraint = ommx::Constraint {
             id: constraint_id,
@@ -56,11 +52,8 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn equality(&self) -> u32 {
-        match self.0.equality {
-            ommx::Equality::EqualToZero => 1,
-            ommx::Equality::LessThanOrEqualToZero => 2,
-        }
+    pub fn equality(&self) -> Equality {
+        Equality::from_rust(self.0.equality)
     }
 
     #[getter]

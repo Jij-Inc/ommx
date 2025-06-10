@@ -5,6 +5,7 @@ mod constraint;
 mod dataset;
 mod decision_variable;
 mod descriptor;
+mod enums;
 mod evaluate;
 mod instance;
 mod message;
@@ -19,6 +20,7 @@ pub use constraint::*;
 pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
+pub use enums::*;
 pub use evaluate::*;
 pub use instance::*;
 pub use message::*;
@@ -57,6 +59,10 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
+
+    // Enums
+    m.add_class::<Sense>()?;
+    m.add_class::<Equality>()?;
 
     // Random
     m.add_class::<Rng>()?;
