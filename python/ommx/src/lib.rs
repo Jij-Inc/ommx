@@ -1,4 +1,5 @@
 mod artifact;
+mod bound;
 mod builder;
 mod constraint;
 mod dataset;
@@ -12,6 +13,7 @@ mod qplib;
 mod random;
 
 pub use artifact::*;
+pub use bound::*;
 pub use builder::*;
 pub use constraint::*;
 pub use dataset::*;

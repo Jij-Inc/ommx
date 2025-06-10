@@ -1,4 +1,4 @@
-use crate::message::VariableBound;
+use crate::VariableBound;
 use anyhow::Result;
 use ommx::{v1, ATol, Message, Parse, VariableID};
 use pyo3::{prelude::*, types::PyBytes};
@@ -71,7 +71,11 @@ impl DecisionVariable {
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0.parameters.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.0
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     #[getter]
