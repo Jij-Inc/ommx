@@ -153,7 +153,7 @@ impl Quadratic {
         columns: Vec<u64>,
         rows: Vec<u64>,
         values: Vec<f64>,
-        linear: Option<&Linear>,
+        linear: Option<Linear>,
     ) -> Result<Self> {
         // Validate that all input vectors have the same length
         if columns.len() != rows.len() || columns.len() != values.len() {
