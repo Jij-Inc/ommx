@@ -10,11 +10,10 @@ on:
 
 jobs:
   linux:
-    name: build on ubuntu (${{ matrix.target }} - ${{ matrix.manylinux }})
+    name: build on ubuntu (${{ matrix.target }} - manylinux_2_28)
     strategy:
       matrix:
         target: [x86_64, aarch64]
-        manylinux: [manylinux_2_28]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,7 +26,7 @@ jobs:
           args: --release --out dist --interpreter 3.9 3.13t
           target: ${{ matrix.target }}
           working-directory: ./python/ommx
-          manylinux: ${{ matrix.manylinux }}
+          manylinux: manylinux_2_28
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
