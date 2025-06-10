@@ -601,9 +601,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         {0}
 
         """
-        return _ommx_rust.Instance.from_bytes(
-            self.to_bytes()
-        ).required_ids()
+        return _ommx_rust.Instance.from_bytes(self.to_bytes()).required_ids()
 
     def to_qubo(
         self,
