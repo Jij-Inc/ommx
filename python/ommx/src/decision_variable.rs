@@ -69,6 +69,16 @@ impl DecisionVariable {
         self.0.subscripts.clone()
     }
 
+    #[getter]
+    pub fn parameters(&self) -> HashMap<String, String> {
+        self.0.parameters.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
+
+    #[getter]
+    pub fn description(&self) -> String {
+        self.0.description.clone().unwrap_or_default()
+    }
+
     #[staticmethod]
     #[pyo3(signature = (id, name=None, subscripts=None, parameters=HashMap::default(), description=None))]
     pub fn binary(

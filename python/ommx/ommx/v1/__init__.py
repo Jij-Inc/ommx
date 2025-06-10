@@ -267,7 +267,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             _Instance(
                 description=description,
                 decision_variables=[
-                    v.raw if isinstance(v, DecisionVariable) else v
+                    v.to_protobuf() if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
                 objective=raw_objective,
@@ -408,7 +408,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
-        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+        return [DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables]
 
     def get_constraints(self) -> list[Constraint]:
         """
@@ -1582,7 +1582,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             _ParametricInstance(
                 description=description,
                 decision_variables=[
-                    v.raw if isinstance(v, DecisionVariable) else v
+                    v.to_protobuf() if isinstance(v, DecisionVariable) else v
                     for v in decision_variables
                 ],
                 objective=raw_objective,
@@ -1609,7 +1609,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
-        return [DecisionVariable(raw) for raw in self.raw.decision_variables]
+        return [DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables]
 
     def get_constraints(self) -> list[Constraint]:
         """
@@ -1850,7 +1850,7 @@ class Solution(UserAnnotationBase):
     @property
     def decision_variables(self) -> DataFrame:
         df = DataFrame(
-            DecisionVariable(v)._as_pandas_entry()
+            DecisionVariable.from_protobuf(v)._as_pandas_entry()
             | {"value": self.raw.state.entries[v.id]}
             for v in self.raw.decision_variables
         )
@@ -2058,7 +2058,7 @@ class DecisionVariable(VariableBase):
 
     """
 
-    raw: _DecisionVariable
+    raw: _ommx_rust.DecisionVariable
 
     Kind = _DecisionVariable.Kind.ValueType
 
@@ -2070,12 +2070,24 @@ class DecisionVariable(VariableBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> DecisionVariable:
-        new = DecisionVariable(_DecisionVariable())
-        new.raw.ParseFromString(data)
-        return new
+        rust_dv = _ommx_rust.DecisionVariable.decode(data)
+        return DecisionVariable(rust_dv)
+
+    @staticmethod
+    def from_protobuf(pb_dv: _DecisionVariable) -> DecisionVariable:
+        """Convert from protobuf DecisionVariable to Rust DecisionVariable via serialization"""
+        data = pb_dv.SerializeToString()
+        return DecisionVariable.from_bytes(data)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.encode()
+
+    def to_protobuf(self) -> _DecisionVariable:
+        """Convert to protobuf DecisionVariable via serialization"""
+        data = self.to_bytes()
+        pb_dv = _DecisionVariable()
+        pb_dv.ParseFromString(data)
+        return pb_dv
 
     @staticmethod
     def of_type(
@@ -2089,17 +2101,31 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=kind,
-                bound=_Bound(lower=lower, upper=upper),
-                name=name,
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        # Convert protobuf Kind enum to Rust kind (int)
+        kind_mapping = {
+            _DecisionVariable.Kind.KIND_BINARY: 1,
+            _DecisionVariable.Kind.KIND_INTEGER: 2,
+            _DecisionVariable.Kind.KIND_CONTINUOUS: 3,
+            _DecisionVariable.Kind.KIND_SEMI_INTEGER: 4,
+            _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS: 5,
+        }
+        rust_kind = kind_mapping.get(kind, 3)  # default to continuous
+        
+        # Create Rust bound
+        rust_bound = _ommx_rust.Bound(lower, upper)
+        
+        # Create Rust DecisionVariable
+        rust_dv = _ommx_rust.DecisionVariable(
+            id=id,
+            kind=rust_kind,
+            bound=rust_bound,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        
+        return DecisionVariable(rust_dv)
 
     @staticmethod
     def binary(
@@ -2110,17 +2136,14 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=_DecisionVariable.Kind.KIND_BINARY,
-                name=name,
-                bound=_Bound(lower=0, upper=1),
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        rust_dv = _ommx_rust.DecisionVariable.binary(
+            id=id,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        return DecisionVariable(rust_dv)
 
     @staticmethod
     def integer(
@@ -2133,17 +2156,16 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=_DecisionVariable.Kind.KIND_INTEGER,
-                bound=_Bound(lower=lower, upper=upper),
-                name=name,
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        rust_dv = _ommx_rust.DecisionVariable.integer(
+            id=id,
+            lower=lower,
+            upper=upper,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        return DecisionVariable(rust_dv)
 
     @staticmethod
     def continuous(
@@ -2156,17 +2178,16 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=_DecisionVariable.Kind.KIND_CONTINUOUS,
-                bound=_Bound(lower=lower, upper=upper),
-                name=name,
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        rust_dv = _ommx_rust.DecisionVariable.continuous(
+            id=id,
+            lower=lower,
+            upper=upper,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        return DecisionVariable(rust_dv)
 
     @staticmethod
     def semi_integer(
@@ -2179,17 +2200,16 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=_DecisionVariable.Kind.KIND_SEMI_INTEGER,
-                bound=_Bound(lower=lower, upper=upper),
-                name=name,
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        rust_dv = _ommx_rust.DecisionVariable.semi_integer(
+            id=id,
+            lower=lower,
+            upper=upper,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        return DecisionVariable(rust_dv)
 
     @staticmethod
     def semi_continuous(
@@ -2202,17 +2222,16 @@ class DecisionVariable(VariableBase):
         parameters: Optional[dict[str, str]] = None,
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        return DecisionVariable(
-            _DecisionVariable(
-                id=id,
-                kind=_DecisionVariable.Kind.KIND_SEMI_CONTINUOUS,
-                bound=_Bound(lower=lower, upper=upper),
-                name=name,
-                subscripts=subscripts,
-                parameters=parameters,
-                description=description,
-            )
+        rust_dv = _ommx_rust.DecisionVariable.semi_continuous(
+            id=id,
+            lower=lower,
+            upper=upper,
+            name=name,
+            subscripts=subscripts,
+            parameters=parameters or {},
+            description=description,
         )
+        return DecisionVariable(rust_dv)
 
     @property
     def id(self) -> int:
@@ -2224,12 +2243,21 @@ class DecisionVariable(VariableBase):
 
     @property
     def kind(self) -> Kind:
-        return self.raw.kind
+        # Convert Rust kind (int) to protobuf Kind enum
+        rust_kind = self.raw.kind
+        kind_mapping = {
+            1: _DecisionVariable.Kind.KIND_BINARY,
+            2: _DecisionVariable.Kind.KIND_INTEGER,
+            3: _DecisionVariable.Kind.KIND_CONTINUOUS,
+            4: _DecisionVariable.Kind.KIND_SEMI_INTEGER,
+            5: _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS,
+        }
+        return kind_mapping.get(rust_kind, _DecisionVariable.Kind.KIND_CONTINUOUS)
 
     @property
     def bound(self) -> Bound:
-        pb_bound = self.raw.bound
-        return Bound(lower=pb_bound.lower, upper=pb_bound.upper)
+        rust_bound = self.raw.bound
+        return Bound(lower=rust_bound.lower(), upper=rust_bound.upper())
 
     @property
     def subscripts(self) -> list[int]:
@@ -2237,7 +2265,7 @@ class DecisionVariable(VariableBase):
 
     @property
     def parameters(self) -> dict[str, str]:
-        return dict(self.raw.parameters)
+        return self.raw.parameters
 
     @property
     def description(self) -> str:
@@ -2247,7 +2275,17 @@ class DecisionVariable(VariableBase):
         """
         Alternative to ``==`` operator to compare two decision variables.
         """
-        return self.raw == other.raw
+        # Compare key properties since we can't directly compare Rust objects
+        return (
+            self.id == other.id
+            and self.kind == other.kind
+            and self.name == other.name
+            and self.bound.lower == other.bound.lower
+            and self.bound.upper == other.bound.upper
+            and self.subscripts == other.subscripts
+            and self.parameters == other.parameters
+            and self.description == other.description
+        )
 
     # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
@@ -2256,19 +2294,16 @@ class DecisionVariable(VariableBase):
         )
 
     def _as_pandas_entry(self) -> dict:
-        v = self.raw
         return {
-            "id": v.id,
-            "kind": _kind(v.kind),
-            "lower": v.bound.lower if v.HasField("bound") else NA,
-            "upper": v.bound.upper if v.HasField("bound") else NA,
-            "name": v.name if v.HasField("name") else NA,
-            "subscripts": v.subscripts,
-            "description": v.description if v.HasField("description") else NA,
-            "substituted_value": v.substituted_value
-            if v.HasField("substituted_value")
-            else NA,
-        } | {f"parameters.{key}": value for key, value in v.parameters.items()}
+            "id": self.id,
+            "kind": _kind(self.kind),
+            "lower": self.bound.lower,
+            "upper": self.bound.upper,
+            "name": self.name if self.name else NA,
+            "subscripts": self.subscripts,
+            "description": self.description if self.description else NA,
+            "substituted_value": NA,  # Not available in current Rust API
+        } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
 class AsConstraint(ABC):
@@ -3522,7 +3557,7 @@ class SampleSet(UserAnnotationBase):
     @property
     def decision_variables(self) -> DataFrame:
         df = DataFrame(
-            DecisionVariable(v.decision_variable)._as_pandas_entry()
+            DecisionVariable.from_bytes(v.decision_variable.SerializeToString())._as_pandas_entry()
             | {id: value for id, value in SampledValues(v.samples)}
             for v in self.raw.decision_variables
         )

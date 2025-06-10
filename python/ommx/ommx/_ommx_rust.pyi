@@ -135,6 +135,8 @@ class DecisionVariable:
     bound: Bound
     name: builtins.str
     subscripts: builtins.list[builtins.int]
+    parameters: builtins.dict[builtins.str, builtins.str]
+    description: builtins.str
     def __new__(
         cls,
         id: builtins.int,
@@ -196,6 +198,7 @@ class DecisionVariable:
     @staticmethod
     def decode(bytes: bytes) -> DecisionVariable: ...
     def encode(self) -> bytes: ...
+    def to_protobuf(self) -> typing.Any: ...
     def __repr__(self) -> builtins.str: ...
 
 class DecisionVariableAnalysis:
