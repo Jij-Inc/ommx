@@ -41,6 +41,7 @@ The project is actively migrating from Protocol Buffers auto-generated Python cl
 **Core Mathematical Objects** (Completed):
 - `Linear`, `Quadratic`, `Polynomial`, `Function` classes now use Rust implementations
 - `DecisionVariableAnalysis` and `Bound` classes provide comprehensive variable analysis
+- `DecisionVariable` PyO3 wrapper implemented in `python/ommx/src/instance.rs`
 - Located in `python/ommx/src/message.rs` and `python/ommx/src/instance.rs`, exposed via `_ommx_rust` module
 - Python wrappers in `python/ommx/ommx/v1/__init__.py` use `.raw` attribute pattern
 - All evaluation methods migrated to instance methods (`.evaluate()`, `.partial_evaluate()`)
@@ -58,22 +59,44 @@ class Linear(AsConstraint):
         return self.raw.evaluate(to_state(state).SerializeToString())
 ```
 
-**Pending Migration**:
-- `Constraint` classes - migrating to Rust implementations
-- `Instance` classes - migrating to Rust implementations
-- Additional protocol buffer types as needed
+**Instance Migration Roadmap (Current Focus)**:
+The Instance class migration follows this phased approach:
+
+1. **Phase 1: ✅ Completed** - DecisionVariable PyO3 wrapper
+   - Implemented `_ommx_rust.DecisionVariable` with proper Rust type usage
+   - Factory methods for binary, integer, continuous variables
+   - All tests passing and committed
+
+2. **Phase 2: 🔄 Next** - Additional PyO3 wrappers
+   - `Constraint` PyO3 wrapper implementation
+   - `RemovedConstraint` PyO3 wrapper implementation
+
+3. **Phase 3: 📋 Planned** - Rust Instance API extension
+   - Add getter methods (`get_objective`, `get_sense`, `get_decision_variables`, `get_constraints`)
+   - Add `from_components` constructor method to Rust Instance
+
+4. **Phase 4: 📋 Planned** - Python Instance migration
+   - Replace `Instance.raw` from Protocol Buffer to `_ommx_rust.Instance`
+   - Update all Instance methods to use Rust implementation
+   - Maintain backward compatibility with existing Python API
+
+5. **Phase 5: 📋 Planned** - Testing and validation
+   - Comprehensive testing of migrated Instance functionality
+   - Performance validation and optimization
 
 **Key Implementation Details**:
 - Python classes are thin wrappers around Rust core types
 - Protocol Buffers serialization/deserialization handled by Rust
 - Mathematical operations (add, subtract, multiply) implemented in Rust
 - Object-oriented evaluation API with instance methods for better encapsulation
+- Use native Rust types (`ommx::DecisionVariable`) rather than Protocol Buffer types for better performance
 
 **Migration Progress**: 
 - ✅ Mathematical functions (`Linear`, `Quadratic`, `Polynomial`, `Function`)
 - ✅ Decision variable analysis (`DecisionVariableAnalysis`, `Bound`)
-- 🔄 Constraint types (in progress)
-- 🔄 Instance types (planned)
+- ✅ DecisionVariable PyO3 wrapper (Phase 1 complete)
+- 🔄 Instance migration (Phase 2 in progress)
+- 📋 Constraint types (Phase 2 planned)
 - Deprecated global evaluation functions removed
 
 ## Development Commands
@@ -178,4 +201,22 @@ When making changes, always run the appropriate linting/testing commands before 
 
 ## Development Guidance
 
+### General Development Principles
 - Rustのコードを変更する時は必ず小さい単位で変更を行い、都度cargo checkが通ることを確認してください
+- Always run `task python:test` after making changes to ensure all tests pass
+- Use incremental approach: implement one component at a time, test, then commit
+- Maintain backward compatibility during migration phases
+
+### Instance Migration Guidelines
+When working on the Protocol Buffer to Rust Instance migration:
+
+1. **Small Incremental Changes**: Add one PyO3 wrapper at a time (DecisionVariable ✅, next: Constraint, then RemovedConstraint)
+2. **Test-Driven Development**: Ensure `cargo check` passes and all tests pass before each commit
+3. **Use Native Rust Types**: Prefer `ommx::DecisionVariable` over `ommx::v1::DecisionVariable` (Protocol Buffer types)
+4. **Proper Error Handling**: Use `anyhow::Result` for proper error propagation in PyO3 wrappers
+5. **API Consistency**: Follow existing patterns from DecisionVariable wrapper implementation
+
+### Current Development Status
+- **Completed**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
+- **Next Steps**: Follow the 5-phase roadmap outlined in the migration status above
+- **Key Principles**: Small changes, test coverage, and maintaining compatibility throughout the migration
