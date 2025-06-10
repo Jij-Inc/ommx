@@ -46,6 +46,11 @@ impl Instance {
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
+    pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+        let (qubo, constant) = self.0.as_hubo_format()?;
+        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
+    }
+
     pub fn as_parametric_instance(&self) -> ParametricInstance {
         ParametricInstance(self.0.clone().into())
     }

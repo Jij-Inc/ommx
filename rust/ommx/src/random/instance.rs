@@ -80,6 +80,19 @@ impl InstanceParameters {
         }
     }
 
+    pub fn default_hubo() -> Self {
+        Self {
+            num_constraints: 0,
+            objective: FunctionParameters {
+                num_terms: 5,
+                max_degree: 5,
+                max_id: 10,
+            },
+            kinds: vec![Kind::Binary],
+            ..Default::default()
+        }
+    }
+
     pub fn validate(&self) -> Result<()> {
         self.objective.validate()?;
         self.constraint.validate()?;
