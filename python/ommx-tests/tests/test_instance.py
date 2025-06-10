@@ -208,12 +208,12 @@ def test_hubo_3rd_degree():
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
-        objective=x[0] * x[1] * x[2],
+        objective=(x[0] + x[0] * x[0] + x[0] * x[1] * x[2]),
         constraints=[],
         sense=Instance.MINIMIZE,
     )
     hubo, offset = instance.to_hubo()
-    assert hubo == {(0, 1, 2): 1.0}
+    assert hubo == {(0,): 1.0, (0, 0): 1.0, (0, 1, 2): 1.0}
     assert offset == 0.0
 
 
