@@ -598,7 +598,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> instance.relax_constraint(0, "testing")
         >>> instance.used_decision_variable_ids()
-        {0, 1}
+        {0}
 
         """
         return _ommx_rust.Instance.from_bytes(

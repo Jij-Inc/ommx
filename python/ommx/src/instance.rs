@@ -1,5 +1,5 @@
 use anyhow::Result;
-use ommx::{Evaluate, Message};
+use ommx::{Evaluate, Message, Parse, Substitute};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Instance(ommx::v1::Instance);
+pub struct Instance(ommx::Instance);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -16,16 +16,19 @@ impl Instance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::Instance::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner.clone(), &())?;
         inner.validate()?;
-        Ok(Self(inner))
+        Ok(Self(parsed))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
     pub fn validate(&self) -> Result<()> {
-        self.0.validate()
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        inner.validate()
     }
 
     pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
@@ -37,25 +40,30 @@ impl Instance {
     }
 
     pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
-        let pubo = self.0.as_pubo_format()?;
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        let pubo = inner.as_pubo_format()?;
         Ok(serde_pyobject::to_pyobject(py, &pubo)?.extract()?)
     }
 
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let (qubo, constant) = self.0.as_qubo_format()?;
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        let (qubo, constant) = inner.as_qubo_format()?;
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
-        ParametricInstance(self.0.clone().into())
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        ParametricInstance(inner.into())
     }
 
     pub fn penalty_method(&self) -> Result<ParametricInstance> {
-        Ok(ParametricInstance(self.0.clone().penalty_method()?))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(ParametricInstance(inner.penalty_method()?))
     }
 
     pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
-        Ok(ParametricInstance(self.0.clone().uniform_penalty_method()?))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(ParametricInstance(inner.uniform_penalty_method()?))
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
@@ -70,20 +78,27 @@ impl Instance {
         removed_reason: String,
         removed_reason_parameters: HashMap<String, String>,
     ) -> Result<()> {
-        self.0
-            .relax_constraint(constraint_id, removed_reason, removed_reason_parameters)
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        inner.relax_constraint(constraint_id, removed_reason, removed_reason_parameters)?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(())
     }
 
     pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        self.0.restore_constraint(constraint_id)
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        inner.restore_constraint(constraint_id)?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(())
     }
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
         let replacements = integer_variable_ids
             .iter()
-            .map(|&id| Ok((id, self.0.log_encode(id)?.into())))
+            .map(|&id| Ok((id, inner.log_encode(id)?.into())))
             .collect::<Result<_>>()?;
-        self.0.substitute(replacements)?;
+        inner.substitute(replacements)?;
+        self.0 = Parse::parse(inner, &())?;
         Ok(())
     }
 
@@ -92,11 +107,14 @@ impl Instance {
         constraint_id: u64,
         max_integer_range: u64,
     ) -> Result<()> {
-        self.0.convert_inequality_to_equality_with_integer_slack(
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        inner.convert_inequality_to_equality_with_integer_slack(
             constraint_id,
             max_integer_range,
             ommx::ATol::default(),
-        )
+        )?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(())
     }
 
     pub fn add_integer_slack_to_inequality(
@@ -104,8 +122,10 @@ impl Instance {
         constraint_id: u64,
         slack_upper_bound: u64,
     ) -> Result<Option<f64>> {
-        self.0
-            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        let result = inner.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(result)
     }
 }
 
@@ -136,7 +156,8 @@ impl ParametricInstance {
             .0
             .clone()
             .with_parameters(parameters.0.clone(), ommx::ATol::default())?;
-        Ok(Instance(instance))
+        let parsed = Parse::parse(instance, &())?;
+        Ok(Instance(parsed))
     }
 }
 
