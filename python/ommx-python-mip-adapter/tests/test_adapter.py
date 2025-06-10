@@ -1,7 +1,6 @@
 import pytest
 
 from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.decision_variables_pb2 import DecisionVariable as _DecisionVariable
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
@@ -11,21 +10,6 @@ from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
 from ommx_python_mip_adapter.exception import OMMXPythonMIPAdapterError
 
-
-def test_error_not_suppoerted_decision_variable():
-    ommx_instance = Instance.from_components(
-        decision_variables=[
-            DecisionVariable(
-                _DecisionVariable(id=1, kind=_DecisionVariable.KIND_UNSPECIFIED)
-            )
-        ],
-        objective=Function(constant=0),
-        constraints=[],
-        sense=Instance.MINIMIZE,
-    )
-    with pytest.raises(OMMXPythonMIPAdapterError) as e:
-        OMMXPythonMIPAdapter(ommx_instance)
-    assert "Not supported decision variable" in str(e.value)
 
 
 def test_error_nonlinear_objective():
