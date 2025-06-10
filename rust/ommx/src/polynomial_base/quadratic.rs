@@ -76,9 +76,18 @@ impl Quadratic {
         values: impl IntoIterator<Item = Coefficient>,
     ) -> Result<Self> {
         let mut result = Self::default();
-        for ((col, row), val) in columns.into_iter().zip(rows).zip(values) {
-            let pair = VariableIDPair::new(col, row);
-            result.add_term(QuadraticMonomial::Pair(pair), val);
+        let mut columns = columns.into_iter();
+        let mut rows = rows.into_iter();
+        let mut values = values.into_iter();
+        loop {
+            match (columns.next(), rows.next(), values.next()) {
+                (Some(col), Some(row), Some(val)) => {
+                    let pair = VariableIDPair::new(col, row);
+                    result.add_term(QuadraticMonomial::Pair(pair), val);
+                }
+                (None, None, None) => break,
+                _ => bail!("Mismatched lengths of columns, rows, and values"),
+            }
         }
         Ok(result)
     }

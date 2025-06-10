@@ -2,7 +2,7 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{v1, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse};
+use ommx::{v1, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse, VariableIDPair};
 use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
@@ -153,22 +153,33 @@ impl Quadratic {
         columns: Vec<u64>,
         rows: Vec<u64>,
         values: Vec<f64>,
-        linear: Option<Linear>,
+        linear: Option<&Linear>,
     ) -> Result<Self> {
-        // Convert to VariableID and Coefficient, filtering out zero values
-        let col_ids: Vec<_> = columns.into_iter().map(|id| id.into()).collect();
-        let row_ids: Vec<_> = rows.into_iter().map(|id| id.into()).collect();
+        // Validate that all input vectors have the same length
+        if columns.len() != rows.len() || columns.len() != values.len() {
+            return Err(anyhow!(
+                "Input vectors must have the same length: columns={}, rows={}, values={}",
+                columns.len(),
+                rows.len(),
+                values.len()
+            ));
+        }
 
-        let mut filtered_cols = Vec::new();
-        let mut filtered_rows = Vec::new();
-        let mut filtered_coeffs = Vec::new();
-
-        for ((col_id, row_id), value) in col_ids.into_iter().zip(row_ids).zip(values) {
+        let mut out = ommx::Quadratic::default();
+        for ((col_id, row_id), value) in columns
+            .into_iter()
+            .zip(rows.into_iter())
+            .zip(values.into_iter())
+        {
             match TryInto::<Coefficient>::try_into(value) {
                 Ok(coeff) => {
-                    filtered_cols.push(col_id);
-                    filtered_rows.push(row_id);
-                    filtered_coeffs.push(coeff);
+                    out.add_term(
+                        ommx::QuadraticMonomial::Pair(VariableIDPair::new(
+                            col_id.into(),
+                            row_id.into(),
+                        )),
+                        coeff,
+                    );
                 }
                 Err(CoefficientError::Zero) => {
                     // Skip zero coefficients
@@ -179,16 +190,11 @@ impl Quadratic {
                 }
             }
         }
-
-        let mut quadratic =
-            ommx::Quadratic::from_coo(filtered_cols, filtered_rows, filtered_coeffs)?;
-
         // Add linear part if provided
         if let Some(linear) = linear {
-            quadratic = quadratic + &linear.0;
+            out += &linear.0;
         }
-
-        Ok(Self(quadratic))
+        Ok(Self(out))
     }
 
     #[staticmethod]
