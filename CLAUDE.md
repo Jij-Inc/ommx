@@ -175,3 +175,7 @@ When making changes, always run the appropriate linting/testing commands before 
 2. **Test Coverage**: The test suite includes 30 tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, and doctests
 3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
+
+## Development Guidance
+
+- Rustのコードを変更する時は必ず小さい単位で変更を行い、都度cargo checkが通ることを確認してください
