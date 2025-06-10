@@ -792,7 +792,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         uniform_penalty_weight: Optional[float] = None,
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 31,
-    ) -> tuple[dict[tuple[int, int], float], float]:
+    ) -> tuple[dict[tuple[int, ...], float], float]:
         r"""Convert the instance to a HUBO format
 
         This is a **Driver API** for HUBO conversion calling single-purpose methods in order:

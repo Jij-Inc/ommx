@@ -204,8 +204,21 @@ def test_to_qubo_invalid_penalty_option():
     )
 
 
+def test_hubo_3rd_degree():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] * x[1] * x[2],
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
+    hubo, offset = instance.to_hubo()
+    assert hubo == {(0, 1, 2): 1.0}
+    assert offset == 2.0
+
+
 def test_to_hubo_penalty_weight():
-    # 2nd degree and lower should have the same behavior as to_qubo()
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(2)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -214,21 +227,9 @@ def test_to_hubo_penalty_weight():
         sense=Instance.MINIMIZE,
     )
     # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
-    hubo, h_offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
-    qubo, q_offset = instance.to_qubo(penalty_weights={123: 1.0, 456: 2.0})
-    assert qubo == hubo
-    assert q_offset == h_offset
-
-    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0] * x[1] * x[2],
-        constraints=[(x[0] == 0).set_id(123), (x[1] == 1).set_id(456)],
-        sense=Instance.MINIMIZE,
-    )
     hubo, offset = instance.to_hubo(penalty_weights={123: 1.0, 456: 2.0})
-    assert hubo == {}
-    assert offset == 0.0
+    assert hubo == {(0,): 1.0, (0, 0): 1.0, (1,): -4.0, (1, 1): 2.0}
+    assert offset == 2.0
 
 
 def test_to_hubo_continuous():
