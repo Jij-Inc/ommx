@@ -1,8 +1,11 @@
 use crate::message::Function;
 use anyhow::Result;
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Equality};
-use pyo3::prelude::*;
+use ommx::{ConstraintID, Equality, Message, Parse};
+use pyo3::{
+    prelude::*,
+    types::PyBytes,
+};
 use std::collections::HashMap;
 
 /// Constraint wrapper for Python
@@ -91,6 +94,18 @@ impl Constraint {
             id, function, 2, // EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
             name, None,
         )
+    }
+
+    #[staticmethod]
+    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
+        let inner = ommx::v1::Constraint::decode(bytes.as_bytes())?;
+        let parsed = Parse::parse(inner, &())?;
+        Ok(Self(parsed))
+    }
+
+    pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let inner: ommx::v1::Constraint = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
     pub fn __repr__(&self) -> String {
