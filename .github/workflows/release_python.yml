@@ -10,7 +10,6 @@ on:
 
 jobs:
   linux:
-    name: build on ubuntu (${{ matrix.target }} - manylinux_2_28)
     strategy:
       matrix:
         target: [x86_64, aarch64]
