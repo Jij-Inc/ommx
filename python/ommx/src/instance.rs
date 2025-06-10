@@ -610,3 +610,69 @@ impl Constraint {
         )
     }
 }
+
+/// RemovedConstraint wrapper for Python
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[derive(Clone)]
+pub struct RemovedConstraint(pub ommx::RemovedConstraint);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl RemovedConstraint {
+    #[new]
+    #[pyo3(signature = (constraint, removed_reason, removed_reason_parameters=None))]
+    pub fn new(
+        constraint: Constraint,
+        removed_reason: String,
+        removed_reason_parameters: Option<HashMap<String, String>>,
+    ) -> Self {
+        use fnv::FnvHashMap;
+        
+        let removed_constraint = ommx::RemovedConstraint {
+            constraint: constraint.0,
+            removed_reason,
+            removed_reason_parameters: removed_reason_parameters
+                .map(|params| params.into_iter().collect::<FnvHashMap<_, _>>())
+                .unwrap_or_default(),
+        };
+        
+        Self(removed_constraint)
+    }
+
+    #[getter]
+    pub fn constraint(&self) -> Constraint {
+        Constraint(self.0.constraint.clone())
+    }
+
+    #[getter]
+    pub fn removed_reason(&self) -> String {
+        self.0.removed_reason.clone()
+    }
+
+    #[getter]
+    pub fn removed_reason_parameters(&self) -> HashMap<String, String> {
+        self.0.removed_reason_parameters.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    #[getter]
+    pub fn id(&self) -> u64 {
+        self.0.constraint.id.into_inner()
+    }
+
+    #[getter]
+    pub fn name(&self) -> String {
+        self.0.constraint.name.clone().unwrap_or_default()
+    }
+
+    pub fn __repr__(&self) -> String {
+        format!(
+            "RemovedConstraint(id={}, reason=\"{}\", name=\"{}\")",
+            self.id(),
+            self.removed_reason(),
+            self.name()
+        )
+    }
+}

@@ -365,6 +365,26 @@ class Quadratic:
     def evaluate(self, state: bytes) -> builtins.float: ...
     def partial_evaluate(self, state: bytes) -> Quadratic: ...
 
+class RemovedConstraint:
+    r"""
+    RemovedConstraint wrapper for Python
+    """
+
+    constraint: Constraint
+    removed_reason: builtins.str
+    removed_reason_parameters: builtins.dict[builtins.str, builtins.str]
+    id: builtins.int
+    name: builtins.str
+    def __new__(
+        cls,
+        constraint: Constraint,
+        removed_reason: builtins.str,
+        removed_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+    ): ...
+    def __repr__(self) -> builtins.str: ...
+
 class Rng:
     def __new__(
         cls,
