@@ -212,10 +212,9 @@ def test_hubo_3rd_degree():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    # QUBO = x0 + 1 * (x0)^2 + 2 * (x1 - 1)^2 = 2*x0 - 2*x1 + 1
     hubo, offset = instance.to_hubo()
     assert hubo == {(0, 1, 2): 1.0}
-    assert offset == 2.0
+    assert offset == 0.0
 
 
 def test_to_hubo_penalty_weight():
