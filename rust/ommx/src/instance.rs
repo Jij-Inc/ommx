@@ -25,23 +25,6 @@ pub enum Sense {
     Maximize,
 }
 
-impl TryFrom<i32> for Sense {
-    type Error = anyhow::Error;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        let v1_sense = v1::instance::Sense::try_from(value)
-            .map_err(|_| anyhow::anyhow!("Invalid sense value: {}", value))?;
-
-        match v1_sense {
-            v1::instance::Sense::Minimize => Ok(Sense::Minimize),
-            v1::instance::Sense::Maximize => Ok(Sense::Maximize),
-            v1::instance::Sense::Unspecified => {
-                Err(anyhow::anyhow!("Unspecified sense is not supported"))
-            }
-        }
-    }
-}
-
 /// Instance, represents a mathematical optimization problem.
 ///
 /// Invariants
