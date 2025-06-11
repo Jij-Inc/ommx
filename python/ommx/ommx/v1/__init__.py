@@ -438,7 +438,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [
             RemovedConstraint.from_raw(rust_removed_constraint)
-            for _, rust_removed_constraint in sorted(self.raw.removed_constraints.items())
+            for _, rust_removed_constraint in sorted(
+                self.raw.removed_constraints.items()
+            )
         ]
 
     def evaluate(self, state: ToState) -> Solution:
