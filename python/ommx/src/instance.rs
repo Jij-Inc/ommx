@@ -64,20 +64,20 @@ impl Instance {
     }
 
     #[getter]
-    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
+    pub fn decision_variables(&self) -> HashMap<u64, DecisionVariable> {
         self.0
             .decision_variables()
-            .values()
-            .map(|var| DecisionVariable(var.clone()))
+            .iter()
+            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
             .collect()
     }
 
     #[getter]
-    pub fn constraints(&self) -> Vec<Constraint> {
+    pub fn constraints(&self) -> HashMap<u64, Constraint> {
         self.0
             .constraints()
-            .values()
-            .map(|constraint| Constraint(constraint.clone()))
+            .iter()
+            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
             .collect()
     }
 

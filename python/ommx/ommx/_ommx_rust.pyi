@@ -301,8 +301,8 @@ class Function:
 class Instance:
     sense: Sense
     objective: Function
-    decision_variables: builtins.list[DecisionVariable]
-    constraints: builtins.list[Constraint]
+    decision_variables: builtins.dict[builtins.int, DecisionVariable]
+    constraints: builtins.dict[builtins.int, Constraint]
     removed_constraints: builtins.dict[builtins.int, RemovedConstraint]
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
