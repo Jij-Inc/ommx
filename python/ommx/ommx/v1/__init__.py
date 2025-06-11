@@ -1536,7 +1536,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         ...     parameters=p + w + [W],
         ...     objective=objective,
         ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Instance.MAXIMIZE.to_pb(),
         ... )
 
         Substitute parameters to get an instance
