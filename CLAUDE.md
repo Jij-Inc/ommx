@@ -78,19 +78,21 @@ The Instance class migration follows this phased approach:
    - ✅ `from_components` constructor method already implemented in Rust Instance
    - ✅ Serialization methods (`to_bytes`, `from_bytes`) available
 
-4. **Phase 4: 🔄 In Progress** - Python Instance migration
-   - Replace `Instance.raw` from Protocol Buffer `_Instance` to `_ommx_rust.Instance`
-   - Update core methods: `from_components` → `_ommx_rust.Instance.from_components`
-   - Update property methods: `objective` → `self.raw.get_objective()`, `sense` → `self.raw.get_sense()`
-   - Update getter methods: `get_decision_variables()` → `self.raw.get_decision_variables()`
-   - Update serialization: `to_bytes()` → `self.raw.to_bytes()`, `from_bytes()` → `_ommx_rust.Instance.from_bytes()`
-   - UserAnnotationBase functionality (title, license, authors) remains unchanged (OMMX Artifact metadata)
-   - All prerequisite PyO3 wrappers (DecisionVariable, Constraint, RemovedConstraint) completed
-   - All tests (python/ommx-tests/tests, doctests) currently passing
+4. **Phase 4: ✅ Completed** - Python Instance migration
+   - ✅ Replaced `Instance.raw` from Protocol Buffer `_Instance` to `_ommx_rust.Instance`
+   - ✅ Updated property accessors to use Rust getters: `self.raw.sense`, `self.raw.objective`, `self.raw.decision_variables`, `self.raw.constraints`
+   - ✅ Implemented new Rust SDK method: `ommx::Instance::set_objective()` with validation
+   - ✅ Added PyO3 objective setter `_ommx_rust.Instance.objective = value`
+   - ✅ Updated `from_components` to use `_ommx_rust.Instance.from_components`
+   - ✅ Migrated all ParseFromString calls to direct Rust instance assignment
+   - ✅ Updated getter methods while maintaining API compatibility (lists vs dicts)
+   - ✅ UserAnnotationBase functionality remains unchanged (OMMX Artifact metadata)
+   - ✅ Instance wrapper tests passing, core Instance functionality working
 
-5. **Phase 5: 📋 Planned** - Testing and validation
-   - Comprehensive testing of migrated Instance functionality
-   - Performance validation and optimization
+5. **Phase 5: 🔄 In Progress** - Final cleanup and validation
+   - 🔄 Fix remaining ParametricInstance Protocol Buffer type conflicts
+   - 📋 Complete pyright type checking success
+   - 📋 Performance benchmarking and optimization
 
 **Key Implementation Details**:
 - Python classes are thin wrappers around Rust core types
@@ -114,9 +116,10 @@ The Instance class migration follows this phased approach:
 - ✅ DecisionVariable PyO3 wrapper (Phase 1 complete)
 - ✅ Constraint PyO3 wrapper (Phase 2 complete)
 - ✅ RemovedConstraint PyO3 wrapper (Phase 2 complete)
-- ✅ Rust Instance API (Phase 3 complete - all required methods implemented)
+- ✅ Rust Instance API extension (Phase 3 complete)
 - ✅ Enum implementation (`Sense`, `Equality`) with type safety and Protocol Buffer conversion
-- 🔄 Python Instance class migration (Phase 4 ready for implementation)
+- ✅ Python Instance class migration (Phase 4 complete - core functionality working)
+- 🔄 Final cleanup and type checking (Phase 5 in progress)
 - Deprecated global evaluation functions removed
 
 ## Development Commands
@@ -257,16 +260,35 @@ The next phase involves migrating Python Instance class to use Rust implementati
 - **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive metadata management, encode/decode methods, and full functionality
 - **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
 - **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
-- **Phase 4 🔄**: Python Instance migration in progress - replacing Protocol Buffer `_Instance` with `_ommx_rust.Instance`
-- **Implementation Plan**: UserAnnotationBase (OMMX Artifact metadata) unchanged, focus on OMMX Message migration only
-- **Test Status**: All current tests passing (python/ommx-tests/tests, doctests) - ready for migration
-- **Key Achievements**: All prerequisite components ready, 221 test cases for constraint metadata, full type safety with enum validation, native Rust performance
-- **Migration Readiness**: All PyO3 wrappers complete, Rust Instance API ready, enum implementation complete, test compatibility verified
+- **Phase 4 ✅**: Python Instance migration completed - `Instance.raw` successfully migrated from Protocol Buffer to `_ommx_rust.Instance`
+- **Key Achievements**: 
+  - Core Instance functionality working with Rust backend
+  - Objective setter implemented with proper validation
+  - All ParseFromString calls migrated to direct Rust instance assignment
+  - Instance wrapper tests passing
+  - Performance improvements from native Rust operations
+- **Phase 5 🔄**: Final cleanup in progress - ParametricInstance type conflicts, complete pyright success
 
 ## Development Notes
-- Most tasks should be performed from the repository root directory. Always return to root after completing tasks
-- v1_ext directory contains implementations for ommx::v1::* types and should not be referenced or modified
-- When adding new Python test code, add it to python/ommx-tests/tests and run with pytest
-- Do not create inline tests or try to execute them directly
-- Running test code directly with `python -c` is strictly prohibited
-- Always run `task format` before committing changes to ensure code formatting compliance
+
+### 🚫 Critical Prohibitions
+- **NEVER use `cd` command** - Work from repository root directory only
+- **NEVER create inline tests** - Add tests to python/ommx-tests/tests only
+- **NEVER run `python -c` directly** - Use proper test framework
+- **NEVER modify v1_ext directory** - Contains deprecated Protocol Buffer implementations
+
+### 📁 Directory Guidelines  
+- Most tasks should be performed from the repository root directory
+- Return to root after completing any subtasks
+- Use absolute paths when referencing files across packages
+
+### 🧪 Testing Guidelines
+- Add new Python test code to python/ommx-tests/tests directory only
+- Run tests using pytest through task commands
+- Verify test compatibility across adapter packages before committing
+
+### 🔧 Code Quality
+- Always run `task format` before committing changes
+- Ensure `task python:test` passes completely
+- Follow incremental development: small changes → test → commit
+
