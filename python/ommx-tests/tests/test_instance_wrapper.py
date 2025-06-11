@@ -18,12 +18,14 @@ def test_instance_from_components():
     # Create constraint: x1 + x2 <= 5
     constraint_linear = rust.Linear({1: 1.0, 2: 1.0}, -5.0)
     constraint_function = rust.Function.from_linear(constraint_linear)
-    constraint = rust.Constraint(1, constraint_function, 2)  # 2 = LessThanOrEqualToZero
+    constraint = rust.Constraint(
+        1, constraint_function, rust.Equality.LessThanOrEqualToZero
+    )
     constraints = {1: constraint}
 
     # Create instance with MINIMIZE sense
     instance = rust.Instance.from_components(
-        sense=1,  # MINIMIZE
+        sense=rust.Sense.Minimize,
         objective=objective,
         decision_variables=decision_variables,
         constraints=constraints,
@@ -43,11 +45,11 @@ def test_instance_getters():
 
     constraint_linear = rust.Linear.single_term(1, 1.0)
     constraint_function = rust.Function.from_linear(constraint_linear)
-    constraint = rust.Constraint(1, constraint_function, 1)  # 1 = EqualToZero
+    constraint = rust.Constraint(1, constraint_function, rust.Equality.EqualToZero)
     constraints = {1: constraint}
 
     instance = rust.Instance.from_components(
-        sense=2,  # MAXIMIZE
+        sense=rust.Sense.Maximize,
         objective=objective,
         decision_variables=decision_variables,
         constraints=constraints,
@@ -79,29 +81,6 @@ def test_instance_getters():
     assert len(removed_constraints) == 0
 
 
-def test_instance_sense_validation():
-    """Test that invalid sense values raise errors."""
-    dv = rust.DecisionVariable.binary(1)
-    decision_variables = {1: dv}
-
-    linear = rust.Linear.single_term(1, 1.0)
-    objective = rust.Function.from_linear(linear)
-
-    constraints = {}
-
-    # Test invalid sense value
-    try:
-        rust.Instance.from_components(
-            sense=999,  # Invalid sense
-            objective=objective,
-            decision_variables=decision_variables,
-            constraints=constraints,
-        )
-        assert False, "Should have raised an exception for invalid sense"
-    except Exception as e:
-        assert "Invalid integer for ommx.v1.instance.Sense" in str(e)
-
-
 def test_instance_serialization():
     """Test Instance serialization methods."""
     # Create simple instance
@@ -112,7 +91,7 @@ def test_instance_serialization():
     objective = rust.Function.from_linear(linear)
 
     instance = rust.Instance.from_components(
-        sense=1,  # MINIMIZE
+        sense=rust.Sense.Minimize,
         objective=objective,
         decision_variables=decision_variables,
         constraints={},

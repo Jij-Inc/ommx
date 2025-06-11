@@ -3166,13 +3166,13 @@ class Constraint:
         if not isinstance(function, Function):
             function = Function(function)
 
-        # Convert Equality enum to integer for Rust
-        equality_int = 1 if equality == Equality.EQUALITY_EQUAL_TO_ZERO else 2
+        # Convert protobuf Equality to Rust Equality enum
+        rust_equality = _ommx_rust.Equality.from_pb(equality)
 
         self.raw = _ommx_rust.Constraint(
             id=id,
             function=function.raw,
-            equality=equality_int,
+            equality=rust_equality,
             name=name,
             subscripts=subscripts or [],
             description=description,
@@ -3181,7 +3181,7 @@ class Constraint:
 
     @staticmethod
     def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
-        new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
+        new = Constraint(function=0, equality=Equality.EQUALITY_EQUAL_TO_ZERO)
         new.raw = raw
         Constraint._counter = max(Constraint._counter, raw.id + 1)
         return new
@@ -3252,11 +3252,12 @@ class Constraint:
 
     @property
     def equality(self) -> Equality.ValueType:
-        # Convert Rust equality (int) to protobuf Equality enum
+        # Convert Rust equality enum to protobuf Equality enum
         rust_equality = self.raw.equality
-        if rust_equality == 1:
+        pb_value = rust_equality.to_pb()
+        if pb_value == 1:
             return Equality.EQUALITY_EQUAL_TO_ZERO
-        elif rust_equality == 2:
+        elif pb_value == 2:
             return Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
         else:
             return Equality.EQUALITY_UNSPECIFIED
@@ -3285,11 +3286,12 @@ class Constraint:
     def _as_pandas_entry(self) -> dict:
         c = self.raw
         # Convert Rust equality to protobuf equivalent for _equality function
+        pb_value = c.equality.to_pb()
         equality_for_display = (
             Equality.EQUALITY_EQUAL_TO_ZERO
-            if c.equality == 1
+            if pb_value == 1
             else Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-            if c.equality == 2
+            if pb_value == 2
             else Equality.EQUALITY_UNSPECIFIED
         )
         # Convert Rust function to protobuf for _function_type

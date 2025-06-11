@@ -1,4 +1,4 @@
-use crate::{Constraint, DecisionVariable, Function, RemovedConstraint, VariableBound};
+use crate::{Constraint, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
@@ -24,12 +24,12 @@ impl Instance {
     #[staticmethod]
     #[pyo3(signature = (sense, objective, decision_variables, constraints))]
     pub fn from_components(
-        sense: i32,
+        sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
     ) -> Result<Self> {
-        let rust_sense = ommx::Sense::try_from(sense)?;
+        let rust_sense = sense.into();
 
         let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
             decision_variables
@@ -53,7 +53,7 @@ impl Instance {
         Ok(Self(instance))
     }
 
-    pub fn get_sense(&self) -> i32 {
+    pub fn get_sense(&self) -> Sense {
         (*self.0.sense()).into()
     }
 

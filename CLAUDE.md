@@ -111,6 +111,7 @@ The Instance class migration follows this phased approach:
 - ✅ Constraint PyO3 wrapper (Phase 2 complete)
 - ✅ RemovedConstraint PyO3 wrapper (Phase 2 complete)
 - ✅ Rust Instance API (Phase 3 complete - all required methods implemented)
+- ✅ Enum implementation (`Sense`, `Equality`) with type safety and Protocol Buffer conversion
 - 🔄 Python Instance class migration (Phase 4 ready for implementation)
 - Deprecated global evaluation functions removed
 
@@ -251,9 +252,10 @@ The next phase involves migrating Python Instance class to use Rust implementati
 - **Phase 1 ✅**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
 - **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive metadata management, encode/decode methods, and full functionality
 - **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
+- **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
 - **Phase 4 🔄**: Ready for Python Instance migration - replace Protocol Buffer with Rust implementation
-- **Key Achievements**: All prerequisite components ready, 221 test cases for constraint metadata, full type safety, native Rust performance
-- **Migration Readiness**: All PyO3 wrappers complete, Rust Instance API ready, test compatibility verified
+- **Key Achievements**: All prerequisite components ready, 221 test cases for constraint metadata, full type safety with enum validation, native Rust performance
+- **Migration Readiness**: All PyO3 wrappers complete, Rust Instance API ready, enum implementation complete, test compatibility verified
 
 ## Development Notes
 - Most tasks should be performed from the repository root directory. Always return to root after completing tasks
@@ -261,3 +263,4 @@ The next phase involves migrating Python Instance class to use Rust implementati
 - When adding new Python test code, add it to python/ommx-tests/tests and run with pytest
 - Do not create inline tests or try to execute them directly
 - Running test code directly with `python -c` is strictly prohibited
+- Always run `task format` before committing changes to ensure code formatting compliance
