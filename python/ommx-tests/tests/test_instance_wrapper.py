@@ -99,7 +99,7 @@ def test_instance_sense_validation():
         )
         assert False, "Should have raised an exception for invalid sense"
     except Exception as e:
-        assert "Invalid sense" in str(e)
+        assert "Invalid integer for ommx.v1.instance.Sense" in str(e)
 
 
 def test_instance_serialization():
