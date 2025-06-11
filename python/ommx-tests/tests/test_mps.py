@@ -84,41 +84,30 @@ def test_output():
 
     # convert to a format easier to test.
     dvars_before = instance.raw.decision_variables
-    dvars_before.sort(key=lambda x: x.id)
     dvars_after = loaded.raw.decision_variables
-    dvars_after.sort(key=lambda x: x.id)
-    assert len(dvars_before) == len(dvars_after)
-    # IDs are stable specifically for OMMX-outputed MPS files
-    for before, after in zip(dvars_before, dvars_after):
-        # names are not intentionally preserved
-        assert before.id == after.id
-        assert before.kind == after.kind
-        assert before.bound.lower == after.bound.lower
-        assert before.bound.upper == after.bound.upper
-        assert before.subscripts == after.subscripts
+    assert dvars_before.keys() == dvars_after.keys()
+    for key in dvars_before.keys():
+        b = dvars_before[key]
+        a = dvars_after[key]
+        assert b.id == a.id
+        assert b.name == a.name
+        assert b.kind == a.kind
+        assert b.bound.lower == a.bound.lower
+        assert b.bound.upper == a.bound.upper
+        assert b.subscripts == a.subscripts
 
     constr_before = instance.raw.constraints
-    constr_before.sort(key=lambda c: c.id)
     constr_after = loaded.raw.constraints
-    constr_after.sort(key=lambda c: c.id)
-    assert len(constr_before) == len(constr_after)
-    for before, after in zip(constr_before, constr_after):
-        # names are not intentionally preserved
-        assert before.id == after.id
-        terms_before = [t.coefficient for t in before.function.linear.terms]
-        terms_before.sort()
+    assert constr_before.keys() == constr_after.keys()
 
-        terms_after = [t.coefficient for t in after.function.linear.terms]
-        terms_after.sort()
-        assert terms_before == terms_after
+    for key in constr_before.keys():
+        before = constr_before[key]
+        after = constr_after[key]
+        assert before.id == after.id
+        assert before.name == after.name
+        assert before.equality == after.equality
+        assert before.subscripts == after.subscripts
+        assert before.function.almost_equal(after.function)
 
     # same as above for objective function
-    obj_before = [t.coefficient for t in instance.raw.objective.linear.terms]
-    obj_before.sort()
-
-    obj_after = [t.coefficient for t in loaded.raw.objective.linear.terms]
-    obj_after.sort()
-    assert obj_before == obj_after
-    assert (
-        instance.raw.objective.linear.constant == loaded.raw.objective.linear.constant
-    )
+    assert instance.raw.objective.almost_equal(loaded.raw.objective)
