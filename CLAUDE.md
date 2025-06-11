@@ -78,11 +78,15 @@ The Instance class migration follows this phased approach:
    - ✅ `from_components` constructor method already implemented in Rust Instance
    - ✅ Serialization methods (`to_bytes`, `from_bytes`) available
 
-4. **Phase 4: 🔄 Ready for Implementation** - Python Instance migration
-   - Replace `Instance.raw` from Protocol Buffer to `_ommx_rust.Instance`
-   - Update all Instance methods to use Rust implementation
-   - Maintain backward compatibility with existing Python API
+4. **Phase 4: 🔄 In Progress** - Python Instance migration
+   - Replace `Instance.raw` from Protocol Buffer `_Instance` to `_ommx_rust.Instance`
+   - Update core methods: `from_components` → `_ommx_rust.Instance.from_components`
+   - Update property methods: `objective` → `self.raw.get_objective()`, `sense` → `self.raw.get_sense()`
+   - Update getter methods: `get_decision_variables()` → `self.raw.get_decision_variables()`
+   - Update serialization: `to_bytes()` → `self.raw.to_bytes()`, `from_bytes()` → `_ommx_rust.Instance.from_bytes()`
+   - UserAnnotationBase functionality (title, license, authors) remains unchanged (OMMX Artifact metadata)
    - All prerequisite PyO3 wrappers (DecisionVariable, Constraint, RemovedConstraint) completed
+   - All tests (python/ommx-tests/tests, doctests) currently passing
 
 5. **Phase 5: 📋 Planned** - Testing and validation
    - Comprehensive testing of migrated Instance functionality
@@ -253,7 +257,9 @@ The next phase involves migrating Python Instance class to use Rust implementati
 - **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive metadata management, encode/decode methods, and full functionality
 - **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
 - **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
-- **Phase 4 🔄**: Ready for Python Instance migration - replace Protocol Buffer with Rust implementation
+- **Phase 4 🔄**: Python Instance migration in progress - replacing Protocol Buffer `_Instance` with `_ommx_rust.Instance`
+- **Implementation Plan**: UserAnnotationBase (OMMX Artifact metadata) unchanged, focus on OMMX Message migration only
+- **Test Status**: All current tests passing (python/ommx-tests/tests, doctests) - ready for migration
 - **Key Achievements**: All prerequisite components ready, 221 test cases for constraint metadata, full type safety with enum validation, native Rust performance
 - **Migration Readiness**: All PyO3 wrappers complete, Rust Instance API ready, enum implementation complete, test compatibility verified
 
