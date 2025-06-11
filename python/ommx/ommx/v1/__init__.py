@@ -257,7 +257,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Convert objective to Function if needed
         if not isinstance(objective, Function):
             objective = Function(objective)
-        
+
         # Convert decision variables to _ommx_rust.DecisionVariable
         rust_decision_variables = {}
         for v in decision_variables:
@@ -267,7 +267,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 # Convert protobuf to DecisionVariable first
                 dv = DecisionVariable.from_protobuf(v)
                 rust_decision_variables[dv.id] = dv.raw
-        
+
         # Convert constraints to _ommx_rust.Constraint
         rust_constraints = {}
         for c in constraints:
@@ -277,7 +277,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 # Convert protobuf to Constraint first
                 constraint = Constraint.from_protobuf(c)
                 rust_constraints[constraint.id] = constraint.raw
-        
+
         # Create Rust instance
         rust_instance = _ommx_rust.Instance.from_components(
             sense=sense,
@@ -285,7 +285,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             decision_variables=rust_decision_variables,
             constraints=rust_constraints,
         )
-        
+
         return Instance(rust_instance)
 
     @staticmethod
@@ -379,7 +379,9 @@ class Instance(InstanceBase, UserAnnotationBase):
     @property
     def description(self) -> _Instance.Description:
         # TODO: Description is not yet implemented in Rust Instance
-        raise NotImplementedError("Description property not yet supported in Rust implementation")
+        raise NotImplementedError(
+            "Description property not yet supported in Rust implementation"
+        )
 
     @property
     def objective(self) -> Function:
@@ -417,7 +419,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
         return [
-            DecisionVariable(rust_dv) 
+            DecisionVariable(rust_dv)
             for rust_dv in self.raw.decision_variables.values()
         ]
 
@@ -426,7 +428,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Get constraints as a list of :class:`Constraint` instances.
         """
         return [
-            Constraint.from_raw(rust_constraint) 
+            Constraint.from_raw(rust_constraint)
             for rust_constraint in self.raw.constraints.values()
         ]
 
@@ -435,7 +437,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
         return [
-            RemovedConstraint.from_raw(rust_removed_constraint) 
+            RemovedConstraint.from_raw(rust_removed_constraint)
             for rust_removed_constraint in self.raw.removed_constraints.values()
         ]
 
@@ -863,7 +865,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             sense=_ommx_rust.Sense.Minimize,
             objective=obj.raw,
             decision_variables=self.raw.decision_variables,
-            constraints=self.raw.constraints
+            constraints=self.raw.constraints,
         )
         return True
 
@@ -917,7 +919,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             sense=_ommx_rust.Sense.Maximize,
             objective=obj.raw,
             decision_variables=self.raw.decision_variables,
-            constraints=self.raw.constraints
+            constraints=self.raw.constraints,
         )
         return True
 
@@ -1577,7 +1579,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         return ParametricInstance.from_components(
             objective=0,
             constraints=[],
-            sense=Instance.MINIMIZE,
+            sense=_Instance.Sense.SENSE_MINIMIZE,
             decision_variables=[],
             parameters=[],
         )

@@ -112,7 +112,7 @@ impl Instance {
                 return Err(InstanceError::UndefinedVariableID { id }.into());
             }
         }
-        
+
         self.objective = objective;
         Ok(())
     }
