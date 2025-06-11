@@ -75,7 +75,7 @@ class Bound:
     """
     def __new__(cls, lower: builtins.float, upper: builtins.float): ...
     @staticmethod
-    def default() -> Bound: ...
+    def unbounded() -> Bound: ...
     @staticmethod
     def positive() -> Bound: ...
     @staticmethod
@@ -92,7 +92,148 @@ class Bound:
     def nearest_to_zero(self) -> builtins.float: ...
     def intersection(self, other: Bound) -> typing.Optional[Bound]: ...
     def __repr__(self) -> builtins.str: ...
-    def __str__(self) -> builtins.str: ...
+
+class Constraint:
+    r"""
+    Constraint wrapper for Python
+    """
+
+    id: builtins.int
+    function: Function
+    equality: builtins.int
+    name: builtins.str
+    subscripts: builtins.list[builtins.int]
+    description: builtins.str
+    parameters: builtins.dict[builtins.str, builtins.str]
+    def __new__(
+        cls,
+        id: builtins.int,
+        function: Function,
+        equality: builtins.int,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+    ): ...
+    @staticmethod
+    def decode(bytes: bytes) -> Constraint: ...
+    def encode(self) -> bytes: ...
+    def set_name(self, name: builtins.str) -> None:
+        r"""
+        Set the name of the constraint
+        """
+        ...
+
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Set the subscripts of the constraint
+        """
+        ...
+
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+        r"""
+        Add subscripts to the constraint
+        """
+        ...
+
+    def set_id(self, id: builtins.int) -> None:
+        r"""
+        Set the ID of the constraint
+        """
+        ...
+
+    def set_description(self, description: builtins.str) -> None:
+        r"""
+        Set the description of the constraint
+        """
+        ...
+
+    def set_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> None:
+        r"""
+        Set the parameters of the constraint
+        """
+        ...
+
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add a parameter to the constraint
+        """
+        ...
+
+    def __repr__(self) -> builtins.str: ...
+
+class DecisionVariable:
+    r"""
+    DecisionVariable wrapper for Python
+    """
+
+    id: builtins.int
+    kind: builtins.int
+    bound: Bound
+    name: builtins.str
+    subscripts: builtins.list[builtins.int]
+    parameters: builtins.dict[builtins.str, builtins.str]
+    description: builtins.str
+    def __new__(
+        cls,
+        id: builtins.int,
+        kind: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ): ...
+    @staticmethod
+    def binary(
+        id: builtins.int,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def integer(
+        id: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def continuous(
+        id: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def semi_integer(
+        id: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def semi_continuous(
+        id: builtins.int,
+        bound: Bound,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> DecisionVariable: ...
+    @staticmethod
+    def decode(bytes: bytes) -> DecisionVariable: ...
+    def encode(self) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
 
 class DecisionVariableAnalysis:
     def used_binary(self) -> builtins.dict[builtins.int, Bound]: ...
@@ -170,6 +311,22 @@ class Function:
 class Instance:
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
+    @staticmethod
+    def from_components(
+        sense: builtins.int,
+        objective: Function,
+        decision_variables: typing.Mapping[builtins.int, DecisionVariable],
+        constraints: typing.Mapping[builtins.int, Constraint],
+    ) -> Instance: ...
+    def get_sense(self) -> builtins.int: ...
+    def get_objective(self) -> Function: ...
+    def get_decision_variables(
+        self,
+    ) -> builtins.dict[builtins.int, DecisionVariable]: ...
+    def get_constraints(self) -> builtins.dict[builtins.int, Constraint]: ...
+    def get_removed_constraints(
+        self,
+    ) -> builtins.dict[builtins.int, RemovedConstraint]: ...
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
     def as_pubo_format(self) -> dict: ...
@@ -298,6 +455,29 @@ class Quadratic:
     ) -> Quadratic: ...
     def evaluate(self, state: bytes) -> builtins.float: ...
     def partial_evaluate(self, state: bytes) -> Quadratic: ...
+
+class RemovedConstraint:
+    r"""
+    RemovedConstraint wrapper for Python
+    """
+
+    constraint: Constraint
+    removed_reason: builtins.str
+    removed_reason_parameters: builtins.dict[builtins.str, builtins.str]
+    id: builtins.int
+    name: builtins.str
+    def __new__(
+        cls,
+        constraint: Constraint,
+        removed_reason: builtins.str,
+        removed_reason_parameters: typing.Optional[
+            typing.Mapping[builtins.str, builtins.str]
+        ] = None,
+    ): ...
+    @staticmethod
+    def decode(bytes: bytes) -> RemovedConstraint: ...
+    def encode(self) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
 
 class Rng:
     def __new__(

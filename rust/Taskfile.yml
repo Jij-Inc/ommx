@@ -27,3 +27,8 @@ tasks:
     desc: Set version for Rust SDK
     cmds:
       - cargo set-version {{.CLI_ARGS}}
+
+  format:
+    desc: Format Rust code
+    cmds:
+      - cargo fmt --all

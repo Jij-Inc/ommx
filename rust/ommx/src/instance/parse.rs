@@ -20,6 +20,24 @@ impl Parse for v1::instance::Sense {
     }
 }
 
+impl TryFrom<v1::instance::Sense> for Sense {
+    type Error = ParseError;
+    fn try_from(value: v1::instance::Sense) -> Result<Self, Self::Error> {
+        value.parse(&())
+    }
+}
+
+impl TryFrom<i32> for Sense {
+    type Error = anyhow::Error;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        let v1_sense = v1::instance::Sense::try_from(value).map_err(|_| {
+            anyhow::anyhow!("Invalid integer for ommx.v1.instance.Sense: {}", value)
+        })?;
+        Ok(v1_sense.try_into()?)
+    }
+}
+
 impl From<Sense> for v1::instance::Sense {
     fn from(value: Sense) -> Self {
         match value {

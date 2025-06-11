@@ -257,7 +257,6 @@ impl Quadratic {
     pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
         self.0
             .linear_terms()
-            .into_iter()
             .map(|(id, coeff)| (id.into_inner(), coeff.into_inner()))
             .collect()
     }
@@ -269,7 +268,6 @@ impl Quadratic {
     pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
         self.0
             .quadratic_terms()
-            .into_iter()
             .map(|(pair, coeff)| {
                 (
                     (pair.lower().into_inner(), pair.upper().into_inner()),
@@ -452,7 +450,8 @@ impl Polynomial {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Function(ommx::Function);
+#[derive(Clone)]
+pub struct Function(pub ommx::Function);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -604,83 +603,5 @@ impl Function {
         let mut inner = self.0.clone();
         inner.partial_evaluate(&state, ommx::ATol::default())?;
         Ok(Function(inner))
-    }
-}
-
-/// Variable bound wrapper for Python
-///
-/// Note: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,
-/// but is exposed as `Bound` in Python through the `#[pyclass(name = "Bound")]` attribute.
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass(name = "Bound")]
-#[derive(Clone)]
-pub struct VariableBound(pub ommx::Bound);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl VariableBound {
-    #[new]
-    pub fn new(lower: f64, upper: f64) -> Result<Self> {
-        Ok(Self(ommx::Bound::new(lower, upper)?))
-    }
-
-    #[staticmethod]
-    pub fn default() -> Self {
-        Self(ommx::Bound::default())
-    }
-
-    #[staticmethod]
-    pub fn positive() -> Self {
-        Self(ommx::Bound::positive())
-    }
-
-    #[staticmethod]
-    pub fn negative() -> Self {
-        Self(ommx::Bound::negative())
-    }
-
-    #[staticmethod]
-    pub fn of_binary() -> Self {
-        Self(ommx::Bound::of_binary())
-    }
-
-    pub fn lower(&self) -> f64 {
-        self.0.lower()
-    }
-
-    pub fn upper(&self) -> f64 {
-        self.0.upper()
-    }
-
-    pub fn width(&self) -> f64 {
-        self.0.width()
-    }
-
-    pub fn is_finite(&self) -> bool {
-        self.0.is_finite()
-    }
-
-    pub fn contains(&self, value: f64, atol: f64) -> Result<bool> {
-        Ok(self.0.contains(value, ommx::ATol::new(atol)?))
-    }
-
-    pub fn nearest_to_zero(&self) -> f64 {
-        self.0.nearest_to_zero()
-    }
-
-    pub fn intersection(&self, other: &VariableBound) -> Option<VariableBound> {
-        self.0.intersection(&other.0).map(VariableBound)
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!(
-            "VariableBound(lower={}, upper={})",
-            self.0.lower(),
-            self.0.upper()
-        )
-    }
-
-    pub fn __str__(&self) -> String {
-        format!("{}", self.0)
     }
 }

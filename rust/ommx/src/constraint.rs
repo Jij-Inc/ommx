@@ -29,7 +29,7 @@ impl std::fmt::Display for ConstraintID {
 }
 
 impl ConstraintID {
-    fn into_inner(self) -> u64 {
+    pub fn into_inner(self) -> u64 {
         self.0
     }
 }
@@ -46,9 +46,44 @@ pub struct Constraint {
     pub description: Option<String>,
 }
 
+impl std::fmt::Display for Constraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let equality_symbol = match self.equality {
+            Equality::EqualToZero => "==",
+            Equality::LessThanOrEqualToZero => "<=",
+        };
+        write!(f, "Constraint({} {} 0)", self.function, equality_symbol)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemovedConstraint {
     pub constraint: Constraint,
     pub removed_reason: String,
     pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
+impl std::fmt::Display for RemovedConstraint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let equality_symbol = match self.constraint.equality {
+            Equality::EqualToZero => "==",
+            Equality::LessThanOrEqualToZero => "<=",
+        };
+
+        let mut reason_str = format!("reason={}", self.removed_reason);
+        if !self.removed_reason_parameters.is_empty() {
+            let params: Vec<String> = self
+                .removed_reason_parameters
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect();
+            reason_str = format!("{}, {}", reason_str, params.join(", "));
+        }
+
+        write!(
+            f,
+            "RemovedConstraint({} {} 0, {})",
+            self.constraint.function, equality_symbol, reason_str
+        )
+    }
 }

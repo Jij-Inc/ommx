@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "approx",
  "derive_more",
+ "fnv",
  "ocipkg",
  "ommx",
  "pyo3",

@@ -1,6 +1,9 @@
 mod artifact;
+mod bound;
 mod builder;
+mod constraint;
 mod dataset;
+mod decision_variable;
 mod descriptor;
 mod evaluate;
 mod instance;
@@ -10,8 +13,11 @@ mod qplib;
 mod random;
 
 pub use artifact::*;
+pub use bound::*;
 pub use builder::*;
+pub use constraint::*;
 pub use dataset::*;
+pub use decision_variable::*;
 pub use descriptor::*;
 pub use evaluate::*;
 pub use instance::*;
@@ -43,6 +49,9 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
+    m.add_class::<DecisionVariable>()?;
+    m.add_class::<Constraint>()?;
+    m.add_class::<RemovedConstraint>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
