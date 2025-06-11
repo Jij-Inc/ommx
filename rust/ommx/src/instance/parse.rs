@@ -12,10 +12,10 @@ impl Parse for v1::instance::Sense {
         match self {
             v1::instance::Sense::Minimize => Ok(Sense::Minimize),
             v1::instance::Sense::Maximize => Ok(Sense::Maximize),
-            v1::instance::Sense::Unspecified => Err(RawParseError::UnspecifiedEnum {
-                enum_name: "ommx.v1.instance.Sense",
+            v1::instance::Sense::Unspecified => {
+                log::warn!("Unspecified ommx.v1.instance.Sense found, defaulting to Minimize");
+                Ok(Sense::Minimize)
             }
-            .into()),
         }
     }
 }
