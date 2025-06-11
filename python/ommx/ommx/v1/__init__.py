@@ -3181,7 +3181,7 @@ class Constraint:
 
     @staticmethod
     def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
-        new = Constraint(function=0, equality=Equality.EQUALITY_UNSPECIFIED)
+        new = Constraint(function=0, equality=Equality.EQUALITY_EQUAL_TO_ZERO)
         new.raw = raw
         Constraint._counter = max(Constraint._counter, raw.id + 1)
         return new
