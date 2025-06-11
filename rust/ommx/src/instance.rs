@@ -102,6 +102,20 @@ impl Instance {
             description: None,
         })
     }
+
+    /// Set the objective function
+    pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
+        // Validate that all variables in the objective are defined
+        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
+        for id in objective.required_ids() {
+            if !variable_ids.contains(&id) {
+                return Err(InstanceError::UndefinedVariableID { id }.into());
+            }
+        }
+        
+        self.objective = objective;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

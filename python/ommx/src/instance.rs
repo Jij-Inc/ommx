@@ -63,6 +63,12 @@ impl Instance {
         Function(self.0.objective().clone())
     }
 
+    #[setter]
+    pub fn set_objective(&mut self, objective: Function) -> Result<()> {
+        self.0.set_objective(objective.0)?;
+        Ok(())
+    }
+
     #[getter]
     pub fn decision_variables(&self) -> HashMap<u64, DecisionVariable> {
         self.0
