@@ -95,7 +95,7 @@ def test_constraint_invalid_equality():
     function = rust.Function.from_linear(linear)
 
     with pytest.raises(Exception):  # Should raise error for invalid equality
-        rust.Constraint(1, function, 999, "invalid", None)
+        rust.Constraint(1, function, 999, "invalid", [])
 
 
 def test_constraint_empty_name():
