@@ -7,10 +7,6 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-// Constants for sense values to match Python SDK
-const SENSE_MINIMIZE: u32 = 1;
-const SENSE_MAXIMIZE: u32 = 2;
-
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Instance(ommx::Instance);
@@ -28,16 +24,12 @@ impl Instance {
     #[staticmethod]
     #[pyo3(signature = (sense, objective, decision_variables, constraints))]
     pub fn from_components(
-        sense: u32,
+        sense: i32,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
     ) -> Result<Self> {
-        let rust_sense = match sense {
-            SENSE_MINIMIZE => ommx::Sense::Minimize,
-            SENSE_MAXIMIZE => ommx::Sense::Maximize,
-            _ => return Err(anyhow::anyhow!("Invalid sense: {}", sense).into()),
-        };
+        let rust_sense = ommx::Sense::try_from(sense)?;
 
         let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
             decision_variables
@@ -61,11 +53,8 @@ impl Instance {
         Ok(Self(instance))
     }
 
-    pub fn get_sense(&self) -> u32 {
-        match self.0.sense() {
-            ommx::Sense::Minimize => SENSE_MINIMIZE,
-            ommx::Sense::Maximize => SENSE_MAXIMIZE,
-        }
+    pub fn get_sense(&self) -> i32 {
+        (*self.0.sense()).into()
     }
 
     pub fn get_objective(&self) -> Function {
