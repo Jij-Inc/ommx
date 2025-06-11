@@ -195,8 +195,8 @@ class Instance(InstanceBase, UserAnnotationBase):
 
     """
 
-    raw: _Instance
-    """The raw protobuf message."""
+    raw: _ommx_rust.Instance
+    """The raw Rust instance."""
 
     # Annotations
     annotations: dict[str, str] = field(default_factory=dict)
@@ -224,8 +224,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         return self.annotations
 
     # Re-export some enums
-    MAXIMIZE = _Instance.SENSE_MAXIMIZE
-    MINIMIZE = _Instance.SENSE_MINIMIZE
+    MAXIMIZE = _ommx_rust.Sense.Maximize
+    MINIMIZE = _ommx_rust.Sense.Minimize
 
     Description = _Instance.Description
 
@@ -250,33 +250,43 @@ class Instance(InstanceBase, UserAnnotationBase):
         | Function
         | _Function,
         constraints: Iterable[Constraint | _Constraint],
-        sense: _Instance.Sense.ValueType,
+        sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
-        if not isinstance(objective, _Function):
-            if not isinstance(objective, Function):
-                objective = Function(objective)
-            raw_objective = _Function()
-            raw_objective.ParseFromString(objective.to_bytes())
-        else:
-            raw_objective = objective
-
-        return Instance(
-            _Instance(
-                description=description,
-                decision_variables=[
-                    v.to_protobuf() if isinstance(v, DecisionVariable) else v
-                    for v in decision_variables
-                ],
-                objective=raw_objective,
-                constraints=[
-                    c.to_protobuf() if isinstance(c, Constraint) else c
-                    for c in constraints
-                ],
-                sense=sense,
-            )
+        # Convert objective to Function if needed
+        if not isinstance(objective, Function):
+            objective = Function(objective)
+        
+        # Convert decision variables to _ommx_rust.DecisionVariable
+        rust_decision_variables = {}
+        for v in decision_variables:
+            if isinstance(v, DecisionVariable):
+                rust_decision_variables[v.id] = v.raw
+            else:
+                # Convert protobuf to DecisionVariable first
+                dv = DecisionVariable.from_protobuf(v)
+                rust_decision_variables[dv.id] = dv.raw
+        
+        # Convert constraints to _ommx_rust.Constraint
+        rust_constraints = {}
+        for c in constraints:
+            if isinstance(c, Constraint):
+                rust_constraints[c.id] = c.raw
+            else:
+                # Convert protobuf to Constraint first
+                constraint = Constraint.from_protobuf(c)
+                rust_constraints[constraint.id] = constraint.raw
+        
+        # Create Rust instance
+        rust_instance = _ommx_rust.Instance.from_components(
+            sense=sense,
+            objective=objective.raw,
+            decision_variables=rust_decision_variables,
+            constraints=rust_constraints,
         )
+        
+        return Instance(rust_instance)
 
     @staticmethod
     def load_mps(path: str) -> Instance:
@@ -360,20 +370,20 @@ class Instance(InstanceBase, UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
-        instance = _Instance()
-        instance.ParseFromString(data)
-        return Instance(instance)
+        rust_instance = _ommx_rust.Instance.from_bytes(data)
+        return Instance(rust_instance)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def description(self) -> _Instance.Description:
-        return self.raw.description
+        # TODO: Description is not yet implemented in Rust Instance
+        raise NotImplementedError("Description property not yet supported in Rust implementation")
 
     @property
     def objective(self) -> Function:
-        return Function(self.raw.objective)
+        return Function.from_raw(self.raw.objective)
 
     @objective.setter
     def objective(
@@ -394,14 +404,12 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
         """
-        if isinstance(value, Function):
-            f = value
-        else:
-            f = Function(value)
-        self.raw.objective.ParseFromString(f.to_bytes())
+        if not isinstance(value, Function):
+            value = Function(value)
+        self.raw.objective = value.raw
 
     @property
-    def sense(self) -> _Instance.Sense.ValueType:
+    def sense(self) -> _ommx_rust.Sense:
         return self.raw.sense
 
     def get_decision_variables(self) -> list[DecisionVariable]:
@@ -409,21 +417,26 @@ class Instance(InstanceBase, UserAnnotationBase):
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
         return [
-            DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
+            DecisionVariable(rust_dv) 
+            for rust_dv in self.raw.decision_variables.values()
         ]
 
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances.
         """
-        return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
+        return [
+            Constraint.from_raw(rust_constraint) 
+            for rust_constraint in self.raw.constraints.values()
+        ]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
         return [
-            RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
+            RemovedConstraint.from_raw(rust_removed_constraint) 
+            for rust_removed_constraint in self.raw.removed_constraints.values()
         ]
 
     def evaluate(self, state: ToState) -> Solution:
@@ -845,9 +858,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         if self.raw.sense == Instance.MINIMIZE:
             return False
-        self.raw.sense = Instance.MINIMIZE
         obj = -self.objective
-        self.raw.objective.ParseFromString(obj.to_bytes())
+        self.raw = _ommx_rust.Instance.from_components(
+            sense=_ommx_rust.Sense.Minimize,
+            objective=obj.raw,
+            decision_variables=self.raw.decision_variables,
+            constraints=self.raw.constraints
+        )
         return True
 
     def as_maximization_problem(self) -> bool:
@@ -895,9 +912,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         if self.raw.sense == Instance.MAXIMIZE:
             return False
-        self.raw.sense = Instance.MAXIMIZE
         obj = -self.objective
-        self.raw.objective.ParseFromString(obj.to_bytes())
+        self.raw = _ommx_rust.Instance.from_components(
+            sense=_ommx_rust.Sense.Maximize,
+            objective=obj.raw,
+            decision_variables=self.raw.decision_variables,
+            constraints=self.raw.constraints
+        )
         return True
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
@@ -1185,7 +1206,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.relax_constraint(constraint_id, reason, parameters)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def restore_constraint(self, constraint_id: int):
         """
@@ -1197,7 +1218,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.restore_constraint(constraint_id)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
@@ -1294,7 +1315,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 return
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.log_encode(decision_variable_ids)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
@@ -1362,7 +1383,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance.convert_inequality_to_equality_with_integer_slack(
             constraint_id, max_integer_range
         )
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def add_integer_slack_to_inequality(
         self, constraint_id: int, slack_upper_bound: int
@@ -1439,7 +1460,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         b = instance.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
         return b
 
     def decision_variable_analysis(self) -> "DecisionVariableAnalysis":
@@ -3318,6 +3339,10 @@ class RemovedConstraint:
 
     def __init__(self, raw: _ommx_rust.RemovedConstraint):
         self.raw = raw
+
+    @staticmethod
+    def from_raw(raw: _ommx_rust.RemovedConstraint) -> RemovedConstraint:
+        return RemovedConstraint(raw)
 
     @staticmethod
     def from_protobuf(pb_removed_constraint: _RemovedConstraint) -> RemovedConstraint:

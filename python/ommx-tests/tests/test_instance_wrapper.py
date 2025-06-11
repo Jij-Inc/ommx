@@ -55,28 +55,30 @@ def test_instance_getters():
         constraints=constraints,
     )
 
-    # Test get_sense
-    sense = instance.get_sense()
+    # Test sense property
+    sense = instance.sense
     assert sense == 2  # MAXIMIZE
 
-    # Test get_objective
-    retrieved_objective = instance.get_objective()
+    # Test objective property
+    retrieved_objective = instance.objective
     assert isinstance(retrieved_objective, rust.Function)
 
-    # Test get_decision_variables
-    retrieved_dvs = instance.get_decision_variables()
+    # Test decision_variables property
+    retrieved_dvs = instance.decision_variables
     assert isinstance(retrieved_dvs, dict)
+    assert len(retrieved_dvs) == 1
     assert 1 in retrieved_dvs
     assert isinstance(retrieved_dvs[1], rust.DecisionVariable)
 
-    # Test get_constraints
-    retrieved_constraints = instance.get_constraints()
+    # Test constraints property
+    retrieved_constraints = instance.constraints
     assert isinstance(retrieved_constraints, dict)
+    assert len(retrieved_constraints) == 1
     assert 1 in retrieved_constraints
     assert isinstance(retrieved_constraints[1], rust.Constraint)
 
-    # Test get_removed_constraints (should be empty initially)
-    removed_constraints = instance.get_removed_constraints()
+    # Test removed_constraints property (should be empty initially)
+    removed_constraints = instance.removed_constraints
     assert isinstance(removed_constraints, dict)
     assert len(removed_constraints) == 0
 
@@ -107,6 +109,6 @@ def test_instance_serialization():
     assert isinstance(instance2, rust.Instance)
 
     # Verify deserialized instance has same properties
-    assert instance2.get_sense() == 1
-    assert len(instance2.get_decision_variables()) == 1
-    assert len(instance2.get_constraints()) == 0
+    assert instance2.sense == 1  # MINIMIZE
+    assert len(instance2.decision_variables) == 1
+    assert len(instance2.constraints) == 0
