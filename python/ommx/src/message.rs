@@ -2,7 +2,9 @@ use crate::Rng;
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{v1, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse, VariableIDPair};
+use ommx::{
+    v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse, VariableIDPair,
+};
 use ommx::{LinearMonomial, MonomialDyn};
 use pyo3::{prelude::*, types::PyBytes};
 use std::collections::BTreeMap;
@@ -89,6 +91,7 @@ impl Linear {
             .unwrap_or(0.0)
     }
 
+    #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Linear, atol: f64) -> Result<bool> {
         Ok(self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol)?))
     }
@@ -210,6 +213,7 @@ impl Quadratic {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Quadratic, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
@@ -355,6 +359,7 @@ impl Polynomial {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Polynomial, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
@@ -493,6 +498,7 @@ impl Function {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
     }
