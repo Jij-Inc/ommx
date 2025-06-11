@@ -19,7 +19,7 @@ impl VariableBound {
     }
 
     #[staticmethod]
-    pub fn default() -> Self {
+    pub fn unbounded() -> Self {
         Self(ommx::Bound::default())
     }
 

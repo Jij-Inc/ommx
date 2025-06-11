@@ -257,7 +257,6 @@ impl Quadratic {
     pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
         self.0
             .linear_terms()
-            .into_iter()
             .map(|(id, coeff)| (id.into_inner(), coeff.into_inner()))
             .collect()
     }
@@ -269,7 +268,6 @@ impl Quadratic {
     pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
         self.0
             .quadratic_terms()
-            .into_iter()
             .map(|(pair, coeff)| {
                 (
                     (pair.lower().into_inner(), pair.upper().into_inner()),

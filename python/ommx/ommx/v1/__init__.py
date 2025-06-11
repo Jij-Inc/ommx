@@ -3916,9 +3916,9 @@ class Bound:
         self.raw = _ommx_rust.Bound(lower, upper)
 
     @classmethod
-    def default(cls) -> "Bound":
+    def unbounded(cls) -> "Bound":
         """Create an unbounded range (-inf, +inf)."""
-        return cls.__new__(cls).__init_from_raw__(_ommx_rust.Bound.default())
+        return cls.__new__(cls).__init_from_raw__(_ommx_rust.Bound.unbounded())
 
     @classmethod
     def positive(cls) -> "Bound":

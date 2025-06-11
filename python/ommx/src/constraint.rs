@@ -1,5 +1,5 @@
 use crate::message::Function;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Equality, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};
@@ -29,7 +29,7 @@ impl Constraint {
         let rust_equality = match equality {
             1 => Equality::EqualToZero,
             2 => Equality::LessThanOrEqualToZero,
-            _ => return Err(anyhow::anyhow!("Invalid equality: {}", equality).into()),
+            _ => return Err(anyhow!("Invalid equality: {}", equality)),
         };
 
         let constraint = ommx::Constraint {
@@ -37,7 +37,7 @@ impl Constraint {
             function: function.0,
             equality: rust_equality,
             name,
-            subscripts: subscripts,
+            subscripts,
             parameters: parameters.into_iter().collect(),
             description,
         };
