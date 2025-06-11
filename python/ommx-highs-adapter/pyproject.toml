@@ -20,7 +20,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx >= 1.9.0rc1, < 2.0.0","highspy>=1.9.0", "numpy>=1.17.3"]
+dependencies = ["ommx >= 1.9.0rc1, < 2.0.0", "highspy>=1.9.0", "numpy>=1.17.3"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

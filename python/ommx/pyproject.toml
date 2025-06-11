@@ -40,7 +40,7 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [tool.maturin]
 module-name = "ommx._ommx_rust"
-features = ["pyo3/extension-module"]
+features = ["pyo3/extension-module", "pyo3/abi3-py39"]
 
 [tool.ruff.lint]
 per-file-ignores = { "*_pb2.py" = ["ALL"] }

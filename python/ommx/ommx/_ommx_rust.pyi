@@ -73,7 +73,7 @@ class Bound:
     Note: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,
     but is exposed as `Bound` in Python through the `#[pyclass(name = "Bound")]` attribute.
     """
-    def __new__(cls, lower: builtins.float, upper: builtins.float): ...
+    def __new__(cls, lower: builtins.float, upper: builtins.float) -> Bound: ...
     @staticmethod
     def unbounded() -> Bound: ...
     @staticmethod
@@ -114,7 +114,7 @@ class Constraint:
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
-    ): ...
+    ) -> Constraint: ...
     @staticmethod
     def decode(bytes: bytes) -> Constraint: ...
     def encode(self) -> bytes: ...
@@ -122,46 +122,32 @@ class Constraint:
         r"""
         Set the name of the constraint
         """
-        ...
-
     def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Set the subscripts of the constraint
         """
-        ...
-
     def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
         r"""
         Add subscripts to the constraint
         """
-        ...
-
     def set_id(self, id: builtins.int) -> None:
         r"""
         Set the ID of the constraint
         """
-        ...
-
     def set_description(self, description: builtins.str) -> None:
         r"""
         Set the description of the constraint
         """
-        ...
-
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> None:
         r"""
         Set the parameters of the constraint
         """
-        ...
-
     def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
         r"""
         Add a parameter to the constraint
         """
-        ...
-
     def __repr__(self) -> builtins.str: ...
 
 class DecisionVariable:
@@ -185,7 +171,7 @@ class DecisionVariable:
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
         description: typing.Optional[builtins.str] = None,
-    ): ...
+    ) -> DecisionVariable: ...
     @staticmethod
     def binary(
         id: builtins.int,
@@ -261,6 +247,9 @@ class Descriptor:
     media_type: builtins.str
     annotations: builtins.dict[builtins.str, builtins.str]
     user_annotations: builtins.dict[builtins.str, builtins.str]
+    r"""
+    Return annotations with key prefix "org.ommx.user."
+    """
     def to_dict(self) -> dict: ...
     @staticmethod
     def from_dict(dict: dict) -> Descriptor: ...
@@ -356,7 +345,7 @@ class Linear:
         cls,
         terms: typing.Mapping[builtins.int, builtins.float],
         constant: builtins.float = 0.0,
-    ): ...
+    ) -> Linear: ...
     @staticmethod
     def single_term(id: builtins.int, coefficient: builtins.float) -> Linear: ...
     @staticmethod
@@ -395,7 +384,7 @@ class ParametricInstance:
 class Polynomial:
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
-    ): ...
+    ) -> Polynomial: ...
     @staticmethod
     def decode(bytes: bytes) -> Polynomial: ...
     def encode(self) -> bytes: ...
@@ -430,7 +419,7 @@ class Quadratic:
         rows: typing.Sequence[builtins.int],
         values: typing.Sequence[builtins.float],
         linear: typing.Optional[Linear] = None,
-    ): ...
+    ) -> Quadratic: ...
     @staticmethod
     def decode(bytes: bytes) -> Quadratic: ...
     def encode(self) -> bytes: ...
@@ -473,17 +462,17 @@ class RemovedConstraint:
         removed_reason_parameters: typing.Optional[
             typing.Mapping[builtins.str, builtins.str]
         ] = None,
-    ): ...
+    ) -> RemovedConstraint: ...
     @staticmethod
     def decode(bytes: bytes) -> RemovedConstraint: ...
     def encode(self) -> bytes: ...
     def __repr__(self) -> builtins.str: ...
 
 class Rng:
-    def __new__(
-        cls,
-    ): ...
-    ...
+    def __new__(cls) -> Rng:
+        r"""
+        Create a new random number generator with a deterministic seed.
+        """
 
 class SampleSet:
     @staticmethod
