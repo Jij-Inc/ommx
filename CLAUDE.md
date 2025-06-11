@@ -97,7 +97,7 @@ The Instance class migration follows this phased approach:
 
 **Phase 2 Completed Features**:
 - **DecisionVariable wrapper**: Factory methods (binary, integer, continuous), property getters, proper type validation
-- **Constraint wrapper**: Direct constructor, comprehensive metadata management, encode/decode methods, factory methods (equal_to_zero, less_than_or_equal_to_zero), function access
+- **Constraint wrapper**: Direct constructor, comprehensive metadata management, encode/decode methods, function access
 - **RemovedConstraint wrapper**: Complete parameter handling, original constraint access, convenience methods, encode/decode methods
 - **Metadata Management**: Full support for constraint names, descriptions, subscripts, and parameters with efficient Rust implementation
 - **Type Safety**: Full pyright type checking support with auto-generated stub files

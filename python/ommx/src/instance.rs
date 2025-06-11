@@ -7,6 +7,10 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+// Constants for sense values to match Python SDK
+const SENSE_MINIMIZE: u32 = 1;
+const SENSE_MAXIMIZE: u32 = 2;
+
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 pub struct Instance(ommx::Instance);
@@ -30,8 +34,8 @@ impl Instance {
         constraints: HashMap<u64, Constraint>,
     ) -> Result<Self> {
         let rust_sense = match sense {
-            1 => ommx::Sense::Minimize,
-            2 => ommx::Sense::Maximize,
+            SENSE_MINIMIZE => ommx::Sense::Minimize,
+            SENSE_MAXIMIZE => ommx::Sense::Maximize,
             _ => return Err(anyhow::anyhow!("Invalid sense: {}", sense).into()),
         };
 
@@ -59,8 +63,8 @@ impl Instance {
 
     pub fn get_sense(&self) -> u32 {
         match self.0.sense() {
-            ommx::Sense::Minimize => 1,
-            ommx::Sense::Maximize => 2,
+            ommx::Sense::Minimize => SENSE_MINIMIZE,
+            ommx::Sense::Maximize => SENSE_MAXIMIZE,
         }
     }
 
