@@ -44,18 +44,18 @@ impl Sense {
     }
 }
 
-impl Sense {
-    /// Convert from Rust ommx::Sense
-    pub fn from_rust(sense: ommx::Sense) -> Self {
+impl From<ommx::Sense> for Sense {
+    fn from(sense: ommx::Sense) -> Self {
         match sense {
             ommx::Sense::Minimize => Sense::Minimize,
             ommx::Sense::Maximize => Sense::Maximize,
         }
     }
+}
 
-    /// Convert to Rust ommx::Sense
-    pub fn to_rust(&self) -> ommx::Sense {
-        match self {
+impl From<Sense> for ommx::Sense {
+    fn from(sense: Sense) -> Self {
+        match sense {
             Sense::Minimize => ommx::Sense::Minimize,
             Sense::Maximize => ommx::Sense::Maximize,
         }
@@ -106,18 +106,18 @@ impl Equality {
     }
 }
 
-impl Equality {
-    /// Convert from Rust ommx::Equality
-    pub fn from_rust(equality: ommx::Equality) -> Self {
+impl From<ommx::Equality> for Equality {
+    fn from(equality: ommx::Equality) -> Self {
         match equality {
             ommx::Equality::EqualToZero => Equality::EqualToZero,
             ommx::Equality::LessThanOrEqualToZero => Equality::LessThanOrEqualToZero,
         }
     }
+}
 
-    /// Convert to Rust ommx::Equality
-    pub fn to_rust(&self) -> ommx::Equality {
-        match self {
+impl From<Equality> for ommx::Equality {
+    fn from(equality: Equality) -> Self {
+        match equality {
             Equality::EqualToZero => ommx::Equality::EqualToZero,
             Equality::LessThanOrEqualToZero => ommx::Equality::LessThanOrEqualToZero,
         }

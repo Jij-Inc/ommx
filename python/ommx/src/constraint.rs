@@ -26,7 +26,7 @@ impl Constraint {
         parameters: HashMap<String, String>,
     ) -> Result<Self> {
         let constraint_id = ConstraintID::from(id);
-        let rust_equality = equality.to_rust();
+        let rust_equality = equality.into();
 
         let constraint = ommx::Constraint {
             id: constraint_id,
@@ -53,7 +53,7 @@ impl Constraint {
 
     #[getter]
     pub fn equality(&self) -> Equality {
-        Equality::from_rust(self.0.equality)
+        self.0.equality.into()
     }
 
     #[getter]

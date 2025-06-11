@@ -1,6 +1,5 @@
 """Test Constraint PyO3 wrapper functionality."""
 
-import pytest
 import ommx._ommx_rust as rust
 
 
@@ -11,10 +10,10 @@ def test_constraint_creation():
     function = rust.Function.from_linear(linear)
 
     # Create constraint: x1 + 2 = 0
-    constraint = rust.Constraint(1, function, 1, "test_constraint")  # 1 = EqualToZero
+    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, "test_constraint")
 
     assert constraint.id == 1
-    assert constraint.equality == 1  # EqualToZero
+    assert constraint.equality == rust.Equality.EqualToZero
     assert constraint.name == "test_constraint"
     assert constraint.subscripts == []
 
@@ -27,11 +26,11 @@ def test_constraint_less_than_or_equal():
 
     # Create constraint: 2*x2 - 5 <= 0
     constraint = rust.Constraint(
-        2, function, 2, "leq_constraint"
-    )  # 2 = LessThanOrEqualToZero
+        2, function, rust.Equality.LessThanOrEqualToZero, "leq_constraint"
+    )
 
     assert constraint.id == 2
-    assert constraint.equality == 2  # LessThanOrEqualToZero
+    assert constraint.equality == rust.Equality.LessThanOrEqualToZero
     assert constraint.name == "leq_constraint"
     assert constraint.subscripts == []
 
@@ -47,13 +46,13 @@ def test_constraint_direct_constructor():
     constraint = rust.Constraint(
         id=3,
         function=function,
-        equality=1,  # EqualToZero
+        equality=rust.Equality.EqualToZero,
         name="quadratic_constraint",
         subscripts=[1, 2],
     )
 
     assert constraint.id == 3
-    assert constraint.equality == 1
+    assert constraint.equality == rust.Equality.EqualToZero
     assert constraint.name == "quadratic_constraint"
     assert constraint.subscripts == [1, 2]
 
@@ -64,7 +63,7 @@ def test_constraint_function_access():
     linear = rust.Linear({1: 3.0, 2: -1.0}, 10.0)
     function = rust.Function.from_linear(linear)
 
-    constraint = rust.Constraint(5, function, 1, "access_test")  # 1 = EqualToZero
+    constraint = rust.Constraint(5, function, rust.Equality.EqualToZero, "access_test")
 
     # Access the function from constraint
     retrieved_function = constraint.function
@@ -77,25 +76,16 @@ def test_constraint_repr():
     function = rust.Function.from_linear(linear)
 
     # Test EqualToZero representation
-    constraint1 = rust.Constraint(1, function, 1, "eq_test")  # 1 = EqualToZero
+    constraint1 = rust.Constraint(1, function, rust.Equality.EqualToZero, "eq_test")
     repr_str1 = repr(constraint1)
     assert "Constraint(5 == 0)" == repr_str1
 
     # Test LessThanOrEqualToZero representation
     constraint2 = rust.Constraint(
-        2, function, 2, "leq_test"
-    )  # 2 = LessThanOrEqualToZero
+        2, function, rust.Equality.LessThanOrEqualToZero, "leq_test"
+    )
     repr_str2 = repr(constraint2)
     assert "Constraint(5 <= 0)" == repr_str2
-
-
-def test_constraint_invalid_equality():
-    """Test that invalid equality values raise errors."""
-    linear = rust.Linear.constant(1.0)
-    function = rust.Function.from_linear(linear)
-
-    with pytest.raises(Exception):  # Should raise error for invalid equality
-        rust.Constraint(1, function, 999, "invalid", [])
 
 
 def test_constraint_empty_name():
@@ -104,7 +94,7 @@ def test_constraint_empty_name():
     function = rust.Function.from_linear(linear)
 
     # Create constraint without name
-    constraint = rust.Constraint(1, function, 1, None)  # 1 = EqualToZero
+    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, None)
 
     assert constraint.id == 1
     assert constraint.name == ""  # Should return empty string for None name

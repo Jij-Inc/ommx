@@ -29,7 +29,7 @@ impl Instance {
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
     ) -> Result<Self> {
-        let rust_sense = sense.to_rust();
+        let rust_sense = sense.into();
 
         let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
             decision_variables
@@ -54,7 +54,7 @@ impl Instance {
     }
 
     pub fn get_sense(&self) -> Sense {
-        Sense::from_rust(*self.0.sense())
+        (*self.0.sense()).into()
     }
 
     pub fn get_objective(&self) -> Function {
