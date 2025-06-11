@@ -2129,8 +2129,8 @@ class DecisionVariable(VariableBase):
             kind=rust_kind,
             bound=rust_bound,
             name=name,
-            subscripts=subscripts or [],
-            parameters=parameters or {},
+            subscripts=subscripts,
+            parameters=parameters,
             description=description,
         )
 
@@ -2165,10 +2165,10 @@ class DecisionVariable(VariableBase):
         parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
+        bound = _ommx_rust.Bound(lower, upper)
         rust_dv = _ommx_rust.DecisionVariable.integer(
             id=id,
-            lower=lower,
-            upper=upper,
+            bound=bound,
             name=name,
             subscripts=subscripts,
             parameters=parameters,
@@ -2187,10 +2187,10 @@ class DecisionVariable(VariableBase):
         parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
+        bound = _ommx_rust.Bound(lower, upper)
         rust_dv = _ommx_rust.DecisionVariable.continuous(
             id=id,
-            lower=lower,
-            upper=upper,
+            bound=bound,
             name=name,
             subscripts=subscripts,
             parameters=parameters,
@@ -2209,10 +2209,10 @@ class DecisionVariable(VariableBase):
         parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
+        bound = _ommx_rust.Bound(lower, upper)
         rust_dv = _ommx_rust.DecisionVariable.semi_integer(
             id=id,
-            lower=lower,
-            upper=upper,
+            bound=bound,
             name=name,
             subscripts=subscripts,
             parameters=parameters,
@@ -2231,10 +2231,10 @@ class DecisionVariable(VariableBase):
         parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
+        bound = _ommx_rust.Bound(lower, upper)
         rust_dv = _ommx_rust.DecisionVariable.semi_continuous(
             id=id,
-            lower=lower,
-            upper=upper,
+            bound=bound,
             name=name,
             subscripts=subscripts,
             parameters=parameters,

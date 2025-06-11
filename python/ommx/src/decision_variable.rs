@@ -10,14 +10,6 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct DecisionVariable(pub ommx::DecisionVariable);
 
-/// Helper function to create a bound from optional lower/upper values
-fn create_bound(lower: Option<f64>, upper: Option<f64>) -> Result<VariableBound> {
-    Ok(VariableBound(ommx::Bound::new(
-        lower.unwrap_or(f64::NEG_INFINITY),
-        upper.unwrap_or(f64::INFINITY),
-    )?))
-}
-
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl DecisionVariable {
@@ -112,17 +104,15 @@ impl DecisionVariable {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    #[pyo3(signature = (id, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn integer(
         id: u64,
-        lower: Option<f64>,
-        upper: Option<f64>,
+        bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> Result<Self> {
-        let bound = create_bound(lower, upper)?;
         Self::new(
             id,
             2, // KIND_INTEGER
@@ -135,17 +125,15 @@ impl DecisionVariable {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    #[pyo3(signature = (id, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn continuous(
         id: u64,
-        lower: Option<f64>,
-        upper: Option<f64>,
+        bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> Result<Self> {
-        let bound = create_bound(lower, upper)?;
         Self::new(
             id,
             3, // KIND_CONTINUOUS
@@ -158,17 +146,15 @@ impl DecisionVariable {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    #[pyo3(signature = (id, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn semi_integer(
         id: u64,
-        lower: Option<f64>,
-        upper: Option<f64>,
+        bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> Result<Self> {
-        let bound = create_bound(lower, upper)?;
         Self::new(
             id,
             4, // KIND_SEMI_INTEGER
@@ -181,17 +167,15 @@ impl DecisionVariable {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (id, lower=None, upper=None, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    #[pyo3(signature = (id, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn semi_continuous(
         id: u64,
-        lower: Option<f64>,
-        upper: Option<f64>,
+        bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
     ) -> Result<Self> {
-        let bound = create_bound(lower, upper)?;
         Self::new(
             id,
             5, // KIND_SEMI_CONTINUOUS

@@ -7,7 +7,8 @@ def test_instance_from_components():
     """Test Instance.from_components constructor."""
     # Create decision variables
     dv1 = rust.DecisionVariable.binary(1)
-    dv2 = rust.DecisionVariable.continuous(2, lower=0.0, upper=10.0)
+    bound = rust.Bound(0.0, 10.0)
+    dv2 = rust.DecisionVariable.continuous(2, bound)
     decision_variables = {1: dv1, 2: dv2}
 
     # Create objective function: x1 + 2*x2
