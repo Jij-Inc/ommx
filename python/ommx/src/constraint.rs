@@ -15,13 +15,13 @@ pub struct Constraint(pub ommx::Constraint);
 #[pymethods]
 impl Constraint {
     #[new]
-    #[pyo3(signature = (id, function, equality, name=None, subscripts=None, description=None, parameters=HashMap::default()))]
+    #[pyo3(signature = (id, function, equality, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
         id: u64,
         function: Function,
         equality: u32,
         name: Option<String>,
-        subscripts: Option<Vec<i64>>,
+        subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> Result<Self> {
@@ -37,7 +37,7 @@ impl Constraint {
             function: function.0,
             equality: rust_equality,
             name,
-            subscripts: subscripts.unwrap_or_default(),
+            subscripts: subscripts,
             parameters: parameters.into_iter().collect(),
             description,
         };

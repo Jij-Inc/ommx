@@ -37,3 +37,9 @@ tasks:
     desc: List all Codspeed workflows
     cmds:
       - gh run list --workflow=bench.yml
+
+  format:
+    desc: Format all code
+    cmds:
+      - task: python:format
+      - task: rust:format

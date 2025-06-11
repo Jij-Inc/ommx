@@ -2106,8 +2106,8 @@ class DecisionVariable(VariableBase):
         lower: float,
         upper: float,
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         # Convert protobuf Kind enum to Rust kind (int)
@@ -2129,7 +2129,7 @@ class DecisionVariable(VariableBase):
             kind=rust_kind,
             bound=rust_bound,
             name=name,
-            subscripts=subscripts,
+            subscripts=subscripts or [],
             parameters=parameters or {},
             description=description,
         )
@@ -2141,15 +2141,15 @@ class DecisionVariable(VariableBase):
         id: int,
         *,
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         rust_dv = _ommx_rust.DecisionVariable.binary(
             id=id,
             name=name,
             subscripts=subscripts,
-            parameters=parameters or {},
+            parameters=parameters,
             description=description,
         )
         return DecisionVariable(rust_dv)
@@ -2161,8 +2161,8 @@ class DecisionVariable(VariableBase):
         lower: float = float("-inf"),
         upper: float = float("inf"),
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         rust_dv = _ommx_rust.DecisionVariable.integer(
@@ -2171,7 +2171,7 @@ class DecisionVariable(VariableBase):
             upper=upper,
             name=name,
             subscripts=subscripts,
-            parameters=parameters or {},
+            parameters=parameters,
             description=description,
         )
         return DecisionVariable(rust_dv)
@@ -2183,8 +2183,8 @@ class DecisionVariable(VariableBase):
         lower: float = float("-inf"),
         upper: float = float("inf"),
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         rust_dv = _ommx_rust.DecisionVariable.continuous(
@@ -2193,7 +2193,7 @@ class DecisionVariable(VariableBase):
             upper=upper,
             name=name,
             subscripts=subscripts,
-            parameters=parameters or {},
+            parameters=parameters,
             description=description,
         )
         return DecisionVariable(rust_dv)
@@ -2205,8 +2205,8 @@ class DecisionVariable(VariableBase):
         lower: float = float("-inf"),
         upper: float = float("inf"),
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         rust_dv = _ommx_rust.DecisionVariable.semi_integer(
@@ -2215,7 +2215,7 @@ class DecisionVariable(VariableBase):
             upper=upper,
             name=name,
             subscripts=subscripts,
-            parameters=parameters or {},
+            parameters=parameters,
             description=description,
         )
         return DecisionVariable(rust_dv)
@@ -2227,8 +2227,8 @@ class DecisionVariable(VariableBase):
         lower: float = float("-inf"),
         upper: float = float("inf"),
         name: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
         rust_dv = _ommx_rust.DecisionVariable.semi_continuous(
@@ -2237,7 +2237,7 @@ class DecisionVariable(VariableBase):
             upper=upper,
             name=name,
             subscripts=subscripts,
-            parameters=parameters or {},
+            parameters=parameters,
             description=description,
         )
         return DecisionVariable(rust_dv)
@@ -3154,8 +3154,8 @@ class Constraint:
         id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
-        subscripts: Optional[list[int]] = None,
-        parameters: Optional[dict[str, str]] = None,
+        subscripts: list[int] = [],
+        parameters: dict[str, str] = {},
     ):
         if id is None:
             id = Constraint._counter
@@ -3174,7 +3174,7 @@ class Constraint:
             function=function.raw,
             equality=equality_int,
             name=name,
-            subscripts=subscripts,
+            subscripts=subscripts or [],
             description=description,
             parameters=parameters or {},
         )
