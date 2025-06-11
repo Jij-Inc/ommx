@@ -53,31 +53,36 @@ impl Instance {
         Ok(Self(instance))
     }
 
-    pub fn get_sense(&self) -> Sense {
+    #[getter]
+    pub fn sense(&self) -> Sense {
         (*self.0.sense()).into()
     }
 
-    pub fn get_objective(&self) -> Function {
+    #[getter]
+    pub fn objective(&self) -> Function {
         Function(self.0.objective().clone())
     }
 
-    pub fn get_decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+    #[getter]
+    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         self.0
             .decision_variables()
-            .iter()
-            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
+            .values()
+            .map(|var| DecisionVariable(var.clone()))
             .collect()
     }
 
-    pub fn get_constraints(&self) -> HashMap<u64, Constraint> {
+    #[getter]
+    pub fn constraints(&self) -> Vec<Constraint> {
         self.0
             .constraints()
-            .iter()
-            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .values()
+            .map(|constraint| Constraint(constraint.clone()))
             .collect()
     }
 
-    pub fn get_removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+    #[getter]
+    pub fn removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
         self.0
             .removed_constraints()
             .iter()
