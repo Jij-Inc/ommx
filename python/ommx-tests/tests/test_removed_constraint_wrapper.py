@@ -80,7 +80,7 @@ def test_removed_constraint_repr():
     )
 
     repr_str = repr(removed_constraint)
-    expected = 'RemovedConstraint(id=1, reason="Test reason", name="repr_test")'
+    expected = "RemovedConstraint(5 == 0, reason=Test reason)"
     assert repr_str == expected
 
 
@@ -96,7 +96,7 @@ def test_removed_constraint_empty_name():
 
     assert removed_constraint.name == ""  # Should return empty string
     repr_str = repr(removed_constraint)
-    expected = 'RemovedConstraint(id=1, reason="No name test", name="")'
+    expected = "RemovedConstraint(x1 == 0, reason=No name test)"
     assert repr_str == expected
 
 

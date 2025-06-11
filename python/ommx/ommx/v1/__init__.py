@@ -704,7 +704,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
         >>> instance.get_removed_constraint(0)
-        RemovedConstraint(Function(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3) == 0, reason=uniform_penalty_method)
+        RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
 
         The solver will returns the solution, which only contains the log-encoded binary variables like:
 
@@ -976,9 +976,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> len(pi.get_removed_constraints())
         2
         >>> pi.get_removed_constraints()[0]
-        RemovedConstraint(Function(x0 + x1 - 1) == 0, reason=penalty_method, parameter_id=3)
+        RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
         >>> pi.get_removed_constraints()[1]
-        RemovedConstraint(Function(x1 + x2 - 1) == 0, reason=penalty_method, parameter_id=4)
+        RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
 
         There are two parameters corresponding to the two constraints
 
@@ -1060,7 +1060,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> len(pi.get_removed_constraints())
         1
         >>> pi.get_removed_constraints()[0]
-        RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=uniform_penalty_method)
+        RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
 
         There is only one parameter in the instance
 
@@ -1133,17 +1133,17 @@ class Instance(InstanceBase, UserAnnotationBase):
             ...     sense=Instance.MAXIMIZE,
             ... )
             >>> instance.get_constraints()
-            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+            [Constraint(x0 + x1 + x2 - 3 == 0)]
 
             >>> instance.relax_constraint(1, "manual relaxation")
             >>> instance.get_constraints()
             []
             >>> instance.get_removed_constraints()
-            [RemovedConstraint(Function(x0 + x1 + x2 - 3) == 0, reason=manual relaxation)]
+            [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
 
             >>> instance.restore_constraint(1)
             >>> instance.get_constraints()
-            [Constraint(Function(x0 + x1 + x2 - 3) == 0)]
+            [Constraint(x0 + x1 + x2 - 3 == 0)]
             >>> instance.get_removed_constraints()
             []
 
@@ -1336,7 +1336,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> instance.get_constraints()[0]
-        Constraint(Function(x0 + 2*x1 - 5) <= 0)
+        Constraint(x0 + 2*x1 - 5 <= 0)
 
         Introduce an integer slack variable
 
@@ -1345,7 +1345,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     max_integer_range=32
         ... )
         >>> instance.get_constraints()[0]
-        Constraint(Function(x0 + 2*x1 + x3 - 5) == 0)
+        Constraint(x0 + 2*x1 + x3 - 5 == 0)
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
@@ -1412,7 +1412,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> instance.get_constraints()[0]
-        Constraint(Function(x0 + 2*x1 - 4) <= 0)
+        Constraint(x0 + 2*x1 - 4 <= 0)
 
         Introduce an integer slack variable :math:`s \in [0, 2]`
 
@@ -1421,7 +1421,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     slack_upper_bound=2
         ... )
         >>> b, instance.get_constraints()[0]
-        (2.0, Constraint(Function(x0 + 2*x1 + 2*x3 - 4) <= 0))
+        (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
@@ -3125,12 +3125,12 @@ class Constraint:
         >>> x = DecisionVariable.integer(1)
         >>> y = DecisionVariable.integer(2)
         >>> x + y == 1
-        Constraint(Function(x1 + x2 - 1) == 0)
+        Constraint(x1 + x2 - 1 == 0)
 
         To set the name or other attributes, use methods like :py:meth:`add_name`.
 
         >>> (x + y <= 5).add_name("constraint 1")
-        Constraint(Function(x1 + x2 - 5) <= 0)
+        Constraint(x1 + x2 - 5 <= 0)
 
     """
 
@@ -3280,10 +3280,6 @@ class Constraint:
         return self.raw.parameters
 
     def __repr__(self) -> str:
-        if self.raw.equality == 1:  # EQUALITY_EQUAL_TO_ZERO
-            return f"Constraint({self.function.__repr__()} == 0)"
-        if self.raw.equality == 2:  # EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-            return f"Constraint({self.function.__repr__()} <= 0)"
         return self.raw.__repr__()
 
     def _as_pandas_entry(self) -> dict:
@@ -3331,16 +3327,6 @@ class RemovedConstraint:
         return RemovedConstraint(rust_removed_constraint)
 
     def __repr__(self) -> str:
-        reason = f"reason={self.removed_reason}"
-        if self.removed_reason_parameters:
-            reason += ", " + ", ".join(
-                f"{key}={value}"
-                for key, value in self.removed_reason_parameters.items()
-            )
-        if self.equality == Equality.EQUALITY_EQUAL_TO_ZERO:
-            return f"RemovedConstraint({self.function.__repr__()} == 0, {reason})"
-        if self.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
-            return f"RemovedConstraint({self.function.__repr__()} <= 0, {reason})"
         return self.raw.__repr__()
 
     @property

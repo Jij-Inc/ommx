@@ -135,15 +135,7 @@ impl Constraint {
     }
 
     pub fn __repr__(&self) -> String {
-        format!(
-            "Constraint(id={}, equality={}, name=\"{}\")",
-            self.id(),
-            match self.0.equality {
-                ommx::Equality::EqualToZero => "EqualToZero",
-                ommx::Equality::LessThanOrEqualToZero => "LessThanOrEqualToZero",
-            },
-            self.name()
-        )
+        self.0.to_string()
     }
 }
 
@@ -216,11 +208,6 @@ impl RemovedConstraint {
     }
 
     pub fn __repr__(&self) -> String {
-        format!(
-            "RemovedConstraint(id={}, reason=\"{}\", name=\"{}\")",
-            self.id(),
-            self.removed_reason(),
-            self.name()
-        )
+        self.0.to_string()
     }
 }

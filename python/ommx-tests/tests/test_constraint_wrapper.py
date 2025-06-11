@@ -79,16 +79,14 @@ def test_constraint_repr():
     # Test EqualToZero representation
     constraint1 = rust.Constraint(1, function, 1, "eq_test")  # 1 = EqualToZero
     repr_str1 = repr(constraint1)
-    assert 'Constraint(id=1, equality=EqualToZero, name="eq_test")' == repr_str1
+    assert "Constraint(5 == 0)" == repr_str1
 
     # Test LessThanOrEqualToZero representation
     constraint2 = rust.Constraint(
         2, function, 2, "leq_test"
     )  # 2 = LessThanOrEqualToZero
     repr_str2 = repr(constraint2)
-    assert (
-        'Constraint(id=2, equality=LessThanOrEqualToZero, name="leq_test")' == repr_str2
-    )
+    assert "Constraint(5 <= 0)" == repr_str2
 
 
 def test_constraint_invalid_equality():
