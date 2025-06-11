@@ -38,10 +38,12 @@ impl VariableBound {
         Self(ommx::Bound::of_binary())
     }
 
+    #[getter]
     pub fn lower(&self) -> f64 {
         self.0.lower()
     }
 
+    #[getter]
     pub fn upper(&self) -> f64 {
         self.0.upper()
     }

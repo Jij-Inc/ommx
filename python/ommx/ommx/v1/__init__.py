@@ -420,7 +420,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [
             DecisionVariable(rust_dv)
-            for rust_dv in self.raw.decision_variables.values()
+            for _, rust_dv in sorted(self.raw.decision_variables.items())
         ]
 
     def get_constraints(self) -> list[Constraint]:
@@ -429,7 +429,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [
             Constraint.from_raw(rust_constraint)
-            for rust_constraint in self.raw.constraints.values()
+            for _, rust_constraint in sorted(self.raw.constraints.items())
         ]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
@@ -438,7 +438,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         return [
             RemovedConstraint.from_raw(rust_removed_constraint)
-            for rust_removed_constraint in self.raw.removed_constraints.values()
+            for _, rust_removed_constraint in sorted(self.raw.removed_constraints.items())
         ]
 
     def evaluate(self, state: ToState) -> Solution:
@@ -2289,7 +2289,7 @@ class DecisionVariable(VariableBase):
     @property
     def bound(self) -> Bound:
         rust_bound = self.raw.bound
-        return Bound(lower=rust_bound.lower(), upper=rust_bound.upper())
+        return Bound(lower=rust_bound.lower, upper=rust_bound.upper)
 
     @property
     def subscripts(self) -> list[int]:
@@ -3972,12 +3972,12 @@ class Bound:
     @property
     def lower(self) -> float:
         """Get the lower bound."""
-        return self.raw.lower()
+        return self.raw.lower
 
     @property
     def upper(self) -> float:
         """Get the upper bound."""
-        return self.raw.upper()
+        return self.raw.upper
 
     def width(self) -> float:
         """Get the width (upper - lower) of the bound."""
