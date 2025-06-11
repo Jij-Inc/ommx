@@ -1,5 +1,5 @@
 use crate::{message::Function, Equality};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes};

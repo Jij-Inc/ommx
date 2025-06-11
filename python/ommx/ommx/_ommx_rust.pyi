@@ -5,6 +5,7 @@ import builtins
 import os
 import pathlib
 import typing
+from enum import Enum
 
 class ArtifactArchive:
     image_name: typing.Optional[builtins.str]
@@ -100,7 +101,7 @@ class Constraint:
 
     id: builtins.int
     function: Function
-    equality: builtins.int
+    equality: Equality
     name: builtins.str
     subscripts: builtins.list[builtins.int]
     description: builtins.str
@@ -109,7 +110,7 @@ class Constraint:
         cls,
         id: builtins.int,
         function: Function,
-        equality: builtins.int,
+        equality: Equality,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -302,12 +303,12 @@ class Instance:
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
     def from_components(
-        sense: builtins.int,
+        sense: Sense,
         objective: Function,
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
     ) -> Instance: ...
-    def get_sense(self) -> builtins.int: ...
+    def get_sense(self) -> Sense: ...
     def get_objective(self) -> Function: ...
     def get_decision_variables(
         self,
@@ -495,6 +496,50 @@ class Solution:
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
+
+class Equality(Enum):
+    r"""
+    Equality type for constraints
+    """
+
+    EqualToZero = ...
+    LessThanOrEqualToZero = ...
+
+    @staticmethod
+    def from_pb(value: builtins.int) -> Equality:
+        r"""
+        Convert from Protocol Buffer equality value
+        """
+
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to Protocol Buffer equality value
+        """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+
+class Sense(Enum):
+    r"""
+    Sense of optimization (minimize or maximize)
+    """
+
+    Minimize = ...
+    Maximize = ...
+
+    @staticmethod
+    def from_pb(value: builtins.int) -> Sense:
+        r"""
+        Convert from Protocol Buffer sense value
+        """
+
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to Protocol Buffer sense value
+        """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
 
 def evaluate_constraint(function: bytes, state: bytes) -> bytes: ...
 def evaluate_instance(function: bytes, state: bytes) -> bytes: ...

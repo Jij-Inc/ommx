@@ -1,7 +1,7 @@
 use pyo3::prelude::*;
 
 /// Sense of optimization (minimize or maximize)
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sense {
@@ -31,7 +31,6 @@ impl Sense {
     pub fn to_pb(&self) -> i32 {
         *self as i32
     }
-
 
     fn __repr__(&self) -> String {
         match self {
@@ -64,7 +63,7 @@ impl Sense {
 }
 
 /// Equality type for constraints
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
 #[pyclass(eq, eq_int)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Equality {
@@ -94,7 +93,6 @@ impl Equality {
     pub fn to_pb(&self) -> i32 {
         *self as i32
     }
-
 
     fn __repr__(&self) -> String {
         match self {
