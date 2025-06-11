@@ -8,7 +8,9 @@ def test_removed_constraint_creation():
     # Create a constraint first
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, "test_constraint")
+    constraint = rust.Constraint(
+        1, function, rust.Equality.EqualToZero, "test_constraint"
+    )
 
     # Create removed constraint
     removed_constraint = rust.RemovedConstraint(
@@ -52,7 +54,9 @@ def test_removed_constraint_access_original_constraint():
     terms = {(1, 1): 1.0, (2,): 1.0}  # x1^2 + x2
     polynomial = rust.Polynomial(terms)
     function = rust.Function.from_polynomial(polynomial)
-    original_constraint = rust.Constraint(3, function, rust.Equality.EqualToZero, "original")
+    original_constraint = rust.Constraint(
+        3, function, rust.Equality.EqualToZero, "original"
+    )
 
     # Create removed constraint
     removed_constraint = rust.RemovedConstraint(

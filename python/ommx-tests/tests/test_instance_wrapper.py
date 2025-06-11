@@ -18,7 +18,9 @@ def test_instance_from_components():
     # Create constraint: x1 + x2 <= 5
     constraint_linear = rust.Linear({1: 1.0, 2: 1.0}, -5.0)
     constraint_function = rust.Function.from_linear(constraint_linear)
-    constraint = rust.Constraint(1, constraint_function, rust.Equality.LessThanOrEqualToZero)
+    constraint = rust.Constraint(
+        1, constraint_function, rust.Equality.LessThanOrEqualToZero
+    )
     constraints = {1: constraint}
 
     # Create instance with MINIMIZE sense
@@ -77,8 +79,6 @@ def test_instance_getters():
     removed_constraints = instance.get_removed_constraints()
     assert isinstance(removed_constraints, dict)
     assert len(removed_constraints) == 0
-
-
 
 
 def test_instance_serialization():

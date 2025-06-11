@@ -10,7 +10,9 @@ def test_constraint_creation():
     function = rust.Function.from_linear(linear)
 
     # Create constraint: x1 + 2 = 0
-    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, "test_constraint")
+    constraint = rust.Constraint(
+        1, function, rust.Equality.EqualToZero, "test_constraint"
+    )
 
     assert constraint.id == 1
     assert constraint.equality == rust.Equality.EqualToZero
