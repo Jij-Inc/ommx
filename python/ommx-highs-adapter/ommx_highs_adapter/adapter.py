@@ -37,6 +37,11 @@ class OMMXHighsAdapter(SolverAdapter):
     | DecisionVariable.BINARY | HighsVarType.kInteger | [0, 1] |
     | DecisionVariable.INTEGER | HighsVarType.kInteger | [var.bound.lower, var.bound.upper] |
     | DecisionVariable.CONTINUOUS | HighsVarType.kContinuous | [var.bound.lower, var.bound.upper] |
+    | DecisionVariable.SEMI_INTEGER | **Not supported** (support planned) | - |
+    | DecisionVariable.SEMI_CONTINUOUS | **Not supported** (support planned) | - |
+    
+    **Note**: Semi-integer and semi-continuous variables are planned for future support but are 
+    currently unsupported. Using these variable types will raise an `OMMXHighsAdapterError`.
     
     Constraints
     -----------
@@ -81,7 +86,8 @@ class OMMXHighsAdapter(SolverAdapter):
     --------------
     **Unsupported Features**:
     - Quadratic functions (HiGHS supports linear problems only)
-    - Variable types other than Binary/Integer/Continuous
+    - Semi-integer variables (DecisionVariable.SEMI_INTEGER, kind=4) - support planned
+    - Semi-continuous variables (DecisionVariable.SEMI_CONTINUOUS, kind=5) - support planned
     - Constraint types other than EQUAL_TO_ZERO/LESS_THAN_OR_EQUAL_TO_ZERO
     
     **Solver Status Mapping**:
@@ -97,6 +103,8 @@ class OMMXHighsAdapter(SolverAdapter):
     1. Linear problems only (no quadratic constraints or objectives)
     2. Constraint forms limited to equality (= 0) and inequality (≤ 0)
     3. Variable types limited to Binary, Integer, and Continuous
+       - Semi-integer (SEMI_INTEGER) support is planned but not yet implemented
+       - Semi-continuous (SEMI_CONTINUOUS) support is planned but not yet implemented
     
     Examples
     --------
@@ -164,6 +172,7 @@ class OMMXHighsAdapter(SolverAdapter):
             - Linear objective function (constant or linear terms only)
             - Linear constraints (constant or linear terms only)
             - Variables of type Binary, Integer, or Continuous only
+              (Semi-integer and Semi-continuous support is planned but not yet implemented)
             - Constraints of type EQUAL_TO_ZERO or LESS_THAN_OR_EQUAL_TO_ZERO only
             
         verbose : bool, default=False
