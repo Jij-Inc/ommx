@@ -1,6 +1,7 @@
 import mip
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx._ommx_rust import Sense, Equality
 
 from ommx_python_mip_adapter import model_to_instance
 
@@ -43,25 +44,25 @@ def test_milp():
     model.add_constr(-7 * x1 + 8 * x3 - 9 <= 0)  # type: ignore
     model.add_constr(10 * x2 - 11 * x3 + 12 >= 0)  # type: ignore
 
-    ommx_instance = model_to_instance(model).raw
+    ommx_instance = model_to_instance(model)
 
-    assert ommx_instance.sense == Instance.MINIMIZE
+    assert ommx_instance.sense == Sense.Minimize
 
-    # Check the decision variables
-    assert len(ommx_instance.decision_variables) == 3
-    decision_variables_x1 = ommx_instance.decision_variables[0]
+    # Check the decision variables using .raw for direct dict access
+    assert len(ommx_instance.raw.decision_variables) == 3
+    decision_variables_x1 = ommx_instance.raw.decision_variables[0]
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == CONTINUOUS_LOWER_BOUND
     assert decision_variables_x1.bound.upper == CONTINUOUS_UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.decision_variables[1]
+    decision_variables_x2 = ommx_instance.raw.decision_variables[1]
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.INTEGER
     assert decision_variables_x2.bound.lower == INTEGER_LOWER_BOUND
     assert decision_variables_x2.bound.upper == INTEGER_UPPER_BOUND
     assert decision_variables_x2.name == "2"
-    decision_variables_x3 = ommx_instance.decision_variables[2]
+    decision_variables_x3 = ommx_instance.raw.decision_variables[2]
     assert decision_variables_x3.id == 2
     assert decision_variables_x3.kind == DecisionVariable.BINARY
     assert decision_variables_x3.bound.lower == 0
@@ -69,58 +70,47 @@ def test_milp():
     assert decision_variables_x3.name == "3"
 
     # Check the objective function
-    assert ommx_instance.objective.HasField("linear")
-    objective = ommx_instance.objective.linear
-    assert objective.constant == 0
-    assert len(objective.terms) == 3
-    objective_term_x1 = objective.terms[0]
-    assert objective_term_x1.id == 0
-    assert objective_term_x1.coefficient == -1
-    objective_term_x2 = objective.terms[1]
-    assert objective_term_x2.id == 1
-    assert objective_term_x2.coefficient == -2
-    objective_term_x3 = objective.terms[2]
-    assert objective_term_x3.id == 2
-    assert objective_term_x3.coefficient == -3
+    objective_linear = ommx_instance.raw.objective.as_linear()
+    assert objective_linear is not None
+    assert objective_linear.constant_term() == 0
+    linear_terms = objective_linear.linear_terms()
+    assert len(linear_terms) == 3
+    assert linear_terms[0] == -1
+    assert linear_terms[1] == -2
+    assert linear_terms[2] == -3
 
-    # Check the constraints
-    assert len(ommx_instance.constraints) == 3
+    # Check the constraints using .raw for access
+    assert len(ommx_instance.raw.constraints) == 3
 
-    constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
-    assert constraint1.function.HasField("linear")
-    assert constraint1.function.linear.constant == 6
-    assert len(constraint1.function.linear.terms) == 2
-    constraint1_term_x1 = constraint1.function.linear.terms[0]
-    assert constraint1_term_x1.id == 0
-    assert constraint1_term_x1.coefficient == 4
-    constraint1_term_x2 = constraint1.function.linear.terms[1]
-    assert constraint1_term_x2.id == 1
-    assert constraint1_term_x2.coefficient == -5
+    constraint1 = ommx_instance.raw.constraints[0]
+    assert constraint1.equality == Equality.EqualToZero
+    constraint1_linear = constraint1.function.as_linear()
+    assert constraint1_linear is not None
+    assert constraint1_linear.constant_term() == 6
+    constraint1_terms = constraint1_linear.linear_terms()
+    assert len(constraint1_terms) == 2
+    assert constraint1_terms[0] == 4
+    assert constraint1_terms[1] == -5
 
-    constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-    assert constraint2.function.HasField("linear")
-    assert constraint2.function.linear.constant == -9
-    assert len(constraint2.function.linear.terms) == 2
-    constraint2_term_x1 = constraint2.function.linear.terms[0]
-    assert constraint2_term_x1.id == 0
-    assert constraint2_term_x1.coefficient == -7
-    constraint2_term_x3 = constraint2.function.linear.terms[1]
-    assert constraint2_term_x3.id == 2
-    assert constraint2_term_x3.coefficient == 8
+    constraint2 = ommx_instance.raw.constraints[1]
+    assert constraint2.equality == Equality.LessThanOrEqualToZero
+    constraint2_linear = constraint2.function.as_linear()
+    assert constraint2_linear is not None
+    assert constraint2_linear.constant_term() == -9
+    constraint2_terms = constraint2_linear.linear_terms()
+    assert len(constraint2_terms) == 2
+    assert constraint2_terms[0] == -7
+    assert constraint2_terms[2] == 8
 
-    constraint3 = ommx_instance.constraints[2]
-    assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-    assert constraint3.function.HasField("linear")
-    assert constraint3.function.linear.constant == -12
-    assert len(constraint3.function.linear.terms) == 2
-    constraint3_term_x2 = constraint3.function.linear.terms[0]
-    assert constraint3_term_x2.id == 1
-    assert constraint3_term_x2.coefficient == -10
-    constraint3_term_x3 = constraint3.function.linear.terms[1]
-    assert constraint3_term_x3.id == 2
-    assert constraint3_term_x3.coefficient == 11
+    constraint3 = ommx_instance.raw.constraints[2]
+    assert constraint3.equality == Equality.LessThanOrEqualToZero
+    constraint3_linear = constraint3.function.as_linear()
+    assert constraint3_linear is not None
+    assert constraint3_linear.constant_term() == -12
+    constraint3_terms = constraint3_linear.linear_terms()
+    assert len(constraint3_terms) == 2
+    assert constraint3_terms[1] == -10
+    assert constraint3_terms[2] == 11
 
 
 def test_no_objective_model():
@@ -151,52 +141,48 @@ def test_no_objective_model():
     model.add_constr(1 * x1 + 2 * x2 - 5 == 0)  # type: ignore
     model.add_constr(4 * x1 + 3 * x2 - 10 == 0)  # type: ignore
 
-    ommx_instance = model_to_instance(model).raw
+    ommx_instance = model_to_instance(model)
 
-    assert ommx_instance.sense == Instance.MAXIMIZE
+    assert ommx_instance.sense == Sense.Maximize
 
-    # Check the decision variables
-    assert len(ommx_instance.decision_variables) == 2
-    decision_variables_x1 = ommx_instance.decision_variables[0]
+    # Check the decision variables using .raw for direct dict access
+    assert len(ommx_instance.raw.decision_variables) == 2
+    decision_variables_x1 = ommx_instance.raw.decision_variables[0]
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == LOWER_BOUND
     assert decision_variables_x1.bound.upper == UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.decision_variables[1]
+    decision_variables_x2 = ommx_instance.raw.decision_variables[1]
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x2.bound.lower == LOWER_BOUND
     assert decision_variables_x2.bound.upper == UPPER_BOUND
     assert decision_variables_x2.name == "2"
 
-    # check the objective function
-    assert ommx_instance.objective.HasField("constant")
-    assert ommx_instance.objective.constant == 0
+    # check the objective function - should be a zero constant
+    assert ommx_instance.raw.objective.degree() == 0
+    assert ommx_instance.raw.objective.num_terms() == 0  # Zero function has 0 terms
 
-    # Check the constraints
-    assert len(ommx_instance.constraints) == 2
+    # Check the constraints using .raw for access
+    assert len(ommx_instance.raw.constraints) == 2
 
-    constraint1 = ommx_instance.constraints[0]
-    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
-    assert constraint1.function.HasField("linear")
-    assert constraint1.function.linear.constant == -5
-    assert len(constraint1.function.linear.terms) == 2
-    constraint1_term_x1 = constraint1.function.linear.terms[0]
-    assert constraint1_term_x1.id == 0
-    assert constraint1_term_x1.coefficient == 1
-    constraint1_term_x2 = constraint1.function.linear.terms[1]
-    assert constraint1_term_x2.id == 1
-    assert constraint1_term_x2.coefficient == 2
+    constraint1 = ommx_instance.raw.constraints[0]
+    assert constraint1.equality == Equality.EqualToZero
+    constraint1_linear = constraint1.function.as_linear()
+    assert constraint1_linear is not None
+    assert constraint1_linear.constant_term() == -5
+    constraint1_terms = constraint1_linear.linear_terms()
+    assert len(constraint1_terms) == 2
+    assert constraint1_terms[0] == 1
+    assert constraint1_terms[1] == 2
 
-    constraint2 = ommx_instance.constraints[1]
-    assert constraint2.equality == Constraint.EQUAL_TO_ZERO
-    assert constraint2.function.HasField("linear")
-    assert constraint2.function.linear.constant == -10
-    assert len(constraint2.function.linear.terms) == 2
-    constraint2_term_x1 = constraint2.function.linear.terms[0]
-    assert constraint2_term_x1.id == 0
-    assert constraint2_term_x1.coefficient == 4
-    constraint2_term_x3 = constraint2.function.linear.terms[1]
-    assert constraint2_term_x3.id == 1
-    assert constraint2_term_x3.coefficient == 3
+    constraint2 = ommx_instance.raw.constraints[1]
+    assert constraint2.equality == Equality.EqualToZero
+    constraint2_linear = constraint2.function.as_linear()
+    assert constraint2_linear is not None
+    assert constraint2_linear.constant_term() == -10
+    constraint2_terms = constraint2_linear.linear_terms()
+    assert len(constraint2_terms) == 2
+    assert constraint2_terms[0] == 4
+    assert constraint2_terms[1] == 3

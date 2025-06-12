@@ -4,10 +4,9 @@ from typing import final
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
-from ommx.v1 import Instance, DecisionVariable
+from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx._ommx_rust import Function, Linear, Sense, Equality
+import ommx._ommx_rust
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -27,35 +26,37 @@ class OMMXInstanceBuilder:
         decision_variables = []
         for var in self.model.vars:
             if var.var_type == mip.BINARY:
-                kind = DecisionVariable.BINARY
+                decision_variables.append(
+                    DecisionVariable.binary(var.idx, name=var.name)
+                )
             elif var.var_type == mip.INTEGER:
-                kind = DecisionVariable.INTEGER
+                decision_variables.append(
+                    DecisionVariable.integer(var.idx, lower=var.lb, upper=var.ub, name=var.name)
+                )
             elif var.var_type == mip.CONTINUOUS:
-                kind = DecisionVariable.CONTINUOUS
+                decision_variables.append(
+                    DecisionVariable.continuous(var.idx, lower=var.lb, upper=var.ub, name=var.name)
+                )
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported variable type. "
                     f"idx: {var.idx} name: {var.name}, type: {var.var_type}"
                 )
-            decision_variables.append(
-                DecisionVariable.of_type(
-                    kind, var.idx, lower=var.lb, upper=var.ub, name=var.name
-                )
-            )
         return decision_variables
 
     def as_ommx_function(self, lin_expr: mip.LinExpr) -> Function:
-        terms = [
-            Linear.Term(id=var.idx, coefficient=coefficient)  # type: ignore
+        terms = {
+            var.idx: coefficient  # type: ignore
             for var, coefficient in lin_expr.expr.items()
-        ]
+        }
         constant: float = lin_expr.const  # type: ignore
 
         # If the terms are empty, the function is a constant.
         if len(terms) == 0:
-            return Function(constant=constant)
+            return Function.from_scalar(constant)
         else:
-            return Function(linear=Linear(terms=terms, constant=constant))
+            linear = Linear(terms=terms, constant=constant)
+            return Function.from_linear(linear)
 
     def objective(self) -> Function:
         # In Python-MIP, it is allowed not to set the objective function.
@@ -65,7 +66,7 @@ class OMMXInstanceBuilder:
         try:
             objective = self.model.objective
         except ParameterNotAvailable:
-            return Function(constant=0)
+            return Function.from_scalar(0.0)
 
         return self.as_ommx_function(objective)
 
@@ -78,28 +79,34 @@ class OMMXInstanceBuilder:
             name = constr.name
 
             if lin_expr.sense == "=":
-                constraint = Constraint(
+                raw_constraint = ommx._ommx_rust.Constraint(
                     id=id,
-                    equality=Equality.EQUALITY_EQUAL_TO_ZERO,
                     function=self.as_ommx_function(lin_expr),
-                    name=name,
+                    equality=Equality.EqualToZero,
                 )
+                if name:
+                    raw_constraint.set_name(name)
+                constraint = Constraint.from_raw(raw_constraint)
             elif lin_expr.sense == "<":
-                constraint = Constraint(
+                raw_constraint = ommx._ommx_rust.Constraint(
                     id=id,
-                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self.as_ommx_function(lin_expr),
-                    name=name,
+                    equality=Equality.LessThanOrEqualToZero,
                 )
+                if name:
+                    raw_constraint.set_name(name)
+                constraint = Constraint.from_raw(raw_constraint)
             elif lin_expr.sense == ">":
                 # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
                 # So multiply the linear expression by -1.
-                constraint = Constraint(
+                raw_constraint = ommx._ommx_rust.Constraint(
                     id=id,
-                    equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
                     function=self.as_ommx_function(-lin_expr),
-                    name=name,
+                    equality=Equality.LessThanOrEqualToZero,
                 )
+                if name:
+                    raw_constraint.set_name(name)
+                constraint = Constraint.from_raw(raw_constraint)
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported constraint sense: "
@@ -112,9 +119,9 @@ class OMMXInstanceBuilder:
 
     def sense(self):
         if self.model.sense == mip.MAXIMIZE:
-            return Instance.MAXIMIZE
+            return Sense.Maximize
         elif self.model.sense == mip.MINIMIZE:
-            return Instance.MINIMIZE
+            return Sense.Minimize
         raise OMMXPythonMIPAdapterError(f"Not supported sense: {self.model.sense}")
 
     @final

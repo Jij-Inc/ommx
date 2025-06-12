@@ -393,6 +393,106 @@ for _, row in instance.decision_variables.iterrows():
     if row['kind'] == 'binary':  # 文字列比較
 ```
 
+#### 知見 6: DecisionVariable.Kind 存在せず
+**発見**: `DecisionVariable.Kind.Binary` などのenumは存在しない
+- **正しい形式**: `DecisionVariable.BINARY`, `DecisionVariable.INTEGER`, `DecisionVariable.CONTINUOUS`
+- **整数値比較**: 新旧APIとも整数定数での比較を継続使用
+- **エラー例**: `AttributeError: type object 'int' has no attribute 'Binary'`
+
+**修正パターン**:
+```python
+# 間違った記述
+if var.kind == DecisionVariable.Kind.Binary:  # エラー
+
+# 正しい記述
+if var.kind == DecisionVariable.BINARY:  # 正常動作
+```
+
+#### 知見 7: Constraint ファクトリーメソッド不存在
+**発見**: `Constraint.equal_to_zero()` などのファクトリーメソッドは存在しない
+- **直接作成**: `ommx._ommx_rust.Constraint()` から作成後 `Constraint.from_raw()` で変換
+- **従来の定数**: `Constraint.EQUAL_TO_ZERO` などの定数は使用可能
+- **Rust enum**: `Equality.EqualToZero` などの新しいenum値
+
+**実装パターン**:
+```python
+# Rust constraint作成後にPython wrapperで包む
+import ommx._ommx_rust
+raw_constraint = ommx._ommx_rust.Constraint(
+    id=id,
+    function=function,
+    equality=Equality.EqualToZero,
+)
+if name:
+    raw_constraint.set_name(name)
+constraint = Constraint.from_raw(raw_constraint)
+```
+
+#### 知見 8: イテレーション対象の修正必要性
+**発見**: dictイテレーションにおけるキーと値の取得パターン変更
+- **decision_variables**: `for var_id, var in instance.raw.decision_variables.items()`
+- **constraints**: `for constraint_id, constraint in instance.raw.constraints.items()`
+- **エラー原因**: `for var in instance.raw.decision_variables:` はキー（int）のみ取得
+
+**修正例**:
+```python
+# 間違ったパターン（キーのみ取得）
+for var in instance.raw.decision_variables:
+    print(var.kind)  # エラー: 'int' object has no attribute 'kind'
+
+# 正しいパターン（キーと値の両方取得）
+for var_id, var in instance.raw.decision_variables.items():
+    print(var.kind)  # 正常動作
+```
+
+#### 知見 9: テストでのDataFrameアクセス問題
+**発見**: `instance.decision_variables[0]` のようなインデックスアクセスは不可
+- **DataFrame形式**: 新APIではpandas DataFrameとして返される
+- **辞書アクセス**: `.raw.decision_variables[id]` で直接アクセス可能
+- **エラー例**: `KeyError: 0` - DataFrameの列名として0が存在しない
+
+**対処方法**:
+```python
+# 間違ったアクセス
+decision_var = instance.decision_variables[0]  # KeyError
+
+# 正しいアクセス方法
+decision_var = instance.raw.decision_variables[0]  # dict access
+```
+
+#### 知見 10: Function APIアクセス方法
+**発見**: `instance.objective.as_linear()` は不可、`.raw` 経由でアクセス必要
+- **新しいFunction API**: `instance.raw.objective.as_linear()` で Rust実装にアクセス
+- **度数・項数アクセス**: `instance.raw.objective.degree()`, `instance.raw.objective.num_terms()`
+- **constraints**: `instance.raw.constraints[id].function.as_linear()`
+
+**修正パターン**:
+```python
+# 間違ったアクセス
+linear_func = instance.objective.as_linear()  # AttributeError
+
+# 正しいアクセス方法
+linear_func = instance.raw.objective.as_linear()  # 正常動作
+degree = instance.raw.objective.degree()
+constraint_func = instance.raw.constraints[0].function.as_linear()
+```
+
+#### 知見 11: 変数ID一致の重要性
+**発見**: Function内で使用する変数IDは決定変数リストと厳密に一致する必要
+- **エラー例**: `RuntimeError: Undefined variable ID is used: VariableID(1)`
+- **解決**: Quadratic/Function作成時の変数IDを決定変数IDと一致させる
+
+**修正例**:
+```python
+# 間違った変数ID
+decision_var = DecisionVariable.continuous(0)
+quadratic = Quadratic(columns=[1], rows=[1], values=[2.3])  # IDが1、決定変数は0
+
+# 正しい変数ID
+decision_var = DecisionVariable.continuous(0)
+quadratic = Quadratic(columns=[0], rows=[0], values=[2.3])  # IDが0で一致
+```
+
 ### 検証とテスト戦略
 
 #### 段階的検証

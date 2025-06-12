@@ -1,6 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable
+from ommx._ommx_rust import Sense
 from ommx.v1.solution_pb2 import Optimality
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
@@ -51,7 +52,7 @@ def test_integration_milp():
             3 * x1 - x2 <= 6,
             -x1 + 3 * x2 <= 6,
         ],
-        sense=Instance.MINIMIZE,
+        sense=Sense.Minimize,
     )
 
     adapter = OMMXPythonMIPAdapter(ommx_instance)
@@ -70,7 +71,7 @@ def test_solution_optimality():
         decision_variables=[x, y],
         objective=x + y,
         constraints=[],
-        sense=Instance.MAXIMIZE,
+        sense=Sense.Maximize,
     )
 
     solution = OMMXPythonMIPAdapter.solve(ommx_instance)

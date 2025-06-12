@@ -6,7 +6,7 @@ import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
-from ommx.v1.function_pb2 import Function
+from ommx._ommx_rust import Function, Sense, Equality
 from ommx.v1.solution_pb2 import Relaxation
 
 from .exception import OMMXPythonMIPAdapterError
@@ -29,9 +29,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        if ommx_instance.raw.sense == Instance.MAXIMIZE:
+        if ommx_instance.raw.sense == Sense.Maximize:
             sense = mip.MAXIMIZE
-        elif ommx_instance.raw.sense == Instance.MINIMIZE:
+        elif ommx_instance.raw.sense == Sense.Minimize:
             sense = mip.MINIMIZE
         else:
             raise OMMXPythonMIPAdapterError(
@@ -80,6 +80,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx._ommx_rust import Sense
             >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -90,7 +91,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             Solve it
@@ -118,6 +119,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
@@ -125,7 +127,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints=[x >= 4],
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -138,6 +140,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)
@@ -145,7 +148,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints=[],
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -158,6 +161,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
+                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.continuous(0, lower=0, upper=1)
@@ -166,7 +170,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
                 ...     constraints=[x + y <= 1],
-                ...     sense=Instance.MAXIMIZE,
+                ...     sense=Sense.Maximize,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
@@ -210,6 +214,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx._ommx_rust import Sense
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -219,7 +224,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
-            ...     sense=Instance.MAXIMIZE,
+            ...     sense=Sense.Maximize,
             ... )
 
             >>> adapter = OMMXPythonMIPAdapter(instance)
@@ -275,13 +280,14 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
             >>> from ommx.v1 import Instance, DecisionVariable
+            >>> from ommx._ommx_rust import Sense
 
             >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
             >>> ommx_instance = Instance.from_components(
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints=[],
-            ...     sense=Instance.MINIMIZE,
+            ...     sense=Sense.Minimize,
             ... )
             >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
             >>> model = adapter.solver_input
@@ -302,13 +308,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         return State(
             entries={
-                var.id: data.var_by_name(str(var.id)).x  # type: ignore
-                for var in self.instance.raw.decision_variables
+                var_id: data.var_by_name(str(var_id)).x  # type: ignore
+                for var_id, var in self.instance.raw.decision_variables.items()
             }
         )
 
     def _set_decision_variables(self):
-        for var in self.instance.raw.decision_variables:
+        for var_id, var in self.instance.raw.decision_variables.items():
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
                     name=str(var.id),
@@ -341,17 +347,31 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Translate ommx.v1.Function to `mip.LinExpr` or `float`.
         """
-        if f.HasField("constant"):
-            return mip.LinExpr(const=f.constant)  # type: ignore
-        elif f.HasField("linear"):
-            ommx_linear = f.linear
+        # Check if function is linear
+        linear_func = f.as_linear()
+        if linear_func is not None:
+            linear_terms = linear_func.linear_terms()  # dict[int, float]
+            constant = linear_func.constant_term()     # float
             return (
                 mip.xsum(
-                    term.coefficient * self.model.vars[str(term.id)]  # type: ignore
-                    for term in ommx_linear.terms
+                    coeff * self.model.vars[str(var_id)]  # type: ignore
+                    for var_id, coeff in linear_terms.items()
                 )
-                + ommx_linear.constant
+                + constant
             )  # type: ignore
+        # Check if function is a constant (degree 0)
+        elif f.degree() == 0:
+            # For zero function, num_terms() == 0
+            if f.num_terms() == 0:
+                return mip.LinExpr(const=0.0)  # type: ignore
+            else:
+                # For constant function, get the constant value
+                # We can evaluate it with an empty state to get the constant value
+                from ommx.v1 import State
+                empty_state = State(entries={})
+                constant_value = f.evaluate(empty_state.encode())
+                return mip.LinExpr(const=constant_value)  # type: ignore
+        
         raise OMMXPythonMIPAdapterError(
             "The function must be either `constant` or `linear`."
         )
@@ -360,7 +380,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.raw.objective)  # type: ignore
 
     def _set_constraints(self):
-        for constraint in self.instance.raw.constraints:
+        for constraint_id, constraint in self.instance.raw.constraints.items():
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
