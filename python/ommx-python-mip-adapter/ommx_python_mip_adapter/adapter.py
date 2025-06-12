@@ -342,7 +342,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         linear_func = f.as_linear()
         if linear_func is not None:
             linear_terms = linear_func.linear_terms  # dict[int, float]
-            constant = linear_func.constant  # float
+            constant = linear_func.constant_term  # float
             return (
                 mip.xsum(
                     coeff * self.model.vars[str(var_id)]  # type: ignore

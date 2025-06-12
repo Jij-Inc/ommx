@@ -71,8 +71,8 @@ def test_milp():
     # Check the objective function
     objective_linear = ommx_instance.raw.objective.as_linear()
     assert objective_linear is not None
-    assert objective_linear.constant_term() == 0
-    linear_terms = objective_linear.linear_terms()
+    assert objective_linear.constant_term == 0
+    linear_terms = objective_linear.linear_terms
     assert len(linear_terms) == 3
     assert linear_terms[0] == -1
     assert linear_terms[1] == -2
@@ -85,8 +85,8 @@ def test_milp():
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
-    assert constraint1_linear.constant_term() == 6
-    constraint1_terms = constraint1_linear.linear_terms()
+    assert constraint1_linear.constant_term == 6
+    constraint1_terms = constraint1_linear.linear_terms
     assert len(constraint1_terms) == 2
     assert constraint1_terms[0] == 4
     assert constraint1_terms[1] == -5
@@ -95,8 +95,8 @@ def test_milp():
     assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
-    assert constraint2_linear.constant_term() == -9
-    constraint2_terms = constraint2_linear.linear_terms()
+    assert constraint2_linear.constant_term == -9
+    constraint2_terms = constraint2_linear.linear_terms
     assert len(constraint2_terms) == 2
     assert constraint2_terms[0] == -7
     assert constraint2_terms[2] == 8
@@ -105,8 +105,8 @@ def test_milp():
     assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint3_linear = constraint3.function.as_linear()
     assert constraint3_linear is not None
-    assert constraint3_linear.constant_term() == -12
-    constraint3_terms = constraint3_linear.linear_terms()
+    assert constraint3_linear.constant_term == -12
+    constraint3_terms = constraint3_linear.linear_terms
     assert len(constraint3_terms) == 2
     assert constraint3_terms[1] == -10
     assert constraint3_terms[2] == 11
@@ -170,8 +170,8 @@ def test_no_objective_model():
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
-    assert constraint1_linear.constant_term() == -5
-    constraint1_terms = constraint1_linear.linear_terms()
+    assert constraint1_linear.constant_term == -5
+    constraint1_terms = constraint1_linear.linear_terms
     assert len(constraint1_terms) == 2
     assert constraint1_terms[0] == 1
     assert constraint1_terms[1] == 2
@@ -180,8 +180,8 @@ def test_no_objective_model():
     assert constraint2.equality == Constraint.EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
-    assert constraint2_linear.constant_term() == -10
-    constraint2_terms = constraint2_linear.linear_terms()
+    assert constraint2_linear.constant_term == -10
+    constraint2_terms = constraint2_linear.linear_terms
     assert len(constraint2_terms) == 2
     assert constraint2_terms[0] == 4
     assert constraint2_terms[1] == 3
