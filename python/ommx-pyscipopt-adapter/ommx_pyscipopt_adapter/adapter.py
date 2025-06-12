@@ -242,7 +242,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> ommx_state = adapter.decode_to_state(model)
             >>> ommx_state.entries
-            {1: -0.0}
+            {1: 0.0}
 
         """
         if data.getStatus() == "unknown":
@@ -379,11 +379,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             # Try to create expression based on function type
             expr = None
-            if constraint_func.as_linear() is not None:
-                expr = self._make_linear_expr(constraint_func)
-            elif constraint_func.as_quadratic() is not None:
-                expr = self._make_quadratic_expr(constraint_func)
-            elif constraint_func.degree() == 0:
+            # Check for constant constraints first (degree 0)
+            if constraint_func.degree() == 0:
                 # Constant constraint - handle specially
                 linear_func = constraint_func.as_linear()
                 if linear_func is not None:
@@ -403,6 +400,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                         )
                 else:
                     continue  # Skip if can't get constant value
+            elif constraint_func.as_linear() is not None:
+                expr = self._make_linear_expr(constraint_func)
+            elif constraint_func.as_quadratic() is not None:
+                expr = self._make_quadratic_expr(constraint_func)
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Constraints must be either constant, linear or quadratic. "

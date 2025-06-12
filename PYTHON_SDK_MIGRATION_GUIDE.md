@@ -353,7 +353,29 @@ constraint = Constraint(
 )
 ```
 
-### 11. Linear/Quadratic オブジェクトのプロパティアクセス
+### 11. 制約処理順序の重要性（PySCIPOpt Adapter）
+**発見**: 制約の種類判定で順序が重要 - degree-based チェックを type-based チェックより先に実行する必要がある
+**影響**: 定数制約（`-1 = 0`, `1 <= 0`）のバリデーションが実行されずに通過してしまう
+**解決策**: 制約処理の順序を修正
+
+**修正パターン**:
+```python
+# 問題のあるパターン（定数制約のバリデーションが実行されない）
+if constraint_func.as_linear() is not None:    # 定数関数も線形関数なのでここにマッチ
+    expr = self._make_linear_expr(constraint_func)  # 線形制約として処理
+elif constraint_func.degree() == 0:            # 定数制約チェックに到達しない
+    # バリデーションロジックが実行されない
+
+# 正しいパターン（定数制約を最初にチェック）
+if constraint_func.degree() == 0:              # 定数制約を最初にチェック
+    # 適切な定数制約バリデーション
+elif constraint_func.as_linear() is not None:  # 非定数の線形制約
+    expr = self._make_linear_expr(constraint_func)
+```
+
+**影響**: 数学的に実行不可能な問題（`-1 = 0`など）がソルバーに渡され、実行時エラーや誤った結果の原因となる
+
+### 12. Linear/Quadratic オブジェクトのプロパティアクセス
 **発見**: `Linear.constant_term`と`Linear.linear_terms`はプロパティであり、メソッドではない
 **影響**: メソッド呼び出し（括弧付き）すると`TypeError: 'float' object is not callable`等のエラーが発生
 **解決策**: プロパティとして正しくアクセス
@@ -375,7 +397,7 @@ quad_func = function.as_quadratic()
 constant_value = quad_func.constant_term   # プロパティアクセス
 ```
 
-### 7. Function APIアクセス方法
+### 13. Function APIアクセス方法
 **発見**: `instance.objective.as_linear()` は不可、`.raw` 経由でアクセス必要
 
 **修正パターン**:
@@ -387,11 +409,11 @@ linear_func = instance.objective.as_linear()  # AttributeError
 linear_func = instance.raw.objective.as_linear()  # 正常動作
 ```
 
-### 8. 変数ID一致の重要性
+### 14. 変数ID一致の重要性
 **発見**: Function内で使用する変数IDは決定変数リストと厳密に一致する必要
 - **エラー例**: `RuntimeError: Undefined variable ID is used: VariableID(1)`
 
-### 9. Pyright型エラー修正とAPI改善
+### 15. Pyright型エラー修正とAPI改善
 **発見**: 型システム間の変換とPyrightエラーの適切な対処方法
 
 **重要な改善**: `Instance.from_components()` の型アノテーションと実装を修正
@@ -409,7 +431,7 @@ def from_components(
 
 この改善により、他のアダプターでも`ommx.v1.Function`を直接使用可能になりました。
 
-### 10. Raw APIからPython SDKへの移行
+### 16. Raw APIからPython SDKへの移行
 
 **重要な変更**: `_ommx_rust`モジュールの直接使用を避け、必要なAPIはPython SDKに追加
 

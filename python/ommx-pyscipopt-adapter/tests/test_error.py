@@ -39,7 +39,7 @@ def test_error_nonlinear_constraint():
     )
     with pytest.raises(OMMXPySCIPOptAdapterError) as e:
         OMMXPySCIPOptAdapter(ommx_instance)
-    assert "Constraints must be either `constant`, `linear` or `quadratic`." in str(
+    assert "Constraints must be either constant, linear or quadratic." in str(
         e.value
     )
 
