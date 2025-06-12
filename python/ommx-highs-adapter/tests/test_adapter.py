@@ -24,7 +24,7 @@ def test_integration_lp():
 
     state = adapter.decode_to_state(model)
     assert state.entries[3] == pytest.approx(-1)  # x1 with lower bound -1
-    assert state.entries[2] == pytest.approx(0)   # x2 at lower bound
+    assert state.entries[2] == pytest.approx(0)  # x2 at lower bound
 
 
 def test_integration_milp():

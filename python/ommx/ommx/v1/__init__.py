@@ -64,7 +64,7 @@ __all__ = [
     "Bound",
     # Enums
     "Sense",
-    "Equality", 
+    "Equality",
     "Kind",
     # Utility
     "SampledValues",
@@ -1807,9 +1807,7 @@ class Parameter(VariableBase):
 
     # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
         p = self.raw
@@ -2044,11 +2042,16 @@ def _function_type(function: _Function) -> str:
     raise ValueError("Unknown function type")
 
 
-
 def _equality(equality: _ommx_rust.Equality | _Equality.ValueType) -> str:
-    if equality == _ommx_rust.Equality.EqualToZero or equality == _Equality.EQUALITY_EQUAL_TO_ZERO:
+    if (
+        equality == _ommx_rust.Equality.EqualToZero
+        or equality == _Equality.EQUALITY_EQUAL_TO_ZERO
+    ):
         return "=0"
-    if equality == _ommx_rust.Equality.LessThanOrEqualToZero or equality == _Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+    if (
+        equality == _ommx_rust.Equality.LessThanOrEqualToZero
+        or equality == _Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    ):
         return "<=0"
     raise ValueError("Unknown equality")
 
@@ -2296,9 +2299,7 @@ class DecisionVariable(VariableBase):
 
     # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
         return {
@@ -2541,9 +2542,7 @@ class Linear(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -2722,9 +2721,7 @@ class Quadratic(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -2871,9 +2868,7 @@ class Polynomial(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -3158,9 +3153,7 @@ class Function(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Constraint.EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass

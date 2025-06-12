@@ -232,7 +232,9 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var_id: solution.col_value[i]
-                for i, (var_id, var) in enumerate(self.instance.raw.decision_variables.items())
+                for i, (var_id, var) in enumerate(
+                    self.instance.raw.decision_variables.items()
+                )
             }
         )
 
@@ -267,10 +269,12 @@ class OMMXHighsAdapter(SolverAdapter):
         self.highs_vars = self.model.addVariables(
             var_names, lb=lower.tolist(), ub=upper.tolist(), type=types
         )
-        
+
         # Create mapping from var_id to HiGHS variable
         # self.highs_vars is a dict with variable names as keys
-        self.varname_map = {str(var_id): self.highs_vars[str(var_id)] for var_id in var_ids}
+        self.varname_map = {
+            str(var_id): self.highs_vars[str(var_id)] for var_id in var_ids
+        }
 
     def _linear_expr_conversion(self, ommx_func: Union[Function, _ommx_rust.Function]):
         # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
