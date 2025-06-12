@@ -1,7 +1,8 @@
 import mip
 
 from ommx.v1 import DecisionVariable
-from ommx._ommx_rust import Sense, Equality
+from ommx.v1 import Instance
+from ommx._ommx_rust import Equality
 
 from ommx_python_mip_adapter import model_to_instance
 
@@ -46,7 +47,7 @@ def test_milp():
 
     ommx_instance = model_to_instance(model)
 
-    assert ommx_instance.sense == Sense.Minimize
+    assert ommx_instance.sense == Instance.MINIMIZE
 
     # Check the decision variables using .raw for direct dict access
     assert len(ommx_instance.raw.decision_variables) == 3
@@ -143,7 +144,7 @@ def test_no_objective_model():
 
     ommx_instance = model_to_instance(model)
 
-    assert ommx_instance.sense == Sense.Maximize
+    assert ommx_instance.sense == Instance.MAXIMIZE
 
     # Check the decision variables using .raw for direct dict access
     assert len(ommx_instance.raw.decision_variables) == 2

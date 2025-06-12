@@ -1,7 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Quadratic, Sense, Equality
+from ommx._ommx_rust import Function, Quadratic, Equality
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -15,7 +15,7 @@ def test_error_nonlinear_objective():
         decision_variables=[DecisionVariable.continuous(0)],
         objective=Function.from_quadratic(quadratic),
         constraints=[],
-        sense=Sense.Minimize,
+        sense=Instance.MINIMIZE,
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
@@ -36,7 +36,7 @@ def test_error_nonlinear_constraint():
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Function.from_scalar(0),
         constraints=[constraint],
-        sense=Sense.Minimize,
+        sense=Instance.MINIMIZE,
     )
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:

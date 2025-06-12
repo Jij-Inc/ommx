@@ -5,7 +5,7 @@ import mip
 
 from mip.exceptions import ParameterNotAvailable
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Linear, Sense, Equality
+from ommx._ommx_rust import Function, Linear, Equality
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -116,9 +116,9 @@ class OMMXInstanceBuilder:
 
     def sense(self):
         if self.model.sense == mip.MAXIMIZE:
-            return Sense.Maximize
+            return Instance.MAXIMIZE
         elif self.model.sense == mip.MINIMIZE:
-            return Sense.Minimize
+            return Instance.MINIMIZE
         raise OMMXPythonMIPAdapterError(f"Not supported sense: {self.model.sense}")
 
     @final

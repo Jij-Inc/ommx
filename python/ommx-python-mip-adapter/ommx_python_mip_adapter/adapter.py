@@ -6,7 +6,7 @@ import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
-from ommx._ommx_rust import Function, Sense
+from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Relaxation
 
 from .exception import OMMXPythonMIPAdapterError
@@ -29,9 +29,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        if ommx_instance.raw.sense == Sense.Maximize:
+        if ommx_instance.raw.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
-        elif ommx_instance.raw.sense == Sense.Minimize:
+        elif ommx_instance.raw.sense == Instance.MINIMIZE:
             sense = mip.MINIMIZE
         else:
             raise OMMXPythonMIPAdapterError(
@@ -91,7 +91,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
-            ...     sense=Sense.Maximize,
+            ...     sense=Instance.MAXIMIZE,
             ... )
 
             Solve it
@@ -127,7 +127,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints=[x >= 4],
-                ...     sense=Sense.Maximize,
+                ...     sense=Instance.MAXIMIZE,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -148,7 +148,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x],
                 ...     objective=x,
                 ...     constraints=[],
-                ...     sense=Sense.Maximize,
+                ...     sense=Instance.MAXIMIZE,
                 ... )
 
                 >>> OMMXPythonMIPAdapter.solve(instance)
@@ -170,7 +170,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
                 ...     constraints=[x + y <= 1],
-                ...     sense=Sense.Maximize,
+                ...     sense=Instance.MAXIMIZE,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
@@ -224,7 +224,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
             ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
-            ...     sense=Sense.Maximize,
+            ...     sense=Instance.MAXIMIZE,
             ... )
 
             >>> adapter = OMMXPythonMIPAdapter(instance)
@@ -287,7 +287,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             ...     decision_variables=[x1],
             ...     objective=x1,
             ...     constraints=[],
-            ...     sense=Sense.Minimize,
+            ...     sense=Instance.MINIMIZE,
             ... )
             >>> adapter = OMMXPythonMIPAdapter(ommx_instance)
             >>> model = adapter.solver_input

@@ -90,20 +90,34 @@ constraint = Constraint(
 
 ### 5. Enum 定数
 
+**重要**: `Instance.MAXIMIZE`/`Instance.MINIMIZE`の値は自動的に更新されているため、変更は不要です。
+
 **旧方式**:
 ```python
-Instance.MAXIMIZE
-Instance.MINIMIZE
-DecisionVariable.BINARY
+# Constraint equality - これらは変更が必要
 Constraint.EQUAL_TO_ZERO
+Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+
+# DecisionVariable kind - 通常は変更不要
+DecisionVariable.BINARY
+DecisionVariable.INTEGER
+DecisionVariable.CONTINUOUS
 ```
 
 **新方式**:
 ```python
-Sense.Maximize
-Sense.Minimize  
-DecisionVariable.Kind.Binary
+# Constraint equality - Rust enum使用
 Equality.EqualToZero
+Equality.LessThanOrEqualToZero
+
+# Instance sense - 変更不要（値が自動更新）
+Instance.MAXIMIZE  # そのまま使用可能
+Instance.MINIMIZE  # そのまま使用可能
+
+# DecisionVariable kind - 通常は変更不要
+DecisionVariable.BINARY     # そのまま使用可能
+DecisionVariable.INTEGER    # そのまま使用可能  
+DecisionVariable.CONTINUOUS # そのまま使用可能
 ```
 
 ### 6. Function 検査・変換
@@ -167,8 +181,9 @@ function.num_terms() -> int   # 項数
 2. `Function`と`Constraint`の直接作成をファクトリーメソッドに変更
 
 ### ステップ 3: Enum定数の更新
-1. 古いクラス定数を新しいEnum値に変更
-2. `Sense`と`Equality`の適切なインポート
+1. `Constraint.EQUAL_TO_ZERO` → `Equality.EqualToZero`への変更
+2. `Instance.MAXIMIZE`/`Instance.MINIMIZE`は変更不要（値が自動更新）
+3. `Equality`の適切なインポートの追加
 
 ### ステップ 4: Protocol Buffer API除去
 1. `.HasField()`呼び出しを`.as_linear()`等に変更
@@ -190,8 +205,8 @@ function.num_terms() -> int   # 項数
 **解決**: `.as_linear()`メソッドを使用
 
 ### 問題 3: `ImportError: cannot import name 'Sense' from 'ommx.v1'`
-**原因**: EnumがRustから直接エクスポートされている
-**解決**: `ommx._ommx_rust`からインポート
+**原因**: `Sense`enumの使用が不要
+**解決**: `Instance.MAXIMIZE`/`Instance.MINIMIZE`をそのまま使用
 
 ### 問題 4: `AttributeError: type object 'Function' has no attribute 'from_scalar'`
 **原因**: Python Functionクラスでなく_ommx_rust.Functionを使う必要
