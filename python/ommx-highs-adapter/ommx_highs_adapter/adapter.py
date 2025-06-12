@@ -3,9 +3,7 @@ import numpy as np
 
 from highspy.highs import highs_linear_expression
 
-from ommx.v1 import Instance, DecisionVariable, Solution, Constraint
-from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1.function_pb2 import Function
+from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 
 from .exception import OMMXHighsAdapterError
@@ -201,8 +199,7 @@ class OMMXHighsAdapter(SolverAdapter):
         --------
         **Knapsack Problem**
         
-        >>> from ommx.v1 import Instance, DecisionVariable
-        >>> from ommx.v1.solution_pb2 import Optimality
+        >>> from ommx.v1 import Instance, DecisionVariable, Solution
         >>> from ommx_highs_adapter import OMMXHighsAdapter
         >>> 
         >>> p = [10, 13, 18, 32, 7, 15]  # profits
@@ -220,7 +217,7 @@ class OMMXHighsAdapter(SolverAdapter):
         [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
         >>> solution.feasible
         True
-        >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+        >>> assert solution.optimality == Solution.OPTIMAL
         >>> solution.objective
         42.0
         
@@ -349,7 +346,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
         # set optimality
         if self.model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.raw.optimality = Solution.OPTIMAL
 
         # dual variables
         solution_info = self.model.getSolution()
@@ -417,7 +414,7 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.raw.decision_variables)
+                for i, var in enumerate(self.instance.get_decision_variables())
             }
         )
 
@@ -428,7 +425,7 @@ class OMMXHighsAdapter(SolverAdapter):
         types = []
         var_ids = []
 
-        for i, var in enumerate(self.instance.raw.decision_variables):
+        for i, var in enumerate(self.instance.get_decision_variables()):
             var_ids.append(var.id)
             if var.kind == DecisionVariable.BINARY:
                 lower[i] = 0
@@ -472,18 +469,18 @@ class OMMXHighsAdapter(SolverAdapter):
             )
 
     def _set_objective(self):
-        obj = self._linear_expr_conversion(self.instance.raw.objective)
+        obj = self._linear_expr_conversion(self.instance.objective)
         if isinstance(obj, float):
             return
-        if self.instance.raw.sense == Instance.MAXIMIZE:
+        if self.instance.sense == Instance.MAXIMIZE:
             self.model.maximize(highs_linear_expression(obj))
-        elif self.instance.raw.sense == Instance.MINIMIZE:
+        elif self.instance.sense == Instance.MINIMIZE:
             self.model.minimize(highs_linear_expression(obj))
         else:
-            raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.raw.sense}")
+            raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
 
     def _set_constraints(self):
-        for constr in self.instance.raw.constraints:
+        for constr in self.instance.get_constraints():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
