@@ -57,7 +57,7 @@ impl Evaluate for Instance {
             feasible_relaxed: Some(feasible_relaxed),
             // feasible_unrelaxed is deprecated, but we need to keep it for backward compatibility
             feasible_unrelaxed: feasible,
-            // Optimality is only detecable in the context of a solver, and `State` does not store this information.
+            // Optimality is only detectable in the context of a solver, and `State` does not store this information.
             optimality: Optimality::Unspecified as i32,
             // This field means that the solver relaxes the problem for some reason, and returns a solution for the relaxed problem.
             // The `removed_constraints` field do not relate to this. This is purely a solver-specific field.
