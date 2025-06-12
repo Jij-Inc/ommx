@@ -236,7 +236,8 @@ class Instance(InstanceBase, UserAnnotationBase):
     MAXIMIZE = _ommx_rust.Sense.Maximize
     MINIMIZE = _ommx_rust.Sense.Minimize
 
-    Description = _Instance.Description
+    # Expose InstanceDescription as Instance.Description for consistency
+    Description = _ommx_rust.InstanceDescription
 
     @staticmethod
     def empty() -> Instance:
@@ -262,7 +263,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         constraints: Iterable[Constraint | _Constraint],
         sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
-        description: Optional[_Instance.Description] = None,
+        description: Optional["Instance.Description | _Instance.Description"] = None,
     ) -> Instance:
         if not isinstance(objective, Function):
             objective = Function(objective)
@@ -287,12 +288,28 @@ class Instance(InstanceBase, UserAnnotationBase):
                 constraint = Constraint.from_protobuf(c)
                 rust_constraints[constraint.id] = constraint.raw
 
+        # Convert description if provided
+        rust_description = None
+        if description is not None:
+            if isinstance(description, _ommx_rust.InstanceDescription):
+                # Already a Rust InstanceDescription
+                rust_description = description
+            else:
+                # Convert Protocol Buffer Description to Rust InstanceDescription
+                rust_description = _ommx_rust.InstanceDescription(
+                    name=description.name if description.HasField("name") else None,
+                    description=description.description if description.HasField("description") else None,
+                    authors=list(description.authors) if description.authors else None,
+                    created_by=description.created_by if description.HasField("created_by") else None,
+                )
+
         # Create Rust instance
         rust_instance = _ommx_rust.Instance.from_components(
             sense=sense,
             objective=objective.raw,
             decision_variables=rust_decision_variables,
             constraints=rust_constraints,
+            description=rust_description,
         )
 
         return Instance(rust_instance)
@@ -386,11 +403,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         return self.raw.to_bytes()
 
     @property
-    def description(self) -> _Instance.Description:
-        # TODO: Description is not yet implemented in Rust Instance
-        raise NotImplementedError(
-            "Description property not yet supported in Rust implementation"
-        )
+    def description(self) -> "Instance.Description | None":
+        return self.raw.description
 
     @property
     def objective(self) -> Function:

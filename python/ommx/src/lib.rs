@@ -50,6 +50,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
     m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
+    m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<Constraint>()?;

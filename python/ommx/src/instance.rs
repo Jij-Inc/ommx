@@ -24,12 +24,13 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints))]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
+        description: Option<InstanceDescription>,
     ) -> Result<Self> {
         let rust_sense = sense.into();
 
@@ -44,13 +45,18 @@ impl Instance {
             .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
             .collect();
 
-        let instance = ommx::Instance::new(
+        let mut instance = ommx::Instance::new(
             rust_sense,
             objective.0,
             rust_decision_variables,
             rust_constraints,
             ommx::ConstraintHints::default(),
         )?;
+
+        // Set description if provided
+        if let Some(desc) = description {
+            instance.description = Some(desc.0);
+        }
 
         Ok(Self(instance))
     }
@@ -101,6 +107,14 @@ impl Instance {
                 )
             })
             .collect()
+    }
+
+    #[getter]
+    pub fn description(&self) -> Option<InstanceDescription> {
+        // Convert Option<v1::instance::Description> to Option<InstanceDescription>
+        self.0.description.as_ref().map(|desc| {
+            InstanceDescription(desc.clone())
+        })
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
@@ -327,6 +341,63 @@ impl DecisionVariableAnalysis {
             .keys()
             .map(|id| id.into_inner())
             .collect()
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[derive(Clone)]
+pub struct InstanceDescription(ommx::v1::instance::Description);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl InstanceDescription {
+    #[new]
+    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None))]
+    pub fn new(
+        name: Option<String>,
+        description: Option<String>,
+        authors: Option<Vec<String>>,
+        created_by: Option<String>,
+    ) -> Self {
+        let mut desc = ommx::v1::instance::Description::default();
+        desc.name = name;
+        desc.description = description;
+        desc.authors = authors.unwrap_or_default();
+        desc.created_by = created_by;
+        Self(desc)
+    }
+    #[getter]
+    pub fn name(&self) -> Option<String> {
+        self.0.name.clone()
+    }
+
+    #[getter]
+    pub fn description(&self) -> Option<String> {
+        self.0.description.clone()
+    }
+
+    #[getter]
+    pub fn authors(&self) -> Vec<String> {
+        self.0.authors.clone()
+    }
+
+    #[getter]
+    pub fn created_by(&self) -> Option<String> {
+        self.0.created_by.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
+            self.0.name, self.0.description, self.0.authors, self.0.created_by)
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }
 

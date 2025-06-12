@@ -345,6 +345,7 @@ class Instance:
     decision_variables: builtins.dict[builtins.int, DecisionVariable]
     constraints: builtins.dict[builtins.int, Constraint]
     removed_constraints: builtins.dict[builtins.int, RemovedConstraint]
+    description: typing.Optional[InstanceDescription]
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
@@ -353,6 +354,7 @@ class Instance:
         objective: Function,
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
+        description: typing.Optional[InstanceDescription] = None,
     ) -> Instance: ...
     def set_objective(self, objective: Function) -> None: ...
     def to_bytes(self) -> bytes: ...
@@ -382,6 +384,22 @@ class Instance:
     def __deepcopy__(self, _memo: typing.Any) -> Instance: ...
     def as_minimization_problem(self) -> builtins.bool: ...
     def as_maximization_problem(self) -> builtins.bool: ...
+
+class InstanceDescription:
+    name: typing.Optional[builtins.str]
+    description: typing.Optional[builtins.str]
+    authors: builtins.list[builtins.str]
+    created_by: typing.Optional[builtins.str]
+    def __new__(
+        cls,
+        name: typing.Optional[builtins.str] = None,
+        description: typing.Optional[builtins.str] = None,
+        authors: typing.Optional[typing.Sequence[builtins.str]] = None,
+        created_by: typing.Optional[builtins.str] = None,
+    ) -> InstanceDescription: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> InstanceDescription: ...
+    def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
 
 class Linear:
     linear_terms: builtins.dict[builtins.int, builtins.float]
