@@ -130,10 +130,10 @@ The Instance class migration follows this phased approach:
 
 ### Python-MIP Adapter Migration to v2 API
 
-**Completion Status**: ✅ Fully completed with API improvements
+**Completion Status**: ✅ Fully completed with API improvements and best practices established
 
 **Work Summary**:
-The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 API to the new Rust-PyO3 based v2 API. This work involved comprehensive updates across all adapter components and resulted in significant API improvements.
+The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 API to the new Rust-PyO3 based v2 API. This work involved comprehensive updates across all adapter components and established important best practices for Python SDK usage.
 
 **Key Accomplishments**:
 
@@ -150,26 +150,86 @@ The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 A
    - ✅ Fixed iteration patterns for dictionaries vs keys
 
 3. **API Enhancement at Core Level**:
-   - ✅ Extended `Instance.from_components()` to accept `_ommx_rust.Function` directly
+   - ✅ Extended `Instance.from_components()` to accept `ommx.v1.Function` directly
    - ✅ Added automatic type conversion in core SDK
    - ✅ Eliminated need for manual `V1Function.from_raw()` conversions
 
+4. **Solution Class Constants**:
+   - ✅ Added `OPTIMAL`, `NOT_OPTIMAL`, `LP_RELAXED` constants to Solution class
+   - ✅ Eliminated need for `solution_pb2` imports in adapters
+
+5. **Best Practices Established**:
+   - ✅ Removed all `_ommx_rust` direct imports from Python-MIP Adapter
+   - ✅ Added necessary APIs to Python SDK (`Function.degree()`, `Function.num_terms()`, `Function.as_linear()`)
+   - ✅ Established pattern of extending Python SDK rather than using raw APIs
+
 **Impact on Other Adapters**:
-The `Instance.from_components()` enhancement benefits all current and future adapters by allowing direct use of `_ommx_rust` types without manual conversion.
+- The `Instance.from_components()` enhancement benefits all adapters
+- Established best practice: avoid `_ommx_rust` imports, extend `ommx.v1` instead
+- Migration guide updated with comprehensive examples and patterns
 
 **Test Results**:
 - ✅ 12/12 functional tests passing
 - ✅ 0 Pyright type errors
 - ✅ All doctest examples working
 - ✅ README examples functional
+- ✅ No `_ommx_rust` imports remaining
 
-**Time Investment**: ~6 hours total
+**Time Investment**: ~8 hours total
 - Analysis and planning: 1 hour
 - Core migration work: 3 hours
 - Pyright error resolution: 1 hour
 - API improvement implementation: 1 hour
+- Best practices implementation: 2 hours
 
-**Knowledge Captured**: 12 detailed technical insights documented in migration guide covering common error patterns, solutions, and best practices for future migrations.
+**Knowledge Captured**: 
+- 12+ detailed technical insights documented in migration guide
+- Established clear pattern for avoiding raw API usage
+- Created comprehensive examples of Python SDK extension
+
+### Migration Guide Updates
+
+**PYTHON_SDK_MIGRATION_GUIDE.md** has been significantly enhanced with:
+- ✅ Clear guidance on avoiding `_ommx_rust` imports
+- ✅ Examples of extending Python SDK with needed APIs
+- ✅ Complete migration patterns from v1 to v2
+- ✅ Best practices section emphasizing unified API usage
+
+## Next Steps and Future Work
+
+### Immediate Tasks
+
+1. **Other Adapter Migrations**:
+   - [ ] HiGHS Adapter - Apply same patterns as Python-MIP
+   - [ ] PySCIPOpt Adapter - May need careful handling due to complexity
+   - [ ] OpenJij Adapter - Should be straightforward
+
+2. **Python SDK Enhancements**:
+   - [ ] Add `Function.as_quadratic()` method
+   - [ ] Add `Function.as_polynomial()` method
+   - [ ] Consider adding more convenience methods based on adapter needs
+
+3. **Documentation**:
+   - [ ] Update all adapter README files with v2 API examples
+   - [ ] Create adapter development guide
+   - [ ] Add migration examples to main documentation
+
+### Long-term Goals
+
+1. **API Consistency**:
+   - Ensure all mathematical objects have consistent APIs
+   - Add missing convenience methods based on usage patterns
+   - Consider deprecating `.raw` attribute access in future versions
+
+2. **Performance Optimization**:
+   - Profile common operations and optimize hot paths
+   - Consider caching for frequently accessed properties
+   - Optimize Protocol Buffer conversions where still needed
+
+3. **Developer Experience**:
+   - Improve error messages for common mistakes
+   - Add more type hints and documentation
+   - Create adapter template/generator tool
 
 ## Development Commands
 
@@ -266,10 +326,11 @@ When making changes, always run the appropriate linting/testing commands before 
 
 ## Important Notes for Development
 
-1. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-2. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers (221 test cases for metadata management), and doctests
-3. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
-4. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
+1. **API Philosophy**: Avoid `_ommx_rust` direct imports; always use `ommx.v1` unified API. When needed functionality is missing, extend the Python SDK rather than using raw APIs
+2. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
+3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers (221 test cases for metadata management), and doctests
+4. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
+5. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
 ## Development Guidance
 
@@ -278,6 +339,7 @@ When making changes, always run the appropriate linting/testing commands before 
 - Always run `task python:test` after making changes to ensure all tests pass
 - Use incremental approach: implement one component at a time, test, then commit
 - Maintain backward compatibility during migration phases
+- **New**: Prefer extending Python SDK over using raw APIs - this ensures API stability and better user experience
 
 ### Instance Migration Guidelines
 When working on the Protocol Buffer to Rust Instance migration:
@@ -289,24 +351,32 @@ When working on the Protocol Buffer to Rust Instance migration:
 5. **API Consistency**: Follow established patterns from completed wrapper implementations
 6. **Type Safety**: Always regenerate stub files and run pyright after adding new wrappers
 
-### Phase 4 Implementation Plan
-The next phase involves migrating Python Instance class to use Rust implementation:
+### Adapter Migration Guidelines
 
-1. **Replace Instance.raw**: Change from Protocol Buffer `_Instance` to `_ommx_rust.Instance`
-2. **Update Property Methods**: Modify getters (`objective`, `sense`, `decision_variables`, `constraints`) to call Rust methods
-3. **Migrate from_components**: Update static method to use `_ommx_rust.Instance.from_components`
-4. **Maintain API Compatibility**: Ensure existing test patterns continue to work
-5. **Handle Annotations**: Address `UserAnnotationBase` functionality separately (Protocol Buffer dependent)
+When migrating solver adapters to v2 API:
 
-**Implementation Considerations**:
-- All prerequisite PyO3 wrappers are complete and tested
-- Rust Instance API provides all necessary methods
-- Test compatibility verified across adapter packages
-- Type conversion patterns established in existing wrappers
+1. **Import Updates**: Replace all Protocol Buffer and `_ommx_rust` imports with `ommx.v1` imports
+2. **API Usage**: Use Python SDK methods instead of raw API calls
+3. **Type Conversions**: Let Python SDK handle conversions between Rust and Python types
+4. **Extension Pattern**: If needed functionality is missing, add it to Python SDK classes
+5. **Testing**: Ensure all tests pass including doctests and pyright checks
+
+**Example Pattern**:
+```python
+# Bad: Using raw API
+from ommx._ommx_rust import Function
+function.as_linear()  # Direct Rust method
+
+# Good: Using Python SDK
+from ommx.v1 import Function
+function.as_linear()  # Python SDK method that wraps Rust
+```
 
 ### Current Development Status (December 2024)
-- **Phase 1 ✅**: DecisionVariable PyO3 wrapper with factory methods and proper type conversions
-- **Phase 2 ✅**: Constraint and RemovedConstraint PyO3 wrappers with comprehensive metadata management, encode/decode methods, and full functionality
+- **Core Migration ✅**: All phases of Protocol Buffer to Rust migration complete
+- **Python-MIP Adapter ✅**: Fully migrated with best practices established
+- **Migration Guide ✅**: Comprehensive guide with examples and patterns
+- **API Extensions ✅**: Function class extended with needed methods
 - **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
 - **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
 - **Phase 4 ✅**: Python Instance migration completed - `Instance.raw` successfully migrated from Protocol Buffer to `_ommx_rust.Instance`
@@ -325,6 +395,7 @@ The next phase involves migrating Python Instance class to use Rust implementati
 - **NEVER create inline tests** - Add tests to python/ommx-tests/tests only
 - **NEVER run `python -c` directly** - Use proper test framework
 - **NEVER modify v1_ext directory** - Contains deprecated Protocol Buffer implementations
+- **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API instead
 
 ### 📁 Directory Guidelines  
 - Most tasks should be performed from the repository root directory
