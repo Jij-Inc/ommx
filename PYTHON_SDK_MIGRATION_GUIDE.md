@@ -10,6 +10,18 @@ OMMX Python SDKのPhase 4完了により、コアSDKは新しいRust-PyO3実装�
 
 このガイドは、Protocol Bufferベース（v1）からRust-PyO3ベース（v2）へのアダプター移行に適用されます。
 
+## 重要な方針
+
+### Raw APIの非推奨とPython SDKの拡張
+
+v2への移行では、以下の方針を推奨します：
+
+1. **`_ommx_rust`モジュールの直接使用を避ける**: 内部実装の詳細に依存することを防ぐため
+2. **`ommx.v1`モジュールの統一されたAPIを使用**: 安定したパブリックAPIを利用
+3. **必要なAPIがない場合はPython SDKに追加**: raw APIを使うのではなく、適切なラッパーメソッドを追加
+
+この方針により、将来的な内部実装の変更に対して堅牢なコードを維持できます。
+
 ## 主要な変更点
 
 ### 1. インポートの変更
@@ -22,11 +34,17 @@ from ommx.v1.linear_pb2 import Linear
 from ommx.v1 import Instance, DecisionVariable
 ```
 
-**新方式 (v2)**:
+**新方式 (v2) - 推奨**:
 ```python
-from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Linear, Sense, Equality
+# すべてommx.v1から統一的にインポート
+from ommx.v1 import (
+    Instance, DecisionVariable, Constraint,
+    Function, Linear, Quadratic, Polynomial,
+    Solution, State
+)
 ```
+
+**注意**: `_ommx_rust`モジュールからの直接インポートは避けてください。
 
 ### 2. DecisionVariable ファクトリーメソッド
 
@@ -58,10 +76,13 @@ Function(linear=Linear(terms=terms, constant=constant))
 
 **新方式**:
 ```python
-# Rustベースファクトリーメソッド
-Function.from_scalar(constant)
+# 統一されたコンストラクタ
+Function(constant)  # スカラー値から作成
+Function(linear)    # Linearオブジェクトから作成
+Function(quadratic) # Quadraticオブジェクトから作成
+
+# Linearオブジェクトの作成
 linear = Linear(terms=terms, constant=constant)
-Function.from_linear(linear)
 ```
 
 ### 4. Constraint 作成
@@ -79,10 +100,10 @@ Constraint(
 
 **新方式**:
 ```python
-# 直接コンストラクタで作成（_ommx_rust.Function を受け取り可能、Equality は Python SDK の定数を使用）
+# 直接コンストラクタで作成（ommx.v1.Function を使用）
 constraint = Constraint(
     id=id,
-    function=function,  # _ommx_rust.Function を直接使用可能
+    function=function,  # ommx.v1.Function を使用
     equality=Constraint.EQUAL_TO_ZERO,  # Python SDK の定数を使用
     name=name,
 )
@@ -132,11 +153,11 @@ if function.HasField("linear"):
 
 **新方式**:
 ```python
-# Rust as_linear メソッド
+# Python SDK の as_linear メソッド
 linear_func = function.as_linear()
 if linear_func is not None:
-    linear_terms = linear_func.linear_terms()  # dict[int, float]
-    constant = linear_func.constant_term()     # float
+    linear_terms = linear_func.linear_terms  # dict[int, float] - プロパティ
+    constant = linear_func.constant          # float - プロパティ
 ```
 
 ### 7. 属性アクセス
@@ -163,19 +184,32 @@ constraint.equality == Equality.EqualToZero
 ```python
 # 型変換・検査
 function.as_linear() -> Optional[Linear]
-function.as_quadratic() -> Optional[Quadratic]
+function.as_quadratic() -> Optional[Quadratic]  # 今後追加予定
 
 # 情報取得
 function.degree() -> int      # 関数の次数
 function.num_terms() -> int   # 項数
+
+# 評価
+function.evaluate(state: State | dict[int, float]) -> float
+function.partial_evaluate(state: State | dict[int, float]) -> Function
+```
+
+### Linear クラス
+```python
+# プロパティ
+linear.linear_terms  # dict[int, float] - 定数項を除く線形項
+linear.constant     # float - 定数項
+linear.terms       # dict[tuple[int, ...], float] - すべての項
 ```
 
 ## マイグレーション手順
 
 ### ステップ 1: インポートの更新
-1. Protocol Buffer直接インポートを削除
-2. `ommx.v1`と`ommx._ommx_rust`からの適切なインポートに変更
-3. `Sense`と`Equality`のインポートは通常不要（Python SDK定数を使用）
+1. Protocol Buffer直接インポート（`*_pb2`）を削除
+2. `_ommx_rust`からの直接インポートを避ける
+3. すべて`ommx.v1`からインポートするように変更
+4. `Sense`と`Equality`のインポートは不要（Python SDK定数を使用）
 
 ### ステップ 2: ファクトリーメソッドの更新
 1. `DecisionVariable.of_type()`を型別メソッドに変更
@@ -345,7 +379,38 @@ def from_components(
     # ...
 ```
 
-この改善により、他のアダプターでも`_ommx_rust.Function`を直接使用可能になりました。
+この改善により、他のアダプターでも`ommx.v1.Function`を直接使用可能になりました。
+
+### 10. Raw APIからPython SDKへの移行
+
+**重要な変更**: `_ommx_rust`モジュールの直接使用を避け、必要なAPIはPython SDKに追加
+
+**実例**: Python MIP Adapterでの実装
+```python
+# 悪い例 - _ommx_rustを直接使用
+from ommx._ommx_rust import Function, Linear
+
+# 良い例 - ommx.v1の統一APIを使用
+from ommx.v1 import Function, Linear
+
+# Python SDKに必要なAPIを追加した例
+class Function:
+    def degree(self) -> int:
+        """関数の次数を返す"""
+        return self.raw.degree()
+    
+    def as_linear(self) -> Linear | None:
+        """線形関数への変換を試みる"""
+        linear_raw = self.raw.as_linear()
+        if linear_raw is None:
+            return None
+        return Linear.from_raw(linear_raw)
+```
+
+**メリット**:
+- 内部実装の変更に対して堅牢
+- 一貫性のあるAPI設計
+- 型安全性の向上
 
 ## 検証戦略
 
@@ -364,6 +429,43 @@ task python:adapter:test > after.log 2>&1
 diff before.log after.log
 ```
 
+## まとめ
+
+### 推奨されるベストプラクティス
+
+1. **統一されたインポート**: すべて`ommx.v1`から
+2. **Raw APIの回避**: `.raw`属性や`_ommx_rust`の直接使用を避ける
+3. **Python SDKの拡張**: 必要なAPIがない場合は追加を検討
+4. **型安全性**: Python SDKが提供する型を活用
+
+### 実装例
+```python
+# 完全な移行例
+from ommx.v1 import (
+    Instance, DecisionVariable, Constraint,
+    Function, Linear, Solution, State
+)
+
+# Function作成
+objective = Function(Linear(terms={0: 1.0, 1: 2.0}, constant=3.0))
+
+# Constraint作成
+constraint = Constraint(
+    id=0,
+    function=Function(linear_expr),
+    equality=Constraint.EQUAL_TO_ZERO,
+    name="my_constraint"
+)
+
+# Instance作成
+instance = Instance.from_components(
+    decision_variables=[x1, x2],
+    objective=objective,
+    constraints=[constraint],
+    sense=Instance.MINIMIZE
+)
+```
+
 ---
 
-このガイドは実際のマイグレーション作業から得られた知見に基づいており、他のアダプターでも同様の問題を効率的に解決するために活用できます。
+このガイドは実際のマイグレーション作業から得られた知見に基づいており、他のアダプターでも同様の問題を効率的に解決するために活用できます。特に、raw APIを使わずPython SDKの統一されたAPIを使用することで、メンテナンス性と将来の互換性を確保できます。
