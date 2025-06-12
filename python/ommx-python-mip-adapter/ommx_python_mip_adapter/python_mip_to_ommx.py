@@ -4,8 +4,7 @@ from typing import final
 import mip
 
 from mip.exceptions import ParameterNotAvailable
-from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Linear
+from ommx.v1 import Instance, DecisionVariable, Constraint, Function, Linear
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -56,10 +55,10 @@ class OMMXInstanceBuilder:
 
         # If the terms are empty, the function is a constant.
         if len(terms) == 0:
-            return Function.from_scalar(constant)
+            return Function(constant)
         else:
             linear = Linear(terms=terms, constant=constant)  # type: ignore
-            return Function.from_linear(linear)
+            return Function(linear)
 
     def objective(self) -> Function:
         # In Python-MIP, it is allowed not to set the objective function.
@@ -69,7 +68,7 @@ class OMMXInstanceBuilder:
         try:
             objective = self.model.objective
         except ParameterNotAvailable:
-            return Function.from_scalar(0.0)
+            return Function(0.0)
 
         return self.as_ommx_function(objective)
 

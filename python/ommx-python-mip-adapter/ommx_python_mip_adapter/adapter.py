@@ -5,8 +5,7 @@ from typing import Optional
 import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State
-from ommx._ommx_rust import Function
+from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -342,8 +341,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         # Check if function is linear
         linear_func = f.as_linear()
         if linear_func is not None:
-            linear_terms = linear_func.linear_terms()  # dict[int, float]
-            constant = linear_func.constant_term()  # float
+            linear_terms = linear_func.linear_terms  # dict[int, float]
+            constant = linear_func.constant  # float
             return (
                 mip.xsum(
                     coeff * self.model.vars[str(var_id)]  # type: ignore
@@ -362,7 +361,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 from ommx.v1 import State
 
                 empty_state = State(entries={})
-                constant_value = f.evaluate(empty_state.SerializeToString())
+                constant_value = f.evaluate(empty_state)
                 return mip.LinExpr(const=constant_value)  # type: ignore
 
         raise OMMXPythonMIPAdapterError(
@@ -370,11 +369,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         )
 
     def _set_objective(self):
-        self.model.objective = self._as_lin_expr(self.instance.raw.objective)  # type: ignore
+        objective_func = Function.from_raw(self.instance.raw.objective)
+        self.model.objective = self._as_lin_expr(objective_func)  # type: ignore
 
     def _set_constraints(self):
         for constraint_id, constraint in self.instance.raw.constraints.items():
-            lin_expr = self._as_lin_expr(constraint.function)
+            constraint_func = Function.from_raw(constraint.function)
+            lin_expr = self._as_lin_expr(constraint_func)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
             elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:

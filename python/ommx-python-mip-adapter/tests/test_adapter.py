@@ -1,7 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Quadratic
+from ommx.v1 import Function, Quadratic
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -13,7 +13,7 @@ def test_error_nonlinear_objective():
     quadratic = Quadratic(columns=[0], rows=[0], values=[2.3])
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(0)],
-        objective=Function.from_quadratic(quadratic),
+        objective=Function(quadratic),
         constraints=[],
         sense=Instance.MINIMIZE,
     )
@@ -29,12 +29,12 @@ def test_error_nonlinear_constraint():
     quadratic = Quadratic(columns=[1], rows=[1], values=[2.3])
     constraint = Constraint(
         id=0,
-        function=Function.from_quadratic(quadratic),
+        function=Function(quadratic),
         equality=Constraint.EQUAL_TO_ZERO,
     )
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
-        objective=Function.from_scalar(0),
+        objective=Function(0),
         constraints=[constraint],
         sense=Instance.MINIMIZE,
     )

@@ -3034,6 +3034,36 @@ class Function(AsConstraint):
         """
         return self.raw.content_factor()
 
+    def degree(self) -> int:
+        """
+        Get the degree of the polynomial function.
+
+        Returns:
+            The degree of the polynomial (0 for constants, 1 for linear, 2 for quadratic, etc.)
+        """
+        return self.raw.degree()
+
+    def num_terms(self) -> int:
+        """
+        Get the number of terms in the polynomial function.
+
+        Returns:
+            The number of terms in the polynomial
+        """
+        return self.raw.num_terms()
+
+    def as_linear(self) -> Linear | None:
+        """
+        Try to convert the function to a Linear object if it's linear.
+
+        Returns:
+            A Linear object if the function is linear, None otherwise
+        """
+        linear_raw = self.raw.as_linear()
+        if linear_raw is None:
+            return None
+        return Linear.from_raw(linear_raw)
+
     def __repr__(self) -> str:
         return self.raw.__repr__()
 
