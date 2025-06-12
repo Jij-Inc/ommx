@@ -79,11 +79,11 @@ Constraint(
 
 **新方式**:
 ```python
-# 直接コンストラクタで作成（_ommx_rust.Function と _ommx_rust.Equality を受け取り可能）
+# 直接コンストラクタで作成（_ommx_rust.Function を受け取り可能、Equality は Python SDK の定数を使用）
 constraint = Constraint(
     id=id,
     function=function,  # _ommx_rust.Function を直接使用可能
-    equality=Equality.EqualToZero,  # _ommx_rust.Equality を直接使用可能
+    equality=Constraint.EQUAL_TO_ZERO,  # Python SDK の定数を使用
     name=name,
 )
 ```
@@ -106,9 +106,9 @@ DecisionVariable.CONTINUOUS
 
 **新方式**:
 ```python
-# Constraint equality - Rust enum使用
-Equality.EqualToZero
-Equality.LessThanOrEqualToZero
+# Constraint equality - Python SDK定数を使用（推奨）
+Constraint.EQUAL_TO_ZERO
+Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
 
 # Instance sense - 変更不要（値が自動更新）
 Instance.MAXIMIZE  # そのまま使用可能
@@ -175,15 +175,16 @@ function.num_terms() -> int   # 項数
 ### ステップ 1: インポートの更新
 1. Protocol Buffer直接インポートを削除
 2. `ommx.v1`と`ommx._ommx_rust`からの適切なインポートに変更
+3. `Sense`と`Equality`のインポートは通常不要（Python SDK定数を使用）
 
 ### ステップ 2: ファクトリーメソッドの更新
 1. `DecisionVariable.of_type()`を型別メソッドに変更
 2. `Function`と`Constraint`の直接作成をファクトリーメソッドに変更
 
 ### ステップ 3: Enum定数の更新
-1. `Constraint.EQUAL_TO_ZERO` → `Equality.EqualToZero`への変更
-2. `Instance.MAXIMIZE`/`Instance.MINIMIZE`は変更不要（値が自動更新）
-3. `Equality`の適切なインポートの追加
+1. `Instance.MAXIMIZE`/`Instance.MINIMIZE`は変更不要（値が自動更新）
+2. `Constraint.EQUAL_TO_ZERO`等はそのまま使用可能
+3. 特別なインポートは不要
 
 ### ステップ 4: Protocol Buffer API除去
 1. `.HasField()`呼び出しを`.as_linear()`等に変更

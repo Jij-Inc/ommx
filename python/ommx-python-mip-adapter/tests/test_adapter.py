@@ -1,7 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Quadratic, Equality
+from ommx._ommx_rust import Function, Quadratic
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -30,7 +30,7 @@ def test_error_nonlinear_constraint():
     constraint = Constraint(
         id=0,
         function=Function.from_quadratic(quadratic),
-        equality=Equality.EqualToZero,
+        equality=Constraint.EQUAL_TO_ZERO,
     )
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],

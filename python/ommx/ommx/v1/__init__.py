@@ -3144,8 +3144,8 @@ class Constraint:
     raw: _ommx_rust.Constraint
     _counter: int = 0
 
-    EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
-    LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    EQUAL_TO_ZERO = _ommx_rust.Equality.EqualToZero
+    LESS_THAN_OR_EQUAL_TO_ZERO = _ommx_rust.Equality.LessThanOrEqualToZero
 
     def __init__(
         self,

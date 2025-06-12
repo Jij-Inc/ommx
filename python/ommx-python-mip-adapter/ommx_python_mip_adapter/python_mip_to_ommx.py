@@ -5,7 +5,7 @@ import mip
 
 from mip.exceptions import ParameterNotAvailable
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Linear, Equality
+from ommx._ommx_rust import Function, Linear
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -85,14 +85,14 @@ class OMMXInstanceBuilder:
                 constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(lin_expr),
-                    equality=Equality.EqualToZero,
+                    equality=Constraint.EQUAL_TO_ZERO,
                     name=name,
                 )
             elif lin_expr.sense == "<":
                 constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(lin_expr),
-                    equality=Equality.LessThanOrEqualToZero,
+                    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
                     name=name,
                 )
             elif lin_expr.sense == ">":
@@ -101,7 +101,7 @@ class OMMXInstanceBuilder:
                 constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(-lin_expr),
-                    equality=Equality.LessThanOrEqualToZero,
+                    equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
                     name=name,
                 )
             else:

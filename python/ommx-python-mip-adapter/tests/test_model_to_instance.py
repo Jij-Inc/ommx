@@ -1,8 +1,6 @@
 import mip
 
-from ommx.v1 import DecisionVariable
-from ommx.v1 import Instance
-from ommx._ommx_rust import Equality
+from ommx.v1 import DecisionVariable, Instance, Constraint
 
 from ommx_python_mip_adapter import model_to_instance
 
@@ -84,7 +82,7 @@ def test_milp():
     assert len(ommx_instance.raw.constraints) == 3
 
     constraint1 = ommx_instance.raw.constraints[0]
-    assert constraint1.equality == Equality.EqualToZero
+    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
     assert constraint1_linear.constant_term() == 6
@@ -94,7 +92,7 @@ def test_milp():
     assert constraint1_terms[1] == -5
 
     constraint2 = ommx_instance.raw.constraints[1]
-    assert constraint2.equality == Equality.LessThanOrEqualToZero
+    assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
     assert constraint2_linear.constant_term() == -9
@@ -104,7 +102,7 @@ def test_milp():
     assert constraint2_terms[2] == 8
 
     constraint3 = ommx_instance.raw.constraints[2]
-    assert constraint3.equality == Equality.LessThanOrEqualToZero
+    assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint3_linear = constraint3.function.as_linear()
     assert constraint3_linear is not None
     assert constraint3_linear.constant_term() == -12
@@ -169,7 +167,7 @@ def test_no_objective_model():
     assert len(ommx_instance.raw.constraints) == 2
 
     constraint1 = ommx_instance.raw.constraints[0]
-    assert constraint1.equality == Equality.EqualToZero
+    assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
     assert constraint1_linear.constant_term() == -5
@@ -179,7 +177,7 @@ def test_no_objective_model():
     assert constraint1_terms[1] == 2
 
     constraint2 = ommx_instance.raw.constraints[1]
-    assert constraint2.equality == Equality.EqualToZero
+    assert constraint2.equality == Constraint.EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
     assert constraint2_linear.constant_term() == -10
