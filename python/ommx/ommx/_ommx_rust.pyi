@@ -279,6 +279,36 @@ class Function:
     @staticmethod
     def decode(bytes: bytes) -> Function: ...
     def encode(self) -> bytes: ...
+    def as_linear(self) -> typing.Optional[Linear]:
+        r"""
+        Try to convert this function to a linear function.
+
+        Returns Some(Linear) if the function can be represented as linear,
+        None otherwise. This is useful for checking if a function is suitable
+        for linear programming solvers.
+        """
+    def as_quadratic(self) -> typing.Optional[Quadratic]:
+        r"""
+        Try to convert this function to a quadratic function.
+
+        Returns Some(Quadratic) if the function can be represented as quadratic,
+        None otherwise.
+        """
+    def degree(self) -> builtins.int:
+        r"""
+        Get the degree of this function.
+
+        Returns the highest degree of any term in the function.
+        Zero function has degree 0, constant function has degree 0,
+        linear function has degree 1, quadratic function has degree 2, etc.
+        """
+    def num_terms(self) -> builtins.int:
+        r"""
+        Get the number of terms in this function.
+
+        Zero function has 0 terms, constant function has 1 term,
+        and polynomial functions have the number of non-zero coefficient terms.
+        """
     def almost_equal(
         self, other: Function, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...

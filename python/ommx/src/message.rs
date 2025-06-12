@@ -533,6 +533,44 @@ impl Function {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    /// Try to convert this function to a linear function.
+    ///
+    /// Returns Some(Linear) if the function can be represented as linear,
+    /// None otherwise. This is useful for checking if a function is suitable
+    /// for linear programming solvers.
+    pub fn as_linear(&self) -> Option<Linear> {
+        self.0
+            .as_linear()
+            .map(|cow_linear| Linear(cow_linear.into_owned()))
+    }
+
+    /// Try to convert this function to a quadratic function.
+    ///
+    /// Returns Some(Quadratic) if the function can be represented as quadratic,
+    /// None otherwise.
+    pub fn as_quadratic(&self) -> Option<Quadratic> {
+        self.0
+            .as_quadratic()
+            .map(|cow_quadratic| Quadratic(cow_quadratic.into_owned()))
+    }
+
+    /// Get the degree of this function.
+    ///
+    /// Returns the highest degree of any term in the function.
+    /// Zero function has degree 0, constant function has degree 0,
+    /// linear function has degree 1, quadratic function has degree 2, etc.
+    pub fn degree(&self) -> u32 {
+        self.0.degree().into_inner()
+    }
+
+    /// Get the number of terms in this function.
+    ///
+    /// Zero function has 0 terms, constant function has 1 term,
+    /// and polynomial functions have the number of non-zero coefficient terms.
+    pub fn num_terms(&self) -> usize {
+        self.0.num_terms()
+    }
+
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
     pub fn almost_equal(&self, other: &Function, atol: f64) -> bool {
         self.0.abs_diff_eq(&other.0, ommx::ATol::new(atol).unwrap())
