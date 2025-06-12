@@ -187,6 +187,67 @@ The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 A
 - Established clear pattern for avoiding raw API usage
 - Created comprehensive examples of Python SDK extension
 
+### DecisionVariable Kind PyO3 Enum Implementation (December 2024)
+
+**Completion Status**: ✅ Fully completed with PyO3 enum integration
+
+**Work Summary**:
+Implemented DecisionVariable's Kind as a PyO3 Enum similar to existing Equality and Sense enums, following the Protocol Buffer to Rust migration pattern.
+
+**Key Accomplishments**:
+
+1. **Kind PyO3 Enum Implementation**:
+   - ✅ Added Kind enum in `python/ommx/src/enums.rs` with Binary, Integer, Continuous, SemiInteger, SemiContinuous variants
+   - ✅ Implemented from_pb()/to_pb() conversion methods for Protocol Buffer compatibility
+   - ✅ Added proper __repr__ and __str__ methods using Debug trait
+   - ✅ Exported Kind enum in PyO3 module (`python/ommx/src/lib.rs`)
+
+2. **Python Wrapper Integration**:
+   - ✅ Updated DecisionVariable wrapper in `python/ommx/ommx/v1/__init__.py` to use Kind enum
+   - ✅ Modified kind property to return Kind.from_pb(self.raw.kind)
+   - ✅ Updated of_type method to use kind.to_pb() for Rust conversion
+   - ✅ Fixed doctests to use capitalized Kind names (Binary, Integer, etc.)
+
+3. **Type Safety and Compatibility**:
+   - ✅ Maintains compatibility with integer constants (DecisionVariable.BINARY still works)
+   - ✅ Supports PyO3 enum comparison (Kind.Binary == Kind.Binary)
+   - ✅ Generated proper type stubs via task python:stubgen
+
+**Technical Details**:
+- Used Debug trait instead of Display for string representation consistency
+- Removed unnecessary _kind helper function as per user feedback
+- Fixed constraint equality usage to use Constraint.EQUAL_TO_ZERO constants
+- Updated all doctests from lowercase to capitalized Kind names
+
+**Test Results**:
+- ✅ 57/57 tests passing
+- ✅ 0 Pyright type errors
+- ✅ All doctests updated and passing
+- ✅ Type safety maintained across all use cases
+
+### Python-MIP Adapter Property Access Fix (December 2024)
+
+**Issue**: Tests failing with `TypeError: 'float' object is not callable` due to incorrect method calls
+
+**Root Cause**: Linear class properties `constant_term` and `linear_terms` were being called as methods with parentheses
+
+**Solution**: Updated test files to use property access pattern:
+- ✅ `linear_func.constant_term()` → `linear_func.constant_term` (property)
+- ✅ `linear_func.linear_terms()` → `linear_func.linear_terms` (property)
+
+**Files Updated**:
+- `python/ommx-python-mip-adapter/tests/test_model_to_instance.py` - 6 instances fixed
+
+**Test Results**:
+- ✅ 12/12 tests passing, 2 skipped
+- ✅ 0 Pyright type errors
+- ✅ All doctests and README examples working
+
+**Migration Guide Impact**:
+- Added Problem 5 to PYTHON_SDK_MIGRATION_GUIDE.md documenting this common error
+- Updated Linear class property documentation
+- Emphasized property vs method access patterns
+
 ### Migration Guide Updates
 
 **PYTHON_SDK_MIGRATION_GUIDE.md** has been significantly enhanced with:
@@ -201,7 +262,7 @@ The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 A
 
 1. **Other Adapter Migrations**:
    - [ ] HiGHS Adapter - Apply same patterns as Python-MIP
-   - [ ] PySCIPOpt Adapter - May need careful handling due to complexity
+   - [ ] PySCIPOpt Adapter - May need careful handling due to complexity  
    - [ ] OpenJij Adapter - Should be straightforward
 
 2. **Python SDK Enhancements**:
@@ -213,6 +274,20 @@ The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 A
    - [ ] Update all adapter README files with v2 API examples
    - [ ] Create adapter development guide
    - [ ] Add migration examples to main documentation
+
+### Completed Work Summary (December 2024)
+
+**Major Achievements**:
+1. ✅ **DecisionVariable Kind PyO3 Enum**: Complete implementation with type safety
+2. ✅ **Python-MIP Adapter Property Fix**: Resolved property vs method access issues
+3. ✅ **Migration Guide Enhancement**: Added Linear/Quadratic property access patterns
+4. ✅ **Type Safety Improvements**: PyO3 enums with proper Debug trait usage
+
+**Key Learnings Documented**:
+- Property access patterns for Linear/Quadratic classes
+- PyO3 enum implementation following established patterns
+- Importance of maintaining API compatibility during migrations
+- Debug trait usage for consistent string representation
 
 ### Long-term Goals
 
@@ -377,6 +452,8 @@ function.as_linear()  # Python SDK method that wraps Rust
 - **Python-MIP Adapter ✅**: Fully migrated with best practices established
 - **Migration Guide ✅**: Comprehensive guide with examples and patterns
 - **API Extensions ✅**: Function class extended with needed methods
+- **DecisionVariable Kind PyO3 Enum ✅**: Implemented Kind enum with Debug trait support
+- **Linear/Quadratic Property Access ✅**: Fixed constant_term()/linear_terms() method calls to property access
 - **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
 - **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
 - **Phase 4 ✅**: Python Instance migration completed - `Instance.raw` successfully migrated from Protocol Buffer to `_ommx_rust.Instance`

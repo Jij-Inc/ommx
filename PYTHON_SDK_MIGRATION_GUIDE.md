@@ -157,7 +157,7 @@ if function.HasField("linear"):
 linear_func = function.as_linear()
 if linear_func is not None:
     linear_terms = linear_func.linear_terms  # dict[int, float] - プロパティ
-    constant = linear_func.constant          # float - プロパティ
+    constant = linear_func.constant_term     # float - プロパティ
 ```
 
 ### 7. 属性アクセス
@@ -199,8 +199,8 @@ function.partial_evaluate(state: State | dict[int, float]) -> Function
 ```python
 # プロパティ
 linear.linear_terms  # dict[int, float] - 定数項を除く線形項
-linear.constant     # float - 定数項
-linear.terms       # dict[tuple[int, ...], float] - すべての項
+linear.constant_term # float - 定数項
+linear.terms        # dict[tuple[int, ...], float] - すべての項
 ```
 
 ## マイグレーション手順
@@ -247,6 +247,10 @@ linear.terms       # dict[tuple[int, ...], float] - すべての項
 **原因**: Python Functionクラスでなく_ommx_rust.Functionを使う必要
 **解決**: 正しいインポートパスを使用
 
+### 問題 5: `TypeError: 'float' object is not callable`
+**原因**: `Linear.constant_term()`をメソッドとして呼び出している
+**解決**: プロパティとしてアクセス（`Linear.constant_term`）
+
 ## パフォーマンス向上
 
 新しいv2 APIの利点：
@@ -280,11 +284,11 @@ task python:test
 
 **修正パターン**:
 ```python
-# 間違った記述
-if var.kind == DecisionVariable.Kind.Binary:  # エラー
+# PyO3 Enumを使用
+if var.kind == DecisionVariable.BINARY:    # 整数定数との比較
+if var.kind == Kind.Binary:               # PyO3 Enumとの比較
 
-# 正しい記述  
-if var.kind == DecisionVariable.BINARY:  # 正常動作
+# どちらも正常動作
 ```
 
 ### 2. Function 検査の新パラダイム
@@ -293,27 +297,29 @@ if var.kind == DecisionVariable.BINARY:  # 正常動作
 
 **実装例**:
 ```python
-# 旧方式
+# 旧方式 (Protocol Buffer)
 if obj.HasField("linear"):
     terms = obj.linear.terms
+    constant = obj.linear.constant
     
-# 新方式 
+# 新方式 (Rust-PyO3)
 linear_obj = obj.as_linear()
 if linear_obj is not None:
-    terms = linear_obj.linear_terms()
+    terms = linear_obj.linear_terms     # プロパティアクセス（dict[int, float]）
+    constant = linear_obj.constant_term # プロパティアクセス（float）
 ```
 
 ### 3. Import階層の整理
-**発見**: Rust-based型は`_ommx_rust`から直接インポート必要  
-**理由**: Protocol Buffer生成コードと区別するため
+**発見**: 統一されたAPIの使用を推奨  
+**理由**: APIの一貫性とメンテナンス性の向上
 
-**パターン**:
+**推奨パターン**:
 ```python
-# Core wrappers
-from ommx.v1 import Instance, DecisionVariable, Constraint
+# すべてommx.v1から統一的にインポート
+from ommx.v1 import Instance, DecisionVariable, Constraint, Function, Linear
 
-# Rust native types  
-from ommx._ommx_rust import Function, Linear, Sense, Equality
+# _ommx_rustからの直接インポートは避ける（非推奨）
+# from ommx._ommx_rust import Function, Linear  # 避ける
 ```
 
 ### 4. エラーパターンと診断方法
@@ -347,24 +353,26 @@ constraint = Constraint(
 )
 ```
 
-### 11. Linear/Quadratic オブジェクトの定数項アクセス
-**発見**: `Linear.constant`はコンストラクタであり、定数項を取得するには`constant_term`プロパティを使用
-**影響**: 定数項にアクセスしようとして型エラーが発生
-**解決策**: 正しいプロパティ名を使用
+### 11. Linear/Quadratic オブジェクトのプロパティアクセス
+**発見**: `Linear.constant_term`と`Linear.linear_terms`はプロパティであり、メソッドではない
+**影響**: メソッド呼び出し（括弧付き）すると`TypeError: 'float' object is not callable`等のエラーが発生
+**解決策**: プロパティとして正しくアクセス
 
 **修正パターン**:
 ```python
-# 間違った記述
+# 間違った記述（メソッド呼び出し）
 linear_func = function.as_linear()
-constant_value = linear_func.constant  # これはコンストラクタ
+constant_value = linear_func.constant_term()  # TypeError
+terms = linear_func.linear_terms()           # TypeError
 
-# 正しい記述
+# 正しい記述（プロパティアクセス）
 linear_func = function.as_linear()
-constant_value = linear_func.constant_term  # これが定数項プロパティ
+constant_value = linear_func.constant_term  # float
+terms = linear_func.linear_terms           # dict[int, float]
 
 # Quadraticでも同様
 quad_func = function.as_quadratic()
-constant_value = quad_func.constant_term  # 定数項プロパティ
+constant_value = quad_func.constant_term   # プロパティアクセス
 ```
 
 ### 7. Function APIアクセス方法
@@ -405,26 +413,17 @@ def from_components(
 
 **重要な変更**: `_ommx_rust`モジュールの直接使用を避け、必要なAPIはPython SDKに追加
 
-**実例**: Python MIP Adapterでの実装
+**実装例**: Python MIP Adapterでの実装
 ```python
-# 悪い例 - _ommx_rustを直接使用
-from ommx._ommx_rust import Function, Linear
+# 統一されたommx.v1 APIを使用
+from ommx.v1 import Function, Linear, Instance, DecisionVariable, Constraint
 
-# 良い例 - ommx.v1の統一APIを使用
-from ommx.v1 import Function, Linear
-
-# Python SDKに必要なAPIを追加した例
-class Function:
-    def degree(self) -> int:
-        """関数の次数を返す"""
-        return self.raw.degree()
-    
-    def as_linear(self) -> Linear | None:
-        """線形関数への変換を試みる"""
-        linear_raw = self.raw.as_linear()
-        if linear_raw is None:
-            return None
-        return Linear.from_raw(linear_raw)
+# Python SDKに追加されたメソッド
+function.degree()          # 関数の次数
+function.num_terms()       # 項数
+function.as_linear()       # 線形関数への変換
+linear.constant_term       # 定数項（プロパティ）
+linear.linear_terms        # 線形項（プロパティ）
 ```
 
 **メリット**:
@@ -454,37 +453,49 @@ diff before.log after.log
 ### 推奨されるベストプラクティス
 
 1. **統一されたインポート**: すべて`ommx.v1`から
-2. **Raw APIの回避**: `.raw`属性や`_ommx_rust`の直接使用を避ける
-3. **Python SDKの拡張**: 必要なAPIがない場合は追加を検討
-4. **型安全性**: Python SDKが提供する型を活用
+2. **Raw APIの回避**: `_ommx_rust`の直接使用を避けPython SDK経由でアクセス
+3. **Python SDKの拡張**: 必要なAPIはPython SDKに追加
+4. **型安全性**: PyO3 Enumとプロパティアクセスで型安全性を実現
 
-### 実装例
+### 推奨実装パターン
 ```python
-# 完全な移行例
+# 統一されたインポート
 from ommx.v1 import (
     Instance, DecisionVariable, Constraint,
-    Function, Linear, Solution, State
+    Function, Linear, Kind, Solution, State
 )
 
-# Function作成
-objective = Function(Linear(terms={0: 1.0, 1: 2.0}, constant=3.0))
+# DecisionVariable作成 (新しいファクトリーメソッド)
+var1 = DecisionVariable.binary(0, name="x1")
+var2 = DecisionVariable.integer(1, lower=0, upper=10, name="x2")
+
+# Function作成 (プロパティアクセス)
+linear = Linear(terms={0: 1.0, 1: 2.0}, constant=3.0)
+objective = Function(linear)
+
+# Function検査 (プロパティアクセス)
+linear_func = objective.as_linear()
+if linear_func is not None:
+    terms = linear_func.linear_terms      # dict[int, float] - プロパティ
+    constant = linear_func.constant_term  # float - プロパティ
 
 # Constraint作成
 constraint = Constraint(
     id=0,
-    function=Function(linear_expr),
+    function=objective,
     equality=Constraint.EQUAL_TO_ZERO,
     name="my_constraint"
 )
 
 # Instance作成
 instance = Instance.from_components(
-    decision_variables=[x1, x2],
+    decision_variables=[var1, var2],
     objective=objective,
     constraints=[constraint],
     sense=Instance.MINIMIZE
 )
 ```
+
 
 ---
 
