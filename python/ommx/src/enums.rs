@@ -123,3 +123,84 @@ impl From<Equality> for ommx::Equality {
         }
     }
 }
+
+/// Kind of decision variable
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyclass(eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Kind {
+    /// Binary decision variable (0 or 1)
+    Binary = 1,
+    /// Integer decision variable
+    Integer = 2,
+    /// Continuous decision variable (real-valued)
+    Continuous = 3,
+    /// Semi-integer decision variable (integer in range or zero)
+    SemiInteger = 4,
+    /// Semi-continuous decision variable (continuous in range or zero)
+    SemiContinuous = 5,
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Kind {
+    /// Convert from Protocol Buffer kind value
+    #[staticmethod]
+    pub fn from_pb(value: i32) -> PyResult<Self> {
+        match value {
+            1 => Ok(Kind::Binary),
+            2 => Ok(Kind::Integer),
+            3 => Ok(Kind::Continuous),
+            4 => Ok(Kind::SemiInteger),
+            5 => Ok(Kind::SemiContinuous),
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid kind value: {}",
+                value
+            ))),
+        }
+    }
+
+    /// Convert to Protocol Buffer kind value
+    pub fn to_pb(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __repr__(&self) -> String {
+        match self {
+            Kind::Binary => "Kind.Binary".to_string(),
+            Kind::Integer => "Kind.Integer".to_string(),
+            Kind::Continuous => "Kind.Continuous".to_string(),
+            Kind::SemiInteger => "Kind.SemiInteger".to_string(),
+            Kind::SemiContinuous => "Kind.SemiContinuous".to_string(),
+        }
+    }
+
+    fn __str__(&self) -> String {
+        let rust_kind: ommx::Kind = (*self).into();
+        format!("{:?}", rust_kind)
+    }
+}
+
+impl From<ommx::Kind> for Kind {
+    fn from(kind: ommx::Kind) -> Self {
+        match kind {
+            ommx::Kind::Binary => Kind::Binary,
+            ommx::Kind::Integer => Kind::Integer,
+            ommx::Kind::Continuous => Kind::Continuous,
+            ommx::Kind::SemiInteger => Kind::SemiInteger,
+            ommx::Kind::SemiContinuous => Kind::SemiContinuous,
+        }
+    }
+}
+
+impl From<Kind> for ommx::Kind {
+    fn from(kind: Kind) -> Self {
+        match kind {
+            Kind::Binary => ommx::Kind::Binary,
+            Kind::Integer => ommx::Kind::Integer,
+            Kind::Continuous => ommx::Kind::Continuous,
+            Kind::SemiInteger => ommx::Kind::SemiInteger,
+            Kind::SemiContinuous => ommx::Kind::SemiContinuous,
+        }
+    }
+}

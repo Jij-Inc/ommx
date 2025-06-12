@@ -571,6 +571,31 @@ class Equality(Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+class Kind(Enum):
+    r"""
+    Kind of decision variable
+    """
+
+    Binary = ...
+    Integer = ...
+    Continuous = ...
+    SemiInteger = ...
+    SemiContinuous = ...
+
+    @staticmethod
+    def from_pb(value: builtins.int) -> Kind:
+        r"""
+        Convert from Protocol Buffer kind value
+        """
+
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to Protocol Buffer kind value
+        """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+
 class Sense(Enum):
     r"""
     Sense of optimization (minimize or maximize)

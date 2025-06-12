@@ -63,6 +63,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // Enums
     m.add_class::<Sense>()?;
     m.add_class::<Equality>()?;
+    m.add_class::<Kind>()?;
 
     // Random
     m.add_class::<Rng>()?;

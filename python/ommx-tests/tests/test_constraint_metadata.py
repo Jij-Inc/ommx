@@ -190,7 +190,7 @@ def test_constraint_metadata_efficiency():
 
 def test_constraint_constructor_with_metadata():
     """Test Constraint constructor properly handles description and parameters"""
-    from ommx.v1 import Constraint, Equality
+    from ommx.v1 import Constraint
 
     x = DecisionVariable.binary(0)
     function = x + 1
@@ -198,7 +198,7 @@ def test_constraint_constructor_with_metadata():
     # Create constraint with all metadata in constructor
     constraint = Constraint(
         function=function,
-        equality=Equality.EQUALITY_EQUAL_TO_ZERO,
+        equality=Constraint.EQUAL_TO_ZERO,
         id=100,
         name="constructor_test",
         description="Created via constructor",
@@ -216,7 +216,7 @@ def test_constraint_constructor_with_metadata():
 
 def test_constraint_constructor_partial_metadata():
     """Test Constraint constructor with partial metadata"""
-    from ommx.v1 import Constraint, Equality
+    from ommx.v1 import Constraint
 
     x = DecisionVariable.binary(0)
     function = x - 2
@@ -224,7 +224,7 @@ def test_constraint_constructor_partial_metadata():
     # Create constraint with only some metadata
     constraint = Constraint(
         function=function,
-        equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO,
+        equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO,
         description="Only description set",
     )
 
