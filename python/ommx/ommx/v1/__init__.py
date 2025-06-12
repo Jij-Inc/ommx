@@ -1824,6 +1824,10 @@ class Solution(UserAnnotationBase):
     raw: _Solution
     """The raw protobuf message."""
 
+    OPTIMAL = Optimality.OPTIMALITY_OPTIMAL
+    NOT_OPTIMAL = Optimality.OPTIMALITY_NOT_OPTIMAL
+    LP_RELAXED = Relaxation.RELAXATION_LP_RELAXED
+
     annotation_namespace = "org.ommx.v1.solution"
     instance = str_annotation_property("instance")
     """

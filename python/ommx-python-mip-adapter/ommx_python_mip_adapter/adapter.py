@@ -5,9 +5,8 @@ from typing import Optional
 import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
+from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State
 from ommx._ommx_rust import Function
-from ommx.v1.solution_pb2 import Relaxation
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -80,7 +79,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -103,7 +101,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
             >>> solution.feasible
             True
-            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+            >>> assert solution.optimality == Solution.OPTIMAL
 
             p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
@@ -256,10 +254,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 constraint.dual_variable = dual_variables[id]
 
         if data.status == mip.OptimizationStatus.OPTIMAL:
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.raw.optimality = Solution.OPTIMAL
 
         if self._relax:
-            solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
+            solution.raw.relaxation = Solution.LP_RELAXED
         return solution
 
     def decode_to_state(self, data: mip.Model) -> State:

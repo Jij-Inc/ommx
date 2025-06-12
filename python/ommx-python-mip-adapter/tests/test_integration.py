@@ -1,7 +1,6 @@
 import pytest
 
-from ommx.v1 import Instance, DecisionVariable
-from ommx.v1.solution_pb2 import Optimality
+from ommx.v1 import Instance, DecisionVariable, Solution
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
@@ -74,4 +73,4 @@ def test_solution_optimality():
     )
 
     solution = OMMXPythonMIPAdapter.solve(ommx_instance)
-    assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+    assert solution.optimality == Solution.OPTIMAL
