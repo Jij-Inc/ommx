@@ -166,7 +166,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """Convert optimized pyscipopt.Model and ommx.v1.Instance to ommx.v1.Solution.
 
         This method is intended to be used if the model has been acquired with
-        `solver_input` for futher adjustment of the solver parameters, and
+        `solver_input` for further adjustment of the solver parameters, and
         separately optimizing the model.
 
         Note that alterations to the model may make the decoding process
@@ -424,18 +424,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     )
 
                 self.model.addCons(constr_expr, name=str(constraint_id))
-
-            if constraint.equality == Constraint.EQUAL_TO_ZERO:
-                constr_expr = expr == 0
-            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                constr_expr = expr <= 0
-            else:
-                raise OMMXPySCIPOptAdapterError(
-                    f"Not supported constraint equality: "
-                    f"id: {constraint.id}, equality: {constraint.equality}"
-                )
-
-            self.model.addCons(constr_expr, name=str(constraint.id))
 
     def _make_linear_expr(self, function: Any) -> pyscipopt.Expr:
         linear = function.as_linear()
