@@ -1,7 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable, Constraint
-from ommx._ommx_rust import Function, Linear, Quadratic, Sense, Equality
+from ommx._ommx_rust import Function, Quadratic, Sense, Equality
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 

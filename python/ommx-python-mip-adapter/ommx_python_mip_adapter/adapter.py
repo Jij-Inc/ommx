@@ -6,7 +6,7 @@ import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
-from ommx._ommx_rust import Function, Sense, Equality
+from ommx._ommx_rust import Function, Sense
 from ommx.v1.solution_pb2 import Relaxation
 
 from .exception import OMMXPythonMIPAdapterError
@@ -369,7 +369,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 # We can evaluate it with an empty state to get the constant value
                 from ommx.v1 import State
                 empty_state = State(entries={})
-                constant_value = f.evaluate(empty_state.encode())
+                constant_value = f.evaluate(empty_state.SerializeToString())
                 return mip.LinExpr(const=constant_value)  # type: ignore
         
         raise OMMXPythonMIPAdapterError(

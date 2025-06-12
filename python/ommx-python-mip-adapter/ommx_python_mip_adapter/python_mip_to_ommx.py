@@ -55,7 +55,7 @@ class OMMXInstanceBuilder:
         if len(terms) == 0:
             return Function.from_scalar(constant)
         else:
-            linear = Linear(terms=terms, constant=constant)
+            linear = Linear(terms=terms, constant=constant)  # type: ignore
             return Function.from_linear(linear)
 
     def objective(self) -> Function:

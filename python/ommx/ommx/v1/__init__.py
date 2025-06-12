@@ -248,13 +248,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         | Quadratic
         | Polynomial
         | Function
-        | _Function,
+        | _Function
+        | _ommx_rust.Function,
         constraints: Iterable[Constraint | _Constraint],
         sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional[_Instance.Description] = None,
     ) -> Instance:
-        # Convert objective to Function if needed
         if not isinstance(objective, Function):
             objective = Function(objective)
 

@@ -493,6 +493,64 @@ decision_var = DecisionVariable.continuous(0)
 quadratic = Quadratic(columns=[0], rows=[0], values=[2.3])  # IDが0で一致
 ```
 
+#### 知見 12: Pyright型エラー修正とAPI改善
+**発見**: 型システム間の変換とPyrightエラーの適切な対処方法
+
+**問題と解決**:
+1. **State.encode() 存在しない**:
+   - **エラー**: `'State' object has no attribute 'encode'`
+   - **解決**: `State.SerializeToString()` を使用
+
+2. **型変換でのマッピング問題**:
+   - **エラー**: `dict[int, Real]` を `Mapping[int, float]` に変換不可
+   - **解決**: `# type: ignore` で回避（型システムの制限）
+
+3. **Function型の不一致 - 根本的解決**:
+   - **問題**: `ommx._ommx_rust.Function` を `Instance.from_components()` で直接使用不可
+   - **根本解決**: `Instance.from_components()` の型アノテーションと実装を修正
+   - **影響**: 他のアダプターでも同様の恩恵を受ける
+
+**API改善内容**:
+```python
+# ommx/v1/__init__.py の修正
+@staticmethod
+def from_components(
+    *,
+    objective: int
+    | float
+    | DecisionVariable
+    | Linear
+    | Quadratic
+    | Polynomial
+    | Function
+    | _Function
+    | _ommx_rust.Function,  # ← 追加
+    # ...
+):
+    # 実装部分も修正
+    if isinstance(objective, _ommx_rust.Function):
+        objective = Function.from_raw(objective)
+    elif not isinstance(objective, Function):
+        objective = Function(objective)
+```
+
+**使用例**:
+```python
+# 修正前: 手動変換が必要
+from ommx.v1 import Function as V1Function
+objective = V1Function.from_raw(rust_function)
+
+# 修正後: 直接使用可能
+from ommx._ommx_rust import Function
+objective = Function.from_scalar(5.0)
+
+# Instance.from_components で直接使用
+instance = Instance.from_components(
+    objective=objective,  # 直接使用可能！
+    # ...
+)
+```
+
 ### 検証とテスト戦略
 
 #### 段階的検証

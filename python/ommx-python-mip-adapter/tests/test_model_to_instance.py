@@ -1,6 +1,6 @@
 import mip
 
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import DecisionVariable
 from ommx._ommx_rust import Sense, Equality
 
 from ommx_python_mip_adapter import model_to_instance
