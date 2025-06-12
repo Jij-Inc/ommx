@@ -3156,8 +3156,9 @@ class Constraint:
         | Linear
         | Quadratic
         | Polynomial
-        | Function,
-        equality: Equality.ValueType,
+        | Function
+        | _ommx_rust.Function,
+        equality: Equality.ValueType | _ommx_rust.Equality,
         id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -3173,8 +3174,12 @@ class Constraint:
         if not isinstance(function, Function):
             function = Function(function)
 
-        # Convert protobuf Equality to Rust Equality enum
-        rust_equality = _ommx_rust.Equality.from_pb(equality)
+        # Convert equality to Rust Equality enum
+        if isinstance(equality, _ommx_rust.Equality):
+            rust_equality = equality
+        else:
+            # Handle Protocol Buffer integer values
+            rust_equality = _ommx_rust.Equality.from_pb(equality)
 
         self.raw = _ommx_rust.Constraint(
             id=id,

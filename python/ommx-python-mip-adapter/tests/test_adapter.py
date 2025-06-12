@@ -27,9 +27,7 @@ def test_error_nonlinear_constraint():
     # Objective function: 0
     # Constraint: 2.3 * x * x = 0
     quadratic = Quadratic(columns=[1], rows=[1], values=[2.3])
-    import ommx._ommx_rust
-
-    raw_constraint = ommx._ommx_rust.Constraint(
+    constraint = Constraint(
         id=0,
         function=Function.from_quadratic(quadratic),
         equality=Equality.EqualToZero,
@@ -37,9 +35,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
         objective=Function.from_scalar(0),
-        constraints=[
-            Constraint.from_raw(raw_constraint),
-        ],
+        constraints=[constraint],
         sense=Sense.Minimize,
     )
 

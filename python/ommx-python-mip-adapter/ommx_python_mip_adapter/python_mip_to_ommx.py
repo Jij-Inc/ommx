@@ -6,7 +6,6 @@ import mip
 from mip.exceptions import ParameterNotAvailable
 from ommx.v1 import Instance, DecisionVariable, Constraint
 from ommx._ommx_rust import Function, Linear, Sense, Equality
-import ommx._ommx_rust
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -83,34 +82,28 @@ class OMMXInstanceBuilder:
             name = constr.name
 
             if lin_expr.sense == "=":
-                raw_constraint = ommx._ommx_rust.Constraint(
+                constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(lin_expr),
                     equality=Equality.EqualToZero,
+                    name=name,
                 )
-                if name:
-                    raw_constraint.set_name(name)
-                constraint = Constraint.from_raw(raw_constraint)
             elif lin_expr.sense == "<":
-                raw_constraint = ommx._ommx_rust.Constraint(
+                constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(lin_expr),
                     equality=Equality.LessThanOrEqualToZero,
+                    name=name,
                 )
-                if name:
-                    raw_constraint.set_name(name)
-                constraint = Constraint.from_raw(raw_constraint)
             elif lin_expr.sense == ">":
                 # `ommx.v1.Constraint` does not support `GREATER_THAN_OR_EQUAL_TO_ZERO`.
                 # So multiply the linear expression by -1.
-                raw_constraint = ommx._ommx_rust.Constraint(
+                constraint = Constraint(
                     id=id,
                     function=self.as_ommx_function(-lin_expr),
                     equality=Equality.LessThanOrEqualToZero,
+                    name=name,
                 )
-                if name:
-                    raw_constraint.set_name(name)
-                constraint = Constraint.from_raw(raw_constraint)
             else:
                 raise OMMXPythonMIPAdapterError(
                     f"Not supported constraint sense: "

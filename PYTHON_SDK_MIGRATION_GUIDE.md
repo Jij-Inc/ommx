@@ -79,9 +79,13 @@ Constraint(
 
 **新方式**:
 ```python
-# ファクトリーメソッド
-Constraint.equal_to_zero(id=id, function=function, name=name)
-Constraint.less_than_or_equal_to_zero(id=id, function=function, name=name)
+# 直接コンストラクタで作成（_ommx_rust.Function と _ommx_rust.Equality を受け取り可能）
+constraint = Constraint(
+    id=id,
+    function=function,  # _ommx_rust.Function を直接使用可能
+    equality=Equality.EqualToZero,  # _ommx_rust.Equality を直接使用可能
+    name=name,
+)
 ```
 
 ### 5. Enum 定数
@@ -277,19 +281,20 @@ from ommx._ommx_rust import Function, Linear, Sense, Equality
 - **旧API (.raw)**: `dict[int, DecisionVariable]` - kind は整数定数
 - **新API**: `DataFrame` - kind は文字列 ('binary', 'integer', 'continuous')
 
-### 6. Constraint ファクトリーメソッド不存在
-**発見**: `Constraint.equal_to_zero()` などのファクトリーメソッドは存在しない
-- **解決**: `ommx._ommx_rust.Constraint()` から作成後 `Constraint.from_raw()` で変換
+### 6. Constraint 作成パターンの改善
+**発見**: `Constraint()` コンストラクタが `_ommx_rust.Function` と `_ommx_rust.Equality` を直接受け取り可能
+- **利点**: `from_raw()` による変換が不要、よりシンプルなAPI
+- **型対応**: Protocol Buffer値とRust enum値の両方をサポート
 
 **実装パターン**:
 ```python
-import ommx._ommx_rust
-raw_constraint = ommx._ommx_rust.Constraint(
+# シンプルなコンストラクタパターン
+constraint = Constraint(
     id=id,
-    function=function,
-    equality=Equality.EqualToZero,
+    function=function,  # _ommx_rust.Function を直接使用
+    equality=Equality.EqualToZero,  # _ommx_rust.Equality を直接使用
+    name=name,
 )
-constraint = Constraint.from_raw(raw_constraint)
 ```
 
 ### 7. Function APIアクセス方法
