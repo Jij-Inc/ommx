@@ -112,9 +112,10 @@ impl Instance {
     #[getter]
     pub fn description(&self) -> Option<InstanceDescription> {
         // Convert Option<v1::instance::Description> to Option<InstanceDescription>
-        self.0.description.as_ref().map(|desc| {
-            InstanceDescription(desc.clone())
-        })
+        self.0
+            .description
+            .as_ref()
+            .map(|desc| InstanceDescription(desc.clone()))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
@@ -388,8 +389,10 @@ impl InstanceDescription {
     }
 
     fn __repr__(&self) -> String {
-        format!("InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
-            self.0.name, self.0.description, self.0.authors, self.0.created_by)
+        format!(
+            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
+            self.0.name, self.0.description, self.0.authors, self.0.created_by
+        )
     }
 
     fn __copy__(&self) -> Self {

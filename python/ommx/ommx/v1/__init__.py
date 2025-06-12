@@ -298,9 +298,13 @@ class Instance(InstanceBase, UserAnnotationBase):
                 # Convert Protocol Buffer Description to Rust InstanceDescription
                 rust_description = _ommx_rust.InstanceDescription(
                     name=description.name if description.HasField("name") else None,
-                    description=description.description if description.HasField("description") else None,
+                    description=description.description
+                    if description.HasField("description")
+                    else None,
                     authors=list(description.authors) if description.authors else None,
-                    created_by=description.created_by if description.HasField("created_by") else None,
+                    created_by=description.created_by
+                    if description.HasField("created_by")
+                    else None,
                 )
 
         # Create Rust instance
