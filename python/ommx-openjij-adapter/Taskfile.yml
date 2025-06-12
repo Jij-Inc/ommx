@@ -8,11 +8,21 @@ tasks:
       - task: test
 
   test:
-    desc: Run tests for OMMX OpenJij Adapter
+    desc: Run all tests for OMMX OpenJij Adapter
+    cmds:
+      - task: pytest
+      - task: pyright
+      - task: lint
+
+  pytest:
+    desc: Run pytest tests
     cmds:
       - uv run pytest -vv --doctest-modules
+
+  pyright:
+    desc: Run pyright type checking
+    cmds:
       - uv run pyright
-      - task: lint
 
   lint:
     desc: Lint by ruff check
