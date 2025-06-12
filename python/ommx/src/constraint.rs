@@ -2,7 +2,7 @@ use crate::{message::Function, Equality};
 use anyhow::Result;
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Message, Parse};
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Constraint wrapper for Python
@@ -130,6 +130,17 @@ impl Constraint {
     pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
 }
 
 /// RemovedConstraint wrapper for Python
@@ -202,5 +213,16 @@ impl RemovedConstraint {
 
     pub fn __repr__(&self) -> String {
         self.0.to_string()
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }

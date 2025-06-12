@@ -6,7 +6,7 @@ use ommx::{
     v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse, VariableIDPair,
 };
 use ommx::{LinearMonomial, MonomialDyn};
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
@@ -141,10 +141,22 @@ impl Linear {
         inner.partial_evaluate(&state, ommx::ATol::default())?;
         Ok(Linear(inner))
     }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Quadratic(ommx::Quadratic);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -319,10 +331,22 @@ impl Quadratic {
         inner.partial_evaluate(&state, ommx::ATol::default())?;
         Ok(Quadratic(inner))
     }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Polynomial(ommx::Polynomial);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -450,6 +474,17 @@ impl Polynomial {
         let mut inner = self.0.clone();
         inner.partial_evaluate(&state, ommx::ATol::default())?;
         Ok(Polynomial(inner))
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }
 
@@ -609,5 +644,16 @@ impl Function {
         let mut inner = self.0.clone();
         inner.partial_evaluate(&state, ommx::ATol::default())?;
         Ok(Function(inner))
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }

@@ -4,11 +4,13 @@ use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
+    Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Instance(ommx::Instance);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -205,6 +207,17 @@ impl Instance {
 
     pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
         DecisionVariableAnalysis(self.0.analyze_decision_variables())
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }
 

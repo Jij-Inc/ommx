@@ -1,7 +1,7 @@
 use crate::VariableBound;
 use anyhow::Result;
 use ommx::{v1, ATol, Message, Parse, VariableID};
-use pyo3::{prelude::*, types::PyBytes};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// DecisionVariable wrapper for Python
@@ -208,5 +208,16 @@ impl DecisionVariable {
             self.0.bound().lower(),
             self.0.bound().upper()
         )
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }
