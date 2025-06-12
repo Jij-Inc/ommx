@@ -219,6 +219,14 @@ impl Instance {
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
     }
+
+    pub fn as_minimization_problem(&mut self) -> bool {
+        self.0.as_minimization_problem()
+    }
+
+    pub fn as_maximization_problem(&mut self) -> bool {
+        self.0.as_maximization_problem()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

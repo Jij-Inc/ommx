@@ -860,16 +860,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(-x0 - x1 - x2)
 
         """
-        if self.raw.sense == Instance.MINIMIZE:
-            return False
-        obj = -self.objective
-        self.raw = _ommx_rust.Instance.from_components(
-            sense=_ommx_rust.Sense.Minimize,
-            objective=obj.raw,
-            decision_variables=self.raw.decision_variables,
-            constraints=self.raw.constraints,
-        )
-        return True
+        return self.raw.as_minimization_problem()
 
     def as_maximization_problem(self) -> bool:
         """
@@ -914,16 +905,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(-x0 - x1 - x2)
 
         """
-        if self.raw.sense == Instance.MAXIMIZE:
-            return False
-        obj = -self.objective
-        self.raw = _ommx_rust.Instance.from_components(
-            sense=_ommx_rust.Sense.Maximize,
-            objective=obj.raw,
-            decision_variables=self.raw.decision_variables,
-            constraints=self.raw.constraints,
-        )
-        return True
+        return self.raw.as_maximization_problem()
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
