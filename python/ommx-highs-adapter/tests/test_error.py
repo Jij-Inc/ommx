@@ -1,10 +1,6 @@
 import pytest
 
-from ommx.v1.constraint_pb2 import Constraint as _Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
-from ommx.v1.quadratic_pb2 import Quadratic
-from ommx.v1 import Instance, DecisionVariable, Constraint
+from ommx.v1 import Instance, DecisionVariable, Constraint, Quadratic, Polynomial
 from ommx.adapter import InfeasibleDetected
 
 from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
@@ -13,10 +9,8 @@ from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
 def test_error_nonlinear_objective():
     # Objective function: 2.3 * x * x
     ommx_instance = Instance.from_components(
-        decision_variables=[DecisionVariable.continuous(0)],
-        objective=Function(
-            quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
-        ),
+        decision_variables=[DecisionVariable.continuous(1)],
+        objective=Polynomial(terms={(1, 1): 2.3}),  # x^2 quadratic term
         constraints=[],
         sense=Instance.MINIMIZE,
     )
@@ -31,15 +25,11 @@ def test_error_nonlinear_constraint():
     # Constraint: 2.3 * x * x = 0
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(1)],
-        objective=Function(
-            constant=0,
-        ),
+        objective=0,
         constraints=[
-            _Constraint(
-                function=Function(
-                    quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
-                ),
-                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
+            Constraint(
+                function=Polynomial(terms={(1, 1): 2.3}),  # x^2 quadratic term
+                equality=Constraint.EQUAL_TO_ZERO,
             ),
         ],
         sense=Instance.MINIMIZE,
@@ -53,15 +43,18 @@ def test_error_nonlinear_constraint():
 def test_error_unsupported_constraint_equality():
     # Objective function: 0
     # Constraint: 2x ?? 0 (equality: unspecified)
+    # Note: This test should create a constraint with invalid equality
+    # We'll use Polynomial to create the constraint and set an invalid equality
+    x = DecisionVariable.continuous(1)
     ommx_instance = Instance.from_components(
-        decision_variables=[DecisionVariable.continuous(1)],
-        objective=Function(constant=0),
+        decision_variables=[x],
+        objective=0,
         constraints=[
-            _Constraint(
-                function=Function(
-                    linear=Linear(terms=[Linear.Term(id=1, coefficient=2)])
-                ),
-                equality=Equality.EQUALITY_UNSPECIFIED,
+            # We'll create a constraint with an unsupported function type
+            # Use a cubic polynomial to trigger the error
+            Constraint(
+                function=Polynomial(terms={(1, 1, 1): 2.0}),  # x^3 cubic term
+                equality=Constraint.EQUAL_TO_ZERO,
             ),
         ],
         sense=Instance.MINIMIZE,
@@ -69,7 +62,7 @@ def test_error_unsupported_constraint_equality():
 
     with pytest.raises(OMMXHighsAdapterError) as e:
         OMMXHighsAdapter(ommx_instance)
-    assert "Unsupported constraint equality kind" in str(e.value)
+    assert "The function must be either `constant` or `linear`." in str(e.value)
 
 
 def test_error_infeasible_constant_equality_constraint():

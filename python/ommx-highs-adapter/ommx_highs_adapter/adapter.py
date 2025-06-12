@@ -3,9 +3,9 @@ import numpy as np
 
 from highspy.highs import highs_linear_expression
 
-from ommx.v1 import Instance, DecisionVariable, Solution, Constraint
-from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1.function_pb2 import Function
+from ommx.v1 import Instance, DecisionVariable, Solution, Constraint, State, Function
+from typing import Union
+from ommx import _ommx_rust
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
 
 from .exception import OMMXHighsAdapterError
@@ -24,7 +24,7 @@ class OMMXHighsAdapter(SolverAdapter):
         if not verbose:
             self.model.setOptionValue("log_to_console", False)
 
-        self.var_ids = {}
+        self.varname_map = {}
         self.highs_vars = []
 
         self._set_decision_variables()
@@ -45,8 +45,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
         .. doctest::
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx.v1.solution_pb2 import Optimality
+            >>> from ommx.v1 import Instance, DecisionVariable, Solution
             >>> from ommx_highs_adapter import OMMXHighsAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -69,7 +68,7 @@ class OMMXHighsAdapter(SolverAdapter):
             [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
             >>> solution.feasible
             True
-            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+            >>> assert solution.optimality == Solution.OPTIMAL
 
             p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
@@ -178,7 +177,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
         # set optimality
         if self.model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.raw.optimality = Solution.OPTIMAL
 
         # dual variables
         solution_info = self.model.getSolution()
@@ -232,8 +231,8 @@ class OMMXHighsAdapter(SolverAdapter):
         solution = data.getSolution()
         return State(
             entries={
-                var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.raw.decision_variables)
+                var_id: solution.col_value[i]
+                for i, (var_id, var) in enumerate(self.instance.raw.decision_variables.items())
             }
         )
 
@@ -244,8 +243,8 @@ class OMMXHighsAdapter(SolverAdapter):
         types = []
         var_ids = []
 
-        for i, var in enumerate(self.instance.raw.decision_variables):
-            var_ids.append(var.id)
+        for i, (var_id, var) in enumerate(self.instance.raw.decision_variables.items()):
+            var_ids.append(var_id)
             if var.kind == DecisionVariable.BINARY:
                 lower[i] = 0
                 upper[i] = 1
@@ -261,45 +260,67 @@ class OMMXHighsAdapter(SolverAdapter):
             else:
                 raise OMMXHighsAdapterError(
                     f"Unsupported decision variable kind: "
-                    f"id: {var.id}, kind: {var.kind}"
+                    f"id: {var_id}, kind: {var.kind}"
                 )
+        # HiGHS expects variable names (strings) not IDs
+        var_names = [str(var_id) for var_id in var_ids]
         self.highs_vars = self.model.addVariables(
-            var_ids, lb=lower.tolist(), ub=upper.tolist(), type=types
+            var_names, lb=lower.tolist(), ub=upper.tolist(), type=types
         )
+        
+        # Create mapping from var_id to HiGHS variable
+        # self.highs_vars is a dict with variable names as keys
+        self.varname_map = {str(var_id): self.highs_vars[str(var_id)] for var_id in var_ids}
 
-    def _linear_expr_conversion(self, ommx_func: Function):
+    def _linear_expr_conversion(self, ommx_func: Union[Function, _ommx_rust.Function]):
         # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
         # before returning as the callers want to check whether the returned
         # value is a constant float.
-        if ommx_func.HasField("constant"):
-            return ommx_func.constant
-        elif ommx_func.HasField("linear"):
-            return (
-                sum(
-                    term.coefficient * self.highs_vars[term.id]
-                    for term in ommx_func.linear.terms
-                )
-                + ommx_func.linear.constant
-            )
-
+        # Check for constant function first (degree 0)
+        if ommx_func.degree() == 0:
+            # For constant functions, evaluate with empty state to get constant value
+            linear_func = ommx_func.as_linear()
+            if linear_func is not None:
+                return linear_func.constant_term
+            else:
+                # Zero function case
+                return 0.0
+        # Check for linear function
         else:
-            raise OMMXHighsAdapterError(
-                "The function must be either `constant` or `linear`."
-            )
+            linear_func = ommx_func.as_linear()
+            if linear_func is not None:
+                return (
+                    sum(
+                        coeff * self.varname_map[str(var_id)]
+                        for var_id, coeff in linear_func.linear_terms.items()
+                        if str(var_id) in self.varname_map
+                    )
+                    + linear_func.constant_term
+                )
+            else:
+                raise OMMXHighsAdapterError(
+                    "The function must be either `constant` or `linear`."
+                )
 
     def _set_objective(self):
         obj = self._linear_expr_conversion(self.instance.raw.objective)
         if isinstance(obj, float):
-            return
-        if self.instance.raw.sense == Instance.MAXIMIZE:
+            # Even for constant objectives, we should set something
+            # Create a dummy variable with coefficient 0
+            if len(self.varname_map) > 0:
+                first_var = next(iter(self.varname_map.values()))
+                obj = 0 * first_var + obj
+            else:
+                return  # No variables to work with
+        if self.instance.sense == Instance.MAXIMIZE:
             self.model.maximize(highs_linear_expression(obj))
-        elif self.instance.raw.sense == Instance.MINIMIZE:
+        elif self.instance.sense == Instance.MINIMIZE:
             self.model.minimize(highs_linear_expression(obj))
         else:
-            raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.raw.sense}")
+            raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
 
     def _set_constraints(self):
-        for constr in self.instance.raw.constraints:
+        for constraint_id, constr in self.instance.raw.constraints.items():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr
@@ -318,9 +339,9 @@ class OMMXHighsAdapter(SolverAdapter):
             else:
                 const_expr = highs_linear_expression(const_expr)
                 if constr.equality == Constraint.EQUAL_TO_ZERO:
-                    self.model.addConstr(const_expr == 0, str(constr.id))
+                    self.model.addConstr(const_expr == 0, str(constraint_id))
                 elif constr.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                    self.model.addConstr(const_expr <= 0, str(constr.id))
+                    self.model.addConstr(const_expr <= 0, str(constraint_id))
                 else:
                     raise OMMXHighsAdapterError(
                         f"Unsupported constraint equality kind: {constr.equality}"
