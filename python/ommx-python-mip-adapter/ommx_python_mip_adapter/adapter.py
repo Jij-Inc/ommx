@@ -80,7 +80,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx._ommx_rust import Sense
             >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
@@ -119,7 +118,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, upper=3, lower=0)
@@ -140,7 +138,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.integer(0, lower=0)
@@ -161,7 +158,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
                 >>> from ommx.v1 import Instance, DecisionVariable
-                >>> from ommx._ommx_rust import Sense
                 >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
                 >>> x = DecisionVariable.continuous(0, lower=0, upper=1)
@@ -214,7 +210,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx._ommx_rust import Sense
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -280,7 +275,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx._ommx_rust import Sense
 
             >>> x1 = DecisionVariable.integer(1, lower=0, upper=5)
             >>> ommx_instance = Instance.from_components(
