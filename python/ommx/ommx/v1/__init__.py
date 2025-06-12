@@ -2280,6 +2280,16 @@ class DecisionVariable(VariableBase):
         return Bound(lower=rust_bound.lower, upper=rust_bound.upper)
 
     @property
+    def lower(self) -> float:
+        """Lower bound of the decision variable"""
+        return self.raw.bound.lower
+
+    @property
+    def upper(self) -> float:
+        """Upper bound of the decision variable"""
+        return self.raw.bound.upper
+
+    @property
     def subscripts(self) -> list[int]:
         return list(self.raw.subscripts)
 
@@ -2416,7 +2426,7 @@ class Linear(AsConstraint):
         """
         Get the terms of the linear function as a dictionary, except for the constant term.
         """
-        return self.raw.linear_terms()
+        return self.raw.linear_terms
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
@@ -2424,15 +2434,15 @@ class Linear(AsConstraint):
         Linear terms and constant as a dictionary
         """
         return {(id,): value for id, value in self.linear_terms.items()} | {
-            (): self.constant
+            (): self.constant_term
         }
 
     @property
-    def constant(self) -> float:
+    def constant_term(self) -> float:
         """
         Get the constant term of the linear function
         """
-        return self.raw.constant_term()
+        return self.raw.constant_term
 
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
@@ -2655,15 +2665,26 @@ class Quadratic(AsConstraint):
 
     @property
     def linear(self) -> Linear | None:
-        linear_terms = self.raw.linear_terms()
-        constant = self.raw.constant_term()
+        linear_terms = self.raw.linear_terms
+        constant = self.raw.constant_term
         if linear_terms or constant != 0.0:
             return Linear(terms=linear_terms, constant=constant)
         return None
 
     @property
-    def quad_terms(self) -> dict[tuple[int, int], float]:
-        return self.raw.quadratic_terms()
+    def quadratic_terms(self) -> dict[tuple[int, int], float]:
+        """Quadratic terms as a dictionary mapping (row, col) to coefficient"""
+        return self.raw.quadratic_terms
+
+    @property
+    def linear_terms(self) -> dict[int, float]:
+        """Linear terms as a dictionary mapping variable id to coefficient"""
+        return self.raw.linear_terms
+
+    @property
+    def constant_term(self) -> float:
+        """Constant term of the quadratic function"""
+        return self.raw.constant_term
 
     @property
     def terms(self) -> dict[list[int], float]:
@@ -3063,6 +3084,18 @@ class Function(AsConstraint):
         if linear_raw is None:
             return None
         return Linear.from_raw(linear_raw)
+
+    def as_quadratic(self) -> Quadratic | None:
+        """
+        Try to convert the function to a Quadratic object if it's quadratic.
+
+        Returns:
+            A Quadratic object if the function is quadratic, None otherwise
+        """
+        quadratic_raw = self.raw.as_quadratic()
+        if quadratic_raw is None:
+            return None
+        return Quadratic.from_raw(quadratic_raw)
 
     def __repr__(self) -> str:
         return self.raw.__repr__()

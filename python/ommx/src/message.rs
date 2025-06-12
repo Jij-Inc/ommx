@@ -74,6 +74,7 @@ impl Linear {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    #[getter]
     pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
         self.0
             .iter()
@@ -84,6 +85,7 @@ impl Linear {
             .collect()
     }
 
+    #[getter]
     pub fn constant_term(&self) -> f64 {
         self.0
             .get(&LinearMonomial::Constant)
@@ -270,6 +272,7 @@ impl Quadratic {
         Polynomial(&self.0 * &linear.0)
     }
 
+    #[getter]
     pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
         self.0
             .linear_terms()
@@ -277,10 +280,12 @@ impl Quadratic {
             .collect()
     }
 
+    #[getter]
     pub fn constant_term(&self) -> f64 {
         self.0.constant_term()
     }
 
+    #[getter]
     pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
         self.0
             .quadratic_terms()
