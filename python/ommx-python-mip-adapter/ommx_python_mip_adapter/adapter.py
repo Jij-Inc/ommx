@@ -351,7 +351,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         linear_func = f.as_linear()
         if linear_func is not None:
             linear_terms = linear_func.linear_terms()  # dict[int, float]
-            constant = linear_func.constant_term()     # float
+            constant = linear_func.constant_term()  # float
             return (
                 mip.xsum(
                     coeff * self.model.vars[str(var_id)]  # type: ignore
@@ -368,10 +368,11 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 # For constant function, get the constant value
                 # We can evaluate it with an empty state to get the constant value
                 from ommx.v1 import State
+
                 empty_state = State(entries={})
                 constant_value = f.evaluate(empty_state.SerializeToString())
                 return mip.LinExpr(const=constant_value)  # type: ignore
-        
+
         raise OMMXPythonMIPAdapterError(
             "The function must be either `constant` or `linear`."
         )

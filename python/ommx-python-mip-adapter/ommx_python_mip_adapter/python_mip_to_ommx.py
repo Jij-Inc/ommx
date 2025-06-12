@@ -31,11 +31,15 @@ class OMMXInstanceBuilder:
                 )
             elif var.var_type == mip.INTEGER:
                 decision_variables.append(
-                    DecisionVariable.integer(var.idx, lower=var.lb, upper=var.ub, name=var.name)
+                    DecisionVariable.integer(
+                        var.idx, lower=var.lb, upper=var.ub, name=var.name
+                    )
                 )
             elif var.var_type == mip.CONTINUOUS:
                 decision_variables.append(
-                    DecisionVariable.continuous(var.idx, lower=var.lb, upper=var.ub, name=var.name)
+                    DecisionVariable.continuous(
+                        var.idx, lower=var.lb, upper=var.ub, name=var.name
+                    )
                 )
             else:
                 raise OMMXPythonMIPAdapterError(

@@ -28,6 +28,7 @@ def test_error_nonlinear_constraint():
     # Constraint: 2.3 * x * x = 0
     quadratic = Quadratic(columns=[1], rows=[1], values=[2.3])
     import ommx._ommx_rust
+
     raw_constraint = ommx._ommx_rust.Constraint(
         id=0,
         function=Function.from_quadratic(quadratic),
