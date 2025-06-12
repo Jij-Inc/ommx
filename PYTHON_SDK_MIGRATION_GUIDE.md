@@ -347,6 +347,26 @@ constraint = Constraint(
 )
 ```
 
+### 11. Linear/Quadratic オブジェクトの定数項アクセス
+**発見**: `Linear.constant`はコンストラクタであり、定数項を取得するには`constant_term`プロパティを使用
+**影響**: 定数項にアクセスしようとして型エラーが発生
+**解決策**: 正しいプロパティ名を使用
+
+**修正パターン**:
+```python
+# 間違った記述
+linear_func = function.as_linear()
+constant_value = linear_func.constant  # これはコンストラクタ
+
+# 正しい記述
+linear_func = function.as_linear()
+constant_value = linear_func.constant_term  # これが定数項プロパティ
+
+# Quadraticでも同様
+quad_func = function.as_quadratic()
+constant_value = quad_func.constant_term  # 定数項プロパティ
+```
+
 ### 7. Function APIアクセス方法
 **発見**: `instance.objective.as_linear()` は不可、`.raw` 経由でアクセス必要
 

@@ -1,5 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable
-from ommx.v1.solution_pb2 import Optimality
+from ommx.v1 import Instance, DecisionVariable, Solution
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -15,4 +14,4 @@ def test_solution_optimality():
     )
 
     solution = OMMXPySCIPOptAdapter.solve(ommx_instance)
-    assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+    assert solution.optimality == Solution.OPTIMAL
