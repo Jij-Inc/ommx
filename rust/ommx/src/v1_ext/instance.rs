@@ -225,42 +225,6 @@ impl Instance {
         Ok(())
     }
 
-    /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
-    ///
-    /// Before calling this method, you should check that this instance is suitable for PUBO:
-    ///
-    /// - This instance has no constraints
-    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
-    /// - The objective function uses only binary decision variables.
-    ///   - TODO: Binary encoding will be added.
-    ///
-    pub fn as_pubo_format(&self) -> Result<BTreeMap<BinaryIds, f64>> {
-        if !self.constraints.is_empty() {
-            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
-        }
-        if self.sense() == Sense::Maximize {
-            bail!("PUBO format is only for minimization problems.");
-        }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
-            bail!("The objective function uses non-binary decision variables.");
-        }
-        let mut out = BTreeMap::new();
-        for (ids, c) in self.objective().into_iter() {
-            if c.abs() > f64::EPSILON {
-                let key = BinaryIds::from(ids);
-                let value = out.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
-                    out.remove(&key);
-                }
-            }
-        }
-        Ok(out)
-    }
-
     /// Convert the instance into a minimization problem.
     ///
     /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
@@ -315,6 +279,48 @@ impl Instance {
             } else {
                 let key = BinaryIdPair::try_from(ids)?;
                 let value = quad.entry(key).and_modify(|v| *v += c).or_insert(c);
+                if value.abs() < f64::EPSILON {
+                    quad.remove(&key);
+                }
+            }
+        }
+        Ok((quad, constant))
+    }
+
+    /// Create HUBO (Higher-Order Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for QUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    ///
+    pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
+        if self.sense() == Sense::Maximize {
+            bail!("HUBO format is only for minimization problems.");
+        }
+        if !self.constraints.is_empty() {
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
+        }
+        if !self
+            .objective()
+            .required_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
+        }
+        let mut constant = 0.0;
+        let mut quad = BTreeMap::new();
+        for (ids, c) in self.objective().into_iter() {
+            if c.abs() <= f64::EPSILON {
+                continue;
+            }
+            if ids.is_empty() {
+                constant += c;
+            } else {
+                let key = BinaryIds::from(ids);
+                let value = quad.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
                 if value.abs() < f64::EPSILON {
                     quad.remove(&key);
                 }
@@ -954,17 +960,6 @@ mod tests {
         }
 
         #[test]
-        fn test_pubo(instance in Instance::arbitrary_with(InstanceParameters::default_pubo())) {
-            if instance.sense() == Sense::Maximize {
-                return Ok(());
-            }
-            let pubo = instance.as_pubo_format().unwrap();
-            for (_, c) in pubo {
-                prop_assert!(c.abs() > f64::EPSILON);
-            }
-        }
-
-        #[test]
         fn test_qubo(instance in Instance::arbitrary_with(InstanceParameters::default_qubo())) {
             if instance.sense() == Sense::Maximize {
                 return Ok(());
@@ -972,6 +967,19 @@ mod tests {
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);
+                prop_assert!(c.abs() > f64:: EPSILON);
+            }
+        }
+
+        #[test]
+        fn test_hubo(instance in Instance::arbitrary_with(InstanceParameters::default_hubo())) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
+            let degree = instance.objective().degree();
+            let (quad, _) = instance.as_hubo_format().unwrap();
+            for (ids, c) in quad {
+                prop_assert!(ids.len() <= degree as usize);
                 prop_assert!(c.abs() > f64:: EPSILON);
             }
         }
