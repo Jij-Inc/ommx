@@ -242,7 +242,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> ommx_state = adapter.decode_to_state(model)
             >>> ommx_state.entries
-            {1: 0.0}
+            {1: -0.0}
 
         """
         if data.getStatus() == "unknown":
@@ -281,27 +281,31 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        # Use .raw to access the dict directly
-        for var_id, var in self.instance.raw.decision_variables.items():
+        for var in self.instance.get_decision_variables():
             if var.kind == DecisionVariable.BINARY:
-                self.model.addVar(name=str(var_id), vtype="B")
+                self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:
                 self.model.addVar(
-                    name=str(var_id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
+                    name=str(var.id), vtype="I", lb=var.bound.lower, ub=var.bound.upper
                 )
             elif var.kind == DecisionVariable.CONTINUOUS:
                 self.model.addVar(
-                    name=str(var_id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
+                    name=str(var.id), vtype="C", lb=var.bound.lower, ub=var.bound.upper
                 )
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Unsupported decision variable kind: "
-                    f"id: {var_id}, kind: {var.kind}"
+                    f"id: {var.id}, kind: {var.kind}"
                 )
 
         # Check if objective is quadratic to add auxiliary variable
-        objective_func = self.instance.raw.objective
-        if objective_func.as_quadratic() is not None:
+        degree = self.instance.objective.degree()
+        if degree > 3:
+            raise OMMXPySCIPOptAdapterError(
+                f"Objective function degree {degree} is not supported. "
+                "Only constant, linear, and quadratic objectives are supported."
+            )
+        if degree == 2:
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.
             self.model.addVar(
@@ -311,8 +315,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.varname_map = {var.name: var for var in self.model.getVars()}
 
     def _set_objective(self):
-        objective = self.instance.raw.objective
-
         if self.instance.sense == Instance.MAXIMIZE:
             sense = "maximize"
         elif self.instance.sense == Instance.MINIMIZE:
@@ -322,20 +324,15 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 f"Sense not supported: {self.instance.sense}"
             )
 
-        # Handle constant objective
-        if objective.degree() == 0:
-            # It's a constant function
-            linear_func = objective.as_linear()
-            if linear_func is not None:
-                self.model.setObjective(linear_func.constant_term, sense=sense)
-            else:
-                self.model.setObjective(0.0, sense=sense)
-        # Handle linear objective
-        elif objective.as_linear() is not None:
+        objective = self.instance.objective
+
+        degree = objective.degree()
+        if degree == 0:
+            self.model.setObjective(objective.constant_term, sense=sense)
+        elif degree == 1:
             expr = self._make_linear_expr(objective)
             self.model.setObjective(expr, sense=sense)
-        # Handle quadratic objective
-        elif objective.as_quadratic() is not None:
+        elif degree == 2:
             # The setObjective method in PySCIPOpt does not support quadratic objective functions.
             # So we introduce the auxiliary variable to linearize the objective function,
             # Example:
