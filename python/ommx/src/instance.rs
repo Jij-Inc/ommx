@@ -142,16 +142,16 @@ impl Instance {
             .collect()
     }
 
-    pub fn as_pubo_format<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        let pubo = inner.as_pubo_format()?;
-        Ok(serde_pyobject::to_pyobject(py, &pubo)?.extract()?)
-    }
-
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         let (qubo, constant) = inner.as_qubo_format()?;
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
+    }
+
+    pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        let (hubo, constant) = inner.as_hubo_format()?;
+        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
