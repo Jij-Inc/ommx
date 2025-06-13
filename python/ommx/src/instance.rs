@@ -110,8 +110,9 @@ impl Instance {
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let (qubo, constant) = self.0.as_hubo_format()?;
-        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        let (hubo, constant) = inner.as_hubo_format()?;
+        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
