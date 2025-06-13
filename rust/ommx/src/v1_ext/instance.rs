@@ -4,8 +4,8 @@ use crate::{
         Linear, Optimality, Parameter, ParametricInstance, Relaxation, RemovedConstraint,
         SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
-    BinaryIdPair, BinaryIdSeq, BinaryIds, Bound, Bounds, ConstraintID, Evaluate,
-    InfeasibleDetected, VariableID, VariableIDSet,
+    BinaryIdPair, BinaryIdSeq, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected,
+    VariableID, VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -223,42 +223,6 @@ impl Instance {
         let c = self.removed_constraints.remove(index).constraint.unwrap();
         self.constraints.push(c);
         Ok(())
-    }
-
-    /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
-    ///
-    /// Before calling this method, you should check that this instance is suitable for PUBO:
-    ///
-    /// - This instance has no constraints
-    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
-    /// - The objective function uses only binary decision variables.
-    ///   - TODO: Binary encoding will be added.
-    ///
-    pub fn as_pubo_format(&self) -> Result<BTreeMap<BinaryIds, f64>> {
-        if !self.constraints.is_empty() {
-            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
-        }
-        if self.sense() == Sense::Maximize {
-            bail!("PUBO format is only for minimization problems.");
-        }
-        if !self
-            .objective()
-            .required_ids()
-            .is_subset(&self.binary_ids())
-        {
-            bail!("The objective function uses non-binary decision variables.");
-        }
-        let mut out = BTreeMap::new();
-        for (ids, c) in self.objective().into_iter() {
-            if c.abs() > f64::EPSILON {
-                let key = BinaryIds::from(ids);
-                let value = out.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
-                    out.remove(&key);
-                }
-            }
-        }
-        Ok(out)
     }
 
     /// Convert the instance into a minimization problem.
@@ -985,17 +949,6 @@ mod tests {
                 objective = objective + 2.0 * f.clone() * f;
             }
             prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
-        }
-
-        #[test]
-        fn test_pubo(instance in Instance::arbitrary_with(InstanceParameters::default_pubo())) {
-            if instance.sense() == Sense::Maximize {
-                return Ok(());
-            }
-            let pubo = instance.as_pubo_format().unwrap();
-            for (_, c) in pubo {
-                prop_assert!(c.abs() > f64::EPSILON);
-            }
         }
 
         #[test]
