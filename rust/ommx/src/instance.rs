@@ -4,6 +4,7 @@ mod arbitrary;
 mod constraint_hints;
 mod error;
 mod evaluate;
+mod log_encode;
 mod parse;
 mod pass;
 mod substitute;
