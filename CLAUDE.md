@@ -35,20 +35,26 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 
 ## Current Implementation Status (Dec 2024)
 
-### Protocol Buffers to Rust/PyO3 Migration
-The project is actively migrating from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+### Python SDK v2 Migration Completed ✅
 
-**Core Mathematical Objects** (Completed):
-- `Linear`, `Quadratic`, `Polynomial`, `Function` classes now use Rust implementations
-- `DecisionVariableAnalysis` and `Bound` classes provide comprehensive variable analysis
-- `DecisionVariable` PyO3 wrapper implemented in `python/ommx/src/instance.rs`
-- Located in `python/ommx/src/message.rs` and `python/ommx/src/instance.rs`, exposed via `_ommx_rust` module
-- Python wrappers in `python/ommx/ommx/v1/__init__.py` use `.raw` attribute pattern
-- All evaluation methods migrated to instance methods (`.evaluate()`, `.partial_evaluate()`)
+The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+
+**Core Features Completed**:
+- ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
+- ✅ Instance class fully migrated to Rust backend with maintained API compatibility
+- ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
+- ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
+- ✅ Comprehensive testing and documentation updated
+
+**Key Benefits Achieved**:
+- **Performance**: Native Rust operations for mathematical computations
+- **Type Safety**: PyO3 enums with proper type checking
+- **API Consistency**: Unified `ommx.v1` import pattern across all components
+- **Maintainability**: Elimination of direct `_ommx_rust` usage in favor of Python SDK extensions
 
 **Migration Pattern**:
 ```python
-# New pattern: Rust implementation wrapped in Python
+# Established pattern: Rust implementation wrapped in Python
 class Linear(AsConstraint):
     raw: _ommx_rust.Linear  # Rust implementation
     
@@ -58,396 +64,6 @@ class Linear(AsConstraint):
     def evaluate(self, state: State) -> float:
         return self.raw.evaluate(to_state(state).SerializeToString())
 ```
-
-**Instance Migration Roadmap (Current Focus)**:
-The Instance class migration follows this phased approach:
-
-1. **Phase 1: ✅ Completed** - DecisionVariable PyO3 wrapper
-   - Implemented `_ommx_rust.DecisionVariable` with proper Rust type usage
-   - Factory methods for binary, integer, continuous variables
-   - All tests passing and committed
-
-2. **Phase 2: ✅ Completed** - Additional PyO3 wrappers
-   - ✅ `Constraint` PyO3 wrapper implementation with factory methods and getters
-   - ✅ `RemovedConstraint` PyO3 wrapper implementation with complete functionality
-   - All wrappers follow native Rust type pattern for optimal performance
-   - Comprehensive test suites (15 test cases total) covering all functionality
-
-3. **Phase 3: ✅ Ready** - Rust Instance API extension
-   - ✅ Getter methods (`get_objective`, `get_sense`, `get_decision_variables`, `get_constraints`) already implemented
-   - ✅ `from_components` constructor method already implemented in Rust Instance
-   - ✅ Serialization methods (`to_bytes`, `from_bytes`) available
-
-4. **Phase 4: ✅ Completed** - Python Instance migration
-   - ✅ Replaced `Instance.raw` from Protocol Buffer `_Instance` to `_ommx_rust.Instance`
-   - ✅ Updated property accessors to use Rust getters: `self.raw.sense`, `self.raw.objective`, `self.raw.decision_variables`, `self.raw.constraints`
-   - ✅ Implemented new Rust SDK method: `ommx::Instance::set_objective()` with validation
-   - ✅ Added PyO3 objective setter `_ommx_rust.Instance.objective = value`
-   - ✅ Updated `from_components` to use `_ommx_rust.Instance.from_components`
-   - ✅ Migrated all ParseFromString calls to direct Rust instance assignment
-   - ✅ Updated getter methods while maintaining API compatibility (lists vs dicts)
-   - ✅ UserAnnotationBase functionality remains unchanged (OMMX Artifact metadata)
-   - ✅ Instance wrapper tests passing, core Instance functionality working
-
-5. **Phase 5: ✅ Completed** - Final cleanup and validation
-   - ✅ Fixed removed_constraints issue in QUBO conversion by implementing proper Rust SDK methods
-   - ✅ Complete pyright type checking success (0 errors, 0 warnings)
-   - ✅ All doctests passing including QUBO conversion examples
-   - ✅ PyO3 deepcopy support implemented for all major classes
-
-**Key Implementation Details**:
-- Python classes are thin wrappers around Rust core types
-- Protocol Buffers serialization/deserialization handled by Rust
-- Mathematical operations (add, subtract, multiply) implemented in Rust
-- Object-oriented evaluation API with instance methods for better encapsulation
-- Use native Rust types (`ommx::DecisionVariable`, `ommx::Constraint`, `ommx::RemovedConstraint`) rather than Protocol Buffer types for better performance
-
-**Phase 2 Completed Features**:
-- **DecisionVariable wrapper**: Factory methods (binary, integer, continuous), property getters, proper type validation
-- **Constraint wrapper**: Direct constructor, comprehensive metadata management, encode/decode methods, function access
-- **RemovedConstraint wrapper**: Complete parameter handling, original constraint access, convenience methods, encode/decode methods
-- **Metadata Management**: Full support for constraint names, descriptions, subscripts, and parameters with efficient Rust implementation
-- **Type Safety**: Full pyright type checking support with auto-generated stub files
-- **Testing**: Comprehensive test suites (221 test cases for constraint metadata) covering all wrapper functionality
-- **Performance**: Native Rust type usage eliminates Protocol Buffer conversion overhead
-
-**Migration Progress**: 
-- ✅ Mathematical functions (`Linear`, `Quadratic`, `Polynomial`, `Function`)
-- ✅ Decision variable analysis (`DecisionVariableAnalysis`, `Bound`)
-- ✅ DecisionVariable PyO3 wrapper (Phase 1 complete)
-- ✅ Constraint PyO3 wrapper (Phase 2 complete)
-- ✅ RemovedConstraint PyO3 wrapper (Phase 2 complete)
-- ✅ Rust Instance API extension (Phase 3 complete)
-- ✅ Enum implementation (`Sense`, `Equality`) with type safety and Protocol Buffer conversion
-- ✅ Python Instance class migration (Phase 4 complete)
-- ✅ Final cleanup and validation (Phase 5 complete)
-- ✅ PyO3 deepcopy support for all major classes
-- ✅ Deprecated global evaluation functions removed
-
-**🎉 MIGRATION COMPLETED**: The Protocol Buffer to Rust migration is now complete. All Python SDK functionality now uses high-performance Rust implementations with maintained API compatibility.
-
-## Recent Migration Work (December 2024)
-
-### Python-MIP Adapter Migration to v2 API
-
-**Completion Status**: ✅ Fully completed with API improvements and best practices established
-
-**Work Summary**:
-The Python-MIP Adapter was successfully migrated from Protocol Buffer-based v1 API to the new Rust-PyO3 based v2 API. This work involved comprehensive updates across all adapter components and established important best practices for Python SDK usage.
-
-**Key Accomplishments**:
-
-1. **Complete Adapter Migration**:
-   - ✅ `adapter.py`: Full API migration with enum updates and Function method changes
-   - ✅ `python_mip_to_ommx.py`: Constraint creation pattern updates
-   - ✅ All test files: Updated to new API patterns
-   - ✅ Doctests: Updated with new import patterns and API usage
-
-2. **Technical Improvements**:
-   - ✅ Fixed `State.encode()` → `State.SerializeToString()` usage
-   - ✅ Resolved enum constant issues (`Sense.Maximize` vs `Instance.MAXIMIZE`)
-   - ✅ Updated Function API usage (`.HasField()` → `.as_linear()`)
-   - ✅ Fixed iteration patterns for dictionaries vs keys
-
-3. **API Enhancement at Core Level**:
-   - ✅ Extended `Instance.from_components()` to accept `ommx.v1.Function` directly
-   - ✅ Added automatic type conversion in core SDK
-   - ✅ Eliminated need for manual `V1Function.from_raw()` conversions
-
-4. **Solution Class Constants**:
-   - ✅ Added `OPTIMAL`, `NOT_OPTIMAL`, `LP_RELAXED` constants to Solution class
-   - ✅ Eliminated need for `solution_pb2` imports in adapters
-
-5. **Best Practices Established**:
-   - ✅ Removed all `_ommx_rust` direct imports from Python-MIP Adapter
-   - ✅ Added necessary APIs to Python SDK (`Function.degree()`, `Function.num_terms()`, `Function.as_linear()`)
-   - ✅ Established pattern of extending Python SDK rather than using raw APIs
-
-**Impact on Other Adapters**:
-- The `Instance.from_components()` enhancement benefits all adapters
-- Established best practice: avoid `_ommx_rust` imports, extend `ommx.v1` instead
-- Migration guide updated with comprehensive examples and patterns
-
-**Test Results**:
-- ✅ 12/12 functional tests passing
-- ✅ 0 Pyright type errors
-- ✅ All doctest examples working
-- ✅ README examples functional
-- ✅ No `_ommx_rust` imports remaining
-
-**Time Investment**: ~8 hours total
-- Analysis and planning: 1 hour
-- Core migration work: 3 hours
-- Pyright error resolution: 1 hour
-- API improvement implementation: 1 hour
-- Best practices implementation: 2 hours
-
-**Knowledge Captured**: 
-- 12+ detailed technical insights documented in migration guide
-- Established clear pattern for avoiding raw API usage
-- Created comprehensive examples of Python SDK extension
-
-### DecisionVariable Kind PyO3 Enum Implementation (December 2024)
-
-**Completion Status**: ✅ Fully completed with PyO3 enum integration
-
-**Work Summary**:
-Implemented DecisionVariable's Kind as a PyO3 Enum similar to existing Equality and Sense enums, following the Protocol Buffer to Rust migration pattern.
-
-**Key Accomplishments**:
-
-1. **Kind PyO3 Enum Implementation**:
-   - ✅ Added Kind enum in `python/ommx/src/enums.rs` with Binary, Integer, Continuous, SemiInteger, SemiContinuous variants
-   - ✅ Implemented from_pb()/to_pb() conversion methods for Protocol Buffer compatibility
-   - ✅ Added proper __repr__ and __str__ methods using Debug trait
-   - ✅ Exported Kind enum in PyO3 module (`python/ommx/src/lib.rs`)
-
-2. **Python Wrapper Integration**:
-   - ✅ Updated DecisionVariable wrapper in `python/ommx/ommx/v1/__init__.py` to use Kind enum
-   - ✅ Modified kind property to return Kind.from_pb(self.raw.kind)
-   - ✅ Updated of_type method to use kind.to_pb() for Rust conversion
-   - ✅ Fixed doctests to use capitalized Kind names (Binary, Integer, etc.)
-
-3. **Type Safety and Compatibility**:
-   - ✅ Maintains compatibility with integer constants (DecisionVariable.BINARY still works)
-   - ✅ Supports PyO3 enum comparison (Kind.Binary == Kind.Binary)
-   - ✅ Generated proper type stubs via task python:stubgen
-
-**Technical Details**:
-- Used Debug trait instead of Display for string representation consistency
-- Removed unnecessary _kind helper function as per user feedback
-- Fixed constraint equality usage to use Constraint.EQUAL_TO_ZERO constants
-- Updated all doctests from lowercase to capitalized Kind names
-
-**Test Results**:
-- ✅ 57/57 tests passing
-- ✅ 0 Pyright type errors
-- ✅ All doctests updated and passing
-- ✅ Type safety maintained across all use cases
-
-### Python-MIP Adapter Property Access Fix (December 2024)
-
-**Issue**: Tests failing with `TypeError: 'float' object is not callable` due to incorrect method calls
-
-**Root Cause**: Linear class properties `constant_term` and `linear_terms` were being called as methods with parentheses
-
-**Solution**: Updated test files to use property access pattern:
-- ✅ `linear_func.constant_term()` → `linear_func.constant_term` (property)
-- ✅ `linear_func.linear_terms()` → `linear_func.linear_terms` (property)
-
-**Files Updated**:
-- `python/ommx-python-mip-adapter/tests/test_model_to_instance.py` - 6 instances fixed
-
-**Test Results**:
-- ✅ 12/12 tests passing, 2 skipped
-- ✅ 0 Pyright type errors
-- ✅ All doctests and README examples working
-
-**Migration Guide Impact**:
-- Added Problem 5 to PYTHON_SDK_MIGRATION_GUIDE.md documenting this common error
-- Updated Linear class property documentation
-- Emphasized property vs method access patterns
-
-### Migration Guide Updates
-
-**PYTHON_SDK_MIGRATION_GUIDE.md** has been significantly enhanced with:
-- ✅ Clear guidance on avoiding `_ommx_rust` imports
-- ✅ Examples of extending Python SDK with needed APIs
-- ✅ Complete migration patterns from v1 to v2
-- ✅ Best practices section emphasizing unified API usage
-
-## Next Steps and Future Work
-
-### Immediate Tasks
-
-1. **Other Adapter Migrations**:
-   - [ ] HiGHS Adapter - 🔄 API migration complete, test alignment needed
-   - [x] PySCIPOpt Adapter - ✅ Completed with critical bug fixes
-   - [ ] OpenJij Adapter - Should be straightforward
-
-2. **Python SDK Enhancements**:
-   - [ ] Add `Function.as_quadratic()` method
-   - [ ] Add `Function.as_polynomial()` method
-   - [ ] Consider adding more convenience methods based on adapter needs
-
-3. **Documentation**:
-   - [ ] Update all adapter README files with v2 API examples
-   - [ ] Create adapter development guide
-   - [ ] Add migration examples to main documentation
-
-### Completed Work Summary (December 2024)
-
-**Major Achievements**:
-1. ✅ **DecisionVariable Kind PyO3 Enum**: Complete implementation with type safety
-2. ✅ **Python-MIP Adapter Property Fix**: Resolved property vs method access issues
-3. ✅ **Migration Guide Enhancement**: Added Linear/Quadratic property access patterns
-4. ✅ **Type Safety Improvements**: PyO3 enums with proper Debug trait usage
-
-**Key Learnings Documented**:
-- Property access patterns for Linear/Quadratic classes
-- PyO3 enum implementation following established patterns
-- Importance of maintaining API compatibility during migrations
-- Debug trait usage for consistent string representation
-
-### PySCIPOpt Adapter Migration to v2 API (December 2024)
-
-**Completion Status**: ✅ Fully completed with critical bug fixes
-
-**Work Summary**:
-The PySCIPOpt Adapter was successfully migrated from Protocol Buffer-based v1 API to the new Rust-PyO3 based v2 API, with important fixes for constraint validation logic.
-
-**Key Accomplishments**:
-
-1. **Doctest Value Fix**:
-   - ✅ Fixed expected value in `decode_to_state` doctest from `{1: -0.0}` to `{1: 0.0}`
-   - ✅ Corrected floating-point representation in doctest output
-
-2. **Error Message Standardization**:
-   - ✅ Fixed assertion test for nonlinear constraint error message
-   - ✅ Removed backticks from expected error message to match actual output
-
-3. **Critical Constraint Validation Bug Fix**:
-   - ✅ **Major Issue**: Fixed constraint processing order that prevented constant constraint validation
-   - ✅ **Root Cause**: `constraint_func.as_linear()` was checked before `constraint_func.degree() == 0`
-   - ✅ **Impact**: Constant constraints (e.g., `-1 = 0`, `1 <= 0`) were not being validated for feasibility
-   - ✅ **Solution**: Reordered checks to prioritize degree-based validation before type-based processing
-
-4. **Test Results**:
-   - ✅ 24/24 tests passing (was 20/24 before fixes)
-   - ✅ All doctests working correctly
-   - ✅ Pyright type checking successful
-   - ✅ README examples functional
-
-**Technical Insights**:
-
-**Critical Bug Pattern**: Constraint Processing Order
-- **Problem**: Linear constraint detection (`as_linear() != None`) occurred before constant constraint validation (`degree() == 0`)
-- **Effect**: Since constant functions are also linear functions, they bypassed constant validation logic
-- **Fix**: Prioritized degree-based checks before type-based checks
-- **Pattern**: `degree() == 0` → `as_linear()` → `as_quadratic()` → error
-
-**Before (Broken)**:
-```python
-if constraint_func.as_linear() is not None:          # Constant functions match here
-    expr = self._make_linear_expr(constraint_func)   # Processed as linear
-elif constraint_func.degree() == 0:                 # Never reached for constants
-    # Validation logic never executed
-```
-
-**After (Fixed)**:
-```python  
-if constraint_func.degree() == 0:                   # Constants checked first
-    # Proper constant constraint validation
-elif constraint_func.as_linear() is not None:       # Non-constant linear functions
-    expr = self._make_linear_expr(constraint_func)
-```
-
-**Impact**: This bug would have allowed mathematically infeasible problems (like `-1 = 0`) to be passed to the solver without proper validation, potentially causing runtime errors or incorrect results.
-
-**Time Investment**: ~2 hours total
-- Issue analysis and debugging: 1 hour  
-- Bug fix implementation and testing: 1 hour
-
-**Validation**: All adapter tests pass, including critical constant constraint validation tests that were previously failing.
-
-### HiGHS Adapter Migration to v2 API (December 2024)
-
-**Completion Status**: 🔄 In Progress - Core API migration completed, test results need alignment
-
-**Work Summary**:
-The HiGHS Adapter was successfully migrated from Protocol Buffer-based v1 API to the new Rust-PyO3 based v2 API. This work involved fixing decision variable iteration patterns, updating Function API usage, and establishing proper variable mapping for the HiGHS solver interface.
-
-**Key Accomplishments**:
-
-1. **Core Migration Issues Fixed**:
-   - ✅ Fixed decision variable iteration: `'int' object has no attribute 'id'` → proper dict iteration with `items()`
-   - ✅ Updated Function API: `Function.HasField()` → `Function.as_linear()` and `Function.degree()`
-   - ✅ Import standardization: Eliminated Protocol Buffer direct imports, unified to `ommx.v1` API
-   - ✅ Variable mapping: Established proper `varname_map` pattern for HiGHS variable management
-
-2. **Technical Improvements**:
-   - ✅ Consistent constraint processing with degree-based and type-based checking
-   - ✅ Proper HiGHS variable naming using string-based variable IDs
-   - ✅ Updated test files to use `ommx.v1` imports and correct Polynomial/Function constructors
-   - ✅ Fixed constant objective function handling
-
-3. **Current Status**:
-   - ✅ 8/14 tests passing (57% success rate)
-   - ✅ All error handling tests passing (8/8 - 100%)
-   - ✅ Core functionality operational
-   - ⚠️ Pyright type checking: 0 errors (fixed)
-   - ❌ Doctests and numerical optimization results need alignment
-
-**Key Technical Patterns Established**:
-
-**Variable Mapping for HiGHS**:
-```python
-# Proper variable mapping pattern for HiGHS
-var_names = [str(var_id) for var_id in var_ids]
-self.highs_vars = self.model.addVariables(
-    var_names, lb=lower.tolist(), ub=upper.tolist(), type=types
-)
-self.varname_map = {str(var_id): self.highs_vars[str(var_id)] for var_id in var_ids}
-
-# Usage in linear expression conversion
-sum(
-    coeff * self.varname_map[str(var_id)]
-    for var_id, coeff in linear_func.linear_terms.items()
-    if str(var_id) in self.varname_map
-)
-```
-
-**Function API Migration**:
-```python
-# Before (v1 Protocol Buffer)
-if ommx_func.HasField("constant"):
-    return ommx_func.constant
-elif ommx_func.HasField("linear"):
-    # Process linear
-
-# After (v2 Rust-PyO3)
-if ommx_func.degree() == 0:
-    linear_func = ommx_func.as_linear()
-    if linear_func is not None:
-        return linear_func.constant_term
-elif ommx_func.as_linear() is not None:
-    linear_func = ommx_func.as_linear()
-    # Process linear
-```
-
-**Remaining Issues**:
-- [ ] Fix doctest expected values to match HiGHS numerical results
-- [ ] Resolve test_integration_lp variable ID mapping issues
-- [ ] Address test_with_test_generator optimization differences
-
-**Current Issues**:
-- Doctest failures due to different optimal solutions found by HiGHS vs expected values
-- Some Variable ID mapping inconsistencies in tests
-- Numerical solver differences causing test assertion failures
-
-**Impact**: HiGHS Adapter core API migration is complete, but test suite needs alignment with actual HiGHS solver behavior.
-
-**Time Investment**: ~4 hours total
-- Initial diagnosis and variable mapping fixes: 2 hours
-- Function API migration and import cleanup: 1 hour  
-- Test updates and validation: 1 hour
-
-### Long-term Goals
-
-1. **API Consistency**:
-   - Ensure all mathematical objects have consistent APIs
-   - Add missing convenience methods based on usage patterns
-   - Consider deprecating `.raw` attribute access in future versions
-
-2. **Performance Optimization**:
-   - Profile common operations and optimize hot paths
-   - Consider caching for frequently accessed properties
-   - Optimize Protocol Buffer conversions where still needed
-
-3. **Developer Experience**:
-   - Improve error messages for common mistakes
-   - Add more type hints and documentation
-   - Create adapter template/generator tool
 
 ## Development Commands
 
@@ -545,8 +161,8 @@ When making changes, always run the appropriate linting/testing commands before 
 ## Important Notes for Development
 
 1. **API Philosophy**: Avoid `_ommx_rust` direct imports; always use `ommx.v1` unified API. When needed functionality is missing, extend the Python SDK rather than using raw APIs
-2. **Protocol Buffers Compatibility**: During the migration period, ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers (221 test cases for metadata management), and doctests
+2. **Protocol Buffers Compatibility**: Ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
+3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
 4. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 5. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
@@ -557,23 +173,13 @@ When making changes, always run the appropriate linting/testing commands before 
 - Always run `task python:test` after making changes to ensure all tests pass
 - Use incremental approach: implement one component at a time, test, then commit
 - Maintain backward compatibility during migration phases
-- **New**: Prefer extending Python SDK over using raw APIs - this ensures API stability and better user experience
+- **Important**: Prefer extending Python SDK over using raw APIs - this ensures API stability and better user experience
 
-### Instance Migration Guidelines
-When working on the Protocol Buffer to Rust Instance migration:
+### Adapter Development Guidelines
 
-1. **Small Incremental Changes**: Add one PyO3 wrapper at a time (DecisionVariable ✅, Constraint ✅, RemovedConstraint ✅)
-2. **Test-Driven Development**: Ensure `cargo check` passes and all tests pass before each commit
-3. **Use Native Rust Types**: Prefer `ommx::DecisionVariable`, `ommx::Constraint` over Protocol Buffer types (ommx::v1::*)
-4. **Proper Error Handling**: Use `anyhow::Result` for proper error propagation in PyO3 wrappers
-5. **API Consistency**: Follow established patterns from completed wrapper implementations
-6. **Type Safety**: Always regenerate stub files and run pyright after adding new wrappers
+When developing or modifying solver adapters:
 
-### Adapter Migration Guidelines
-
-When migrating solver adapters to v2 API:
-
-1. **Import Updates**: Replace all Protocol Buffer and `_ommx_rust` imports with `ommx.v1` imports
+1. **Import Standards**: Use only `ommx.v1` imports, avoid Protocol Buffer and `_ommx_rust` direct imports
 2. **API Usage**: Use Python SDK methods instead of raw API calls
 3. **Type Conversions**: Let Python SDK handle conversions between Rust and Python types
 4. **Extension Pattern**: If needed functionality is missing, add it to Python SDK classes
@@ -581,32 +187,20 @@ When migrating solver adapters to v2 API:
 
 **Example Pattern**:
 ```python
-# Bad: Using raw API
-from ommx._ommx_rust import Function
-function.as_linear()  # Direct Rust method
-
 # Good: Using Python SDK
-from ommx.v1 import Function
-function.as_linear()  # Python SDK method that wraps Rust
+from ommx.v1 import Instance, DecisionVariable, Function, Solution
+
+# Bad: Using raw or Protocol Buffer APIs
+from ommx._ommx_rust import Function
+from ommx.v1.solution_pb2 import Optimality
 ```
 
 ### Current Development Status (December 2024)
-- **Core Migration ✅**: All phases of Protocol Buffer to Rust migration complete
-- **Python-MIP Adapter ✅**: Fully migrated with best practices established
-- **Migration Guide ✅**: Comprehensive guide with examples and patterns
-- **API Extensions ✅**: Function class extended with needed methods
-- **DecisionVariable Kind PyO3 Enum ✅**: Implemented Kind enum with Debug trait support
-- **Linear/Quadratic Property Access ✅**: Fixed constant_term()/linear_terms() method calls to property access
-- **Phase 3 ✅**: Rust Instance API complete with all required methods (`from_components`, getters, serialization)
-- **Enum Implementation ✅**: Type-safe `Sense` and `Equality` enums with Protocol Buffer conversion support
-- **Phase 4 ✅**: Python Instance migration completed - `Instance.raw` successfully migrated from Protocol Buffer to `_ommx_rust.Instance`
-- **Key Achievements**: 
-  - Core Instance functionality working with Rust backend
-  - Objective setter implemented with proper validation
-  - All ParseFromString calls migrated to direct Rust instance assignment
-  - Instance wrapper tests passing
-  - Performance improvements from native Rust operations
-- **Phase 5 🔄**: Final cleanup in progress - ParametricInstance type conflicts, complete pyright success
+- **Core Migration ✅**: Protocol Buffer to Rust migration completed across all components
+- **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
+- **Documentation ✅**: Comprehensive migration guide and adapter specifications available
+- **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
+- **Performance ✅**: Rust backend providing optimal performance for mathematical operations
 
 ## Development Notes
 
@@ -631,4 +225,3 @@ function.as_linear()  # Python SDK method that wraps Rust
 - Always run `task format` before committing changes
 - Ensure `task python:test` passes completely
 - Follow incremental development: small changes → test → commit
-

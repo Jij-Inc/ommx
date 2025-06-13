@@ -431,7 +431,64 @@ def from_components(
 
 この改善により、他のアダプターでも`ommx.v1.Function`を直接使用可能になりました。
 
-### 16. Raw APIからPython SDKへの移行
+### 16. 制約処理の順序（重要なバグパターン）
+
+**発見**: PySCIPOptアダプターで発見された重要なバグ - 制約処理の順序が重要
+
+**問題**: 線形制約検出が定数制約検証より先に実行されるため、定数制約の妥当性チェックがスキップされる
+
+**修正前（バグ）**:
+```python
+if constraint_func.as_linear() is not None:        # 定数関数もここでマッチ
+    expr = self._make_linear_expr(constraint_func)  # 線形として処理
+elif constraint_func.degree() == 0:                # 定数の場合は到達しない
+    # 妥当性検証ロジック（実行されない）
+```
+
+**修正後（正しい）**:
+```python
+if constraint_func.degree() == 0:                  # 定数を最初にチェック
+    # 適切な定数制約妥当性検証
+elif constraint_func.as_linear() is not None:      # 非定数の線形関数
+    expr = self._make_linear_expr(constraint_func)
+```
+
+**影響**: このバグにより、数学的に不可能な問題（`-1 = 0`など）が適切に検証されずにソルバーに渡される可能性があった。
+
+### 17. 浮動小数点表現の一貫性
+
+**発見**: テスト期待値での浮動小数点表現の違い（`-0.0` vs `0.0`）
+
+**対処法**:
+```python
+# doctestでの期待値修正
+>>> state.entries
+{1: -0.0}  # HiGHSが返す実際の値に合わせる
+```
+
+### 18. エラーメッセージの更新
+
+**発見**: v2 APIでエラーメッセージが変更されている
+
+**修正例**:
+```python
+# 旧: "The function must be either `constant` or `linear`."
+# 新: "HiGHS Adapter currently only supports linear problems"
+assert "HiGHS Adapter currently only supports linear problems" in str(e.value)
+```
+
+### 19. 不要なテストファイルの判別基準
+
+**判断基準**: 以下の条件を満たすテストファイルは削除対象
+1. `_ommx_rust`を直接使用（ベストプラクティス違反）
+2. 上位APIテストで間接的にカバー済み
+3. ユーザーが使用しない内部実装詳細をテスト
+4. メンテナンス負荷が価値を上回る
+
+**例**: `test_instance_wrapper.py` - PyO3バインディングの低レベルテスト
+- 削除理由: 上位Instance APIテストで間接的にテスト済み、内部実装の詳細
+
+### 20. Raw APIからPython SDKへの移行
 
 **重要な変更**: `_ommx_rust`モジュールの直接使用を避け、必要なAPIはPython SDKに追加
 
@@ -519,6 +576,29 @@ instance = Instance.from_components(
 ```
 
 
+## マイグレーション完了状況 (December 2024)
+
+### ✅ 完了済みアダプター
+1. **Python-MIP Adapter**: 完全移行完了、ベストプラクティス確立
+2. **PySCIPOpt Adapter**: 完全移行完了、重要なバグ修正含む
+3. **HiGHS Adapter**: API移行完了、包括的ドキュメント追加
+
+### 🎉 主な成果
+- **API統一**: すべてのアダプターで `ommx.v1` 統一インポート
+- **型安全性向上**: PyO3 enumsとプロパティアクセス
+- **パフォーマンス向上**: Rust実装による高速化
+- **メンテナンス性**: `_ommx_rust` 直接使用の撤廃
+- **ドキュメント**: 包括的移行ガイドと仕様書
+
+### 確立されたベストプラクティス
+1. **Import Standards**: Protocol Buffer直接インポートの廃止
+2. **API Extension**: 必要機能のPython SDK追加パターン
+3. **Test Patterns**: 不要な低レベルテストの削除基準
+4. **Error Handling**: 制約処理順序の重要性
+5. **Documentation**: 具体的使用例とAPI仕様の明記
+
 ---
 
-このガイドは実際のマイグレーション作業から得られた知見に基づいており、他のアダプターでも同様の問題を効率的に解決するために活用できます。特に、raw APIを使わずPython SDKの統一されたAPIを使用することで、メンテナンス性と将来の互換性を確保できます。
+このガイドは実際のマイグレーション作業から得られた知見に基づいており、今後のOMMMX開発において同様の問題を効率的に解決するために活用できます。特に、raw APIを使わずPython SDKの統一されたAPIを使用することで、メンテナンス性と将来の互換性を確保できます。
+
+**重要**: v2 APIマイグレーションは完了しています。このガイドは主に歴史的記録と将来の類似作業のための参考資料として保持されています。
