@@ -414,37 +414,29 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             self.model.addCons(constr_expr, name=str(constraint.id))
 
-    def _make_linear_expr(self, function: Function) -> pyscipopt.Expr:
-        linear = function.as_linear()
-        if linear is None:
-            raise OMMXPySCIPOptAdapterError("Function is not linear")
-
+    def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
         return (
             pyscipopt.quicksum(
-                coeff * self.varname_map[str(var_id)]
-                for var_id, coeff in linear.linear_terms.items()
+                coeff * self.varname_map[str(id)]
+                for id, coeff in f.linear_terms.items()
             )
-            + linear.constant_term
+            + f.constant_term
         )
 
-    def _make_quadratic_expr(self, function: Function) -> pyscipopt.Expr:
-        quad = function.as_quadratic()
-        if quad is None:
-            raise OMMXPySCIPOptAdapterError("Function is not quadratic")
-
+    def _make_quadratic_expr(self, f: Function) -> pyscipopt.Expr:
         # Quadratic terms
         quad_terms = pyscipopt.quicksum(
             self.varname_map[str(row)] * self.varname_map[str(col)] * coeff
-            for (row, col), coeff in quad.quadratic_terms.items()
+            for (row, col), coeff in f.quadratic_terms.items()
         )
 
         # Linear terms
         linear_terms = pyscipopt.quicksum(
             coeff * self.varname_map[str(var_id)]
-            for var_id, coeff in quad.linear_terms.items()
+            for var_id, coeff in f.linear_terms.items()
         )
 
-        constant = quad.constant_term
+        constant = f.constant_term
 
         return quad_terms + linear_terms + constant
 
