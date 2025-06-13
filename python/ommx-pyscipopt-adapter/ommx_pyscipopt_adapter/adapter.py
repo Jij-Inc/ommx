@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Literal, Optional, Any
+from typing import Literal, Optional
 
 import pyscipopt
 import math
@@ -10,6 +10,7 @@ from ommx.v1 import (
     Instance,
     Solution,
     DecisionVariable,
+    Function,
     Constraint,
     State,
     ToState,
@@ -367,62 +368,53 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # TODO: Re-implement SOS1 constraint handling after migration
         # Skip SOS1 constraints for now
 
-        for constraint_id, constraint in self.instance.raw.constraints.items():
-            if constraint_id in excluded:
+        for constraint in self.instance.get_constraints():
+            if constraint.id in excluded:
                 continue
 
             # Handle constraint function based on its type
-            constraint_func = constraint.function
-
-            # Try to create expression based on function type
-            expr = None
-            # Check for constant constraints first (degree 0)
-            if constraint_func.degree() == 0:
-                # Constant constraint - handle specially
-                linear_func = constraint_func.as_linear()
-                if linear_func is not None:
-                    constant_value = linear_func.constant_term
-                    if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
-                        constant_value, 0, abs_tol=1e-6
-                    ):
-                        continue  # Skip feasible constant constraint
-                    elif (
-                        constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-                        and constant_value <= 1e-6
-                    ):
-                        continue  # Skip feasible constant constraint
-                    else:
-                        raise OMMXPySCIPOptAdapterError(
-                            f"Infeasible constant constraint was found: id {constraint_id}"
-                        )
+            f = constraint.function
+            degree = f.degree()
+            if degree == 0:
+                # Constant constraint is not passed to SCIP, but checked for feasibility
+                constant_value = f.constant_term
+                if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
+                    constant_value, 0, abs_tol=1e-6
+                ):
+                    continue  # Skip feasible constant constraint
+                elif (
+                    constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+                    and constant_value <= 1e-6
+                ):
+                    continue  # Skip feasible constant constraint
                 else:
-                    continue  # Skip if can't get constant value
-            elif constraint_func.as_linear() is not None:
-                expr = self._make_linear_expr(constraint_func)
-            elif constraint_func.as_quadratic() is not None:
-                expr = self._make_quadratic_expr(constraint_func)
+                    raise OMMXPySCIPOptAdapterError(
+                        f"Infeasible constant constraint was found: id {constraint.id}"
+                    )
+            elif degree == 1:
+                expr = self._make_linear_expr(f)
+            elif degree == 2:
+                expr = self._make_quadratic_expr(f)
             else:
                 raise OMMXPySCIPOptAdapterError(
                     f"Constraints must be either constant, linear or quadratic. "
-                    f"id: {constraint_id}, "
-                    f"degree: {constraint_func.degree()}"
+                    f"id: {constraint.id}, "
+                    f"degree: {degree}"
                 )
 
-            # Only add constraint if we have a valid expression
-            if expr is not None:
-                if constraint.equality == Constraint.EQUAL_TO_ZERO:
-                    constr_expr = expr == 0
-                elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
-                    constr_expr = expr <= 0
-                else:
-                    raise OMMXPySCIPOptAdapterError(
-                        f"Not supported constraint equality: "
-                        f"id: {constraint_id}, equality: {constraint.equality}"
-                    )
+            if constraint.equality == Constraint.EQUAL_TO_ZERO:
+                constr_expr = expr == 0
+            elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:
+                constr_expr = expr <= 0
+            else:
+                raise OMMXPySCIPOptAdapterError(
+                    f"Not supported constraint equality: "
+                    f"id: {constraint.id}, equality: {constraint.equality}"
+                )
 
-                self.model.addCons(constr_expr, name=str(constraint_id))
+            self.model.addCons(constr_expr, name=str(constraint.id))
 
-    def _make_linear_expr(self, function: Any) -> pyscipopt.Expr:
+    def _make_linear_expr(self, function: Function) -> pyscipopt.Expr:
         linear = function.as_linear()
         if linear is None:
             raise OMMXPySCIPOptAdapterError("Function is not linear")
@@ -435,7 +427,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             + linear.constant_term
         )
 
-    def _make_quadratic_expr(self, function: Any) -> pyscipopt.Expr:
+    def _make_quadratic_expr(self, function: Function) -> pyscipopt.Expr:
         quad = function.as_quadratic()
         if quad is None:
             raise OMMXPySCIPOptAdapterError("Function is not quadratic")
