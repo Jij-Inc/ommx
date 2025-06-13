@@ -2,6 +2,7 @@ mod artifact;
 mod bound;
 mod builder;
 mod constraint;
+mod constraint_hints;
 mod dataset;
 mod decision_variable;
 mod descriptor;
@@ -17,6 +18,7 @@ pub use artifact::*;
 pub use bound::*;
 pub use builder::*;
 pub use constraint::*;
+pub use constraint_hints::*;
 pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
@@ -50,10 +52,14 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Function>()?;
     m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
+    m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<RemovedConstraint>()?;
+    m.add_class::<OneHot>()?;
+    m.add_class::<Sos1>()?;
+    m.add_class::<ConstraintHints>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
@@ -63,6 +69,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // Enums
     m.add_class::<Sense>()?;
     m.add_class::<Equality>()?;
+    m.add_class::<Kind>()?;
 
     // Random
     m.add_class::<Rng>()?;

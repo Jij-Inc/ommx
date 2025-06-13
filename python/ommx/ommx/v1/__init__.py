@@ -11,7 +11,7 @@ from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
-    Equality,
+    Equality as _Equality,
     Constraint as _Constraint,
     RemovedConstraint as _RemovedConstraint,
 )
@@ -37,6 +37,16 @@ from .annotation import (
 
 from .. import _ommx_rust
 
+# Import PyO3 enums
+Sense = _ommx_rust.Sense
+Equality = _ommx_rust.Equality
+Kind = _ommx_rust.Kind
+
+# Import constraint hints classes directly
+OneHot = _ommx_rust.OneHot
+Sos1 = _ommx_rust.Sos1
+ConstraintHints = _ommx_rust.ConstraintHints
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -50,6 +60,10 @@ __all__ = [
     "Quadratic",
     "Polynomial",
     "Function",
+    # Constraint hints
+    "OneHot",
+    "Sos1",
+    "ConstraintHints",
     # Imported from protobuf
     "State",
     "Samples",
@@ -57,6 +71,10 @@ __all__ = [
     "Optimality",
     "Relaxation",
     "Bound",
+    # Enums
+    "Sense",
+    "Equality",
+    "Kind",
     # Utility
     "SampledValues",
     # Type Alias
@@ -195,8 +213,8 @@ class Instance(InstanceBase, UserAnnotationBase):
 
     """
 
-    raw: _Instance
-    """The raw protobuf message."""
+    raw: _ommx_rust.Instance
+    """The raw Rust instance."""
 
     # Annotations
     annotations: dict[str, str] = field(default_factory=dict)
@@ -224,10 +242,11 @@ class Instance(InstanceBase, UserAnnotationBase):
         return self.annotations
 
     # Re-export some enums
-    MAXIMIZE = _Instance.SENSE_MAXIMIZE
-    MINIMIZE = _Instance.SENSE_MINIMIZE
+    MAXIMIZE = _ommx_rust.Sense.Maximize
+    MINIMIZE = _ommx_rust.Sense.Minimize
 
-    Description = _Instance.Description
+    # Expose InstanceDescription as Instance.Description for consistency
+    Description = _ommx_rust.InstanceDescription
 
     @staticmethod
     def empty() -> Instance:
@@ -248,35 +267,70 @@ class Instance(InstanceBase, UserAnnotationBase):
         | Quadratic
         | Polynomial
         | Function
-        | _Function,
+        | _Function
+        | _ommx_rust.Function,
         constraints: Iterable[Constraint | _Constraint],
-        sense: _Instance.Sense.ValueType,
+        sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
-        description: Optional[_Instance.Description] = None,
+        description: Optional["Instance.Description | _Instance.Description"] = None,
+        constraint_hints: Optional[ConstraintHints] = None,
     ) -> Instance:
-        if not isinstance(objective, _Function):
-            if not isinstance(objective, Function):
-                objective = Function(objective)
-            raw_objective = _Function()
-            raw_objective.ParseFromString(objective.to_bytes())
-        else:
-            raw_objective = objective
+        if not isinstance(objective, Function):
+            objective = Function(objective)
 
-        return Instance(
-            _Instance(
-                description=description,
-                decision_variables=[
-                    v.to_protobuf() if isinstance(v, DecisionVariable) else v
-                    for v in decision_variables
-                ],
-                objective=raw_objective,
-                constraints=[
-                    c.to_protobuf() if isinstance(c, Constraint) else c
-                    for c in constraints
-                ],
-                sense=sense,
-            )
+        # Convert decision variables to _ommx_rust.DecisionVariable
+        rust_decision_variables = {}
+        for v in decision_variables:
+            if isinstance(v, DecisionVariable):
+                rust_decision_variables[v.id] = v.raw
+            else:
+                # Convert protobuf to DecisionVariable first
+                dv = DecisionVariable.from_protobuf(v)
+                rust_decision_variables[dv.id] = dv.raw
+
+        # Convert constraints to _ommx_rust.Constraint
+        rust_constraints = {}
+        for c in constraints:
+            if isinstance(c, Constraint):
+                rust_constraints[c.id] = c.raw
+            else:
+                # Convert protobuf to Constraint first
+                constraint = Constraint.from_protobuf(c)
+                rust_constraints[constraint.id] = constraint.raw
+
+        # Convert description if provided
+        rust_description = None
+        if description is not None:
+            if isinstance(description, _ommx_rust.InstanceDescription):
+                # Already a Rust InstanceDescription
+                rust_description = description
+            else:
+                # Convert Protocol Buffer Description to Rust InstanceDescription
+                rust_description = _ommx_rust.InstanceDescription(
+                    name=description.name if description.HasField("name") else None,
+                    description=description.description
+                    if description.HasField("description")
+                    else None,
+                    authors=list(description.authors) if description.authors else None,
+                    created_by=description.created_by
+                    if description.HasField("created_by")
+                    else None,
+                )
+
+        # Convert constraint hints if provided
+        rust_constraint_hints = constraint_hints
+
+        # Create Rust instance
+        rust_instance = _ommx_rust.Instance.from_components(
+            sense=sense,
+            objective=objective.raw,
+            decision_variables=rust_decision_variables,
+            constraints=rust_constraints,
+            description=rust_description,
+            constraint_hints=rust_constraint_hints,
         )
+
+        return Instance(rust_instance)
 
     @staticmethod
     def load_mps(path: str) -> Instance:
@@ -360,20 +414,19 @@ class Instance(InstanceBase, UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
-        instance = _Instance()
-        instance.ParseFromString(data)
-        return Instance(instance)
+        rust_instance = _ommx_rust.Instance.from_bytes(data)
+        return Instance(rust_instance)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
-    def description(self) -> _Instance.Description:
+    def description(self) -> "Instance.Description | None":
         return self.raw.description
 
     @property
     def objective(self) -> Function:
-        return Function(self.raw.objective)
+        return Function.from_raw(self.raw.objective)
 
     @objective.setter
     def objective(
@@ -394,36 +447,46 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
         """
-        if isinstance(value, Function):
-            f = value
-        else:
-            f = Function(value)
-        self.raw.objective.ParseFromString(f.to_bytes())
+        if not isinstance(value, Function):
+            value = Function(value)
+        self.raw.objective = value.raw
 
     @property
-    def sense(self) -> _Instance.Sense.ValueType:
+    def sense(self) -> _ommx_rust.Sense:
         return self.raw.sense
+
+    @property
+    def constraint_hints(self) -> ConstraintHints:
+        """Get constraint hints that provide additional information to solvers."""
+        return self.raw.constraint_hints
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
         return [
-            DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
+            DecisionVariable(rust_dv)
+            for _, rust_dv in sorted(self.raw.decision_variables.items())
         ]
 
     def get_constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances.
         """
-        return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
+        return [
+            Constraint.from_raw(rust_constraint)
+            for _, rust_constraint in sorted(self.raw.constraints.items())
+        ]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
         return [
-            RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
+            RemovedConstraint.from_raw(rust_removed_constraint)
+            for _, rust_removed_constraint in sorted(
+                self.raw.removed_constraints.items()
+            )
         ]
 
     def evaluate(self, state: ToState) -> Solution:
@@ -469,9 +532,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   binary   -0.0    1.0         []    1.0
-        1   binary   -0.0    1.0         []    0.0
-        2   binary   -0.0    1.0         []    0.0
+        0   Binary   -0.0    1.0         []    1.0
+        1   Binary   -0.0    1.0         []    0.0
+        2   Binary   -0.0    1.0         []    0.0
 
         If the value is out of the range, this raises an error:
 
@@ -524,9 +587,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   binary   -0.0    1.0         []    1.0
-        1   binary   -0.0    1.0         []    0.0
-        2   binary   -0.0    1.0         []    0.0
+        0   Binary   -0.0    1.0         []    1.0
+        1   Binary   -0.0    1.0         []    0.0
+        2   Binary   -0.0    1.0         []    0.0
         
         """
         out = _ommx_rust.evaluate_instance(
@@ -689,15 +752,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   integer   -0.0    2.0                x        [0]
-        1   integer   -0.0    2.0                x        [1]
-        2   integer   -0.0    3.0       ommx.slack        [0]
-        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]
-        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]
-        5    binary   -0.0    1.0  ommx.log_encode     [1, 0]
-        6    binary   -0.0    1.0  ommx.log_encode     [1, 1]
-        7    binary   -0.0    1.0  ommx.log_encode     [2, 0]
-        8    binary   -0.0    1.0  ommx.log_encode     [2, 1]
+        0   Integer   -0.0    2.0                x        [0]
+        1   Integer   -0.0    2.0                x        [1]
+        2   Integer   -0.0    3.0       ommx.slack        [0]
+        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]
+        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]
+        5    Binary   -0.0    1.0  ommx.log_encode     [1, 0]
+        6    Binary   -0.0    1.0  ommx.log_encode     [1, 1]
+        7    Binary   -0.0    1.0  ommx.log_encode     [2, 0]
+        8    Binary   -0.0    1.0  ommx.log_encode     [2, 1]
 
         * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
 
@@ -723,15 +786,15 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts  value
         id                                                          
-        0   integer   -0.0    2.0                x        [0]    2.0
-        1   integer   -0.0    2.0                x        [1]    0.0
-        2   integer   -0.0    3.0       ommx.slack        [0]    1.0
-        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]    1.0
-        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]    1.0
-        5    binary   -0.0    1.0  ommx.log_encode     [1, 0]    0.0
-        6    binary   -0.0    1.0  ommx.log_encode     [1, 1]    0.0
-        7    binary   -0.0    1.0  ommx.log_encode     [2, 0]    1.0
-        8    binary   -0.0    1.0  ommx.log_encode     [2, 1]    0.0
+        0   Integer   -0.0    2.0                x        [0]    2.0
+        1   Integer   -0.0    2.0                x        [1]    0.0
+        2   Integer   -0.0    3.0       ommx.slack        [0]    1.0
+        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]    1.0
+        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]    1.0
+        5    Binary   -0.0    1.0  ommx.log_encode     [1, 0]    0.0
+        6    Binary   -0.0    1.0  ommx.log_encode     [1, 1]    0.0
+        7    Binary   -0.0    1.0  ommx.log_encode     [2, 0]    1.0
+        8    Binary   -0.0    1.0  ommx.log_encode     [2, 1]    0.0
 
         >>> solution.objective
         2.0
@@ -758,7 +821,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ineq_ids = [
             c.id
             for c in self.get_constraints()
-            if c.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
             try:
@@ -843,12 +906,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(-x0 - x1 - x2)
 
         """
-        if self.raw.sense == Instance.MINIMIZE:
-            return False
-        self.raw.sense = Instance.MINIMIZE
-        obj = -self.objective
-        self.raw.objective.ParseFromString(obj.to_bytes())
-        return True
+        return self.raw.as_minimization_problem()
 
     def as_maximization_problem(self) -> bool:
         """
@@ -893,12 +951,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(-x0 - x1 - x2)
 
         """
-        if self.raw.sense == Instance.MAXIMIZE:
-            return False
-        self.raw.sense = Instance.MAXIMIZE
-        obj = -self.objective
-        self.raw.objective.ParseFromString(obj.to_bytes())
-        return True
+        return self.raw.as_maximization_problem()
 
     def as_qubo_format(self) -> tuple[dict[tuple[int, int], float], float]:
         """
@@ -1185,7 +1238,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.relax_constraint(constraint_id, reason, parameters)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def restore_constraint(self, constraint_id: int):
         """
@@ -1197,7 +1250,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.restore_constraint(constraint_id)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
@@ -1250,13 +1303,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   integer   -0.0    3.0                x        [0]
-        1   integer   -0.0    3.0                x        [1]
-        2   integer   -0.0    3.0                x        [2]
-        3    binary   -0.0    1.0  ommx.log_encode     [0, 0]
-        4    binary   -0.0    1.0  ommx.log_encode     [0, 1]
-        5    binary   -0.0    1.0  ommx.log_encode     [2, 0]
-        6    binary   -0.0    1.0  ommx.log_encode     [2, 1]
+        0   Integer   -0.0    3.0                x        [0]
+        1   Integer   -0.0    3.0                x        [1]
+        2   Integer   -0.0    3.0                x        [2]
+        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]
+        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]
+        5    Binary   -0.0    1.0  ommx.log_encode     [2, 0]
+        6    Binary   -0.0    1.0  ommx.log_encode     [2, 1]
 
         The `subscripts` of the new binary variables must be two elements in form of :math:`[i, j]` where
 
@@ -1294,7 +1347,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 return
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.log_encode(decision_variable_ids)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
@@ -1352,17 +1405,17 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   integer   -0.0    3.0           x        [0]
-        1   integer   -0.0    3.0           x        [1]
-        2   integer   -0.0    3.0           x        [2]
-        3   integer   -0.0    5.0  ommx.slack        [0]
+        0   Integer   -0.0    3.0           x        [0]
+        1   Integer   -0.0    3.0           x        [1]
+        2   Integer   -0.0    3.0           x        [2]
+        3   Integer   -0.0    5.0  ommx.slack        [0]
 
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         instance.convert_inequality_to_equality_with_integer_slack(
             constraint_id, max_integer_range
         )
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
 
     def add_integer_slack_to_inequality(
         self, constraint_id: int, slack_upper_bound: int
@@ -1428,10 +1481,10 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   integer   -0.0    3.0           x        [0]
-        1   integer   -0.0    3.0           x        [1]
-        2   integer   -0.0    3.0           x        [2]
-        3   integer   -0.0    2.0  ommx.slack        [0]
+        0   Integer   -0.0    3.0           x        [0]
+        1   Integer   -0.0    3.0           x        [1]
+        2   Integer   -0.0    3.0           x        [2]
+        3   Integer   -0.0    2.0  ommx.slack        [0]
 
         In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
@@ -1439,7 +1492,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         b = instance.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
-        self.raw.ParseFromString(instance.to_bytes())
+        self.raw = instance
         return b
 
     def decision_variable_analysis(self) -> "DecisionVariableAnalysis":
@@ -1513,7 +1566,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         ...     parameters=p + w + [W],
         ...     objective=objective,
         ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE,
+        ...     sense=Instance.MAXIMIZE.to_pb(),
         ... )
 
         Substitute parameters to get an instance
@@ -1556,7 +1609,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         return ParametricInstance.from_components(
             objective=0,
             constraints=[],
-            sense=Instance.MINIMIZE,
+            sense=_Instance.Sense.SENSE_MINIMIZE,
             decision_variables=[],
             parameters=[],
         )
@@ -1711,12 +1764,12 @@ class VariableBase(ABC):
 
     def __le__(self, other) -> Constraint:
         return Constraint(
-            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            function=self - other, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
     def __ge__(self, other) -> Constraint:
         return Constraint(
-            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            function=other - self, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
     def __req__(self, other) -> Constraint:
@@ -1791,9 +1844,7 @@ class Parameter(VariableBase):
 
     # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
         p = self.raw
@@ -1816,6 +1867,10 @@ class Solution(UserAnnotationBase):
 
     raw: _Solution
     """The raw protobuf message."""
+
+    OPTIMAL = Optimality.OPTIMALITY_OPTIMAL
+    NOT_OPTIMAL = Optimality.OPTIMALITY_NOT_OPTIMAL
+    LP_RELAXED = Relaxation.RELAXATION_LP_RELAXED
 
     annotation_namespace = "org.ommx.v1.solution"
     instance = str_annotation_property("instance")
@@ -2024,26 +2079,16 @@ def _function_type(function: _Function) -> str:
     raise ValueError("Unknown function type")
 
 
-def _kind(kind: _DecisionVariable.Kind.ValueType) -> str:
-    if kind == _DecisionVariable.Kind.KIND_UNSPECIFIED:
-        return "unspecified"
-    if kind == _DecisionVariable.Kind.KIND_BINARY:
-        return "binary"
-    if kind == _DecisionVariable.Kind.KIND_INTEGER:
-        return "integer"
-    if kind == _DecisionVariable.Kind.KIND_CONTINUOUS:
-        return "continuous"
-    if kind == _DecisionVariable.Kind.KIND_SEMI_INTEGER:
-        return "semi-integer"
-    if kind == _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS:
-        return "semi-continuous"
-    raise ValueError("Unknown kind")
-
-
-def _equality(equality: Equality.ValueType) -> str:
-    if equality == Equality.EQUALITY_EQUAL_TO_ZERO:
+def _equality(equality: _ommx_rust.Equality | _Equality.ValueType) -> str:
+    if (
+        equality == _ommx_rust.Equality.EqualToZero
+        or equality == _Equality.EQUALITY_EQUAL_TO_ZERO
+    ):
         return "=0"
-    if equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO:
+    if (
+        equality == _ommx_rust.Equality.LessThanOrEqualToZero
+        or equality == _Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    ):
         return "<=0"
     raise ValueError("Unknown equality")
 
@@ -2069,13 +2114,14 @@ class DecisionVariable(VariableBase):
 
     raw: _ommx_rust.DecisionVariable
 
-    Kind = _DecisionVariable.Kind.ValueType
+    # Use the new PyO3 Kind enum
+    Kind = _ommx_rust.Kind
 
-    BINARY = _DecisionVariable.Kind.KIND_BINARY
-    INTEGER = _DecisionVariable.Kind.KIND_INTEGER
-    CONTINUOUS = _DecisionVariable.Kind.KIND_CONTINUOUS
-    SEMI_INTEGER = _DecisionVariable.Kind.KIND_SEMI_INTEGER
-    SEMI_CONTINUOUS = _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS
+    BINARY = _ommx_rust.Kind.Binary
+    INTEGER = _ommx_rust.Kind.Integer
+    CONTINUOUS = _ommx_rust.Kind.Continuous
+    SEMI_INTEGER = _ommx_rust.Kind.SemiInteger
+    SEMI_CONTINUOUS = _ommx_rust.Kind.SemiContinuous
 
     @staticmethod
     def from_bytes(data: bytes) -> DecisionVariable:
@@ -2110,23 +2156,13 @@ class DecisionVariable(VariableBase):
         parameters: dict[str, str] = {},
         description: Optional[str] = None,
     ) -> DecisionVariable:
-        # Convert protobuf Kind enum to Rust kind (int)
-        kind_mapping = {
-            _DecisionVariable.Kind.KIND_BINARY: 1,
-            _DecisionVariable.Kind.KIND_INTEGER: 2,
-            _DecisionVariable.Kind.KIND_CONTINUOUS: 3,
-            _DecisionVariable.Kind.KIND_SEMI_INTEGER: 4,
-            _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS: 5,
-        }
-        rust_kind = kind_mapping.get(kind, 3)  # default to continuous
-
         # Create Rust bound
         rust_bound = _ommx_rust.Bound(lower, upper)
 
-        # Create Rust DecisionVariable
+        # Create Rust DecisionVariable - convert Kind enum to int
         rust_dv = _ommx_rust.DecisionVariable(
             id=id,
-            kind=rust_kind,
+            kind=kind.to_pb(),
             bound=rust_bound,
             name=name,
             subscripts=subscripts,
@@ -2252,21 +2288,23 @@ class DecisionVariable(VariableBase):
 
     @property
     def kind(self) -> Kind:
-        # Convert Rust kind (int) to protobuf Kind enum
-        rust_kind = self.raw.kind
-        kind_mapping = {
-            1: _DecisionVariable.Kind.KIND_BINARY,
-            2: _DecisionVariable.Kind.KIND_INTEGER,
-            3: _DecisionVariable.Kind.KIND_CONTINUOUS,
-            4: _DecisionVariable.Kind.KIND_SEMI_INTEGER,
-            5: _DecisionVariable.Kind.KIND_SEMI_CONTINUOUS,
-        }
-        return kind_mapping.get(rust_kind, _DecisionVariable.Kind.KIND_CONTINUOUS)
+        # Convert int from Rust to PyO3 Kind enum
+        return _ommx_rust.Kind.from_pb(self.raw.kind)
 
     @property
     def bound(self) -> Bound:
         rust_bound = self.raw.bound
-        return Bound(lower=rust_bound.lower(), upper=rust_bound.upper())
+        return Bound(lower=rust_bound.lower, upper=rust_bound.upper)
+
+    @property
+    def lower(self) -> float:
+        """Lower bound of the decision variable"""
+        return self.raw.bound.lower
+
+    @property
+    def upper(self) -> float:
+        """Upper bound of the decision variable"""
+        return self.raw.bound.upper
 
     @property
     def subscripts(self) -> list[int]:
@@ -2298,14 +2336,12 @@ class DecisionVariable(VariableBase):
 
     # The special function __eq__ cannot be inherited from VariableBase
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
         return {
             "id": self.id,
-            "kind": _kind(self.kind),
+            "kind": str(self.kind),
             "lower": self.bound.lower,
             "upper": self.bound.upper,
             "name": self.name if self.name else NA,
@@ -2318,12 +2354,12 @@ class DecisionVariable(VariableBase):
 class AsConstraint(ABC):
     def __le__(self, other) -> Constraint:
         return Constraint(
-            function=self - other, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            function=self - other, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
     def __ge__(self, other) -> Constraint:
         return Constraint(
-            function=other - self, equality=Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            function=other - self, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         )
 
     def __req__(self, other) -> Constraint:
@@ -2405,7 +2441,7 @@ class Linear(AsConstraint):
         """
         Get the terms of the linear function as a dictionary, except for the constant term.
         """
-        return self.raw.linear_terms()
+        return self.raw.linear_terms
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
@@ -2413,15 +2449,15 @@ class Linear(AsConstraint):
         Linear terms and constant as a dictionary
         """
         return {(id,): value for id, value in self.linear_terms.items()} | {
-            (): self.constant
+            (): self.constant_term
         }
 
     @property
-    def constant(self) -> float:
+    def constant_term(self) -> float:
         """
         Get the constant term of the linear function
         """
-        return self.raw.constant_term()
+        return self.raw.constant_term
 
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
@@ -2543,9 +2579,7 @@ class Linear(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -2644,15 +2678,26 @@ class Quadratic(AsConstraint):
 
     @property
     def linear(self) -> Linear | None:
-        linear_terms = self.raw.linear_terms()
-        constant = self.raw.constant_term()
+        linear_terms = self.raw.linear_terms
+        constant = self.raw.constant_term
         if linear_terms or constant != 0.0:
             return Linear(terms=linear_terms, constant=constant)
         return None
 
     @property
-    def quad_terms(self) -> dict[tuple[int, int], float]:
-        return self.raw.quadratic_terms()
+    def quadratic_terms(self) -> dict[tuple[int, int], float]:
+        """Quadratic terms as a dictionary mapping (row, col) to coefficient"""
+        return self.raw.quadratic_terms
+
+    @property
+    def linear_terms(self) -> dict[int, float]:
+        """Linear terms as a dictionary mapping variable id to coefficient"""
+        return self.raw.linear_terms
+
+    @property
+    def constant_term(self) -> float:
+        """Constant term of the quadratic function"""
+        return self.raw.constant_term
 
     @property
     def terms(self) -> dict[list[int], float]:
@@ -2713,9 +2758,7 @@ class Quadratic(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -2862,9 +2905,7 @@ class Polynomial(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -3023,6 +3064,134 @@ class Function(AsConstraint):
         """
         return self.raw.content_factor()
 
+    def degree(self) -> int:
+        """
+        Get the degree of the polynomial function.
+
+        Returns:
+            The degree of the polynomial (0 for constants, 1 for linear, 2 for quadratic, etc.)
+        """
+        return self.raw.degree()
+
+    def num_terms(self) -> int:
+        """
+        Get the number of terms in the polynomial function.
+
+        Returns:
+            The number of terms in the polynomial
+        """
+        return self.raw.num_terms()
+
+    def as_linear(self) -> Linear | None:
+        """
+        Try to convert the function to a Linear object if it's linear.
+
+        Returns:
+            A Linear object if the function is linear, None otherwise
+        """
+        linear_raw = self.raw.as_linear()
+        if linear_raw is None:
+            return None
+        return Linear.from_raw(linear_raw)
+
+    def as_quadratic(self) -> Quadratic | None:
+        """
+        Try to convert the function to a Quadratic object if it's quadratic.
+
+        Returns:
+            A Quadratic object if the function is quadratic, None otherwise
+        """
+        quadratic_raw = self.raw.as_quadratic()
+        if quadratic_raw is None:
+            return None
+        return Quadratic.from_raw(quadratic_raw)
+
+    @property
+    def linear_terms(self) -> dict[int, float]:
+        """
+        Get linear terms as a dictionary mapping variable id to coefficient.
+
+        Returns:
+            Dictionary mapping variable IDs to their linear coefficients.
+            Returns empty dict if function has no linear terms.
+            Works for all polynomial functions by filtering only degree-1 terms.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> f = Function(2*x1 + 3*x2 + 5)
+            >>> f.linear_terms
+            {1: 2.0, 2: 3.0}
+
+            >>> f_const = Function(5)
+            >>> f_const.linear_terms
+            {}
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
+            >>> f_cubic.linear_terms
+            {1: 2.0}
+        """
+        return self.raw.linear_terms
+
+    @property
+    def quadratic_terms(self) -> dict[tuple[int, int], float]:
+        """
+        Get quadratic terms as a dictionary mapping (row, col) to coefficient.
+
+        Returns:
+            Dictionary mapping variable ID pairs to their quadratic coefficients.
+            Returns empty dict if function has no quadratic terms.
+            Works for all polynomial functions by filtering only degree-2 terms.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> f = Function(2*x1*x2 + 3*x1 + 5)
+            >>> f.quadratic_terms
+            {(1, 2): 2.0}
+
+            >>> f_linear = Function(3*x1 + 5)
+            >>> f_linear.quadratic_terms
+            {}
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1*x2 + 5)
+            >>> f_cubic.quadratic_terms
+            {(1, 2): 2.0}
+        """
+        return self.raw.quadratic_terms
+
+    @property
+    def constant_term(self) -> float:
+        """
+        Get the constant term of the function.
+
+        Returns:
+            The constant term. Returns 0.0 if function has no constant term.
+            Works for all polynomial functions by filtering the degree-0 term.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> f = Function(2*x1 + 5)
+            >>> f.constant_term
+            5.0
+
+            >>> f_no_const = Function(2*x1)
+            >>> f_no_const.constant_term
+            0.0
+
+            >>> f_const_only = Function(7)
+            >>> f_const_only.constant_term
+            7.0
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
+            >>> f_cubic.constant_term
+            5.0
+        """
+        return self.raw.constant_term
+
     def __repr__(self) -> str:
         return self.raw.__repr__()
 
@@ -3107,9 +3276,7 @@ class Function(AsConstraint):
         return -1 * self
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(
-            function=self - other, equality=Equality.EQUALITY_EQUAL_TO_ZERO
-        )
+        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
 @dataclass
@@ -3137,8 +3304,8 @@ class Constraint:
     raw: _ommx_rust.Constraint
     _counter: int = 0
 
-    EQUAL_TO_ZERO = Equality.EQUALITY_EQUAL_TO_ZERO
-    LESS_THAN_OR_EQUAL_TO_ZERO = Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+    EQUAL_TO_ZERO = _ommx_rust.Equality.EqualToZero
+    LESS_THAN_OR_EQUAL_TO_ZERO = _ommx_rust.Equality.LessThanOrEqualToZero
 
     def __init__(
         self,
@@ -3149,8 +3316,9 @@ class Constraint:
         | Linear
         | Quadratic
         | Polynomial
-        | Function,
-        equality: Equality.ValueType,
+        | Function
+        | _ommx_rust.Function,
+        equality: _Equality.ValueType | _ommx_rust.Equality,
         id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -3166,8 +3334,12 @@ class Constraint:
         if not isinstance(function, Function):
             function = Function(function)
 
-        # Convert protobuf Equality to Rust Equality enum
-        rust_equality = _ommx_rust.Equality.from_pb(equality)
+        # Convert equality to Rust Equality enum
+        if isinstance(equality, _ommx_rust.Equality):
+            rust_equality = equality
+        else:
+            # Handle Protocol Buffer integer values
+            rust_equality = _ommx_rust.Equality.from_pb(equality)
 
         self.raw = _ommx_rust.Constraint(
             id=id,
@@ -3181,7 +3353,7 @@ class Constraint:
 
     @staticmethod
     def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
-        new = Constraint(function=0, equality=Equality.EQUALITY_EQUAL_TO_ZERO)
+        new = Constraint(function=0, equality=Constraint.EQUAL_TO_ZERO)
         new.raw = raw
         Constraint._counter = max(Constraint._counter, raw.id + 1)
         return new
@@ -3251,16 +3423,9 @@ class Constraint:
         return self.raw.id
 
     @property
-    def equality(self) -> Equality.ValueType:
-        # Convert Rust equality enum to protobuf Equality enum
-        rust_equality = self.raw.equality
-        pb_value = rust_equality.to_pb()
-        if pb_value == 1:
-            return Equality.EQUALITY_EQUAL_TO_ZERO
-        elif pb_value == 2:
-            return Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        else:
-            return Equality.EQUALITY_UNSPECIFIED
+    def equality(self) -> _ommx_rust.Equality:
+        # Return the PyO3 Equality enum directly from Rust
+        return self.raw.equality
 
     @property
     def name(self) -> str | None:
@@ -3285,15 +3450,8 @@ class Constraint:
 
     def _as_pandas_entry(self) -> dict:
         c = self.raw
-        # Convert Rust equality to protobuf equivalent for _equality function
-        pb_value = c.equality.to_pb()
-        equality_for_display = (
-            Equality.EQUALITY_EQUAL_TO_ZERO
-            if pb_value == 1
-            else Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-            if pb_value == 2
-            else Equality.EQUALITY_UNSPECIFIED
-        )
+        # Use PyO3 Equality directly
+        equality_for_display = c.equality
         # Convert Rust function to protobuf for _function_type
         pb_function = _Function()
         pb_function.ParseFromString(c.function.encode())
@@ -3320,6 +3478,10 @@ class RemovedConstraint:
         self.raw = raw
 
     @staticmethod
+    def from_raw(raw: _ommx_rust.RemovedConstraint) -> RemovedConstraint:
+        return RemovedConstraint(raw)
+
+    @staticmethod
     def from_protobuf(pb_removed_constraint: _RemovedConstraint) -> RemovedConstraint:
         """Convert from protobuf RemovedConstraint to Rust RemovedConstraint"""
         # Use Rust decode method to convert Protocol Buffer to Rust implementation
@@ -3332,15 +3494,9 @@ class RemovedConstraint:
         return self.raw.__repr__()
 
     @property
-    def equality(self) -> Equality.ValueType:
-        # Convert Rust equality (int) to protobuf Equality enum
-        rust_equality = self.raw.constraint.equality
-        if rust_equality == 1:
-            return Equality.EQUALITY_EQUAL_TO_ZERO
-        elif rust_equality == 2:
-            return Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-        else:
-            return Equality.EQUALITY_UNSPECIFIED
+    def equality(self) -> _ommx_rust.Equality:
+        # Return the PyO3 Equality enum directly from Rust
+        return self.raw.constraint.equality
 
     @property
     def id(self) -> int:
@@ -3455,9 +3611,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
-        0   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
-        1   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        1   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
 
     :meth:`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
 
@@ -3469,9 +3625,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
-        0   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        1   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        1   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
 
     Of course, the sample of smallest objective value is returned for minimization problems.
 
@@ -3945,12 +4101,12 @@ class Bound:
     @property
     def lower(self) -> float:
         """Get the lower bound."""
-        return self.raw.lower()
+        return self.raw.lower
 
     @property
     def upper(self) -> float:
         """Get the upper bound."""
-        return self.raw.upper()
+        return self.raw.upper
 
     def width(self) -> float:
         """Get the width (upper - lower) of the bound."""

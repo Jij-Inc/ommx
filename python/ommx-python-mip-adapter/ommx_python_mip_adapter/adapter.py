@@ -5,9 +5,7 @@ from typing import Optional
 import mip
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Optimality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import Relaxation
+from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
 
@@ -80,7 +78,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx.v1.solution_pb2 import Optimality
             >>> from ommx_python_mip_adapter import OMMXPythonMIPAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -103,7 +100,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
             >>> solution.feasible
             True
-            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+            >>> assert solution.optimality == Solution.OPTIMAL
 
             p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
@@ -256,10 +253,10 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 constraint.dual_variable = dual_variables[id]
 
         if data.status == mip.OptimizationStatus.OPTIMAL:
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.raw.optimality = Solution.OPTIMAL
 
         if self._relax:
-            solution.raw.relaxation = Relaxation.RELAXATION_LP_RELAXED
+            solution.raw.relaxation = Solution.LP_RELAXED
         return solution
 
     def decode_to_state(self, data: mip.Model) -> State:
@@ -302,13 +299,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         return State(
             entries={
-                var.id: data.var_by_name(str(var.id)).x  # type: ignore
-                for var in self.instance.raw.decision_variables
+                var_id: data.var_by_name(str(var_id)).x  # type: ignore
+                for var_id, var in self.instance.raw.decision_variables.items()
             }
         )
 
     def _set_decision_variables(self):
-        for var in self.instance.raw.decision_variables:
+        for var_id, var in self.instance.raw.decision_variables.items():
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
                     name=str(var.id),
@@ -341,26 +338,29 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Translate ommx.v1.Function to `mip.LinExpr` or `float`.
         """
-        if f.HasField("constant"):
-            return mip.LinExpr(const=f.constant)  # type: ignore
-        elif f.HasField("linear"):
-            ommx_linear = f.linear
-            return (
-                mip.xsum(
-                    term.coefficient * self.model.vars[str(term.id)]  # type: ignore
-                    for term in ommx_linear.terms
-                )
-                + ommx_linear.constant
-            )  # type: ignore
-        raise OMMXPythonMIPAdapterError(
-            "The function must be either `constant` or `linear`."
+        degree = f.degree()
+        constant = f.constant_term
+        if degree > 1:
+            raise OMMXPythonMIPAdapterError(
+                f"Function with degree {degree} is not supported. "
+                "Only linear (degree 1) and constant (degree 0) functions are supported."
+            )
+        if degree == 0:
+            return mip.LinExpr(const=constant)  # type: ignore
+        assert degree == 1
+        return (
+            mip.xsum(
+                coeff * self.model.vars[str(var_id)]  # type: ignore
+                for var_id, coeff in f.linear_terms.items()
+            )
+            + constant
         )
 
     def _set_objective(self):
-        self.model.objective = self._as_lin_expr(self.instance.raw.objective)  # type: ignore
+        self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for constraint in self.instance.raw.constraints:
+        for constraint in self.instance.get_constraints():
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0

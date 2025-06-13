@@ -272,6 +272,14 @@ impl Instance {
         self.objective = Some(-self.objective().into_owned());
     }
 
+    pub fn as_maximization_problem(&mut self) {
+        if self.sense() == Sense::Maximize {
+            return;
+        }
+        self.sense = Sense::Maximize as i32;
+        self.objective = Some(-self.objective().into_owned());
+    }
+
     /// Create QUBO (Quadratic Unconstrained Binary Optimization) dictionary from the instance.
     ///
     /// Before calling this method, you should check that this instance is suitable for QUBO:

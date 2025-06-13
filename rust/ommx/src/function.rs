@@ -1,4 +1,6 @@
-use crate::{Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic};
+use crate::{
+    Coefficient, Degree, Linear, MonomialDyn, Polynomial, Quadratic, VariableID, VariableIDPair,
+};
 use derive_more::From;
 use num::{traits::Inv, One, Zero};
 use std::{borrow::Cow, fmt::Debug};
@@ -27,6 +29,36 @@ pub enum Function {
 }
 
 impl Function {
+    pub fn constant_term(&self) -> f64 {
+        match self {
+            Function::Zero => 0.0,
+            Function::Constant(c) => c.into_inner(),
+            Function::Linear(l) => l.constant_term(),
+            Function::Quadratic(q) => q.constant_term(),
+            Function::Polynomial(p) => p.constant_term(),
+        }
+    }
+
+    pub fn linear_terms(&self) -> Box<dyn Iterator<Item = (VariableID, Coefficient)> + '_> {
+        match self {
+            Function::Zero => Box::new(std::iter::empty()),
+            Function::Constant(_) => Box::new(std::iter::empty()),
+            Function::Linear(l) => Box::new(l.linear_terms()),
+            Function::Quadratic(q) => Box::new(q.linear_terms()),
+            Function::Polynomial(p) => Box::new(p.linear_terms()),
+        }
+    }
+
+    pub fn quadratic_terms(&self) -> Box<dyn Iterator<Item = (VariableIDPair, Coefficient)> + '_> {
+        match self {
+            Function::Zero => Box::new(std::iter::empty()),
+            Function::Constant(_) => Box::new(std::iter::empty()),
+            Function::Linear(l) => Box::new(l.quadratic_terms()),
+            Function::Quadratic(q) => Box::new(q.quadratic_terms()),
+            Function::Polynomial(p) => Box::new(p.quadratic_terms()),
+        }
+    }
+
     pub fn as_linear(&self) -> Option<Cow<Linear>> {
         match self {
             Function::Zero => Some(Cow::Owned(Linear::zero())),

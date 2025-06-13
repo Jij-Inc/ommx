@@ -38,10 +38,12 @@ impl VariableBound {
         Self(ommx::Bound::of_binary())
     }
 
+    #[getter]
     pub fn lower(&self) -> f64 {
         self.0.lower()
     }
 
+    #[getter]
     pub fn upper(&self) -> f64 {
         self.0.upper()
     }
@@ -68,5 +70,16 @@ impl VariableBound {
 
     pub fn __repr__(&self) -> String {
         self.0.to_string()
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: pyo3::Bound<'_, pyo3::PyAny>) -> Self {
+        self.clone()
     }
 }

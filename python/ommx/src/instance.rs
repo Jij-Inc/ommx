@@ -1,14 +1,19 @@
-use crate::{Constraint, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
+use crate::{
+    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense,
+    VariableBound,
+};
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
+    Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Instance(ommx::Instance);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -22,12 +27,14 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints))]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None, constraint_hints = None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
+        description: Option<InstanceDescription>,
+        constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
         let rust_sense = sense.into();
 
@@ -42,26 +49,42 @@ impl Instance {
             .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
             .collect();
 
-        let instance = ommx::Instance::new(
+        let rust_constraint_hints = constraint_hints.map(|hints| hints.0).unwrap_or_default();
+
+        let mut instance = ommx::Instance::new(
             rust_sense,
             objective.0,
             rust_decision_variables,
             rust_constraints,
-            ommx::ConstraintHints::default(),
+            rust_constraint_hints,
         )?;
+
+        // Set description if provided
+        if let Some(desc) = description {
+            instance.description = Some(desc.0);
+        }
 
         Ok(Self(instance))
     }
 
-    pub fn get_sense(&self) -> Sense {
+    #[getter]
+    pub fn sense(&self) -> Sense {
         (*self.0.sense()).into()
     }
 
-    pub fn get_objective(&self) -> Function {
+    #[getter]
+    pub fn objective(&self) -> Function {
         Function(self.0.objective().clone())
     }
 
-    pub fn get_decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+    #[setter]
+    pub fn set_objective(&mut self, objective: Function) -> Result<()> {
+        self.0.set_objective(objective.0)?;
+        Ok(())
+    }
+
+    #[getter]
+    pub fn decision_variables(&self) -> HashMap<u64, DecisionVariable> {
         self.0
             .decision_variables()
             .iter()
@@ -69,7 +92,8 @@ impl Instance {
             .collect()
     }
 
-    pub fn get_constraints(&self) -> HashMap<u64, Constraint> {
+    #[getter]
+    pub fn constraints(&self) -> HashMap<u64, Constraint> {
         self.0
             .constraints()
             .iter()
@@ -77,7 +101,8 @@ impl Instance {
             .collect()
     }
 
-    pub fn get_removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+    #[getter]
+    pub fn removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
         self.0
             .removed_constraints()
             .iter()
@@ -88,6 +113,20 @@ impl Instance {
                 )
             })
             .collect()
+    }
+
+    #[getter]
+    pub fn description(&self) -> Option<InstanceDescription> {
+        // Convert Option<v1::instance::Description> to Option<InstanceDescription>
+        self.0
+            .description
+            .as_ref()
+            .map(|desc| InstanceDescription(desc.clone()))
+    }
+
+    #[getter]
+    pub fn constraint_hints(&self) -> ConstraintHints {
+        ConstraintHints(self.0.constraint_hints().clone())
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
@@ -195,6 +234,25 @@ impl Instance {
     pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
         DecisionVariableAnalysis(self.0.analyze_decision_variables())
     }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    // __deepcopy__ can also be implemented with self.clone()
+    // memo argument is required to match Python protocol but not used in this implementation
+    // Since this implementation contains no PyObject references, simple clone is sufficient
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
+
+    pub fn as_minimization_problem(&mut self) -> bool {
+        self.0.as_minimization_problem()
+    }
+
+    pub fn as_maximization_problem(&mut self) -> bool {
+        self.0.as_maximization_problem()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -295,6 +353,65 @@ impl DecisionVariableAnalysis {
             .keys()
             .map(|id| id.into_inner())
             .collect()
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[derive(Clone)]
+pub struct InstanceDescription(ommx::v1::instance::Description);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl InstanceDescription {
+    #[new]
+    #[pyo3(signature = (name = None, description = None, authors = None, created_by = None))]
+    pub fn new(
+        name: Option<String>,
+        description: Option<String>,
+        authors: Option<Vec<String>>,
+        created_by: Option<String>,
+    ) -> Self {
+        let mut desc = ommx::v1::instance::Description::default();
+        desc.name = name;
+        desc.description = description;
+        desc.authors = authors.unwrap_or_default();
+        desc.created_by = created_by;
+        Self(desc)
+    }
+    #[getter]
+    pub fn name(&self) -> Option<String> {
+        self.0.name.clone()
+    }
+
+    #[getter]
+    pub fn description(&self) -> Option<String> {
+        self.0.description.clone()
+    }
+
+    #[getter]
+    pub fn authors(&self) -> Vec<String> {
+        self.0.authors.clone()
+    }
+
+    #[getter]
+    pub fn created_by(&self) -> Option<String> {
+        self.0.created_by.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "InstanceDescription(name={:?}, description={:?}, authors={:?}, created_by={:?})",
+            self.0.name, self.0.description, self.0.authors, self.0.created_by
+        )
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }
 
