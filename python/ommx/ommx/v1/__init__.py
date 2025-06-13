@@ -3279,7 +3279,6 @@ class Function(AsConstraint):
         return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
 
-
 @dataclass
 class Constraint:
     """

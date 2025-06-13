@@ -361,12 +361,27 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_constraints(self):
-        # TODO: Re-implement constraint hints after migration (SOS1 constraints)
-        # For now, skip SOS1 constraint handling
+        ommx_hints = self.instance.constraint_hints
         excluded = set()
 
-        # TODO: Re-implement SOS1 constraint handling after migration
-        # Skip SOS1 constraints for now
+        # Handle SOS1 constraints from constraint hints
+        if self.use_sos1 != "disabled":
+            if self.use_sos1 == "forced" and len(ommx_hints.sos1_constraints) == 0:
+                raise OMMXPySCIPOptAdapterError(
+                    "No SOS1 constraints were found, but `use_sos1` is set to `forced`."
+                )
+
+            for sos1 in ommx_hints.sos1_constraints:
+                bid = sos1.binary_constraint_id
+                excluded.add(bid)
+                big_m_ids = sos1.big_m_constraint_ids
+                if len(big_m_ids) == 0:
+                    name = f"sos1_{bid}"
+                else:
+                    name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
+                    excluded.update(big_m_ids)
+                vars = [self.varname_map[str(v)] for v in sos1.variables]
+                self.model.addConsSOS1(vars, name=name)
 
         for constraint in self.instance.get_constraints():
             if constraint.id in excluded:

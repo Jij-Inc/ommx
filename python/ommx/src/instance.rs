@@ -1,4 +1,7 @@
-use crate::{Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
+use crate::{
+    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense,
+    VariableBound,
+};
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
@@ -46,9 +49,7 @@ impl Instance {
             .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
             .collect();
 
-        let rust_constraint_hints = constraint_hints
-            .map(|hints| hints.0)
-            .unwrap_or_default();
+        let rust_constraint_hints = constraint_hints.map(|hints| hints.0).unwrap_or_default();
 
         let mut instance = ommx::Instance::new(
             rust_sense,
