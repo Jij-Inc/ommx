@@ -1,8 +1,5 @@
 import pytest
 
-from ommx.v1.constraint_pb2 import Constraint as _Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.quadratic_pb2 import Quadratic
 from ommx.v1 import Instance, DecisionVariable, Constraint
 from ommx.adapter import InfeasibleDetected
 
@@ -11,11 +8,10 @@ from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
 
 def test_error_nonlinear_objective():
     # Objective function: 2.3 * x * x
+    x = DecisionVariable.continuous(0)
     ommx_instance = Instance.from_components(
-        decision_variables=[DecisionVariable.continuous(0)],
-        objective=Function(
-            quadratic=Quadratic(rows=[0], columns=[0], values=[2.3]),
-        ),
+        decision_variables=[x],
+        objective=2.3 * x * x,
         constraints=[],
         sense=Instance.MINIMIZE,
     )
@@ -28,18 +24,12 @@ def test_error_nonlinear_objective():
 def test_error_nonlinear_constraint():
     # Objective function: 0
     # Constraint: 2.3 * x * x = 0
+    x = DecisionVariable.continuous(1)
     ommx_instance = Instance.from_components(
-        decision_variables=[DecisionVariable.continuous(1)],
-        objective=Function(
-            constant=0,
-        ),
+        decision_variables=[x],
+        objective=0,  # constant 0
         constraints=[
-            _Constraint(
-                function=Function(
-                    quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
-                ),
-                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
-            ),
+            2.3 * x * x == 0
         ],
         sense=Instance.MINIMIZE,
     )
