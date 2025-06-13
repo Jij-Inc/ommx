@@ -456,17 +456,12 @@ class OMMXHighsAdapter(SolverAdapter):
             raise OMMXHighsAdapterError(
                 "HiGHS Adapter currently only supports linear problems"
             )
-        linear = ommx_func.as_linear()
-        if linear is None:
-            raise OMMXHighsAdapterError(
-                "Cannot convert function to linear form. This should be a bug. Please report it: {ommx_func}"
-            )
         return (
             sum(
                 coeff * self.highs_vars[id]
-                for (id, coeff) in linear.linear_terms.items()
+                for (id, coeff) in ommx_func.linear_terms.items()
             )
-            + linear.constant_term
+            + ommx_func.constant_term
         )
 
     def _set_objective(self):
