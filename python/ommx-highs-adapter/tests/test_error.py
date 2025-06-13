@@ -2,7 +2,6 @@ import pytest
 
 from ommx.v1.constraint_pb2 import Constraint as _Constraint, Equality
 from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
 from ommx.v1 import Instance, DecisionVariable, Constraint
 from ommx.adapter import InfeasibleDetected
@@ -15,7 +14,7 @@ def test_error_nonlinear_objective():
     ommx_instance = Instance.from_components(
         decision_variables=[DecisionVariable.continuous(0)],
         objective=Function(
-            quadratic=Quadratic(rows=[1], columns=[1], values=[2.3]),
+            quadratic=Quadratic(rows=[0], columns=[0], values=[2.3]),
         ),
         constraints=[],
         sense=Instance.MINIMIZE,
@@ -23,7 +22,7 @@ def test_error_nonlinear_objective():
 
     with pytest.raises(OMMXHighsAdapterError) as e:
         OMMXHighsAdapter(ommx_instance)
-    assert "The function must be either `constant` or `linear`." in str(e.value)
+    assert "HiGHS Adapter currently only supports linear problems" in str(e.value)
 
 
 def test_error_nonlinear_constraint():
@@ -47,29 +46,7 @@ def test_error_nonlinear_constraint():
 
     with pytest.raises(OMMXHighsAdapterError) as e:
         OMMXHighsAdapter(ommx_instance)
-    assert "The function must be either `constant` or `linear`." in str(e.value)
-
-
-def test_error_unsupported_constraint_equality():
-    # Objective function: 0
-    # Constraint: 2x ?? 0 (equality: unspecified)
-    ommx_instance = Instance.from_components(
-        decision_variables=[DecisionVariable.continuous(1)],
-        objective=Function(constant=0),
-        constraints=[
-            _Constraint(
-                function=Function(
-                    linear=Linear(terms=[Linear.Term(id=1, coefficient=2)])
-                ),
-                equality=Equality.EQUALITY_UNSPECIFIED,
-            ),
-        ],
-        sense=Instance.MINIMIZE,
-    )
-
-    with pytest.raises(OMMXHighsAdapterError) as e:
-        OMMXHighsAdapter(ommx_instance)
-    assert "Unsupported constraint equality kind" in str(e.value)
+    assert "HiGHS Adapter currently only supports linear problems" in str(e.value)
 
 
 def test_error_infeasible_constant_equality_constraint():
