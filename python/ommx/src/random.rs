@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-#[derive(Deref)]
+#[derive(Deref, Default)]
 pub struct Rng(Arc<Mutex<ommx::random::Rng>>);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]

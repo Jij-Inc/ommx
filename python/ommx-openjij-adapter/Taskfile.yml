@@ -12,3 +12,9 @@ tasks:
     cmds:
       - uv run pytest -vv --doctest-modules
       - uv run pyright
+      - task: lint
+
+  lint:
+    desc: Lint by ruff check
+    cmds:
+      - uv run ruff check

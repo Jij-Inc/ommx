@@ -1,14 +1,15 @@
+use crate::{Constraint, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
 use anyhow::Result;
-use ommx::{Evaluate, Message};
+use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict},
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Instance(ommx::v1::Instance);
+pub struct Instance(ommx::Instance);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -16,19 +17,85 @@ impl Instance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
         let inner = ommx::v1::Instance::decode(bytes.as_bytes())?;
-        inner.validate()?;
-        Ok(Self(inner))
+        let parsed = Parse::parse(inner.clone(), &())?;
+        Ok(Self(parsed))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints))]
+    pub fn from_components(
+        sense: Sense,
+        objective: Function,
+        decision_variables: HashMap<u64, DecisionVariable>,
+        constraints: HashMap<u64, Constraint>,
+    ) -> Result<Self> {
+        let rust_sense = sense.into();
+
+        let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
+            decision_variables
+                .into_iter()
+                .map(|(id, var)| (VariableID::from(id), var.0))
+                .collect();
+
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
+            .into_iter()
+            .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
+            .collect();
+
+        let instance = ommx::Instance::new(
+            rust_sense,
+            objective.0,
+            rust_decision_variables,
+            rust_constraints,
+            ommx::ConstraintHints::default(),
+        )?;
+
+        Ok(Self(instance))
+    }
+
+    pub fn get_sense(&self) -> Sense {
+        (*self.0.sense()).into()
+    }
+
+    pub fn get_objective(&self) -> Function {
+        Function(self.0.objective().clone())
+    }
+
+    pub fn get_decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+        self.0
+            .decision_variables()
+            .iter()
+            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
+            .collect()
+    }
+
+    pub fn get_constraints(&self) -> HashMap<u64, Constraint> {
+        self.0
+            .constraints()
+            .iter()
+            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .collect()
+    }
+
+    pub fn get_removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+        self.0
+            .removed_constraints()
+            .iter()
+            .map(|(id, removed_constraint)| {
+                (
+                    id.into_inner(),
+                    RemovedConstraint(removed_constraint.clone()),
+                )
+            })
+            .collect()
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
-    pub fn validate(&self) -> Result<()> {
-        self.0.validate()
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+    pub fn required_ids(&self) -> BTreeSet<u64> {
         self.0
             .required_ids()
             .into_iter()
@@ -37,7 +104,8 @@ impl Instance {
     }
 
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let (qubo, constant) = self.0.as_qubo_format()?;
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        let (qubo, constant) = inner.as_qubo_format()?;
         Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
     }
 
@@ -47,15 +115,18 @@ impl Instance {
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
-        ParametricInstance(self.0.clone().into())
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        ParametricInstance(inner.into())
     }
 
     pub fn penalty_method(&self) -> Result<ParametricInstance> {
-        Ok(ParametricInstance(self.0.clone().penalty_method()?))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(ParametricInstance(inner.penalty_method()?))
     }
 
     pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
-        Ok(ParametricInstance(self.0.clone().uniform_penalty_method()?))
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(ParametricInstance(inner.uniform_penalty_method()?))
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
@@ -70,20 +141,27 @@ impl Instance {
         removed_reason: String,
         removed_reason_parameters: HashMap<String, String>,
     ) -> Result<()> {
-        self.0
-            .relax_constraint(constraint_id, removed_reason, removed_reason_parameters)
+        self.0.relax_constraint(
+            constraint_id.into(),
+            removed_reason,
+            removed_reason_parameters,
+        )?;
+        Ok(())
     }
 
     pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        self.0.restore_constraint(constraint_id)
+        self.0.restore_constraint(constraint_id.into())?;
+        Ok(())
     }
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
         let replacements = integer_variable_ids
             .iter()
-            .map(|&id| Ok((id, self.0.log_encode(id)?.into())))
+            .map(|&id| Ok((id, inner.log_encode(id)?.into())))
             .collect::<Result<_>>()?;
-        self.0.substitute(replacements)?;
+        inner.substitute(replacements)?;
+        self.0 = Parse::parse(inner, &())?;
         Ok(())
     }
 
@@ -92,11 +170,14 @@ impl Instance {
         constraint_id: u64,
         max_integer_range: u64,
     ) -> Result<()> {
-        self.0.convert_inequality_to_equality_with_integer_slack(
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        inner.convert_inequality_to_equality_with_integer_slack(
             constraint_id,
             max_integer_range,
             ommx::ATol::default(),
-        )
+        )?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(())
     }
 
     pub fn add_integer_slack_to_inequality(
@@ -104,8 +185,115 @@ impl Instance {
         constraint_id: u64,
         slack_upper_bound: u64,
     ) -> Result<Option<f64>> {
+        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        let result = inner.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
+        self.0 = Parse::parse(inner, &())?;
+        Ok(result)
+    }
+
+    pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
+        DecisionVariableAnalysis(self.0.analyze_decision_variables())
+    }
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+pub struct DecisionVariableAnalysis(ommx::DecisionVariableAnalysis);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl DecisionVariableAnalysis {
+    pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
         self.0
-            .add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
+            .used_binary()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_integer(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_integer()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_continuous(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_continuous()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_semi_integer(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_semi_integer()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_semi_continuous(&self) -> BTreeMap<u64, VariableBound> {
+        self.0
+            .used_semi_continuous()
+            .into_iter()
+            .map(|(id, bound)| (id.into_inner(), VariableBound(bound)))
+            .collect()
+    }
+
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.used().iter().map(|id| id.into_inner()).collect()
+    }
+
+    pub fn all_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0.all().iter().map(|id| id.into_inner()).collect()
+    }
+
+    pub fn used_in_objective(&self) -> BTreeSet<u64> {
+        self.0
+            .used_in_objective()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn used_in_constraints(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_constraints()
+            .iter()
+            .map(|(constraint_id, variable_ids)| {
+                (
+                    **constraint_id,
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn fixed(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .fixed()
+            .iter()
+            .map(|(id, value)| (id.into_inner(), *value))
+            .collect()
+    }
+
+    pub fn irrelevant(&self) -> BTreeSet<u64> {
+        self.0
+            .irrelevant()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn dependent(&self) -> BTreeSet<u64> {
+        self.0
+            .dependent()
+            .keys()
+            .map(|id| id.into_inner())
+            .collect()
     }
 }
 
@@ -136,7 +324,8 @@ impl ParametricInstance {
             .0
             .clone()
             .with_parameters(parameters.0.clone(), ommx::ATol::default())?;
-        Ok(Instance(instance))
+        let parsed = Parse::parse(instance, &())?;
+        Ok(Instance(parsed))
     }
 }
 

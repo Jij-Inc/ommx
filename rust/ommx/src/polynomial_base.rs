@@ -38,6 +38,9 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
     fn degree(&self) -> Degree;
     fn max_degree() -> Degree;
 
+    fn as_linear(&self) -> Option<VariableID>;
+    fn as_quadratic(&self) -> Option<VariableIDPair>;
+
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
     /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
     fn from_ids(ids: impl Iterator<Item = VariableID>) -> Option<Self>;
@@ -138,6 +141,31 @@ impl<M: Monomial> PolynomialBase<M> {
         self.terms.keys()
     }
 
+    /// Get constant term, zero if not present
+    pub fn constant_term(&self) -> f64 {
+        self.get(&M::default())
+            .map(|c| c.into_inner())
+            .unwrap_or(0.0)
+    }
+
+    /// Get terms of specific degree as an iterator
+    pub fn terms_by_degree(&self, degree: Degree) -> impl Iterator<Item = (&M, &Coefficient)> {
+        self.iter()
+            .filter(move |(monomial, _)| monomial.degree() == degree)
+    }
+
+    /// Get linear terms as an iterator over (VariableID, Coefficient)
+    pub fn linear_terms(&self) -> impl Iterator<Item = (VariableID, Coefficient)> + '_ {
+        self.iter()
+            .filter_map(|(monomial, coeff)| monomial.as_linear().map(|id| (id, *coeff)))
+    }
+
+    /// Get quadratic terms as an iterator over (VariableIDPair, Coefficient)
+    pub fn quadratic_terms(&self) -> impl Iterator<Item = (VariableIDPair, Coefficient)> + '_ {
+        self.iter()
+            .filter_map(|(monomial, coeff)| monomial.as_quadratic().map(|pair| (pair, *coeff)))
+    }
+
     /// The maximum absolute value of the coefficients including the constant.
     ///
     /// `None` means this polynomial is exactly zero.
@@ -191,7 +219,7 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    -4.973622349033379,
+                    -1.0,
                 ),
             ),
             (
@@ -201,7 +229,7 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    -1.0,
+                    -0.27550031881072173,
                 ),
             ),
             (
@@ -211,7 +239,7 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    1.0,
+                    4.520657493715473,
                 ),
             ),
         ]

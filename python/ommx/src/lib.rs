@@ -1,7 +1,11 @@
 mod artifact;
+mod bound;
 mod builder;
+mod constraint;
 mod dataset;
+mod decision_variable;
 mod descriptor;
+mod enums;
 mod evaluate;
 mod instance;
 mod message;
@@ -10,9 +14,13 @@ mod qplib;
 mod random;
 
 pub use artifact::*;
+pub use bound::*;
 pub use builder::*;
+pub use constraint::*;
 pub use dataset::*;
+pub use decision_variable::*;
 pub use descriptor::*;
+pub use enums::*;
 pub use evaluate::*;
 pub use instance::*;
 pub use message::*;
@@ -40,27 +48,28 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Quadratic>()?;
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
+    m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
+    m.add_class::<DecisionVariableAnalysis>()?;
+    m.add_class::<DecisionVariable>()?;
+    m.add_class::<Constraint>()?;
+    m.add_class::<RemovedConstraint>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
 
+    // Enums
+    m.add_class::<Sense>()?;
+    m.add_class::<Equality>()?;
+
     // Random
     m.add_class::<Rng>()?;
 
     // Evaluate
-    m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_linear, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_linear, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_polynomial, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_function, m)?)?;
     m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
     m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
     m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;

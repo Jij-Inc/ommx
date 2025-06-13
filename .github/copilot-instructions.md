@@ -1,141 +1,30 @@
-# Coding Standards
-
-- Write all comments in English.
-- Add code comments only when necessary to explain complex logic or the reasoning behind a decision (the "why", not the "what"). Avoid obvious comments.
-- Ensure comments are about the code itself, not about the author or the process of writing the code.
-
 # Project Context
 
 ## Core Technologies & Languages
 - This project, ommx, primarily uses Rust and Python.
-- When generating Rust code, adhere to idiomatic Rust practices and the standard library.
-- When generating Python code, follow PEP 8 guidelines and use type hints where appropriate.
+- Use idiomatic Rust practices and PEP 8 guidelines for Python.
+- Write comments in English only when necessary to explain complex logic.
 
 ## Architectural Principles
-- The main logic of this project is primarily implemented in Rust, with Python acting as a wrapper or interface to utilize this Rust core. Future development should adhere to this principle.
-- A core goal of OMMX is to standardize data formats for mathematical optimization using Protocol Buffers.
-- Serialization and deserialization code for Rust and Python is generated from `.proto` files.
+- Core logic is implemented in Rust, with Python as a wrapper.
+- Standardize mathematical optimization data formats using Protocol Buffers.
+- Use `Taskfile.yml` for complex commands - check root and subdirectory Taskfiles.
 
-## Repository Structure Overview
-- **`proto/`**: Protocol Buffer definitions for OMMX data structures
-- **`python/`**: Python-related code
-    - `ommx/`: Core Python SDK (mixed Rust/Python project using PyO3/Maturin)
-    - `ommx-*-adapter/`: Adapter packages for various optimization solvers
-- **`rust/`**: Rust crates
-    - `ommx/`: Core Rust implementation of the OMMX library
-    - `protogen/`: Utility for generating Rust code from Protocol Buffer definitions
-    - `dataset/`: Convert existing datasets like MIPLIB as OMMX Artifacts
-- **`docs/`**: Project documentation (API reference, user guides)
+## Repository Structure
+- **`proto/`**: Protocol Buffer definitions
+- **`python/ommx/`**: Mixed Rust/Python project using PyO3/Maturin
+- **`python/ommx-*-adapter/`**: Adapter packages for optimization solvers
+- **`rust/ommx/`**: Core Rust implementation
+- Python SDK uses `uv` for dependency management
 
-## Development Workflow & Tooling
-- This project uses `Taskfile.yml` to manage and execute complex commands. To understand available commands, refer to the `Taskfile.yml` files located in the root directory and various subdirectories (e.g., `rust/`, `python/`, `docs/`).
+# Rust Development Guidelines
 
-# Python SDK Development Guidelines
+## Idiomatic vs. Protobuf Structures
+- Use idiomatic Rust structs (e.g., `ommx::Instance`) for core logic and APIs
+- Use protobuf structs (e.g., `ommx::v1::Instance`) only for serialization/deserialization
+- Convert between protobuf and idiomatic structs at serialization boundaries
 
-## Dependency Management
-- The Python SDK uses `uv` for dependency management.
-- The core `ommx` package, located in `python/ommx/`, is a mixed Rust/Python project built with PyO3 and maturin.
-
-## Package Structure
-- The repository contains multiple Python packages. The core `ommx` package serves as a dependency for various adapter projects (`ommx-*-adapter`).
-- The `python/ommx/` directory is structured as a Maturin mixed Rust/Python project.
-- When a user imports the package in Python (e.g., `import ommx`), the primary Python module loaded is `python/ommx/ommx/__init__.py`.
-- The Rust-native components are made available as a submodule, typically `ommx._ommx_rust`.
-
-# Rust SDK Development Guidelines
-
-## Core Design Principle: Idiomatic Rust Structures vs. Protobuf-Generated Structures
-
-A fundamental architectural decision for the Rust SDK (version 2.0.0 and onwards) is the separation of concerns between idiomatic Rust structures and structures auto-generated from Protocol Buffer (`.proto`) definitions.
-
-**1. Idiomatic Rust Structures (e.g., `ommx::Instance`, `ommx::Function`):**
-- These are the primary structures to be used for all **core logic, internal operations, and public-facing APIs** of the SDK.
-- They should be designed following Rust best practices and idiomatic patterns.
-- **Goal:** Provide a developer-friendly, type-safe, and efficient interface for working with OMMX data within Rust.
-
-**2. Protobuf-Generated Structures (e.g., `ommx::v1::Instance`, `ommx::v1::Function`):**
-- These structures are automatically generated from the `.proto` files (e.g., those in `proto/ommx/v1/`).
-- Their **sole purpose** is for **serialization and deserialization** of data to and from the OMMX binary format.
-- They should **not** be used directly for implementing core SDK logic or in public APIs beyond the raw serialization/deserialization layer.
-
-## Data Flow Expectation
-
-**Reading OMMX data:**
-1. Deserialize binary data into Protobuf-generated structs (e.g., `ommx::v1::Instance`).
-2. Convert/map these Protobuf-generated structs into their corresponding idiomatic Rust structs (e.g., `ommx::Instance`).
-3. Use the idiomatic Rust structs for all subsequent operations.
-
-**Writing OMMX data:**
-1. Convert/map idiomatic Rust structs (e.g., `ommx::Instance`) into their corresponding Protobuf-generated structs (e.g., `ommx::v1::Instance`).
-2. Serialize the Protobuf-generated structs into binary data.
-
-## Transition and Current State
-
-- This architectural shift is an **ongoing process**.
-- You may find parts of the existing codebase where Protobuf-generated structs (`ommx::v1::*`) are still used directly in logic that should ideally use idiomatic Rust structs.
-- **When developing new features or refactoring existing code:**
-  - Prioritize the use of idiomatic Rust structs for all logic.
-  - Implement the necessary conversions to/from the `ommx::v1::*` Protobuf structs at the serialization boundaries.
-  - If you encounter legacy code directly using `ommx::v1::*` for logic, and it's within the scope of your task, consider refactoring it to align with this new principle.
-
-## Summary of Key Types
-
-- `ommx::Instance`: Preferred idiomatic Rust struct for representing an optimization instance.
-- `ommx::v1::Instance`: Protobuf-generated struct, use only for serializing/deserializing `ommx::Instance`.
-- This pattern applies to other core OMMX entities like `Function`, `Constraint`, `Variable`, etc. (e.g., `ommx::Function` vs. `ommx::v1::Function`).
-
-## Property-Based Testing Guidelines
-
-When implementing property-based tests (using `proptest`) for mathematical operations in OMMX:
-
-### Test Data Generation Strategies
-
-**Leverage Existing `arbitrary_xxx` Functions:**
-- OMMX provides `arbitrary_xxx` helper functions for generating test data (e.g., `arbitrary_state`).
-- Always prefer using existing generators before creating new ones.
-- Example: Use `arbitrary_state(variable_ids)` to generate consistent test states.
-
-**Create Reusable Test Utilities:**
-- When implementing new test data generators, follow the `arbitrary_xxx` naming convention.
-- Make useful generators public so they can be reused across different test modules.
-- Consider adding them to appropriate modules (e.g., `ommx::random`) for broader availability.
-
-**Test Flow Pattern:**
-1. Generate base mathematical structure (polynomial, function)
-2. Extract required variable IDs
-3. Use `arbitrary_state` or similar generators for test state creation
-4. Apply transformation
-5. Generate transformed state if needed
-6. Verify evaluation equivalence
-
-### Postcondition Categories (Examples)
-
-- **Evaluation Equivalence**: For transformations, verify that evaluation results remain equivalent before and after transformation (e.g., `original.evaluate(state) == transformed.evaluate(transformed_state)`)
-- **Algebraic Properties**: Additivity, scalar multiplication, linearity preservation
-- **Structural Properties**: Degree bounds, coefficient preservation, variable set management
-
-### Common Pitfalls in Property Tests
-
-- **State Coverage**: Ensure generated states cover all variables required for evaluation
-- **Numerical Precision**: Use appropriate tolerance for floating-point comparisons in evaluation equivalence
-- **Floating-Point Comparison**: When comparing mathematical structures like `PolynomialBase` after transformations, use `approx` crate's `AbsDiffEq` trait for tolerance-based equality checks instead of exact equality, as floating-point operations introduce numerical errors even in mathematically equivalent transformations
-- **Edge Case Coverage**: Include boundary conditions like empty inputs, zero values, and extreme ranges
-
-## Common Pitfalls / Frequently Made Mistakes
-
-- **Incorrect `Coefficient` Creation:** When creating a `Coefficient` from an `f64` value, always use `Coefficient::try_from(value).unwrap()` instead of `Coefficient::from(value)`. In test code and documentation, prefer using the `coeff!` macro for cleaner syntax (e.g., `coeff!(1.5)` instead of `Coefficient::try_from(1.5).unwrap()`).
-
-## Macros for Test Code and Documentation
-
-When writing test code and documentation examples, prefer using OMMX convenience macros for better readability and conciseness:
-
-- **`coeff!` macro**: Use `coeff!(value)` instead of `Coefficient::try_from(value).unwrap()` for creating coefficients.
-- **`linear!` macro**: Use `linear!(id)` for creating `ommx::Linear` monomials from variable ID literals (e.g., `linear!(1)` creates a linear monomial for variable x1).
-- **`quadratic!` macro**: Use `quadratic!(id)` for linear terms in quadratic space or `quadratic!(id1, id2)` for quadratic pair terms.
-- **`monomial!` macro**: Use `monomial!(id1, id2, ...)` for creating general monomials of any degree from variable ID literals.
-- **`assign!` macro**: Use `assign! { var_id <- expression, ... }` for creating acyclic variable assignments in test scenarios.
-
-**Important Note**: These macros accept only compile-time literals, not runtime values. For runtime values, use the corresponding constructor functions (e.g., `Coefficient::try_from()`, `LinearMonomial::Variable()`, etc.). These macros provide cleaner, more readable syntax in examples while maintaining the same functionality as their verbose counterparts.
-
-## General Guidance
-- If relevant, consider the ommx library's conventions and APIs. Please ask if you need more specific details about ommx.
+## Common Practices
+- Use `Coefficient::try_from(value).unwrap()` for creating coefficients, or `coeff!` macro in tests
+- Use convenience macros in test code: `linear!`, `quadratic!`, `monomial!`, `assign!`
+- For property-based tests, use existing `arbitrary_xxx` generators when available

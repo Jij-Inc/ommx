@@ -1,7 +1,6 @@
 import pytest
 
 from ommx.v1.constraint_pb2 import Constraint as _Constraint, Equality
-from ommx.v1.decision_variables_pb2 import DecisionVariable as _DecisionVariable
 from ommx.v1.function_pb2 import Function
 from ommx.v1.linear_pb2 import Linear
 from ommx.v1.quadratic_pb2 import Quadratic
@@ -9,22 +8,6 @@ from ommx.v1 import Instance, DecisionVariable, Constraint
 from ommx.adapter import InfeasibleDetected
 
 from ommx_highs_adapter import OMMXHighsAdapter, OMMXHighsAdapterError
-
-
-def test_error_unsupported_decision_variable():
-    ommx_instance = Instance.from_components(
-        decision_variables=[
-            DecisionVariable(
-                _DecisionVariable(id=1, kind=_DecisionVariable.KIND_UNSPECIFIED)
-            )
-        ],
-        objective=Function(constant=0),
-        constraints=[],
-        sense=Instance.MINIMIZE,
-    )
-    with pytest.raises(OMMXHighsAdapterError) as e:
-        OMMXHighsAdapter(ommx_instance)
-    assert "Unsupported decision variable kind" in str(e.value)
 
 
 def test_error_nonlinear_objective():

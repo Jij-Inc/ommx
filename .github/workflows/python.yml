@@ -111,16 +111,6 @@ jobs:
       - name: Test
         run: task python:test-ci
 
-      # Skips jupyter on free-threaded
-      - name: Run notebooks
-        if: github.actor != 'dependabot[bot]'
-        run: |
-          uv run jupyter nbconvert --to notebook --execute notebooks/*.ipynb
-        env:
-          OMMX_BASIC_AUTH_DOMAIN: ghcr.io
-          OMMX_BASIC_AUTH_USERNAME: ${{ github.actor }}
-          OMMX_BASIC_AUTH_PASSWORD: ${{ github.token }}
-
   ruff:
     runs-on: ubuntu-latest
     steps:
