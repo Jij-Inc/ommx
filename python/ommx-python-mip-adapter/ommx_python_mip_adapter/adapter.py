@@ -338,44 +338,30 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         """
         Translate ommx.v1.Function to `mip.LinExpr` or `float`.
         """
-        # Check if function is linear
-        linear_func = f.as_linear()
-        if linear_func is not None:
-            linear_terms = linear_func.linear_terms  # dict[int, float]
-            constant = linear_func.constant_term  # float
-            return (
-                mip.xsum(
-                    coeff * self.model.vars[str(var_id)]  # type: ignore
-                    for var_id, coeff in linear_terms.items()
-                )
-                + constant
-            )  # type: ignore
-        # Check if function is a constant (degree 0)
-        elif f.degree() == 0:
-            # For zero function, num_terms() == 0
-            if f.num_terms() == 0:
-                return mip.LinExpr(const=0.0)  # type: ignore
-            else:
-                # For constant function, get the constant value
-                # We can evaluate it with an empty state to get the constant value
-                from ommx.v1 import State
-
-                empty_state = State(entries={})
-                constant_value = f.evaluate(empty_state)
-                return mip.LinExpr(const=constant_value)  # type: ignore
-
-        raise OMMXPythonMIPAdapterError(
-            "The function must be either `constant` or `linear`."
+        degree = f.degree()
+        constant = f.constant_term
+        if degree > 1:
+            raise OMMXPythonMIPAdapterError(
+                f"Function with degree {degree} is not supported. "
+                "Only linear (degree 1) and constant (degree 0) functions are supported."
+            )
+        if degree == 0:
+            return mip.LinExpr(const=constant)  # type: ignore
+        assert degree == 1
+        return (
+            mip.xsum(
+                coeff * self.model.vars[str(var_id)]  # type: ignore
+                for var_id, coeff in f.linear_terms.items()
+            )
+            + constant
         )
 
     def _set_objective(self):
-        objective_func = Function.from_raw(self.instance.raw.objective)
-        self.model.objective = self._as_lin_expr(objective_func)  # type: ignore
+        self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for constraint_id, constraint in self.instance.raw.constraints.items():
-            constraint_func = Function.from_raw(constraint.function)
-            lin_expr = self._as_lin_expr(constraint_func)
+        for constraint in self.instance.get_constraints():
+            lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0
             elif constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO:

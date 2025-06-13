@@ -16,7 +16,7 @@ def test_error_nonlinear_objective():
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
-    assert "The function must be either `constant` or `linear`." in str(e.value)
+    assert "Function with degree 2 is not supported. Only linear (degree 1) and constant (degree 0) functions are supported." in str(e.value)
 
 
 def test_error_nonlinear_constraint():
@@ -32,4 +32,4 @@ def test_error_nonlinear_constraint():
 
     with pytest.raises(OMMXPythonMIPAdapterError) as e:
         OMMXPythonMIPAdapter(ommx_instance)
-    assert "The function must be either `constant` or `linear`." in str(e.value)
+    assert "Function with degree 2 is not supported. Only linear (degree 1) and constant (degree 0) functions are supported." in str(e.value)
