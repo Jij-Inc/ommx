@@ -1021,16 +1021,6 @@ class Instance(InstanceBase, UserAnnotationBase):
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return instance.as_hubo_format()
 
-    def as_pubo_format(self) -> dict[tuple[int, ...], float]:
-        """
-        Convert unconstrained polynomial instance to simple PUBO format.
-
-        This method is designed for better composability rather than easy-to-use.
-        This does not execute any conversion of the instance, only translates the data format.
-        """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return instance.as_pubo_format()
-
     def penalty_method(self) -> ParametricInstance:
         r"""
         Convert to a parametric unconstrained instance by penalty method.
