@@ -156,6 +156,22 @@ class Constraint:
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
+class ConstraintHints:
+    r"""
+    ConstraintHints wrapper for Python
+    """
+
+    one_hot_constraints: builtins.list[OneHot]
+    sos1_constraints: builtins.list[Sos1]
+    def __new__(
+        cls,
+        one_hot_constraints: typing.Sequence[OneHot] = [],
+        sos1_constraints: typing.Sequence[Sos1] = [],
+    ) -> ConstraintHints: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> ConstraintHints: ...
+    def __deepcopy__(self, _memo: typing.Any) -> ConstraintHints: ...
+
 class DecisionVariable:
     r"""
     DecisionVariable wrapper for Python
@@ -369,6 +385,7 @@ class Instance:
     constraints: builtins.dict[builtins.int, Constraint]
     removed_constraints: builtins.dict[builtins.int, RemovedConstraint]
     description: typing.Optional[InstanceDescription]
+    constraint_hints: ConstraintHints
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
@@ -378,6 +395,7 @@ class Instance:
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
         description: typing.Optional[InstanceDescription] = None,
+        constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance: ...
     def set_objective(self, objective: Function) -> None: ...
     def to_bytes(self) -> bytes: ...
@@ -456,6 +474,20 @@ class Linear:
     def partial_evaluate(self, state: bytes) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
+
+class OneHot:
+    r"""
+    OneHot constraint hint wrapper for Python
+    """
+
+    id: builtins.int
+    variables: builtins.list[builtins.int]
+    def __new__(
+        cls, id: builtins.int, variables: typing.Sequence[builtins.int]
+    ) -> OneHot: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> OneHot: ...
+    def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
 
 class Parameters:
     @staticmethod
@@ -589,6 +621,24 @@ class Solution:
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
+
+class Sos1:
+    r"""
+    SOS1 constraint hint wrapper for Python
+    """
+
+    binary_constraint_id: builtins.int
+    big_m_constraint_ids: builtins.list[builtins.int]
+    variables: builtins.list[builtins.int]
+    def __new__(
+        cls,
+        binary_constraint_id: builtins.int,
+        big_m_constraint_ids: typing.Sequence[builtins.int],
+        variables: typing.Sequence[builtins.int],
+    ) -> Sos1: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> Sos1: ...
+    def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
 
 class Equality(Enum):
     r"""

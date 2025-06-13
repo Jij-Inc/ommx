@@ -1,4 +1,4 @@
-use crate::{Constraint, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
+use crate::{Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense, VariableBound};
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
@@ -24,13 +24,14 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None))]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None, constraint_hints = None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
         description: Option<InstanceDescription>,
+        constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
         let rust_sense = sense.into();
 
@@ -45,12 +46,16 @@ impl Instance {
             .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
             .collect();
 
+        let rust_constraint_hints = constraint_hints
+            .map(|hints| hints.0)
+            .unwrap_or_default();
+
         let mut instance = ommx::Instance::new(
             rust_sense,
             objective.0,
             rust_decision_variables,
             rust_constraints,
-            ommx::ConstraintHints::default(),
+            rust_constraint_hints,
         )?;
 
         // Set description if provided
@@ -116,6 +121,11 @@ impl Instance {
             .description
             .as_ref()
             .map(|desc| InstanceDescription(desc.clone()))
+    }
+
+    #[getter]
+    pub fn constraint_hints(&self) -> ConstraintHints {
+        ConstraintHints(self.0.constraint_hints().clone())
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {

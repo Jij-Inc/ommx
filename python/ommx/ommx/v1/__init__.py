@@ -42,6 +42,11 @@ Sense = _ommx_rust.Sense
 Equality = _ommx_rust.Equality
 Kind = _ommx_rust.Kind
 
+# Import constraint hints classes directly
+OneHot = _ommx_rust.OneHot
+Sos1 = _ommx_rust.Sos1
+ConstraintHints = _ommx_rust.ConstraintHints
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -55,6 +60,10 @@ __all__ = [
     "Quadratic",
     "Polynomial",
     "Function",
+    # Constraint hints
+    "OneHot",
+    "Sos1",
+    "ConstraintHints",
     # Imported from protobuf
     "State",
     "Samples",
@@ -264,6 +273,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         description: Optional["Instance.Description | _Instance.Description"] = None,
+        constraint_hints: Optional[ConstraintHints] = None,
     ) -> Instance:
         if not isinstance(objective, Function):
             objective = Function(objective)
@@ -307,6 +317,9 @@ class Instance(InstanceBase, UserAnnotationBase):
                     else None,
                 )
 
+        # Convert constraint hints if provided
+        rust_constraint_hints = constraint_hints
+
         # Create Rust instance
         rust_instance = _ommx_rust.Instance.from_components(
             sense=sense,
@@ -314,6 +327,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             decision_variables=rust_decision_variables,
             constraints=rust_constraints,
             description=rust_description,
+            constraint_hints=rust_constraint_hints,
         )
 
         return Instance(rust_instance)
@@ -440,6 +454,11 @@ class Instance(InstanceBase, UserAnnotationBase):
     @property
     def sense(self) -> _ommx_rust.Sense:
         return self.raw.sense
+
+    @property
+    def constraint_hints(self) -> ConstraintHints:
+        """Get constraint hints that provide additional information to solvers."""
+        return self.raw.constraint_hints
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
@@ -3258,6 +3277,7 @@ class Function(AsConstraint):
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
         return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
+
 
 
 @dataclass
