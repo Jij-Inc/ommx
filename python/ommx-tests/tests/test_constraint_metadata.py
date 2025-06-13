@@ -2,7 +2,7 @@
 Test metadata modification functionality for Constraint
 """
 
-from ommx.v1 import DecisionVariable
+from ommx.v1 import DecisionVariable, Constraint
 
 
 def test_constraint_add_name():
@@ -190,7 +190,6 @@ def test_constraint_metadata_efficiency():
 
 def test_constraint_constructor_with_metadata():
     """Test Constraint constructor properly handles description and parameters"""
-    from ommx.v1 import Constraint
 
     x = DecisionVariable.binary(0)
     function = x + 1
@@ -216,8 +215,6 @@ def test_constraint_constructor_with_metadata():
 
 def test_constraint_constructor_partial_metadata():
     """Test Constraint constructor with partial metadata"""
-    from ommx.v1 import Constraint
-
     x = DecisionVariable.binary(0)
     function = x - 2
 
