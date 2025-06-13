@@ -1,6 +1,13 @@
 use super::Instance;
 use crate::{polynomial_base::Linear, Bound, Coefficient, VariableID};
-use anyhow::{bail, ensure, Result};
+
+#[derive(Debug, thiserror::Error)]
+pub enum LogEncodingError {
+    #[error("Bound must be finite for log-encoding: {0}")]
+    NonFiniteBound(Bound),
+    #[error("No feasible integer values found in the bound: {0}")]
+    NoFeasibleInteger(Bound),
+}
 
 /// Calculate log-encoding coefficients for a given bound.
 ///
@@ -27,27 +34,20 @@ use anyhow::{bail, ensure, Result};
 /// use ommx::{coeff, Bound};
 ///
 /// ```
-fn log_encoding_coefficients(bound: &Bound) -> Result<(Vec<Coefficient>, f64)> {
+fn log_encoding_coefficients(bound: &Bound) -> Result<(Vec<Coefficient>, f64), LogEncodingError> {
     // Check bounds are finite
     if !bound.lower().is_finite() || !bound.upper().is_finite() {
-        bail!(
-            "Bound must be finite for log-encoding: lower={}, upper={}",
-            bound.lower(),
-            bound.upper()
-        );
+        return Err(LogEncodingError::NonFiniteBound(bound.clone()));
     }
 
     // Bound of integer may be non-integer value, so floor/ceil to get valid integer range
     let upper = bound.upper().floor();
     let lower = bound.lower().ceil();
     let u_l = upper - lower;
-
-    ensure!(
-        u_l >= 0.0,
-        "No feasible integer found in the bound: lower={}, upper={}",
-        bound.lower(),
-        bound.upper()
-    );
+    if u_l < 0.0 {
+        // No feasible integer values in the range
+        return Err(LogEncodingError::NoFeasibleInteger(bound.clone()));
+    }
 
     // There is only one feasible integer, and no need to encode
     if u_l == 0.0 {
@@ -56,29 +56,19 @@ fn log_encoding_coefficients(bound: &Bound) -> Result<(Vec<Coefficient>, f64)> {
 
     // Log-encoding: calculate number of binary variables needed
     let n = (u_l + 1.0).log2().ceil() as usize;
-
-    let mut coefficients = Vec::new();
-
-    // Calculate coefficient for each binary variable
-    for i in 0..n {
-        let coeff_value = if i == n - 1 {
-            // Last binary variable gets special coefficient to handle exact range
-            u_l - 2.0f64.powi(i as i32) + 1.0
-        } else {
-            // Other variables get power of 2 coefficients
-            2.0f64.powi(i as i32)
-        };
-
-        // Convert to Coefficient, handling potential zero coefficients
-        match Coefficient::try_from(coeff_value) {
-            Ok(coeff) => coefficients.push(coeff),
-            Err(_) => {
-                // Skip zero coefficients
-                // This shouldn't happen in log-encoding, but handle gracefully
-                continue;
-            }
-        }
-    }
+    let coefficients = (0..n)
+        .map(|i| {
+            // Calculate coefficient for each binary variable
+            let coeff_value = if i == n - 1 {
+                // Last binary variable gets special coefficient to handle exact range
+                u_l - 2.0f64.powi(i as i32) + 1.0
+            } else {
+                // Other variables get power of 2 coefficients
+                2.0f64.powi(i as i32)
+            };
+            Coefficient::try_from(coeff_value).unwrap()
+        })
+        .collect::<Vec<_>>();
 
     Ok((coefficients, lower))
 }
@@ -91,7 +81,7 @@ impl Instance {
     /// variables where each binary variable represents a power of 2, allowing representation of
     /// any integer value in the original range.
     ///
-    pub fn log_encode(&mut self, _id: VariableID) -> Result<Linear> {
+    pub fn log_encode(&mut self, _id: VariableID) -> Result<Linear, LogEncodingError> {
         todo!()
     }
 }
