@@ -659,6 +659,46 @@ impl Function {
             .collect()
     }
 
+    /// Get linear terms as a dictionary mapping variable id to coefficient.
+    ///
+    /// Returns dictionary mapping variable IDs to their linear coefficients.
+    /// Returns empty dict if function has no linear terms.
+    /// Works for all polynomial functions by filtering only degree-1 terms.
+    #[getter]
+    pub fn linear_terms(&self) -> BTreeMap<u64, f64> {
+        self.0
+            .linear_terms()
+            .map(|(id, coeff)| (id.into_inner(), coeff.into_inner()))
+            .collect()
+    }
+
+    /// Get quadratic terms as a dictionary mapping (row, col) to coefficient.
+    ///
+    /// Returns dictionary mapping variable ID pairs to their quadratic coefficients.
+    /// Returns empty dict if function has no quadratic terms.
+    /// Works for all polynomial functions by filtering only degree-2 terms.
+    #[getter]
+    pub fn quadratic_terms(&self) -> BTreeMap<(u64, u64), f64> {
+        self.0
+            .quadratic_terms()
+            .map(|(pair, coeff)| {
+                (
+                    (pair.lower().into_inner(), pair.upper().into_inner()),
+                    coeff.into_inner(),
+                )
+            })
+            .collect()
+    }
+
+    /// Get the constant term of the function.
+    ///
+    /// Returns the constant term. Returns 0.0 if function has no constant term.
+    /// Works for all polynomial functions by filtering the degree-0 term.
+    #[getter]
+    pub fn constant_term(&self) -> f64 {
+        self.0.constant_term()
+    }
+
     #[staticmethod]
     #[pyo3(signature = (
         rng,

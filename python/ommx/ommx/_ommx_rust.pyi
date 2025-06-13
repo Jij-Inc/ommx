@@ -268,6 +268,29 @@ class Descriptor:
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
 
 class Function:
+    linear_terms: builtins.dict[builtins.int, builtins.float]
+    r"""
+    Get linear terms as a dictionary mapping variable id to coefficient.
+    
+    Returns dictionary mapping variable IDs to their linear coefficients.
+    Returns empty dict if function has no linear terms.
+    Works for all polynomial functions by filtering only degree-1 terms.
+    """
+    quadratic_terms: builtins.dict[tuple[builtins.int, builtins.int], builtins.float]
+    r"""
+    Get quadratic terms as a dictionary mapping (row, col) to coefficient.
+    
+    Returns dictionary mapping variable ID pairs to their quadratic coefficients.
+    Returns empty dict if function has no quadratic terms.
+    Works for all polynomial functions by filtering only degree-2 terms.
+    """
+    constant_term: builtins.float
+    r"""
+    Get the constant term of the function.
+    
+    Returns the constant term. Returns 0.0 if function has no constant term.
+    Works for all polynomial functions by filtering the degree-0 term.
+    """
     @staticmethod
     def from_scalar(scalar: builtins.float) -> Function: ...
     @staticmethod

@@ -3087,6 +3087,92 @@ class Function(AsConstraint):
             return None
         return Quadratic.from_raw(quadratic_raw)
 
+    @property
+    def linear_terms(self) -> dict[int, float]:
+        """
+        Get linear terms as a dictionary mapping variable id to coefficient.
+
+        Returns:
+            Dictionary mapping variable IDs to their linear coefficients.
+            Returns empty dict if function has no linear terms.
+            Works for all polynomial functions by filtering only degree-1 terms.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> f = Function(2*x1 + 3*x2 + 5)
+            >>> f.linear_terms
+            {1: 2.0, 2: 3.0}
+
+            >>> f_const = Function(5)
+            >>> f_const.linear_terms
+            {}
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
+            >>> f_cubic.linear_terms
+            {1: 2.0}
+        """
+        return self.raw.linear_terms
+
+    @property
+    def quadratic_terms(self) -> dict[tuple[int, int], float]:
+        """
+        Get quadratic terms as a dictionary mapping (row, col) to coefficient.
+
+        Returns:
+            Dictionary mapping variable ID pairs to their quadratic coefficients.
+            Returns empty dict if function has no quadratic terms.
+            Works for all polynomial functions by filtering only degree-2 terms.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> x2 = DecisionVariable.integer(2)
+            >>> f = Function(2*x1*x2 + 3*x1 + 5)
+            >>> f.quadratic_terms
+            {(1, 2): 2.0}
+
+            >>> f_linear = Function(3*x1 + 5)
+            >>> f_linear.quadratic_terms
+            {}
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1*x2 + 5)
+            >>> f_cubic.quadratic_terms
+            {(1, 2): 2.0}
+        """
+        return self.raw.quadratic_terms
+
+    @property
+    def constant_term(self) -> float:
+        """
+        Get the constant term of the function.
+
+        Returns:
+            The constant term. Returns 0.0 if function has no constant term.
+            Works for all polynomial functions by filtering the degree-0 term.
+
+        Examples:
+            >>> x1 = DecisionVariable.integer(1)
+            >>> f = Function(2*x1 + 5)
+            >>> f.constant_term
+            5.0
+
+            >>> f_no_const = Function(2*x1)
+            >>> f_no_const.constant_term
+            0.0
+
+            >>> f_const_only = Function(7)
+            >>> f_const_only.constant_term
+            7.0
+
+            >>> # Works for higher degree polynomials too
+            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
+            >>> f_cubic.constant_term
+            5.0
+        """
+        return self.raw.constant_term
+
     def __repr__(self) -> str:
         return self.raw.__repr__()
 
