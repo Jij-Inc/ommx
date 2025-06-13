@@ -111,35 +111,10 @@ constraint = Constraint(
 
 ### 5. Enum 定数
 
-**重要**: `Instance.MAXIMIZE`/`Instance.MINIMIZE`の値は自動的に更新されているため、変更は不要です。
-
-**旧方式**:
-```python
-# Constraint equality - これらは変更が必要
-Constraint.EQUAL_TO_ZERO
-Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-
-# DecisionVariable kind - 通常は変更不要
-DecisionVariable.BINARY
-DecisionVariable.INTEGER
-DecisionVariable.CONTINUOUS
-```
-
-**新方式**:
-```python
-# Constraint equality - Python SDK定数を使用（推奨）
-Constraint.EQUAL_TO_ZERO
-Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-
-# Instance sense - 変更不要（値が自動更新）
-Instance.MAXIMIZE  # そのまま使用可能
-Instance.MINIMIZE  # そのまま使用可能
-
-# DecisionVariable kind - 通常は変更不要
-DecisionVariable.BINARY     # そのまま使用可能
-DecisionVariable.INTEGER    # そのまま使用可能  
-DecisionVariable.CONTINUOUS # そのまま使用可能
-```
+**変更不要**: 以下の定数は互換性が保たれているため、そのまま使用可能です：
+- `Instance.MAXIMIZE` / `Instance.MINIMIZE`
+- `Constraint.EQUAL_TO_ZERO` / `Constraint.LESS_THAN_OR_EQUAL_TO_ZERO`
+- `DecisionVariable.BINARY` / `DecisionVariable.INTEGER` / `DecisionVariable.CONTINUOUS`
 
 ### 6. Function 検査・変換
 
@@ -153,54 +128,71 @@ if function.HasField("linear"):
 
 **新方式**:
 ```python
-# Python SDK の as_linear メソッド
-linear_func = function.as_linear()
-if linear_func is not None:
-    linear_terms = linear_func.linear_terms  # dict[int, float] - プロパティ
-    constant = linear_func.constant_term     # float - プロパティ
+# Function.degree() を使って多項式の次数を確認し、直接プロパティアクセス
+degree = function.degree()
+if degree == 0:
+    # 定数関数
+    constant = function.constant_term
+elif degree == 1:
+    # 線形関数 - 直接プロパティアクセス
+    linear_terms = function.linear_terms      # dict[int, float]
+    constant = function.constant_term         # float
+elif degree == 2:
+    # 二次関数 - 直接プロパティアクセス
+    quadratic_terms = function.quadratic_terms  # dict[tuple[int, int], float]
+    linear_terms = function.linear_terms        # dict[int, float]
+    constant = function.constant_term           # float
+
+# 実際のアダプターでの使用例（PySCIPOpt）:
+def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
+    return (
+        pyscipopt.quicksum(
+            coeff * self.varname_map[str(id)]
+            for id, coeff in f.linear_terms.items()
+        )
+        + f.constant_term
+    )
+
+def _make_quadratic_expr(self, f: Function) -> pyscipopt.Expr:
+    # 二次項
+    quad_terms = pyscipopt.quicksum(
+        self.varname_map[str(row)] * self.varname_map[str(col)] * coeff
+        for (row, col), coeff in f.quadratic_terms.items()
+    )
+    # 線形項
+    linear_terms = pyscipopt.quicksum(
+        coeff * self.varname_map[str(var_id)]
+        for var_id, coeff in f.linear_terms.items()
+    )
+    return quad_terms + linear_terms + f.constant_term
 ```
 
 ### 7. 属性アクセス
 
-**旧方式**:
-```python
-# Protocol Buffer フィールドアクセス
-ommx_instance = model_to_instance(model).raw
-decision_var.kind == DecisionVariable.CONTINUOUS
-constraint.equality == Constraint.EQUAL_TO_ZERO
-```
-
-**新方式**:
-```python
-# Rust wrapper プロパティアクセス
-ommx_instance = model_to_instance(model)  # .raw不要
-decision_var.kind == DecisionVariable.Kind.Continuous
-constraint.equality == Equality.EqualToZero
-```
+**主な変更点**:
+- `.raw`属性アクセスが不要に（一部のケースを除く）
+- 多くの属性はそのまま使用可能
 
 ## 新しく利用可能なメソッド
 
 ### Function クラス
 ```python
-# 型変換・検査
-function.as_linear() -> Optional[Linear]
-function.as_quadratic() -> Optional[Quadratic]  # 今後追加予定
-
 # 情報取得
 function.degree() -> int      # 関数の次数
 function.num_terms() -> int   # 項数
 
+# 直接プロパティアクセス（推奨）
+function.constant_term      # float - 定数項
+function.linear_terms       # dict[int, float] - 線形項の係数
+function.quadratic_terms    # dict[tuple[int, int], float] - 二次項の係数
+
 # 評価
 function.evaluate(state: State | dict[int, float]) -> float
 function.partial_evaluate(state: State | dict[int, float]) -> Function
-```
 
-### Linear クラス
-```python
-# プロパティ
-linear.linear_terms  # dict[int, float] - 定数項を除く線形項
-linear.constant_term # float - 定数項
-linear.terms        # dict[tuple[int, ...], float] - すべての項
+# 型変換メソッド（通常は不要）
+function.as_linear() -> Optional[Linear]      # degree()とプロパティアクセスの使用を推奨
+function.as_quadratic() -> Optional[Quadratic]  # degree()とプロパティアクセスの使用を推奨
 ```
 
 ## マイグレーション手順
@@ -215,15 +207,13 @@ linear.terms        # dict[tuple[int, ...], float] - すべての項
 1. `DecisionVariable.of_type()`を型別メソッドに変更
 2. `Function`と`Constraint`の直接作成をファクトリーメソッドに変更
 
-### ステップ 3: Enum定数の更新
-1. `Instance.MAXIMIZE`/`Instance.MINIMIZE`は変更不要（値が自動更新）
-2. `Constraint.EQUAL_TO_ZERO`等はそのまま使用可能
-3. 特別なインポートは不要
+### ステップ 3: Enum定数の確認
+- Enum定数は互換性が保たれているため変更不要
 
 ### ステップ 4: Protocol Buffer API除去
-1. `.HasField()`呼び出しを`.as_linear()`等に変更
+1. `.HasField()`呼び出しを`.degree()`チェックと直接プロパティアクセスに変更
 2. `.raw`属性アクセスを直接アクセスに変更
-3. フィールド直接アクセスをメソッド呼び出しに変更
+3. フィールド直接アクセスをプロパティアクセスに変更
 
 ### ステップ 5: テストの更新
 1. テストの期待値を新しいAPI仕様に合わせて更新
@@ -237,19 +227,13 @@ linear.terms        # dict[tuple[int, ...], float] - すべての項
 
 ### 問題 2: `AttributeError: 'builtins.Function' object has no attribute 'HasField'`
 **原因**: 新しいFunctionクラスにProtocol Bufferメソッドがない
-**解決**: `.as_linear()`メソッドを使用
+**解決**: `.degree()`でチェック後、直接プロパティアクセス（`.linear_terms`, `.constant_term`など）
 
-### 問題 3: `ImportError: cannot import name 'Sense' from 'ommx.v1'`
-**原因**: `Sense`enumの使用が不要
-**解決**: `Instance.MAXIMIZE`/`Instance.MINIMIZE`をそのまま使用
 
-### 問題 4: `AttributeError: type object 'Function' has no attribute 'from_scalar'`
-**原因**: Python Functionクラスでなく_ommx_rust.Functionを使う必要
-**解決**: 正しいインポートパスを使用
 
-### 問題 5: `TypeError: 'float' object is not callable`
-**原因**: `Linear.constant_term()`をメソッドとして呼び出している
-**解決**: プロパティとしてアクセス（`Linear.constant_term`）
+### 問題 3: `TypeError: 'float' object is not callable`
+**原因**: `function.constant_term()`をメソッドとして呼び出している
+**解決**: プロパティとしてアクセス（`function.constant_term`）
 
 ## パフォーマンス向上
 
@@ -273,131 +257,28 @@ task python:ommx-openjij-adapter:test
 task python:test
 ```
 
-## 技術的知見集
+## 重要な注意事項
 
-このセクションでは、マイグレーション作業中に発見された重要な技術的知見をまとめています。
+### Function 検査の変更
+`.HasField("linear")`の代わりに`.degree()`チェックと直接プロパティアクセスを使用
 
-### 1. DecisionVariable データ構造の変化
-**発見**: 新しいAPIでは`DecisionVariable`は単なるintでなくラッパーオブジェクト  
-**影響**: `.kind`属性アクセスパターンが変更  
-**解決策**: 整数定数での比較を継続使用
+### Import方針
+すべて`ommx.v1`から統一的にインポートし、`_ommx_rust`からの直接インポートは避ける
 
-**修正パターン**:
+### 制約処理順序
+制約の種類判定では次数の小さいものから順にチェック：
+
 ```python
-# PyO3 Enumを使用
-if var.kind == DecisionVariable.BINARY:    # 整数定数との比較
-if var.kind == Kind.Binary:               # PyO3 Enumとの比較
-
-# どちらも正常動作
-```
-
-### 2. Function 検査の新パラダイム
-**発見**: `.HasField("linear")`の代替として`.as_linear()`が利用可能  
-**利点**: より直感的なAPI、型安全性の向上、パフォーマンス向上（Rust実装）
-
-**実装例**:
-```python
-# 旧方式 (Protocol Buffer)
-if obj.HasField("linear"):
-    terms = obj.linear.terms
-    constant = obj.linear.constant
-    
-# 新方式 (Rust-PyO3)
-linear_obj = obj.as_linear()
-if linear_obj is not None:
-    terms = linear_obj.linear_terms     # プロパティアクセス（dict[int, float]）
-    constant = linear_obj.constant_term # プロパティアクセス（float）
-```
-
-### 3. Import階層の整理
-**発見**: 統一されたAPIの使用を推奨  
-**理由**: APIの一貫性とメンテナンス性の向上
-
-**推奨パターン**:
-```python
-# すべてommx.v1から統一的にインポート
-from ommx.v1 import Instance, DecisionVariable, Constraint, Function, Linear
-
-# _ommx_rustからの直接インポートは避ける（非推奨）
-# from ommx._ommx_rust import Function, Linear  # 避ける
-```
-
-### 4. エラーパターンと診断方法
-
-**パターン A**: `'int' object has no attribute 'kind'`
-- **原因**: `for var in instance.raw.decision_variables:`でキー（int）を取得している
-- **修正**: `for var_id, var in instance.raw.decision_variables.items():`
-
-**パターン B**: `'builtins.Function' object has no attribute 'HasField'`
-- **原因**: 新しいFunctionクラスにProtocol Bufferメソッドなし
-- **解決**: `.as_linear()`等の新メソッド使用
-
-### 5. API構造の変化理解
-**発見**: Instance.decision_variablesの戻り値型が変化
-- **旧API (.raw)**: `dict[int, DecisionVariable]` - kind は整数定数
-- **新API**: `DataFrame` - kind は文字列 ('binary', 'integer', 'continuous')
-
-### 6. Constraint 作成パターンの改善
-**発見**: `Constraint()` コンストラクタが `_ommx_rust.Function` と `_ommx_rust.Equality` を直接受け取り可能
-- **利点**: `from_raw()` による変換が不要、よりシンプルなAPI
-- **型対応**: Protocol Buffer値とRust enum値の両方をサポート
-
-**実装パターン**:
-```python
-# シンプルなコンストラクタパターン
-constraint = Constraint(
-    id=id,
-    function=function,  # _ommx_rust.Function を直接使用
-    equality=Equality.EqualToZero,  # _ommx_rust.Equality を直接使用
-    name=name,
-)
-```
-
-### 11. 制約処理順序の重要性（PySCIPOpt Adapter）
-**発見**: 制約の種類判定で順序が重要 - degree-based チェックを type-based チェックより先に実行する必要がある
-**影響**: 定数制約（`-1 = 0`, `1 <= 0`）のバリデーションが実行されずに通過してしまう
-**解決策**: 制約処理の順序を修正
-
-**修正パターン**:
-```python
-# 問題のあるパターン（定数制約のバリデーションが実行されない）
-if constraint_func.as_linear() is not None:    # 定数関数も線形関数なのでここにマッチ
-    expr = self._make_linear_expr(constraint_func)  # 線形制約として処理
-elif constraint_func.degree() == 0:            # 定数制約チェックに到達しない
-    # バリデーションロジックが実行されない
-
-# 正しいパターン（定数制約を最初にチェック）
-if constraint_func.degree() == 0:              # 定数制約を最初にチェック
-    # 適切な定数制約バリデーション
-elif constraint_func.as_linear() is not None:  # 非定数の線形制約
+if constraint_func.degree() == 0:              # 定数制約
+    # 定数制約バリデーション
+elif constraint_func.degree() == 1:            # 線形制約
     expr = self._make_linear_expr(constraint_func)
+elif constraint_func.degree() == 2:            # 二次制約
+    expr = self._make_quadratic_expr(constraint_func)
 ```
 
-**影響**: 数学的に実行不可能な問題（`-1 = 0`など）がソルバーに渡され、実行時エラーや誤った結果の原因となる
 
-### 12. Linear/Quadratic オブジェクトのプロパティアクセス
-**発見**: `Linear.constant_term`と`Linear.linear_terms`はプロパティであり、メソッドではない
-**影響**: メソッド呼び出し（括弧付き）すると`TypeError: 'float' object is not callable`等のエラーが発生
-**解決策**: プロパティとして正しくアクセス
-
-**修正パターン**:
-```python
-# 間違った記述（メソッド呼び出し）
-linear_func = function.as_linear()
-constant_value = linear_func.constant_term()  # TypeError
-terms = linear_func.linear_terms()           # TypeError
-
-# 正しい記述（プロパティアクセス）
-linear_func = function.as_linear()
-constant_value = linear_func.constant_term  # float
-terms = linear_func.linear_terms           # dict[int, float]
-
-# Quadraticでも同様
-quad_func = function.as_quadratic()
-constant_value = quad_func.constant_term   # プロパティアクセス
-```
-
-### 13. Function APIアクセス方法
+## 検証戦略
 **発見**: `instance.objective.as_linear()` は不可、`.raw` 経由でアクセス必要
 
 **修正パターン**:
@@ -439,7 +320,7 @@ def from_components(
 
 **修正前（バグ）**:
 ```python
-if constraint_func.as_linear() is not None:        # 定数関数もここでマッチ
+if constraint_func.degree() >= 1:                  # 線形以上の次数をチェック
     expr = self._make_linear_expr(constraint_func)  # 線形として処理
 elif constraint_func.degree() == 0:                # 定数の場合は到達しない
     # 妥当性検証ロジック（実行されない）
@@ -449,8 +330,10 @@ elif constraint_func.degree() == 0:                # 定数の場合は到達し
 ```python
 if constraint_func.degree() == 0:                  # 定数を最初にチェック
     # 適切な定数制約妥当性検証
-elif constraint_func.as_linear() is not None:      # 非定数の線形関数
+elif constraint_func.degree() == 1:                # 線形関数
     expr = self._make_linear_expr(constraint_func)
+elif constraint_func.degree() == 2:                # 二次関数
+    expr = self._make_quadratic_expr(constraint_func)
 ```
 
 **影響**: このバグにより、数学的に不可能な問題（`-1 = 0`など）が適切に検証されずにソルバーに渡される可能性があった。
@@ -552,11 +435,14 @@ var2 = DecisionVariable.integer(1, lower=0, upper=10, name="x2")
 linear = Linear(terms={0: 1.0, 1: 2.0}, constant=3.0)
 objective = Function(linear)
 
-# Function検査 (プロパティアクセス)
-linear_func = objective.as_linear()
-if linear_func is not None:
-    terms = linear_func.linear_terms      # dict[int, float] - プロパティ
-    constant = linear_func.constant_term  # float - プロパティ
+# Function検査 (直接プロパティアクセス)
+if objective.degree() == 1:
+    terms = objective.linear_terms      # dict[int, float] - プロパティ
+    constant = objective.constant_term  # float - プロパティ
+elif objective.degree() == 2:
+    linear_terms = objective.linear_terms        # dict[int, float]
+    quadratic_terms = objective.quadratic_terms  # dict[tuple[int, int], float]
+    constant = objective.constant_term           # float
 
 # Constraint作成
 constraint = Constraint(
