@@ -918,7 +918,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ineq_ids = [
             c.id
             for c in self.get_constraints()
-            if c.equality == Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
+            if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
             try:
