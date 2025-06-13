@@ -28,9 +28,7 @@ def test_error_nonlinear_constraint():
     ommx_instance = Instance.from_components(
         decision_variables=[x],
         objective=0,  # constant 0
-        constraints=[
-            2.3 * x * x == 0
-        ],
+        constraints=[2.3 * x * x == 0],
         sense=Instance.MINIMIZE,
     )
 
