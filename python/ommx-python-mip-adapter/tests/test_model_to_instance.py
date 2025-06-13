@@ -47,21 +47,21 @@ def test_milp():
 
     assert ommx_instance.sense == Instance.MINIMIZE
 
-    # Check the decision variables using .raw for direct dict access
-    assert len(ommx_instance.raw.decision_variables) == 3
-    decision_variables_x1 = ommx_instance.raw.decision_variables[0]
+    # Check the decision variables
+    assert len(ommx_instance.get_decision_variables()) == 3
+    decision_variables_x1 = ommx_instance.get_decision_variable(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == CONTINUOUS_LOWER_BOUND
     assert decision_variables_x1.bound.upper == CONTINUOUS_UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.raw.decision_variables[1]
+    decision_variables_x2 = ommx_instance.get_decision_variable(1)
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.INTEGER
     assert decision_variables_x2.bound.lower == INTEGER_LOWER_BOUND
     assert decision_variables_x2.bound.upper == INTEGER_UPPER_BOUND
     assert decision_variables_x2.name == "2"
-    decision_variables_x3 = ommx_instance.raw.decision_variables[2]
+    decision_variables_x3 = ommx_instance.get_decision_variable(2)
     assert decision_variables_x3.id == 2
     assert decision_variables_x3.kind == DecisionVariable.BINARY
     assert decision_variables_x3.bound.lower == 0
@@ -69,7 +69,7 @@ def test_milp():
     assert decision_variables_x3.name == "3"
 
     # Check the objective function
-    objective_linear = ommx_instance.raw.objective.as_linear()
+    objective_linear = ommx_instance.objective.as_linear()
     assert objective_linear is not None
     assert objective_linear.constant_term == 0
     linear_terms = objective_linear.linear_terms
@@ -78,10 +78,10 @@ def test_milp():
     assert linear_terms[1] == -2
     assert linear_terms[2] == -3
 
-    # Check the constraints using .raw for access
-    assert len(ommx_instance.raw.constraints) == 3
+    # Check the constraints
+    assert len(ommx_instance.get_constraints()) == 3
 
-    constraint1 = ommx_instance.raw.constraints[0]
+    constraint1 = ommx_instance.get_constraint(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
@@ -91,7 +91,7 @@ def test_milp():
     assert constraint1_terms[0] == 4
     assert constraint1_terms[1] == -5
 
-    constraint2 = ommx_instance.raw.constraints[1]
+    constraint2 = ommx_instance.get_constraint(1)
     assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
@@ -101,7 +101,7 @@ def test_milp():
     assert constraint2_terms[0] == -7
     assert constraint2_terms[2] == 8
 
-    constraint3 = ommx_instance.raw.constraints[2]
+    constraint3 = ommx_instance.get_constraint(2)
     assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     constraint3_linear = constraint3.function.as_linear()
     assert constraint3_linear is not None
@@ -144,15 +144,15 @@ def test_no_objective_model():
 
     assert ommx_instance.sense == Instance.MAXIMIZE
 
-    # Check the decision variables using .raw for direct dict access
-    assert len(ommx_instance.raw.decision_variables) == 2
-    decision_variables_x1 = ommx_instance.raw.decision_variables[0]
+    # Check the decision variables
+    assert len(ommx_instance.get_decision_variables()) == 2
+    decision_variables_x1 = ommx_instance.get_decision_variable(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == LOWER_BOUND
     assert decision_variables_x1.bound.upper == UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.raw.decision_variables[1]
+    decision_variables_x2 = ommx_instance.get_decision_variable(1)
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x2.bound.lower == LOWER_BOUND
@@ -160,13 +160,13 @@ def test_no_objective_model():
     assert decision_variables_x2.name == "2"
 
     # check the objective function - should be a zero constant
-    assert ommx_instance.raw.objective.degree() == 0
-    assert ommx_instance.raw.objective.num_terms() == 0  # Zero function has 0 terms
+    assert ommx_instance.objective.degree() == 0
+    assert ommx_instance.objective.num_terms() == 0  # Zero function has 0 terms
 
-    # Check the constraints using .raw for access
-    assert len(ommx_instance.raw.constraints) == 2
+    # Check the constraints
+    assert len(ommx_instance.get_constraints()) == 2
 
-    constraint1 = ommx_instance.raw.constraints[0]
+    constraint1 = ommx_instance.get_constraint(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     constraint1_linear = constraint1.function.as_linear()
     assert constraint1_linear is not None
@@ -176,7 +176,7 @@ def test_no_objective_model():
     assert constraint1_terms[0] == 1
     assert constraint1_terms[1] == 2
 
-    constraint2 = ommx_instance.raw.constraints[1]
+    constraint2 = ommx_instance.get_constraint(1)
     assert constraint2.equality == Constraint.EQUAL_TO_ZERO
     constraint2_linear = constraint2.function.as_linear()
     assert constraint2_linear is not None
