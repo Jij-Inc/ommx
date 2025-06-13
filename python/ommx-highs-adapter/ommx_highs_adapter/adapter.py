@@ -452,21 +452,18 @@ class OMMXHighsAdapter(SolverAdapter):
         # NOTE we explicityly don't convert to `highspy.highs.highs_linear_expression`
         # before returning as the callers want to check whether the returned
         # value is a constant float.
-        if ommx_func.HasField("constant"):
-            return ommx_func.constant
-        elif ommx_func.HasField("linear"):
-            return (
-                sum(
-                    term.coefficient * self.highs_vars[term.id]
-                    for term in ommx_func.linear.terms
-                )
-                + ommx_func.linear.constant
+        if ommx_func.degree() >= 2:
+            raise OMMXHighsAdapterError("HiGHS Adapter currently only supports linear problems")
+        linear = ommx_func.as_linear()
+        if linear is None:
+            raise OMMXHighsAdapterError("Cannot convert function to linear form. This should be a bug. Please report it: {ommx_func}")
+        return (
+            sum(
+                coeff * self.highs_vars[id]
+                for (id, coeff) in linear.linear_terms.items()
             )
-
-        else:
-            raise OMMXHighsAdapterError(
-                "The function must be either `constant` or `linear`."
-            )
+            + linear.constant_term
+        )
 
     def _set_objective(self):
         obj = self._linear_expr_conversion(self.instance.objective)
