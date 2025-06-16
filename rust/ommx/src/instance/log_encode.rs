@@ -39,7 +39,7 @@ pub enum LogEncodingError {
 fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), LogEncodingError> {
     // Check bounds are finite
     if !bound.lower().is_finite() || !bound.upper().is_finite() {
-        return Err(LogEncodingError::NonFiniteBound(bound.clone()));
+        return Err(LogEncodingError::NonFiniteBound(bound));
     }
 
     // Bound of integer may be non-integer value, so floor/ceil to get valid integer range
@@ -48,7 +48,7 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
     let u_l = upper - lower;
     if u_l < 0.0 {
         // No feasible integer values in the range
-        return Err(LogEncodingError::NoFeasibleInteger(bound.clone()));
+        return Err(LogEncodingError::NoFeasibleInteger(bound));
     }
 
     // There is only one feasible integer, and no need to encode
@@ -81,7 +81,7 @@ impl Instance {
         let v = self
             .decision_variables
             .get(&id)
-            .ok_or_else(|| LogEncodingError::UnknownVariable(id))?;
+            .ok_or(LogEncodingError::UnknownVariable(id))?;
         let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {

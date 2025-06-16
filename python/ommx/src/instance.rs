@@ -196,7 +196,7 @@ impl Instance {
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
         for id in integer_variable_ids.iter() {
-            self.0.log_encode(id.clone().into())?;
+            self.0.log_encode((*id).into())?;
         }
         Ok(())
     }
