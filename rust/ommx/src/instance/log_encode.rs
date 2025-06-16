@@ -83,6 +83,7 @@ impl Instance {
             .get(&id)
             .ok_or(LogEncodingError::UnknownVariable(id))?;
         let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
+        // Safe unwrap: offset is always finite from log_encoding_coefficients
         let mut linear = Linear::try_from(offset).unwrap();
         for (i, coefficient) in coefficients.iter().enumerate() {
             // Create binary variables for each coefficient
@@ -92,6 +93,7 @@ impl Instance {
             linear.add_term(binary.id().into(), *coefficient);
         }
         let f = linear.clone().into();
+        // Safe unwrap: there is no recursive assignment and self-assignment
         substitute_one(self, id, &f).unwrap();
         Ok(linear)
     }
