@@ -28,11 +28,11 @@ def linear_large_little(request):
     return functions
 
 
-def sum_linear_functions(functions):
+def sum_linear_functions(functions: list[Linear]):
     """Sum many linear functions"""
     result = Linear(terms={}, constant=0)
     for func in functions:
-        result = result + func
+        result += func
     return result
 
 

@@ -2663,6 +2663,16 @@ class Linear(AsConstraint):
     def __radd__(self, other):
         return self + other
 
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+    ) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            self.raw += rhs.raw
+            return self
+        except TypeError:
+            return NotImplemented
+
     def __sub__(
         self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear:

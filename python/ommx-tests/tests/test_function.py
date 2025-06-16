@@ -37,6 +37,13 @@ def test_linear():
     assert_eq(Linear(terms={1: 2}) + Linear(terms={2: 3}), Linear(terms={1: 2, 2: 3}))
     assert_eq(Linear(terms={1: 2}) + Linear(terms={1: 3}), Linear(terms={1: 5}))
 
+    # test in-place add
+    l = Linear(terms={1: 2}, constant=3)
+    original_id = id(l)
+    l += Linear(terms={2: 3})
+    assert id(l) == original_id  # Verify it's the same object
+    assert_eq(l, Linear(terms={1: 2, 2: 3}, constant=3))
+
 
 def test_quadratic():
     x1 = DecisionVariable.binary(1)

@@ -114,6 +114,10 @@ impl Linear {
         Quadratic(&self.0 * &rhs.0)
     }
 
+    pub fn __iadd__(&mut self, rhs: &Linear) {
+        self.0 += &rhs.0;
+    }
+
     pub fn add_scalar(&self, scalar: f64) -> Result<Linear> {
         match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Linear(&self.0 + coeff)),
