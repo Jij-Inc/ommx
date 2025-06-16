@@ -1264,6 +1264,83 @@ class Instance(InstanceBase, UserAnnotationBase):
         )
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
+    def random_state(self, rng: _ommx_rust.Rng) -> State:
+        """
+        Generate a random state for this instance using the provided random number generator.
+
+        This method generates random values only for variables that are actually used in the
+        objective function or constraints, as determined by decision variable analysis.
+        Generated values respect the bounds of each variable type.
+
+        Parameters
+        ----------
+        rng : _ommx_rust.Rng
+            Random number generator to use for generating the state.
+
+        Returns
+        -------
+        State
+            A randomly generated state that satisfies the variable bounds of this instance.
+            Only contains values for variables that are used in the problem.
+
+        Examples
+        =========
+
+        ### Generate random state only for used variables
+
+        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> x = [DecisionVariable.binary(i) for i in range(5)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],  # Only x[0] and x[1] are used
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> state = instance.random_state(rng)
+
+        Only used variables have values
+
+        >>> set(state.entries.keys())
+        {0, 1}
+
+        Values respect binary bounds
+
+        >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
+        True
+
+        ### Generate random state respecting variable bounds
+
+        >>> x_bin = DecisionVariable.binary(0)
+        >>> x_int = DecisionVariable.integer(1, lower=3, upper=7)
+        >>> x_cont = DecisionVariable.continuous(2, lower=-2.5, upper=5.0)
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x_bin, x_int, x_cont],
+        ...     objective=x_bin + x_int + x_cont,
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> state = instance.random_state(rng)
+
+        Values respect their respective bounds
+
+        >>> state.entries[0] in [0.0, 1.0]  # Binary
+        True
+        >>> 3.0 <= state.entries[1] <= 7.0  # Integer
+        True
+        >>> -2.5 <= state.entries[2] <= 5.0  # Continuous
+        True
+
+        """
+        state_bytes = self.raw.random_state(rng)
+        state = State()
+        state.ParseFromString(state_bytes)
+        return state
+
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
         Remove a constraint from the instance. The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.

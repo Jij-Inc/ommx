@@ -1,5 +1,5 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense,
+    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Rng, Sense,
     VariableBound,
 };
 use anyhow::Result;
@@ -173,6 +173,16 @@ impl Instance {
         Ok(SampleSet(
             self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
         ))
+    }
+
+    pub fn random_state<'py>(&self, py: Python<'py>, rng: &Rng) -> Result<Bound<'py, PyBytes>> {
+        let strategy = self.0.arbitrary_state();
+        let mut rng_guard = rng
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let state = ommx::random::sample(&mut *rng_guard, strategy);
+        let bytes = state.encode_to_vec();
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn relax_constraint(
