@@ -2668,7 +2668,7 @@ class Linear(AsConstraint):
     ) -> Linear:
         try:
             rhs = Linear.from_object(rhs)
-            self.raw += rhs.raw
+            self.raw.__iadd__(rhs.raw)  # This returns None
             return self
         except TypeError:
             return NotImplemented
