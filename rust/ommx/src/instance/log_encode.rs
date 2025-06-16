@@ -1,8 +1,10 @@
 use super::Instance;
-use crate::{polynomial_base::Linear, Bound, Coefficient, VariableID};
+use crate::{Bound, Coefficient, Linear, VariableID};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LogEncodingError {
+    #[error("Unknown variable with ID: {0}")]
+    UnknownVariable(VariableID),
     #[error("Bound must be finite for log-encoding: {0}")]
     NonFiniteBound(Bound),
     #[error("No feasible integer values found in the bound: {0}")]
@@ -34,7 +36,7 @@ pub enum LogEncodingError {
 /// use ommx::{coeff, Bound};
 ///
 /// ```
-fn log_encoding_coefficients(bound: &Bound) -> Result<(Vec<Coefficient>, f64), LogEncodingError> {
+fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), LogEncodingError> {
     // Check bounds are finite
     if !bound.lower().is_finite() || !bound.upper().is_finite() {
         return Err(LogEncodingError::NonFiniteBound(bound.clone()));
@@ -81,7 +83,18 @@ impl Instance {
     /// variables where each binary variable represents a power of 2, allowing representation of
     /// any integer value in the original range.
     ///
-    pub fn log_encode(&mut self, _id: VariableID) -> Result<Linear, LogEncodingError> {
+    pub fn log_encode(&mut self, id: VariableID) -> Result<Linear, LogEncodingError> {
+        let v = self
+            .decision_variables
+            .get(&id)
+            .ok_or_else(|| LogEncodingError::UnknownVariable(id))?;
+        let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
+        let mut linear = Linear::try_from(offset).unwrap();
+        for c in &coefficients {
+            // Create binary variables for each coefficient
+            let binary_id = self.new_binary();
+            todo!()
+        }
         todo!()
     }
 }
