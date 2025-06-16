@@ -114,6 +114,10 @@ impl Linear {
         Quadratic(&self.0 * &rhs.0)
     }
 
+    pub fn add_assign(&mut self, rhs: &Linear) {
+        self.0 += &rhs.0;
+    }
+
     pub fn add_scalar(&self, scalar: f64) -> Result<Linear> {
         match TryInto::<Coefficient>::try_into(scalar) {
             Ok(coeff) => Ok(Linear(&self.0 + coeff)),
@@ -242,6 +246,10 @@ impl Quadratic {
 
     pub fn __sub__(&self, rhs: &Quadratic) -> Quadratic {
         Quadratic(&self.0 - &rhs.0)
+    }
+
+    pub fn add_assign(&mut self, rhs: &Quadratic) {
+        self.0 += &rhs.0;
     }
 
     pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
@@ -403,6 +411,10 @@ impl Polynomial {
 
     pub fn __sub__(&self, rhs: &Polynomial) -> Polynomial {
         Polynomial(&self.0 - &rhs.0)
+    }
+
+    pub fn add_assign(&mut self, rhs: &Polynomial) {
+        self.0 += &rhs.0;
     }
 
     pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
@@ -591,6 +603,10 @@ impl Function {
 
     pub fn __sub__(&self, rhs: &Function) -> Function {
         Function(&self.0 - &rhs.0)
+    }
+
+    pub fn add_assign(&mut self, rhs: &Function) {
+        self.0 += &rhs.0;
     }
 
     pub fn __mul__(&self, rhs: &Function) -> Function {

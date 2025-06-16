@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
-from functools import singledispatchmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -47,6 +46,9 @@ OneHot = _ommx_rust.OneHot
 Sos1 = _ommx_rust.Sos1
 ConstraintHints = _ommx_rust.ConstraintHints
 
+# Import Rng class
+Rng = _ommx_rust.Rng
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -77,6 +79,7 @@ __all__ = [
     "Kind",
     # Utility
     "SampledValues",
+    "Rng",
     # Type Alias
     "ToState",
     "ToSamples",
@@ -2504,36 +2507,28 @@ class Linear(AsConstraint):
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
         self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
 
-    @singledispatchmethod
     @classmethod
     def from_object(
         cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear:
         if isinstance(obj, Linear):
             return obj
-        raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
+        elif isinstance(obj, _ommx_rust.Linear):
+            new = Linear(terms={})
+            new.raw = obj
+            return new
+        elif isinstance(obj, (float, int)):
+            return cls.from_raw(_ommx_rust.Linear.constant(obj))
+        elif isinstance(obj, DecisionVariable):
+            return cls.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
+        else:
+            raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
 
-    @from_object.register(_ommx_rust.Linear)
     @classmethod
     def from_raw(cls, obj: _ommx_rust.Linear) -> Linear:
         new = Linear(terms={})
         new.raw = obj
         return new
-
-    @from_object.register(float)
-    @classmethod
-    def from_float(cls, obj: float) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
-
-    @from_object.register(int)
-    @classmethod
-    def from_integer(cls, obj: int) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
-
-    @from_object.register(DecisionVariable)
-    @classmethod
-    def from_decision_variable(cls, obj: DecisionVariable) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
 
     @property
     def linear_terms(self) -> dict[int, float]:
@@ -2565,6 +2560,22 @@ class Linear(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 3, max_id: int = 10) -> Linear:
+        """
+        Create a random linear function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the linear function
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Linear function
+        """
+        raw = _ommx_rust.Linear.random(rng, num_terms, max_id)
+        return Linear.from_raw(raw)
 
     @deprecated("Use almost_equal method instead.")
     def equals_to(self, other: Linear) -> bool:
@@ -2643,6 +2654,16 @@ class Linear(AsConstraint):
     def __radd__(self, other):
         return self + other
 
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
+    ) -> Linear:
+        try:
+            rhs = Linear.from_object(rhs)
+            self.raw.add_assign(rhs.raw)
+            return self
+        except TypeError:
+            return NotImplemented
+
     def __sub__(
         self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear:
@@ -2713,6 +2734,22 @@ class Quadratic(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_id: int = 10) -> Quadratic:
+        """
+        Create a random quadratic function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the quadratic function
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Quadratic function
+        """
+        raw = _ommx_rust.Quadratic.random(rng, num_terms, max_id)
+        return Quadratic.from_raw(raw)
 
     def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
         """
@@ -2822,6 +2859,18 @@ class Quadratic(AsConstraint):
     def __radd__(self, other):
         return self + other
 
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | Linear | Quadratic
+    ) -> Quadratic:
+        if isinstance(rhs, Quadratic):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
+
     def __sub__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic:
@@ -2885,6 +2934,25 @@ class Polynomial(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(
+        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
+    ) -> Polynomial:
+        """
+        Create a random polynomial function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the polynomial function
+            max_degree: Maximum degree of terms
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Polynomial function
+        """
+        raw = _ommx_rust.Polynomial.random(rng, num_terms, max_degree, max_id)
+        return Polynomial.from_raw(raw)
 
     def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
         """
@@ -2968,6 +3036,18 @@ class Polynomial(AsConstraint):
 
     def __radd__(self, other):
         return self + other
+
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+    ) -> Polynomial:
+        if isinstance(rhs, Polynomial):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
 
     def __sub__(
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
@@ -3059,6 +3139,25 @@ class Function(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(
+        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
+    ) -> Function:
+        """
+        Create a random function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the function
+            max_degree: Maximum degree of terms
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Function
+        """
+        raw = _ommx_rust.Function.random(rng, num_terms, max_degree, max_id)
+        return Function.from_raw(raw)
 
     def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
         """
@@ -3324,6 +3423,25 @@ class Function(AsConstraint):
 
     def __radd__(self, other):
         return self + other
+
+    def __iadd__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        if isinstance(rhs, Function):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
 
     def __sub__(
         self,
