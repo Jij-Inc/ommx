@@ -1,5 +1,5 @@
 use super::*;
-use crate::Function;
+use crate::{CoefficientError, Function};
 
 impl<M: Monomial> PolynomialBase<M> {
     pub fn new(terms: FnvHashMap<M, Coefficient>) -> Self {
@@ -70,5 +70,17 @@ where
     fn from(value: M) -> Self {
         let p: PolynomialBase<M> = value.into();
         Function::from(p)
+    }
+}
+
+impl<M: Monomial> TryFrom<f64> for PolynomialBase<M> {
+    type Error = CoefficientError;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        match Coefficient::try_from(value) {
+            Ok(coefficient) => Ok(Self::from(coefficient)),
+            Err(CoefficientError::Zero) => Ok(Self::default()),
+            Err(e) => Err(e),
+        }
     }
 }

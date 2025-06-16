@@ -195,13 +195,9 @@ impl Instance {
     }
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
-        let mut inner: ommx::v1::Instance = self.0.clone().into();
-        let replacements = integer_variable_ids
-            .iter()
-            .map(|&id| Ok((id, inner.log_encode(id)?.into())))
-            .collect::<Result<_>>()?;
-        inner.substitute(replacements)?;
-        self.0 = Parse::parse(inner, &())?;
+        for id in integer_variable_ids.iter() {
+            self.0.log_encode((*id).into())?;
+        }
         Ok(())
     }
 
