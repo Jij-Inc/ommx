@@ -114,7 +114,7 @@ impl Linear {
         Quadratic(&self.0 * &rhs.0)
     }
 
-    pub fn __iadd__(&mut self, rhs: &Linear) {
+    pub fn add_assign(&mut self, rhs: &Linear) {
         self.0 += &rhs.0;
     }
 
