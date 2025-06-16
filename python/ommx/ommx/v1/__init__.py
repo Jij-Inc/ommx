@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
-from functools import singledispatchmethod
 
 from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -2508,36 +2507,28 @@ class Linear(AsConstraint):
     def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
         self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
 
-    @singledispatchmethod
     @classmethod
     def from_object(
         cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
     ) -> Linear:
         if isinstance(obj, Linear):
             return obj
-        raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
+        elif isinstance(obj, _ommx_rust.Linear):
+            new = Linear(terms={})
+            new.raw = obj
+            return new
+        elif isinstance(obj, (float, int)):
+            return cls.from_raw(_ommx_rust.Linear.constant(obj))
+        elif isinstance(obj, DecisionVariable):
+            return cls.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
+        else:
+            raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
 
-    @from_object.register(_ommx_rust.Linear)
     @classmethod
     def from_raw(cls, obj: _ommx_rust.Linear) -> Linear:
         new = Linear(terms={})
         new.raw = obj
         return new
-
-    @from_object.register(float)
-    @classmethod
-    def from_float(cls, obj: float) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
-
-    @from_object.register(int)
-    @classmethod
-    def from_integer(cls, obj: int) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.constant(obj))
-
-    @from_object.register(DecisionVariable)
-    @classmethod
-    def from_decision_variable(cls, obj: DecisionVariable) -> Linear:
-        return Linear.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
 
     @property
     def linear_terms(self) -> dict[int, float]:
