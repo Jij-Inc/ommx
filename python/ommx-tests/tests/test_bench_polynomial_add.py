@@ -23,7 +23,9 @@ def polynomial_large_little(request):
     functions = []
     for _ in range(3):  # Only 3 functions
         # Create polynomial function with many terms using the new random method
-        func = Polynomial.random(rng, num_terms=num_terms, max_degree=3, max_id=3 * num_terms)
+        func = Polynomial.random(
+            rng, num_terms=num_terms, max_degree=3, max_id=3 * num_terms
+        )
         functions.append(func)
     return functions
 

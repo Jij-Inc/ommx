@@ -2936,7 +2936,9 @@ class Polynomial(AsConstraint):
         return self.raw.encode()
 
     @staticmethod
-    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10) -> Polynomial:
+    def random(
+        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
+    ) -> Polynomial:
         """
         Create a random polynomial function using the given random number generator.
 
@@ -3139,7 +3141,9 @@ class Function(AsConstraint):
         return self.raw.encode()
 
     @staticmethod
-    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10) -> Function:
+    def random(
+        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
+    ) -> Function:
         """
         Create a random function using the given random number generator.
 
