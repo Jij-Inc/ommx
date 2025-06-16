@@ -75,7 +75,7 @@ where
 
 impl<M: Monomial> TryFrom<f64> for PolynomialBase<M> {
     type Error = CoefficientError;
-    
+
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         match Coefficient::try_from(value) {
             Ok(coefficient) => Ok(Self::from(coefficient)),
