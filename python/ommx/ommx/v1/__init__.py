@@ -2735,6 +2735,22 @@ class Quadratic(AsConstraint):
     def to_bytes(self) -> bytes:
         return self.raw.encode()
 
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_id: int = 10) -> Quadratic:
+        """
+        Create a random quadratic function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the quadratic function
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Quadratic function
+        """
+        raw = _ommx_rust.Quadratic.random(rng, num_terms, max_id)
+        return Quadratic.from_raw(raw)
+
     def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
         """
         Compare two quadratic functions have almost equal coefficients
@@ -2843,6 +2859,18 @@ class Quadratic(AsConstraint):
     def __radd__(self, other):
         return self + other
 
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | Linear | Quadratic
+    ) -> Quadratic:
+        if isinstance(rhs, Quadratic):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
+
     def __sub__(
         self, other: int | float | DecisionVariable | Linear | Quadratic
     ) -> Quadratic:
@@ -2906,6 +2934,23 @@ class Polynomial(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10) -> Polynomial:
+        """
+        Create a random polynomial function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the polynomial function
+            max_degree: Maximum degree of terms
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Polynomial function
+        """
+        raw = _ommx_rust.Polynomial.random(rng, num_terms, max_degree, max_id)
+        return Polynomial.from_raw(raw)
 
     def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
         """
@@ -2989,6 +3034,18 @@ class Polynomial(AsConstraint):
 
     def __radd__(self, other):
         return self + other
+
+    def __iadd__(
+        self, rhs: int | float | DecisionVariable | Linear | Quadratic | Polynomial
+    ) -> Polynomial:
+        if isinstance(rhs, Polynomial):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
 
     def __sub__(
         self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
@@ -3080,6 +3137,23 @@ class Function(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10) -> Function:
+        """
+        Create a random function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the function
+            max_degree: Maximum degree of terms
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Function
+        """
+        raw = _ommx_rust.Function.random(rng, num_terms, max_degree, max_id)
+        return Function.from_raw(raw)
 
     def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
         """
@@ -3345,6 +3419,25 @@ class Function(AsConstraint):
 
     def __radd__(self, other):
         return self + other
+
+    def __iadd__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        if isinstance(rhs, Function):
+            self.raw.add_assign(rhs.raw)
+            return self
+        else:
+            # For other types, fall back to regular addition and assignment
+            result = self + rhs
+            self.raw = result.raw
+            return self
 
     def __sub__(
         self,

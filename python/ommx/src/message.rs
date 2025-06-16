@@ -248,6 +248,10 @@ impl Quadratic {
         Quadratic(&self.0 - &rhs.0)
     }
 
+    pub fn add_assign(&mut self, rhs: &Quadratic) {
+        self.0 += &rhs.0;
+    }
+
     pub fn __mul__(&self, rhs: &Quadratic) -> Polynomial {
         Polynomial(&self.0 * &rhs.0)
     }
@@ -407,6 +411,10 @@ impl Polynomial {
 
     pub fn __sub__(&self, rhs: &Polynomial) -> Polynomial {
         Polynomial(&self.0 - &rhs.0)
+    }
+
+    pub fn add_assign(&mut self, rhs: &Polynomial) {
+        self.0 += &rhs.0;
     }
 
     pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
@@ -595,6 +603,10 @@ impl Function {
 
     pub fn __sub__(&self, rhs: &Function) -> Function {
         Function(&self.0 - &rhs.0)
+    }
+
+    pub fn add_assign(&mut self, rhs: &Function) {
+        self.0 += &rhs.0;
     }
 
     pub fn __mul__(&self, rhs: &Function) -> Function {
