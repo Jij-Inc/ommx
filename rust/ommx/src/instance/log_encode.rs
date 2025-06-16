@@ -1,5 +1,5 @@
 use super::Instance;
-use crate::{Bound, Coefficient, Linear, VariableID};
+use crate::{substitute_one, Bound, Coefficient, Linear, VariableID};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LogEncodingError {
@@ -77,12 +77,6 @@ fn log_encoding_coefficients(bound: Bound) -> Result<(Vec<Coefficient>, f64), Lo
 
 impl Instance {
     /// Encode an integer decision variable into binary decision variables.
-    ///
-    /// This method performs logarithmic encoding of an integer variable into binary variables.
-    /// For an integer variable with range [lower, upper], it creates ceil(log₂(range + 1)) binary
-    /// variables where each binary variable represents a power of 2, allowing representation of
-    /// any integer value in the original range.
-    ///
     pub fn log_encode(&mut self, id: VariableID) -> Result<Linear, LogEncodingError> {
         let v = self
             .decision_variables
@@ -90,32 +84,77 @@ impl Instance {
             .ok_or_else(|| LogEncodingError::UnknownVariable(id))?;
         let (coefficients, offset) = log_encoding_coefficients(v.bound())?;
         let mut linear = Linear::try_from(offset).unwrap();
-        for c in &coefficients {
+        for (i, coefficient) in coefficients.iter().enumerate() {
             // Create binary variables for each coefficient
-            let binary_id = self.new_binary();
-            todo!()
+            let binary = self.new_binary();
+            binary.name = Some("ommx.log_encode".to_string());
+            binary.subscripts = vec![id.into_inner() as i64, i as i64];
+            linear.add_term(binary.id().into(), *coefficient);
         }
-        todo!()
+        let f = linear.clone().into();
+        substitute_one(self, id, &f).unwrap();
+        Ok(linear)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, Bound};
+    use crate::{coeff, Bound, DecisionVariable, Instance, Kind};
+
+    #[test]
+    fn test_log_encode_instance() {
+        // Create instance with integer variable in range [2, 7]
+        let mut instance = Instance::default();
+        let id = VariableID::from(0);
+        let var = DecisionVariable::new(
+            id,
+            Kind::Integer,
+            Bound::new(2.0, 7.0).unwrap(),
+            None,
+            crate::ATol::default(),
+        )
+        .unwrap();
+        instance.decision_variables.insert(id, var);
+
+        // Perform log encoding
+        let encoded = instance.log_encode(id).unwrap();
+
+        // The original variable is still present but substituted
+        assert!(instance.decision_variables.contains_key(&id));
+
+        // Check binary variables were created with correct metadata
+        let binary_vars: Vec<_> = instance
+            .decision_variables
+            .values()
+            .filter(|dv| dv.name == Some("ommx.log_encode".to_string()) && dv.subscripts[0] == 0)
+            .collect();
+
+        // For range [2, 7] (6 values), we need ceil(log2(6)) = 3 bits
+        assert_eq!(binary_vars.len(), 3);
+
+        // Check all are binary variables
+        for var in &binary_vars {
+            assert_eq!(var.kind(), Kind::Binary);
+        }
+
+        // Check the encoded linear expression has correct number of terms
+        // Should have 3 terms for binary variables + 1 constant term
+        assert_eq!(encoded.num_terms(), 4);
+    }
 
     #[test]
     fn test_log_encoding_coefficients() {
         // 2^3 case
         let bound = Bound::new(0.0, 7.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(&bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(4.0)]);
         assert_eq!(offset, 0.0);
 
         // [1, 6] should be x = 1 + b1 + 2*b2 + 2*b3, the last coefficient is shifted
         // Then, 1 + 1 + 2 + 2 = 6
         let bound = Bound::new(1.0, 6.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(&bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
         assert_eq!(coefficients, vec![coeff!(1.0), coeff!(2.0), coeff!(2.0)]);
         assert_eq!(offset, 1.0);
         assert_eq!(
@@ -125,12 +164,12 @@ mod tests {
 
         // [2, 2] should be x = 2, no binary variables needed
         let bound = Bound::new(2.0, 2.0).unwrap();
-        let (coefficients, offset) = log_encoding_coefficients(&bound).unwrap();
+        let (coefficients, offset) = log_encoding_coefficients(bound).unwrap();
         assert!(coefficients.is_empty());
         assert_eq!(offset, 2.0);
 
         // No feasible integer values
         let bound = Bound::new(1.3, 1.6).unwrap();
-        assert!(log_encoding_coefficients(&bound).is_err());
+        assert!(log_encoding_coefficients(bound).is_err());
     }
 }

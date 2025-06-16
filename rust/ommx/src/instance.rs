@@ -22,8 +22,9 @@ use crate::{
     Function, RemovedConstraint, VariableID, VariableIDSet,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Sense {
+    #[default]
     Minimize,
     Maximize,
 }
@@ -36,7 +37,7 @@ pub enum Sense {
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
 ///
-#[derive(Debug, Clone, PartialEq, getset::Getters)]
+#[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct Instance {
     #[getset(get = "pub")]
     sense: Sense,
