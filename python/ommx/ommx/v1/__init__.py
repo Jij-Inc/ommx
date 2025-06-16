@@ -47,6 +47,9 @@ OneHot = _ommx_rust.OneHot
 Sos1 = _ommx_rust.Sos1
 ConstraintHints = _ommx_rust.ConstraintHints
 
+# Import Rng class
+Rng = _ommx_rust.Rng
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -77,6 +80,7 @@ __all__ = [
     "Kind",
     # Utility
     "SampledValues",
+    "Rng",
     # Type Alias
     "ToState",
     "ToSamples",
@@ -2565,6 +2569,22 @@ class Linear(AsConstraint):
 
     def to_bytes(self) -> bytes:
         return self.raw.encode()
+
+    @staticmethod
+    def random(rng: _ommx_rust.Rng, num_terms: int = 3, max_id: int = 10) -> Linear:
+        """
+        Create a random linear function using the given random number generator.
+
+        Args:
+            rng: Random number generator
+            num_terms: Number of terms in the linear function
+            max_id: Maximum variable ID to use
+
+        Returns:
+            Random Linear function
+        """
+        raw = _ommx_rust.Linear.random(rng, num_terms, max_id)
+        return Linear.from_raw(raw)
 
     @deprecated("Use almost_equal method instead.")
     def equals_to(self, other: Linear) -> bool:
