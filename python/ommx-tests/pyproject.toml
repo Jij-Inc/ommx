@@ -29,5 +29,3 @@ dependencies = ["ommx", "pluggy"]
 Repository = "https://github.com/Jij-Inc/ommx"
 Issues = "https://github.com/Jij-Inc/ommx/issues"
 
-[tool.ruff.lint]
-ignore = ["E741"]
