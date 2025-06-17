@@ -1,4 +1,4 @@
-use crate::{message::Function, Equality};
+use crate::{Equality, Function};
 use anyhow::Result;
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Evaluate, Message, Parse};
