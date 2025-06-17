@@ -411,9 +411,10 @@ class Instance:
     def random_samples(
         self,
         rng: Rng,
+        *,
         num_different_samples: builtins.int = 5,
         num_samples: builtins.int = 10,
-        max_sample_id: builtins.int = 10,
+        max_sample_id: typing.Optional[builtins.int] = None,
     ) -> bytes: ...
     def relax_constraint(
         self,

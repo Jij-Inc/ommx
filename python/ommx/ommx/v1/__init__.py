@@ -1347,7 +1347,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         *,
         num_different_samples: int = 5,
         num_samples: int = 10,
-        max_sample_id: int = 10,
+        max_sample_id: int | None = None,
     ) -> Samples:
         """
         Generate random samples for this instance.
@@ -1359,7 +1359,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         :param rng: Random number generator
         :param num_different_samples: Number of different states to generate
         :param num_samples: Total number of samples to generate
-        :param max_sample_id: Maximum sample ID (default: ``num_samples * 2``)
+        :param max_sample_id: Maximum sample ID (default: ``num_samples``)
         :return: Samples object
 
         Examples

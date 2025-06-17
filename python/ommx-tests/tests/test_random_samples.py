@@ -1,4 +1,3 @@
-import pytest
 from ommx.v1 import Instance, DecisionVariable, Rng
 
 
@@ -9,7 +8,7 @@ def test_random_samples_basic():
     instance = Instance.from_components(
         decision_variables=x,
         objective=sum(x),
-        constraints=[(sum(x) <= 3).set_id(0)],
+        constraints=[(sum(x) <= 3).set_id(0)],  # type: ignore
         sense=Instance.MAXIMIZE,
     )
 

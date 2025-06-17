@@ -190,7 +190,7 @@ impl Instance {
         *,
         num_different_samples = *ommx::random::SamplesParameters::default().num_different_samples(),
         num_samples = *ommx::random::SamplesParameters::default().num_samples(),
-        max_sample_id = *ommx::random::SamplesParameters::default().max_sample_id()
+        max_sample_id = None
     ))]
     pub fn random_samples<'py>(
         &self,
@@ -198,8 +198,9 @@ impl Instance {
         rng: &Rng,
         num_different_samples: usize,
         num_samples: usize,
-        max_sample_id: u64,
+        max_sample_id: Option<u64>,
     ) -> Result<Bound<'py, PyBytes>> {
+        let max_sample_id = max_sample_id.unwrap_or(num_samples as u64);
         let params = ommx::random::SamplesParameters::new(
             num_different_samples,
             num_samples,
