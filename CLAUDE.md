@@ -252,7 +252,23 @@ Benchmark results for `evaluate_samples` revealed performance optimization oppor
 - ✅ **COMPLETED**: Fix HiGHS adapter test failures (prerequisite for Solution migration)
   - ✅ Fixed State implementation to use BTreeMap for consistent ordering
   - ✅ Updated test to use correct variable IDs (1, 2 instead of 3, 2)
-- ⏳ Update ommx.v1.Solution to use PyO3 properties via .raw  
+- 🔄 **IN PROGRESS**: Update ommx.v1.Solution to use PyO3 properties via .raw
+  - **Problem Analysis**: Python SDK Solution class needs access to complex nested structures:
+    - `decision_variables` property → requires `Vec<DecisionVariable>` from PyO3 Solution
+    - `evaluated_constraints` property → requires `Vec<EvaluatedConstraint>` from PyO3 Solution  
+    - `extract_decision_variables()` method → iterates over decision variables by name/subscripts
+    - `extract_constraints()` method → iterates over evaluated constraints by name/subscripts
+  - **Required PyO3 Solution APIs to implement**:
+    - `#[getter] decision_variables() -> Vec<DecisionVariable>` - Return decision variables for DataFrame construction
+    - `#[getter] evaluated_constraints() -> Vec<EvaluatedConstraint>` - Return evaluated constraints for DataFrame construction
+  - **Required PyO3 Types to implement**:
+    - `EvaluatedConstraint` PyO3 wrapper (currently missing) - Wrapper for `ommx::v1::EvaluatedConstraint`
+    - Properties needed: `id`, `equality`, `evaluated_value`, `used_decision_variable_ids`, `name`, `subscripts`, `description`, `dual_variable`, `removed_reason`, `removed_reason_parameters`
+  - **Implementation Strategy**:
+    - Keep protobuf Solution as fallback for complex operations requiring serialization compatibility  
+    - Add rich PyO3 properties to eliminate temporary `_solution_to_protobuf()` helper
+    - Ensure DecisionVariable PyO3 wrapper has all properties needed for `_as_pandas_entry()`
+    - Add EvaluatedConstraint PyO3 wrapper with full protobuf compatibility
 - ⏳ Update ommx.v1.SampleSet to use PyO3 properties via .raw
 - Maintain serialization compatibility for safe migration
 - Keep all tests passing throughout the process
@@ -329,13 +345,18 @@ class Solution:
 ```
 
 **Key Attributes Needed in PyO3 Solution**:
-- `objective: float` - Objective function value
-- `state: State` - Decision variable values  
-- `feasible: bool` - Feasibility status
-- `feasible_relaxed: Optional[bool]` - Relaxed feasibility
-- `feasible_unrelaxed: bool` - Unrelaxed feasibility
-- `optimality: Optimality` - Optimization status enum
-- `relaxation: Relaxation` - Relaxation status enum
+- ✅ `objective: float` - Objective function value
+- ✅ `state: State` - Decision variable values  
+- ✅ `feasible: bool` - Feasibility status
+- ✅ `feasible_relaxed: Optional[bool]` - Relaxed feasibility
+- ✅ `feasible_unrelaxed: bool` - Unrelaxed feasibility
+- ✅ `optimality: int` - Optimization status (converted to protobuf enum in Python)
+- ✅ `relaxation: int` - Relaxation status (converted to protobuf enum in Python)
+- ⏳ `decision_variables: Vec<DecisionVariable>` - Decision variables for DataFrame construction
+- ⏳ `evaluated_constraints: Vec<EvaluatedConstraint>` - Evaluated constraints for DataFrame construction
+
+**Missing PyO3 Types to Implement**:
+- ⏳ `EvaluatedConstraint` - Complete PyO3 wrapper with all protobuf properties
 
 **Key Attributes Needed in PyO3 SampleSet**:
 - `sample_ids: set[int]` - ✅ Already implemented
@@ -344,21 +365,55 @@ class Solution:
 - `feasible_relaxed: dict[int, Optional[bool]]` - Relaxed feasibility per sample
 - `feasible_unrelaxed: dict[int, bool]` - Unrelaxed feasibility per sample
 
-### Migration Steps for Adapters
+### Migration Steps for Solution
+
+**Implementation Tasks**:
+
+1. **Create EvaluatedConstraint PyO3 wrapper** (`python/ommx/src/evaluated_constraint.rs`):
+   ```rust
+   #[pyclass]
+   pub struct EvaluatedConstraint(pub ommx::v1::EvaluatedConstraint);
+   
+   #[pymethods]
+   impl EvaluatedConstraint {
+       #[getter] pub fn id(&self) -> u64
+       #[getter] pub fn equality(&self) -> i32  // Convert to _ommx_rust.Equality in Python
+       #[getter] pub fn evaluated_value(&self) -> f64
+       #[getter] pub fn used_decision_variable_ids(&self) -> Vec<u64>
+       #[getter] pub fn name(&self) -> Option<String>
+       #[getter] pub fn subscripts(&self) -> Vec<i64>
+       #[getter] pub fn description(&self) -> Option<String>
+       #[getter] pub fn dual_variable(&self) -> Option<f64>
+       #[getter] pub fn removed_reason(&self) -> Option<String>
+       #[getter] pub fn removed_reason_parameters(&self) -> HashMap<String, String>
+       // + HasField-like methods for optional fields
+   }
+   ```
+
+2. **Add Solution getters** (already partially done in `solution.rs`):
+   ```rust
+   #[getter]
+   pub fn decision_variables(&self) -> Vec<crate::DecisionVariable>
+   
+   #[getter] 
+   pub fn evaluated_constraints(&self) -> Vec<crate::EvaluatedConstraint>
+   ```
+
+3. **Update Python SDK Solution class**:
+   - Change `raw: _Solution` → `raw: _ommx_rust.Solution`
+   - Update `from_bytes()` → `_ommx_rust.Solution.from_bytes()`
+   - Update `to_bytes()` → `self.raw.to_bytes()`
+   - Update property access to use PyO3 getters directly
+   - Remove temporary `_solution_to_protobuf()` helper
+
+4. **Register new types in lib.rs**:
+   ```rust
+   m.add_class::<EvaluatedConstraint>()?;
+   ```
+
+5. **Update stub generation and test compatibility**
 
 **🔄 Serialization Compatibility**: PyO3 implementations can always convert to/from their corresponding protobuf structures through serialization (`to_bytes()` / `from_bytes()`). This allows for incremental migration while keeping tests passing throughout the process.
-
-1. **Phase 1**: Complete all `_ommx_rust.*` PyO3 implementations
-   - Add core properties to PyO3 Solution (objective, state, feasible, etc.)
-   - Add core properties to PyO3 SampleSet (objectives, feasible dicts, etc.)
-   - Add core properties to PyO3 State (migrate from protobuf)
-   - Ensure all PyO3 classes have feature parity with current protobuf usage
-
-2. **Phase 2**: Incremental Python SDK migration (keeping tests passing)
-   - Update `ommx.v1.*` classes one by one to use PyO3 properties via `.raw`
-   - Use serialization compatibility to ensure tests continue passing during migration
-   - Update imports and remove protobuf dependencies gradually
-   - Update tests to use new API patterns as each component is migrated
 
 ## Development Notes
 
