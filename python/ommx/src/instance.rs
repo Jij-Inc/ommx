@@ -175,7 +175,11 @@ impl Instance {
         Ok(Solution(solution))
     }
 
-    pub fn partial_evaluate<'py>(&mut self, py: Python<'py>, state: &Bound<PyBytes>) -> Result<Bound<'py, PyBytes>> {
+    pub fn partial_evaluate<'py>(
+        &mut self,
+        py: Python<'py>,
+        state: &Bound<PyBytes>,
+    ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
         self.0.partial_evaluate(&state, ommx::ATol::default())?;
         let inner: ommx::v1::Instance = self.0.clone().into();
