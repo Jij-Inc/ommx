@@ -213,7 +213,9 @@ Benchmark results for `evaluate_samples` revealed significant performance overhe
 - ✅ `Solution` - Simple wrapper with `from_bytes`/`to_bytes`
 - ✅ `Samples` - Simple wrapper with `from_bytes`/`to_bytes`  
 - ✅ `SampleSet` - Full wrapper with `get`, `num_samples`, `sample_ids`, etc.
-- ✅ `State` - PyO3 wrapper with `from_dict` static method
+
+**To Be Migrated**:
+- ⏳ `State` - Currently protobuf, PyO3 implementation exists but not yet used
 
 **Migration Impact**:
 - All core data structures now use PyO3 bindings instead of protobuf
@@ -242,12 +244,85 @@ solution.objective  # Direct protobuf attribute access
 solution.raw.objective  # Access through PyO3 wrapper
 ```
 
+### Current Analysis: Solution and SampleSet Migration
+
+**Current State (Based on Analysis)**:
+- `State` - ⏳ Currently protobuf, PyO3 implementation exists but reverted
+- `Solution`, `Samples`, `SampleSet` - Basic PyO3 wrappers exist but lack functionality
+
+**Current PyO3 Implementation Status**:
+```rust
+// Current _ommx_rust implementations (basic wrappers only)
+class Solution:
+    @staticmethod
+    def from_bytes(bytes: bytes) -> Solution
+    def to_bytes(self) -> bytes
+
+class SampleSet:
+    @staticmethod 
+    def from_bytes(bytes: bytes) -> SampleSet
+    def to_bytes(self) -> bytes
+    def get(self, sample_id: int) -> Solution
+    def num_samples(self) -> int
+    def sample_ids(self) -> set[int]
+    def feasible_ids(self) -> set[int]
+    def feasible_unrelaxed_ids(self) -> set[int]
+    def best_feasible(self) -> Solution
+    def best_feasible_unrelaxed(self) -> Solution
+
+class Samples:
+    @staticmethod
+    def from_bytes(bytes: bytes) -> Samples
+    def to_bytes(self) -> bytes
+```
+
+**Python SDK Current Implementation Pattern**:
+```python
+# Current Python wrapper pattern
+class Solution:
+    def __init__(self, raw: _Solution):
+        self.raw = raw  # Protocol Buffer message
+    
+    @property
+    def objective(self) -> float:
+        return self.raw.objective
+    
+    @property
+    def state(self) -> State:
+        return self.raw.state
+```
+
+**Key Attributes Needed in PyO3 Solution**:
+- `objective: float` - Objective function value
+- `state: State` - Decision variable values  
+- `feasible: bool` - Feasibility status
+- `feasible_relaxed: Optional[bool]` - Relaxed feasibility
+- `feasible_unrelaxed: bool` - Unrelaxed feasibility
+- `optimality: Optimality` - Optimization status enum
+- `relaxation: Relaxation` - Relaxation status enum
+
+**Key Attributes Needed in PyO3 SampleSet**:
+- `sample_ids: set[int]` - ✅ Already implemented
+- `objectives: dict[int, float]` - Objective values per sample
+- `feasible: dict[int, bool]` - Feasibility per sample  
+- `feasible_relaxed: dict[int, Optional[bool]]` - Relaxed feasibility per sample
+- `feasible_unrelaxed: dict[int, bool]` - Unrelaxed feasibility per sample
+
 ### Migration Steps for Adapters
 
-1. **Update imports**: Remove any remaining protobuf imports
-2. **State creation**: Use `State.from_dict()` instead of `State(entries=...)`
-3. **Solution/SampleSet access**: Access attributes through `.raw` property
-4. **Test updates**: Update tests to use new API patterns
+**🔄 Serialization Compatibility**: PyO3 implementations can always convert to/from their corresponding protobuf structures through serialization (`to_bytes()` / `from_bytes()`). This allows for incremental migration while keeping tests passing throughout the process.
+
+1. **Phase 1**: Complete all `_ommx_rust.*` PyO3 implementations
+   - Add core properties to PyO3 Solution (objective, state, feasible, etc.)
+   - Add core properties to PyO3 SampleSet (objectives, feasible dicts, etc.)
+   - Add core properties to PyO3 State (migrate from protobuf)
+   - Ensure all PyO3 classes have feature parity with current protobuf usage
+
+2. **Phase 2**: Incremental Python SDK migration (keeping tests passing)
+   - Update `ommx.v1.*` classes one by one to use PyO3 properties via `.raw`
+   - Use serialization compatibility to ensure tests continue passing during migration
+   - Update imports and remove protobuf dependencies gradually
+   - Update tests to use new API patterns as each component is migrated
 
 ## Development Notes
 
