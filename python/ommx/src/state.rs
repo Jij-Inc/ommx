@@ -11,7 +11,7 @@ use std::collections::HashMap;
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[derive(Clone)]
-pub struct State(ommx::v1::State);
+pub struct State(pub ommx::v1::State);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]

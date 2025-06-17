@@ -618,6 +618,22 @@ class Rng:
         """
 
 class SampleSet:
+    objectives: builtins.dict[builtins.int, builtins.float]
+    r"""
+    Get objectives for all samples
+    """
+    feasible: builtins.dict[builtins.int, builtins.bool]
+    r"""
+    Get feasibility status for all samples
+    """
+    feasible_relaxed: builtins.dict[builtins.int, typing.Optional[builtins.bool]]
+    r"""
+    Get relaxed feasibility status for all samples
+    """
+    feasible_unrelaxed: builtins.dict[builtins.int, builtins.bool]
+    r"""
+    Get unrelaxed feasibility status for all samples
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
@@ -635,6 +651,34 @@ class Samples:
     def to_bytes(self) -> bytes: ...
 
 class Solution:
+    objective: builtins.float
+    r"""
+    Get the objective function value
+    """
+    state: State
+    r"""
+    Get the solution state containing variable values
+    """
+    feasible: builtins.bool
+    r"""
+    Check if the solution is feasible
+    """
+    feasible_relaxed: typing.Optional[builtins.bool]
+    r"""
+    Check if the solution is feasible in the relaxed problem
+    """
+    feasible_unrelaxed: builtins.bool
+    r"""
+    Check if the solution is feasible in the unrelaxed problem
+    """
+    optimality: builtins.int
+    r"""
+    Get the optimality status
+    """
+    relaxation: builtins.int
+    r"""
+    Get the relaxation status
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...

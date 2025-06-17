@@ -226,10 +226,13 @@ Benchmark results for `evaluate_samples` revealed performance optimization oppor
 
 ### Migration Strategy
 
-**Phase 1: Enhance PyO3 Implementations**
-- Add core properties to `_ommx_rust.Solution` (objective, state, feasible status, etc.)
-- Add core properties to `_ommx_rust.SampleSet` (objectives dict, feasible dicts, etc.)
-- Re-implement `_ommx_rust.State` migration from protobuf
+**Phase 1: Enhance PyO3 Implementations** ✅
+- ✅ Split PyO3 classes into separate files for better organization
+  - ✅ Split message.rs into linear.rs, quadratic.rs, polynomial.rs, function.rs
+  - ✅ Extract Solution, SampleSet, Samples from instance.rs into separate files
+- ✅ Add core properties to `_ommx_rust.Solution` (objective, state, feasible status, etc.)
+- ✅ Add core properties to `_ommx_rust.SampleSet` (objectives dict, feasible dicts, etc.)
+- ⏳ Re-implement `_ommx_rust.State` migration from protobuf (State already uses PyO3)
 
 **Phase 2: Incremental Python SDK Migration**
 - Update Python SDK classes to use enhanced PyO3 properties via `.raw`
