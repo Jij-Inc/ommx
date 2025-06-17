@@ -187,6 +187,7 @@ impl Instance {
 
     #[pyo3(signature = (
         rng,
+        *,
         num_different_samples = *ommx::random::SamplesParameters::default().num_different_samples(),
         num_samples = *ommx::random::SamplesParameters::default().num_samples(),
         max_sample_id = *ommx::random::SamplesParameters::default().max_sample_id()

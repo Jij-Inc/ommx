@@ -1344,6 +1344,7 @@ class Instance(InstanceBase, UserAnnotationBase):
     def random_samples(
         self,
         rng: _ommx_rust.Rng,
+        *,
         num_different_samples: int = 5,
         num_samples: int = 10,
         max_sample_id: int = 10,
@@ -1390,7 +1391,10 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         """
         samples_bytes = self.raw.random_samples(
-            rng, num_different_samples, num_samples, max_sample_id
+            rng,
+            num_different_samples=num_different_samples,
+            num_samples=num_samples,
+            max_sample_id=max_sample_id,
         )
         samples = Samples()
         samples.ParseFromString(samples_bytes)
