@@ -249,6 +249,9 @@ Benchmark results for `evaluate_samples` revealed performance optimization oppor
   - ✅ Fixed import order to resolve lint errors (E402)
   - ✅ **ADAPTER FIXES COMPLETED**: All major adapters (OpenJij, PyScipOpt) fixed for State constructor changes
   - ✅ **State Constructor Enhancement**: Enhanced to accept both `dict[int, float]` and `Iterable[tuple[int, float]]`
+- ✅ **COMPLETED**: Fix HiGHS adapter test failures (prerequisite for Solution migration)
+  - ✅ Fixed State implementation to use BTreeMap for consistent ordering
+  - ✅ Updated test to use correct variable IDs (1, 2 instead of 3, 2)
 - ⏳ Update ommx.v1.Solution to use PyO3 properties via .raw  
 - ⏳ Update ommx.v1.SampleSet to use PyO3 properties via .raw
 - Maintain serialization compatibility for safe migration

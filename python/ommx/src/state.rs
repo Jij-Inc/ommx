@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ommx::Message;
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// State wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -45,8 +45,8 @@ impl State {
     }
 
     #[getter]
-    pub fn entries(&self) -> HashMap<u64, f64> {
-        self.0.entries.clone()
+    pub fn entries(&self) -> BTreeMap<u64, f64> {
+        self.0.entries.iter().map(|(k, v)| (*k, *v)).collect()
     }
 
     #[setter]

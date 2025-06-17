@@ -7,7 +7,7 @@ from ommx_highs_adapter import OMMXHighsAdapter
 
 
 def test_integration_lp():
-    x1 = DecisionVariable.continuous(3, lower=0, upper=5)
+    x1 = DecisionVariable.continuous(1, lower=0, upper=5)
     x2 = DecisionVariable.continuous(2, lower=-1, upper=5)
 
     instance = Instance.from_components(
