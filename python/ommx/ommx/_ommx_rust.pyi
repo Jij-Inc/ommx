@@ -408,6 +408,13 @@ class Instance:
     def uniform_penalty_method(self) -> ParametricInstance: ...
     def evaluate_samples(self, samples: Samples) -> SampleSet: ...
     def random_state(self, rng: Rng) -> bytes: ...
+    def random_samples(
+        self,
+        rng: Rng,
+        num_different_samples: builtins.int = 5,
+        num_samples: builtins.int = 10,
+        max_sample_id: builtins.int = 10,
+    ) -> bytes: ...
     def relax_constraint(
         self,
         constraint_id: builtins.int,

@@ -1,7 +1,9 @@
 use super::*;
 use crate::{
-    arbitrary_constraints, arbitrary_decision_variables, v1::State, Bounds, ConstraintIDParameters,
-    Evaluate, KindParameters, PolynomialParameters,
+    arbitrary_constraints, arbitrary_decision_variables,
+    random::{arbitrary_samples, SamplesParameters},
+    v1::{Samples, State},
+    Bounds, ConstraintIDParameters, Evaluate, KindParameters, PolynomialParameters,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -92,6 +94,10 @@ impl Instance {
                 },
             )
             .boxed()
+    }
+
+    pub fn arbitrary_samples(&self, params: SamplesParameters) -> BoxedStrategy<Samples> {
+        arbitrary_samples(params, self.arbitrary_state())
     }
 }
 

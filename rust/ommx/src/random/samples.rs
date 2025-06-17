@@ -3,13 +3,17 @@ use crate::{
     v1::{samples::SamplesEntry, Samples, State},
 };
 use anyhow::{bail, Result};
+use getset::Getters;
 use proptest::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters)]
 pub struct SamplesParameters {
+    #[getset(get = "pub")]
     num_different_samples: usize,
+    #[getset(get = "pub")]
     num_samples: usize,
     /// The maximum sample ID. This value is inclusive.
+    #[getset(get = "pub")]
     max_sample_id: u64,
 }
 

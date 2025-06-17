@@ -185,6 +185,35 @@ impl Instance {
         Ok(PyBytes::new(py, &bytes))
     }
 
+    #[pyo3(signature = (
+        rng,
+        num_different_samples = *ommx::random::SamplesParameters::default().num_different_samples(),
+        num_samples = *ommx::random::SamplesParameters::default().num_samples(),
+        max_sample_id = *ommx::random::SamplesParameters::default().max_sample_id()
+    ))]
+    pub fn random_samples<'py>(
+        &self,
+        py: Python<'py>,
+        rng: &Rng,
+        num_different_samples: usize,
+        num_samples: usize,
+        max_sample_id: u64,
+    ) -> Result<Bound<'py, PyBytes>> {
+        let params = ommx::random::SamplesParameters::new(
+            num_different_samples,
+            num_samples,
+            max_sample_id,
+        )?;
+
+        let strategy = self.0.arbitrary_samples(params);
+        let mut rng_guard = rng
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let samples = ommx::random::sample(&mut *rng_guard, strategy);
+        let bytes = samples.encode_to_vec();
+        Ok(PyBytes::new(py, &bytes))
+    }
+
     pub fn relax_constraint(
         &mut self,
         constraint_id: u64,

@@ -1341,6 +1341,61 @@ class Instance(InstanceBase, UserAnnotationBase):
         state.ParseFromString(state_bytes)
         return state
 
+    def random_samples(
+        self,
+        rng: _ommx_rust.Rng,
+        num_different_samples: int = 5,
+        num_samples: int = 10,
+        max_sample_id: int = 10,
+    ) -> Samples:
+        """
+        Generate random samples for this instance.
+
+        The generated samples will contain ``num_samples`` sample entries divided into
+        ``num_different_samples`` groups, where each group shares the same state but has
+        different sample IDs.
+
+        :param rng: Random number generator
+        :param num_different_samples: Number of different states to generate
+        :param num_samples: Total number of samples to generate
+        :param max_sample_id: Maximum sample ID (default: ``num_samples * 2``)
+        :return: Samples object
+
+        Examples
+        ========
+
+        Generate samples for a simple instance:
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(sum(x) <= 2).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
+        >>> len(samples.entries)
+        2
+        >>> sum(len(entry.ids) for entry in samples.entries)
+        5
+
+        Each generated state respects variable bounds:
+
+        >>> for entry in samples.entries:
+        ...     state = entry.state
+        ...     for var_id, value in state.entries.items():
+        ...         assert value in [0.0, 1.0], f"Binary variable {var_id} has invalid value {value}"
+
+        """
+        samples_bytes = self.raw.random_samples(
+            rng, num_different_samples, num_samples, max_sample_id
+        )
+        samples = Samples()
+        samples.ParseFromString(samples_bytes)
+        return samples
+
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
         Remove a constraint from the instance. The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
