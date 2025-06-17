@@ -25,7 +25,7 @@ impl SamplesParameters {
     ) -> Result<Self> {
         if num_different_samples > num_samples {
             bail!(
-                "num_different_samples({num_different_samples}) must be less than num_samples({num_samples})."
+                "num_different_samples({num_different_samples}) must be less than or equal to num_samples({num_samples})."
             );
         }
         if num_samples > max_sample_id as usize + 1 {
