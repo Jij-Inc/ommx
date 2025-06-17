@@ -7,7 +7,6 @@ mod dataset;
 mod decision_variable;
 mod descriptor;
 mod enums;
-mod evaluate;
 mod instance;
 mod message;
 mod mps;
@@ -23,7 +22,6 @@ pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
 pub use enums::*;
-pub use evaluate::*;
 pub use instance::*;
 pub use message::*;
 pub use mps::*;
@@ -73,13 +71,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     // Random
     m.add_class::<Rng>()?;
-
-    // Evaluate
-    m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
 
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;

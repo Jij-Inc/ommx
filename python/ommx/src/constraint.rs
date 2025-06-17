@@ -1,7 +1,7 @@
 use crate::{message::Function, Equality};
 use anyhow::Result;
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Message, Parse};
+use ommx::{ConstraintID, Evaluate, Message, Parse};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
@@ -88,6 +88,19 @@ impl Constraint {
     }
 
     pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+        let inner: ommx::v1::Constraint = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    }
+
+    pub fn evaluate<'py>(&self, py: Python<'py>, state: &Bound<PyBytes>) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let evaluated = self.0.evaluate(&state, ommx::ATol::default())?;
+        Ok(PyBytes::new(py, &evaluated.encode_to_vec()))
+    }
+
+    pub fn partial_evaluate<'py>(&mut self, py: Python<'py>, state: &Bound<PyBytes>) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.partial_evaluate(&state, ommx::ATol::default())?;
         let inner: ommx::v1::Constraint = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }

@@ -544,14 +544,14 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.evaluate({0: 1, 1: 0, 2: 2})
         Traceback (most recent call last):
             ...
-        RuntimeError: Decision variable value out of bound: ID=2, value=2, bound=[0, 1]
+        RuntimeError: Value for Binary variable VariableID(2) is out of bounds. Value: 2, Bound: Bound { lower: -0.0, upper: 1.0 }
 
         If some of the decision variables are not set, this raises an error:
 
         >>> instance.evaluate({0: 1, 1: 0})
         Traceback (most recent call last):
             ...
-        RuntimeError: Variable id (2) is not found in the solution
+        RuntimeError: The state does not contain some required IDs: {VariableID(2)}
 
         Irrelevant decision variables
         -----------------------------
@@ -595,10 +595,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   Binary   -0.0    1.0         []    0.0
         
         """
-        out = _ommx_rust.evaluate_instance(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Solution.from_bytes(out)
+        out = self.raw.evaluate(to_state(state).SerializeToString())
+        return Solution.from_bytes(out.to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Instance:
         """
@@ -636,9 +634,10 @@ class Instance(InstanceBase, UserAnnotationBase):
             >>> new_instance.objective
             Function(x2 + 1)
         """
-        out = _ommx_rust.partial_evaluate_instance(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        # Create a copy of the instance and call partial_evaluate on it
+        # Note: partial_evaluate modifies the instance in place and returns bytes
+        temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        out = temp_instance.partial_evaluate(to_state(state).SerializeToString())
         return Instance.from_bytes(out)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -3808,7 +3807,7 @@ class Constraint:
             "id": c.id,
             "equality": _equality(equality_for_display),
             "type": _function_type(pb_function),
-            "used_ids": _ommx_rust.used_decision_variable_ids(c.function.encode()),
+            "used_ids": Function(c.function).raw.required_ids(),
             "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
             "description": NA,  # Description not supported in Rust implementation

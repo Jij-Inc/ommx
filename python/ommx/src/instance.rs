@@ -169,6 +169,19 @@ impl Instance {
         Ok(ParametricInstance(inner.uniform_penalty_method()?))
     }
 
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let solution = self.0.evaluate(&state, ommx::ATol::default())?;
+        Ok(Solution(solution))
+    }
+
+    pub fn partial_evaluate<'py>(&mut self, py: Python<'py>, state: &Bound<PyBytes>) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.partial_evaluate(&state, ommx::ATol::default())?;
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    }
+
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(
             self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
