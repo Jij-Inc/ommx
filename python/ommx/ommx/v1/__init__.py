@@ -6,7 +6,7 @@ from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
 
-from .solution_pb2 import Optimality, Relaxation, Solution as _Solution
+from .solution_pb2 import Optimality, Relaxation, Solution as _Solution, State as _PbState
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
@@ -88,7 +88,7 @@ __all__ = [
     "ToSamples",
 ]
 
-ToState: TypeAlias = Union[State, Mapping[int, float]]
+ToState: TypeAlias = Union[State, _PbState, Mapping[int, float]]
 """
 Type alias for convertible types to :class:`State`.
 """
@@ -97,13 +97,17 @@ Type alias for convertible types to :class:`State`.
 def to_state(state: ToState) -> State:
     if isinstance(state, State):
         return state
-    return State(entries=state)
+    # Handle protobuf State objects from legacy code
+    if hasattr(state, 'entries') and hasattr(state, 'SerializeToString'):
+        # Convert protobuf State to PyO3 State
+        if isinstance(state, _PbState):
+            return State.from_bytes(state.SerializeToString())
+    return State(entries=state)  # type: ignore
 
 
 def _state_to_protobuf(state: State):
     """Convert _ommx_rust.State to protobuf State for legacy compatibility"""
-    from .solution_pb2 import State as PbState
-    pb_state = PbState()
+    pb_state = _PbState()
     pb_state.ParseFromString(state.to_bytes())
     return pb_state
 

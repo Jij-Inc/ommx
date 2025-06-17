@@ -247,6 +247,8 @@ Benchmark results for `evaluate_samples` revealed performance optimization oppor
   - ✅ All pyright errors resolved (0 errors)
   - ✅ All 98 tests pass - migration successful!
   - ✅ Fixed import order to resolve lint errors (E402)
+  - ✅ **ADAPTER FIXES COMPLETED**: All major adapters (OpenJij, PyScipOpt) fixed for State constructor changes
+  - ⏳ **State Constructor Enhancement**: Working on more flexible constructor to accept iterables
 - ⏳ Update ommx.v1.Solution to use PyO3 properties via .raw  
 - ⏳ Update ommx.v1.SampleSet to use PyO3 properties via .raw
 - Maintain serialization compatibility for safe migration

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ommx.v1 import Instance, State, Samples, SampleSet
+from ommx.v1 import Instance, State, Samples, SampleSet, _state_to_protobuf
 from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
@@ -185,14 +185,14 @@ def decode_to_samples(response: oj.Response) -> Samples:
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
-        state = State(entries=zip(response.variables, sample))  # type: ignore
+        state = State(entries=dict(zip(response.variables, sample)))  # type: ignore
         # `num_occurrences` is encoded into sample ID list.
         # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
         ids = []
         for _ in range(response.record.num_occurrences[i]):
             ids.append(sample_id)
             sample_id += 1
-        entries.append(Samples.SamplesEntry(state=state, ids=ids))
+        entries.append(Samples.SamplesEntry(state=_state_to_protobuf(state), ids=ids))
     return Samples(entries=entries)
 
 
