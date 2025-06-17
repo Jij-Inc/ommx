@@ -33,7 +33,7 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - Rust: Generated at build time via `build.rs`
 - Python: Pre-generated files committed to repo, regenerated via `task proto:python`
 
-## Current Implementation Status (Dec 2024)
+## Current Implementation Status
 
 ### Python SDK v2 Migration Completed ✅
 
@@ -195,14 +195,14 @@ from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Optimality
 ```
 
-### Current Development Status (December 2024)
+### Current Development Status
 - **Core Migration ✅**: Protocol Buffer to Rust migration completed across all components
 - **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - **Documentation ✅**: Comprehensive migration guide and adapter specifications available
 - **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
 - **Performance ✅**: Rust backend providing optimal performance for mathematical operations
 
-## PyO3 Performance Migration Plan (December 2024)
+## PyO3 Performance Migration Plan
 
 ### Background
 Benchmark results for `evaluate_samples` revealed significant performance overhead from serialization when passing data between Python and Rust. To address this, we are migrating the remaining protobuf implementations to PyO3 bindings.
@@ -213,7 +213,7 @@ Benchmark results for `evaluate_samples` revealed significant performance overhe
 - ✅ `Solution` - Simple wrapper with `from_bytes`/`to_bytes`
 - ✅ `Samples` - Simple wrapper with `from_bytes`/`to_bytes`  
 - ✅ `SampleSet` - Full wrapper with `get`, `num_samples`, `sample_ids`, etc.
-- ✅ `State` - PyO3 wrapper with `from_dict` static method (December 2024)
+- ✅ `State` - PyO3 wrapper with `from_dict` static method
 
 **Migration Impact**:
 - All core data structures now use PyO3 bindings instead of protobuf
@@ -248,13 +248,6 @@ solution.raw.objective  # Access through PyO3 wrapper
 2. **State creation**: Use `State.from_dict()` instead of `State(entries=...)`
 3. **Solution/SampleSet access**: Access attributes through `.raw` property
 4. **Test updates**: Update tests to use new API patterns
-
-### Performance Benefits
-
-- **No serialization overhead**: Direct memory access between Python and Rust
-- **Faster evaluate operations**: ~10x improvement for `evaluate_samples`
-- **Better memory efficiency**: Shared memory instead of copying data
-- **Type safety**: PyO3 provides better type checking than protobuf
 
 ## Development Notes
 
