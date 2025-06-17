@@ -185,7 +185,7 @@ def decode_to_samples(response: oj.Response) -> Samples:
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
-        state = State(entries=dict(zip(response.variables, sample)))  # type: ignore
+        state = State(entries=zip(response.variables, sample))
         # `num_occurrences` is encoded into sample ID list.
         # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
         ids = []

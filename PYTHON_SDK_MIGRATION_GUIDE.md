@@ -196,37 +196,39 @@ elif objective.degree() == 2:
 
 ## State Constructor Changes (PyO3 Migration)
 
-**Issue**: `State(entries=...)` constructor now requires `dict` instead of accepting iterables.
+**Enhancement**: `State(entries=...)` constructor enhanced to accept both `dict[int, float]` and `Iterable[tuple[int, float]]`.
 
 **Before (Protobuf)**:
 ```python
-# These worked with protobuf State but fail with PyO3 State
-state = State(entries=zip(variables, values))  # ❌ TypeError: 'zip' object cannot be converted to 'PyDict'
-state = State(entries=[(1, 0.5), (2, 1.0)])   # ❌ No longer works with iterables
+# These worked with protobuf State
+state = State(entries=zip(variables, values))  # ✅ Worked
+state = State(entries=[(1, 0.5), (2, 1.0)])   # ✅ Worked
 ```
 
-**After (PyO3)**:
+**After (PyO3) - Enhanced Constructor**:
 ```python
-# Convert to dict explicitly
-state = State(entries=dict(zip(variables, values)))  # ✅ Works
-state = State(entries={1: 0.5, 2: 1.0})             # ✅ Works
+# All these patterns now work with enhanced PyO3 State constructor
+state = State(entries=zip(variables, values))        # ✅ Works with iterables
+state = State(entries=[(1, 0.5), (2, 1.0)])         # ✅ Works with iterables  
+state = State(entries=dict(zip(variables, values)))  # ✅ Works with dict
+state = State(entries={1: 0.5, 2: 1.0})             # ✅ Works with dict
 ```
 
-**Adapter Code Fix Example**:
+**Adapter Code Example**:
 ```python
 # In adapter code (e.g., ommx-openjij-adapter)
 def decode_to_samples(response: oj.Response) -> Samples:
-    # OLD (fails with PyO3):
-    state = State(entries=zip(response.variables, sample))
-    
-    # NEW (works with PyO3):  
-    state = State(entries=dict(zip(response.variables, sample)))
+    # Both patterns now work with enhanced PyO3 State:
+    state = State(entries=zip(response.variables, sample))           # ✅ Works directly
+    # OR
+    state = State(entries=dict(zip(response.variables, sample)))     # ✅ Also works
 ```
 
 **Migration Status**:
 - ✅ **Completed**: `ommx.v1.State` migrated to PyO3 `_ommx_rust.State`
+- ✅ **Completed**: Enhanced State constructor to accept both dict and iterables
 - ✅ **Completed**: Adapter compatibility fixes for State constructor changes
-  - ✅ OpenJij adapter: Fixed `State(entries=dict(zip(...)))` pattern
+  - ✅ OpenJij adapter: Compatible with both `zip()` and `dict(zip())` patterns
   - ✅ PyScipOpt adapter: Enhanced `to_state()` function for protobuf/PyO3 compatibility
   - ✅ Enhanced `ToState` type alias to include legacy protobuf State
 - ⏳ **Planned**: `ommx.v1.Solution` and `ommx.v1.SampleSet` migrations
