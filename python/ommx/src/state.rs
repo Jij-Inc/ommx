@@ -1,10 +1,6 @@
 use anyhow::Result;
 use ommx::Message;
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyDict},
-    Bound, PyAny,
-};
+use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// State wrapper for Python
@@ -17,24 +13,25 @@ pub struct State(pub ommx::v1::State);
 #[pymethods]
 impl State {
     #[new]
-    #[pyo3(signature = (entries = HashMap::default()))]
-    pub fn new(entries: HashMap<u64, f64>) -> Self {
-        let mut state = ommx::v1::State::default();
-        state.entries = entries;
-        Self(state)
-    }
-
-    #[staticmethod]
-    pub fn from_dict(entries: &Bound<PyDict>) -> Result<Self> {
-        let mut state_entries = HashMap::new();
-
-        for (key, value) in entries.iter() {
-            let key_u64: u64 = key.extract()?;
-            let value_f64: f64 = value.extract()?;
-            state_entries.insert(key_u64, value_f64);
+    pub fn new(entries: &Bound<PyAny>) -> PyResult<Self> {
+        // FIXME: Set type annotations for `entries` to be more specific after pyo3-stub-gen supports it
+        if let Ok(entries) = entries.extract::<HashMap<u64, f64>>() {
+            let mut state = ommx::v1::State::default();
+            state.entries = entries;
+            return Ok(Self(state));
         }
-
-        Ok(Self::new(state_entries))
+        let err = || {
+            PyTypeError::new_err("ommx.v1.State can only be initialized with a `dict[int, float]` or `Iterable[tuple[int, float]]`")
+        };
+        if let Ok(iter) = entries.try_iter() {
+            let mut state = ommx::v1::State::default();
+            for item in iter {
+                let (key, value) = item?.extract::<(u64, f64)>().map_err(|_| err())?;
+                state.entries.insert(key, value);
+            }
+            return Ok(Self(state));
+        }
+        Err(err())
     }
 
     #[staticmethod]

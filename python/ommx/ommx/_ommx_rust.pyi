@@ -707,11 +707,16 @@ class State:
     """
 
     entries: builtins.dict[builtins.int, builtins.float]
-    def __new__(
-        cls, entries: typing.Mapping[builtins.int, builtins.float] = {}
-    ) -> State: ...
-    @staticmethod
-    def from_dict(entries: dict) -> State: ...
+    def __new__(cls, entries: typing.Any) -> State:
+        r"""
+        Create a new State from a dictionary of entries
+
+        ```python
+        >>> from ommx import State
+        >>> entries = {1: 0.5, 2: 1.0}
+        >>> state = State(entries)
+        ```
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
     def to_bytes(self) -> bytes: ...

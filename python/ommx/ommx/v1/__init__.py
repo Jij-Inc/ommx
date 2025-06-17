@@ -6,7 +6,12 @@ from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
 
-from .solution_pb2 import Optimality, Relaxation, Solution as _Solution, State as _PbState
+from .solution_pb2 import (
+    Optimality,
+    Relaxation,
+    Solution as _Solution,
+    State as _PbState,
+)
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
@@ -98,7 +103,7 @@ def to_state(state: ToState) -> State:
     if isinstance(state, State):
         return state
     # Handle protobuf State objects from legacy code
-    if hasattr(state, 'entries') and hasattr(state, 'SerializeToString'):
+    if hasattr(state, "entries") and hasattr(state, "SerializeToString"):
         # Convert protobuf State to PyO3 State
         if isinstance(state, _PbState):
             return State.from_bytes(state.SerializeToString())
