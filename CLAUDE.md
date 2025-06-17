@@ -232,10 +232,23 @@ Benchmark results for `evaluate_samples` revealed performance optimization oppor
   - ✅ Extract Solution, SampleSet, Samples from instance.rs into separate files
 - ✅ Add core properties to `_ommx_rust.Solution` (objective, state, feasible status, etc.)
 - ✅ Add core properties to `_ommx_rust.SampleSet` (objectives dict, feasible dicts, etc.)
-- ⏳ Re-implement `_ommx_rust.State` migration from protobuf (State already uses PyO3)
+- ✅ `_ommx_rust.State` already has PyO3 implementation with full functionality
 
-**Phase 2: Incremental Python SDK Migration**
-- Update Python SDK classes to use enhanced PyO3 properties via `.raw`
+**Phase 2: Incremental Python SDK Migration** 🔄
+- ✅ **COMPLETED**: Migrate ommx.v1.State to use _ommx_rust.State via .raw
+  - Strategy: Replace protobuf import with _ommx_rust.State, fix errors iteratively
+  - ✅ Changed import: `State = _ommx_rust.State` in __init__.py
+  - ✅ **Fixed all pyright errors (13 total)**:
+    - ✅ SerializeToString() → to_bytes() method calls (9 locations)
+    - ✅ ParseFromString() → from_bytes() method calls (1 location)
+    - ✅ Type mismatches in protobuf Solution construction (2 locations)
+    - ✅ Incompatible State type in return (1 location)
+  - ✅ Added helper function `_state_to_protobuf()` for legacy compatibility
+  - ✅ All pyright errors resolved (0 errors)
+  - ✅ All 98 tests pass - migration successful!
+  - ✅ Fixed import order to resolve lint errors (E402)
+- ⏳ Update ommx.v1.Solution to use PyO3 properties via .raw  
+- ⏳ Update ommx.v1.SampleSet to use PyO3 properties via .raw
 - Maintain serialization compatibility for safe migration
 - Keep all tests passing throughout the process
 
@@ -265,8 +278,8 @@ sample_set.feasible        # Dict[int, bool]
 ### Current Analysis: Solution and SampleSet Migration
 
 **Current State (Based on Analysis)**:
-- `State` - ⏳ Currently protobuf, PyO3 implementation exists but reverted
-- `Solution`, `Samples`, `SampleSet` - Basic PyO3 wrappers exist but lack functionality
+- `State` - 🔄 **IN PROGRESS**: PyO3 implementation exists, currently migrating Python SDK wrapper
+- `Solution`, `Samples`, `SampleSet` - ✅ Enhanced PyO3 implementations with rich properties completed
 
 **Current PyO3 Implementation Status**:
 ```rust
@@ -365,3 +378,11 @@ class Solution:
 - Always run `task format` before committing changes
 - Ensure `task python:test` passes completely
 - Follow incremental development: small changes → test → commit
+
+### 🛠️ Development Techniques
+- **PyO3 Migration Pattern**: When migrating from protobuf to PyO3 implementations:
+  1. Change import statements (e.g., `State = _ommx_rust.State`)
+  2. Run `task python:ommx:pyright` to get precise error locations
+  3. Fix errors iteratively: `SerializeToString()` → `to_bytes()`, `ParseFromString()` → `from_bytes()`
+  4. Add compatibility helpers for legacy protobuf interactions
+  5. Verify with `task python:ommx:pytest` that all tests pass

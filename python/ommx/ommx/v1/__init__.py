@@ -6,7 +6,7 @@ from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
 
-from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
+from .solution_pb2 import Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
@@ -35,6 +35,9 @@ from .annotation import (
 )
 
 from .. import _ommx_rust
+
+# Define PyO3 types
+State = _ommx_rust.State
 
 # Import PyO3 enums
 Sense = _ommx_rust.Sense
@@ -97,6 +100,14 @@ def to_state(state: ToState) -> State:
     return State(entries=state)
 
 
+def _state_to_protobuf(state: State):
+    """Convert _ommx_rust.State to protobuf State for legacy compatibility"""
+    from .solution_pb2 import State as PbState
+    pb_state = PbState()
+    pb_state.ParseFromString(state.to_bytes())
+    return pb_state
+
+
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
@@ -110,7 +121,7 @@ def to_samples(samples: ToSamples) -> Samples:
         # Do not compress the samples
         samples = Samples(
             entries=[
-                Samples.SamplesEntry(state=to_state(state), ids=[i])
+                Samples.SamplesEntry(state=_state_to_protobuf(to_state(state)), ids=[i])
                 for i, state in samples.items()
             ]
         )
@@ -595,7 +606,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   Binary   -0.0    1.0         []    0.0
         
         """
-        out = self.raw.evaluate(to_state(state).SerializeToString())
+        out = self.raw.evaluate(to_state(state).to_bytes())
         return Solution.from_bytes(out.to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Instance:
@@ -637,7 +648,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        out = temp_instance.partial_evaluate(to_state(state).SerializeToString())
+        out = temp_instance.partial_evaluate(to_state(state).to_bytes())
         return Instance.from_bytes(out)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -1336,8 +1347,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         """
         state_bytes = self.raw.random_state(rng)
-        state = State()
-        state.ParseFromString(state_bytes)
+        state = State.from_bytes(state_bytes)
         return state
 
     def random_samples(
@@ -2142,7 +2152,9 @@ class Solution(UserAnnotationBase):
 
     @property
     def state(self) -> State:
-        return self.raw.state
+        # Convert protobuf State to _ommx_rust.State
+        pb_state = self.raw.state
+        return State.from_bytes(pb_state.SerializeToString())
 
     @property
     def objective(self) -> float:
@@ -2750,7 +2762,7 @@ class Linear(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(to_state(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -2771,7 +2783,7 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
         return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -2920,7 +2932,7 @@ class Quadratic(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(to_state(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -2944,7 +2956,7 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
         return Quadratic.from_raw(new_raw)
 
     @property
@@ -3123,7 +3135,7 @@ class Polynomial(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(to_state(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -3147,7 +3159,7 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
         return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3328,7 +3340,7 @@ class Function(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(to_state(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Function:
         """
@@ -3352,7 +3364,7 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
         return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
