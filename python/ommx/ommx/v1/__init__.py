@@ -6,7 +6,7 @@ from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 import collections.abc
 
-from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
+from .solution_pb2 import Optimality, Relaxation, Solution as _Solution
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
@@ -48,6 +48,9 @@ ConstraintHints = _ommx_rust.ConstraintHints
 
 # Import Rng class
 Rng = _ommx_rust.Rng
+
+# Import State class - this will replace the protobuf State
+State = _ommx_rust.State
 
 __all__ = [
     "Instance",
@@ -94,7 +97,7 @@ Type alias for convertible types to :class:`State`.
 def to_state(state: ToState) -> State:
     if isinstance(state, State):
         return state
-    return State(entries=state)
+    return State.from_dict(state)
 
 
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]

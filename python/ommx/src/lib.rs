@@ -12,6 +12,7 @@ mod message;
 mod mps;
 mod qplib;
 mod random;
+mod state;
 
 pub use artifact::*;
 pub use bound::*;
@@ -27,6 +28,7 @@ pub use message::*;
 pub use mps::*;
 pub use qplib::*;
 pub use random::*;
+pub use state::*;
 
 use pyo3::prelude::*;
 
@@ -63,6 +65,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
+    m.add_class::<State>()?;
 
     // Enums
     m.add_class::<Sense>()?;
