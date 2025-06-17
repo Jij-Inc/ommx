@@ -1,6 +1,10 @@
 use anyhow::Result;
 use ommx::Message;
-use pyo3::{prelude::*, types::{PyBytes, PyDict}, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+    Bound, PyAny,
+};
 use std::collections::HashMap;
 
 /// State wrapper for Python
@@ -23,13 +27,13 @@ impl State {
     #[staticmethod]
     pub fn from_dict(entries: &Bound<PyDict>) -> Result<Self> {
         let mut state_entries = HashMap::new();
-        
+
         for (key, value) in entries.iter() {
             let key_u64: u64 = key.extract()?;
             let value_f64: f64 = value.extract()?;
             state_entries.insert(key_u64, value_f64);
         }
-        
+
         Ok(Self::new(state_entries))
     }
 
