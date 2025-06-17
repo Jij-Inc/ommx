@@ -1,6 +1,6 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Rng, SampleSet, Samples, Sense,
-    Solution, VariableBound,
+    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Rng, SampleSet,
+    Samples, Sense, Solution, VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
@@ -518,4 +518,3 @@ impl Parameters {
         Ok(PyBytes::new(py, &self.0.encode_to_vec()))
     }
 }
-

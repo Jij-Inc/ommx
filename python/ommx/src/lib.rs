@@ -15,8 +15,8 @@ mod polynomial;
 mod qplib;
 mod quadratic;
 mod random;
-mod samples;
 mod sample_set;
+mod samples;
 mod solution;
 mod state;
 
@@ -37,8 +37,8 @@ pub use polynomial::*;
 pub use qplib::*;
 pub use quadratic::*;
 pub use random::*;
-pub use samples::*;
 pub use sample_set::*;
+pub use samples::*;
 pub use solution::*;
 pub use state::*;
 

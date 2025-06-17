@@ -52,29 +52,34 @@ impl SampleSet {
     /// Get objectives for all samples
     #[getter]
     pub fn objectives(&self) -> BTreeMap<u64, f64> {
-        self.0.sample_ids().into_iter()
-            .filter_map(|id| {
-                self.0.get(id).ok().map(|solution| (id, solution.objective))
-            })
+        self.0
+            .sample_ids()
+            .into_iter()
+            .filter_map(|id| self.0.get(id).ok().map(|solution| (id, solution.objective)))
             .collect()
     }
 
     /// Get feasibility status for all samples
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
-        self.0.sample_ids().into_iter()
-            .filter_map(|id| {
-                self.0.get(id).ok().map(|solution| (id, solution.feasible))
-            })
+        self.0
+            .sample_ids()
+            .into_iter()
+            .filter_map(|id| self.0.get(id).ok().map(|solution| (id, solution.feasible)))
             .collect()
     }
 
     /// Get relaxed feasibility status for all samples
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, Option<bool>> {
-        self.0.sample_ids().into_iter()
+        self.0
+            .sample_ids()
+            .into_iter()
             .filter_map(|id| {
-                self.0.get(id).ok().map(|solution| (id, solution.feasible_relaxed))
+                self.0
+                    .get(id)
+                    .ok()
+                    .map(|solution| (id, solution.feasible_relaxed))
             })
             .collect()
     }
@@ -82,9 +87,14 @@ impl SampleSet {
     /// Get unrelaxed feasibility status for all samples
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
-        self.0.sample_ids().into_iter()
+        self.0
+            .sample_ids()
+            .into_iter()
             .filter_map(|id| {
-                self.0.get(id).ok().map(|solution| (id, solution.feasible_unrelaxed))
+                self.0
+                    .get(id)
+                    .ok()
+                    .map(|solution| (id, solution.feasible_unrelaxed))
             })
             .collect()
     }

@@ -26,7 +26,7 @@ impl Solution {
     }
 
     /// Get the solution state containing variable values
-    #[getter] 
+    #[getter]
     pub fn state(&self) -> crate::State {
         crate::State(self.0.state.clone().unwrap_or_default())
     }
