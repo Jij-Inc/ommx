@@ -35,16 +35,20 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 
 ## Current Implementation Status
 
-### Python SDK v2 Migration Completed ✅
+### Python SDK v2 Migration Status
 
-The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+The project has completed its core migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings. Additional performance optimizations are ongoing.
 
-**Core Features Completed**:
+**Completed Core Migration ✅**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
 - ✅ Instance class fully migrated to Rust backend with maintained API compatibility
 - ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
 - ✅ Comprehensive testing and documentation updated
+
+**Ongoing Performance Migration 🔄**:
+- ⏳ PyO3 implementations for `Solution`, `SampleSet`, and `State` to eliminate serialization overhead
+- ⏳ Enhanced properties and methods for better Python API integration
 
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
@@ -67,70 +71,70 @@ class Linear(AsConstraint):
 
 ## Development Commands
 
-This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
+This project uses [Taskfile](https://taskfile.dev/) for task management. **Always run task commands from the project root directory**. Run `task -l` to see all available commands.
 
 ### Essential Commands
 
 **Setup and Dependencies:**
 ```bash
-# Python development environment
-task python:sync
-
-# Install/upgrade dependencies
-task python:upgrade
+# From project root: /Users/termoshtt/github.com/Jij-Inc/ommx
+task python:sync        # Setup Python development environment, rebuild Python SDK
+task python:upgrade     # Upgrade uv dependencies
 ```
 
 **Testing:**
 ```bash
-# Run all tests
+# Run all tests (from project root)
 task python:test        # Python tests (includes linting, type checking, and pytest)
 task rust:test         # Rust tests only
-task python:test-ci    # CI mode (no pyright for main ommx package)
+task python:test-ci     # CI mode (no pyright for main ommx package)
 ```
 
 **Code Quality:**
 ```bash
-# Format Python code
-task python:format
-
-# Python linting
-task python:lint         # Run ruff check on all Python packages
-
-# Rust linting
-task rust:clippy
-
-# Type checking (Python)
-task python:ommx:pyright
+# Format and linting (from project root)
+task format             # Format all code (Python + Rust)
+task python:format      # Format Python code only
+task python:lint        # Run ruff check on all Python packages
+task rust:clippy        # Run clippy for Rust SDK
+task python:ommx:pyright # Type checking for main Python package
 ```
 
 **Building and Documentation:**
 ```bash
-# Generate code from protobuf
-task proto
+# Generate code from protobuf (from project root)
+task proto              # Generate code from Protobuf definitions
 
-# Build documentation
-task api_reference     # Python API docs
-task rust:doc         # Rust docs
-task book_en          # English Jupyter Book
-task book_ja          # Japanese Jupyter Book
+# Build documentation (from project root)
+task api_reference      # Build and open Python API docs
+task rust:doc          # Generate and open Rust docs
+task book_en           # Build and open English Jupyter Book
+task book_ja           # Build and open Japanese Jupyter Book
 ```
 
 ### Package-Specific Commands
 
 **Core OMMX:**
-- `task python:ommx:test` - Test main Python package
+- `task python:ommx:test` - Run tests for OMMX Python SDK
 - `task python:ommx:pytest` - Run pytest only (no type checking)
+- `task python:ommx:test-ci` - CI mode (without pyright)
+- `task python:ommx:bench` - Run benchmarks for OMMX Python SDK
 
 **Adapters:**
-- `task python:ommx-openjij-adapter:test`
-- `task python:ommx-python-mip-adapter:test`
-- `task python:ommx-pyscipopt-adapter:test`
-- `task python:ommx-highs-adapter:test`
+- `task python:ommx-openjij-adapter:test` - Run all tests for OMMX OpenJij Adapter
+- `task python:ommx-python-mip-adapter:test` - Run all tests for OMMX Python-MIP Adapter  
+- `task python:ommx-pyscipopt-adapter:test` - Run all tests for OMMX PySCIPOpt Adapter
+- `task python:ommx-highs-adapter:test` - Run all tests for OMMX Highs Adapter
+
+**Development Utilities:**
+- `task python:stubgen` - Generate stubs files for Rust extension
+- `task python:bench` - Run benchmarks for OMMX Python SDK
+- `task codspeed:trigger` - Trigger GitHub Actions workflow for Codspeed on current branch
 
 ## Testing Strategy
 
 **Python Testing:**
-- Main package: ruff linting + pytest + pyright type checking + doctests
+- Main package: ruff linting + pytest + pyright type checking + doc tests
 - Adapters: ruff linting + pytest with solver-specific integration tests
 - CI mode available for environments without pyright
 
@@ -162,7 +166,7 @@ When making changes, always run the appropriate linting/testing commands before 
 
 1. **API Philosophy**: Avoid `_ommx_rust` direct imports; always use `ommx.v1` unified API. When needed functionality is missing, extend the Python SDK rather than using raw APIs
 2. **Protocol Buffers Compatibility**: Ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
+3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doc tests
 4. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 5. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
@@ -183,7 +187,7 @@ When developing or modifying solver adapters:
 2. **API Usage**: Use Python SDK methods instead of raw API calls
 3. **Type Conversions**: Let Python SDK handle conversions between Rust and Python types
 4. **Extension Pattern**: If needed functionality is missing, add it to Python SDK classes
-5. **Testing**: Ensure all tests pass including doctests and pyright checks
+5. **Testing**: Ensure all tests pass including doc tests and pyright checks
 
 **Example Pattern**:
 ```python
@@ -200,48 +204,59 @@ from ommx.v1.solution_pb2 import Optimality
 - **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - **Documentation ✅**: Comprehensive migration guide and adapter specifications available
 - **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
-- **Performance ✅**: Rust backend providing optimal performance for mathematical operations
+- **Performance Optimization 🔄**: Ongoing PyO3 performance improvements for data structures
 
-## PyO3 Performance Migration Plan
+## PyO3 Performance Enhancement Plan
 
 ### Background
-Benchmark results for `evaluate_samples` revealed significant performance overhead from serialization when passing data between Python and Rust. To address this, we are migrating the remaining protobuf implementations to PyO3 bindings.
+Benchmark results for `evaluate_samples` revealed performance optimization opportunities through better PyO3 integration. We are enhancing the existing PyO3 implementations with richer functionality to eliminate unnecessary serialization overhead.
 
-### Migration Status
+### Current PyO3 Implementation Status
 
-**Already Migrated to PyO3**:
-- ✅ `Solution` - Simple wrapper with `from_bytes`/`to_bytes`
-- ✅ `Samples` - Simple wrapper with `from_bytes`/`to_bytes`  
-- ✅ `SampleSet` - Full wrapper with `get`, `num_samples`, `sample_ids`, etc.
+**Basic PyO3 Wrappers (Need Enhancement)**:
+- ⏳ `Solution` - Basic wrapper, needs core properties (objective, state, feasible, etc.)
+- ⏳ `Samples` - Basic wrapper with `from_bytes`/`to_bytes`  
+- ⏳ `SampleSet` - Basic wrapper, needs enhanced functionality (objectives dict, feasible dicts, etc.)
+- ⏳ `State` - PyO3 implementation exists but reverted to protobuf, needs re-migration
 
-**To Be Migrated**:
-- ⏳ `State` - Currently protobuf, PyO3 implementation exists but not yet used
-
-**Migration Impact**:
-- All core data structures now use PyO3 bindings instead of protobuf
-- Significant performance improvement for `evaluate_samples` and similar operations
+**Enhancement Goals**:
+- Rich Python properties for all PyO3 data structures
 - Direct memory access between Python and Rust without serialization overhead
+- Maintaining API compatibility through incremental migration
 
-### API Changes
+### Migration Strategy
 
-**State Migration**:
+**Phase 1: Enhance PyO3 Implementations**
+- Add core properties to `_ommx_rust.Solution` (objective, state, feasible status, etc.)
+- Add core properties to `_ommx_rust.SampleSet` (objectives dict, feasible dicts, etc.)
+- Re-implement `_ommx_rust.State` migration from protobuf
+
+**Phase 2: Incremental Python SDK Migration**
+- Update Python SDK classes to use enhanced PyO3 properties via `.raw`
+- Maintain serialization compatibility for safe migration
+- Keep all tests passing throughout the process
+
+### API Evolution Pattern
+
+**Enhanced Solution Access**:
 ```python
-# Before (protobuf)
-from ommx.v1.solution_pb2 import State
-state = State(entries={0: 1.0, 1: 2.0})
+# Current (basic PyO3 wrapper)
+solution = Solution.from_bytes(bytes_data)
 
-# After (PyO3)
-from ommx.v1 import State  # Now imported from _ommx_rust
-state = State.from_dict({0: 1.0, 1: 2.0})
+# Target (rich PyO3 properties)
+solution.objective    # Direct property access
+solution.state        # Direct State object
+solution.feasible     # Direct boolean
 ```
 
-**Solution/SampleSet Access**:
+**Enhanced SampleSet Access**:
 ```python
-# Before
-solution.objective  # Direct protobuf attribute access
+# Current (basic methods)
+sample_set.get(sample_id)  # Returns Solution
 
-# After
-solution.raw.objective  # Access through PyO3 wrapper
+# Target (rich properties) 
+sample_set.objectives      # Dict[int, float]
+sample_set.feasible        # Dict[int, bool]
 ```
 
 ### Current Analysis: Solution and SampleSet Migration
