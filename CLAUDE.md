@@ -135,6 +135,69 @@ pub struct SampledConstraint {
 - ✅ Type-safe constraint evaluation with proper error handling
 - ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
 
+**Solution and SampleSet Implementation (Planned 🚧)**:
+
+Following the same design principles as constraint types, the next phase will implement strongly-typed Solution and SampleSet alternatives:
+
+```rust
+// Auxiliary metadata for solutions (excluding essential evaluation results)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SolutionMetadata {
+    pub optimality: Optimality,
+    pub relaxation: Relaxation,
+    pub feasible_unrelaxed: bool,  // Deprecated but maintained for compatibility
+}
+
+// Single solution result with data integrity guarantees  
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct Solution {
+    #[getset(get = "pub")]
+    state: v1::State,                        // Essential: variable assignments
+    #[getset(get = "pub")]
+    objective: f64,                          // Essential: objective value
+    #[getset(get = "pub")]
+    evaluated_constraints: Vec<EvaluatedConstraint>, // Protected: constraint evaluations
+    #[getset(get = "pub")]
+    decision_variables: Vec<v1::DecisionVariable>,   // Protected: decision variable values
+    #[getset(get = "pub")]
+    feasible: bool,                          // Protected: overall feasibility
+    #[getset(get = "pub")]
+    feasible_relaxed: bool,                  // Protected: relaxed feasibility
+    pub metadata: SolutionMetadata,          // Auxiliary metadata
+}
+
+// Multiple sample solution results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampleSet {
+    #[getset(get = "pub")]
+    decision_variables: Vec<v1::SampledDecisionVariable>, // Protected: sampled variables
+    #[getset(get = "pub")]
+    objectives: Option<Sampled<f64>>,        // Protected: objective values
+    #[getset(get = "pub")]
+    constraints: Vec<SampledConstraint>,     // Protected: constraint evaluations
+    #[getset(get = "pub")]
+    feasible_relaxed: FnvHashMap<u64, bool>, // Protected: relaxed feasibility map
+    #[getset(get = "pub")]
+    feasible: FnvHashMap<u64, bool>,         // Protected: strict feasibility map
+    #[getset(get = "pub")]
+    sense: Sense,                            // Essential: optimization sense
+}
+```
+
+**Planned Design Decisions**:
+- **Data Integrity**: Solution evaluation results are private with getters only
+- **Metadata Separation**: `SolutionMetadata` contains only auxiliary information like optimality status
+- **Feasibility Pre-computation**: Both `feasible` and `feasible_relaxed` stored to avoid repeated calculations
+- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
+- **Efficient Storage**: `Sampled<f64>` for objectives enables deduplication when multiple samples share results
+
+**Planned Benefits**:
+- **Data Integrity**: Prevents external modification of critical solution evaluation data
+- **Performance**: Pre-computed feasibility avoids repeated constraint checks
+- **Type Safety**: Strong typing with private fields and controlled access via getters  
+- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
+- **Clean API**: Separation of essential solution properties from auxiliary metadata
+
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
 - **Type Safety**: PyO3 enums with proper type checking
