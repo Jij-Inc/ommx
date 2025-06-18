@@ -1,6 +1,6 @@
 mod parse;
 
-use crate::{EvaluatedConstraint, Sampled, Sense, DecisionVariable};
+use crate::{EvaluatedConstraint, Sampled, Sense, EvaluatedDecisionVariable};
 use fnv::FnvHashMap;
 use getset::Getters;
 
@@ -14,7 +14,7 @@ pub struct Solution {
     #[getset(get = "pub")]
     evaluated_constraints: Vec<EvaluatedConstraint>,
     #[getset(get = "pub")]
-    decision_variables: Vec<DecisionVariable>,
+    decision_variables: Vec<EvaluatedDecisionVariable>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
@@ -106,28 +106,32 @@ impl SampleSet {
             }
         }
         
-        // Get decision variables with substituted values - convert to ommx::DecisionVariable
+        // Get decision variables with substituted values - convert to EvaluatedDecisionVariable
         let decision_variables: Result<Vec<_>, _> = self
             .decision_variables
             .iter()
             .filter_map(|dv| {
                 dv.decision_variable.as_ref().map(|dv_def| {
                     // Parse v1::DecisionVariable to ommx::DecisionVariable
-                    let parsed_dv: DecisionVariable = crate::Parse::parse(dv_def.clone(), &())
+                    let parsed_dv: crate::DecisionVariable = crate::Parse::parse(dv_def.clone(), &())
                         .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
                     
-                    // Create a new DecisionVariable with the substituted value
-                    if let Some(value) = state_entries.get(&dv_def.id) {
-                        DecisionVariable::new(
-                            parsed_dv.id(),
-                            parsed_dv.kind(),
-                            parsed_dv.bound(),
-                            Some(*value),
-                            crate::ATol::default(),
-                        ).map_err(|_| crate::UnknownSampleIDError { id: sample_id })
-                    } else {
-                        Ok(parsed_dv)
-                    }
+                    // Get the substituted value for this sample
+                    let substituted_value = state_entries.get(&dv_def.id).copied();
+                    
+                    // Create EvaluatedDecisionVariable
+                    Ok(crate::EvaluatedDecisionVariable::new(
+                        parsed_dv.id(),
+                        parsed_dv.kind(),
+                        parsed_dv.bound(),
+                        substituted_value,
+                        crate::DecisionVariableMetadata {
+                            name: parsed_dv.name.clone(),
+                            subscripts: parsed_dv.subscripts.clone(),
+                            parameters: parsed_dv.parameters.clone(),
+                            description: parsed_dv.description.clone(),
+                        },
+                    ))
                 })
             })
             .collect();
@@ -168,7 +172,7 @@ impl Solution {
         state: crate::v1::State,
         objective: f64,
         evaluated_constraints: Vec<EvaluatedConstraint>,
-        decision_variables: Vec<DecisionVariable>,
+        decision_variables: Vec<EvaluatedDecisionVariable>,
         feasible: bool,
         feasible_relaxed: bool,
         optimality: crate::v1::Optimality,

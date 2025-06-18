@@ -17,10 +17,13 @@ impl Parse for crate::v1::Solution {
             .collect();
         let evaluated_constraints = evaluated_constraints?;
 
-        let decision_variables: Result<Vec<_>, _> = self
+        let decision_variables: Result<Vec<_>, ParseError> = self
             .decision_variables
             .into_iter()
-            .map(|dv| dv.parse(&()))
+            .map(|dv| {
+                let parsed: crate::DecisionVariable = dv.parse(&())?;
+                Ok(crate::EvaluatedDecisionVariable::from_decision_variable(parsed))
+            })
             .collect();
         let decision_variables = decision_variables?;
         let (feasible, feasible_relaxed) = match self.feasible_relaxed {
@@ -116,7 +119,10 @@ impl From<Solution> for crate::v1::Solution {
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
             .iter()
-            .map(|dv| dv.clone().into())
+            .map(|dv| {
+                let dv_converted = dv.to_decision_variable().unwrap();
+                dv_converted.into()
+            })
             .collect();
         let feasible = *solution.feasible();
         let feasible_relaxed = Some(*solution.feasible_relaxed());

@@ -35,20 +35,25 @@ impl Evaluate for Instance {
             evaluated_constraints.push(evaluated);
         }
 
-        let decision_variables: Vec<crate::DecisionVariable> = self
+        let decision_variables: Vec<crate::EvaluatedDecisionVariable> = self
             .decision_variables
             .values()
             .map(|dv| {
                 let id = dv.id().into_inner();
                 let value = state.entries.get(&id).unwrap(); // Safe unwrap, as we populate the state with the decision variables
-                // Create a new DecisionVariable with the substituted value
-                crate::DecisionVariable::new(
+                
+                crate::EvaluatedDecisionVariable::new(
                     dv.id(),
                     dv.kind(),
                     dv.bound(),
                     Some(*value),
-                    crate::ATol::default(),
-                ).unwrap() // Safe unwrap since the original was valid
+                    crate::DecisionVariableMetadata {
+                        name: dv.name.clone(),
+                        subscripts: dv.subscripts.clone(),
+                        parameters: dv.parameters.clone(),
+                        description: dv.description.clone(),
+                    },
+                )
             })
             .collect();
 

@@ -4,9 +4,10 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::{ATol, Bound};
+use crate::{ATol, Bound, Sampled, SampleID, sampled::UnknownSampleIDError};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
+use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
@@ -299,4 +300,133 @@ pub enum DecisionVariableError {
         substituted_value: f64,
         atol: ATol,
     },
+}
+
+/// Auxiliary metadata for decision variables (excluding essential id, kind, bound, substituted_value)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DecisionVariableMetadata {
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: FnvHashMap<String, String>,
+    pub description: Option<String>,
+}
+
+/// Single evaluation result with data integrity guarantees
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct EvaluatedDecisionVariable {
+    #[getset(get = "pub")]
+    id: VariableID,
+    #[getset(get = "pub")]
+    kind: Kind,
+    #[getset(get = "pub")]
+    bound: Bound,
+    #[getset(get = "pub")]
+    substituted_value: Option<f64>,
+    pub metadata: DecisionVariableMetadata,
+}
+
+/// Multiple sample evaluation results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampledDecisionVariable {
+    #[getset(get = "pub")]
+    id: VariableID,
+    #[getset(get = "pub")]
+    kind: Kind,
+    #[getset(get = "pub")]
+    bound: Bound,
+    pub metadata: DecisionVariableMetadata,
+    #[getset(get = "pub")]
+    samples: Option<Sampled<f64>>,
+}
+
+impl EvaluatedDecisionVariable {
+    /// Create a new EvaluatedDecisionVariable
+    pub fn new(
+        id: VariableID,
+        kind: Kind,
+        bound: Bound,
+        substituted_value: Option<f64>,
+        metadata: DecisionVariableMetadata,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            bound,
+            substituted_value,
+            metadata,
+        }
+    }
+    
+    /// Create from a DecisionVariable
+    pub fn from_decision_variable(dv: DecisionVariable) -> Self {
+        Self {
+            id: dv.id(),
+            kind: dv.kind(),
+            bound: dv.bound(),
+            substituted_value: dv.substituted_value(),
+            metadata: DecisionVariableMetadata {
+                name: dv.name.clone(),
+                subscripts: dv.subscripts.clone(),
+                parameters: dv.parameters.clone(),
+                description: dv.description.clone(),
+            },
+        }
+    }
+    
+    /// Convert to DecisionVariable
+    pub fn to_decision_variable(&self) -> Result<DecisionVariable, DecisionVariableError> {
+        let mut dv = DecisionVariable {
+            id: self.id,
+            kind: self.kind,
+            bound: self.bound,
+            substituted_value: None,
+            name: self.metadata.name.clone(),
+            subscripts: self.metadata.subscripts.clone(),
+            parameters: self.metadata.parameters.clone(),
+            description: self.metadata.description.clone(),
+        };
+        
+        if let Some(value) = self.substituted_value {
+            dv.check_value_consistency(value, ATol::default())?;
+            dv.substituted_value = Some(value);
+        }
+        
+        Ok(dv)
+    }
+}
+
+impl SampledDecisionVariable {
+    /// Create a new SampledDecisionVariable
+    pub fn new(
+        id: VariableID,
+        kind: Kind,
+        bound: Bound,
+        metadata: DecisionVariableMetadata,
+        samples: Option<Sampled<f64>>,
+    ) -> Self {
+        Self {
+            id,
+            kind,
+            bound,
+            metadata,
+            samples,
+        }
+    }
+    
+    /// Get a specific evaluated decision variable by sample ID
+    pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
+        let substituted_value = if let Some(samples) = &self.samples {
+            Some(*samples.get(sample_id)?)
+        } else {
+            None
+        };
+        
+        Ok(EvaluatedDecisionVariable::new(
+            self.id,
+            self.kind,
+            self.bound,
+            substituted_value,
+            self.metadata.clone(),
+        ))
+    }
 }
