@@ -14,8 +14,9 @@ impl Parse for v1::Equality {
         match self {
             v1::Equality::EqualToZero => Ok(Equality::EqualToZero),
             v1::Equality::LessThanOrEqualToZero => Ok(Equality::LessThanOrEqualToZero),
-            _ => Err(RawParseError::UnspecifiedEnum {
+            _ => Err(RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Equality",
+                value: self as i32,
             }
             .into()),
         }

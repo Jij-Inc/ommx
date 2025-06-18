@@ -24,13 +24,15 @@ impl Parse for crate::v1::Solution {
         let metadata =
             SolutionMetadata {
                 optimality: self.optimality.try_into().map_err(|_| {
-                    RawParseError::UnspecifiedEnum {
+                    RawParseError::UnknownEnumValue {
                         enum_name: "ommx.v1.Optimality",
+                        value: self.optimality,
                     }
                 })?,
                 relaxation: self.relaxation.try_into().map_err(|_| {
-                    RawParseError::UnspecifiedEnum {
+                    RawParseError::UnknownEnumValue {
                         enum_name: "ommx.v1.Relaxation",
+                        value: self.relaxation,
                     }
                 })?,
             };
@@ -70,8 +72,9 @@ impl Parse for crate::v1::SampleSet {
         let sense = self
             .sense
             .try_into()
-            .map_err(|_| RawParseError::UnspecifiedEnum {
+            .map_err(|_| RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
+                value: self.sense,
             })?;
 
         Ok(SampleSet {
@@ -265,5 +268,51 @@ mod tests {
         let v1_converted: v1::SampleSet = parsed.into();
         assert_eq!(v1_converted.sense, v1::instance::Sense::Minimize as i32);
         assert_eq!(v1_converted.decision_variables.len(), 1);
+    }
+
+    #[test]
+    fn test_unknown_enum_value_error() {
+        // Test with an invalid optimality value
+        let v1_solution = v1::Solution {
+            optimality: 99, // Unknown enum value
+            relaxation: v1::Relaxation::Unspecified as i32,
+            feasible: true,
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        assert!(result.is_err());
+        
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Unknown or unsupported enum value 99 for ommx.v1.Optimality"));
+        
+        // Test with an invalid relaxation value
+        let v1_solution2 = v1::Solution {
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: 123, // Unknown enum value
+            feasible: true,
+            ..Default::default()
+        };
+
+        let result2: Result<Solution, ParseError> = v1_solution2.parse(&());
+        assert!(result2.is_err());
+        
+        let error2 = result2.unwrap_err();
+        assert!(error2.to_string().contains("Unknown or unsupported enum value 123 for ommx.v1.Relaxation"));
+    }
+
+    #[test]
+    fn test_unknown_sense_enum_value() {
+        // Test with an invalid sense value in SampleSet
+        let v1_sample_set = v1::SampleSet {
+            sense: 999, // Unknown enum value
+            ..Default::default()
+        };
+
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        assert!(result.is_err());
+        
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Unknown or unsupported enum value 999 for ommx.v1.Sense"));
     }
 }

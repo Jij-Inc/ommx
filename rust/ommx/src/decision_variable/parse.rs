@@ -9,15 +9,16 @@ impl Parse for v1::decision_variable::Kind {
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         use v1::decision_variable::Kind::*;
         match self {
-            Unspecified => Err(RawParseError::UnspecifiedEnum {
-                enum_name: "ommx.v1.decision_variable.Kind",
-            }
-            .into()),
             Continuous => Ok(Kind::Continuous),
             Integer => Ok(Kind::Integer),
             Binary => Ok(Kind::Binary),
             SemiContinuous => Ok(Kind::SemiContinuous),
             SemiInteger => Ok(Kind::SemiInteger),
+            _ => Err(RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.decision_variable.Kind",
+                value: self as i32,
+            }
+            .into()),
         }
     }
 }
