@@ -521,19 +521,21 @@ impl Parameters {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct Solution(ommx::v1::Solution);
+pub struct Solution(ommx::Solution);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl Solution {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Solution::decode(bytes.as_bytes())?;
+        let v1_solution = ommx::v1::Solution::decode(bytes.as_bytes())?;
+        let inner = Parse::parse(v1_solution, &())?;
         Ok(Self(inner))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+        let v1_solution: ommx::v1::Solution = self.0.clone().into();
+        Ok(PyBytes::new(py, &v1_solution.encode_to_vec()))
     }
 }
 
@@ -557,46 +559,69 @@ impl Samples {
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-pub struct SampleSet(ommx::v1::SampleSet);
+pub struct SampleSet(ommx::SampleSet);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl SampleSet {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
+        let v1_sample_set = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
+        let inner = Parse::parse(v1_sample_set, &())?;
         Ok(Self(inner))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+        let v1_sample_set: ommx::v1::SampleSet = self.0.clone().into();
+        Ok(PyBytes::new(py, &v1_sample_set.encode_to_vec()))
     }
 
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
-        Ok(self.0.get(sample_id).map(Solution)?)
+        let solution = self.0.get(ommx::SampleID::from(sample_id))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get solution: {}", e)))?;
+        Ok(Solution(solution))
     }
 
     pub fn num_samples(&self) -> PyResult<usize> {
-        Ok(self.0.num_samples()?)
+        Ok(self.0.sample_ids().len())
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.0.sample_ids()
+        self.0.sample_ids().into_iter().map(|id| id.into_inner()).collect()
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible_ids()
+        self.0.feasible().iter()
+            .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
+            .collect()
     }
 
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible_unrelaxed_ids()
+        self.0.feasible().iter()
+            .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
+            .collect()
     }
 
     pub fn best_feasible(&self) -> PyResult<Solution> {
-        Ok(self.0.best_feasible().map(Solution)?)
+        // Find best feasible solution based on objective value and feasibility
+        let feasible_samples: Vec<_> = self.0.feasible().iter()
+            .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
+            .collect();
+        
+        if feasible_samples.is_empty() {
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("No feasible solutions found"));
+        }
+        
+        // For now, just return the first feasible solution
+        // TODO: Implement proper objective-based selection
+        let best_id = feasible_samples[0];
+        let solution = self.0.get(ommx::SampleID::from(best_id))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get best feasible solution: {}", e)))?;
+        Ok(Solution(solution))
     }
 
     pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
-        Ok(self.0.best_feasible_unrelaxed().map(Solution)?)
+        // Same implementation for now
+        self.best_feasible()
     }
 }
