@@ -129,9 +129,9 @@ impl Instance {
         ConstraintHints(self.0.constraint_hints().clone())
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let inner: ommx::v1::Instance = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+        PyBytes::new(py, &inner.encode_to_vec())
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
@@ -483,8 +483,8 @@ impl ParametricInstance {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -514,8 +514,8 @@ impl Parameters {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 }
 
@@ -533,9 +533,9 @@ impl Solution {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let v1_solution: ommx::v1::Solution = self.0.clone().into();
-        Ok(PyBytes::new(py, &v1_solution.encode_to_vec()))
+        PyBytes::new(py, &v1_solution.encode_to_vec())
     }
 }
 
@@ -552,8 +552,8 @@ impl Samples {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 }
 
@@ -571,23 +571,19 @@ impl SampleSet {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let v1_sample_set: ommx::v1::SampleSet = self.0.clone().into();
-        Ok(PyBytes::new(py, &v1_sample_set.encode_to_vec()))
+        PyBytes::new(py, &v1_sample_set.encode_to_vec())
     }
 
-    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
-        let solution = self.0.get(ommx::SampleID::from(sample_id)).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to get solution: {}",
-                e
-            ))
-        })?;
+    pub fn get(&self, sample_id: u64) -> Result<Solution> {
+        let solution = self.0.get(ommx::SampleID::from(sample_id))
+            .map_err(|e| anyhow::anyhow!("Failed to get solution: {}", e))?;
         Ok(Solution(solution))
     }
 
-    pub fn num_samples(&self) -> PyResult<usize> {
-        Ok(self.0.sample_ids().len())
+    pub fn num_samples(&self) -> usize {
+        self.0.sample_ids().len()
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
@@ -614,7 +610,7 @@ impl SampleSet {
             .collect()
     }
 
-    pub fn best_feasible(&self) -> PyResult<Solution> {
+    pub fn best_feasible(&self) -> Result<Solution> {
         // Find best feasible solution based on objective value and feasibility
         let feasible_samples: Vec<_> = self
             .0
@@ -624,24 +620,18 @@ impl SampleSet {
             .collect();
 
         if feasible_samples.is_empty() {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                "No feasible solutions found",
-            ));
+            return Err(anyhow::anyhow!("No feasible solutions found"));
         }
 
         // For now, just return the first feasible solution
         // TODO: Implement proper objective-based selection
         let best_id = feasible_samples[0];
-        let solution = self.0.get(ommx::SampleID::from(best_id)).map_err(|e| {
-            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                "Failed to get best feasible solution: {}",
-                e
-            ))
-        })?;
+        let solution = self.0.get(ommx::SampleID::from(best_id))
+            .map_err(|e| anyhow::anyhow!("Failed to get best feasible solution: {}", e))?;
         Ok(Solution(solution))
     }
 
-    pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
+    pub fn best_feasible_unrelaxed(&self) -> Result<Solution> {
         // Same implementation for now
         self.best_feasible()
     }
