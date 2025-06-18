@@ -121,11 +121,11 @@ pub struct SampledConstraint {
 
 impl EvaluatedConstraint {
     /// Check if this constraint is feasible given the tolerance
-    pub fn is_feasible(&self, atol: crate::ATol) -> anyhow::Result<bool> {
-        Ok(match self.metadata.equality {
+    pub fn is_feasible(&self, atol: crate::ATol) -> bool {
+        match self.metadata.equality {
             Equality::EqualToZero => self.evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => self.evaluated_value < *atol,
-        })
+        }
     }
 }
 
