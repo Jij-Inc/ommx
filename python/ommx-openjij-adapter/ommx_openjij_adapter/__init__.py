@@ -167,7 +167,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 # maintaining default parameters in openjij impl if None passed
                 num_sweeps=self.num_sweeps or 1000,
                 num_reads=self.num_reads or 1,
-                num_threads=self.num_threads or 1,
                 updater=self.updater or "METROPOLIS",
                 seed=self.seed,
             )
