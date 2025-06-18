@@ -247,10 +247,10 @@ mod tests {
 
         let parsed: EvaluatedConstraint = v1_constraint.parse(&()).unwrap();
 
-        assert_eq!(parsed.id, ConstraintID(42));
-        assert_eq!(parsed.equality, Equality::EqualToZero);
-        assert_eq!(parsed.evaluated_value, 1.5);
-        assert_eq!(parsed.dual_variable, Some(0.5));
+        assert_eq!(*parsed.id(), ConstraintID(42));
+        assert_eq!(*parsed.equality(), Equality::EqualToZero);
+        assert_eq!(*parsed.evaluated_value(), 1.5);
+        assert_eq!(*parsed.dual_variable(), Some(0.5));
         assert_eq!(parsed.metadata.name, Some("test_constraint".to_string()));
         assert_eq!(
             parsed.metadata.description,
@@ -259,6 +259,6 @@ mod tests {
         assert_eq!(parsed.metadata.used_decision_variable_ids, vec![1, 2, 3]);
         assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
-        assert_eq!(parsed.feasible, false);
+        assert_eq!(*parsed.feasible(), false);
     }
 }

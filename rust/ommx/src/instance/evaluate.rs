@@ -21,7 +21,7 @@ impl Evaluate for Instance {
         let mut feasible_relaxed = true;
         for constraint in self.constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !evaluated.feasible {
+            if !*evaluated.feasible() {
                 feasible_relaxed = false;
             }
             evaluated_constraints.push(evaluated.into());
@@ -29,7 +29,7 @@ impl Evaluate for Instance {
         let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !evaluated.feasible {
+            if !*evaluated.feasible() {
                 feasible = false;
             }
             evaluated_constraints.push(evaluated.into());
