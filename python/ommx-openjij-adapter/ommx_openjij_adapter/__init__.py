@@ -162,7 +162,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if degree > 2:
             return sampler.sample_hubo(
                 input,  # type: ignore
-                vartype="SPIN",
+                vartype="BINARY",
                 beta_min=self.beta_min,
                 beta_max=self.beta_max,
                 # maintaining default parameters in openjij impl if None passed
