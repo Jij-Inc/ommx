@@ -17,7 +17,12 @@ impl Parse for crate::v1::Solution {
             .collect();
         let evaluated_constraints = evaluated_constraints?;
 
-        let decision_variables = self.decision_variables;
+        let decision_variables: Result<Vec<_>, _> = self
+            .decision_variables
+            .into_iter()
+            .map(|dv| dv.parse(&()))
+            .collect();
+        let decision_variables = decision_variables?;
         let (feasible, feasible_relaxed) = match self.feasible_relaxed {
             Some(feasible_relaxed) => {
                 // New format since OMMX Python SDK 1.7.0
@@ -108,7 +113,11 @@ impl From<Solution> for crate::v1::Solution {
             .iter()
             .map(|ec| ec.clone().into())
             .collect();
-        let decision_variables = solution.decision_variables().clone();
+        let decision_variables: Vec<crate::v1::DecisionVariable> = solution
+            .decision_variables()
+            .iter()
+            .map(|dv| dv.clone().into())
+            .collect();
         let feasible = *solution.feasible();
         let feasible_relaxed = Some(*solution.feasible_relaxed());
         let optimality = (*solution.optimality()).into();
@@ -184,6 +193,7 @@ mod tests {
             decision_variables: vec![v1::DecisionVariable {
                 id: 1,
                 name: Some("x1".to_string()),
+                kind: v1::decision_variable::Kind::Continuous as i32,
                 ..Default::default()
             }],
             feasible: true,
@@ -217,6 +227,7 @@ mod tests {
                 decision_variable: Some(v1::DecisionVariable {
                     id: 1,
                     name: Some("x1".to_string()),
+                    kind: v1::decision_variable::Kind::Continuous as i32,
                     ..Default::default()
                 }),
                 samples: Some(v1::SampledValues {

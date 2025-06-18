@@ -1,6 +1,6 @@
 mod parse;
 
-use crate::{EvaluatedConstraint, Sampled, Sense};
+use crate::{EvaluatedConstraint, Sampled, Sense, DecisionVariable};
 use fnv::FnvHashMap;
 use getset::Getters;
 
@@ -14,7 +14,7 @@ pub struct Solution {
     #[getset(get = "pub")]
     evaluated_constraints: Vec<EvaluatedConstraint>,
     #[getset(get = "pub")]
-    decision_variables: Vec<crate::v1::DecisionVariable>,
+    decision_variables: Vec<DecisionVariable>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
@@ -42,51 +42,6 @@ pub struct SampleSet {
     sense: Sense,
 }
 
-impl Solution {
-    /// Create a new Solution
-    pub fn new(
-        state: crate::v1::State,
-        objective: f64,
-        evaluated_constraints: Vec<EvaluatedConstraint>,
-        decision_variables: Vec<crate::v1::DecisionVariable>,
-        feasible: bool,
-        feasible_relaxed: bool,
-        optimality: crate::v1::Optimality,
-        relaxation: crate::v1::Relaxation,
-    ) -> Self {
-        Self {
-            state,
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            feasible,
-            feasible_relaxed,
-            optimality,
-            relaxation,
-        }
-    }
-
-    /// Get decision variable IDs used in this solution
-    pub fn decision_variable_ids(&self) -> std::collections::BTreeSet<u64> {
-        self.decision_variables.iter().map(|v| v.id).collect()
-    }
-
-    /// Get constraint IDs evaluated in this solution
-    pub fn constraint_ids(&self) -> std::collections::BTreeSet<crate::ConstraintID> {
-        self.evaluated_constraints.iter().map(|c| *c.id()).collect()
-    }
-
-    /// Check if all constraints are feasible
-    pub fn is_feasible(&self) -> bool {
-        *self.feasible()
-    }
-
-    /// Check if all constraints are feasible in the relaxed problem
-    pub fn is_feasible_relaxed(&self) -> bool {
-        *self.feasible_relaxed()
-    }
-}
-
 impl SampleSet {
     /// Create a new SampleSet
     pub fn new(
@@ -107,23 +62,13 @@ impl SampleSet {
         }
     }
 
-    /// Get all sample IDs in this sample set
+    /// Get sample IDs available in this sample set
     pub fn sample_ids(&self) -> std::collections::BTreeSet<crate::SampleID> {
-        let mut ids = std::collections::BTreeSet::new();
-
-        // Collect from objectives if present
         if let Some(objectives) = &self.objectives {
-            for (sample_id, _) in objectives.iter() {
-                ids.insert(*sample_id);
-            }
+            objectives.iter().map(|(id, _)| *id).collect()
+        } else {
+            std::collections::BTreeSet::new()
         }
-
-        // Collect from feasible maps
-        for &sample_id in self.feasible.keys() {
-            ids.insert(crate::SampleID::from(sample_id));
-        }
-
-        ids
     }
 
     /// Check if a specific sample is feasible
@@ -160,18 +105,33 @@ impl SampleSet {
                 }
             }
         }
-        // Get decision variables with substituted values before moving state_entries
-        let decision_variables: Vec<_> = self
+        
+        // Get decision variables with substituted values - convert to ommx::DecisionVariable
+        let decision_variables: Result<Vec<_>, _> = self
             .decision_variables
             .iter()
             .filter_map(|dv| {
                 dv.decision_variable.as_ref().map(|dv_def| {
-                    let mut dv_clone = dv_def.clone();
-                    dv_clone.substituted_value = state_entries.get(&dv_def.id).copied();
-                    dv_clone
+                    // Parse v1::DecisionVariable to ommx::DecisionVariable
+                    let parsed_dv: DecisionVariable = crate::Parse::parse(dv_def.clone(), &())
+                        .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
+                    
+                    // Create a new DecisionVariable with the substituted value
+                    if let Some(value) = state_entries.get(&dv_def.id) {
+                        DecisionVariable::new(
+                            parsed_dv.id(),
+                            parsed_dv.kind(),
+                            parsed_dv.bound(),
+                            Some(*value),
+                            crate::ATol::default(),
+                        ).map_err(|_| crate::UnknownSampleIDError { id: sample_id })
+                    } else {
+                        Ok(parsed_dv)
+                    }
                 })
             })
             .collect();
+        let decision_variables = decision_variables?;
 
         let state = crate::v1::State {
             entries: state_entries,
@@ -199,5 +159,50 @@ impl SampleSet {
             crate::v1::Optimality::Unspecified,
             crate::v1::Relaxation::Unspecified,
         ))
+    }
+}
+
+impl Solution {
+    /// Create a new Solution
+    pub fn new(
+        state: crate::v1::State,
+        objective: f64,
+        evaluated_constraints: Vec<EvaluatedConstraint>,
+        decision_variables: Vec<DecisionVariable>,
+        feasible: bool,
+        feasible_relaxed: bool,
+        optimality: crate::v1::Optimality,
+        relaxation: crate::v1::Relaxation,
+    ) -> Self {
+        Self {
+            state,
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            feasible,
+            feasible_relaxed,
+            optimality,
+            relaxation,
+        }
+    }
+
+    /// Get decision variable IDs used in this solution
+    pub fn decision_variable_ids(&self) -> std::collections::BTreeSet<u64> {
+        self.decision_variables.iter().map(|v| v.id().into_inner()).collect()
+    }
+
+    /// Get constraint IDs evaluated in this solution
+    pub fn constraint_ids(&self) -> std::collections::BTreeSet<crate::ConstraintID> {
+        self.evaluated_constraints.iter().map(|c| *c.id()).collect()
+    }
+
+    /// Check if all constraints are feasible
+    pub fn is_feasible(&self) -> bool {
+        *self.feasible()
+    }
+
+    /// Check if all constraints are feasible in the relaxed problem
+    pub fn is_feasible_relaxed(&self) -> bool {
+        *self.feasible_relaxed()
     }
 }
