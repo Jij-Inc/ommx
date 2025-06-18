@@ -577,8 +577,12 @@ impl SampleSet {
     }
 
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
-        let solution = self.0.get(ommx::SampleID::from(sample_id))
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get solution: {}", e)))?;
+        let solution = self.0.get(ommx::SampleID::from(sample_id)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to get solution: {}",
+                e
+            ))
+        })?;
         Ok(Solution(solution))
     }
 
@@ -587,36 +591,53 @@ impl SampleSet {
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.0.sample_ids().into_iter().map(|id| id.into_inner()).collect()
+        self.0
+            .sample_ids()
+            .into_iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible().iter()
+        self.0
+            .feasible()
+            .iter()
             .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
             .collect()
     }
 
     pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible().iter()
+        self.0
+            .feasible()
+            .iter()
             .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
             .collect()
     }
 
     pub fn best_feasible(&self) -> PyResult<Solution> {
         // Find best feasible solution based on objective value and feasibility
-        let feasible_samples: Vec<_> = self.0.feasible().iter()
+        let feasible_samples: Vec<_> = self
+            .0
+            .feasible()
+            .iter()
             .filter_map(|(&id, &is_feasible)| if is_feasible { Some(id) } else { None })
             .collect();
-        
+
         if feasible_samples.is_empty() {
-            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>("No feasible solutions found"));
+            return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                "No feasible solutions found",
+            ));
         }
-        
+
         // For now, just return the first feasible solution
         // TODO: Implement proper objective-based selection
         let best_id = feasible_samples[0];
-        let solution = self.0.get(ommx::SampleID::from(best_id))
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Failed to get best feasible solution: {}", e)))?;
+        let solution = self.0.get(ommx::SampleID::from(best_id)).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Failed to get best feasible solution: {}",
+                e
+            ))
+        })?;
         Ok(Solution(solution))
     }
 

@@ -113,19 +113,19 @@ impl SampleSet {
     /// Get all sample IDs in this sample set
     pub fn sample_ids(&self) -> std::collections::BTreeSet<crate::SampleID> {
         let mut ids = std::collections::BTreeSet::new();
-        
+
         // Collect from objectives if present
         if let Some(objectives) = &self.objectives {
             for (sample_id, _) in objectives.iter() {
                 ids.insert(*sample_id);
             }
         }
-        
+
         // Collect from feasible maps
         for &sample_id in self.feasible.keys() {
             ids.insert(crate::SampleID::from(sample_id));
         }
-        
+
         ids
     }
 
@@ -143,7 +143,9 @@ impl SampleSet {
     pub fn get(&self, sample_id: crate::SampleID) -> Result<Solution, Box<dyn std::error::Error>> {
         // Get objective value
         let objective = if let Some(objectives) = &self.objectives {
-            *objectives.get(sample_id).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+            *objectives
+                .get(sample_id)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
         } else {
             return Err("No objectives found in sample set".into());
         };
@@ -153,16 +155,22 @@ impl SampleSet {
         for dv in &self.decision_variables {
             if let Some(samples) = &dv.samples {
                 // Convert v1::SampledValues to Sampled<f64> and get value
-                let sampled: crate::Sampled<f64> = samples.clone().try_into()
+                let sampled: crate::Sampled<f64> = samples
+                    .clone()
+                    .try_into()
                     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-                let value = *sampled.get(sample_id).map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+                let value = *sampled
+                    .get(sample_id)
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
                 if let Some(decision_variable) = &dv.decision_variable {
                     state_entries.insert(decision_variable.id, value);
                 }
             }
         }
         // Get decision variables with substituted values before moving state_entries
-        let decision_variables: Vec<_> = self.decision_variables.iter()
+        let decision_variables: Vec<_> = self
+            .decision_variables
+            .iter()
             .filter_map(|dv| {
                 dv.decision_variable.as_ref().map(|dv_def| {
                     let mut dv_clone = dv_def.clone();
@@ -172,17 +180,22 @@ impl SampleSet {
             })
             .collect();
 
-        let state = crate::v1::State { entries: state_entries };
+        let state = crate::v1::State {
+            entries: state_entries,
+        };
 
         // Get evaluated constraints
-        let evaluated_constraints: Result<Vec<_>, _> = self.constraints.iter()
-            .map(|c| c.get(sample_id))
-            .collect();
-        let evaluated_constraints = evaluated_constraints.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let evaluated_constraints: Result<Vec<_>, _> =
+            self.constraints.iter().map(|c| c.get(sample_id)).collect();
+        let evaluated_constraints =
+            evaluated_constraints.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
         // Get feasibility
         let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
-        let feasible_relaxed = *self.feasible_relaxed.get(&sample_id.into_inner()).unwrap_or(&false);
+        let feasible_relaxed = *self
+            .feasible_relaxed
+            .get(&sample_id.into_inner())
+            .unwrap_or(&false);
 
         let metadata = crate::SolutionMetadata {
             optimality: crate::v1::Optimality::Unspecified,
