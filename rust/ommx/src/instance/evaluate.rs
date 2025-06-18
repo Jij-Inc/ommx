@@ -21,18 +21,18 @@ impl Evaluate for Instance {
         let mut feasible_relaxed = true;
         for constraint in self.constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !evaluated.is_feasible(atol)? {
+            if !*evaluated.feasible() {
                 feasible_relaxed = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.push(evaluated.into());
         }
         let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !evaluated.is_feasible(atol)? {
+            if !*evaluated.feasible() {
                 feasible = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.push(evaluated.into());
         }
 
         let decision_variables = self
@@ -86,22 +86,18 @@ impl Evaluate for Instance {
         let mut constraints = Vec::new();
         for c in self.constraints.values() {
             let evaluated = c.evaluate_samples(&samples, atol)?;
-            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
-                if !feasible_ {
-                    feasible_relaxed.insert(sample_id, false);
-                }
+            for sample_id in evaluated.infeasible_ids(atol) {
+                feasible_relaxed.insert(sample_id.into_inner(), false);
             }
-            constraints.push(evaluated);
+            constraints.push(evaluated.into());
         }
         let mut feasible = feasible_relaxed.clone();
         for c in self.removed_constraints.values() {
             let v = c.evaluate_samples(&samples, atol)?;
-            for (sample_id, feasible_) in v.is_feasible(atol)? {
-                if !feasible_ {
-                    feasible.insert(sample_id, false);
-                }
+            for sample_id in v.infeasible_ids(atol) {
+                feasible.insert(sample_id.into_inner(), false);
             }
-            constraints.push(v);
+            constraints.push(v.into());
         }
 
         // Objective

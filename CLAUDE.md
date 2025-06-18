@@ -33,11 +33,88 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - Rust: Generated at build time via `build.rs`
 - Python: Pre-generated files committed to repo, regenerated via `task proto:python`
 
-## Current Implementation Status (Dec 2024)
+## Current Implementation Status
 
 ### Python SDK v2 Migration Completed ✅
 
 The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+
+### Rust SDK v2 Design (Completed ✅)
+
+The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generated `ommx::v1::*` types:
+
+**Design Philosophy**:
+- Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
+- Improve type safety and reduce runtime errors
+- Enable efficient data structures for deduplication
+
+**Implemented Types**:
+- ✅ `Sampled<T>` - Efficient representation for `ommx::v1::Samples` with deduplication
+  - `SampleID(u64)` - Type-safe sample identifier
+  - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
+  - Efficient storage: multiple sample IDs can share the same data
+
+**Constraint Types Implementation (Completed ✅)**:
+
+```rust
+// Auxiliary metadata for constraints (excluding essential id and equality)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintMetadata {
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: FnvHashMap<String, String>,
+    pub description: Option<String>,
+    pub used_decision_variable_ids: Vec<u64>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
+// Single evaluation result with data integrity guarantees
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct EvaluatedConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type (== 0 or <= 0)
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_value: f64,                // Protected: evaluation result
+    #[getset(get = "pub")]
+    dual_variable: Option<f64>,          // Protected: dual variable value
+    #[getset(get = "pub")]
+    feasible: bool,                      // Protected: pre-computed feasibility
+}
+
+// Multiple sample evaluation results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampledConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_values: Sampled<f64>,      // Protected: evaluation results
+    #[getset(get = "pub")]
+    dual_variables: Option<Sampled<f64>>, // Protected: dual variable values
+    #[getset(get = "pub")]
+    feasible: FnvHashMap<u64, bool>,     // Protected: feasibility map
+}
+```
+
+**Key Design Decisions**:
+- **Data Integrity**: Essential fields (`id`, `equality`) and evaluation data are private with getters only
+- **Metadata Separation**: `ConstraintMetadata` contains only auxiliary information, not essential constraint properties
+- **Feasibility Pre-computation**: `feasible` field stores pre-computed feasibility to avoid repeated calculations
+- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
+- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
+
+**Benefits**:
+- **Data Integrity**: Prevents external modification of critical constraint evaluation data
+- **Performance**: Pre-computed feasibility avoids repeated tolerance-based calculations
+- **Type Safety**: Strong typing with private fields and controlled access via getters
+- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
+- **Clean API**: Separation of essential properties from auxiliary metadata
 
 **Core Features Completed**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
@@ -45,6 +122,18 @@ The project has completed its migration from Protocol Buffers auto-generated Pyt
 - ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
 - ✅ Comprehensive testing and documentation updated
+- ✅ **Constraint evaluation system with data integrity guarantees**
+- ✅ **Sampled data structures with efficient deduplication**
+- ✅ **Parse trait implementations for Protocol Buffer conversion**
+
+**Recently Implemented**:
+- ✅ `Sampled<T>` with `get`/`get_mut` methods and `UnknownSampleIDError` error handling
+- ✅ `EvaluatedConstraint` and `SampledConstraint` with private fields and getset getters
+- ✅ `ConstraintMetadata` separation for auxiliary data with `Default` implementation
+- ✅ Pre-computed feasibility fields to improve performance
+- ✅ `Parse` trait implementations for `v1::EvaluatedConstraint` and `v1::SampledConstraint`
+- ✅ Type-safe constraint evaluation with proper error handling
+- ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
 
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
@@ -245,12 +334,15 @@ from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Optimality
 ```
 
-### Current Development Status (December 2024)
+### Current Development Status
 - **Core Migration ✅**: Protocol Buffer to Rust migration completed across all components
 - **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - **Documentation ✅**: Comprehensive migration guide and adapter specifications available
 - **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
 - **Performance ✅**: Rust backend providing optimal performance for mathematical operations
+- **Constraint System ✅**: Complete constraint evaluation system with data integrity guarantees
+- **Type Safety ✅**: Strongly-typed constraint implementations with private fields and getters
+- **Parse Integration ✅**: Full Protocol Buffer to Rust type conversion via Parse trait
 
 ## Development Notes
 
