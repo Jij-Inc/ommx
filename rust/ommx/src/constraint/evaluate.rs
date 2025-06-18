@@ -162,7 +162,7 @@ mod tests {
                 (*parameter_id, value)
             }).collect();
             for (sample_id, each) in evaluated_each {
-                let extracted = evaluated.get(sample_id).unwrap();
+                let extracted = evaluated.get(SampleID::from(sample_id)).unwrap();
                 prop_assert_eq!(extracted, each)
             }
         }

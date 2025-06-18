@@ -7,7 +7,7 @@ pub use arbitrary::*;
 
 use crate::{Function, Sampled, SampleID};
 use derive_more::{Deref, From};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -167,18 +167,45 @@ impl SampledConstraint {
         })
     }
 
-    /// Check feasibility for all samples
-    pub fn is_feasible(&self, atol: crate::ATol) -> anyhow::Result<FnvHashMap<u64, bool>> {
-        Ok(self.evaluated_values
+    /// Check feasibility for a specific sample
+    pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> anyhow::Result<bool> {
+        let evaluated_value = self.evaluated_values.iter()
+            .find(|(id, _)| **id == sample_id)
+            .map(|(_, value)| *value)
+            .ok_or_else(|| anyhow::anyhow!("Sample ID {} not found in constraint {}", sample_id.into_inner(), self.metadata.id.into_inner()))?;
+        
+        Ok(match self.metadata.equality {
+            Equality::EqualToZero => evaluated_value.abs() < *atol,
+            Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+        })
+    }
+
+    /// Get all sample IDs that are feasible
+    pub fn feasible_ids(&self, atol: crate::ATol) -> FnvHashSet<SampleID> {
+        self.evaluated_values
             .iter()
-            .map(|(sample_id, evaluated_value)| {
+            .filter_map(|(sample_id, evaluated_value)| {
                 let feasible = match self.metadata.equality {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
-                (sample_id.into_inner(), feasible)
+                if feasible { Some(*sample_id) } else { None }
             })
-            .collect())
+            .collect()
+    }
+
+    /// Get all sample IDs that are infeasible
+    pub fn infeasible_ids(&self, atol: crate::ATol) -> FnvHashSet<SampleID> {
+        self.evaluated_values
+            .iter()
+            .filter_map(|(sample_id, evaluated_value)| {
+                let feasible = match self.metadata.equality {
+                    Equality::EqualToZero => evaluated_value.abs() < *atol,
+                    Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
+                };
+                if !feasible { Some(*sample_id) } else { None }
+            })
+            .collect()
     }
 }
 
