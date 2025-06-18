@@ -102,6 +102,7 @@ impl From<Solution> for crate::v1::Solution {
         // For backward compatibility, set feasible_unrelaxed to the same value as feasible
         let feasible_unrelaxed = feasible;
 
+        #[allow(deprecated)]
         crate::v1::Solution {
             state: Some(state),
             objective,

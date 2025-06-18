@@ -197,7 +197,7 @@ impl Instance {
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
-        let state = ommx::random::sample(&mut *rng_guard, strategy);
+        let state = ommx::random::sample(&mut rng_guard, strategy);
         let bytes = state.encode_to_vec();
         Ok(PyBytes::new(py, &bytes))
     }
@@ -228,7 +228,7 @@ impl Instance {
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
-        let samples = ommx::random::sample(&mut *rng_guard, strategy);
+        let samples = ommx::random::sample(&mut rng_guard, strategy);
         let bytes = samples.encode_to_vec();
         Ok(PyBytes::new(py, &bytes))
     }
