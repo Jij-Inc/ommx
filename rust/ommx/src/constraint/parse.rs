@@ -148,7 +148,7 @@ impl Parse for v1::EvaluatedConstraint {
             Equality::EqualToZero => self.evaluated_value.abs() < *crate::ATol::default(),
             Equality::LessThanOrEqualToZero => self.evaluated_value < *crate::ATol::default(),
         };
-        
+
         Ok(EvaluatedConstraint {
             id: ConstraintID(self.id),
             equality,

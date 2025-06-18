@@ -149,7 +149,7 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
         let equality = (*constraint.equality()).into();
         let evaluated_value = *constraint.evaluated_value();
         let dual_variable = *constraint.dual_variable();
-        
+
         crate::v1::EvaluatedConstraint {
             id,
             equality,
@@ -247,7 +247,8 @@ impl SampledConstraint {
 impl From<SampledConstraint> for crate::v1::SampledConstraint {
     fn from(constraint: SampledConstraint) -> Self {
         // Convert Sampled<f64> to v1::SampledValues
-        let evaluated_values: crate::v1::SampledValues = constraint.evaluated_values().clone().into();
+        let evaluated_values: crate::v1::SampledValues =
+            constraint.evaluated_values().clone().into();
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
         let feasible = constraint.feasible().clone().into_iter().collect();

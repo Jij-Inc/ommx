@@ -33,7 +33,7 @@ impl Evaluate for Constraint {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => evaluated_value < *atol,
         };
-        
+
         Ok(EvaluatedConstraint {
             id: self.id,
             equality: self.equality,
