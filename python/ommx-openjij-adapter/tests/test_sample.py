@@ -105,7 +105,7 @@ def hubo_binary_no_constraint_minimize():
         constraints=[],
         sense=Instance.MINIMIZE,
     )
-    ans = {(0,): 0.0, (1,): 0.0}
+    ans = {(0,): 0.0, (1,): 0.0, (2,): 0.0}
     return pytest.param(instance, ans, id="hubo_binary_no_constraint_minimize")
 
 
