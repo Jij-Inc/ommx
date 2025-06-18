@@ -1,8 +1,9 @@
+use num::{traits::Inv, One};
 use ordered_float::NotNan;
 use proptest::prelude::*;
 use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
 
-use crate::Offset;
+use crate::ATol;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CoefficientError {
@@ -47,13 +48,6 @@ impl TryFrom<f64> for Coefficient {
             return Err(CoefficientError::Zero);
         }
         Ok(Self(NotNan::new(value).unwrap())) // Safe because we checked the value is not NaN
-    }
-}
-
-impl TryFrom<Offset> for Coefficient {
-    type Error = CoefficientError;
-    fn try_from(value: Offset) -> Result<Self, Self::Error> {
-        Self::try_from(value.into_inner())
     }
 }
 
@@ -111,6 +105,20 @@ impl Sub for Coefficient {
     }
 }
 
+impl One for Coefficient {
+    fn one() -> Self {
+        Coefficient(NotNan::new(1.0).unwrap())
+    }
+}
+
+impl Inv for Coefficient {
+    type Output = Self;
+    fn inv(self) -> Self::Output {
+        // Non-zero coefficient is invertible
+        Self(self.0.into_inner().recip().try_into().unwrap())
+    }
+}
+
 impl Arbitrary for Coefficient {
     type Parameters = ();
     type Strategy = BoxedStrategy<Self>;
@@ -135,5 +143,17 @@ impl PartialEq<f64> for Coefficient {
 impl PartialOrd<f64> for Coefficient {
     fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
         Some(self.into_inner().total_cmp(other))
+    }
+}
+
+impl PartialEq<ATol> for Coefficient {
+    fn eq(&self, other: &ATol) -> bool {
+        self.into_inner() == other.into_inner()
+    }
+}
+
+impl PartialOrd<ATol> for Coefficient {
+    fn partial_cmp(&self, other: &ATol) -> Option<std::cmp::Ordering> {
+        self.into_inner().partial_cmp(&other.into_inner())
     }
 }

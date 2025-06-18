@@ -3,9 +3,10 @@ resolver = "2"
 members = ["rust/ommx", "rust/protogen", "rust/dataset", "python/ommx"]
 
 [workspace.package]
-version = "2.0.0"
+version = "2.0.0-rc.4"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [workspace.dependencies]
 anyhow = "1.0.98"
@@ -13,14 +14,14 @@ approx = "0.5.1"
 base64 = "0.22.1"
 built = { version = "0.7.7", features = ["git2"] }
 chrono = "0.4.41"
-clap = { version = "4.5.38", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 colored = "2.2.0"
 criterion = { package = "codspeed-criterion-compat", version = "2.8.0" }
 csv = "1.3.0"
 derive_more = "0.99.20"
 directories = "5.0.1"
 env_logger = "0.11.8"
-flate2 = "1.1.1"
+flate2 = "1.1.2"
 fnv = "1.0.7"
 getset = "0.1.5"
 glob = "0.3.2"
@@ -32,19 +33,20 @@ maplit = "1.0.2"
 num = "0.4.3"
 ocipkg = "0.3.9"
 ordered-float = "5.0.0"
-proptest = "1.6.0"
+petgraph = "0.8.2"
+proptest = "1.7.0"
 prost = "0.12.6"
 prost-build = "0.12.6"
-pyo3 = { version = "0.23.5", features = ["anyhow", "abi3-py38"] }
-pyo3-log = "0.12.3"
-pyo3-stub-gen = "0.7.0"
+pyo3 = { version = "0.24.0", features = ["anyhow"] }
+pyo3-log = "0.12.4"
+pyo3-stub-gen = "0.8.0"
 serde = { version = "1.0.219", features = ["derive"] }
-serde-pyobject = "0.6.1"
+serde-pyobject = "0.6.2"
 serde_json = "1.0.140"
-smallvec = "1.15.0"
+smallvec = "1.15.1"
 thiserror = "2.0.12"
 url = "2.5.3"
-uuid = { version = "1.16.0", features = ["v4"] }
+uuid = { version = "1.17.0", features = ["v4"] }
 zip = "2.6.1"
 
 [profile.release]

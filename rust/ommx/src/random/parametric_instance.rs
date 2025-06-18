@@ -1,15 +1,15 @@
 use crate::{
     random::{
         arbitrary_constraints, arbitrary_decision_variables, arbitrary_parameters,
-        InstanceParameters,
+        arbitrary_split_ids, InstanceParameters,
     },
     v1::{
         instance::{Description, Sense},
         Function, ParametricInstance,
     },
+    Evaluate,
 };
 use proptest::prelude::*;
-use std::collections::BTreeSet;
 
 impl Arbitrary for ParametricInstance {
     type Parameters = InstanceParameters;
@@ -30,15 +30,15 @@ impl Arbitrary for ParametricInstance {
             Just(kinds),
         )
             .prop_flat_map(|(objective, constraints, kinds)| {
-                let mut used_ids = objective.used_decision_variable_ids();
+                let mut used_ids = objective.required_ids();
                 for c in &constraints {
-                    used_ids.extend(c.function().used_decision_variable_ids());
+                    used_ids.extend(c.function().required_ids());
                 }
 
                 (
                     Just(objective),
                     Just(constraints),
-                    arbitrary_split(used_ids),
+                    arbitrary_split_ids(used_ids),
                 )
                     .prop_flat_map(
                         move |(objective, constraints, (decision_variable_ids, parameter_ids))| {
@@ -82,22 +82,4 @@ impl Arbitrary for ParametricInstance {
             .prop_flat_map(Self::arbitrary_with)
             .boxed()
     }
-}
-
-fn arbitrary_split(ids: BTreeSet<u64>) -> BoxedStrategy<(BTreeSet<u64>, BTreeSet<u64>)> {
-    let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
-    flips
-        .prop_map(move |flips| {
-            let mut used_ids = BTreeSet::new();
-            let mut defined_ids = BTreeSet::new();
-            for (flip, id) in flips.into_iter().zip(ids.iter()) {
-                if flip {
-                    used_ids.insert(*id);
-                } else {
-                    defined_ids.insert(*id);
-                }
-            }
-            (used_ids, defined_ids)
-        })
-        .boxed()
 }

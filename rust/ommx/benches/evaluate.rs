@@ -25,7 +25,7 @@ fn evaluate<T, Params>(
         group.bench_with_input(
             BenchmarkId::new(title, num_terms.to_string()),
             &(f, state),
-            |b, (f, state)| b.iter(|| f.evaluate(state)),
+            |b, (f, state)| b.iter(|| f.evaluate(state, ommx::ATol::default())),
         );
     }
     group.finish();

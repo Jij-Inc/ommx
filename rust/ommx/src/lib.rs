@@ -39,7 +39,7 @@
 //!   let state: State = hashmap! { 1 => 4.0, 2 => 5.0, 3 => 6.0 }.into();
 //!
 //!   // Evaluate the linear function with the state, and get the value and used variable ids
-//!   let value = linear.evaluate(&state).unwrap();
+//!   let value = linear.evaluate(&state, ommx::ATol::default()).unwrap();
 //!
 //!   assert_eq!(value, 1.0 * 4.0 + 2.0 * 5.0 + 3.0);
 //!   ```
@@ -142,6 +142,7 @@ pub mod qplib;
 pub mod random;
 
 // Internal modules
+mod atol;
 mod bound;
 mod coefficient;
 mod constraint;
@@ -152,16 +153,12 @@ mod function;
 mod infeasible_detected;
 mod instance;
 mod macros;
-mod offset;
-mod parameter;
-mod parametric_instance;
 mod polynomial_base;
-mod quadratic;
-mod sample_set;
 mod sampled;
 mod solution;
-mod state;
+mod substitute;
 
+pub use atol::*;
 pub use bound::*;
 pub use coefficient::*;
 pub use constraint::*;
@@ -170,10 +167,10 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
-pub use offset::*;
+pub use parse::*;
 pub use polynomial_base::*;
-pub use sample_set::*;
 pub use sampled::*;
+pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files
 pub mod v1 {
@@ -186,5 +183,24 @@ mod v1_ext {
     mod function;
     mod instance;
     mod linear;
+    mod parameter;
+    mod parametric_instance;
     mod polynomial;
+    mod quadratic;
+    mod sample_set;
+    mod state;
+}
+
+/// Convert `fnv::FnvHashMap` to `std::collections::HashMap`
+pub(crate) trait FnvHashMapExt {
+    type Key;
+    type Value;
+    fn to_std(&self) -> std::collections::HashMap<Self::Key, Self::Value>;
+}
+impl<K: Eq + std::hash::Hash + Clone, V: Clone> FnvHashMapExt for fnv::FnvHashMap<K, V> {
+    type Key = K;
+    type Value = V;
+    fn to_std(&self) -> std::collections::HashMap<Self::Key, Self::Value> {
+        self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
 }

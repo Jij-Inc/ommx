@@ -19,7 +19,7 @@ def small():
     return instance
 
 
-@pytest.fixture(params=[10, 100])
+@pytest.fixture(params=[10, 100, 1000])
 def pseudo_boolean_inequality(request):
     num_terms: int = request.param
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(num_terms)]

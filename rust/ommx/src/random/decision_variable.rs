@@ -1,6 +1,9 @@
-use crate::v1::{decision_variable::Kind, Bound, DecisionVariable};
+use crate::{
+    v1::{decision_variable::Kind, Bound, DecisionVariable},
+    VariableIDSet,
+};
 use proptest::{prelude::*, strategy::Union};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 
 impl Arbitrary for Bound {
     type Parameters = ();
@@ -102,7 +105,7 @@ impl Arbitrary for DecisionVariable {
 }
 
 pub fn arbitrary_decision_variables(
-    ids: BTreeSet<u64>,
+    ids: VariableIDSet,
     kinds: Vec<Kind>,
 ) -> BoxedStrategy<Vec<DecisionVariable>> {
     let kind_strategy = Union::new(kinds.into_iter().map(Just));
@@ -117,7 +120,7 @@ pub fn arbitrary_decision_variables(
     )
         .prop_map(|(mut dvs, used_ids)| {
             for (dv, id) in dvs.iter_mut().zip(used_ids.iter()) {
-                dv.id = *id;
+                dv.id = id.into_inner();
             }
             dvs
         })

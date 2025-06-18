@@ -6,10 +6,16 @@ import math
 
 
 from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
-from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, ToState, to_state
-from ommx.v1.function_pb2 import Function
-from ommx.v1.solution_pb2 import State, Optimality
-from ommx.v1.constraint_hints_pb2 import ConstraintHints
+from ommx.v1 import (
+    Instance,
+    Solution,
+    DecisionVariable,
+    Function,
+    Constraint,
+    State,
+    ToState,
+    to_state,
+)
 
 from .exception import OMMXPySCIPOptAdapterError
 
@@ -74,7 +80,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         .. doctest::
 
             >>> from ommx.v1 import Instance, DecisionVariable
-            >>> from ommx.v1.solution_pb2 import Optimality
+            >>> from ommx.v1 import Solution
             >>> from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
             >>> p = [10, 13, 18, 32, 7, 15]
@@ -97,7 +103,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             [(0, 1.0), (1, 0.0), (2, 0.0), (3, 1.0), (4, 0.0), (5, 0.0)]
             >>> solution.feasible
             True
-            >>> assert solution.optimality == Optimality.OPTIMALITY_OPTIMAL
+            >>> assert solution.optimality == Solution.OPTIMAL
 
             p[0] + p[3] = 42
             w[0] + w[3] = 46 <= 47
@@ -161,7 +167,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         """Convert optimized pyscipopt.Model and ommx.v1.Instance to ommx.v1.Solution.
 
         This method is intended to be used if the model has been acquired with
-        `solver_input` for futher adjustment of the solver parameters, and
+        `solver_input` for further adjustment of the solver parameters, and
         separately optimizing the model.
 
         Note that alterations to the model may make the decoding process
@@ -206,7 +212,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if (
             data.getStatus() == "optimal"
         ):  # pyscipopt does not appear to have an enum or constant for this
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.raw.optimality = Solution.OPTIMAL
 
         return solution
 
@@ -266,8 +272,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             varname_map = {var.name: var for var in data.getVars()}
             return State(
                 entries={
-                    var.id: sol[varname_map[str(var.id)]]
-                    for var in self.instance.raw.decision_variables
+                    var_id: sol[varname_map[str(var_id)]]
+                    for var_id, _ in self.instance.raw.decision_variables.items()
                 }
             )
         except Exception:
@@ -276,7 +282,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.raw.decision_variables:
+        for var in self.instance.get_decision_variables():
             if var.kind == DecisionVariable.BINARY:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:
@@ -293,8 +299,15 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     f"id: {var.id}, kind: {var.kind}"
                 )
 
-        if self.instance.raw.objective.HasField("quadratic"):
-            # If objective function is quadratic, add the auxiliary variable for the linealized objective function,
+        # Check if objective is quadratic to add auxiliary variable
+        degree = self.instance.objective.degree()
+        if degree > 3:
+            raise OMMXPySCIPOptAdapterError(
+                f"Objective function degree {degree} is not supported. "
+                "Only constant, linear, and quadratic objectives are supported."
+            )
+        if degree == 2:
+            # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because the setObjective method in PySCIPOpt does not support quadratic objective functions.
             self.model.addVar(
                 name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
@@ -303,8 +316,6 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         self.varname_map = {var.name: var for var in self.model.getVars()}
 
     def _set_objective(self):
-        objective = self.instance.raw.objective
-
         if self.instance.sense == Instance.MAXIMIZE:
             sense = "maximize"
         elif self.instance.sense == Instance.MINIMIZE:
@@ -314,12 +325,15 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 f"Sense not supported: {self.instance.sense}"
             )
 
-        if objective.HasField("constant"):
-            self.model.setObjective(objective.constant, sense=sense)
-        elif objective.HasField("linear"):
+        objective = self.instance.objective
+
+        degree = objective.degree()
+        if degree == 0:
+            self.model.setObjective(objective.constant_term, sense=sense)
+        elif degree == 1:
             expr = self._make_linear_expr(objective)
             self.model.setObjective(expr, sense=sense)
-        elif objective.HasField("quadratic"):
+        elif degree == 2:
             # The setObjective method in PySCIPOpt does not support quadratic objective functions.
             # So we introduce the auxiliary variable to linearize the objective function,
             # Example:
@@ -328,36 +342,33 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             #     introduce the auxiliary variable z, and the linearized objective function problem is:
             #         min z
             #         s.t. z >= x^2 + y^2
-            auxilary_var = self.varname_map["auxiliary_for_linearized_objective"]
+            auxiliary_var = self.varname_map["auxiliary_for_linearized_objective"]
 
             # Add the auxiliary variable to the objective function.
-            self.model.setObjective(auxilary_var, sense=sense)
+            self.model.setObjective(auxiliary_var, sense=sense)
 
             # Add the constraint for the auxiliary variable.
             expr = self._make_quadratic_expr(objective)
             if sense == "minimize":
-                constr_expr = auxilary_var >= expr
+                constr_expr = auxiliary_var >= expr
             else:  # sense == "maximize"
-                constr_expr = auxilary_var <= expr
+                constr_expr = auxiliary_var <= expr
 
             self.model.addCons(constr_expr, name="constraint_for_linearized_objective")
-
         else:
             raise OMMXPySCIPOptAdapterError(
-                "The objective function must be `constant`, `linear`, `quadratic`."
+                "The objective function must be constant, linear, or quadratic."
             )
 
-        pass
-
     def _set_constraints(self):
-        ommx_hints: ConstraintHints = self.instance.raw.constraint_hints
-
+        ommx_hints = self.instance.constraint_hints
         excluded = set()
 
+        # Handle SOS1 constraints from constraint hints
         if self.use_sos1 != "disabled":
-            if self.use_sos1 == "force" and len(ommx_hints.sos1_constraints) == 0:
+            if self.use_sos1 == "forced" and len(ommx_hints.sos1_constraints) == 0:
                 raise OMMXPySCIPOptAdapterError(
-                    "No SOS1 constraints were found, but `use_sos1` is set to `force`."
+                    "No SOS1 constraints were found, but `use_sos1` is set to `forced`."
                 )
 
             for sos1 in ommx_hints.sos1_constraints:
@@ -368,35 +379,42 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                     name = f"sos1_{bid}"
                 else:
                     name = f"sos1_{bid}_{'_'.join(map(str, big_m_ids))}"
-                vars = [self.varname_map[str(v)] for v in sos1.decision_variables]
+                    excluded.update(big_m_ids)
+                vars = [self.varname_map[str(v)] for v in sos1.variables]
                 self.model.addConsSOS1(vars, name=name)
 
-        for constraint in self.instance.raw.constraints:
+        for constraint in self.instance.get_constraints():
             if constraint.id in excluded:
                 continue
-            if constraint.function.HasField("linear"):
-                expr = self._make_linear_expr(constraint.function)
-            elif constraint.function.HasField("quadratic"):
-                expr = self._make_quadratic_expr(constraint.function)
-            elif constraint.function.HasField("constant"):
+
+            # Handle constraint function based on its type
+            f = constraint.function
+            degree = f.degree()
+            if degree == 0:
+                # Constant constraint is not passed to SCIP, but checked for feasibility
+                constant_value = f.constant_term
                 if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
-                    constraint.function.constant, 0, abs_tol=1e-6
+                    constant_value, 0, abs_tol=1e-6
                 ):
-                    continue
+                    continue  # Skip feasible constant constraint
                 elif (
                     constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-                    and constraint.function.constant <= 1e-6
+                    and constant_value <= 1e-6
                 ):
-                    continue
+                    continue  # Skip feasible constant constraint
                 else:
                     raise OMMXPySCIPOptAdapterError(
                         f"Infeasible constant constraint was found: id {constraint.id}"
                     )
+            elif degree == 1:
+                expr = self._make_linear_expr(f)
+            elif degree == 2:
+                expr = self._make_quadratic_expr(f)
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Constraints must be either `constant`, `linear` or `quadratic`."
+                    f"Constraints must be either constant, linear or quadratic. "
                     f"id: {constraint.id}, "
-                    f"type: {constraint.function.WhichOneof('function')}"
+                    f"degree: {degree}"
                 )
 
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
@@ -411,29 +429,29 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             self.model.addCons(constr_expr, name=str(constraint.id))
 
-    def _make_linear_expr(self, function: Function) -> pyscipopt.Expr:
-        linear = function.linear
+    def _make_linear_expr(self, f: Function) -> pyscipopt.Expr:
         return (
             pyscipopt.quicksum(
-                term.coefficient * self.varname_map[str(term.id)]
-                for term in linear.terms
+                coeff * self.varname_map[str(id)]
+                for id, coeff in f.linear_terms.items()
             )
-            + linear.constant
+            + f.constant_term
         )
 
-    def _make_quadratic_expr(self, function: Function) -> pyscipopt.Expr:
-        quad = function.quadratic
+    def _make_quadratic_expr(self, f: Function) -> pyscipopt.Expr:
+        # Quadratic terms
         quad_terms = pyscipopt.quicksum(
-            self.varname_map[str(row)] * self.varname_map[str(column)] * value
-            for row, column, value in zip(quad.rows, quad.columns, quad.values)
+            self.varname_map[str(row)] * self.varname_map[str(col)] * coeff
+            for (row, col), coeff in f.quadratic_terms.items()
         )
 
+        # Linear terms
         linear_terms = pyscipopt.quicksum(
-            term.coefficient * self.varname_map[str(term.id)]
-            for term in quad.linear.terms
+            coeff * self.varname_map[str(var_id)]
+            for var_id, coeff in f.linear_terms.items()
         )
 
-        constant = quad.linear.constant
+        constant = f.constant_term
 
         return quad_terms + linear_terms + constant
 

@@ -1,12 +1,13 @@
 use crate::{
     macros::*,
-    v1::{Linear, Monomial, Polynomial, Quadratic},
-    MonomialDyn, VariableID,
+    v1::{Linear, Monomial, Polynomial, Quadratic, SampledValues, Samples, State},
+    Evaluate, MonomialDyn, VariableID, VariableIDSet,
 };
+use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fmt,
     ops::{Add, Mul},
 };
@@ -92,14 +93,6 @@ impl<'a> IntoIterator for &'a Polynomial {
 }
 
 impl Polynomial {
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms
-            .iter()
-            .flat_map(|term| term.ids.iter())
-            .cloned()
-            .collect()
-    }
-
     pub fn degree(&self) -> u32 {
         self.terms
             .iter()
@@ -215,10 +208,10 @@ impl_neg_by_mul!(Polynomial);
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Polynomial {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -228,7 +221,7 @@ impl AbsDiffEq for Polynomial {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() < epsilon)
+            .all(|term| term.coefficient.abs() < *epsilon)
     }
 }
 
@@ -238,6 +231,73 @@ impl fmt::Display for Polynomial {
             return write!(f, "0");
         }
         format_polynomial(f, self.clone().into_iter())
+    }
+}
+
+impl Evaluate for Polynomial {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State, _atol: crate::ATol) -> Result<f64> {
+        let mut sum = 0.0;
+        for term in &self.terms {
+            let mut v = term.coefficient;
+            for id in &term.ids {
+                v *= solution
+                    .entries
+                    .get(id)
+                    .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            }
+            sum += v;
+        }
+        Ok(sum)
+    }
+
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
+        let mut monomials = BTreeMap::new();
+        for term in self.terms.iter() {
+            let mut value = term.coefficient;
+            if value.abs() <= f64::EPSILON {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for id in term.ids.iter() {
+                if let Some(v) = state.entries.get(id) {
+                    value *= v;
+                } else {
+                    ids.push(*id);
+                }
+            }
+            let coefficient: &mut f64 = monomials.entry(ids.clone()).or_default();
+            *coefficient += value;
+            if coefficient.abs() <= f64::EPSILON {
+                monomials.remove(&ids);
+            }
+        }
+        self.terms = monomials
+            .into_iter()
+            .map(|(ids, coefficient)| Monomial { ids, coefficient })
+            .collect();
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s, atol)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.terms
+            .iter()
+            .flat_map(|term| term.ids.iter().map(|id| VariableID::from(*id)))
+            .collect()
     }
 }
 

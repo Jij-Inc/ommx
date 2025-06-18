@@ -1,9 +1,11 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Parameter, ParametricInstance, RemovedConstraint, State,
+        Linear, Optimality, Parameter, ParametricInstance, Relaxation, RemovedConstraint,
+        SampleSet, SampledDecisionVariable, Samples, Solution, State,
     },
-    Bound, Bounds, ConstraintID, InfeasibleDetected, VariableID, {BinaryIdPair, BinaryIds},
+    BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
+    VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
@@ -11,7 +13,7 @@ use maplit::hashmap;
 use num::Zero;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
 };
 
 impl Instance {
@@ -38,7 +40,7 @@ impl Instance {
         Ok(bounds)
     }
 
-    pub fn check_bound(&self, state: &State, atol: f64) -> Result<()> {
+    pub fn check_bound(&self, state: &State, atol: crate::ATol) -> Result<()> {
         let bounds = self.get_bounds()?;
         for (id, value) in state.entries.iter() {
             let id = VariableID::from(*id);
@@ -56,19 +58,6 @@ impl Instance {
             .iter()
             .map(|dv| (VariableID::from(dv.id), dv.kind()))
             .collect()
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        let mut used_ids = self.objective().used_decision_variable_ids();
-        for c in &self.constraints {
-            used_ids.extend(c.function().used_decision_variable_ids());
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                used_ids.extend(c.function().used_decision_variable_ids());
-            }
-        }
-        used_ids
     }
 
     pub fn defined_ids(&self) -> BTreeSet<u64> {
@@ -98,10 +87,10 @@ impl Instance {
 
     /// Validate that all decision variable IDs used in the instance are defined.
     pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.used_decision_variable_ids();
-        let mut defined_ids = BTreeSet::new();
+        let used_ids = self.required_ids();
+        let mut defined_ids = VariableIDSet::default();
         for dv in &self.decision_variables {
-            if !defined_ids.insert(dv.id) {
+            if !defined_ids.insert(dv.id.into()) {
                 bail!("Duplicated definition of decision variable ID: {}", dv.id);
             }
         }
@@ -197,11 +186,11 @@ impl Instance {
         })
     }
 
-    pub fn binary_ids(&self) -> BTreeSet<u64> {
+    pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
             .iter()
             .filter(|dv| dv.kind() == Kind::Binary)
-            .map(|dv| dv.id)
+            .map(|dv| dv.id.into())
             .collect()
     }
 
@@ -236,42 +225,6 @@ impl Instance {
         Ok(())
     }
 
-    /// Create PUBO (Polynomial Unconstrained Binary Optimization) dictionary from the instance.
-    ///
-    /// Before calling this method, you should check that this instance is suitable for PUBO:
-    ///
-    /// - This instance has no constraints
-    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
-    /// - The objective function uses only binary decision variables.
-    ///   - TODO: Binary encoding will be added.
-    ///
-    pub fn as_pubo_format(&self) -> Result<BTreeMap<BinaryIds, f64>> {
-        if !self.constraints.is_empty() {
-            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
-        }
-        if self.sense() == Sense::Maximize {
-            bail!("PUBO format is only for minimization problems.");
-        }
-        if !self
-            .objective()
-            .used_decision_variable_ids()
-            .is_subset(&self.binary_ids())
-        {
-            bail!("The objective function uses non-binary decision variables.");
-        }
-        let mut out = BTreeMap::new();
-        for (ids, c) in self.objective().into_iter() {
-            if c.abs() > f64::EPSILON {
-                let key = BinaryIds::from(ids);
-                let value = out.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
-                if value.abs() < f64::EPSILON {
-                    out.remove(&key);
-                }
-            }
-        }
-        Ok(out)
-    }
-
     /// Convert the instance into a minimization problem.
     ///
     /// This is based on the fact that maximization problem with negative objective function is equivalent to minimization problem.
@@ -280,6 +233,14 @@ impl Instance {
             return;
         }
         self.sense = Sense::Minimize as i32;
+        self.objective = Some(-self.objective().into_owned());
+    }
+
+    pub fn as_maximization_problem(&mut self) {
+        if self.sense() == Sense::Maximize {
+            return;
+        }
+        self.sense = Sense::Maximize as i32;
         self.objective = Some(-self.objective().into_owned());
     }
 
@@ -302,7 +263,7 @@ impl Instance {
         }
         if !self
             .objective()
-            .used_decision_variable_ids()
+            .required_ids()
             .is_subset(&self.binary_ids())
         {
             bail!("The objective function uses non-binary decision variables.");
@@ -318,6 +279,48 @@ impl Instance {
             } else {
                 let key = BinaryIdPair::try_from(ids)?;
                 let value = quad.entry(key).and_modify(|v| *v += c).or_insert(c);
+                if value.abs() < f64::EPSILON {
+                    quad.remove(&key);
+                }
+            }
+        }
+        Ok((quad, constant))
+    }
+
+    /// Create HUBO (Higher-Order Unconstrained Binary Optimization) dictionary from the instance.
+    ///
+    /// Before calling this method, you should check that this instance is suitable for QUBO:
+    ///
+    /// - This instance has no constraints
+    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    /// - The objective function uses only binary decision variables.
+    ///   - TODO: Binary encoding will be added.
+    ///
+    pub fn as_hubo_format(&self) -> Result<(BTreeMap<BinaryIds, f64>, f64)> {
+        if self.sense() == Sense::Maximize {
+            bail!("HUBO format is only for minimization problems.");
+        }
+        if !self.constraints.is_empty() {
+            bail!("The instance still has constraints. Use penalty method or other way to translate into unconstrained problem first.");
+        }
+        if !self
+            .objective()
+            .required_ids()
+            .is_subset(&self.binary_ids())
+        {
+            bail!("The objective function uses non-binary decision variables.");
+        }
+        let mut constant = 0.0;
+        let mut quad = BTreeMap::new();
+        for (ids, c) in self.objective().into_iter() {
+            if c.abs() <= f64::EPSILON {
+                continue;
+            }
+            if ids.is_empty() {
+                constant += c;
+            } else {
+                let key = BinaryIds::from(ids);
+                let value = quad.entry(key.clone()).and_modify(|v| *v += c).or_insert(c);
                 if value.abs() < f64::EPSILON {
                     quad.remove(&key);
                 }
@@ -475,6 +478,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         max_integer_range: u64,
+        atol: crate::ATol,
     ) -> Result<()> {
         let bounds = self.get_bounds()?;
         let kinds = self.get_kinds();
@@ -491,8 +495,7 @@ impl Instance {
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
 
         // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
-        for id in function.used_decision_variable_ids() {
-            let id = VariableID::from(id);
+        for id in function.required_ids() {
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;
@@ -510,7 +513,13 @@ impl Instance {
         // Check the bound of `a*f`
         // - If `lower > 0`, the constraint is infeasible
         // - If `upper <= 0`, the constraint is always satisfied, thus moved to `removed_constraints`
-        let bound = af.evaluate_bound(&bounds).as_integer_bound();
+        let bound = af.evaluate_bound(&bounds);
+        let bound = bound.as_integer_bound(atol).ok_or_else(|| {
+            InfeasibleDetected::InequalityConstraintBound {
+                id: ConstraintID::from(constraint_id),
+                bound,
+            }
+        })?;
         if bound.lower() > 0.0 {
             bail!(InfeasibleDetected::InequalityConstraintBound {
                 id: ConstraintID::from(constraint_id),
@@ -589,8 +598,7 @@ impl Instance {
             .as_ref()
             .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
 
-        for id in f.used_decision_variable_ids() {
-            let id = VariableID::from(id);
+        for id in f.required_ids() {
             let kind = kinds
                 .get(&id)
                 .with_context(|| format!("Decision variable ID {id:?} not found"))?;
@@ -640,10 +648,10 @@ impl Instance {
 ///   but this regarded them as different problems.
 ///
 impl AbsDiffEq for Instance {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
@@ -690,6 +698,186 @@ impl AbsDiffEq for Instance {
     }
 }
 
+impl Evaluate for Instance {
+    type Output = Solution;
+    type SampledOutput = SampleSet;
+
+    fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output> {
+        self.check_bound(state, atol)?;
+        let mut evaluated_constraints = Vec::new();
+        let mut feasible_relaxed = true;
+        for c in &self.constraints {
+            let c = c.evaluate(state, atol)?;
+            // Only check non-removed constraints for feasibility
+            if feasible_relaxed {
+                feasible_relaxed = c.is_feasible(atol)?;
+            }
+            evaluated_constraints.push(c);
+        }
+        let mut feasible = feasible_relaxed;
+        for c in &self.removed_constraints {
+            let c = c.evaluate(state, atol)?;
+            if feasible {
+                feasible = c.is_feasible(atol)?;
+            }
+            evaluated_constraints.push(c);
+        }
+
+        let objective = self.objective().evaluate(state, atol)?;
+
+        let mut state = state.clone();
+        for v in &self.decision_variables {
+            if let Some(value) = v.substituted_value {
+                state.entries.insert(v.id, value);
+            }
+        }
+        eval_dependencies(&self.decision_variable_dependency, &mut state, atol)?;
+        for v in &self.decision_variables {
+            if let HashMapEntry::Vacant(e) = state.entries.entry(v.id) {
+                let bound: crate::Bound = v.try_into()?;
+                e.insert(bound.nearest_to_zero());
+            }
+        }
+        Ok(Solution {
+            decision_variables: self.decision_variables.clone(),
+            state: Some(state),
+            evaluated_constraints,
+            feasible_relaxed: Some(feasible_relaxed),
+            feasible,
+            objective,
+            optimality: Optimality::Unspecified.into(),
+            relaxation: Relaxation::Unspecified.into(),
+            ..Default::default()
+        })
+    }
+
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
+        for v in &mut self.decision_variables {
+            if let Some(value) = state.entries.get(&v.id) {
+                v.substituted_value = Some(*value);
+            }
+        }
+        if let Some(f) = self.objective.as_mut() {
+            f.partial_evaluate(state, atol)?
+        }
+        for constraints in &mut self.constraints {
+            constraints.partial_evaluate(state, atol)?;
+        }
+        for constraints in &mut self.removed_constraints {
+            constraints.partial_evaluate(state, atol)?;
+        }
+        for d in self.decision_variable_dependency.values_mut() {
+            d.partial_evaluate(state, atol)?;
+        }
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
+        let mut feasible_relaxed: HashMap<u64, bool> =
+            samples.ids().map(|id| (*id, true)).collect();
+
+        // Constraints
+        let mut constraints = Vec::new();
+        for c in &self.constraints {
+            let evaluated = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
+                if !feasible_ {
+                    feasible_relaxed.insert(sample_id, false);
+                }
+            }
+            constraints.push(evaluated);
+        }
+        let mut feasible = feasible_relaxed.clone();
+        for c in &self.removed_constraints {
+            let v = c.evaluate_samples(samples, atol)?;
+            for (sample_id, feasible_) in v.is_feasible(atol)? {
+                if !feasible_ {
+                    feasible.insert(sample_id, false);
+                }
+            }
+            constraints.push(v);
+        }
+
+        // Objective
+        let objectives = self.objective().evaluate_samples(samples, atol)?;
+
+        // Reconstruct decision variable values
+        let mut samples = samples.clone();
+        for state in samples.states_mut() {
+            eval_dependencies(&self.decision_variable_dependency, state?, atol)?;
+        }
+        let mut transposed = samples.transpose();
+        let decision_variables: Vec<SampledDecisionVariable> = self
+            .decision_variables
+            .iter()
+            .map(|d| -> Result<_> {
+                Ok(SampledDecisionVariable {
+                    decision_variable: Some(d.clone()),
+                    samples: transposed.remove(&d.id),
+                })
+            })
+            .collect::<Result<_>>()?;
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives: Some(objectives),
+            constraints,
+            feasible_relaxed,
+            feasible,
+            sense: self.sense,
+            ..Default::default()
+        })
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        let mut used_ids = self.objective().required_ids();
+        for c in &self.constraints {
+            used_ids.extend(c.function().required_ids());
+        }
+        for c in &self.removed_constraints {
+            if let Some(c) = &c.constraint {
+                used_ids.extend(c.function().required_ids());
+            }
+        }
+        used_ids
+    }
+}
+
+// FIXME: This would be better by using a topological sort
+fn eval_dependencies(
+    dependencies: &HashMap<u64, Function>,
+    state: &mut State,
+    atol: crate::ATol,
+) -> Result<()> {
+    let mut bucket: Vec<_> = dependencies.iter().collect();
+    let mut last_size = bucket.len();
+    let mut not_evaluated = Vec::new();
+    loop {
+        while let Some((id, f)) = bucket.pop() {
+            match f.evaluate(state, atol) {
+                Ok(value) => {
+                    state.entries.insert(*id, value);
+                }
+                Err(_) => {
+                    not_evaluated.push((id, f));
+                }
+            }
+        }
+        if not_evaluated.is_empty() {
+            return Ok(());
+        }
+        if last_size == not_evaluated.len() {
+            bail!("Cannot evaluate any dependent variables.");
+        }
+        last_size = not_evaluated.len();
+        bucket.append(&mut not_evaluated);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -719,23 +907,23 @@ mod tests {
 
             // Put every penalty weights to zero
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -752,34 +940,23 @@ mod tests {
 
             // Put every penalty weights to zero
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 0.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
             };
-            let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), 1e-10));
+            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
+            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
             prop_assert_eq!(substituted.constraints.len(), 0);
 
             // Put every penalty weights to two
             let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id, 2.0)).collect(),
+                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
             };
-            let substituted = parametric_instance.with_parameters(parameters).unwrap();
+            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
             let mut objective = instance.objective().into_owned();
             for c in &instance.constraints {
                 let f = c.function().into_owned();
                 objective = objective + 2.0 * f.clone() * f;
             }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), 1e-10));
-        }
-
-        #[test]
-        fn test_pubo(instance in Instance::arbitrary_with(InstanceParameters::default_pubo())) {
-            if instance.sense() == Sense::Maximize {
-                return Ok(());
-            }
-            let pubo = instance.as_pubo_format().unwrap();
-            for (_, c) in pubo {
-                prop_assert!(c.abs() > f64::EPSILON);
-            }
+            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
         }
 
         #[test]
@@ -790,7 +967,20 @@ mod tests {
             let (quad, _) = instance.as_qubo_format().unwrap();
             for (ids, c) in quad {
                 prop_assert!(ids.0 <= ids.1);
-                prop_assert!(c.abs() > f64::EPSILON);
+                prop_assert!(c.abs() > f64:: EPSILON);
+            }
+        }
+
+        #[test]
+        fn test_hubo(instance in Instance::arbitrary_with(InstanceParameters::default_hubo())) {
+            if instance.sense() == Sense::Maximize {
+                return Ok(());
+            }
+            let degree = instance.objective().degree();
+            let (quad, _) = instance.as_hubo_format().unwrap();
+            for (ids, c) in quad {
+                prop_assert!(ids.len() <= degree as usize);
+                prop_assert!(c.abs() > f64:: EPSILON);
             }
         }
 
@@ -832,11 +1022,11 @@ mod tests {
             }
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 0.0)).collect::<HashMap<_, _>>() };
-            let lower_evaluated = encoded.evaluate(&state).unwrap();
+            let lower_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(lower_evaluated, lower.ceil());
 
             let state = State { entries: aux_bits.iter().map(|&id| (id, 1.0)).collect::<HashMap<_, _>>() };
-            let upper_evaluated = encoded.evaluate(&state).unwrap();
+            let upper_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
 
@@ -845,11 +1035,39 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, crate::ATol::default()).unwrap();
                 let mut substituted = instance.clone();
                 substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, 1e-10));
+                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
             }
         }
+    }
+
+    #[test]
+    fn test_eval_dependencies() {
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
+        assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
+        assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
+
+        // circular dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
+
+        // non-existing dependency
+        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
+        let dependencies = hashmap! {
+            4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+        };
+        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }

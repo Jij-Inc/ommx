@@ -2,10 +2,9 @@ use super::parse::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, DecisionVariable, VariableID,
+    Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
 };
-use fnv::FnvHashMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OneHot {
@@ -16,8 +15,8 @@ pub struct OneHot {
 impl Parse for v1::OneHot {
     type Output = OneHot;
     type Context = (
-        FnvHashMap<VariableID, DecisionVariable>,
-        FnvHashMap<ConstraintID, Constraint>,
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
     );
     fn parse(
         self,
@@ -31,8 +30,10 @@ impl Parse for v1::OneHot {
             let id = as_variable_id(decision_variable, *v)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(RawParseError::NonUniqueVariableID { id }
-                    .context(message, "decision_variables"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
         Ok(OneHot {
@@ -52,8 +53,8 @@ pub struct Sos1 {
 impl Parse for v1::Sos1 {
     type Output = Sos1;
     type Context = (
-        FnvHashMap<VariableID, DecisionVariable>,
-        FnvHashMap<ConstraintID, Constraint>,
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
     );
     fn parse(
         self,
@@ -67,8 +68,10 @@ impl Parse for v1::Sos1 {
             let id = as_constraint_id(constraints, *id)
                 .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
             if !big_m_constraint_ids.insert(id) {
-                return Err(RawParseError::NonUniqueConstraintID { id }
-                    .context(message, "big_m_constraint_ids"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueConstraintID { id })
+                        .context(message, "big_m_constraint_ids"),
+                );
             }
         }
         let mut variables = BTreeSet::new();
@@ -76,8 +79,10 @@ impl Parse for v1::Sos1 {
             let id = as_variable_id(decision_variable, *id)
                 .map_err(|e| e.context(message, "decision_variables"))?;
             if !variables.insert(id) {
-                return Err(RawParseError::NonUniqueVariableID { id }
-                    .context(message, "decision_variables"));
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
             }
         }
         Ok(Sos1 {
@@ -97,8 +102,8 @@ pub struct ConstraintHints {
 impl Parse for v1::ConstraintHints {
     type Output = ConstraintHints;
     type Context = (
-        FnvHashMap<VariableID, DecisionVariable>,
-        FnvHashMap<ConstraintID, Constraint>,
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";
@@ -116,5 +121,41 @@ impl Parse for v1::ConstraintHints {
             one_hot_constraints,
             sos1_constraints,
         })
+    }
+}
+
+impl From<OneHot> for v1::OneHot {
+    fn from(value: OneHot) -> Self {
+        Self {
+            constraint_id: *value.id,
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<Sos1> for v1::Sos1 {
+    fn from(value: Sos1) -> Self {
+        Self {
+            binary_constraint_id: *value.binary_constraint_id,
+            big_m_constraint_ids: value.big_m_constraint_ids.into_iter().map(|c| *c).collect(),
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<ConstraintHints> for v1::ConstraintHints {
+    fn from(value: ConstraintHints) -> Self {
+        Self {
+            one_hot_constraints: value
+                .one_hot_constraints
+                .into_iter()
+                .map(|oh| oh.into())
+                .collect(),
+            sos1_constraints: value
+                .sos1_constraints
+                .into_iter()
+                .map(|s| s.into())
+                .collect(),
+        }
     }
 }

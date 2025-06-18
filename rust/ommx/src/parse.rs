@@ -1,6 +1,6 @@
 use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, ConstraintID, OffsetError,
-    SampleID, VariableID,
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
+    InstanceError, SampleID, SubstitutionError,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -86,26 +86,11 @@ pub enum RawParseError {
     #[error("Enum ({enum_name}) value is unspecified.")]
     UnspecifiedEnum { enum_name: &'static str },
 
-    #[error("Duplicated variable ID is found in definition: {id:?}")]
-    DuplicatedVariableID { id: VariableID },
+    #[error(transparent)]
+    InstanceError(#[from] InstanceError),
 
-    #[error("Duplicated constraint ID is found in definition: {id:?}")]
-    DuplicatedConstraintID { id: ConstraintID },
-
-    #[error("Duplicated sample ID is found: {id:?}")]
-    DuplicatedSampleID { id: SampleID },
-
-    #[error("Undefined variable ID is used: {id:?}")]
-    UndefinedVariableID { id: VariableID },
-
-    #[error("Undefined constraint ID is used: {id:?}")]
-    UndefinedConstraintID { id: ConstraintID },
-
-    #[error("Non-unique variable ID is found where uniqueness is required: {id:?}")]
-    NonUniqueVariableID { id: VariableID },
-
-    #[error("Non-unique constraint ID is found where uniqueness is required: {id:?}")]
-    NonUniqueConstraintID { id: ConstraintID },
+    #[error(transparent)]
+    SubstitutionError(#[from] SubstitutionError),
 
     #[error(transparent)]
     InvalidCoefficient(#[from] CoefficientError),
@@ -114,10 +99,13 @@ pub enum RawParseError {
     QuadraticParseError(#[from] QuadraticParseError),
 
     #[error(transparent)]
-    InvalidOffset(#[from] OffsetError),
+    InvalidBound(#[from] BoundError),
 
     #[error(transparent)]
-    InvalidBound(#[from] BoundError),
+    InvalidDecisionVariable(#[from] DecisionVariableError),
+
+    #[error("Duplicated sample ID: {id:?}")]
+    DuplicatedSampleID { id: SampleID },
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]

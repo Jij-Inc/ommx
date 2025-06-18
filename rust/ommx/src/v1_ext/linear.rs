@@ -1,16 +1,12 @@
 use crate::{
     macros::*,
-    v1::{linear::Term, Linear, Quadratic},
-    VariableID,
+    v1::{linear::Term, Linear, Quadratic, SampledValues, Samples, State},
+    Evaluate, VariableID, VariableIDSet,
 };
+use anyhow::{Context, Result};
 use approx::AbsDiffEq;
 use num::Zero;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
-    iter::Sum,
-    ops::*,
-};
+use std::{collections::BTreeMap, fmt, iter::Sum, ops::*};
 
 impl Zero for Linear {
     fn zero() -> Self {
@@ -47,10 +43,6 @@ impl Linear {
             terms: vec![Term { id, coefficient }],
             constant: 0.0,
         }
-    }
-
-    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
-        self.terms.iter().map(|term| term.id).collect()
     }
 
     pub fn degree(&self) -> u32 {
@@ -220,14 +212,14 @@ impl Mul for Linear {
 
 /// Compare coefficients in sup-norm.
 impl AbsDiffEq for Linear {
-    type Epsilon = f64;
+    type Epsilon = crate::ATol;
 
     fn default_epsilon() -> Self::Epsilon {
-        f64::default_epsilon()
+        crate::ATol::default()
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        if !self.constant.abs_diff_eq(&other.constant, epsilon)
+        if !self.constant.abs_diff_eq(&other.constant, *epsilon)
             || self.terms.len() != other.terms.len()
         {
             return false;
@@ -236,7 +228,7 @@ impl AbsDiffEq for Linear {
         let sub = self.clone() - other.clone();
         sub.terms
             .iter()
-            .all(|term| term.coefficient.abs() <= epsilon)
+            .all(|term| term.coefficient.abs() <= *epsilon)
     }
 }
 
@@ -250,6 +242,56 @@ impl fmt::Display for Linear {
             self.into_iter()
                 .map(|(id, c)| (id.into_iter().map(VariableID::from).collect(), c)),
         )
+    }
+}
+
+impl Evaluate for Linear {
+    type Output = f64;
+    type SampledOutput = SampledValues;
+
+    fn evaluate(&self, solution: &State, _atol: crate::ATol) -> Result<f64> {
+        let mut sum = self.constant;
+        for Term { id, coefficient } in &self.terms {
+            let s = solution
+                .entries
+                .get(id)
+                .with_context(|| format!("Variable id ({id}) is not found in the solution"))?;
+            sum += coefficient * s;
+        }
+        Ok(sum)
+    }
+
+    fn partial_evaluate(&mut self, state: &State, _atol: crate::ATol) -> Result<()> {
+        let mut i = 0;
+        while i < self.terms.len() {
+            let Term { id, coefficient } = self.terms[i];
+            if let Some(value) = state.entries.get(&id) {
+                self.constant += coefficient * value;
+                self.terms.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &Samples,
+        atol: crate::ATol,
+    ) -> Result<Self::SampledOutput> {
+        let out = samples.map(|s| {
+            let value = self.evaluate(s, atol)?;
+            Ok(value)
+        })?;
+        Ok(out)
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.terms
+            .iter()
+            .map(|term| VariableID::from(term.id))
+            .collect()
     }
 }
 

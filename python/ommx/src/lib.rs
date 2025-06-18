@@ -1,22 +1,32 @@
 mod artifact;
+mod bound;
 mod builder;
+mod constraint;
+mod constraint_hints;
 mod dataset;
+mod decision_variable;
 mod descriptor;
-mod evaluate;
+mod enums;
 mod instance;
 mod message;
 mod mps;
 mod qplib;
+mod random;
 
 pub use artifact::*;
+pub use bound::*;
 pub use builder::*;
+pub use constraint::*;
+pub use constraint_hints::*;
 pub use dataset::*;
+pub use decision_variable::*;
 pub use descriptor::*;
-pub use evaluate::*;
+pub use enums::*;
 pub use instance::*;
 pub use message::*;
 pub use mps::*;
 pub use qplib::*;
+pub use random::*;
 
 use pyo3::prelude::*;
 
@@ -38,27 +48,29 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Quadratic>()?;
     m.add_class::<Polynomial>()?;
     m.add_class::<Function>()?;
+    m.add_class::<VariableBound>()?;
     m.add_class::<Instance>()?;
+    m.add_class::<InstanceDescription>()?;
+    m.add_class::<DecisionVariableAnalysis>()?;
+    m.add_class::<DecisionVariable>()?;
+    m.add_class::<Constraint>()?;
+    m.add_class::<RemovedConstraint>()?;
+    m.add_class::<OneHot>()?;
+    m.add_class::<Sos1>()?;
+    m.add_class::<ConstraintHints>()?;
     m.add_class::<ParametricInstance>()?;
     m.add_class::<Parameters>()?;
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
 
-    // Evaluate
-    m.add_function(wrap_pyfunction!(evaluate_function, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_linear, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_polynomial, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_linear, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_quadratic, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_polynomial, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_function, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
+    // Enums
+    m.add_class::<Sense>()?;
+    m.add_class::<Equality>()?;
+    m.add_class::<Kind>()?;
+
+    // Random
+    m.add_class::<Rng>()?;
 
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;

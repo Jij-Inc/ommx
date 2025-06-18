@@ -1,3 +1,4 @@
+use num::One;
 use std::ops::{Mul, MulAssign};
 
 use super::*;
@@ -86,6 +87,14 @@ macro_rules! impl_mul_via_mul_assign {
                 self
             }
         }
+
+        impl Mul<Function> for $rhs {
+            type Output = Function;
+            fn mul(self, mut rhs: Function) -> Self::Output {
+                rhs.mul_assign(self);
+                rhs
+            }
+        }
     };
     () => {};
 }
@@ -146,10 +155,45 @@ impl Mul for &Function {
     }
 }
 
-impl Mul<Function> for &Function {
+impl One for Function {
+    fn one() -> Self {
+        Function::Constant(Coefficient::one())
+    }
+}
+
+// Add support for &Function operations with references
+impl Mul<&Coefficient> for &Function {
     type Output = Function;
-    fn mul(self, rhs: Function) -> Self::Output {
-        rhs * self
+    fn mul(self, rhs: &Coefficient) -> Self::Output {
+        self.clone() * *rhs
+    }
+}
+
+impl Mul<Coefficient> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: Coefficient) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Linear> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Linear) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Quadratic> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Quadratic) -> Self::Output {
+        self.clone() * rhs
+    }
+}
+
+impl Mul<&Polynomial> for &Function {
+    type Output = Function;
+    fn mul(self, rhs: &Polynomial) -> Self::Output {
+        self.clone() * rhs
     }
 }
 

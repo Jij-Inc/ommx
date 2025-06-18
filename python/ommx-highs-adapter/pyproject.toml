@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_highs_adapter"
-version = "2.0.0-alpha"
+version = "2.0.0b1"
 description = "An adapter between OMMX and HiGHS"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
@@ -20,7 +20,7 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-dependencies = ["ommx >= 1.9.0rc1, < 2.0.0","highspy>=1.9.0", "numpy>=1.17.3"]
+dependencies = ["ommx >= 2.0.0b1, < 3.0.0", "highspy>=1.9.0", "numpy>=1.17.3"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

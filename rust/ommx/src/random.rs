@@ -40,6 +40,7 @@ mod parameter;
 mod parametric_instance;
 mod polynomial;
 mod quadratic;
+mod samples;
 mod state;
 
 pub use constraint::*;
@@ -47,11 +48,12 @@ pub use decision_variable::*;
 pub use function::*;
 pub use instance::*;
 pub use parameter::*;
+pub use samples::*;
 pub use state::*;
 
 pub use proptest::test_runner::TestRunner as Rng;
 
-use crate::{decision_variable::VariableID, v1::State, Bound, Bounds, MonomialDyn};
+use crate::{v1::State, Bound, Bounds, MonomialDyn, VariableID, VariableIDSet};
 use proptest::{
     prelude::*,
     strategy::{Strategy, ValueTree},
@@ -201,8 +203,45 @@ pub fn multi_choose(n: u64, r: usize) -> u64 {
     combinations(n + r as u64 - 1, r)
 }
 
+pub fn arbitrary_split_ids(ids: VariableIDSet) -> BoxedStrategy<(VariableIDSet, VariableIDSet)> {
+    let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
+    flips
+        .prop_map(move |flips| {
+            let mut used_ids = VariableIDSet::default();
+            let mut defined_ids = VariableIDSet::default();
+            for (flip, id) in flips.into_iter().zip(ids.iter()) {
+                if flip {
+                    used_ids.insert(*id);
+                } else {
+                    defined_ids.insert(*id);
+                }
+            }
+            (used_ids, defined_ids)
+        })
+        .boxed()
+}
+
+pub fn arbitrary_split_state(state: &State) -> BoxedStrategy<(State, State)> {
+    let ids: Vec<(u64, f64)> = state.entries.iter().map(|(k, v)| (*k, *v)).collect();
+    let flips = proptest::collection::vec(bool::arbitrary(), ids.len());
+    (Just(ids), flips)
+        .prop_map(|(ids, flips)| {
+            let mut a = State::default();
+            let mut b = State::default();
+            for (flip, (id, value)) in flips.into_iter().zip(ids.into_iter()) {
+                if flip {
+                    a.entries.insert(id, value);
+                } else {
+                    b.entries.insert(id, value);
+                }
+            }
+            (a, b)
+        })
+        .boxed()
+}
+
 pub fn arbitrary_bounds(ids: impl Iterator<Item = VariableID>) -> BoxedStrategy<Bounds> {
-    let mut strategy = Just(HashMap::new()).boxed();
+    let mut strategy = Just(Bounds::default()).boxed();
     for id in ids {
         strategy = (strategy, Bound::arbitrary())
             .prop_map(move |(mut bounds, bound)| {

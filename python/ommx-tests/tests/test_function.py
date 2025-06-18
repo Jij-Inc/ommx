@@ -37,6 +37,13 @@ def test_linear():
     assert_eq(Linear(terms={1: 2}) + Linear(terms={2: 3}), Linear(terms={1: 2, 2: 3}))
     assert_eq(Linear(terms={1: 2}) + Linear(terms={1: 3}), Linear(terms={1: 5}))
 
+    # test in-place add
+    linear_instance = Linear(terms={1: 2}, constant=3)
+    original_id = id(linear_instance)
+    linear_instance += Linear(terms={2: 3})
+    assert id(linear_instance) == original_id  # Verify it's the same object
+    assert_eq(linear_instance, Linear(terms={1: 2, 2: 3}, constant=3))
+
 
 def test_quadratic():
     x1 = DecisionVariable.binary(1)
@@ -122,6 +129,13 @@ def test_quadratic():
         Quadratic(columns=[0, 3], rows=[1, 2], values=[1.0, 2.0]),
     )
 
+    # test in-place add
+    quad_instance = Quadratic(columns=[1], rows=[2], values=[2.0])
+    original_id = id(quad_instance)
+    quad_instance += Quadratic(columns=[3], rows=[4], values=[3.0])
+    assert id(quad_instance) == original_id  # Verify it's the same object
+    assert_eq(quad_instance, Quadratic(columns=[1, 3], rows=[2, 4], values=[2.0, 3.0]))
+
 
 def test_polynomial():
     x1 = DecisionVariable.binary(1)
@@ -155,6 +169,13 @@ def test_polynomial():
         2 * x1 * x2 * x3,
     )
 
+    # test in-place add
+    poly_instance = Polynomial(terms={(1, 2): 2.0})
+    original_id = id(poly_instance)
+    poly_instance += Polynomial(terms={(3, 4): 3.0})
+    assert id(poly_instance) == original_id  # Verify it's the same object
+    assert_eq(poly_instance, Polynomial(terms={(1, 2): 2.0, (3, 4): 3.0}))
+
 
 def test_function():
     x1 = DecisionVariable.binary(1)
@@ -165,3 +186,10 @@ def test_function():
     assert_eq(Function(x1) + Function(x2), Function(x1 + x2))
     assert_eq(Function(x1) * Function(x2), Function(x1 * x2))
     assert_eq(Function(x1 * x2) * Function(x3), Function(x1 * x2 * x3))
+
+    # test in-place add
+    func_instance = Function(x1)
+    original_id = id(func_instance)
+    func_instance += Function(x2)
+    assert id(func_instance) == original_id  # Verify it's the same object
+    assert_eq(func_instance, Function(x1 + x2))

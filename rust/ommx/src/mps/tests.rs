@@ -15,6 +15,6 @@ proptest! {
         prop_assert!(to_mps::write_mps(&instance, &mut buffer).is_ok());
         let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
         dbg!(&instance);
-        prop_assert!(instance.abs_diff_eq(&dbg!(loaded_instance), 1e-6))
+        prop_assert!(instance.abs_diff_eq(&dbg!(loaded_instance), crate::ATol::default()));
     }
 }

@@ -8,8 +8,29 @@ tasks:
       - task: test
 
   test:
-    desc: Run tests for OMMX PySCIPOpt Adapter
+    desc: Run all tests for OMMX PySCIPOpt Adapter
+    cmds:
+      - task: pytest
+      - task: pyright
+      - task: markdown-code-runner
+      - task: lint
+
+  pytest:
+    desc: Run pytest tests
     cmds:
       - uv run pytest -vv --doctest-modules
+
+  pyright:
+    desc: Run pyright type checking
+    cmds:
       - uv run pyright
+
+  markdown-code-runner:
+    desc: Run markdown code runner
+    cmds:
       - uv run markdown-code-runner --verbose README.md
+
+  lint:
+    desc: Lint by ruff check
+    cmds:
+      - uv run ruff check

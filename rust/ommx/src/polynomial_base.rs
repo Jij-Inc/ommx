@@ -10,6 +10,7 @@ mod mul;
 mod parse;
 mod polynomial;
 mod quadratic;
+mod substitute;
 
 pub use binary_ids::*;
 pub use degree::*;
@@ -18,8 +19,13 @@ pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
-use crate::{v1::State, Coefficient, VariableID};
+use crate::{coeff, v1::State, Coefficient, VariableID};
+use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
+use num::{
+    integer::{gcd, lcm},
+    One,
+};
 use proptest::strategy::BoxedStrategy;
 use std::{fmt::Debug, hash::Hash};
 
@@ -31,6 +37,9 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
 
     fn degree(&self) -> Degree;
     fn max_degree() -> Degree;
+
+    fn as_linear(&self) -> Option<VariableID>;
+    fn as_quadratic(&self) -> Option<VariableIDPair>;
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
     /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
@@ -56,7 +65,21 @@ impl<M: Monomial> Default for PolynomialBase<M> {
     }
 }
 
+impl<M: Monomial> From<M> for PolynomialBase<M> {
+    fn from(monomial: M) -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(monomial, Coefficient::one());
+        Self { terms }
+    }
+}
+
 impl<M: Monomial> PolynomialBase<M> {
+    pub fn one() -> Self {
+        let mut terms = FnvHashMap::default();
+        terms.insert(M::default(), coeff!(1.0));
+        Self { terms }
+    }
+
     pub fn add_term(&mut self, term: M, coefficient: Coefficient) {
         use std::collections::hash_map::Entry;
         match self.terms.entry(term) {
@@ -118,6 +141,31 @@ impl<M: Monomial> PolynomialBase<M> {
         self.terms.keys()
     }
 
+    /// Get constant term, zero if not present
+    pub fn constant_term(&self) -> f64 {
+        self.get(&M::default())
+            .map(|c| c.into_inner())
+            .unwrap_or(0.0)
+    }
+
+    /// Get terms of specific degree as an iterator
+    pub fn terms_by_degree(&self, degree: Degree) -> impl Iterator<Item = (&M, &Coefficient)> {
+        self.iter()
+            .filter(move |(monomial, _)| monomial.degree() == degree)
+    }
+
+    /// Get linear terms as an iterator over (VariableID, Coefficient)
+    pub fn linear_terms(&self) -> impl Iterator<Item = (VariableID, Coefficient)> + '_ {
+        self.iter()
+            .filter_map(|(monomial, coeff)| monomial.as_linear().map(|id| (id, *coeff)))
+    }
+
+    /// Get quadratic terms as an iterator over (VariableIDPair, Coefficient)
+    pub fn quadratic_terms(&self) -> impl Iterator<Item = (VariableIDPair, Coefficient)> + '_ {
+        self.iter()
+            .filter_map(|(monomial, coeff)| monomial.as_quadratic().map(|pair| (pair, *coeff)))
+    }
+
     /// The maximum absolute value of the coefficients including the constant.
     ///
     /// `None` means this polynomial is exactly zero.
@@ -126,6 +174,30 @@ impl<M: Monomial> PolynomialBase<M> {
             .values()
             .map(|coefficient| coefficient.abs())
             .max()
+    }
+
+    /// Get a minimal positive factor `a` which make all coefficients of `a * self` integer.
+    ///
+    /// This returns `Coefficient::one()` for zero polynomial. See also <https://en.wikipedia.org/wiki/Primitive_part_and_content>.
+    pub fn content_factor(&self) -> Result<Coefficient> {
+        let mut numer_gcd = 0;
+        let mut denom_lcm: i64 = 1;
+        for coefficient in self.terms.values() {
+            let r = num::Rational64::approximate_float(coefficient.into_inner())
+                .context("Cannot approximate coefficient in 64-bit rational")?;
+            numer_gcd = gcd(numer_gcd, *r.numer());
+            denom_lcm
+                .checked_mul(*r.denom())
+                .context("Overflow detected while evaluating minimal integer coefficient multiplier. This means it is hard to make the all coefficient integer")?;
+            denom_lcm = lcm(denom_lcm, *r.denom());
+        }
+
+        if numer_gcd == 0 {
+            Ok(Coefficient::one())
+        } else {
+            let result = (denom_lcm as f64 / numer_gcd as f64).abs();
+            Coefficient::try_from(result).context("Content factor should be non-zero")
+        }
     }
 }
 
@@ -147,7 +219,7 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    -4.973622349033379,
+                    -1.0,
                 ),
             ),
             (
@@ -157,7 +229,7 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    -1.0,
+                    -0.27550031881072173,
                 ),
             ),
             (
@@ -167,10 +239,51 @@ mod tests {
                     ),
                 ),
                 Coefficient(
-                    1.0,
+                    4.520657493715473,
                 ),
             ),
         ]
         "###);
+    }
+
+    #[test]
+    fn test_content_factor() {
+        use crate::linear;
+        use ::approx::assert_abs_diff_eq;
+
+        // Test with simple rational coefficients
+        // 1/2 * x1 + 1/3 * x2 => content factor should be 6
+        let p = coeff!(0.5) * linear!(1) + Coefficient::try_from(1.0 / 3.0).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_abs_diff_eq!(factor.into_inner(), 6.0);
+
+        // Test with integer coefficients (should return 1)
+        let p = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_eq!(factor, Coefficient::one());
+
+        // Test with zero polynomial (empty terms)
+        let p: Linear = PolynomialBase::default();
+        let factor = p.content_factor().unwrap();
+        assert_eq!(factor, Coefficient::one());
+
+        // Test with more complex rational coefficients
+        // 2/3 * x1 + 2/5 * x2 => content factor should be 15/2
+        let p = Coefficient::try_from(2.0 / 3.0).unwrap() * linear!(1)
+            + Coefficient::try_from(2.0 / 5.0).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        assert_abs_diff_eq!(factor.into_inner(), 15.0 / 2.0);
+
+        // Test with PI (irrational numbers)
+        use std::f64::consts::PI;
+        let p = Coefficient::try_from(PI).unwrap() * linear!(1)
+            + Coefficient::try_from(2.0 * PI).unwrap() * linear!(2);
+
+        let factor = p.content_factor().unwrap();
+        // For PI and 2*PI, the content factor should be approximately 1/PI
+        assert_abs_diff_eq!(factor.into_inner(), 1.0 / PI);
     }
 }

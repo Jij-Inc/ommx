@@ -5,6 +5,7 @@ name = "ommx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
 
 # crate-specific settings for publishing
 description = "Open Mathematical prograMming eXchange (OMMX)"
@@ -33,6 +34,7 @@ maplit.workspace = true
 num.workspace = true
 ocipkg.workspace = true
 ordered-float.workspace = true
+petgraph.workspace = true
 proptest.workspace = true
 prost.workspace = true
 serde.workspace = true

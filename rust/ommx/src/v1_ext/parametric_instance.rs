@@ -1,6 +1,6 @@
 use crate::{
     v1::{Function, Instance, Parameters, ParametricInstance, State},
-    Evaluate,
+    Evaluate, VariableIDSet,
 };
 use anyhow::{bail, Result};
 use std::{borrow::Cow, collections::BTreeSet};
@@ -47,7 +47,11 @@ impl From<Parameters> for State {
 
 impl ParametricInstance {
     /// Create a new [Instance] with the given parameters.
-    pub fn with_parameters(mut self, parameters: Parameters) -> Result<Instance> {
+    pub fn with_parameters(
+        mut self,
+        parameters: Parameters,
+        atol: crate::ATol,
+    ) -> Result<Instance> {
         let required_ids: BTreeSet<u64> = self.parameters.iter().map(|p| p.id).collect();
         let given_ids: BTreeSet<u64> = parameters.entries.keys().cloned().collect();
         if !required_ids.is_subset(&given_ids) {
@@ -64,10 +68,10 @@ impl ParametricInstance {
 
         let state = State::from(parameters.clone());
         if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(&state)?;
+            f.partial_evaluate(&state, atol)?;
         }
         for constraint in self.constraints.iter_mut() {
-            constraint.partial_evaluate(&state)?;
+            constraint.partial_evaluate(&state, atol)?;
         }
 
         Ok(Instance {
@@ -91,25 +95,25 @@ impl ParametricInstance {
     }
 
     /// Used decision variable and parameter IDs in the objective and constraints.
-    pub fn used_ids(&self) -> Result<BTreeSet<u64>> {
-        let mut used_ids = self.objective().used_decision_variable_ids();
+    pub fn used_ids(&self) -> Result<VariableIDSet> {
+        let mut used_ids = self.objective().required_ids();
         for c in &self.constraints {
-            used_ids.extend(c.function().used_decision_variable_ids());
+            used_ids.extend(c.function().required_ids());
         }
         Ok(used_ids)
     }
 
     /// Defined decision variable IDs. These IDs may not be used in the objective and constraints.
-    pub fn defined_decision_variable_ids(&self) -> BTreeSet<u64> {
+    pub fn defined_decision_variable_ids(&self) -> VariableIDSet {
         self.decision_variables
             .iter()
-            .map(|dv| dv.id)
-            .collect::<BTreeSet<_>>()
+            .map(|dv| dv.id.into())
+            .collect()
     }
 
     /// Defined parameter IDs. These IDs may not be used in the objective and constraints.
-    pub fn defined_parameter_ids(&self) -> BTreeSet<u64> {
-        self.parameters.iter().map(|p| p.id).collect()
+    pub fn defined_parameter_ids(&self) -> VariableIDSet {
+        self.parameters.iter().map(|p| p.id.into()).collect()
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -119,14 +123,14 @@ impl ParametricInstance {
     }
 
     pub fn validate_ids(&self) -> Result<()> {
-        let mut ids = BTreeSet::new();
+        let mut ids = VariableIDSet::default();
         for dv in &self.decision_variables {
-            if !ids.insert(dv.id) {
+            if !ids.insert(dv.id.into()) {
                 bail!("Duplicate decision variable ID: {}", dv.id);
             }
         }
         for p in &self.parameters {
-            if !ids.insert(p.id) {
+            if !ids.insert(p.id.into()) {
                 bail!("Duplicate parameter ID: {}", p.id);
             }
         }
@@ -166,10 +170,10 @@ mod tests {
         #[test]
         fn test_parametric_instance_conversion(instance in Instance::arbitrary()) {
             let parametric_instance: ParametricInstance = instance.clone().into();
-            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default()).unwrap();
+            let converted_instance: Instance = parametric_instance.with_parameters(Parameters::default(), crate::ATol::default()).unwrap();
             prop_assert_eq!(&converted_instance.parameters, &Some(Parameters::default()));
             prop_assert!(
-                abs_diff_eq!(instance, converted_instance, epsilon = 1e-10),
+                abs_diff_eq!(instance, converted_instance),
                 "\nLeft : {:?}\nRight: {:?}", instance, converted_instance
             );
         }

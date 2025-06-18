@@ -1,30 +1,15 @@
 use super::*;
 use crate::{
-    arbitrary_constraints, arbitrary_decision_variables, v1::State, Bound, ConstraintIDParameters,
-    Evaluate, KindParameters, PolynomialParameters,
+    arbitrary_constraints, arbitrary_decision_variables,
+    random::{arbitrary_samples, SamplesParameters},
+    v1::{Samples, State},
+    Bounds, ConstraintIDParameters, Evaluate, KindParameters, PolynomialParameters,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::HashMap;
 
-fn arbitrary_binary_state(ids: &FnvHashSet<VariableID>) -> BoxedStrategy<State> {
-    let mut strategy = Just(HashMap::new()).boxed();
-    for id in ids {
-        let raw_id = id.into_inner();
-        strategy = (strategy, any::<bool>())
-            .prop_map(move |(mut state, value)| {
-                state.insert(raw_id, if value { 1.0 } else { 0.0 });
-                state
-            })
-            .boxed();
-    }
-    strategy.prop_map(|state| state.into()).boxed()
-}
-
-fn arbitrary_integer_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: u64,
-) -> BoxedStrategy<State> {
+fn arbitrary_integer_state(bounds: &Bounds, max_abs: u64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -38,10 +23,7 @@ fn arbitrary_integer_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_integer_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: u64,
-) -> BoxedStrategy<State> {
+fn arbitrary_semi_integer_state(bounds: &Bounds, max_abs: u64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -58,10 +40,7 @@ fn arbitrary_semi_integer_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_continuous_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: f64,
-) -> BoxedStrategy<State> {
+fn arbitrary_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -75,10 +54,7 @@ fn arbitrary_continuous_state(
     strategy.prop_map(|state| state.into()).boxed()
 }
 
-fn arbitrary_semi_continuous_state(
-    bounds: &FnvHashMap<VariableID, Bound>,
-    max_abs: f64,
-) -> BoxedStrategy<State> {
+fn arbitrary_semi_continuous_state(bounds: &Bounds, max_abs: f64) -> BoxedStrategy<State> {
     let mut strategy = Just(HashMap::new()).boxed();
     for (id, bound) in bounds {
         let raw_id = id.into_inner();
@@ -100,7 +76,7 @@ impl Instance {
         let analysis = self.analyze_decision_variables();
 
         (
-            arbitrary_binary_state(&analysis.used_binary()),
+            arbitrary_integer_state(&analysis.used_binary(), 1),
             arbitrary_integer_state(&analysis.used_integer(), 100),
             arbitrary_semi_integer_state(&analysis.used_semi_integer(), 100),
             arbitrary_continuous_state(&analysis.used_continuous(), 100.0),
@@ -118,6 +94,10 @@ impl Instance {
                 },
             )
             .boxed()
+    }
+
+    pub fn arbitrary_samples(&self, params: SamplesParameters) -> BoxedStrategy<Samples> {
+        arbitrary_samples(params, self.arbitrary_state())
     }
 }
 
@@ -165,13 +145,10 @@ impl Arbitrary for Instance {
         (objective, constraints, irrelevant_candidates)
             .prop_flat_map(move |(objective, constraints, irrelevant_candidates)| {
                 // Collect all required IDs from the objective and constraints
-                let mut unique_ids: FnvHashSet<VariableID> = objective
-                    .required_ids()
-                    .into_iter()
-                    .map(VariableID::from)
-                    .collect();
+                let mut unique_ids: FnvHashSet<VariableID> =
+                    objective.required_ids().into_iter().collect();
                 for c in constraints.values() {
-                    unique_ids.extend(c.function.required_ids().into_iter().map(VariableID::from));
+                    unique_ids.extend(c.function.required_ids().into_iter());
                 }
                 unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
                 (

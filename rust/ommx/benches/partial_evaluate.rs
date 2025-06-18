@@ -5,15 +5,14 @@ use criterion::{
 use ommx::{
     random::{arbitrary_state, random_deterministic, sample_deterministic},
     Evaluate, Linear, LinearParameters, Polynomial, PolynomialParameters, Quadratic,
-    QuadraticParameters, VariableID,
+    QuadraticParameters, VariableID, VariableIDSet,
 };
 use proptest::prelude::Arbitrary;
-use std::collections::BTreeSet;
 
 fn bench_partial_evaluate<T, Parameters>(
     c: &mut Criterion,
     group_name: &str,
-    id_selector: impl Fn(BTreeSet<u64>) -> BTreeSet<u64>,
+    id_selector: impl Fn(VariableIDSet) -> VariableIDSet,
     parameter_generator: impl Fn(usize) -> Parameters,
 ) where
     T: Evaluate + Clone + Arbitrary<Parameters = Parameters>,
@@ -32,7 +31,7 @@ fn bench_partial_evaluate<T, Parameters>(
                 b.iter_batched_ref(
                     || lin.clone(),
                     |f| {
-                        f.partial_evaluate(state).unwrap();
+                        f.partial_evaluate(state, ommx::ATol::default()).unwrap();
                     },
                     criterion::BatchSize::SmallInput,
                 )
@@ -42,16 +41,16 @@ fn bench_partial_evaluate<T, Parameters>(
     group.finish();
 }
 
-fn all_ids(ids: BTreeSet<u64>) -> BTreeSet<u64> {
+fn all_ids(ids: VariableIDSet) -> VariableIDSet {
     ids
 }
 
-fn half_ids(ids: BTreeSet<u64>) -> BTreeSet<u64> {
+fn half_ids(ids: VariableIDSet) -> VariableIDSet {
     let n = ids.len() / 2;
     ids.into_iter().take(n).collect()
 }
 
-fn one_id(ids: BTreeSet<u64>) -> BTreeSet<u64> {
+fn one_id(ids: VariableIDSet) -> VariableIDSet {
     ids.into_iter().take(1).collect()
 }
 
