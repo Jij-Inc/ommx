@@ -190,17 +190,3 @@ mod v1_ext {
     mod sample_set;
     mod state;
 }
-
-/// Convert `fnv::FnvHashMap` to `std::collections::HashMap`
-pub(crate) trait FnvHashMapExt {
-    type Key;
-    type Value;
-    fn to_std(&self) -> std::collections::HashMap<Self::Key, Self::Value>;
-}
-impl<K: Eq + std::hash::Hash + Clone, V: Clone> FnvHashMapExt for fnv::FnvHashMap<K, V> {
-    type Key = K;
-    type Value = V;
-    fn to_std(&self) -> std::collections::HashMap<Self::Key, Self::Value> {
-        self.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
-    }
-}

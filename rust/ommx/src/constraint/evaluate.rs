@@ -1,9 +1,6 @@
 use super::*;
-use crate::{
-    v1::{EvaluatedConstraint, SampledConstraint},
-    ATol, Evaluate, FnvHashMapExt, VariableIDSet,
-};
-use std::collections::HashMap;
+use crate::{ATol, Evaluate, VariableIDSet};
+use fnv::FnvHashMap;
 
 impl Evaluate for Constraint {
     type Output = EvaluatedConstraint;
@@ -21,19 +18,25 @@ impl Evaluate for Constraint {
             .into_iter()
             .map(|id| id.into_inner())
             .collect();
-        Ok(EvaluatedConstraint {
-            id: self.id.into_inner(),
-            equality: self.equality.into(),
-            evaluated_value,
-            used_decision_variable_ids,
+        
+        let metadata = ConstraintMetadata {
+            id: self.id,
+            equality: self.equality,
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
-            parameters: self.parameters.to_std(),
+            parameters: self.parameters.clone(),
             description: self.description.clone(),
-            dual_variable: None,
+            used_decision_variable_ids,
             removed_reason: None,
-            removed_reason_parameters: Default::default(),
-        })
+            removed_reason_parameters: FnvHashMap::default(),
+        };
+        
+        let core = EvaluatedConstraintCore {
+            evaluated_value,
+            dual_variable: None,
+        };
+        
+        Ok(EvaluatedConstraint { metadata, core })
     }
 
     fn evaluate_samples(
@@ -42,30 +45,43 @@ impl Evaluate for Constraint {
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated_values = self.function.evaluate_samples(samples, atol)?;
-        let feasible: HashMap<u64, bool> = evaluated_values
+        
+        // Convert v1::SampledValues to Sampled<EvaluatedConstraintCore>
+        let sampled_values: crate::Sampled<f64> = evaluated_values.try_into()?;
+        let cores = sampled_values.map(|evaluated_value| EvaluatedConstraintCore {
+            evaluated_value,
+            dual_variable: None,
+        });
+        
+        let feasible: FnvHashMap<u64, bool> = cores
             .iter()
-            .map(|(sample_id, value)| match self.equality {
-                Equality::EqualToZero => (*sample_id, value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => (*sample_id, *value < *atol),
+            .map(|(sample_id, core)| match self.equality {
+                Equality::EqualToZero => (sample_id.into_inner(), core.evaluated_value.abs() < *atol),
+                Equality::LessThanOrEqualToZero => (sample_id.into_inner(), core.evaluated_value < *atol),
             })
             .collect();
-        Ok(SampledConstraint {
-            id: self.id.into_inner(),
-            evaluated_values: Some(evaluated_values),
+        
+        let metadata = ConstraintMetadata {
+            id: self.id,
+            equality: self.equality,
+            name: self.name.clone(),
+            subscripts: self.subscripts.clone(),
+            parameters: self.parameters.clone(),
+            description: self.description.clone(),
             used_decision_variable_ids: self
                 .function
                 .required_ids()
                 .into_iter()
                 .map(|id| id.into_inner())
                 .collect(),
-            name: self.name.clone(),
-            subscripts: self.subscripts.clone(),
-            parameters: self.parameters.to_std(),
-            description: self.description.clone(),
-            equality: self.equality.into(),
-            feasible,
             removed_reason: None,
-            removed_reason_parameters: Default::default(),
+            removed_reason_parameters: FnvHashMap::default(),
+        };
+        
+        Ok(SampledConstraint {
+            metadata,
+            cores,
+            feasible,
         })
     }
 
@@ -87,10 +103,14 @@ impl Evaluate for RemovedConstraint {
     type SampledOutput = SampledConstraint;
 
     fn evaluate(&self, solution: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
-        let mut evaluated = self.constraint.evaluate(solution, atol)?;
-        evaluated.removed_reason = Some(self.removed_reason.clone());
-        evaluated.removed_reason_parameters = self.removed_reason_parameters.to_std();
-        Ok(evaluated)
+        let evaluated = self.constraint.evaluate(solution, atol)?;
+        let mut metadata = evaluated.metadata;
+        metadata.removed_reason = Some(self.removed_reason.clone());
+        metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
+        Ok(EvaluatedConstraint {
+            metadata,
+            core: evaluated.core,
+        })
     }
 
     fn evaluate_samples(
@@ -98,10 +118,15 @@ impl Evaluate for RemovedConstraint {
         samples: &crate::v1::Samples,
         atol: ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let mut evaluated = self.constraint.evaluate_samples(samples, atol)?;
-        evaluated.removed_reason = Some(self.removed_reason.clone());
-        evaluated.removed_reason_parameters = self.removed_reason_parameters.to_std();
-        Ok(evaluated)
+        let evaluated = self.constraint.evaluate_samples(samples, atol)?;
+        let mut metadata = evaluated.metadata;
+        metadata.removed_reason = Some(self.removed_reason.clone());
+        metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
+        Ok(SampledConstraint {
+            metadata,
+            cores: evaluated.cores,
+            feasible: evaluated.feasible,
+        })
     }
 
     fn partial_evaluate(&mut self, state: &crate::v1::State, atol: ATol) -> anyhow::Result<()> {

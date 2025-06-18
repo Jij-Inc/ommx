@@ -24,7 +24,7 @@ impl Evaluate for Instance {
             if !evaluated.is_feasible(atol)? {
                 feasible_relaxed = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.push(evaluated.into());
         }
         let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
@@ -32,7 +32,7 @@ impl Evaluate for Instance {
             if !evaluated.is_feasible(atol)? {
                 feasible = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.push(evaluated.into());
         }
 
         let decision_variables = self
@@ -91,7 +91,7 @@ impl Evaluate for Instance {
                     feasible_relaxed.insert(sample_id, false);
                 }
             }
-            constraints.push(evaluated);
+            constraints.push(evaluated.into());
         }
         let mut feasible = feasible_relaxed.clone();
         for c in self.removed_constraints.values() {
@@ -101,7 +101,7 @@ impl Evaluate for Instance {
                     feasible.insert(sample_id, false);
                 }
             }
-            constraints.push(v);
+            constraints.push(v.into());
         }
 
         // Objective

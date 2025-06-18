@@ -39,6 +39,64 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 
 The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
 
+### Rust SDK v2 Design (In Progress)
+
+The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generated `ommx::v1::*` types:
+
+**Design Philosophy**:
+- Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
+- Improve type safety and reduce runtime errors
+- Enable efficient data structures for deduplication
+
+**Implemented Types**:
+- ✅ `Sampled<T>` - Efficient representation for `ommx::v1::Samples` with deduplication
+  - `SampleID(u64)` - Type-safe sample identifier
+  - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
+  - Efficient storage: multiple sample IDs can share the same data
+
+**Planned Design for Constraint Types**:
+
+```rust
+// Core evaluation data that varies per sample
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluatedConstraintCore {
+    pub evaluated_value: f64,
+    pub dual_variable: Option<f64>,
+}
+
+// Shared metadata across samples
+#[derive(Debug, Clone)]
+pub struct ConstraintMetadata {
+    pub id: ConstraintID,
+    pub equality: Equality,
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: HashMap<String, String>,
+    pub description: Option<String>,
+    pub used_decision_variable_ids: Vec<u64>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: HashMap<String, String>,
+}
+
+// Single evaluation result
+pub struct EvaluatedConstraint {
+    pub metadata: ConstraintMetadata,
+    pub core: EvaluatedConstraintCore,
+}
+
+// Multiple sample evaluation results with deduplication
+pub struct SampledConstraint {
+    pub metadata: ConstraintMetadata,
+    pub cores: Sampled<EvaluatedConstraintCore>,
+}
+```
+
+**Benefits**:
+- Shared `ConstraintMetadata` eliminates duplication between `EvaluatedConstraint` and `SampledConstraint`
+- `EvaluatedConstraintCore` can be reused in both single and sampled contexts
+- `Sampled<EvaluatedConstraintCore>` enables efficient storage when multiple samples have identical evaluation results
+- Clean separation between per-sample data and shared metadata
+
 **Core Features Completed**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
 - ✅ Instance class fully migrated to Rust backend with maintained API compatibility
