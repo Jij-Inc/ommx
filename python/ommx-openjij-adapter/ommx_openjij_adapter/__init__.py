@@ -10,21 +10,21 @@ import copy
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
     """
-    Sampling QUBO with Simulated Annealing (SA) by `openjij.SASampler <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler>`_
+    Sampling QUBO or HUBO with Simulated Annealing (SA) by `openjij.SASampler <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.SASampler>`_
     """
 
     ommx_instance: Instance
     """
-    ommx.v1.Instance representing a QUBO problem
+    ommx.v1.Instance representing a QUBO or HUBO problem
 
-    The input `instance` must be a QUBO (Quadratic Unconstrained Binary Optimization) problem, i.e.
+    The input `instance` must be a QUBO (Quadratic Unconstrained Binary Optimization) or HUBO (Higher-order Unconstrained Binary Optimization) problem, i.e.
 
-    - Every decision variables are binary
-    - No constraint
-    - Objective function is quadratic
+    - All decision variables are binary
+    - No constraints
+    - Objective function is quadratic (QUBO) or higher (HUBO).
     - Minimization problem
 
-    You can convert an instance to QUBO via :meth:`ommx.v1.Instance.penalty_method` or other corresponding method.
+    You can convert an instance to QUBO or HUBO via :meth:`ommx.v1.Instance.penalty_method` or other corresponding method.
     """
 
     beta_min: float | None = None
@@ -49,11 +49,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     """ seed for Monte Carlo algorithm """
 
     uniform_penalty_weight: Optional[float] = None
-    """ Weight for uniform penalty, passed to ``Instance.to_qubo`` """
+    """ Weight for uniform penalty, passed to ``Instance.to_qubo`` or ``Instance.to_hubo`` """
     penalty_weights: dict[int, float] = {}
-    """ Penalty weights for each constraint, passed to ``Instance.to_qubo`` """
+    """ Penalty weights for each constraint, passed to ``Instance.to_qubo`` or ``Instance.to_hubo`` """
     inequality_integer_slack_max_range: int = 32
-    """ Max range for integer slack variables in inequality constraints, passed to ``Instance.to_qubo`` """
+    """ Max range for integer slack variables in inequality constraints, passed to ``Instance.to_qubo`` or ``Instance.to_hubo`` """
 
     @classmethod
     def sample(
@@ -139,30 +139,53 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         return decode_to_samples(data)
 
     @property
-    def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.to_qubo(
-            uniform_penalty_weight=self.uniform_penalty_weight,
-            penalty_weights=self.penalty_weights,
-            inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
-        )
-        return qubo
+    def sampler_input(self) -> dict[tuple[int, ...], float]:
+        if self.ommx_instance.objective.degree() > 2:
+            hubo, _offset = self.ommx_instance.to_hubo(
+                uniform_penalty_weight=self.uniform_penalty_weight,
+                penalty_weights=self.penalty_weights,
+                inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
+            )
+            return hubo
+        else:
+            qubo, _offset = self.ommx_instance.to_qubo(
+                uniform_penalty_weight=self.uniform_penalty_weight,
+                penalty_weights=self.penalty_weights,
+                inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
+            )
+            return qubo
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
+        degree = self.ommx_instance.objective.degree()
         qubo = self.sampler_input
-        return sampler.sample_qubo(
-            qubo,  # type: ignore
-            beta_min=self.beta_min,
-            beta_max=self.beta_max,
-            num_sweeps=self.num_sweeps,
-            num_reads=self.num_reads,
-            schedule=self.schedule,
-            initial_state=self.initial_state,
-            updater=self.updater,
-            sparse=self.sparse,
-            reinitialize_state=self.reinitialize_state,
-            seed=self.seed,
-        )
+        if degree > 2:
+            return sampler.sample_hubo(
+                qubo,  # type: ignore
+                beta_min=self.beta_min,
+                beta_max=self.beta_max,
+                # maintaining default parameters in openjij impl if None passed
+                num_sweeps=self.num_sweeps or 1000,
+                num_reads=self.num_reads or 1,
+                num_threads=self.num_threads or 1,
+                updater=self.updater or "METROPOLIS",
+                seed=self.seed,
+            )
+
+        else:
+            return sampler.sample_qubo(
+                qubo,  # type: ignore
+                beta_min=self.beta_min,
+                beta_max=self.beta_max,
+                num_sweeps=self.num_sweeps,
+                num_reads=self.num_reads,
+                schedule=self.schedule,
+                initial_state=self.initial_state,
+                updater=self.updater,
+                sparse=self.sparse,
+                reinitialize_state=self.reinitialize_state,
+                seed=self.seed,
+            )
 
 
 @deprecated("Renamed to `decode_to_samples`")
