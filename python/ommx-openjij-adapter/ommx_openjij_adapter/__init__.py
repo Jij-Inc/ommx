@@ -36,15 +36,15 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     num_reads: int | None = None
     """ number of reads """
     schedule: list | None = None
-    """ list of inverse temperature """
+    """ list of inverse temperature (parameter only used if problem is QUBO)"""
     initial_state: list | dict | None = None
-    """ initial state """
+    """ initial state (parameter only used if problem is QUBO)"""
     updater: str | None = None
     """ updater algorithm """
     sparse: bool | None = None
-    """ use sparse matrix or not """
+    """ use sparse matrix or not (parameter only used if problem is QUBO)"""
     reinitialize_state: bool | None = None
-    """ if true reinitialize state for each run """
+    """ if true reinitialize state for each run (parameter only used if problem is QUBO)"""
     seed: int | None = None
     """ seed for Monte Carlo algorithm """
 
@@ -158,10 +158,11 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
         degree = self.ommx_instance.objective.degree()
-        qubo = self.sampler_input
+        input = self.sampler_input
         if degree > 2:
             return sampler.sample_hubo(
-                qubo,  # type: ignore
+                input,  # type: ignore
+                vartype="BINARY",
                 beta_min=self.beta_min,
                 beta_max=self.beta_max,
                 # maintaining default parameters in openjij impl if None passed
@@ -173,7 +174,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
         else:
             return sampler.sample_qubo(
-                qubo,  # type: ignore
+                input,  # type: ignore
                 beta_min=self.beta_min,
                 beta_max=self.beta_max,
                 num_sweeps=self.num_sweeps,
