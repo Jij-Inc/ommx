@@ -40,7 +40,7 @@ pub struct DuplicatedSampleIDError {
 #[derive(Debug, thiserror::Error)]
 #[error("Unknown sample ID: {id:?}")]
 pub struct UnknownSampleIDError {
-    id: SampleID,
+    pub id: SampleID,
 }
 
 impl<T> Sampled<T> {

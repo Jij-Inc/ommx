@@ -137,14 +137,12 @@ impl SampleSet {
     }
 
     /// Get a specific solution by sample ID
-    pub fn get(&self, sample_id: crate::SampleID) -> Result<Solution, Box<dyn std::error::Error>> {
+    pub fn get(&self, sample_id: crate::SampleID) -> Result<Solution, crate::UnknownSampleIDError> {
         // Get objective value
         let objective = if let Some(objectives) = &self.objectives {
-            *objectives
-                .get(sample_id)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+            *objectives.get(sample_id)?
         } else {
-            return Err("No objectives found in sample set".into());
+            return Err(crate::UnknownSampleIDError { id: sample_id });
         };
 
         // Get state from decision variables
@@ -155,10 +153,8 @@ impl SampleSet {
                 let sampled: crate::Sampled<f64> = samples
                     .clone()
                     .try_into()
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-                let value = *sampled
-                    .get(sample_id)
-                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+                    .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
+                let value = *sampled.get(sample_id)?;
                 if let Some(decision_variable) = &dv.decision_variable {
                     state_entries.insert(decision_variable.id, value);
                 }
@@ -184,8 +180,7 @@ impl SampleSet {
         // Get evaluated constraints
         let evaluated_constraints: Result<Vec<_>, _> =
             self.constraints.iter().map(|c| c.get(sample_id)).collect();
-        let evaluated_constraints =
-            evaluated_constraints.map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let evaluated_constraints = evaluated_constraints?;
 
         // Get feasibility
         let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);

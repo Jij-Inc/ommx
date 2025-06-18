@@ -577,8 +577,7 @@ impl SampleSet {
     }
 
     pub fn get(&self, sample_id: u64) -> Result<Solution> {
-        let solution = self.0.get(ommx::SampleID::from(sample_id))
-            .map_err(|e| anyhow::anyhow!("Failed to get solution: {}", e))?;
+        let solution = self.0.get(ommx::SampleID::from(sample_id))?;
         Ok(Solution(solution))
     }
 
@@ -626,8 +625,7 @@ impl SampleSet {
         // For now, just return the first feasible solution
         // TODO: Implement proper objective-based selection
         let best_id = feasible_samples[0];
-        let solution = self.0.get(ommx::SampleID::from(best_id))
-            .map_err(|e| anyhow::anyhow!("Failed to get best feasible solution: {}", e))?;
+        let solution = self.0.get(ommx::SampleID::from(best_id))?;
         Ok(Solution(solution))
     }
 
