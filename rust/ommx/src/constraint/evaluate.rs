@@ -18,7 +18,7 @@ impl Evaluate for Constraint {
             .into_iter()
             .map(|id| id.into_inner())
             .collect();
-        
+
         let metadata = ConstraintMetadata {
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
@@ -28,11 +28,11 @@ impl Evaluate for Constraint {
             removed_reason: None,
             removed_reason_parameters: FnvHashMap::default(),
         };
-        
-        Ok(EvaluatedConstraint { 
+
+        Ok(EvaluatedConstraint {
             id: self.id,
             equality: self.equality,
-            metadata, 
+            metadata,
             evaluated_value,
             dual_variable: None,
         })
@@ -44,18 +44,20 @@ impl Evaluate for Constraint {
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated_values_v1 = self.function.evaluate_samples(samples, atol)?;
-        
+
         // Convert v1::SampledValues to Sampled<f64>
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
-        
+
         let feasible: FnvHashMap<u64, bool> = evaluated_values
             .iter()
             .map(|(sample_id, evaluated_value)| match self.equality {
                 Equality::EqualToZero => (sample_id.into_inner(), evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => (sample_id.into_inner(), *evaluated_value < *atol),
+                Equality::LessThanOrEqualToZero => {
+                    (sample_id.into_inner(), *evaluated_value < *atol)
+                }
             })
             .collect();
-        
+
         let metadata = ConstraintMetadata {
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
@@ -70,7 +72,7 @@ impl Evaluate for Constraint {
             removed_reason: None,
             removed_reason_parameters: FnvHashMap::default(),
         };
-        
+
         Ok(SampledConstraint {
             id: self.id,
             equality: self.equality,

@@ -131,9 +131,9 @@ impl Parse for v1::EvaluatedConstraint {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.EvaluatedConstraint";
-        
+
         let equality = self.equality().parse_as(&(), message, "equality")?;
-        
+
         let metadata = ConstraintMetadata {
             name: self.name,
             subscripts: self.subscripts,
@@ -143,7 +143,7 @@ impl Parse for v1::EvaluatedConstraint {
             removed_reason: self.removed_reason,
             removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         };
-        
+
         Ok(EvaluatedConstraint {
             id: ConstraintID(self.id),
             equality,
@@ -160,9 +160,9 @@ impl Parse for v1::SampledConstraint {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampledConstraint";
-        
+
         let equality = self.equality().parse_as(&(), message, "equality")?;
-        
+
         // Parse evaluated_values
         let evaluated_values = self
             .evaluated_values
@@ -171,7 +171,7 @@ impl Parse for v1::SampledConstraint {
                 field: "evaluated_values",
             })?
             .parse_as(&(), message, "evaluated_values")?;
-        
+
         let metadata = ConstraintMetadata {
             name: self.name,
             subscripts: self.subscripts,
@@ -181,7 +181,7 @@ impl Parse for v1::SampledConstraint {
             removed_reason: self.removed_reason,
             removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         };
-        
+
         Ok(SampledConstraint {
             id: ConstraintID(self.id),
             equality,
@@ -228,7 +228,10 @@ mod tests {
             evaluated_value: 1.5,
             used_decision_variable_ids: vec![1, 2, 3],
             subscripts: vec![10, 20],
-            parameters: [("key1".to_string(), "value1".to_string())].iter().cloned().collect(),
+            parameters: [("key1".to_string(), "value1".to_string())]
+                .iter()
+                .cloned()
+                .collect(),
             name: Some("test_constraint".to_string()),
             description: Some("A test constraint".to_string()),
             dual_variable: Some(0.5),
@@ -237,13 +240,16 @@ mod tests {
         };
 
         let parsed: EvaluatedConstraint = v1_constraint.parse(&()).unwrap();
-        
+
         assert_eq!(parsed.id, ConstraintID(42));
         assert_eq!(parsed.equality, Equality::EqualToZero);
         assert_eq!(parsed.evaluated_value, 1.5);
         assert_eq!(parsed.dual_variable, Some(0.5));
         assert_eq!(parsed.metadata.name, Some("test_constraint".to_string()));
-        assert_eq!(parsed.metadata.description, Some("A test constraint".to_string()));
+        assert_eq!(
+            parsed.metadata.description,
+            Some("A test constraint".to_string())
+        );
         assert_eq!(parsed.metadata.used_decision_variable_ids, vec![1, 2, 3]);
         assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
     }

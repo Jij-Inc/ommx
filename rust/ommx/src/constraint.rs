@@ -5,7 +5,7 @@ mod parse;
 
 pub use arbitrary::*;
 
-use crate::{Function, Sampled, SampleID, sampled::UnknownSampleIDError};
+use crate::{sampled::UnknownSampleIDError, Function, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -144,7 +144,11 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
             description: constraint.metadata.description,
             dual_variable: constraint.dual_variable,
             removed_reason: constraint.metadata.removed_reason,
-            removed_reason_parameters: constraint.metadata.removed_reason_parameters.into_iter().collect(),
+            removed_reason_parameters: constraint
+                .metadata
+                .removed_reason_parameters
+                .into_iter()
+                .collect(),
         }
     }
 }
@@ -153,11 +157,13 @@ impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
     pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedConstraint, UnknownSampleIDError> {
         let evaluated_value = *self.evaluated_values.get(sample_id)?;
-        
-        let dual_variable = self.dual_variables.as_ref()
+
+        let dual_variable = self
+            .dual_variables
+            .as_ref()
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
-        
+
         Ok(EvaluatedConstraint {
             id: self.id,
             equality: self.equality,
@@ -168,9 +174,13 @@ impl SampledConstraint {
     }
 
     /// Check feasibility for a specific sample
-    pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Result<bool, UnknownSampleIDError> {
+    pub fn is_feasible(
+        &self,
+        sample_id: SampleID,
+        atol: crate::ATol,
+    ) -> Result<bool, UnknownSampleIDError> {
         let evaluated_value = *self.evaluated_values.get(sample_id)?;
-        
+
         Ok(match self.equality {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => evaluated_value < *atol,
@@ -186,7 +196,11 @@ impl SampledConstraint {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
-                if feasible { Some(*sample_id) } else { None }
+                if feasible {
+                    Some(*sample_id)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -200,7 +214,11 @@ impl SampledConstraint {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
-                if !feasible { Some(*sample_id) } else { None }
+                if !feasible {
+                    Some(*sample_id)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -210,7 +228,7 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
     fn from(constraint: SampledConstraint) -> Self {
         // Convert Sampled<f64> to v1::SampledValues
         let evaluated_values: crate::v1::SampledValues = constraint.evaluated_values.into();
-        
+
         crate::v1::SampledConstraint {
             id: constraint.id.into_inner(),
             equality: constraint.equality.into(),
@@ -219,7 +237,11 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             parameters: constraint.metadata.parameters.into_iter().collect(),
             description: constraint.metadata.description,
             removed_reason: constraint.metadata.removed_reason,
-            removed_reason_parameters: constraint.metadata.removed_reason_parameters.into_iter().collect(),
+            removed_reason_parameters: constraint
+                .metadata
+                .removed_reason_parameters
+                .into_iter()
+                .collect(),
             evaluated_values: Some(evaluated_values),
             used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
             feasible: constraint.feasible.into_iter().collect(),

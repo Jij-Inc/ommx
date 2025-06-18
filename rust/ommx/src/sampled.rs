@@ -104,7 +104,8 @@ impl<T> Sampled<T> {
 
     /// Get a reference to the value for a specific sample ID
     pub fn get(&self, sample_id: SampleID) -> Result<&T, UnknownSampleIDError> {
-        self.offsets.get(&sample_id)
+        self.offsets
+            .get(&sample_id)
             .map(|&offset| {
                 debug_assert!(offset < self.data.len());
                 &self.data[offset]
@@ -115,7 +116,8 @@ impl<T> Sampled<T> {
     /// Get a mutable reference to the value for a specific sample ID
     pub fn get_mut(&mut self, sample_id: SampleID) -> Result<&mut T, UnknownSampleIDError> {
         let sample_id_copy = sample_id; // Copy for error case
-        self.offsets.get(&sample_id)
+        self.offsets
+            .get(&sample_id)
             .map(|&offset| {
                 debug_assert!(offset < self.data.len());
                 &mut self.data[offset]
