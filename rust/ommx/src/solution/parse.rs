@@ -21,21 +21,18 @@ impl Parse for crate::v1::Solution {
         let feasible = self.feasible;
         let feasible_relaxed = self.feasible_relaxed.unwrap_or(feasible);
 
-        let metadata =
-            SolutionMetadata {
-                optimality: self.optimality.try_into().map_err(|_| {
-                    RawParseError::UnspecifiedEnum {
-                        enum_name: "ommx.v1.Optimality",
-                    }
-                })?,
-                relaxation: self.relaxation.try_into().map_err(|_| {
-                    RawParseError::UnspecifiedEnum {
-                        enum_name: "ommx.v1.Relaxation",
-                    }
-                })?,
-                #[allow(deprecated)]
-                feasible_unrelaxed: self.feasible_unrelaxed,
-            };
+        let metadata = SolutionMetadata {
+            optimality: self.optimality.try_into().map_err(|_| {
+                RawParseError::UnspecifiedEnum {
+                    enum_name: "ommx.v1.Optimality",
+                }
+            })?,
+            relaxation: self.relaxation.try_into().map_err(|_| {
+                RawParseError::UnspecifiedEnum {
+                    enum_name: "ommx.v1.Relaxation",
+                }
+            })?,
+        };
 
         Ok(Solution {
             state,
@@ -101,8 +98,8 @@ impl From<Solution> for crate::v1::Solution {
         let feasible_relaxed = Some(*solution.feasible_relaxed());
         let optimality = solution.metadata.optimality.into();
         let relaxation = solution.metadata.relaxation.into();
-        #[allow(deprecated)]
-        let feasible_unrelaxed = solution.metadata.feasible_unrelaxed;
+        // For backward compatibility, set feasible_unrelaxed to the same value as feasible
+        let feasible_unrelaxed = feasible;
 
         crate::v1::Solution {
             state: Some(state),
@@ -188,7 +185,6 @@ mod tests {
         assert_eq!(parsed.feasible_relaxed(), &true);
         assert_eq!(parsed.metadata.optimality, v1::Optimality::Optimal);
         assert_eq!(parsed.metadata.relaxation, v1::Relaxation::Unspecified);
-        assert_eq!(parsed.metadata.feasible_unrelaxed, false);
         assert_eq!(parsed.evaluated_constraints().len(), 1);
         assert_eq!(parsed.decision_variables().len(), 1);
 

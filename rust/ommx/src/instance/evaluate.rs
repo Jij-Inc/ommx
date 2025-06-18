@@ -50,7 +50,6 @@ impl Evaluate for Instance {
         let metadata = crate::SolutionMetadata {
             optimality: Optimality::Unspecified,
             relaxation: Relaxation::Unspecified,
-            feasible_unrelaxed: feasible,
         };
 
         Ok(crate::Solution::new(

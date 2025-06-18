@@ -9,7 +9,6 @@ use getset::Getters;
 pub struct SolutionMetadata {
     pub optimality: crate::v1::Optimality,
     pub relaxation: crate::v1::Relaxation,
-    pub feasible_unrelaxed: bool, // Deprecated but maintained for compatibility
 }
 
 /// Single solution result with data integrity guarantees
@@ -200,7 +199,6 @@ impl SampleSet {
         let metadata = crate::SolutionMetadata {
             optimality: crate::v1::Optimality::Unspecified,
             relaxation: crate::v1::Relaxation::Unspecified,
-            feasible_unrelaxed: feasible,
         };
 
         Ok(Solution::new(
