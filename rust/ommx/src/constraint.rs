@@ -149,22 +149,22 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
 
 impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
-    pub fn get(&self, sample_id: u64) -> Option<EvaluatedConstraint> {
-        let target_id = SampleID::from(sample_id);
-        self.evaluated_values.iter()
-            .find(|(id, _)| **id == target_id)
-            .map(|(_, evaluated_value)| {
-                let dual_variable = self.dual_variables.as_ref()
-                    .and_then(|duals| duals.iter()
-                        .find(|(id, _)| **id == target_id)
-                        .map(|(_, dual)| *dual));
-                
-                EvaluatedConstraint {
-                    metadata: self.metadata.clone(),
-                    evaluated_value: *evaluated_value,
-                    dual_variable,
-                }
-            })
+    pub fn get(&self, sample_id: SampleID) -> anyhow::Result<EvaluatedConstraint> {
+        let evaluated_value = self.evaluated_values.iter()
+            .find(|(id, _)| **id == sample_id)
+            .map(|(_, value)| *value)
+            .ok_or_else(|| anyhow::anyhow!("Sample ID {} not found in constraint {}", sample_id.into_inner(), self.metadata.id.into_inner()))?;
+        
+        let dual_variable = self.dual_variables.as_ref()
+            .and_then(|duals| duals.iter()
+                .find(|(id, _)| **id == sample_id)
+                .map(|(_, dual)| *dual));
+        
+        Ok(EvaluatedConstraint {
+            metadata: self.metadata.clone(),
+            evaluated_value,
+            dual_variable,
+        })
     }
 
     /// Check feasibility for all samples
