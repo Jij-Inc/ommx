@@ -5,7 +5,7 @@ mod parse;
 
 pub use arbitrary::*;
 
-use crate::{Function, Sampled, SampleID};
+use crate::{Function, Sampled, SampleID, sampled::UnknownSampleIDError};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 
@@ -149,16 +149,12 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
 
 impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
-    pub fn get(&self, sample_id: SampleID) -> anyhow::Result<EvaluatedConstraint> {
-        let evaluated_value = self.evaluated_values.iter()
-            .find(|(id, _)| **id == sample_id)
-            .map(|(_, value)| *value)
-            .ok_or_else(|| anyhow::anyhow!("Sample ID {} not found in constraint {}", sample_id.into_inner(), self.metadata.id.into_inner()))?;
+    pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedConstraint, UnknownSampleIDError> {
+        let evaluated_value = *self.evaluated_values.get(sample_id)?;
         
         let dual_variable = self.dual_variables.as_ref()
-            .and_then(|duals| duals.iter()
-                .find(|(id, _)| **id == sample_id)
-                .map(|(_, dual)| *dual));
+            .and_then(|duals| duals.get(sample_id).ok())
+            .copied();
         
         Ok(EvaluatedConstraint {
             metadata: self.metadata.clone(),
@@ -168,11 +164,8 @@ impl SampledConstraint {
     }
 
     /// Check feasibility for a specific sample
-    pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> anyhow::Result<bool> {
-        let evaluated_value = self.evaluated_values.iter()
-            .find(|(id, _)| **id == sample_id)
-            .map(|(_, value)| *value)
-            .ok_or_else(|| anyhow::anyhow!("Sample ID {} not found in constraint {}", sample_id.into_inner(), self.metadata.id.into_inner()))?;
+    pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Result<bool, UnknownSampleIDError> {
+        let evaluated_value = *self.evaluated_values.get(sample_id)?;
         
         Ok(match self.metadata.equality {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
