@@ -18,8 +18,19 @@ impl Parse for crate::v1::Solution {
         let evaluated_constraints = evaluated_constraints?;
 
         let decision_variables = self.decision_variables;
-        let feasible = self.feasible;
-        let feasible_relaxed = self.feasible_relaxed.unwrap_or(feasible);
+        let (feasible, feasible_relaxed) = match self.feasible_relaxed {
+            Some(feasible_relaxed) => {
+                // New format since OMMX Python SDK 1.7.0
+                // https://github.com/Jij-Inc/ommx/pull/280
+                (self.feasible, feasible_relaxed)
+            }
+            None => {
+                // Before OMMX Python SDK 1.7.0, the `feasible` field means current `feasible_relaxed`,
+                // and the deprecated `feasible_unrelaxed` is the same as `feasible`.
+                #[allow(deprecated)]
+                (self.feasible_unrelaxed, self.feasible)
+            }
+        };
 
         let optimality =
             self.optimality
@@ -179,8 +190,7 @@ mod tests {
             feasible_relaxed: Some(true),
             optimality: v1::Optimality::Optimal as i32,
             relaxation: v1::Relaxation::Unspecified as i32,
-            #[allow(deprecated)]
-            feasible_unrelaxed: false,
+            ..Default::default()
         };
 
         let parsed: Solution = v1_solution.parse(&()).unwrap();
