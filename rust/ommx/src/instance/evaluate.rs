@@ -1,14 +1,14 @@
 use super::*;
 use crate::{
-    v1::{Optimality, Relaxation, SampleSet, SampledDecisionVariable, Solution},
+    v1::{Optimality, Relaxation, SampledDecisionVariable},
     ATol, Evaluate, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
+use fnv::FnvHashMap;
 
 impl Evaluate for Instance {
-    type Output = Solution;
-    type SampledOutput = SampleSet;
+    type Output = crate::Solution;
+    type SampledOutput = crate::SampleSet;
 
     fn evaluate(&self, state: &v1::State, atol: ATol) -> Result<Self::Output> {
         let state = self
@@ -24,7 +24,7 @@ impl Evaluate for Instance {
             if !*evaluated.feasible() {
                 feasible_relaxed = false;
             }
-            evaluated_constraints.push(evaluated.into());
+            evaluated_constraints.push(evaluated);
         }
         let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
@@ -32,7 +32,7 @@ impl Evaluate for Instance {
             if !*evaluated.feasible() {
                 feasible = false;
             }
-            evaluated_constraints.push(evaluated.into());
+            evaluated_constraints.push(evaluated);
         }
 
         let decision_variables = self
@@ -47,22 +47,21 @@ impl Evaluate for Instance {
             })
             .collect();
 
-        #[allow(deprecated)]
-        Ok(Solution {
-            state: Some(state.clone()),
+        let metadata = crate::SolutionMetadata {
+            optimality: Optimality::Unspecified,
+            relaxation: Relaxation::Unspecified,
+            feasible_unrelaxed: feasible,
+        };
+
+        Ok(crate::Solution::new(
+            state,
             objective,
             evaluated_constraints,
             decision_variables,
             feasible,
-            feasible_relaxed: Some(feasible_relaxed),
-            // feasible_unrelaxed is deprecated, but we need to keep it for backward compatibility
-            feasible_unrelaxed: feasible,
-            // Optimality is only detectable in the context of a solver, and `State` does not store this information.
-            optimality: Optimality::Unspecified as i32,
-            // This field means that the solver relaxes the problem for some reason, and returns a solution for the relaxed problem.
-            // The `removed_constraints` field do not relate to this. This is purely a solver-specific field.
-            relaxation: Relaxation::Unspecified as i32,
-        })
+            feasible_relaxed,
+            metadata,
+        ))
     }
 
     fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
@@ -79,7 +78,7 @@ impl Evaluate for Instance {
             samples
         };
 
-        let mut feasible_relaxed: HashMap<u64, bool> =
+        let mut feasible_relaxed: FnvHashMap<u64, bool> =
             samples.ids().map(|id| (*id, true)).collect();
 
         // Constraints
@@ -89,7 +88,7 @@ impl Evaluate for Instance {
             for sample_id in evaluated.infeasible_ids(atol) {
                 feasible_relaxed.insert(sample_id.into_inner(), false);
             }
-            constraints.push(evaluated.into());
+            constraints.push(evaluated);
         }
         let mut feasible = feasible_relaxed.clone();
         for c in self.removed_constraints.values() {
@@ -97,7 +96,7 @@ impl Evaluate for Instance {
             for sample_id in v.infeasible_ids(atol) {
                 feasible.insert(sample_id.into_inner(), false);
             }
-            constraints.push(v.into());
+            constraints.push(v);
         }
 
         // Objective
@@ -116,15 +115,14 @@ impl Evaluate for Instance {
             })
             .collect::<Result<_>>()?;
 
-        Ok(SampleSet {
+        Ok(crate::SampleSet::new(
             decision_variables,
-            objectives: Some(objectives),
+            Some(objectives.try_into()?),
             constraints,
             feasible_relaxed,
             feasible,
-            sense: self.sense.into(),
-            ..Default::default()
-        })
+            self.sense,
+        ))
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
@@ -170,7 +168,7 @@ mod tests {
             let analysis = instance.analyze_decision_variables();
             let solution = instance.evaluate(&state, ATol::default()).unwrap();
             // Must be populated
-            let ids: VariableIDSet = solution.state.unwrap().entries.keys().map(|id| VariableID::from(*id)).collect();
+            let ids: VariableIDSet = solution.state().entries.keys().map(|id| VariableID::from(*id)).collect();
             prop_assert_eq!(&ids, analysis.all());
         }
 
@@ -188,7 +186,7 @@ mod tests {
             let s1 = instance.evaluate(&state, ATol::default()).unwrap();
             instance.partial_evaluate(&u, ATol::default()).unwrap();
             let s2 = instance.evaluate(&v, ATol::default()).unwrap();
-            prop_assert!(s1.state.unwrap().abs_diff_eq(&s2.state.unwrap(), ATol::default()));
+            prop_assert!(s1.state().abs_diff_eq(s2.state(), ATol::default()));
         }
     }
 }

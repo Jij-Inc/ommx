@@ -170,6 +170,7 @@ pub use instance::*;
 pub use parse::*;
 pub use polynomial_base::*;
 pub use sampled::*;
+pub use solution::*;
 pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files
@@ -188,5 +189,6 @@ mod v1_ext {
     mod polynomial;
     mod quadratic;
     mod sample_set;
+    mod solution;
     mod state;
 }
