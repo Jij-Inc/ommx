@@ -69,6 +69,8 @@ class Linear(AsConstraint):
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
 
+**⚠️ Important**: All `task` commands must be run from the project root directory. The task command searches for `Taskfile.yml` from the current directory, so available commands will vary depending on your current location. Always ensure you are in the repository root before running any task commands.
+
 ### Essential Commands
 
 **Setup and Dependencies:**
@@ -84,20 +86,25 @@ task python:upgrade
 ```bash
 # Run all tests
 task python:test        # Python tests (includes linting, type checking, and pytest)
-task rust:test         # Rust tests only
-task python:test-ci    # CI mode (no pyright for main ommx package)
+task rust:test          # Rust tests only
+task python:test-ci     # CI mode (no pyright for main ommx package)
 ```
 
 **Code Quality:**
 ```bash
-# Format Python code
+# Format all code (Python and Rust)
+task format
+
+# Python formatting
 task python:format
 
 # Python linting
 task python:lint         # Run ruff check on all Python packages
 
-# Rust linting
-task rust:clippy
+# Rust checks
+task rust:check         # Run cargo check
+task rust:clippy        # Run clippy linting
+task rust:format        # Format Rust code
 
 # Type checking (Python)
 task python:ommx:pyright
@@ -106,26 +113,69 @@ task python:ommx:pyright
 **Building and Documentation:**
 ```bash
 # Generate code from protobuf
-task proto
+task proto              # Generate all (Rust and Python)
+task proto:python       # Generate Python code only
+task proto:rust         # Generate Rust code only
+task proto:doc          # Generate documentation from protobuf
 
 # Build documentation
-task api_reference     # Python API docs
-task rust:doc         # Rust docs
-task book_en          # English Jupyter Book
-task book_ja          # Japanese Jupyter Book
+task api_reference      # Python API docs (build and open)
+task rust:doc           # Rust docs
+task book_en            # English Jupyter Book (build and open)
+task book_ja            # Japanese Jupyter Book (build and open)
+
+# Additional documentation commands
+task api_reference:build       # Build Python API docs only
+task api_reference:open        # Open Python API docs
+task book_en:build            # Build English book only
+task book_en:open             # Open English book
+task book_en:watch            # Watch and rebuild English book
+task book_ja:build            # Build Japanese book only
+task book_ja:open             # Open Japanese book
+task book_ja:watch            # Watch and rebuild Japanese book
+```
+
+**Other Useful Commands:**
+```bash
+# Python benchmarks
+task python:bench              # Run benchmarks for OMMX Python SDK
+
+# Generate stubs for Rust extension
+task python:stubgen
+
+# Version management
+task python:set-version        # Set version for all Python packages
+task rust:set-version          # Set version for Rust SDK
+
+# Codspeed benchmarks
+task codspeed:list            # List all Codspeed workflows
+task codspeed:trigger         # Trigger GitHub Actions workflow
+
+# Generate LLMs.txt
+task python:generate-llms-txt
 ```
 
 ### Package-Specific Commands
 
 **Core OMMX:**
 - `task python:ommx:test` - Test main Python package
-- `task python:ommx:pytest` - Run pytest only (no type checking)
+- `task python:ommx:test-ci` - Test without pyright (CI mode)
+- `task python:ommx:pytest` - Run pytest only
+- `task python:ommx:pyright` - Type check only
+- `task python:ommx:lint` - Lint check only
+- `task python:ommx:bench` - Run benchmarks
 
 **Adapters:**
 - `task python:ommx-openjij-adapter:test`
 - `task python:ommx-python-mip-adapter:test`
 - `task python:ommx-pyscipopt-adapter:test`
 - `task python:ommx-highs-adapter:test`
+
+Each adapter also has individual commands for:
+- `:lint` - Run ruff check
+- `:pyright` - Type checking
+- `:pytest` - Run tests
+- `:markdown-code-runner` - Run markdown code examples (Python-MIP, PySCIPOpt, HiGHS only)
 
 ## Testing Strategy
 
@@ -212,9 +262,11 @@ from ommx.v1.solution_pb2 import Optimality
 - **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API instead
 
 ### 📁 Directory Guidelines  
-- Most tasks should be performed from the repository root directory
+- **All tasks MUST be performed from the repository root directory**
+- Task commands require being in the root directory to access the main `Taskfile.yml`
 - Return to root after completing any subtasks
 - Use absolute paths when referencing files across packages
+- Never use `cd` to navigate to subdirectories when running task commands
 
 ### 🧪 Testing Guidelines
 - Add new Python test code to python/ommx-tests/tests directory only
