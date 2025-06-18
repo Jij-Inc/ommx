@@ -88,11 +88,9 @@ impl std::fmt::Display for RemovedConstraint {
     }
 }
 
-/// Shared metadata across samples
-#[derive(Debug, Clone, PartialEq)]
+/// Auxiliary metadata for constraints (excluding essential id and equality)
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConstraintMetadata {
-    pub id: ConstraintID,
-    pub equality: Equality,
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
@@ -105,6 +103,8 @@ pub struct ConstraintMetadata {
 /// Single evaluation result using the new design
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedConstraint {
+    pub id: ConstraintID,
+    pub equality: Equality,
     pub metadata: ConstraintMetadata,
     pub evaluated_value: f64,
     pub dual_variable: Option<f64>,
@@ -113,6 +113,8 @@ pub struct EvaluatedConstraint {
 /// Multiple sample evaluation results with deduplication
 #[derive(Debug, Clone)]
 pub struct SampledConstraint {
+    pub id: ConstraintID,
+    pub equality: Equality,
     pub metadata: ConstraintMetadata,
     pub evaluated_values: Sampled<f64>,
     pub dual_variables: Option<Sampled<f64>>,
@@ -122,7 +124,7 @@ pub struct SampledConstraint {
 impl EvaluatedConstraint {
     /// Check if this constraint is feasible given the tolerance
     pub fn is_feasible(&self, atol: crate::ATol) -> bool {
-        match self.metadata.equality {
+        match self.equality {
             Equality::EqualToZero => self.evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => self.evaluated_value < *atol,
         }
@@ -132,8 +134,8 @@ impl EvaluatedConstraint {
 impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
     fn from(constraint: EvaluatedConstraint) -> Self {
         crate::v1::EvaluatedConstraint {
-            id: constraint.metadata.id.into_inner(),
-            equality: constraint.metadata.equality.into(),
+            id: constraint.id.into_inner(),
+            equality: constraint.equality.into(),
             evaluated_value: constraint.evaluated_value,
             used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
             subscripts: constraint.metadata.subscripts,
@@ -157,6 +159,8 @@ impl SampledConstraint {
             .copied();
         
         Ok(EvaluatedConstraint {
+            id: self.id,
+            equality: self.equality,
             metadata: self.metadata.clone(),
             evaluated_value,
             dual_variable,
@@ -167,7 +171,7 @@ impl SampledConstraint {
     pub fn is_feasible(&self, sample_id: SampleID, atol: crate::ATol) -> Result<bool, UnknownSampleIDError> {
         let evaluated_value = *self.evaluated_values.get(sample_id)?;
         
-        Ok(match self.metadata.equality {
+        Ok(match self.equality {
             Equality::EqualToZero => evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => evaluated_value < *atol,
         })
@@ -178,7 +182,7 @@ impl SampledConstraint {
         self.evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match self.metadata.equality {
+                let feasible = match self.equality {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
@@ -192,7 +196,7 @@ impl SampledConstraint {
         self.evaluated_values
             .iter()
             .filter_map(|(sample_id, evaluated_value)| {
-                let feasible = match self.metadata.equality {
+                let feasible = match self.equality {
                     Equality::EqualToZero => evaluated_value.abs() < *atol,
                     Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
@@ -208,8 +212,8 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
         let evaluated_values: crate::v1::SampledValues = constraint.evaluated_values.into();
         
         crate::v1::SampledConstraint {
-            id: constraint.metadata.id.into_inner(),
-            equality: constraint.metadata.equality.into(),
+            id: constraint.id.into_inner(),
+            equality: constraint.equality.into(),
             name: constraint.metadata.name,
             subscripts: constraint.metadata.subscripts,
             parameters: constraint.metadata.parameters.into_iter().collect(),

@@ -20,8 +20,6 @@ impl Evaluate for Constraint {
             .collect();
         
         let metadata = ConstraintMetadata {
-            id: self.id,
-            equality: self.equality,
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.clone(),
@@ -32,6 +30,8 @@ impl Evaluate for Constraint {
         };
         
         Ok(EvaluatedConstraint { 
+            id: self.id,
+            equality: self.equality,
             metadata, 
             evaluated_value,
             dual_variable: None,
@@ -57,8 +57,6 @@ impl Evaluate for Constraint {
             .collect();
         
         let metadata = ConstraintMetadata {
-            id: self.id,
-            equality: self.equality,
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.clone(),
@@ -74,6 +72,8 @@ impl Evaluate for Constraint {
         };
         
         Ok(SampledConstraint {
+            id: self.id,
+            equality: self.equality,
             metadata,
             evaluated_values,
             dual_variables: None, // TODO: Support dual variables in the future
@@ -104,6 +104,8 @@ impl Evaluate for RemovedConstraint {
         metadata.removed_reason = Some(self.removed_reason.clone());
         metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(EvaluatedConstraint {
+            id: evaluated.id,
+            equality: evaluated.equality,
             metadata,
             evaluated_value: evaluated.evaluated_value,
             dual_variable: evaluated.dual_variable,
@@ -120,6 +122,8 @@ impl Evaluate for RemovedConstraint {
         metadata.removed_reason = Some(self.removed_reason.clone());
         metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(SampledConstraint {
+            id: evaluated.id,
+            equality: evaluated.equality,
             metadata,
             evaluated_values: evaluated.evaluated_values,
             dual_variables: evaluated.dual_variables,
