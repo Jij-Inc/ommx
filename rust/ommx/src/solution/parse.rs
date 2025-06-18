@@ -21,18 +21,19 @@ impl Parse for crate::v1::Solution {
         let feasible = self.feasible;
         let feasible_relaxed = self.feasible_relaxed.unwrap_or(feasible);
 
-        let metadata = SolutionMetadata {
-            optimality: self.optimality.try_into().map_err(|_| {
-                RawParseError::UnspecifiedEnum {
-                    enum_name: "ommx.v1.Optimality",
-                }
-            })?,
-            relaxation: self.relaxation.try_into().map_err(|_| {
-                RawParseError::UnspecifiedEnum {
-                    enum_name: "ommx.v1.Relaxation",
-                }
-            })?,
-        };
+        let metadata =
+            SolutionMetadata {
+                optimality: self.optimality.try_into().map_err(|_| {
+                    RawParseError::UnspecifiedEnum {
+                        enum_name: "ommx.v1.Optimality",
+                    }
+                })?,
+                relaxation: self.relaxation.try_into().map_err(|_| {
+                    RawParseError::UnspecifiedEnum {
+                        enum_name: "ommx.v1.Relaxation",
+                    }
+                })?,
+            };
 
         Ok(Solution {
             state,
