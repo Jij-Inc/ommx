@@ -108,6 +108,7 @@ pub struct EvaluatedConstraint {
     pub metadata: ConstraintMetadata,
     pub evaluated_value: f64,
     pub dual_variable: Option<f64>,
+    pub feasible: bool,
 }
 
 /// Multiple sample evaluation results with deduplication
@@ -122,8 +123,8 @@ pub struct SampledConstraint {
 }
 
 impl EvaluatedConstraint {
-    /// Check if this constraint is feasible given the tolerance
-    pub fn is_feasible(&self, atol: crate::ATol) -> bool {
+    /// Check if this constraint is feasible given a specific tolerance
+    pub fn is_feasible_with_tolerance(&self, atol: crate::ATol) -> bool {
         match self.equality {
             Equality::EqualToZero => self.evaluated_value.abs() < *atol,
             Equality::LessThanOrEqualToZero => self.evaluated_value < *atol,
@@ -164,12 +165,15 @@ impl SampledConstraint {
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
 
+        let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
+
         Ok(EvaluatedConstraint {
             id: self.id,
             equality: self.equality,
             metadata: self.metadata.clone(),
             evaluated_value,
             dual_variable,
+            feasible,
         })
     }
 

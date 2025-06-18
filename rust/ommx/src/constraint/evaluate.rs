@@ -29,12 +29,18 @@ impl Evaluate for Constraint {
             removed_reason_parameters: FnvHashMap::default(),
         };
 
+        let feasible = match self.equality {
+            Equality::EqualToZero => evaluated_value.abs() < *atol,
+            Equality::LessThanOrEqualToZero => evaluated_value < *atol,
+        };
+        
         Ok(EvaluatedConstraint {
             id: self.id,
             equality: self.equality,
             metadata,
             evaluated_value,
             dual_variable: None,
+            feasible,
         })
     }
 
@@ -111,6 +117,7 @@ impl Evaluate for RemovedConstraint {
             metadata,
             evaluated_value: evaluated.evaluated_value,
             dual_variable: evaluated.dual_variable,
+            feasible: evaluated.feasible,
         })
     }
 

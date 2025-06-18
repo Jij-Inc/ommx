@@ -144,12 +144,18 @@ impl Parse for v1::EvaluatedConstraint {
             removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         };
 
+        let feasible = match equality {
+            Equality::EqualToZero => self.evaluated_value.abs() < *crate::ATol::default(),
+            Equality::LessThanOrEqualToZero => self.evaluated_value < *crate::ATol::default(),
+        };
+        
         Ok(EvaluatedConstraint {
             id: ConstraintID(self.id),
             equality,
             metadata,
             evaluated_value: self.evaluated_value,
             dual_variable: self.dual_variable,
+            feasible,
         })
     }
 }
@@ -252,5 +258,7 @@ mod tests {
         );
         assert_eq!(parsed.metadata.used_decision_variable_ids, vec![1, 2, 3]);
         assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
+        // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
+        assert_eq!(parsed.feasible, false);
     }
 }
