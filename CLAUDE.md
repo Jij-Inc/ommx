@@ -54,48 +54,45 @@ The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generate
   - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
   - Efficient storage: multiple sample IDs can share the same data
 
-**Planned Design for Constraint Types**:
+**Implemented Design for Constraint Types**:
 
 ```rust
-// Core evaluation data that varies per sample
-#[derive(Debug, Clone, PartialEq)]
-pub struct EvaluatedConstraintCore {
-    pub evaluated_value: f64,
-    pub dual_variable: Option<f64>,
-}
-
 // Shared metadata across samples
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintMetadata {
     pub id: ConstraintID,
     pub equality: Equality,
     pub name: Option<String>,
     pub subscripts: Vec<i64>,
-    pub parameters: HashMap<String, String>,
+    pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
     pub used_decision_variable_ids: Vec<u64>,
     pub removed_reason: Option<String>,
-    pub removed_reason_parameters: HashMap<String, String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
 }
 
 // Single evaluation result
 pub struct EvaluatedConstraint {
     pub metadata: ConstraintMetadata,
-    pub core: EvaluatedConstraintCore,
+    pub evaluated_value: f64,
+    pub dual_variable: Option<f64>,
 }
 
 // Multiple sample evaluation results with deduplication
 pub struct SampledConstraint {
     pub metadata: ConstraintMetadata,
-    pub cores: Sampled<EvaluatedConstraintCore>,
+    pub evaluated_values: Sampled<f64>,
+    pub dual_variables: Option<Sampled<f64>>,
+    pub feasible: FnvHashMap<u64, bool>,
 }
 ```
 
 **Benefits**:
 - Shared `ConstraintMetadata` eliminates duplication between `EvaluatedConstraint` and `SampledConstraint`
-- `EvaluatedConstraintCore` can be reused in both single and sampled contexts
-- `Sampled<EvaluatedConstraintCore>` enables efficient storage when multiple samples have identical evaluation results
+- `Sampled<f64>` enables efficient storage of evaluation values when multiple samples share results
+- `Option<Sampled<f64>>` for dual variables allows optimal storage - either all samples have dual variables or none do
 - Clean separation between per-sample data and shared metadata
+- Type-safe Rust implementations replacing protobuf generated types
 
 **Core Features Completed**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations

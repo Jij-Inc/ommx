@@ -31,12 +31,11 @@ impl Evaluate for Constraint {
             removed_reason_parameters: FnvHashMap::default(),
         };
         
-        let core = EvaluatedConstraintCore {
+        Ok(EvaluatedConstraint { 
+            metadata, 
             evaluated_value,
             dual_variable: None,
-        };
-        
-        Ok(EvaluatedConstraint { metadata, core })
+        })
     }
 
     fn evaluate_samples(
@@ -44,20 +43,16 @@ impl Evaluate for Constraint {
         samples: &crate::v1::Samples,
         atol: crate::ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
-        let evaluated_values = self.function.evaluate_samples(samples, atol)?;
+        let evaluated_values_v1 = self.function.evaluate_samples(samples, atol)?;
         
-        // Convert v1::SampledValues to Sampled<EvaluatedConstraintCore>
-        let sampled_values: crate::Sampled<f64> = evaluated_values.try_into()?;
-        let cores = sampled_values.map(|evaluated_value| EvaluatedConstraintCore {
-            evaluated_value,
-            dual_variable: None,
-        });
+        // Convert v1::SampledValues to Sampled<f64>
+        let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
         
-        let feasible: FnvHashMap<u64, bool> = cores
+        let feasible: FnvHashMap<u64, bool> = evaluated_values
             .iter()
-            .map(|(sample_id, core)| match self.equality {
-                Equality::EqualToZero => (sample_id.into_inner(), core.evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => (sample_id.into_inner(), core.evaluated_value < *atol),
+            .map(|(sample_id, evaluated_value)| match self.equality {
+                Equality::EqualToZero => (sample_id.into_inner(), evaluated_value.abs() < *atol),
+                Equality::LessThanOrEqualToZero => (sample_id.into_inner(), *evaluated_value < *atol),
             })
             .collect();
         
@@ -80,7 +75,8 @@ impl Evaluate for Constraint {
         
         Ok(SampledConstraint {
             metadata,
-            cores,
+            evaluated_values,
+            dual_variables: None, // TODO: Support dual variables in the future
             feasible,
         })
     }
@@ -109,7 +105,8 @@ impl Evaluate for RemovedConstraint {
         metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(EvaluatedConstraint {
             metadata,
-            core: evaluated.core,
+            evaluated_value: evaluated.evaluated_value,
+            dual_variable: evaluated.dual_variable,
         })
     }
 
@@ -124,7 +121,8 @@ impl Evaluate for RemovedConstraint {
         metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(SampledConstraint {
             metadata,
-            cores: evaluated.cores,
+            evaluated_values: evaluated.evaluated_values,
+            dual_variables: evaluated.dual_variables,
             feasible: evaluated.feasible,
         })
     }

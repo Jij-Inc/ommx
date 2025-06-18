@@ -88,13 +88,6 @@ impl std::fmt::Display for RemovedConstraint {
     }
 }
 
-/// Core evaluation data that varies per sample
-#[derive(Debug, Clone, PartialEq)]
-pub struct EvaluatedConstraintCore {
-    pub evaluated_value: f64,
-    pub dual_variable: Option<f64>,
-}
-
 /// Shared metadata across samples
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstraintMetadata {
@@ -113,14 +106,16 @@ pub struct ConstraintMetadata {
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatedConstraint {
     pub metadata: ConstraintMetadata,
-    pub core: EvaluatedConstraintCore,
+    pub evaluated_value: f64,
+    pub dual_variable: Option<f64>,
 }
 
 /// Multiple sample evaluation results with deduplication
 #[derive(Debug, Clone)]
 pub struct SampledConstraint {
     pub metadata: ConstraintMetadata,
-    pub cores: Sampled<EvaluatedConstraintCore>,
+    pub evaluated_values: Sampled<f64>,
+    pub dual_variables: Option<Sampled<f64>>,
     pub feasible: FnvHashMap<u64, bool>,
 }
 
@@ -128,8 +123,8 @@ impl EvaluatedConstraint {
     /// Check if this constraint is feasible given the tolerance
     pub fn is_feasible(&self, atol: crate::ATol) -> anyhow::Result<bool> {
         Ok(match self.metadata.equality {
-            Equality::EqualToZero => self.core.evaluated_value.abs() < *atol,
-            Equality::LessThanOrEqualToZero => self.core.evaluated_value < *atol,
+            Equality::EqualToZero => self.evaluated_value.abs() < *atol,
+            Equality::LessThanOrEqualToZero => self.evaluated_value < *atol,
         })
     }
 }
@@ -139,13 +134,13 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
         crate::v1::EvaluatedConstraint {
             id: constraint.metadata.id.into_inner(),
             equality: constraint.metadata.equality.into(),
-            evaluated_value: constraint.core.evaluated_value,
+            evaluated_value: constraint.evaluated_value,
             used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
             subscripts: constraint.metadata.subscripts,
             parameters: constraint.metadata.parameters.into_iter().collect(),
             name: constraint.metadata.name,
             description: constraint.metadata.description,
-            dual_variable: constraint.core.dual_variable,
+            dual_variable: constraint.dual_variable,
             removed_reason: constraint.metadata.removed_reason,
             removed_reason_parameters: constraint.metadata.removed_reason_parameters.into_iter().collect(),
         }
@@ -156,22 +151,30 @@ impl SampledConstraint {
     /// Get an evaluated constraint for a specific sample ID
     pub fn get(&self, sample_id: u64) -> Option<EvaluatedConstraint> {
         let target_id = SampleID::from(sample_id);
-        self.cores.iter()
+        self.evaluated_values.iter()
             .find(|(id, _)| **id == target_id)
-            .map(|(_, core)| EvaluatedConstraint {
-                metadata: self.metadata.clone(),
-                core: core.clone(),
+            .map(|(_, evaluated_value)| {
+                let dual_variable = self.dual_variables.as_ref()
+                    .and_then(|duals| duals.iter()
+                        .find(|(id, _)| **id == target_id)
+                        .map(|(_, dual)| *dual));
+                
+                EvaluatedConstraint {
+                    metadata: self.metadata.clone(),
+                    evaluated_value: *evaluated_value,
+                    dual_variable,
+                }
             })
     }
 
     /// Check feasibility for all samples
     pub fn is_feasible(&self, atol: crate::ATol) -> anyhow::Result<FnvHashMap<u64, bool>> {
-        Ok(self.cores
+        Ok(self.evaluated_values
             .iter()
-            .map(|(sample_id, core)| {
+            .map(|(sample_id, evaluated_value)| {
                 let feasible = match self.metadata.equality {
-                    Equality::EqualToZero => core.evaluated_value.abs() < *atol,
-                    Equality::LessThanOrEqualToZero => core.evaluated_value < *atol,
+                    Equality::EqualToZero => evaluated_value.abs() < *atol,
+                    Equality::LessThanOrEqualToZero => *evaluated_value < *atol,
                 };
                 (sample_id.into_inner(), feasible)
             })
@@ -181,9 +184,8 @@ impl SampledConstraint {
 
 impl From<SampledConstraint> for crate::v1::SampledConstraint {
     fn from(constraint: SampledConstraint) -> Self {
-        // Convert Sampled<EvaluatedConstraintCore> to v1::SampledValues
-        let sampled_values = constraint.cores.map(|core| core.evaluated_value);
-        let evaluated_values: crate::v1::SampledValues = sampled_values.into();
+        // Convert Sampled<f64> to v1::SampledValues
+        let evaluated_values: crate::v1::SampledValues = constraint.evaluated_values.into();
         
         crate::v1::SampledConstraint {
             id: constraint.metadata.id.into_inner(),
