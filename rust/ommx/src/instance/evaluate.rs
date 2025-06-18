@@ -47,11 +47,6 @@ impl Evaluate for Instance {
             })
             .collect();
 
-        let metadata = crate::SolutionMetadata {
-            optimality: Optimality::Unspecified,
-            relaxation: Relaxation::Unspecified,
-        };
-
         Ok(crate::Solution::new(
             state,
             objective,
@@ -59,7 +54,8 @@ impl Evaluate for Instance {
             decision_variables,
             feasible,
             feasible_relaxed,
-            metadata,
+            Optimality::Unspecified,
+            Relaxation::Unspecified,
         ))
     }
 

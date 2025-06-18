@@ -21,21 +21,20 @@ impl Parse for crate::v1::Solution {
         let feasible = self.feasible;
         let feasible_relaxed = self.feasible_relaxed.unwrap_or(feasible);
 
-        let metadata =
-            SolutionMetadata {
-                optimality: self.optimality.try_into().map_err(|_| {
-                    RawParseError::UnknownEnumValue {
-                        enum_name: "ommx.v1.Optimality",
-                        value: self.optimality,
-                    }
-                })?,
-                relaxation: self.relaxation.try_into().map_err(|_| {
-                    RawParseError::UnknownEnumValue {
-                        enum_name: "ommx.v1.Relaxation",
-                        value: self.relaxation,
-                    }
-                })?,
-            };
+        let optimality =
+            self.optimality
+                .try_into()
+                .map_err(|_| RawParseError::UnknownEnumValue {
+                    enum_name: "ommx.v1.Optimality",
+                    value: self.optimality,
+                })?;
+        let relaxation =
+            self.relaxation
+                .try_into()
+                .map_err(|_| RawParseError::UnknownEnumValue {
+                    enum_name: "ommx.v1.Relaxation",
+                    value: self.relaxation,
+                })?;
 
         Ok(Solution {
             state,
@@ -44,7 +43,8 @@ impl Parse for crate::v1::Solution {
             decision_variables,
             feasible,
             feasible_relaxed,
-            metadata,
+            optimality,
+            relaxation,
         })
     }
 }
@@ -100,8 +100,8 @@ impl From<Solution> for crate::v1::Solution {
         let decision_variables = solution.decision_variables().clone();
         let feasible = *solution.feasible();
         let feasible_relaxed = Some(*solution.feasible_relaxed());
-        let optimality = solution.metadata.optimality.into();
-        let relaxation = solution.metadata.relaxation.into();
+        let optimality = (*solution.optimality()).into();
+        let relaxation = (*solution.relaxation()).into();
         // For backward compatibility, set feasible_unrelaxed to the same value as feasible
         let feasible_unrelaxed = feasible;
 
@@ -188,8 +188,8 @@ mod tests {
         assert_eq!(parsed.objective(), &42.5);
         assert_eq!(parsed.feasible(), &true);
         assert_eq!(parsed.feasible_relaxed(), &true);
-        assert_eq!(parsed.metadata.optimality, v1::Optimality::Optimal);
-        assert_eq!(parsed.metadata.relaxation, v1::Relaxation::Unspecified);
+        assert_eq!(*parsed.optimality(), v1::Optimality::Optimal);
+        assert_eq!(*parsed.relaxation(), v1::Relaxation::Unspecified);
         assert_eq!(parsed.evaluated_constraints().len(), 1);
         assert_eq!(parsed.decision_variables().len(), 1);
 
@@ -282,10 +282,12 @@ mod tests {
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Unknown or unsupported enum value 99 for ommx.v1.Optimality"));
-        
+        assert!(error
+            .to_string()
+            .contains("Unknown or unsupported enum value 99 for ommx.v1.Optimality"));
+
         // Test with an invalid relaxation value
         let v1_solution2 = v1::Solution {
             optimality: v1::Optimality::Optimal as i32,
@@ -296,9 +298,11 @@ mod tests {
 
         let result2: Result<Solution, ParseError> = v1_solution2.parse(&());
         assert!(result2.is_err());
-        
+
         let error2 = result2.unwrap_err();
-        assert!(error2.to_string().contains("Unknown or unsupported enum value 123 for ommx.v1.Relaxation"));
+        assert!(error2
+            .to_string()
+            .contains("Unknown or unsupported enum value 123 for ommx.v1.Relaxation"));
     }
 
     #[test]
@@ -311,8 +315,10 @@ mod tests {
 
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Unknown or unsupported enum value 999 for ommx.v1.Sense"));
+        assert!(error
+            .to_string()
+            .contains("Unknown or unsupported enum value 999 for ommx.v1.Sense"));
     }
 }

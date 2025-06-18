@@ -4,13 +4,6 @@ use crate::{EvaluatedConstraint, Sampled, Sense};
 use fnv::FnvHashMap;
 use getset::Getters;
 
-/// Auxiliary metadata for solutions (excluding essential evaluation results)
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct SolutionMetadata {
-    pub optimality: crate::v1::Optimality,
-    pub relaxation: crate::v1::Relaxation,
-}
-
 /// Single solution result with data integrity guarantees
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
@@ -26,7 +19,10 @@ pub struct Solution {
     feasible: bool,
     #[getset(get = "pub")]
     feasible_relaxed: bool,
-    pub metadata: SolutionMetadata,
+    #[getset(get = "pub")]
+    optimality: crate::v1::Optimality,
+    #[getset(get = "pub")]
+    relaxation: crate::v1::Relaxation,
 }
 
 /// Multiple sample solution results with deduplication
@@ -55,7 +51,8 @@ impl Solution {
         decision_variables: Vec<crate::v1::DecisionVariable>,
         feasible: bool,
         feasible_relaxed: bool,
-        metadata: SolutionMetadata,
+        optimality: crate::v1::Optimality,
+        relaxation: crate::v1::Relaxation,
     ) -> Self {
         Self {
             state,
@@ -64,7 +61,8 @@ impl Solution {
             decision_variables,
             feasible,
             feasible_relaxed,
-            metadata,
+            optimality,
+            relaxation,
         }
     }
 
@@ -196,11 +194,6 @@ impl SampleSet {
             .get(&sample_id.into_inner())
             .unwrap_or(&false);
 
-        let metadata = crate::SolutionMetadata {
-            optimality: crate::v1::Optimality::Unspecified,
-            relaxation: crate::v1::Relaxation::Unspecified,
-        };
-
         Ok(Solution::new(
             state,
             objective,
@@ -208,7 +201,8 @@ impl SampleSet {
             decision_variables,
             feasible,
             feasible_relaxed,
-            metadata,
+            crate::v1::Optimality::Unspecified,
+            crate::v1::Relaxation::Unspecified,
         ))
     }
 }

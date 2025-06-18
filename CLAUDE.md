@@ -135,25 +135,18 @@ pub struct SampledConstraint {
 - ✅ Type-safe constraint evaluation with proper error handling
 - ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
 - ✅ **Solution and SampleSet types with data integrity guarantees**
-- ✅ **SolutionMetadata separation for auxiliary solution information**
 - ✅ **Parse trait implementations for v1::Solution and v1::SampleSet**
 - ✅ **Instance evaluation methods updated to use new Solution/SampleSet types**
 - ✅ **Constructor methods for controlled Solution/SampleSet creation**
 - ✅ **Comprehensive round-trip testing for Solution and SampleSet parsing**
+- ✅ **Flattened Solution structure with optimality and relaxation as direct fields**
+- ✅ **Improved error handling with UnknownEnumValue for better diagnostics**
 
 **Solution and SampleSet Implementation (Completed ✅)**:
 
 Following the same design principles as constraint types, strongly-typed Solution and SampleSet alternatives have been implemented:
 
 ```rust
-// Auxiliary metadata for solutions (excluding essential evaluation results)
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct SolutionMetadata {
-    pub optimality: Optimality,
-    pub relaxation: Relaxation,
-    pub feasible_unrelaxed: bool,  // Deprecated but maintained for compatibility
-}
-
 // Single solution result with data integrity guarantees  
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
@@ -169,7 +162,10 @@ pub struct Solution {
     feasible: bool,                          // Protected: overall feasibility
     #[getset(get = "pub")]
     feasible_relaxed: bool,                  // Protected: relaxed feasibility
-    pub metadata: SolutionMetadata,          // Auxiliary metadata
+    #[getset(get = "pub")]
+    optimality: v1::Optimality,              // Protected: optimality status
+    #[getset(get = "pub")]
+    relaxation: v1::Relaxation,              // Protected: relaxation status
 }
 
 // Multiple sample solution results with deduplication
