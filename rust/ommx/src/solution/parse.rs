@@ -22,7 +22,20 @@ impl Parse for crate::v1::Solution {
             .into_iter()
             .map(|dv| {
                 let parsed: crate::DecisionVariable = dv.parse(&())?;
-                Ok(crate::EvaluatedDecisionVariable::from_decision_variable(parsed))
+                // For parsing, we need to extract the value from substituted_value
+                let value = parsed.substituted_value().unwrap_or(0.0);
+                Ok(crate::EvaluatedDecisionVariable::new_internal(
+                    parsed.id(),
+                    parsed.kind(),
+                    parsed.bound(),
+                    value,
+                    crate::DecisionVariableMetadata {
+                        name: parsed.name.clone(),
+                        subscripts: parsed.subscripts.clone(),
+                        parameters: parsed.parameters.clone(),
+                        description: parsed.description.clone(),
+                    },
+                ))
             })
             .collect();
         let decision_variables = decision_variables?;

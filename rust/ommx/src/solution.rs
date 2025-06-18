@@ -116,15 +116,16 @@ impl SampleSet {
                     let parsed_dv: crate::DecisionVariable = crate::Parse::parse(dv_def.clone(), &())
                         .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
                     
-                    // Get the substituted value for this sample
-                    let substituted_value = state_entries.get(&dv_def.id).copied();
+                    // Get the value for this sample
+                    let value = state_entries.get(&dv_def.id).copied()
+                        .ok_or(crate::UnknownSampleIDError { id: sample_id })?;
                     
                     // Create EvaluatedDecisionVariable
-                    Ok(crate::EvaluatedDecisionVariable::new(
+                    Ok(crate::EvaluatedDecisionVariable::new_internal(
                         parsed_dv.id(),
                         parsed_dv.kind(),
                         parsed_dv.bound(),
-                        substituted_value,
+                        value,
                         crate::DecisionVariableMetadata {
                             name: parsed_dv.name.clone(),
                             subscripts: parsed_dv.subscripts.clone(),

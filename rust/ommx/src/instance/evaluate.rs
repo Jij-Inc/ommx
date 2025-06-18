@@ -35,27 +35,12 @@ impl Evaluate for Instance {
             evaluated_constraints.push(evaluated);
         }
 
-        let decision_variables: Vec<crate::EvaluatedDecisionVariable> = self
+        let decision_variables: Result<Vec<crate::EvaluatedDecisionVariable>, _> = self
             .decision_variables
             .values()
-            .map(|dv| {
-                let id = dv.id().into_inner();
-                let value = state.entries.get(&id).unwrap(); // Safe unwrap, as we populate the state with the decision variables
-                
-                crate::EvaluatedDecisionVariable::new(
-                    dv.id(),
-                    dv.kind(),
-                    dv.bound(),
-                    Some(*value),
-                    crate::DecisionVariableMetadata {
-                        name: dv.name.clone(),
-                        subscripts: dv.subscripts.clone(),
-                        parameters: dv.parameters.clone(),
-                        description: dv.description.clone(),
-                    },
-                )
-            })
+            .map(|dv| dv.evaluate(&state, atol))
             .collect();
+        let decision_variables = decision_variables?;
 
         Ok(crate::Solution::new(
             state,

@@ -321,7 +321,7 @@ pub struct EvaluatedDecisionVariable {
     #[getset(get = "pub")]
     bound: Bound,
     #[getset(get = "pub")]
-    substituted_value: Option<f64>,
+    value: f64,
     pub metadata: DecisionVariableMetadata,
 }
 
@@ -336,44 +336,28 @@ pub struct SampledDecisionVariable {
     bound: Bound,
     pub metadata: DecisionVariableMetadata,
     #[getset(get = "pub")]
-    samples: Option<Sampled<f64>>,
+    samples: Sampled<f64>,
 }
 
 impl EvaluatedDecisionVariable {
-    /// Create a new EvaluatedDecisionVariable
-    pub fn new(
+    /// Create a new EvaluatedDecisionVariable (internal use only)
+    pub(crate) fn new_internal(
         id: VariableID,
         kind: Kind,
         bound: Bound,
-        substituted_value: Option<f64>,
+        value: f64,
         metadata: DecisionVariableMetadata,
     ) -> Self {
         Self {
             id,
             kind,
             bound,
-            substituted_value,
+            value,
             metadata,
         }
     }
     
-    /// Create from a DecisionVariable
-    pub fn from_decision_variable(dv: DecisionVariable) -> Self {
-        Self {
-            id: dv.id(),
-            kind: dv.kind(),
-            bound: dv.bound(),
-            substituted_value: dv.substituted_value(),
-            metadata: DecisionVariableMetadata {
-                name: dv.name.clone(),
-                subscripts: dv.subscripts.clone(),
-                parameters: dv.parameters.clone(),
-                description: dv.description.clone(),
-            },
-        }
-    }
-    
-    /// Convert to DecisionVariable
+    /// Convert to DecisionVariable with the evaluated value as substituted_value
     pub fn to_decision_variable(&self) -> Result<DecisionVariable, DecisionVariableError> {
         let mut dv = DecisionVariable {
             id: self.id,
@@ -386,23 +370,21 @@ impl EvaluatedDecisionVariable {
             description: self.metadata.description.clone(),
         };
         
-        if let Some(value) = self.substituted_value {
-            dv.check_value_consistency(value, ATol::default())?;
-            dv.substituted_value = Some(value);
-        }
+        dv.check_value_consistency(self.value, ATol::default())?;
+        dv.substituted_value = Some(self.value);
         
         Ok(dv)
     }
 }
 
 impl SampledDecisionVariable {
-    /// Create a new SampledDecisionVariable
-    pub fn new(
+    /// Create a new SampledDecisionVariable (internal use only)
+    pub(crate) fn new_internal(
         id: VariableID,
         kind: Kind,
         bound: Bound,
         metadata: DecisionVariableMetadata,
-        samples: Option<Sampled<f64>>,
+        samples: Sampled<f64>,
     ) -> Self {
         Self {
             id,
@@ -415,18 +397,79 @@ impl SampledDecisionVariable {
     
     /// Get a specific evaluated decision variable by sample ID
     pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
-        let substituted_value = if let Some(samples) = &self.samples {
-            Some(*samples.get(sample_id)?)
-        } else {
-            None
-        };
+        let value = *self.samples.get(sample_id)?;
         
-        Ok(EvaluatedDecisionVariable::new(
+        Ok(EvaluatedDecisionVariable::new_internal(
             self.id,
             self.kind,
             self.bound,
-            substituted_value,
+            value,
             self.metadata.clone(),
         ))
+    }
+}
+
+impl crate::Evaluate for DecisionVariable {
+    type Output = EvaluatedDecisionVariable;
+    type SampledOutput = SampledDecisionVariable;
+
+    fn evaluate(&self, state: &crate::v1::State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
+        let value = state.entries.get(&self.id.into_inner())
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
+
+        Ok(EvaluatedDecisionVariable::new_internal(
+            self.id,
+            self.kind,
+            self.bound,
+            value,
+            DecisionVariableMetadata {
+                name: self.name.clone(),
+                subscripts: self.subscripts.clone(),
+                parameters: self.parameters.clone(),
+                description: self.description.clone(),
+            },
+        ))
+    }
+
+    fn evaluate_samples(&self, samples: &crate::v1::Samples, _atol: crate::ATol) -> anyhow::Result<Self::SampledOutput> {
+        let variable_id = self.id.into_inner();
+        
+        // Extract values for this variable from all samples
+        let mut grouped_values: std::collections::HashMap<ordered_float::OrderedFloat<f64>, Vec<crate::SampleID>> = std::collections::HashMap::new();
+        for (sample_id, state) in samples.iter() {
+            if let Some(value) = state.entries.get(&variable_id) {
+                grouped_values.entry(ordered_float::OrderedFloat(*value)).or_default().push(crate::SampleID::from(*sample_id));
+            }
+        }
+        
+        // Convert to Sampled format
+        let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
+        let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
+        let samples = crate::Sampled::new(ids, values)?;
+
+        Ok(SampledDecisionVariable::new_internal(
+            self.id,
+            self.kind,
+            self.bound,
+            DecisionVariableMetadata {
+                name: self.name.clone(),
+                subscripts: self.subscripts.clone(),
+                parameters: self.parameters.clone(),
+                description: self.description.clone(),
+            },
+            samples,
+        ))
+    }
+
+    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: crate::ATol) -> anyhow::Result<()> {
+        if let Some(value) = state.entries.get(&self.id.into_inner()) {
+            self.substitute(*value, atol)?;
+        }
+        Ok(())
+    }
+
+    fn required_ids(&self) -> crate::VariableIDSet {
+        [self.id].into_iter().collect()
     }
 }
