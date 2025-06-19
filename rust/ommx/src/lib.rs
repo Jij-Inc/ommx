@@ -155,7 +155,6 @@ mod instance;
 mod macros;
 mod polynomial_base;
 mod sampled;
-mod solution;
 mod substitute;
 
 pub use atol::*;
@@ -188,5 +187,6 @@ mod v1_ext {
     mod polynomial;
     mod quadratic;
     mod sample_set;
+    mod solution;
     mod state;
 }
