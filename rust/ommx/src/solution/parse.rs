@@ -170,8 +170,8 @@ mod tests {
         let parsed: Solution = v1_solution.parse(&()).unwrap();
 
         assert_eq!(parsed.objective(), &42.5);
-        assert_eq!(parsed.feasible(), true);
-        assert_eq!(parsed.feasible_relaxed(), true);
+        assert!(parsed.feasible());
+        assert!(parsed.feasible_relaxed());
         assert_eq!(parsed.optimality, v1::Optimality::Optimal);
         assert_eq!(parsed.relaxation, v1::Relaxation::Unspecified);
         assert_eq!(parsed.evaluated_constraints().len(), 1);
@@ -180,7 +180,7 @@ mod tests {
         // Test round-trip conversion
         let v1_converted: v1::Solution = parsed.into();
         assert_eq!(v1_converted.objective, 42.5);
-        assert_eq!(v1_converted.feasible, true);
+        assert!(v1_converted.feasible);
         assert_eq!(v1_converted.feasible_relaxed, Some(true));
     }
 

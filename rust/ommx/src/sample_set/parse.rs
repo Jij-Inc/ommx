@@ -12,7 +12,7 @@ impl Parse for crate::v1::SampleSet {
             // Parse the DecisionVariable
             let dv = v1_sampled_dv
                 .decision_variable
-                .ok_or_else(|| crate::RawParseError::MissingField {
+                .ok_or(crate::RawParseError::MissingField {
                     message: "ommx.v1.SampledDecisionVariable",
                     field: "decision_variable",
                 })?
@@ -21,7 +21,7 @@ impl Parse for crate::v1::SampleSet {
             // Parse the samples
             let samples: crate::Sampled<f64> = v1_sampled_dv
                 .samples
-                .ok_or_else(|| crate::RawParseError::MissingField {
+                .ok_or(crate::RawParseError::MissingField {
                     message: "ommx.v1.SampledDecisionVariable",
                     field: "samples",
                 })?
@@ -51,7 +51,7 @@ impl Parse for crate::v1::SampleSet {
         // Parse objectives - required, not optional
         let objectives = self
             .objectives
-            .ok_or_else(|| crate::RawParseError::MissingField {
+            .ok_or(crate::RawParseError::MissingField {
                 message: "ommx.v1.SampleSet",
                 field: "objectives",
             })?

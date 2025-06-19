@@ -664,7 +664,7 @@ class Solution:
     r"""
     Check if the solution is feasible
     """
-    feasible_relaxed: typing.Optional[builtins.bool]
+    feasible_relaxed: builtins.bool
     r"""
     Check if the solution is feasible in the relaxed problem
     """

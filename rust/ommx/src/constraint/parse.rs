@@ -260,6 +260,6 @@ mod tests {
         assert_eq!(parsed.metadata.used_decision_variable_ids, vec![1, 2, 3]);
         assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
-        assert_eq!(*parsed.feasible(), false);
+        assert!(!(*parsed.feasible()));
     }
 }
