@@ -320,8 +320,6 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Missing value for variable 1"));
+        assert!(error.to_string().contains("Missing value for variable 1"));
     }
 }

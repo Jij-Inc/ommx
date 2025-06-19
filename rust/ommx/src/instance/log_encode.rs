@@ -129,7 +129,10 @@ mod tests {
         let binary_vars: Vec<_> = instance
             .decision_variables
             .values()
-            .filter(|dv| dv.metadata.name == Some("ommx.log_encode".to_string()) && dv.metadata.subscripts[0] == 0)
+            .filter(|dv| {
+                dv.metadata.name == Some("ommx.log_encode".to_string())
+                    && dv.metadata.subscripts[0] == 0
+            })
             .collect();
 
         // For range [2, 7] (6 values), we need ceil(log2(6)) = 3 bits

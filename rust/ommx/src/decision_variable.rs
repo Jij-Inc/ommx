@@ -387,7 +387,7 @@ impl crate::Evaluate for DecisionVariable {
             id: self.id,
             kind: self.kind,
             bound: self.bound,
-            value: value,
+            value,
             metadata: self.metadata.clone(),
         })
     }

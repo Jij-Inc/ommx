@@ -27,9 +27,7 @@ pub enum SolutionError {
     },
 
     #[error("Missing value for variable {id}: not found in state and no substituted_value")]
-    MissingVariableValue {
-        id: u64,
-    },
+    MissingVariableValue { id: u64 },
 }
 
 /// Single solution result with data integrity guarantees
