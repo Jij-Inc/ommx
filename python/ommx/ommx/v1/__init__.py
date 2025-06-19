@@ -2972,6 +2972,23 @@ class Quadratic(AsConstraint):
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+        
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+        
+        Examples:
+            >>> from ommx.v1 import Quadratic, DecisionVariable
+            >>> x = DecisionVariable(1, name="x")
+            >>> y = DecisionVariable(2, name="y")
+            >>> quad = x * y + 2 * x + 3
+            >>> terms = quad.terms
+            >>> isinstance(list(terms.keys())[0], tuple)
+            True
+            >>> # Keys are tuples, so they can be used in dict operations
+            >>> combined = {**terms, (99,): 1.0}  # This works with tuples
+            >>> len(combined) >= len(terms)
+            True
+        """
         return self.raw.terms()
 
     def __repr__(self) -> str:
@@ -3258,6 +3275,23 @@ class Function(AsConstraint):
 
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+        
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+        
+        Examples:
+            >>> from ommx.v1 import Function, Linear, DecisionVariable
+            >>> x = DecisionVariable(1, name="x")
+            >>> linear = Linear({x: 2.5}, constant=1.0)
+            >>> func = Function.from_linear(linear)
+            >>> terms = func.terms
+            >>> isinstance(list(terms.keys())[0], tuple)
+            True
+            >>> # Keys are tuples, so they can be used in dict operations
+            >>> combined = {**terms, (99,): 1.0}  # This works with tuples
+            >>> len(combined) >= len(terms)
+            True
+        """
         return self.raw.terms()
 
     @staticmethod
