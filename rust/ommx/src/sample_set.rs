@@ -104,8 +104,20 @@ impl SampleSet {
                     .unwrap_or(false)
             });
 
+            // For feasible_relaxed, only consider constraints that haven't been removed
+            let is_feasible_relaxed = constraints
+                .values()
+                .filter(|constraint| constraint.removed_reason().is_none())
+                .all(|constraint| {
+                    constraint
+                        .feasible()
+                        .get(&sample_id.into_inner())
+                        .copied()
+                        .unwrap_or(false)
+                });
+
             feasible.insert(*sample_id, is_feasible);
-            feasible_relaxed.insert(*sample_id, is_feasible);
+            feasible_relaxed.insert(*sample_id, is_feasible_relaxed);
         }
 
         Ok(Self {
