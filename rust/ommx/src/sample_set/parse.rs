@@ -90,14 +90,16 @@ impl Parse for crate::v1::SampleSet {
         // If constraints are present, validate feasibility consistency
         if !sample_set.constraints().is_empty() {
             for (sample_id, provided_feasible_value) in &provided_feasible {
-                let computed_feasible = sample_set.is_sample_feasible(*sample_id)
-                    .map_err(|_| crate::RawParseError::SampleSetError(
-                        SampleSetError::InconsistentSampleIDs {
-                            context: "feasible validation".to_string(),
-                            expected: sample_set.sample_ids(),
-                            found: provided_feasible.keys().copied().collect(),
-                        }
-                    ))?;
+                let computed_feasible =
+                    sample_set.is_sample_feasible(*sample_id).map_err(|_| {
+                        crate::RawParseError::SampleSetError(
+                            SampleSetError::InconsistentSampleIDs {
+                                context: "feasible validation".to_string(),
+                                expected: sample_set.sample_ids(),
+                                found: provided_feasible.keys().copied().collect(),
+                            },
+                        )
+                    })?;
                 if computed_feasible != *provided_feasible_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibility {
@@ -113,13 +115,13 @@ impl Parse for crate::v1::SampleSet {
             for (sample_id, provided_feasible_relaxed_value) in &provided_feasible_relaxed {
                 let computed_feasible_relaxed = sample_set
                     .is_sample_feasible_relaxed(*sample_id)
-                    .map_err(|_| crate::RawParseError::SampleSetError(
-                        SampleSetError::InconsistentSampleIDs {
-                            context: "feasible_relaxed validation".to_string(),
-                            expected: sample_set.sample_ids(),
-                            found: provided_feasible_relaxed.keys().copied().collect(),
-                        }
-                    ))?;
+                    .map_err(|_| {
+                    crate::RawParseError::SampleSetError(SampleSetError::InconsistentSampleIDs {
+                        context: "feasible_relaxed validation".to_string(),
+                        expected: sample_set.sample_ids(),
+                        found: provided_feasible_relaxed.keys().copied().collect(),
+                    })
+                })?;
                 if computed_feasible_relaxed != *provided_feasible_relaxed_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibilityRelaxed {
@@ -163,7 +165,9 @@ impl From<SampleSet> for crate::v1::SampleSet {
         for (sample_id, _) in sample_set.objectives().iter() {
             let sample_id_u64 = sample_id.into_inner();
             // These should always succeed since we're iterating over known sample IDs
-            let is_feasible = sample_set.is_sample_feasible(*sample_id).expect("Sample ID should exist");
+            let is_feasible = sample_set
+                .is_sample_feasible(*sample_id)
+                .expect("Sample ID should exist");
             let is_feasible_relaxed = sample_set
                 .is_sample_feasible_relaxed(*sample_id)
                 .expect("Sample ID should exist");
@@ -245,18 +249,20 @@ mod tests {
         let sample_id_2 = crate::SampleID::from(2);
 
         // Since there are no constraints, all samples should be feasible
-        assert_eq!(parsed.is_sample_feasible(sample_id_0).unwrap(), true);
-        assert_eq!(parsed.is_sample_feasible(sample_id_1).unwrap(), true);
-        assert_eq!(parsed.is_sample_feasible(sample_id_2).unwrap(), true);
+        assert!(parsed.is_sample_feasible(sample_id_0).unwrap());
+        assert!(parsed.is_sample_feasible(sample_id_1).unwrap());
+        assert!(parsed.is_sample_feasible(sample_id_2).unwrap());
 
-        assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_0).unwrap(), true);
-        assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_1).unwrap(), true);
-        assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_2).unwrap(), true);
+        assert!(parsed.is_sample_feasible_relaxed(sample_id_0).unwrap());
+        assert!(parsed.is_sample_feasible_relaxed(sample_id_1).unwrap());
+        assert!(parsed.is_sample_feasible_relaxed(sample_id_2).unwrap());
 
         // Test error handling for unknown sample IDs
         let unknown_sample_id = crate::SampleID::from(999);
         assert!(parsed.is_sample_feasible(unknown_sample_id).is_err());
-        assert!(parsed.is_sample_feasible_relaxed(unknown_sample_id).is_err());
+        assert!(parsed
+            .is_sample_feasible_relaxed(unknown_sample_id)
+            .is_err());
 
         // Test round-trip conversion
         let v1_converted: v1::SampleSet = parsed.into();

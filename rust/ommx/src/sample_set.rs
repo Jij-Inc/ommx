@@ -137,12 +137,21 @@ impl SampleSet {
 
     /// Check if a specific sample is feasible
     pub fn is_sample_feasible(&self, sample_id: SampleID) -> Result<bool, UnknownSampleIDError> {
-        self.feasible.get(&sample_id).copied().ok_or(UnknownSampleIDError { id: sample_id })
+        self.feasible
+            .get(&sample_id)
+            .copied()
+            .ok_or(UnknownSampleIDError { id: sample_id })
     }
 
     /// Check if a specific sample is feasible in the relaxed problem
-    pub fn is_sample_feasible_relaxed(&self, sample_id: SampleID) -> Result<bool, UnknownSampleIDError> {
-        self.feasible_relaxed.get(&sample_id).copied().ok_or(UnknownSampleIDError { id: sample_id })
+    pub fn is_sample_feasible_relaxed(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<bool, UnknownSampleIDError> {
+        self.feasible_relaxed
+            .get(&sample_id)
+            .copied()
+            .ok_or(UnknownSampleIDError { id: sample_id })
     }
 
     /// Get a specific solution by sample ID

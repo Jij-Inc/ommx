@@ -167,10 +167,7 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
             description: constraint.metadata.description,
             dual_variable,
             removed_reason: constraint.removed_reason,
-            removed_reason_parameters: constraint
-                .removed_reason_parameters
-                .into_iter()
-                .collect(),
+            removed_reason_parameters: constraint.removed_reason_parameters.into_iter().collect(),
         }
     }
 }
@@ -268,10 +265,7 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             parameters: constraint.metadata.parameters.into_iter().collect(),
             description: constraint.metadata.description,
             removed_reason: constraint.removed_reason,
-            removed_reason_parameters: constraint
-                .removed_reason_parameters
-                .into_iter()
-                .collect(),
+            removed_reason_parameters: constraint.removed_reason_parameters.into_iter().collect(),
             evaluated_values: Some(evaluated_values),
             used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
             feasible,
