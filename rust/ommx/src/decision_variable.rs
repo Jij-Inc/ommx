@@ -356,7 +356,6 @@ impl EvaluatedDecisionVariable {
             metadata,
         }
     }
-
 }
 
 impl SampledDecisionVariable {
@@ -499,17 +498,17 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
 
     fn try_from(v1_dv: crate::v1::DecisionVariable) -> Result<Self, Self::Error> {
         let message = "ommx.v1.DecisionVariable";
-        
+
         // Parse the DecisionVariable first to get strongly typed fields
         let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
-        
+
         // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
-        let value = v1_dv.substituted_value.ok_or_else(|| {
-            crate::RawParseError::MissingField {
+        let value = v1_dv
+            .substituted_value
+            .ok_or(crate::RawParseError::MissingField {
                 message,
                 field: "substituted_value",
-            }
-        })?;
+            })?;
 
         Ok(EvaluatedDecisionVariable {
             id: dv.id,
@@ -551,14 +550,17 @@ mod tests {
         };
 
         let evaluated_dv: EvaluatedDecisionVariable = v1_dv.try_into().unwrap();
-        
+
         assert_eq!(*evaluated_dv.id(), VariableID::from(42));
         assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
         assert_eq!(*evaluated_dv.value(), 5.0);
         assert_eq!(evaluated_dv.metadata.name, Some("test_var".to_string()));
         assert_eq!(evaluated_dv.metadata.subscripts, vec![1, 2]);
-        assert_eq!(evaluated_dv.metadata.description, Some("A test variable".to_string()));
-        
+        assert_eq!(
+            evaluated_dv.metadata.description,
+            Some("A test variable".to_string())
+        );
+
         // Test round-trip conversion
         let v1_converted: v1::DecisionVariable = evaluated_dv.into();
         assert_eq!(v1_converted.id, 42);
@@ -585,7 +587,7 @@ mod tests {
 
         let result: Result<EvaluatedDecisionVariable, _> = v1_dv.try_into();
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
         assert!(error.to_string().contains("substituted_value"));
     }
