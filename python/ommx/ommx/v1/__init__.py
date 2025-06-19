@@ -2971,7 +2971,7 @@ class Quadratic(AsConstraint):
         return self.raw.constant_term
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
         return self.raw.terms()
 
     def __repr__(self) -> str:
@@ -3257,7 +3257,7 @@ class Function(AsConstraint):
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
         return self.raw.terms()
 
     @staticmethod

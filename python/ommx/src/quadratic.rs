@@ -5,7 +5,11 @@ use approx::AbsDiffEq;
 use ommx::{
     v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Monomial, Parse, VariableIDPair,
 };
-use pyo3::{prelude::*, types::{PyBytes, PyDict, PyTuple}, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict, PyTuple},
+    Bound, PyAny,
+};
 use std::collections::BTreeMap;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

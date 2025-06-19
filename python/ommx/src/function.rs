@@ -3,7 +3,11 @@ use crate::{Linear, Polynomial, Quadratic, Rng};
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Parse};
-use pyo3::{prelude::*, types::{PyBytes, PyDict, PyTuple}, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict, PyTuple},
+    Bound, PyAny,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
