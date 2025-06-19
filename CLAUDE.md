@@ -219,6 +219,32 @@ class Linear(AsConstraint):
         return self.raw.evaluate(to_state(state).SerializeToString())
 ```
 
+### Python Bindings Architecture (python/ommx/src/)
+
+The Rust implementation for Python bindings follows a modular structure with one class per file:
+
+**Mathematical Types**:
+- `linear.rs`: `Linear` class for linear expressions
+- `quadratic.rs`: `Quadratic` class for quadratic expressions  
+- `polynomial.rs`: `Polynomial` class for general polynomial expressions
+- `function.rs`: `Function` class as a wrapper for all mathematical types
+
+**Core Components**:
+- `instance.rs`: `Instance` class for optimization problems
+- `constraint.rs`: `Constraint` class for problem constraints
+- `decision_variable.rs`: `DecisionVariable` class
+- `state.rs`: `State` class for variable assignments
+- `solution.rs`: `Solution` class for optimization results
+- `sample_set.rs`: `SampleSet` class for multiple solutions
+- `samples.rs`: `Samples` class for sample collections
+
+**Utilities**:
+- `enums.rs`: PyO3 enum definitions (`Sense`, `Equality`, `Kind`)
+- `bound.rs`: Variable bounds handling
+- `random.rs`: Random number generation utilities
+
+This modular structure improves maintainability and makes the codebase easier to navigate.
+
 ## Development Commands
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
