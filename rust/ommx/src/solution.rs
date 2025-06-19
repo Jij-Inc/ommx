@@ -74,7 +74,10 @@ impl Solution {
 
     /// Check if all constraints are feasible in the relaxed problem
     pub fn feasible_relaxed(&self) -> bool {
-        self.evaluated_constraints.values().all(|c| *c.feasible())
+        self.evaluated_constraints
+            .values()
+            .filter(|c| c.removed_reason().is_none())
+            .all(|c| *c.feasible())
     }
 
     /// Check if all constraints are feasible (deprecated alias)

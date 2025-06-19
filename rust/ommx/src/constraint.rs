@@ -97,8 +97,6 @@ pub struct ConstraintMetadata {
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
     pub used_decision_variable_ids: Vec<u64>,
-    pub removed_reason: Option<String>,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
 }
 
 /// Single evaluation result using the new design
@@ -115,6 +113,10 @@ pub struct EvaluatedConstraint {
     dual_variable: Option<f64>,
     #[getset(get = "pub")]
     feasible: bool,
+    #[getset(get = "pub")]
+    removed_reason: Option<String>,
+    #[getset(get = "pub")]
+    removed_reason_parameters: FnvHashMap<String, String>,
 }
 
 /// Multiple sample evaluation results with deduplication
@@ -131,6 +133,10 @@ pub struct SampledConstraint {
     dual_variables: Option<Sampled<f64>>,
     #[getset(get = "pub")]
     feasible: FnvHashMap<u64, bool>,
+    #[getset(get = "pub")]
+    removed_reason: Option<String>,
+    #[getset(get = "pub")]
+    removed_reason_parameters: FnvHashMap<String, String>,
 }
 
 impl EvaluatedConstraint {
@@ -160,9 +166,8 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
             name: constraint.metadata.name,
             description: constraint.metadata.description,
             dual_variable,
-            removed_reason: constraint.metadata.removed_reason,
+            removed_reason: constraint.removed_reason,
             removed_reason_parameters: constraint
-                .metadata
                 .removed_reason_parameters
                 .into_iter()
                 .collect(),
@@ -190,6 +195,8 @@ impl SampledConstraint {
             evaluated_value,
             dual_variable,
             feasible,
+            removed_reason: self.removed_reason().clone(),
+            removed_reason_parameters: self.removed_reason_parameters().clone(),
         })
     }
 
@@ -260,9 +267,8 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             subscripts: constraint.metadata.subscripts,
             parameters: constraint.metadata.parameters.into_iter().collect(),
             description: constraint.metadata.description,
-            removed_reason: constraint.metadata.removed_reason,
+            removed_reason: constraint.removed_reason,
             removed_reason_parameters: constraint
-                .metadata
                 .removed_reason_parameters
                 .into_iter()
                 .collect(),

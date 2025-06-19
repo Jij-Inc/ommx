@@ -141,8 +141,6 @@ impl Parse for v1::EvaluatedConstraint {
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
             used_decision_variable_ids: self.used_decision_variable_ids,
-            removed_reason: self.removed_reason,
-            removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         };
 
         let feasible = match equality {
@@ -157,6 +155,8 @@ impl Parse for v1::EvaluatedConstraint {
             evaluated_value: self.evaluated_value,
             dual_variable: self.dual_variable,
             feasible,
+            removed_reason: self.removed_reason,
+            removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         })
     }
 }
@@ -185,8 +185,6 @@ impl Parse for v1::SampledConstraint {
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
             used_decision_variable_ids: self.used_decision_variable_ids,
-            removed_reason: self.removed_reason,
-            removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         };
 
         Ok(SampledConstraint {
@@ -196,6 +194,8 @@ impl Parse for v1::SampledConstraint {
             evaluated_values,
             dual_variables: None, // v1::SampledConstraint doesn't have dual_variables field
             feasible: self.feasible.into_iter().collect(),
+            removed_reason: self.removed_reason,
+            removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         })
     }
 }
