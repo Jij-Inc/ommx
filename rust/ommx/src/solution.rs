@@ -4,6 +4,22 @@ use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Variab
 use getset::Getters;
 use std::collections::BTreeMap;
 
+/// Error occurred during Solution validation
+#[derive(Debug, thiserror::Error)]
+pub enum SolutionError {
+    #[error("Inconsistent feasibility for solution: provided={provided_feasible}, computed={computed_feasible}")]
+    InconsistentFeasibility {
+        provided_feasible: bool,
+        computed_feasible: bool,
+    },
+    
+    #[error("Inconsistent feasibility (relaxed) for solution: provided={provided_feasible_relaxed}, computed={computed_feasible_relaxed}")]
+    InconsistentFeasibilityRelaxed {
+        provided_feasible_relaxed: bool,
+        computed_feasible_relaxed: bool,
+    },
+}
+
 /// Single solution result with data integrity guarantees
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
@@ -13,35 +29,28 @@ pub struct Solution {
     evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-    #[getset(get = "pub")]
-    feasible: bool,
-    #[getset(get = "pub")]
-    feasible_relaxed: bool,
-    #[getset(get = "pub")]
-    optimality: crate::v1::Optimality,
-    #[getset(get = "pub")]
-    relaxation: crate::v1::Relaxation,
+    /// Optimality status - not guaranteed by Solution itself
+    pub optimality: crate::v1::Optimality,
+    /// Relaxation status - not guaranteed by Solution itself
+    pub relaxation: crate::v1::Relaxation,
 }
 
 impl Solution {
     /// Create a new Solution
+    /// 
+    /// Optimality and relaxation are set to Unspecified by default.
+    /// Feasibility is computed on-demand from the evaluated constraints.
     pub fn new(
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
-        feasible: bool,
-        feasible_relaxed: bool,
-        optimality: crate::v1::Optimality,
-        relaxation: crate::v1::Relaxation,
     ) -> Self {
         Self {
             objective,
             evaluated_constraints,
             decision_variables,
-            feasible,
-            feasible_relaxed,
-            optimality,
-            relaxation,
+            optimality: crate::v1::Optimality::Unspecified,
+            relaxation: crate::v1::Relaxation::Unspecified,
         }
     }
 
@@ -59,13 +68,29 @@ impl Solution {
     }
 
     /// Check if all constraints are feasible
-    pub fn is_feasible(&self) -> bool {
-        *self.feasible()
+    pub fn feasible(&self) -> bool {
+        self.evaluated_constraints
+            .values()
+            .all(|c| *c.feasible())
     }
 
     /// Check if all constraints are feasible in the relaxed problem
+    pub fn feasible_relaxed(&self) -> bool {
+        self.evaluated_constraints
+            .values()
+            .all(|c| *c.feasible())
+    }
+
+    /// Check if all constraints are feasible (deprecated alias)
+    #[deprecated(note = "Use feasible() instead")]
+    pub fn is_feasible(&self) -> bool {
+        self.feasible()
+    }
+
+    /// Check if all constraints are feasible in the relaxed problem (deprecated alias)
+    #[deprecated(note = "Use feasible_relaxed() instead")]
     pub fn is_feasible_relaxed(&self) -> bool {
-        *self.feasible_relaxed()
+        self.feasible_relaxed()
     }
 
     /// Generate state from decision variables (for backward compatibility)

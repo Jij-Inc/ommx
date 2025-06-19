@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Parse, ParseError, RawParseError};
+use crate::{Parse, ParseError, SampleSetError};
 
 impl Parse for crate::v1::SampleSet {
     type Output = SampleSet;
@@ -19,24 +19,58 @@ impl Parse for crate::v1::SampleSet {
             .collect();
         let constraints = constraints?;
 
-        let feasible_relaxed: FnvHashMap<u64, bool> = self.feasible_relaxed.into_iter().collect();
-        let feasible: FnvHashMap<u64, bool> = self.feasible.into_iter().collect();
         let sense = self
             .sense
             .try_into()
-            .map_err(|_| RawParseError::UnknownEnumValue {
+            .map_err(|_| crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
                 value: self.sense,
             })?;
 
-        Ok(SampleSet {
+        let provided_feasible_relaxed: std::collections::HashMap<u64, bool> = self.feasible_relaxed.into_iter().collect();
+        let provided_feasible: std::collections::HashMap<u64, bool> = self.feasible.into_iter().collect();
+        
+        // Validate feasibility consistency when constraints are present
+        if !constraints.is_empty() {
+            for (sample_id, provided_feasible_value) in &provided_feasible {
+                let computed_feasible = constraints.iter().all(|constraint| {
+                    constraint.feasible().get(sample_id).copied().unwrap_or(false)
+                });
+                
+                if computed_feasible != *provided_feasible_value {
+                    return Err(crate::RawParseError::SampleSetError(SampleSetError::InconsistentFeasibility {
+                        sample_id: *sample_id,
+                        provided_feasible: *provided_feasible_value,
+                        computed_feasible,
+                    }).into());
+                }
+            }
+            
+            for (sample_id, provided_feasible_relaxed_value) in &provided_feasible_relaxed {
+                // For now, feasible_relaxed uses same logic as feasible
+                // This could be customized later if relaxed constraints are handled differently
+                let computed_feasible_relaxed = constraints.iter().all(|constraint| {
+                    constraint.feasible().get(sample_id).copied().unwrap_or(false)
+                });
+                
+                if computed_feasible_relaxed != *provided_feasible_relaxed_value {
+                    return Err(crate::RawParseError::SampleSetError(SampleSetError::InconsistentFeasibilityRelaxed {
+                        sample_id: *sample_id,
+                        provided_feasible_relaxed: *provided_feasible_relaxed_value,
+                        computed_feasible_relaxed,
+                    }).into());
+                }
+            }
+        }
+        
+        Ok(SampleSet::new_with_feasible(
             decision_variables,
             objectives,
             constraints,
-            feasible_relaxed,
-            feasible,
             sense,
-        })
+            provided_feasible,
+            provided_feasible_relaxed,
+        ))
     }
 }
 
@@ -52,11 +86,22 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .iter()
             .map(|sc| sc.clone().into())
             .collect();
-        let feasible_relaxed: std::collections::HashMap<u64, bool> =
-            sample_set.feasible_relaxed().clone().into_iter().collect();
-        let feasible: std::collections::HashMap<u64, bool> =
-            sample_set.feasible().clone().into_iter().collect();
         let sense = (*sample_set.sense()).into();
+
+        // Compute feasible maps from constraint evaluations
+        let mut feasible_relaxed = std::collections::HashMap::new();
+        let mut feasible = std::collections::HashMap::new();
+        
+        // Get all sample IDs from objectives
+        if let Some(objectives) = sample_set.objectives() {
+            for (sample_id, _) in objectives.iter() {
+                let sample_id_u64 = sample_id.into_inner();
+                let is_feasible = sample_set.is_sample_feasible(*sample_id).unwrap_or(false);
+                let is_feasible_relaxed = sample_set.is_sample_feasible_relaxed(*sample_id).unwrap_or(false);
+                feasible.insert(sample_id_u64, is_feasible);
+                feasible_relaxed.insert(sample_id_u64, is_feasible_relaxed);
+            }
+        }
 
         crate::v1::SampleSet {
             decision_variables,
@@ -161,5 +206,46 @@ mod tests {
         assert!(error
             .to_string()
             .contains("Unknown or unsupported enum value 999 for ommx.v1.Sense"));
+    }
+
+    #[test]
+    fn test_inconsistent_feasibility_validation() {
+        use crate::v1;
+
+        // Create a SampleSet with constraints that should make sample 0 infeasible
+        // but with provided feasible value claiming it's feasible
+        let v1_sample_set = v1::SampleSet {
+            decision_variables: vec![],
+            objectives: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 10.0,
+                }],
+            }),
+            constraints: vec![v1::SampledConstraint {
+                id: 1,
+                equality: v1::Equality::EqualToZero as i32,
+                evaluated_values: Some(v1::SampledValues {
+                    entries: vec![v1::sampled_values::SampledValuesEntry {
+                        ids: vec![0],
+                        value: 1.0, // This should make constraint infeasible (1.0 != 0.0)
+                    }],
+                }),
+                feasible: [(0, false)].iter().cloned().collect(), // Constraint correctly marked as infeasible
+                ..Default::default()
+            }],
+            feasible: [(0, true)].iter().cloned().collect(), // But overall solution claimed as feasible - inconsistent!
+            feasible_relaxed: [(0, true)].iter().cloned().collect(),
+            sense: v1::instance::Sense::Minimize as i32,
+            ..Default::default()
+        };
+
+        let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Inconsistent feasibility for sample 0"));
+        assert!(error.to_string().contains("provided=true"));
+        assert!(error.to_string().contains("computed=false"));
     }
 }

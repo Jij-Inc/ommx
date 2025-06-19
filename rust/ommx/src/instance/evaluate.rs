@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    v1::{Optimality, Relaxation, SampledDecisionVariable},
+    v1::SampledDecisionVariable,
     ATol, Evaluate, VariableIDSet,
 };
 use anyhow::{anyhow, Result};
@@ -19,20 +19,12 @@ impl Evaluate for Instance {
         let objective = self.objective.evaluate(&state, atol)?;
 
         let mut evaluated_constraints = BTreeMap::default();
-        let mut feasible_relaxed = true;
         for constraint in self.constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !*evaluated.feasible() {
-                feasible_relaxed = false;
-            }
             evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
-        let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
-            if !*evaluated.feasible() {
-                feasible = false;
-            }
             evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
 
@@ -42,15 +34,13 @@ impl Evaluate for Instance {
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
 
-        Ok(crate::Solution::new(
+        let solution = crate::Solution::new(
             objective,
             evaluated_constraints,
             decision_variables,
-            feasible,
-            feasible_relaxed,
-            Optimality::Unspecified,
-            Relaxation::Unspecified,
-        ))
+        );
+        
+        Ok(solution)
     }
 
     fn evaluate_samples(&self, samples: &v1::Samples, atol: ATol) -> Result<Self::SampledOutput> {
@@ -108,8 +98,6 @@ impl Evaluate for Instance {
             decision_variables,
             Some(objectives.try_into()?),
             constraints,
-            feasible_relaxed,
-            feasible,
             self.sense,
         ))
     }

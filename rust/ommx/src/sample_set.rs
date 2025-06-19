@@ -4,9 +4,26 @@ use crate::{
     ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sampled, Sense, Solution,
     VariableID,
 };
-use fnv::FnvHashMap;
 use getset::Getters;
 use std::collections::BTreeMap;
+
+/// Error occurred during SampleSet validation
+#[derive(Debug, thiserror::Error)]
+pub enum SampleSetError {
+    #[error("Inconsistent feasibility for sample {sample_id}: provided={provided_feasible}, computed={computed_feasible}")]
+    InconsistentFeasibility {
+        sample_id: u64,
+        provided_feasible: bool,
+        computed_feasible: bool,
+    },
+    
+    #[error("Inconsistent feasibility (relaxed) for sample {sample_id}: provided={provided_feasible_relaxed}, computed={computed_feasible_relaxed}")]
+    InconsistentFeasibilityRelaxed {
+        sample_id: u64,
+        provided_feasible_relaxed: bool,
+        computed_feasible_relaxed: bool,
+    },
+}
 
 /// Multiple sample solution results with deduplication
 #[derive(Debug, Clone, Getters)]
@@ -18,11 +35,11 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     constraints: Vec<crate::SampledConstraint>,
     #[getset(get = "pub")]
-    feasible_relaxed: FnvHashMap<u64, bool>,
-    #[getset(get = "pub")]
-    feasible: FnvHashMap<u64, bool>,
-    #[getset(get = "pub")]
     sense: Sense,
+    /// Cached feasible values (computed from constraints or parsed from original data)
+    cached_feasible: std::collections::HashMap<u64, bool>,
+    /// Cached feasible_relaxed values (computed from constraints or parsed from original data)
+    cached_feasible_relaxed: std::collections::HashMap<u64, bool>,
 }
 
 impl SampleSet {
@@ -31,17 +48,53 @@ impl SampleSet {
         decision_variables: Vec<crate::v1::SampledDecisionVariable>,
         objectives: Option<Sampled<f64>>,
         constraints: Vec<crate::SampledConstraint>,
-        feasible_relaxed: FnvHashMap<u64, bool>,
-        feasible: FnvHashMap<u64, bool>,
         sense: Sense,
+    ) -> Self {
+        // Compute feasibility from constraints for all samples
+        let mut cached_feasible = std::collections::HashMap::new();
+        let mut cached_feasible_relaxed = std::collections::HashMap::new();
+        
+        // Get all sample IDs from objectives
+        if let Some(objectives) = &objectives {
+            for (sample_id, _) in objectives.iter() {
+                let sample_id_u64 = sample_id.into_inner();
+                
+                // Compute feasibility from constraints
+                let feasible = constraints.iter().all(|constraint| {
+                    constraint.feasible().get(&sample_id_u64).copied().unwrap_or(false)
+                });
+                
+                cached_feasible.insert(sample_id_u64, feasible);
+                cached_feasible_relaxed.insert(sample_id_u64, feasible);
+            }
+        }
+        
+        Self {
+            decision_variables,
+            objectives,
+            constraints,
+            sense,
+            cached_feasible,
+            cached_feasible_relaxed,
+        }
+    }
+    
+    /// Create a new SampleSet with explicit feasible values (for parsing)
+    pub(crate) fn new_with_feasible(
+        decision_variables: Vec<crate::v1::SampledDecisionVariable>,
+        objectives: Option<Sampled<f64>>,
+        constraints: Vec<crate::SampledConstraint>,
+        sense: Sense,
+        cached_feasible: std::collections::HashMap<u64, bool>,
+        cached_feasible_relaxed: std::collections::HashMap<u64, bool>,
     ) -> Self {
         Self {
             decision_variables,
             objectives,
             constraints,
-            feasible_relaxed,
-            feasible,
             sense,
+            cached_feasible,
+            cached_feasible_relaxed,
         }
     }
 
@@ -56,12 +109,12 @@ impl SampleSet {
 
     /// Check if a specific sample is feasible
     pub fn is_sample_feasible(&self, sample_id: crate::SampleID) -> Option<bool> {
-        self.feasible.get(&sample_id.into_inner()).copied()
+        self.cached_feasible.get(&sample_id.into_inner()).copied()
     }
 
     /// Check if a specific sample is feasible in the relaxed problem
     pub fn is_sample_feasible_relaxed(&self, sample_id: crate::SampleID) -> Option<bool> {
-        self.feasible_relaxed.get(&sample_id.into_inner()).copied()
+        self.cached_feasible_relaxed.get(&sample_id.into_inner()).copied()
     }
 
     /// Get a specific solution by sample ID
@@ -117,21 +170,10 @@ impl SampleSet {
             evaluated_constraints.insert(*evaluated_constraint.id(), evaluated_constraint);
         }
 
-        // Get feasibility
-        let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
-        let feasible_relaxed = *self
-            .feasible_relaxed
-            .get(&sample_id.into_inner())
-            .unwrap_or(&false);
-
         Ok(Solution::new(
             objective,
             evaluated_constraints,
             decision_variables,
-            feasible,
-            feasible_relaxed,
-            crate::v1::Optimality::Unspecified,
-            crate::v1::Relaxation::Unspecified,
         ))
     }
 }

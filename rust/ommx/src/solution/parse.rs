@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Parse, ParseError, RawParseError};
+use crate::{Parse, ParseError, SolutionError};
 
 impl Parse for crate::v1::Solution {
     type Output = Solution;
@@ -34,7 +34,31 @@ impl Parse for crate::v1::Solution {
             );
             decision_variables.insert(parsed.id(), evaluated_dv);
         }
-        let (feasible, feasible_relaxed) = match self.feasible_relaxed {
+        let optimality =
+            self.optimality
+                .try_into()
+                .map_err(|_| crate::RawParseError::UnknownEnumValue {
+                    enum_name: "ommx.v1.Optimality",
+                    value: self.optimality,
+                })?;
+        let relaxation =
+            self.relaxation
+                .try_into()
+                .map_err(|_| crate::RawParseError::UnknownEnumValue {
+                    enum_name: "ommx.v1.Relaxation",
+                    value: self.relaxation,
+                })?;
+
+        let mut solution = Solution::new(
+            objective,
+            evaluated_constraints,
+            decision_variables,
+        );
+        solution.optimality = optimality;
+        solution.relaxation = relaxation;
+
+        // Validate feasibility consistency 
+        let (provided_feasible, provided_feasible_relaxed) = match self.feasible_relaxed {
             Some(feasible_relaxed) => {
                 // New format since OMMX Python SDK 1.7.0
                 // https://github.com/Jij-Inc/ommx/pull/280
@@ -48,30 +72,24 @@ impl Parse for crate::v1::Solution {
             }
         };
 
-        let optimality =
-            self.optimality
-                .try_into()
-                .map_err(|_| RawParseError::UnknownEnumValue {
-                    enum_name: "ommx.v1.Optimality",
-                    value: self.optimality,
-                })?;
-        let relaxation =
-            self.relaxation
-                .try_into()
-                .map_err(|_| RawParseError::UnknownEnumValue {
-                    enum_name: "ommx.v1.Relaxation",
-                    value: self.relaxation,
-                })?;
+        let computed_feasible = solution.feasible();
+        let computed_feasible_relaxed = solution.feasible_relaxed();
 
-        Ok(Solution {
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            feasible,
-            feasible_relaxed,
-            optimality,
-            relaxation,
-        })
+        if computed_feasible != provided_feasible {
+            return Err(crate::RawParseError::SolutionError(SolutionError::InconsistentFeasibility {
+                provided_feasible,
+                computed_feasible,
+            }).into());
+        }
+
+        if computed_feasible_relaxed != provided_feasible_relaxed {
+            return Err(crate::RawParseError::SolutionError(SolutionError::InconsistentFeasibilityRelaxed {
+                provided_feasible_relaxed,
+                computed_feasible_relaxed,
+            }).into());
+        }
+
+        Ok(solution)
     }
 }
 
@@ -92,10 +110,10 @@ impl From<Solution> for crate::v1::Solution {
                 dv_converted.into()
             })
             .collect();
-        let feasible = *solution.feasible();
-        let feasible_relaxed = Some(*solution.feasible_relaxed());
-        let optimality = (*solution.optimality()).into();
-        let relaxation = (*solution.relaxation()).into();
+        let feasible = solution.feasible();
+        let feasible_relaxed = Some(solution.feasible_relaxed());
+        let optimality = solution.optimality.into();
+        let relaxation = solution.relaxation.into();
         // For backward compatibility, set feasible_unrelaxed to the same value as feasible
         let feasible_unrelaxed = feasible;
 
@@ -129,7 +147,7 @@ mod tests {
             evaluated_constraints: vec![v1::EvaluatedConstraint {
                 id: 1,
                 equality: v1::Equality::EqualToZero as i32,
-                evaluated_value: 0.1,
+                evaluated_value: 0.0,
                 dual_variable: Some(1.5),
                 name: Some("test_constraint".to_string()),
                 ..Default::default()
@@ -150,10 +168,10 @@ mod tests {
         let parsed: Solution = v1_solution.parse(&()).unwrap();
 
         assert_eq!(parsed.objective(), &42.5);
-        assert_eq!(parsed.feasible(), &true);
-        assert_eq!(parsed.feasible_relaxed(), &true);
-        assert_eq!(*parsed.optimality(), v1::Optimality::Optimal);
-        assert_eq!(*parsed.relaxation(), v1::Relaxation::Unspecified);
+        assert_eq!(parsed.feasible(), true);
+        assert_eq!(parsed.feasible_relaxed(), true);
+        assert_eq!(parsed.optimality, v1::Optimality::Optimal);
+        assert_eq!(parsed.relaxation, v1::Relaxation::Unspecified);
         assert_eq!(parsed.evaluated_constraints().len(), 1);
         assert_eq!(parsed.decision_variables().len(), 1);
 
@@ -197,5 +215,38 @@ mod tests {
         assert!(error2
             .to_string()
             .contains("Unknown or unsupported enum value 123 for ommx.v1.Relaxation"));
+    }
+
+    #[test]
+    fn test_inconsistent_feasibility_validation() {
+        use crate::v1;
+
+        // Create a Solution with constraints that should make it infeasible
+        // but with provided feasible value claiming it's feasible
+        let v1_solution = v1::Solution {
+            objective: 42.5,
+            evaluated_constraints: vec![v1::EvaluatedConstraint {
+                id: 1,
+                equality: v1::Equality::EqualToZero as i32,
+                evaluated_value: 1.0, // This should make constraint infeasible (1.0 != 0.0)
+                dual_variable: Some(1.5),
+                name: Some("test_constraint".to_string()),
+                ..Default::default()
+            }],
+            decision_variables: vec![],
+            feasible: true, // But solution claimed as feasible - inconsistent!
+            feasible_relaxed: Some(true),
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("Inconsistent feasibility for solution"));
+        assert!(error.to_string().contains("provided=true"));
+        assert!(error.to_string().contains("computed=false"));
     }
 }
