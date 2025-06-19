@@ -2978,16 +2978,11 @@ class Quadratic(AsConstraint):
 
         Examples:
             >>> from ommx.v1 import Quadratic, DecisionVariable
-            >>> x = DecisionVariable(1, name="x")
-            >>> y = DecisionVariable(2, name="y")
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> y = DecisionVariable.binary(2, name="y")
             >>> quad = x * y + 2 * x + 3
-            >>> terms = quad.terms
-            >>> isinstance(list(terms.keys())[0], tuple)
-            True
-            >>> # Keys are tuples, so they can be used in dict operations
-            >>> combined = {**terms, (99,): 1.0}  # This works with tuples
-            >>> len(combined) >= len(terms)
-            True
+            >>> quad.terms
+            {(1,): 2.0, (1, 2): 1.0, (): 3.0}
         """
         return self.raw.terms()
 
@@ -3281,16 +3276,11 @@ class Function(AsConstraint):
 
         Examples:
             >>> from ommx.v1 import Function, Linear, DecisionVariable
-            >>> x = DecisionVariable(1, name="x")
-            >>> linear = Linear({x: 2.5}, constant=1.0)
-            >>> func = Function.from_linear(linear)
-            >>> terms = func.terms
-            >>> isinstance(list(terms.keys())[0], tuple)
-            True
-            >>> # Keys are tuples, so they can be used in dict operations
-            >>> combined = {**terms, (99,): 1.0}  # This works with tuples
-            >>> len(combined) >= len(terms)
-            True
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> linear = Linear(terms={1: 2.5}, constant=1.0)
+            >>> func = Function(linear)
+            >>> func.terms
+            {(1,): 2.5, (): 1.0}
         """
         return self.raw.terms()
 
