@@ -4,7 +4,7 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::{sampled::UnknownSampleIDError, ATol, Bound, SampleID, Sampled};
+use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
@@ -491,5 +491,102 @@ impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
             parameters: eval_dv.metadata.parameters.into_iter().collect(),
             description: eval_dv.metadata.description,
         }
+    }
+}
+
+impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
+    type Error = crate::ParseError;
+
+    fn try_from(v1_dv: crate::v1::DecisionVariable) -> Result<Self, Self::Error> {
+        let message = "ommx.v1.DecisionVariable";
+        
+        // Parse the DecisionVariable first to get strongly typed fields
+        let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+        
+        // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
+        let value = v1_dv.substituted_value.ok_or_else(|| {
+            crate::RawParseError::MissingField {
+                message,
+                field: "substituted_value",
+            }
+        })?;
+
+        Ok(EvaluatedDecisionVariable {
+            id: dv.id,
+            kind: dv.kind,
+            bound: dv.bound,
+            value,
+            metadata: DecisionVariableMetadata {
+                name: dv.name,
+                subscripts: dv.subscripts,
+                parameters: dv.parameters,
+                description: dv.description,
+            },
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::v1;
+
+    #[test]
+    fn test_evaluated_decision_variable_try_from() {
+        // Test successful conversion
+        let v1_dv = v1::DecisionVariable {
+            id: 42,
+            kind: v1::decision_variable::Kind::Integer as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            substituted_value: Some(5.0),
+            name: Some("test_var".to_string()),
+            subscripts: vec![1, 2],
+            parameters: vec![("param1".to_string(), "value1".to_string())]
+                .into_iter()
+                .collect(),
+            description: Some("A test variable".to_string()),
+        };
+
+        let evaluated_dv: EvaluatedDecisionVariable = v1_dv.try_into().unwrap();
+        
+        assert_eq!(*evaluated_dv.id(), VariableID::from(42));
+        assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
+        assert_eq!(*evaluated_dv.value(), 5.0);
+        assert_eq!(evaluated_dv.metadata.name, Some("test_var".to_string()));
+        assert_eq!(evaluated_dv.metadata.subscripts, vec![1, 2]);
+        assert_eq!(evaluated_dv.metadata.description, Some("A test variable".to_string()));
+        
+        // Test round-trip conversion
+        let v1_converted: v1::DecisionVariable = evaluated_dv.into();
+        assert_eq!(v1_converted.id, 42);
+        assert_eq!(v1_converted.substituted_value, Some(5.0));
+        assert_eq!(v1_converted.name, Some("test_var".to_string()));
+    }
+
+    #[test]
+    fn test_evaluated_decision_variable_try_from_missing_value() {
+        // Test conversion failure when substituted_value is missing
+        let v1_dv = v1::DecisionVariable {
+            id: 42,
+            kind: v1::decision_variable::Kind::Integer as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            substituted_value: None, // Missing value should cause error
+            name: Some("test_var".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let result: Result<EvaluatedDecisionVariable, _> = v1_dv.try_into();
+        assert!(result.is_err());
+        
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("substituted_value"));
     }
 }

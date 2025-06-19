@@ -17,22 +17,8 @@ impl Parse for crate::v1::Solution {
 
         let mut decision_variables = std::collections::BTreeMap::default();
         for dv in self.decision_variables {
-            let parsed: crate::DecisionVariable = dv.parse(&())?;
-            // For parsing, we need to extract the value from substituted_value
-            let value = parsed.substituted_value().unwrap_or(0.0);
-            let evaluated_dv = crate::EvaluatedDecisionVariable::new_internal(
-                parsed.id(),
-                parsed.kind(),
-                parsed.bound(),
-                value,
-                crate::DecisionVariableMetadata {
-                    name: parsed.name.clone(),
-                    subscripts: parsed.subscripts.clone(),
-                    parameters: parsed.parameters.clone(),
-                    description: parsed.description.clone(),
-                },
-            );
-            decision_variables.insert(parsed.id(), evaluated_dv);
+            let evaluated_dv: crate::EvaluatedDecisionVariable = dv.try_into()?;
+            decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
         let optimality =
             self.optimality
