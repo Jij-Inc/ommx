@@ -105,9 +105,15 @@ pub struct SampledConstraint {
 **Key Design Decisions**:
 - **Data Integrity**: Essential fields (`id`, `equality`) and evaluation data are private with getters only
 - **Metadata Separation**: `ConstraintMetadata` contains only auxiliary information, not essential constraint properties
+- **Removed Constraint Status**: `removed_reason` and `removed_reason_parameters` are essential fields in `EvaluatedConstraint`/`SampledConstraint`, not auxiliary metadata
 - **Feasibility Pre-computation**: `feasible` field stores pre-computed feasibility to avoid repeated calculations
 - **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
 - **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
+
+**IMPORTANT: Feasibility Semantics**:
+- **`feasible`**: Considers ALL constraints (including removed ones with `removed_reason.is_some()`)
+- **`feasible_relaxed`**: Only considers active constraints where `removed_reason.is_none()`
+- This distinction is critical for constraint relaxation scenarios where removed constraints should not affect relaxed feasibility
 
 **Benefits**:
 - **Data Integrity**: Prevents external modification of critical constraint evaluation data
