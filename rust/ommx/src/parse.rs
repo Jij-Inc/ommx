@@ -1,6 +1,6 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
-    InstanceError, SubstitutionError,
+    InstanceError, SampleID, SubstitutionError,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -103,6 +103,9 @@ pub enum RawParseError {
 
     #[error(transparent)]
     InvalidDecisionVariable(#[from] DecisionVariableError),
+
+    #[error("Duplicated sample ID: {id:?}")]
+    DuplicatedSampleID { id: SampleID },
 
     /// The wire format is invalid.
     #[error("Cannot decode as a Protobuf Message: {0}")]

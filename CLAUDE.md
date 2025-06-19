@@ -33,11 +33,88 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - Rust: Generated at build time via `build.rs`
 - Python: Pre-generated files committed to repo, regenerated via `task proto:python`
 
-## Current Implementation Status (Dec 2024)
+## Current Implementation Status
 
 ### Python SDK v2 Migration Completed ✅
 
 The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
+
+### Rust SDK v2 Design (Completed ✅)
+
+The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generated `ommx::v1::*` types:
+
+**Design Philosophy**:
+- Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
+- Improve type safety and reduce runtime errors
+- Enable efficient data structures for deduplication
+
+**Implemented Types**:
+- ✅ `Sampled<T>` - Efficient representation for `ommx::v1::Samples` with deduplication
+  - `SampleID(u64)` - Type-safe sample identifier
+  - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
+  - Efficient storage: multiple sample IDs can share the same data
+
+**Constraint Types Implementation (Completed ✅)**:
+
+```rust
+// Auxiliary metadata for constraints (excluding essential id and equality)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintMetadata {
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: FnvHashMap<String, String>,
+    pub description: Option<String>,
+    pub used_decision_variable_ids: Vec<u64>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
+// Single evaluation result with data integrity guarantees
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct EvaluatedConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type (== 0 or <= 0)
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_value: f64,                // Protected: evaluation result
+    #[getset(get = "pub")]
+    dual_variable: Option<f64>,          // Protected: dual variable value
+    #[getset(get = "pub")]
+    feasible: bool,                      // Protected: pre-computed feasibility
+}
+
+// Multiple sample evaluation results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampledConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_values: Sampled<f64>,      // Protected: evaluation results
+    #[getset(get = "pub")]
+    dual_variables: Option<Sampled<f64>>, // Protected: dual variable values
+    #[getset(get = "pub")]
+    feasible: FnvHashMap<u64, bool>,     // Protected: feasibility map
+}
+```
+
+**Key Design Decisions**:
+- **Data Integrity**: Essential fields (`id`, `equality`) and evaluation data are private with getters only
+- **Metadata Separation**: `ConstraintMetadata` contains only auxiliary information, not essential constraint properties
+- **Feasibility Pre-computation**: `feasible` field stores pre-computed feasibility to avoid repeated calculations
+- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
+- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
+
+**Benefits**:
+- **Data Integrity**: Prevents external modification of critical constraint evaluation data
+- **Performance**: Pre-computed feasibility avoids repeated tolerance-based calculations
+- **Type Safety**: Strong typing with private fields and controlled access via getters
+- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
+- **Clean API**: Separation of essential properties from auxiliary metadata
 
 **Core Features Completed**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
@@ -45,6 +122,18 @@ The project has completed its migration from Protocol Buffers auto-generated Pyt
 - ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
 - ✅ Comprehensive testing and documentation updated
+- ✅ **Constraint evaluation system with data integrity guarantees**
+- ✅ **Sampled data structures with efficient deduplication**
+- ✅ **Parse trait implementations for Protocol Buffer conversion**
+
+**Recently Implemented**:
+- ✅ `Sampled<T>` with `get`/`get_mut` methods and `UnknownSampleIDError` error handling
+- ✅ `EvaluatedConstraint` and `SampledConstraint` with private fields and getset getters
+- ✅ `ConstraintMetadata` separation for auxiliary data with `Default` implementation
+- ✅ Pre-computed feasibility fields to improve performance
+- ✅ `Parse` trait implementations for `v1::EvaluatedConstraint` and `v1::SampledConstraint`
+- ✅ Type-safe constraint evaluation with proper error handling
+- ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
 
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
@@ -65,9 +154,37 @@ class Linear(AsConstraint):
         return self.raw.evaluate(to_state(state).SerializeToString())
 ```
 
+### Python Bindings Architecture (python/ommx/src/)
+
+The Rust implementation for Python bindings follows a modular structure with one class per file:
+
+**Mathematical Types**:
+- `linear.rs`: `Linear` class for linear expressions
+- `quadratic.rs`: `Quadratic` class for quadratic expressions  
+- `polynomial.rs`: `Polynomial` class for general polynomial expressions
+- `function.rs`: `Function` class as a wrapper for all mathematical types
+
+**Core Components**:
+- `instance.rs`: `Instance` class for optimization problems
+- `constraint.rs`: `Constraint` class for problem constraints
+- `decision_variable.rs`: `DecisionVariable` class
+- `state.rs`: `State` class for variable assignments
+- `solution.rs`: `Solution` class for optimization results
+- `sample_set.rs`: `SampleSet` class for multiple solutions
+- `samples.rs`: `Samples` class for sample collections
+
+**Utilities**:
+- `enums.rs`: PyO3 enum definitions (`Sense`, `Equality`, `Kind`)
+- `bound.rs`: Variable bounds handling
+- `random.rs`: Random number generation utilities
+
+This modular structure improves maintainability and makes the codebase easier to navigate.
+
 ## Development Commands
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
+
+**⚠️ Important**: All `task` commands must be run from the project root directory. The task command searches for `Taskfile.yml` from the current directory, so available commands will vary depending on your current location. Always ensure you are in the repository root before running any task commands.
 
 ### Essential Commands
 
@@ -84,20 +201,25 @@ task python:upgrade
 ```bash
 # Run all tests
 task python:test        # Python tests (includes linting, type checking, and pytest)
-task rust:test         # Rust tests only
-task python:test-ci    # CI mode (no pyright for main ommx package)
+task rust:test          # Rust tests only
+task python:test-ci     # CI mode (no pyright for main ommx package)
 ```
 
 **Code Quality:**
 ```bash
-# Format Python code
+# Format all code (Python and Rust)
+task format
+
+# Python formatting
 task python:format
 
 # Python linting
 task python:lint         # Run ruff check on all Python packages
 
-# Rust linting
-task rust:clippy
+# Rust checks
+task rust:check         # Run cargo check
+task rust:clippy        # Run clippy linting
+task rust:format        # Format Rust code
 
 # Type checking (Python)
 task python:ommx:pyright
@@ -106,26 +228,69 @@ task python:ommx:pyright
 **Building and Documentation:**
 ```bash
 # Generate code from protobuf
-task proto
+task proto              # Generate all (Rust and Python)
+task proto:python       # Generate Python code only
+task proto:rust         # Generate Rust code only
+task proto:doc          # Generate documentation from protobuf
 
 # Build documentation
-task api_reference     # Python API docs
-task rust:doc         # Rust docs
-task book_en          # English Jupyter Book
-task book_ja          # Japanese Jupyter Book
+task api_reference      # Python API docs (build and open)
+task rust:doc           # Rust docs
+task book_en            # English Jupyter Book (build and open)
+task book_ja            # Japanese Jupyter Book (build and open)
+
+# Additional documentation commands
+task api_reference:build       # Build Python API docs only
+task api_reference:open        # Open Python API docs
+task book_en:build            # Build English book only
+task book_en:open             # Open English book
+task book_en:watch            # Watch and rebuild English book
+task book_ja:build            # Build Japanese book only
+task book_ja:open             # Open Japanese book
+task book_ja:watch            # Watch and rebuild Japanese book
+```
+
+**Other Useful Commands:**
+```bash
+# Python benchmarks
+task python:bench              # Run benchmarks for OMMX Python SDK
+
+# Generate stubs for Rust extension
+task python:stubgen
+
+# Version management
+task python:set-version        # Set version for all Python packages
+task rust:set-version          # Set version for Rust SDK
+
+# Codspeed benchmarks
+task codspeed:list            # List all Codspeed workflows
+task codspeed:trigger         # Trigger GitHub Actions workflow
+
+# Generate LLMs.txt
+task python:generate-llms-txt
 ```
 
 ### Package-Specific Commands
 
 **Core OMMX:**
 - `task python:ommx:test` - Test main Python package
-- `task python:ommx:pytest` - Run pytest only (no type checking)
+- `task python:ommx:test-ci` - Test without pyright (CI mode)
+- `task python:ommx:pytest` - Run pytest only
+- `task python:ommx:pyright` - Type check only
+- `task python:ommx:lint` - Lint check only
+- `task python:ommx:bench` - Run benchmarks
 
 **Adapters:**
 - `task python:ommx-openjij-adapter:test`
 - `task python:ommx-python-mip-adapter:test`
 - `task python:ommx-pyscipopt-adapter:test`
 - `task python:ommx-highs-adapter:test`
+
+Each adapter also has individual commands for:
+- `:lint` - Run ruff check
+- `:pyright` - Type checking
+- `:pytest` - Run tests
+- `:markdown-code-runner` - Run markdown code examples (Python-MIP, PySCIPOpt, HiGHS only)
 
 ## Testing Strategy
 
@@ -195,12 +360,15 @@ from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Optimality
 ```
 
-### Current Development Status (December 2024)
+### Current Development Status
 - **Core Migration ✅**: Protocol Buffer to Rust migration completed across all components
 - **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - **Documentation ✅**: Comprehensive migration guide and adapter specifications available
 - **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
 - **Performance ✅**: Rust backend providing optimal performance for mathematical operations
+- **Constraint System ✅**: Complete constraint evaluation system with data integrity guarantees
+- **Type Safety ✅**: Strongly-typed constraint implementations with private fields and getters
+- **Parse Integration ✅**: Full Protocol Buffer to Rust type conversion via Parse trait
 
 ## Development Notes
 
@@ -212,9 +380,11 @@ from ommx.v1.solution_pb2 import Optimality
 - **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API instead
 
 ### 📁 Directory Guidelines  
-- Most tasks should be performed from the repository root directory
+- **All tasks MUST be performed from the repository root directory**
+- Task commands require being in the root directory to access the main `Taskfile.yml`
 - Return to root after completing any subtasks
 - Use absolute paths when referencing files across packages
+- Never use `cd` to navigate to subdirectories when running task commands
 
 ### 🧪 Testing Guidelines
 - Add new Python test code to python/ommx-tests/tests directory only

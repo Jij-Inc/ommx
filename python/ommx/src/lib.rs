@@ -7,12 +7,18 @@ mod dataset;
 mod decision_variable;
 mod descriptor;
 mod enums;
-mod evaluate;
+mod function;
 mod instance;
-mod message;
+mod linear;
 mod mps;
+mod polynomial;
 mod qplib;
+mod quadratic;
 mod random;
+mod sample_set;
+mod samples;
+mod solution;
+mod state;
 
 pub use artifact::*;
 pub use bound::*;
@@ -23,12 +29,18 @@ pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
 pub use enums::*;
-pub use evaluate::*;
+pub use function::*;
 pub use instance::*;
-pub use message::*;
+pub use linear::*;
 pub use mps::*;
+pub use polynomial::*;
 pub use qplib::*;
+pub use quadratic::*;
 pub use random::*;
+pub use sample_set::*;
+pub use samples::*;
+pub use solution::*;
+pub use state::*;
 
 use pyo3::prelude::*;
 
@@ -65,6 +77,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
+    m.add_class::<State>()?;
 
     // Enums
     m.add_class::<Sense>()?;
@@ -73,13 +86,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     // Random
     m.add_class::<Rng>()?;
-
-    // Evaluate
-    m.add_function(wrap_pyfunction!(evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_constraint, m)?)?;
-    m.add_function(wrap_pyfunction!(partial_evaluate_instance, m)?)?;
-    m.add_function(wrap_pyfunction!(used_decision_variable_ids, m)?)?;
 
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;

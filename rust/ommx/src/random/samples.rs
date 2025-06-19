@@ -3,13 +3,17 @@ use crate::{
     v1::{samples::SamplesEntry, Samples, State},
 };
 use anyhow::{bail, Result};
+use getset::Getters;
 use proptest::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters)]
 pub struct SamplesParameters {
+    #[getset(get = "pub")]
     num_different_samples: usize,
+    #[getset(get = "pub")]
     num_samples: usize,
     /// The maximum sample ID. This value is inclusive.
+    #[getset(get = "pub")]
     max_sample_id: u64,
 }
 
@@ -19,9 +23,9 @@ impl SamplesParameters {
         num_samples: usize,
         max_sample_id: u64,
     ) -> Result<Self> {
-        if num_different_samples >= num_samples {
+        if num_different_samples > num_samples {
             bail!(
-                "num_different_samples({num_different_samples}) must be less than num_samples({num_samples})."
+                "num_different_samples({num_different_samples}) must be less than or equal to num_samples({num_samples})."
             );
         }
         if num_samples > max_sample_id as usize + 1 {

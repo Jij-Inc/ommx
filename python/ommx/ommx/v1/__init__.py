@@ -544,14 +544,14 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> instance.evaluate({0: 1, 1: 0, 2: 2})
         Traceback (most recent call last):
             ...
-        RuntimeError: Decision variable value out of bound: ID=2, value=2, bound=[0, 1]
+        RuntimeError: Value for Binary variable VariableID(2) is out of bounds. Value: 2, Bound: Bound { lower: -0.0, upper: 1.0 }
 
         If some of the decision variables are not set, this raises an error:
 
         >>> instance.evaluate({0: 1, 1: 0})
         Traceback (most recent call last):
             ...
-        RuntimeError: Variable id (2) is not found in the solution
+        RuntimeError: The state does not contain some required IDs: {VariableID(2)}
 
         Irrelevant decision variables
         -----------------------------
@@ -595,10 +595,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   Binary   -0.0    1.0         []    0.0
         
         """
-        out = _ommx_rust.evaluate_instance(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
-        return Solution.from_bytes(out)
+        out = self.raw.evaluate(to_state(state).SerializeToString())
+        return Solution.from_bytes(out.to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Instance:
         """
@@ -636,9 +634,10 @@ class Instance(InstanceBase, UserAnnotationBase):
             >>> new_instance.objective
             Function(x2 + 1)
         """
-        out = _ommx_rust.partial_evaluate_instance(
-            self.to_bytes(), to_state(state).SerializeToString()
-        )
+        # Create a copy of the instance and call partial_evaluate on it
+        # Note: partial_evaluate modifies the instance in place and returns bytes
+        temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        out = temp_instance.partial_evaluate(to_state(state).SerializeToString())
         return Instance.from_bytes(out)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -1263,6 +1262,142 @@ class Instance(InstanceBase, UserAnnotationBase):
             to_samples(samples).SerializeToString()
         )
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
+
+    def random_state(self, rng: _ommx_rust.Rng) -> State:
+        """
+        Generate a random state for this instance using the provided random number generator.
+
+        This method generates random values only for variables that are actually used in the
+        objective function or constraints, as determined by decision variable analysis.
+        Generated values respect the bounds of each variable type.
+
+        Parameters
+        ----------
+        rng : _ommx_rust.Rng
+            Random number generator to use for generating the state.
+
+        Returns
+        -------
+        State
+            A randomly generated state that satisfies the variable bounds of this instance.
+            Only contains values for variables that are used in the problem.
+
+        Examples
+        =========
+
+        ### Generate random state only for used variables
+
+        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> x = [DecisionVariable.binary(i) for i in range(5)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],  # Only x[0] and x[1] are used
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> state = instance.random_state(rng)
+
+        Only used variables have values
+
+        >>> set(state.entries.keys())
+        {0, 1}
+
+        Values respect binary bounds
+
+        >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
+        True
+
+        ### Generate random state respecting variable bounds
+
+        >>> x_bin = DecisionVariable.binary(0)
+        >>> x_int = DecisionVariable.integer(1, lower=3, upper=7)
+        >>> x_cont = DecisionVariable.continuous(2, lower=-2.5, upper=5.0)
+
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x_bin, x_int, x_cont],
+        ...     objective=x_bin + x_int + x_cont,
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> state = instance.random_state(rng)
+
+        Values respect their respective bounds
+
+        >>> state.entries[0] in [0.0, 1.0]  # Binary
+        True
+        >>> 3.0 <= state.entries[1] <= 7.0  # Integer
+        True
+        >>> -2.5 <= state.entries[2] <= 5.0  # Continuous
+        True
+
+        """
+        state_bytes = self.raw.random_state(rng)
+        state = State()
+        state.ParseFromString(state_bytes)
+        return state
+
+    def random_samples(
+        self,
+        rng: _ommx_rust.Rng,
+        *,
+        num_different_samples: int = 5,
+        num_samples: int = 10,
+        max_sample_id: int | None = None,
+    ) -> Samples:
+        """
+        Generate random samples for this instance.
+
+        The generated samples will contain ``num_samples`` sample entries divided into
+        ``num_different_samples`` groups, where each group shares the same state but has
+        different sample IDs.
+
+        :param rng: Random number generator
+        :param num_different_samples: Number of different states to generate
+        :param num_samples: Total number of samples to generate
+        :param max_sample_id: Maximum sample ID (default: ``num_samples``)
+        :return: Samples object
+
+        Examples
+        ========
+
+        Generate samples for a simple instance:
+
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(sum(x) <= 2).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
+        >>> len(samples.entries)
+        2
+        >>> sum(len(entry.ids) for entry in samples.entries)
+        5
+
+        Each generated state respects variable bounds:
+
+        >>> for entry in samples.entries:
+        ...     state = entry.state
+        ...     for var_id, value in state.entries.items():
+        ...         assert value in [0.0, 1.0], f"Binary variable {var_id} has invalid value {value}"
+
+        """
+        samples_bytes = self.raw.random_samples(
+            rng,
+            num_different_samples=num_different_samples,
+            num_samples=num_samples,
+            max_sample_id=max_sample_id,
+        )
+        samples = Samples()
+        samples.ParseFromString(samples_bytes)
+        return samples
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
@@ -3672,7 +3807,7 @@ class Constraint:
             "id": c.id,
             "equality": _equality(equality_for_display),
             "type": _function_type(pb_function),
-            "used_ids": _ommx_rust.used_decision_variable_ids(c.function.encode()),
+            "used_ids": Function(c.function).raw.required_ids(),
             "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
             "description": NA,  # Description not supported in Rust implementation

@@ -1,6 +1,6 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Sense,
-    VariableBound,
+    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Rng, SampleSet,
+    Samples, Sense, Solution, VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
@@ -169,10 +169,68 @@ impl Instance {
         Ok(ParametricInstance(inner.uniform_penalty_method()?))
     }
 
+    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let solution = self.0.evaluate(&state, ommx::ATol::default())?;
+        Ok(Solution(solution))
+    }
+
+    pub fn partial_evaluate<'py>(
+        &mut self,
+        py: Python<'py>,
+        state: &Bound<PyBytes>,
+    ) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        self.0.partial_evaluate(&state, ommx::ATol::default())?;
+        let inner: ommx::v1::Instance = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    }
+
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(
             self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
         ))
+    }
+
+    pub fn random_state<'py>(&self, py: Python<'py>, rng: &Rng) -> Result<Bound<'py, PyBytes>> {
+        let strategy = self.0.arbitrary_state();
+        let mut rng_guard = rng
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let state = ommx::random::sample(&mut *rng_guard, strategy);
+        let bytes = state.encode_to_vec();
+        Ok(PyBytes::new(py, &bytes))
+    }
+
+    #[pyo3(signature = (
+        rng,
+        *,
+        num_different_samples = *ommx::random::SamplesParameters::default().num_different_samples(),
+        num_samples = *ommx::random::SamplesParameters::default().num_samples(),
+        max_sample_id = None
+    ))]
+    pub fn random_samples<'py>(
+        &self,
+        py: Python<'py>,
+        rng: &Rng,
+        num_different_samples: usize,
+        num_samples: usize,
+        max_sample_id: Option<u64>,
+    ) -> Result<Bound<'py, PyBytes>> {
+        let max_sample_id = max_sample_id.unwrap_or(num_samples as u64);
+        let params = ommx::random::SamplesParameters::new(
+            num_different_samples,
+            num_samples,
+            max_sample_id,
+        )?;
+
+        let strategy = self.0.arbitrary_samples(params);
+        let mut rng_guard = rng
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
+        let samples = ommx::random::sample(&mut *rng_guard, strategy);
+        let bytes = samples.encode_to_vec();
+        Ok(PyBytes::new(py, &bytes))
     }
 
     pub fn relax_constraint(
@@ -458,87 +516,5 @@ impl Parameters {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
         Ok(PyBytes::new(py, &self.0.encode_to_vec()))
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-pub struct Solution(ommx::v1::Solution);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl Solution {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Solution::decode(bytes.as_bytes())?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-pub struct Samples(ommx::v1::Samples);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl Samples {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Samples::decode(bytes.as_bytes())?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-pub struct SampleSet(ommx::v1::SampleSet);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl SampleSet {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
-    }
-
-    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
-        Ok(self.0.get(sample_id).map(Solution)?)
-    }
-
-    pub fn num_samples(&self) -> PyResult<usize> {
-        Ok(self.0.num_samples()?)
-    }
-
-    pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.0.sample_ids()
-    }
-
-    pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible_ids()
-    }
-
-    pub fn feasible_unrelaxed_ids(&self) -> BTreeSet<u64> {
-        self.0.feasible_unrelaxed_ids()
-    }
-
-    pub fn best_feasible(&self) -> PyResult<Solution> {
-        Ok(self.0.best_feasible().map(Solution)?)
-    }
-
-    pub fn best_feasible_unrelaxed(&self) -> PyResult<Solution> {
-        Ok(self.0.best_feasible_unrelaxed().map(Solution)?)
     }
 }
