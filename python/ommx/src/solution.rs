@@ -46,7 +46,7 @@ impl Solution {
     /// Check if the solution is feasible in the unrelaxed problem  
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
-        self.0.feasible_unrelaxed
+        self.0.feasible
     }
 
     /// Get the optimality status

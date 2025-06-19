@@ -35,20 +35,107 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 
 ## Current Implementation Status
 
-### Python SDK v2 Migration Status
+### Python SDK v2 Migration Completed ✅
 
-The project has completed its core migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings. Additional performance optimizations are ongoing.
+The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings.
 
-**Completed Core Migration ✅**:
+### Rust SDK v2 Design (Completed ✅)
+
+The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generated `ommx::v1::*` types:
+
+**Design Philosophy**:
+- Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
+- Improve type safety and reduce runtime errors
+- Enable efficient data structures for deduplication
+
+**Implemented Types**:
+- ✅ `Sampled<T>` - Efficient representation for `ommx::v1::Samples` with deduplication
+  - `SampleID(u64)` - Type-safe sample identifier
+  - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
+  - Efficient storage: multiple sample IDs can share the same data
+
+**Constraint Types Implementation (Completed ✅)**:
+
+```rust
+// Auxiliary metadata for constraints (excluding essential id and equality)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintMetadata {
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: FnvHashMap<String, String>,
+    pub description: Option<String>,
+    pub used_decision_variable_ids: Vec<u64>,
+    pub removed_reason: Option<String>,
+    pub removed_reason_parameters: FnvHashMap<String, String>,
+}
+
+// Single evaluation result with data integrity guarantees
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct EvaluatedConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type (== 0 or <= 0)
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_value: f64,                // Protected: evaluation result
+    #[getset(get = "pub")]
+    dual_variable: Option<f64>,          // Protected: dual variable value
+    #[getset(get = "pub")]
+    feasible: bool,                      // Protected: pre-computed feasibility
+}
+
+// Multiple sample evaluation results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampledConstraint {
+    #[getset(get = "pub")]
+    id: ConstraintID,                    // Essential: constraint identifier
+    #[getset(get = "pub")]
+    equality: Equality,                  // Essential: constraint type
+    pub metadata: ConstraintMetadata,    // Auxiliary metadata
+    #[getset(get = "pub")]
+    evaluated_values: Sampled<f64>,      // Protected: evaluation results
+    #[getset(get = "pub")]
+    dual_variables: Option<Sampled<f64>>, // Protected: dual variable values
+    #[getset(get = "pub")]
+    feasible: FnvHashMap<u64, bool>,     // Protected: feasibility map
+}
+```
+
+**Key Design Decisions**:
+- **Data Integrity**: Essential fields (`id`, `equality`) and evaluation data are private with getters only
+- **Metadata Separation**: `ConstraintMetadata` contains only auxiliary information, not essential constraint properties
+- **Feasibility Pre-computation**: `feasible` field stores pre-computed feasibility to avoid repeated calculations
+- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
+- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
+
+**Benefits**:
+- **Data Integrity**: Prevents external modification of critical constraint evaluation data
+- **Performance**: Pre-computed feasibility avoids repeated tolerance-based calculations
+- **Type Safety**: Strong typing with private fields and controlled access via getters
+- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
+- **Clean API**: Separation of essential properties from auxiliary metadata
+
+**Core Features Completed**:
 - ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
 - ✅ Instance class fully migrated to Rust backend with maintained API compatibility
 - ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
 - ✅ Comprehensive testing and documentation updated
+- ✅ **Constraint evaluation system with data integrity guarantees**
+- ✅ **Sampled data structures with efficient deduplication**
+- ✅ **Parse trait implementations for Protocol Buffer conversion**
+- ✅ **Modular Python bindings** with one class per file in `python/ommx/src/`
 
-**Ongoing Performance Migration 🔄**:
-- ⏳ PyO3 implementations for `Solution`, `SampleSet`, and `State` to eliminate serialization overhead
-- ⏳ Enhanced properties and methods for better Python API integration
+**Recently Implemented**:
+- ✅ `Sampled<T>` with `get`/`get_mut` methods and `UnknownSampleIDError` error handling
+- ✅ `EvaluatedConstraint` and `SampledConstraint` with private fields and getset getters
+- ✅ `ConstraintMetadata` separation for auxiliary data with `Default` implementation
+- ✅ Pre-computed feasibility fields to improve performance
+- ✅ `Parse` trait implementations for `v1::EvaluatedConstraint` and `v1::SampledConstraint`
+- ✅ Type-safe constraint evaluation with proper error handling
+- ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
+- ✅ **PyO3 implementations** for `Solution`, `SampleSet`, `Samples`, and `State` with rich properties
 
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
@@ -69,72 +156,138 @@ class Linear(AsConstraint):
         return self.raw.evaluate(to_state(state).SerializeToString())
 ```
 
+### Python Bindings Architecture (python/ommx/src/)
+
+The Rust implementation for Python bindings follows a modular structure with one class per file:
+
+**Mathematical Types**:
+- `linear.rs`: `Linear` class for linear expressions
+- `quadratic.rs`: `Quadratic` class for quadratic expressions  
+- `polynomial.rs`: `Polynomial` class for general polynomial expressions
+- `function.rs`: `Function` class as a wrapper for all mathematical types
+
+**Core Components**:
+- `instance.rs`: `Instance` class for optimization problems
+- `constraint.rs`: `Constraint` class for problem constraints
+- `decision_variable.rs`: `DecisionVariable` class
+- `state.rs`: `State` class for variable assignments
+- `solution.rs`: `Solution` class for optimization results
+- `sample_set.rs`: `SampleSet` class for multiple solutions
+- `samples.rs`: `Samples` class for sample collections
+
+**Utilities**:
+- `enums.rs`: PyO3 enum definitions (`Sense`, `Equality`, `Kind`)
+- `bound.rs`: Variable bounds handling
+- `random.rs`: Random number generation utilities
+
+This modular structure improves maintainability and makes the codebase easier to navigate.
+
 ## Development Commands
 
-This project uses [Taskfile](https://taskfile.dev/) for task management. **Always run task commands from the project root directory**. Run `task -l` to see all available commands.
+This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
+
+**⚠️ Important**: All `task` commands must be run from the project root directory. The task command searches for `Taskfile.yml` from the current directory, so available commands will vary depending on your current location. Always ensure you are in the repository root before running any task commands.
 
 ### Essential Commands
 
 **Setup and Dependencies:**
 ```bash
-# From project root: /Users/termoshtt/github.com/Jij-Inc/ommx
-task python:sync        # Setup Python development environment, rebuild Python SDK
-task python:upgrade     # Upgrade uv dependencies
+# Python development environment
+task python:sync
+
+# Install/upgrade dependencies
+task python:upgrade
 ```
 
 **Testing:**
 ```bash
-# Run all tests (from project root)
+# Run all tests
 task python:test        # Python tests (includes linting, type checking, and pytest)
-task rust:test         # Rust tests only
+task rust:test          # Rust tests only
 task python:test-ci     # CI mode (no pyright for main ommx package)
 ```
 
 **Code Quality:**
 ```bash
-# Format and linting (from project root)
-task format             # Format all code (Python + Rust)
-task python:format      # Format Python code only
-task python:lint        # Run ruff check on all Python packages
-task rust:clippy        # Run clippy for Rust SDK
-task python:ommx:pyright # Type checking for main Python package
+# Format all code (Python and Rust)
+task format
+
+# Python formatting
+task python:format
+
+# Python linting
+task python:lint         # Run ruff check on all Python packages
+
+# Rust checks
+task rust:check         # Run cargo check
+task rust:clippy        # Run clippy linting
+task rust:format        # Format Rust code
+
+# Type checking (Python)
+task python:ommx:pyright
 ```
 
 **Building and Documentation:**
 ```bash
-# Generate code from protobuf (from project root)
-task proto              # Generate code from Protobuf definitions
+# Generate code from protobuf
+task proto              # Generate all (Rust and Python)
+task proto:python       # Generate Python code only
+task proto:rust         # Generate Rust code only
+task proto:doc          # Generate documentation from protobuf
 
-# Build documentation (from project root)
-task api_reference      # Build and open Python API docs
-task rust:doc          # Generate and open Rust docs
-task book_en           # Build and open English Jupyter Book
-task book_ja           # Build and open Japanese Jupyter Book
+# Build documentation
+task api_reference      # Python API docs (build and open)
+task rust:doc           # Rust docs
+task book_en            # English Jupyter Book (build and open)
+task book_ja            # Japanese Jupyter Book (build and open)
+```
+
+**Other Useful Commands:**
+```bash
+# Python benchmarks
+task python:bench              # Run benchmarks for OMMX Python SDK
+
+# Generate stubs for Rust extension
+task python:stubgen
+
+# Version management
+task python:set-version        # Set version for all Python packages
+task rust:set-version          # Set version for Rust SDK
+
+# Codspeed benchmarks
+task codspeed:list            # List all Codspeed workflows
+task codspeed:trigger         # Trigger GitHub Actions workflow
+
+# Generate LLMs.txt
+task python:generate-llms-txt
 ```
 
 ### Package-Specific Commands
 
 **Core OMMX:**
-- `task python:ommx:test` - Run tests for OMMX Python SDK
-- `task python:ommx:pytest` - Run pytest only (no type checking)
-- `task python:ommx:test-ci` - CI mode (without pyright)
-- `task python:ommx:bench` - Run benchmarks for OMMX Python SDK
+- `task python:ommx:test` - Test main Python package
+- `task python:ommx:test-ci` - Test without pyright (CI mode)
+- `task python:ommx:pytest` - Run pytest only
+- `task python:ommx:pyright` - Type check only
+- `task python:ommx:lint` - Lint check only
+- `task python:ommx:bench` - Run benchmarks
 
 **Adapters:**
-- `task python:ommx-openjij-adapter:test` - Run all tests for OMMX OpenJij Adapter
-- `task python:ommx-python-mip-adapter:test` - Run all tests for OMMX Python-MIP Adapter  
-- `task python:ommx-pyscipopt-adapter:test` - Run all tests for OMMX PySCIPOpt Adapter
-- `task python:ommx-highs-adapter:test` - Run all tests for OMMX Highs Adapter
+- `task python:ommx-openjij-adapter:test`
+- `task python:ommx-python-mip-adapter:test`
+- `task python:ommx-pyscipopt-adapter:test`
+- `task python:ommx-highs-adapter:test`
 
-**Development Utilities:**
-- `task python:stubgen` - Generate stubs files for Rust extension
-- `task python:bench` - Run benchmarks for OMMX Python SDK
-- `task codspeed:trigger` - Trigger GitHub Actions workflow for Codspeed on current branch
+Each adapter also has individual commands for:
+- `:lint` - Run ruff check
+- `:pyright` - Type checking
+- `:pytest` - Run tests
+- `:markdown-code-runner` - Run markdown code examples (Python-MIP, PySCIPOpt, HiGHS only)
 
 ## Testing Strategy
 
 **Python Testing:**
-- Main package: ruff linting + pytest + pyright type checking + doc tests
+- Main package: ruff linting + pytest + pyright type checking + doctests
 - Adapters: ruff linting + pytest with solver-specific integration tests
 - CI mode available for environments without pyright
 
@@ -166,7 +319,7 @@ When making changes, always run the appropriate linting/testing commands before 
 
 1. **API Philosophy**: Avoid `_ommx_rust` direct imports; always use `ommx.v1` unified API. When needed functionality is missing, extend the Python SDK rather than using raw APIs
 2. **Protocol Buffers Compatibility**: Ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doc tests
+3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
 4. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
 5. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
 
@@ -187,7 +340,7 @@ When developing or modifying solver adapters:
 2. **API Usage**: Use Python SDK methods instead of raw API calls
 3. **Type Conversions**: Let Python SDK handle conversions between Rust and Python types
 4. **Extension Pattern**: If needed functionality is missing, add it to Python SDK classes
-5. **Testing**: Ensure all tests pass including doc tests and pyright checks
+5. **Testing**: Ensure all tests pass including doctests and pyright checks
 
 **Example Pattern**:
 ```python
@@ -204,216 +357,11 @@ from ommx.v1.solution_pb2 import Optimality
 - **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
 - **Documentation ✅**: Comprehensive migration guide and adapter specifications available
 - **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
-- **Performance Optimization 🔄**: Ongoing PyO3 performance improvements for data structures
-
-## PyO3 Performance Enhancement Plan
-
-### Background
-Benchmark results for `evaluate_samples` revealed performance optimization opportunities through better PyO3 integration. We are enhancing the existing PyO3 implementations with richer functionality to eliminate unnecessary serialization overhead.
-
-### Current PyO3 Implementation Status
-
-**Basic PyO3 Wrappers (Need Enhancement)**:
-- ⏳ `Solution` - Basic wrapper, needs core properties (objective, state, feasible, etc.)
-- ⏳ `Samples` - Basic wrapper with `from_bytes`/`to_bytes`  
-- ⏳ `SampleSet` - Basic wrapper, needs enhanced functionality (objectives dict, feasible dicts, etc.)
-- ⏳ `State` - PyO3 implementation exists but reverted to protobuf, needs re-migration
-
-**Enhancement Goals**:
-- Rich Python properties for all PyO3 data structures
-- Direct memory access between Python and Rust without serialization overhead
-- Maintaining API compatibility through incremental migration
-
-### Migration Strategy
-
-**Phase 1: Enhance PyO3 Implementations** ✅
-- ✅ Split PyO3 classes into separate files for better organization
-  - ✅ Split message.rs into linear.rs, quadratic.rs, polynomial.rs, function.rs
-  - ✅ Extract Solution, SampleSet, Samples from instance.rs into separate files
-- ✅ Add core properties to `_ommx_rust.Solution` (objective, state, feasible status, etc.)
-- ✅ Add core properties to `_ommx_rust.SampleSet` (objectives dict, feasible dicts, etc.)
-- ✅ `_ommx_rust.State` already has PyO3 implementation with full functionality
-
-**Phase 2: Incremental Python SDK Migration** 🔄
-- ✅ **COMPLETED**: Migrate ommx.v1.State to use _ommx_rust.State via .raw
-  - Strategy: Replace protobuf import with _ommx_rust.State, fix errors iteratively
-  - ✅ Changed import: `State = _ommx_rust.State` in __init__.py
-  - ✅ **Fixed all pyright errors (13 total)**:
-    - ✅ SerializeToString() → to_bytes() method calls (9 locations)
-    - ✅ ParseFromString() → from_bytes() method calls (1 location)
-    - ✅ Type mismatches in protobuf Solution construction (2 locations)
-    - ✅ Incompatible State type in return (1 location)
-  - ✅ Added helper function `_state_to_protobuf()` for legacy compatibility
-  - ✅ All pyright errors resolved (0 errors)
-  - ✅ All 98 tests pass - migration successful!
-  - ✅ Fixed import order to resolve lint errors (E402)
-  - ✅ **ADAPTER FIXES COMPLETED**: All major adapters (OpenJij, PyScipOpt) fixed for State constructor changes
-  - ✅ **State Constructor Enhancement**: Enhanced to accept both `dict[int, float]` and `Iterable[tuple[int, float]]`
-- ✅ **COMPLETED**: Fix HiGHS adapter test failures (prerequisite for Solution migration)
-  - ✅ Fixed State implementation to use BTreeMap for consistent ordering
-  - ✅ Updated test to use correct variable IDs (1, 2 instead of 3, 2)
-- 🔄 **IN PROGRESS**: Update ommx.v1.Solution to use PyO3 properties via .raw
-  - **Problem Analysis**: Python SDK Solution class needs access to complex nested structures:
-    - `decision_variables` property → requires `Vec<DecisionVariable>` from PyO3 Solution
-    - `evaluated_constraints` property → requires `Vec<EvaluatedConstraint>` from PyO3 Solution  
-    - `extract_decision_variables()` method → iterates over decision variables by name/subscripts
-    - `extract_constraints()` method → iterates over evaluated constraints by name/subscripts
-  - **Required PyO3 Solution APIs to implement**:
-    - `#[getter] decision_variables() -> Vec<DecisionVariable>` - Return decision variables for DataFrame construction
-    - `#[getter] evaluated_constraints() -> Vec<EvaluatedConstraint>` - Return evaluated constraints for DataFrame construction
-  - **Required PyO3 Types to implement**:
-    - `EvaluatedConstraint` PyO3 wrapper (currently missing) - Wrapper for `ommx::v1::EvaluatedConstraint`
-    - Properties needed: `id`, `equality`, `evaluated_value`, `used_decision_variable_ids`, `name`, `subscripts`, `description`, `dual_variable`, `removed_reason`, `removed_reason_parameters`
-  - **Implementation Strategy**:
-    - Keep protobuf Solution as fallback for complex operations requiring serialization compatibility  
-    - Add rich PyO3 properties to eliminate temporary `_solution_to_protobuf()` helper
-    - Ensure DecisionVariable PyO3 wrapper has all properties needed for `_as_pandas_entry()`
-    - Add EvaluatedConstraint PyO3 wrapper with full protobuf compatibility
-- ⏳ Update ommx.v1.SampleSet to use PyO3 properties via .raw
-- Maintain serialization compatibility for safe migration
-- Keep all tests passing throughout the process
-
-### API Evolution Pattern
-
-**Enhanced Solution Access**:
-```python
-# Current (basic PyO3 wrapper)
-solution = Solution.from_bytes(bytes_data)
-
-# Target (rich PyO3 properties)
-solution.objective    # Direct property access
-solution.state        # Direct State object
-solution.feasible     # Direct boolean
-```
-
-**Enhanced SampleSet Access**:
-```python
-# Current (basic methods)
-sample_set.get(sample_id)  # Returns Solution
-
-# Target (rich properties) 
-sample_set.objectives      # Dict[int, float]
-sample_set.feasible        # Dict[int, bool]
-```
-
-### Current Analysis: Solution and SampleSet Migration
-
-**Current State (Based on Analysis)**:
-- `State` - 🔄 **IN PROGRESS**: PyO3 implementation exists, currently migrating Python SDK wrapper
-- `Solution`, `Samples`, `SampleSet` - ✅ Enhanced PyO3 implementations with rich properties completed
-
-**Current PyO3 Implementation Status**:
-```rust
-// Current _ommx_rust implementations (basic wrappers only)
-class Solution:
-    @staticmethod
-    def from_bytes(bytes: bytes) -> Solution
-    def to_bytes(self) -> bytes
-
-class SampleSet:
-    @staticmethod 
-    def from_bytes(bytes: bytes) -> SampleSet
-    def to_bytes(self) -> bytes
-    def get(self, sample_id: int) -> Solution
-    def num_samples(self) -> int
-    def sample_ids(self) -> set[int]
-    def feasible_ids(self) -> set[int]
-    def feasible_unrelaxed_ids(self) -> set[int]
-    def best_feasible(self) -> Solution
-    def best_feasible_unrelaxed(self) -> Solution
-
-class Samples:
-    @staticmethod
-    def from_bytes(bytes: bytes) -> Samples
-    def to_bytes(self) -> bytes
-```
-
-**Python SDK Current Implementation Pattern**:
-```python
-# Current Python wrapper pattern
-class Solution:
-    def __init__(self, raw: _Solution):
-        self.raw = raw  # Protocol Buffer message
-    
-    @property
-    def objective(self) -> float:
-        return self.raw.objective
-    
-    @property
-    def state(self) -> State:
-        return self.raw.state
-```
-
-**Key Attributes Needed in PyO3 Solution**:
-- ✅ `objective: float` - Objective function value
-- ✅ `state: State` - Decision variable values  
-- ✅ `feasible: bool` - Feasibility status
-- ✅ `feasible_relaxed: Optional[bool]` - Relaxed feasibility
-- ✅ `feasible_unrelaxed: bool` - Unrelaxed feasibility
-- ✅ `optimality: int` - Optimization status (converted to protobuf enum in Python)
-- ✅ `relaxation: int` - Relaxation status (converted to protobuf enum in Python)
-- ⏳ `decision_variables: Vec<DecisionVariable>` - Decision variables for DataFrame construction
-- ⏳ `evaluated_constraints: Vec<EvaluatedConstraint>` - Evaluated constraints for DataFrame construction
-
-**Missing PyO3 Types to Implement**:
-- ⏳ `EvaluatedConstraint` - Complete PyO3 wrapper with all protobuf properties
-
-**Key Attributes Needed in PyO3 SampleSet**:
-- `sample_ids: set[int]` - ✅ Already implemented
-- `objectives: dict[int, float]` - Objective values per sample
-- `feasible: dict[int, bool]` - Feasibility per sample  
-- `feasible_relaxed: dict[int, Optional[bool]]` - Relaxed feasibility per sample
-- `feasible_unrelaxed: dict[int, bool]` - Unrelaxed feasibility per sample
-
-### Migration Steps for Solution
-
-**Implementation Tasks**:
-
-1. **Create EvaluatedConstraint PyO3 wrapper** (`python/ommx/src/evaluated_constraint.rs`):
-   ```rust
-   #[pyclass]
-   pub struct EvaluatedConstraint(pub ommx::v1::EvaluatedConstraint);
-   
-   #[pymethods]
-   impl EvaluatedConstraint {
-       #[getter] pub fn id(&self) -> u64
-       #[getter] pub fn equality(&self) -> i32  // Convert to _ommx_rust.Equality in Python
-       #[getter] pub fn evaluated_value(&self) -> f64
-       #[getter] pub fn used_decision_variable_ids(&self) -> Vec<u64>
-       #[getter] pub fn name(&self) -> Option<String>
-       #[getter] pub fn subscripts(&self) -> Vec<i64>
-       #[getter] pub fn description(&self) -> Option<String>
-       #[getter] pub fn dual_variable(&self) -> Option<f64>
-       #[getter] pub fn removed_reason(&self) -> Option<String>
-       #[getter] pub fn removed_reason_parameters(&self) -> HashMap<String, String>
-       // + HasField-like methods for optional fields
-   }
-   ```
-
-2. **Add Solution getters** (already partially done in `solution.rs`):
-   ```rust
-   #[getter]
-   pub fn decision_variables(&self) -> Vec<crate::DecisionVariable>
-   
-   #[getter] 
-   pub fn evaluated_constraints(&self) -> Vec<crate::EvaluatedConstraint>
-   ```
-
-3. **Update Python SDK Solution class**:
-   - Change `raw: _Solution` → `raw: _ommx_rust.Solution`
-   - Update `from_bytes()` → `_ommx_rust.Solution.from_bytes()`
-   - Update `to_bytes()` → `self.raw.to_bytes()`
-   - Update property access to use PyO3 getters directly
-   - Remove temporary `_solution_to_protobuf()` helper
-
-4. **Register new types in lib.rs**:
-   ```rust
-   m.add_class::<EvaluatedConstraint>()?;
-   ```
-
-5. **Update stub generation and test compatibility**
-
-**🔄 Serialization Compatibility**: PyO3 implementations can always convert to/from their corresponding protobuf structures through serialization (`to_bytes()` / `from_bytes()`). This allows for incremental migration while keeping tests passing throughout the process.
+- **Performance ✅**: Rust backend providing optimal performance for mathematical operations
+- **Constraint System ✅**: Complete constraint evaluation system with data integrity guarantees
+- **Type Safety ✅**: Strongly-typed constraint implementations with private fields and getters
+- **Parse Integration ✅**: Full Protocol Buffer to Rust type conversion via Parse trait
+- **Modular Architecture ✅**: Python bindings organized with one class per file for maintainability
 
 ## Development Notes
 
@@ -425,9 +373,11 @@ class Solution:
 - **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API instead
 
 ### 📁 Directory Guidelines  
-- Most tasks should be performed from the repository root directory
+- **All tasks MUST be performed from the repository root directory**
+- Task commands require being in the root directory to access the main `Taskfile.yml`
 - Return to root after completing any subtasks
 - Use absolute paths when referencing files across packages
+- Never use `cd` to navigate to subdirectories when running task commands
 
 ### 🧪 Testing Guidelines
 - Add new Python test code to python/ommx-tests/tests directory only

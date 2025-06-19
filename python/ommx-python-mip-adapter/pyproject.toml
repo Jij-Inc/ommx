@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "2.0.0b1"
+version = "2.0.0b2"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
@@ -27,7 +27,7 @@ classifiers = [
 # To support Python 3.12 and Apple silicon systems, this requires latest version of Python-MIP (will be 1.16.0?),
 # which does not release yet. https://github.com/coin-or/python-mip/issues/384
 # This project uses dev-dependency to use the latest version of Python-MIP not to include pre-release version in the release.
-dependencies = ["ommx >= 2.0.0b1, < 3.0.0", "mip >= 1.15.0, < 2.0.0"]
+dependencies = ["ommx >= 2.0.0b2, < 3.0.0", "mip >= 1.15.0, < 2.0.0"]
 
 [project.urls]
 Repository = "https://github.com/Jij-Inc/ommx"

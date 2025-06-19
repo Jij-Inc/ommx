@@ -626,7 +626,7 @@ class SampleSet:
     r"""
     Get feasibility status for all samples
     """
-    feasible_relaxed: builtins.dict[builtins.int, typing.Optional[builtins.bool]]
+    feasible_relaxed: builtins.dict[builtins.int, builtins.bool]
     r"""
     Get relaxed feasibility status for all samples
     """

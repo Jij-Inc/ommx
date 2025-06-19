@@ -99,7 +99,8 @@ impl Constraint {
     ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
         let evaluated = self.0.evaluate(&state, ommx::ATol::default())?;
-        Ok(PyBytes::new(py, &evaluated.encode_to_vec()))
+        let v1_evaluated: ommx::v1::EvaluatedConstraint = evaluated.into();
+        Ok(PyBytes::new(py, &v1_evaluated.encode_to_vec()))
     }
 
     pub fn partial_evaluate<'py>(
