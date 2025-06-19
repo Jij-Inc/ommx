@@ -174,7 +174,7 @@ def hubo_binary_inequality():
 )
 def test_sample(instance, ans):
     sample_set = OMMXOpenJijSAAdapter.sample(
-        instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345
+        instance, num_reads=1, uniform_penalty_weight=3.0, seed=999
     )
     assert sample_set.extract_decision_variables("x", 0) == ans
 
@@ -196,7 +196,7 @@ def test_sample(instance, ans):
 )
 def test_solve(instance, ans):
     solution = OMMXOpenJijSAAdapter.solve(
-        instance, num_reads=1, uniform_penalty_weight=3.0, seed=12345
+        instance, num_reads=1, uniform_penalty_weight=3.0, seed=999
     )
     assert solution.extract_decision_variables("x") == ans
 
