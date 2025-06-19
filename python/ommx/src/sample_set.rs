@@ -62,25 +62,16 @@ impl SampleSet {
     /// Get feasibility status for all samples
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
-        self.0
-            .sample_ids()
-            .into_iter()
-            .filter_map(|id| self.0.get(id).ok().map(|solution| (id, solution.feasible)))
-            .collect()
+        self.feasible_unrelaxed()
     }
 
     /// Get relaxed feasibility status for all samples
     #[getter]
-    pub fn feasible_relaxed(&self) -> BTreeMap<u64, Option<bool>> {
+    pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
         self.0
-            .sample_ids()
-            .into_iter()
-            .filter_map(|id| {
-                self.0
-                    .get(id)
-                    .ok()
-                    .map(|solution| (id, solution.feasible_relaxed))
-            })
+            .feasible_relaxed()
+            .iter()
+            .map(|(k, v)| (*k, *v))
             .collect()
     }
 
@@ -88,14 +79,9 @@ impl SampleSet {
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
         self.0
-            .sample_ids()
-            .into_iter()
-            .filter_map(|id| {
-                self.0
-                    .get(id)
-                    .ok()
-                    .map(|solution| (id, solution.feasible_unrelaxed))
-            })
+            .feasible_unrelaxed()
+            .iter()
+            .map(|(k, v)| (*k, *v))
             .collect()
     }
 }
