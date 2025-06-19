@@ -88,8 +88,8 @@ impl Instance {
         for (i, coefficient) in coefficients.iter().enumerate() {
             // Create binary variables for each coefficient
             let binary = self.new_binary();
-            binary.name = Some("ommx.log_encode".to_string());
-            binary.subscripts = vec![id.into_inner() as i64, i as i64];
+            binary.metadata.name = Some("ommx.log_encode".to_string());
+            binary.metadata.subscripts = vec![id.into_inner() as i64, i as i64];
             linear.add_term(binary.id().into(), *coefficient);
         }
         let f = linear.clone().into();
@@ -129,7 +129,7 @@ mod tests {
         let binary_vars: Vec<_> = instance
             .decision_variables
             .values()
-            .filter(|dv| dv.name == Some("ommx.log_encode".to_string()) && dv.subscripts[0] == 0)
+            .filter(|dv| dv.metadata.name == Some("ommx.log_encode".to_string()) && dv.metadata.subscripts[0] == 0)
             .collect();
 
         // For range [2, 7] (6 values), we need ceil(log2(6)) = 3 bits

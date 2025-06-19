@@ -117,10 +117,7 @@ pub struct DecisionVariable {
     #[getset(get_copy = "pub")]
     substituted_value: Option<f64>,
 
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
+    pub metadata: DecisionVariableMetadata,
 }
 
 impl DecisionVariable {
@@ -139,10 +136,7 @@ impl DecisionVariable {
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
             substituted_value: None, // will be set later
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
+            metadata: DecisionVariableMetadata::default(),
         };
         if let Some(substituted_value) = substituted_value {
             new.check_value_consistency(substituted_value, atol)?;
@@ -394,12 +388,7 @@ impl crate::Evaluate for DecisionVariable {
             kind: self.kind,
             bound: self.bound,
             value: value,
-            metadata: DecisionVariableMetadata {
-                name: self.name.clone(),
-                subscripts: self.subscripts.clone(),
-                parameters: self.parameters.clone(),
-                description: self.description.clone(),
-            },
+            metadata: self.metadata.clone(),
         })
     }
 
@@ -433,12 +422,7 @@ impl crate::Evaluate for DecisionVariable {
             self.id,
             self.kind,
             self.bound,
-            DecisionVariableMetadata {
-                name: self.name.clone(),
-                subscripts: self.subscripts.clone(),
-                parameters: self.parameters.clone(),
-                description: self.description.clone(),
-            },
+            self.metadata.clone(),
             samples,
         ))
     }
@@ -496,12 +480,7 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
             kind: dv.kind,
             bound: dv.bound,
             value,
-            metadata: DecisionVariableMetadata {
-                name: dv.name,
-                subscripts: dv.subscripts,
-                parameters: dv.parameters,
-                description: dv.description,
-            },
+            metadata: dv.metadata,
         })
     }
 }

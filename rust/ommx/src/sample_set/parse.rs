@@ -36,12 +36,7 @@ impl Parse for crate::v1::SampleSet {
                 dv.id(),
                 dv.kind(),
                 dv.bound(),
-                crate::DecisionVariableMetadata {
-                    name: dv.name.clone(),
-                    subscripts: dv.subscripts.clone(),
-                    parameters: dv.parameters.clone(),
-                    description: dv.description.clone(),
-                },
+                dv.metadata.clone(),
                 samples,
             );
 

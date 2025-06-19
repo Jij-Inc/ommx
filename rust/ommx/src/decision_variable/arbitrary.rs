@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::{random::unique_integers, Bound};
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashSet;
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 
@@ -52,10 +52,7 @@ impl Arbitrary for DecisionVariable {
                 kind,
                 bound,
                 substituted_value: None, // To keep consistency in Instance level, keep this None here.
-                name: None,
-                subscripts: Vec::new(),
-                parameters: FnvHashMap::default(),
-                description: None,
+                metadata: DecisionVariableMetadata::default(),
             })
             .boxed()
     }

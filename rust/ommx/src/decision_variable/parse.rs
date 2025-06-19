@@ -67,10 +67,10 @@ impl Parse for v1::DecisionVariable {
             ATol::default(), // FIXME: user should provide this
         )
         .map_err(|e| RawParseError::InvalidDecisionVariable(e).context(message, "bound"))?;
-        dv.name = self.name;
-        dv.subscripts = self.subscripts;
-        dv.parameters = self.parameters.into_iter().collect();
-        dv.description = self.description;
+        dv.metadata.name = self.name;
+        dv.metadata.subscripts = self.subscripts;
+        dv.metadata.parameters = self.parameters.into_iter().collect();
+        dv.metadata.description = self.description;
         Ok(dv)
     }
 }
@@ -107,10 +107,7 @@ impl From<DecisionVariable> for v1::DecisionVariable {
             kind,
             bound,
             substituted_value,
-            name,
-            subscripts,
-            parameters,
-            description,
+            metadata,
         }: DecisionVariable,
     ) -> Self {
         Self {
@@ -118,10 +115,10 @@ impl From<DecisionVariable> for v1::DecisionVariable {
             kind: kind.into(),
             bound: Some(bound.into()),
             substituted_value,
-            name,
-            subscripts,
-            parameters: parameters.into_iter().collect(),
-            description,
+            name: metadata.name,
+            subscripts: metadata.subscripts,
+            parameters: metadata.parameters.into_iter().collect(),
+            description: metadata.description,
         }
     }
 }
@@ -134,10 +131,7 @@ impl From<SampledDecisionVariable> for v1::SampledDecisionVariable {
             kind: sampled_dv.kind,
             bound: sampled_dv.bound,
             substituted_value: None, // SampledDecisionVariable doesn't have substituted_value
-            name: sampled_dv.metadata.name,
-            subscripts: sampled_dv.metadata.subscripts,
-            parameters: sampled_dv.metadata.parameters,
-            description: sampled_dv.metadata.description,
+            metadata: sampled_dv.metadata,
         };
 
         Self {
