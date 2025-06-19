@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::LinearMonomial;
 use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Parse};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{prelude::*, types::{PyBytes, PyDict, PyTuple}, Bound, PyAny};
 use std::collections::BTreeMap;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -129,6 +129,19 @@ impl Linear {
             Err(CoefficientError::Zero) => Ok(Linear(ommx::Linear::default())), // Return zero if scalar is zero
             Err(e) => Err(e.into()), // Return error for NaN or infinite
         }
+    }
+
+    pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let result = PyDict::new(py);
+        for (monomial, coeff) in self.0.iter() {
+            let u64_ids: Vec<u64> = match monomial {
+                LinearMonomial::Variable(id) => vec![id.into_inner()],
+                LinearMonomial::Constant => vec![],
+            };
+            let py_tuple = PyTuple::new(py, &u64_ids)?;
+            result.set_item(py_tuple, coeff.into_inner())?;
+        }
+        Ok(result)
     }
 
     pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
