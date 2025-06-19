@@ -2977,7 +2977,7 @@ class Quadratic(AsConstraint):
         Returns dictionary with tuple keys (hashable) instead of list keys.
 
         Examples:
-            >>> from ommx.v1 import Quadratic, DecisionVariable
+            >>> from ommx.v1 import DecisionVariable
             >>> x = DecisionVariable.binary(1, name="x")
             >>> y = DecisionVariable.binary(2, name="y")
             >>> quad = x * y + 2 * x + 3
