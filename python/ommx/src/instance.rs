@@ -172,7 +172,7 @@ impl Instance {
     pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
         let solution = self.0.evaluate(&state, ommx::ATol::default())?;
-        Ok(Solution(solution))
+        Ok(Solution(solution.into()))
     }
 
     pub fn partial_evaluate<'py>(
@@ -188,7 +188,7 @@ impl Instance {
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(
-            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
+            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?.into(),
         ))
     }
 

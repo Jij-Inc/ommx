@@ -155,6 +155,7 @@ mod instance;
 mod macros;
 mod polynomial_base;
 mod sampled;
+mod solution;
 mod substitute;
 
 pub use atol::*;
