@@ -83,17 +83,14 @@ impl Parse for crate::v1::SampleSet {
             .map(|(k, v)| (SampleID::from(k), v))
             .collect();
 
-        // Validate feasibility consistency when constraints are present
-        if !constraints.is_empty() {
-            for (sample_id, provided_feasible_value) in &provided_feasible {
-                let computed_feasible = constraints.values().all(|constraint| {
-                    constraint
-                        .feasible()
-                        .get(&sample_id.into_inner())
-                        .copied()
-                        .unwrap_or(false)
-                });
+        // Create SampleSet with validation
+        let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
+            .map_err(|e| crate::RawParseError::SampleSetError(e))?;
 
+        // If constraints are present, validate feasibility consistency
+        if !sample_set.constraints().is_empty() {
+            for (sample_id, provided_feasible_value) in &provided_feasible {
+                let computed_feasible = sample_set.is_sample_feasible(*sample_id).unwrap_or(false);
                 if computed_feasible != *provided_feasible_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibility {
@@ -107,16 +104,9 @@ impl Parse for crate::v1::SampleSet {
             }
 
             for (sample_id, provided_feasible_relaxed_value) in &provided_feasible_relaxed {
-                // For now, feasible_relaxed uses same logic as feasible
-                // This could be customized later if relaxed constraints are handled differently
-                let computed_feasible_relaxed = constraints.values().all(|constraint| {
-                    constraint
-                        .feasible()
-                        .get(&sample_id.into_inner())
-                        .copied()
-                        .unwrap_or(false)
-                });
-
+                let computed_feasible_relaxed = sample_set
+                    .is_sample_feasible_relaxed(*sample_id)
+                    .unwrap_or(false);
                 if computed_feasible_relaxed != *provided_feasible_relaxed_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibilityRelaxed {
@@ -128,16 +118,12 @@ impl Parse for crate::v1::SampleSet {
                     .into());
                 }
             }
+        } else {
+            // If no constraints, all samples are feasible (no validation needed)
+            // The SampleSet::new already computed this correctly
         }
 
-        Ok(SampleSet::new_with_feasible(
-            decision_variables,
-            objectives,
-            constraints,
-            sense,
-            provided_feasible,
-            provided_feasible_relaxed,
-        ))
+        Ok(sample_set)
     }
 }
 
@@ -244,13 +230,14 @@ mod tests {
         let sample_id_1 = crate::SampleID::from(1);
         let sample_id_2 = crate::SampleID::from(2);
 
+        // Since there are no constraints, all samples should be feasible
         assert_eq!(parsed.is_sample_feasible(sample_id_0), Some(true));
-        assert_eq!(parsed.is_sample_feasible(sample_id_1), Some(false));
-        assert_eq!(parsed.is_sample_feasible(sample_id_2), Some(false));
+        assert_eq!(parsed.is_sample_feasible(sample_id_1), Some(true));
+        assert_eq!(parsed.is_sample_feasible(sample_id_2), Some(true));
 
         assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_0), Some(true));
         assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_1), Some(true));
-        assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_2), Some(false));
+        assert_eq!(parsed.is_sample_feasible_relaxed(sample_id_2), Some(true));
 
         // Test round-trip conversion
         let v1_converted: v1::SampleSet = parsed.into();

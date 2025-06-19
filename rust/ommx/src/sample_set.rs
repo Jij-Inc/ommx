@@ -23,6 +23,13 @@ pub enum SampleSetError {
         provided_feasible_relaxed: bool,
         computed_feasible_relaxed: bool,
     },
+
+    #[error("Inconsistent sample IDs in {context}: expected {expected:?}, found {found:?}")]
+    InconsistentSampleIDs {
+        context: String,
+        expected: std::collections::BTreeSet<SampleID>,
+        found: std::collections::BTreeSet<SampleID>,
+    },
 }
 
 /// Multiple sample solution results with deduplication
@@ -49,13 +56,45 @@ impl SampleSet {
         objectives: Sampled<f64>,
         constraints: BTreeMap<ConstraintID, SampledConstraint>,
         sense: Sense,
-    ) -> Self {
+    ) -> Result<Self, SampleSetError> {
+        // Get all sample IDs from objectives
+        let objective_sample_ids: std::collections::BTreeSet<SampleID> =
+            objectives.iter().map(|(id, _)| *id).collect();
+
+        // Verify that all decision variables have the same sample IDs
+        for (var_id, sampled_dv) in &decision_variables {
+            let dv_sample_ids: std::collections::BTreeSet<SampleID> =
+                sampled_dv.samples().iter().map(|(id, _)| *id).collect();
+            if dv_sample_ids != objective_sample_ids {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    context: format!("Decision variable {}", var_id.into_inner()),
+                    expected: objective_sample_ids.clone(),
+                    found: dv_sample_ids,
+                });
+            }
+        }
+
+        // Verify that all constraints have the same sample IDs
+        for (constraint_id, sampled_constraint) in &constraints {
+            let constraint_sample_ids: std::collections::BTreeSet<SampleID> = sampled_constraint
+                .evaluated_values()
+                .iter()
+                .map(|(id, _)| *id)
+                .collect();
+            if constraint_sample_ids != objective_sample_ids {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    context: format!("Constraint {}", constraint_id.into_inner()),
+                    expected: objective_sample_ids.clone(),
+                    found: constraint_sample_ids,
+                });
+            }
+        }
+
         // Compute feasibility from constraints for all samples
         let mut feasible = BTreeMap::new();
         let mut feasible_relaxed = BTreeMap::new();
 
-        // Get all sample IDs from objectives
-        for (sample_id, _) in objectives.iter() {
+        for sample_id in &objective_sample_ids {
             // Compute feasibility from constraints
             let is_feasible = constraints.values().all(|constraint| {
                 constraint
@@ -69,33 +108,14 @@ impl SampleSet {
             feasible_relaxed.insert(*sample_id, is_feasible);
         }
 
-        Self {
+        Ok(Self {
             decision_variables,
             objectives,
             constraints,
             sense,
             feasible,
             feasible_relaxed,
-        }
-    }
-
-    /// Create a new SampleSet with explicit feasible values (for parsing)
-    pub(crate) fn new_with_feasible(
-        decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
-        objectives: Sampled<f64>,
-        constraints: BTreeMap<ConstraintID, SampledConstraint>,
-        sense: Sense,
-        feasible: BTreeMap<SampleID, bool>,
-        feasible_relaxed: BTreeMap<SampleID, bool>,
-    ) -> Self {
-        Self {
-            decision_variables,
-            objectives,
-            constraints,
-            sense,
-            feasible,
-            feasible_relaxed,
-        }
+        })
     }
 
     /// Get sample IDs available in this sample set

@@ -87,12 +87,13 @@ impl Evaluate for Instance {
             constraints_map.insert(*constraint.id(), constraint);
         }
 
-        Ok(crate::SampleSet::new(
+        crate::SampleSet::new(
             decision_variables,
             objectives.try_into()?,
             constraints_map,
             self.sense,
-        ))
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to create SampleSet: {}", e))
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
