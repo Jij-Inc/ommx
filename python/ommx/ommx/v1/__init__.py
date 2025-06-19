@@ -2973,9 +2973,9 @@ class Quadratic(AsConstraint):
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
         """All terms as a dictionary mapping variable id tuples to coefficients
-        
+
         Returns dictionary with tuple keys (hashable) instead of list keys.
-        
+
         Examples:
             >>> from ommx.v1 import Quadratic, DecisionVariable
             >>> x = DecisionVariable(1, name="x")
@@ -3276,9 +3276,9 @@ class Function(AsConstraint):
     @property
     def terms(self) -> dict[tuple[int, ...], float]:
         """All terms as a dictionary mapping variable id tuples to coefficients
-        
+
         Returns dictionary with tuple keys (hashable) instead of list keys.
-        
+
         Examples:
             >>> from ommx.v1 import Function, Linear, DecisionVariable
             >>> x = DecisionVariable(1, name="x")
