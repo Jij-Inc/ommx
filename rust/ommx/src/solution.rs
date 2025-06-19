@@ -12,7 +12,7 @@ pub enum SolutionError {
         provided_feasible: bool,
         computed_feasible: bool,
     },
-    
+
     #[error("Inconsistent feasibility (relaxed) for solution: provided={provided_feasible_relaxed}, computed={computed_feasible_relaxed}")]
     InconsistentFeasibilityRelaxed {
         provided_feasible_relaxed: bool,
@@ -37,7 +37,7 @@ pub struct Solution {
 
 impl Solution {
     /// Create a new Solution
-    /// 
+    ///
     /// Optimality and relaxation are set to Unspecified by default.
     /// Feasibility is computed on-demand from the evaluated constraints.
     pub fn new(
@@ -69,16 +69,12 @@ impl Solution {
 
     /// Check if all constraints are feasible
     pub fn feasible(&self) -> bool {
-        self.evaluated_constraints
-            .values()
-            .all(|c| *c.feasible())
+        self.evaluated_constraints.values().all(|c| *c.feasible())
     }
 
     /// Check if all constraints are feasible in the relaxed problem
     pub fn feasible_relaxed(&self) -> bool {
-        self.evaluated_constraints
-            .values()
-            .all(|c| *c.feasible())
+        self.evaluated_constraints.values().all(|c| *c.feasible())
     }
 
     /// Check if all constraints are feasible (deprecated alias)

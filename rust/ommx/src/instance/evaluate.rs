@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    v1::SampledDecisionVariable,
-    ATol, Evaluate, VariableIDSet,
-};
+use crate::{ATol, Evaluate, VariableIDSet};
 use anyhow::{anyhow, Result};
 use fnv::FnvHashMap;
 use std::collections::BTreeMap;
@@ -34,12 +31,8 @@ impl Evaluate for Instance {
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
 
-        let solution = crate::Solution::new(
-            objective,
-            evaluated_constraints,
-            decision_variables,
-        );
-        
+        let solution = crate::Solution::new(objective, evaluated_constraints, decision_variables);
+
         Ok(solution)
     }
 
@@ -82,22 +75,22 @@ impl Evaluate for Instance {
         let objectives = self.objective().evaluate_samples(&samples, atol)?;
 
         // Reconstruct decision variable values
-        let mut transposed = samples.transpose();
-        let decision_variables: Vec<SampledDecisionVariable> = self
-            .decision_variables
-            .values()
-            .map(|d| -> Result<_> {
-                Ok(SampledDecisionVariable {
-                    decision_variable: Some(d.clone().into()),
-                    samples: transposed.remove(&d.id().into_inner()),
-                })
-            })
-            .collect::<Result<_>>()?;
+        let mut decision_variables = std::collections::BTreeMap::new();
+        for dv in self.decision_variables.values() {
+            let sampled_dv = dv.evaluate_samples(&samples, atol)?;
+            decision_variables.insert(dv.id(), sampled_dv);
+        }
+
+        // Reconstruct constraint values
+        let mut constraints_map = std::collections::BTreeMap::new();
+        for constraint in constraints {
+            constraints_map.insert(*constraint.id(), constraint);
+        }
 
         Ok(crate::SampleSet::new(
             decision_variables,
-            Some(objectives.try_into()?),
-            constraints,
+            objectives.try_into()?,
+            constraints_map,
             self.sense,
         ))
     }

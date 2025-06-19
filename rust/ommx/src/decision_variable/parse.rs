@@ -126,6 +126,27 @@ impl From<DecisionVariable> for v1::DecisionVariable {
     }
 }
 
+impl From<SampledDecisionVariable> for v1::SampledDecisionVariable {
+    fn from(sampled_dv: SampledDecisionVariable) -> Self {
+        // Convert back to DecisionVariable
+        let dv = DecisionVariable {
+            id: sampled_dv.id,
+            kind: sampled_dv.kind,
+            bound: sampled_dv.bound,
+            substituted_value: None, // SampledDecisionVariable doesn't have substituted_value
+            name: sampled_dv.metadata.name,
+            subscripts: sampled_dv.metadata.subscripts,
+            parameters: sampled_dv.metadata.parameters,
+            description: sampled_dv.metadata.description,
+        };
+
+        Self {
+            decision_variable: Some(dv.into()),
+            samples: Some(sampled_dv.samples.into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

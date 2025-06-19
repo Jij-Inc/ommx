@@ -6,18 +6,63 @@ impl Parse for crate::v1::SampleSet {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let decision_variables = self.decision_variables;
+        // Parse decision variables into BTreeMap
+        let mut decision_variables = std::collections::BTreeMap::new();
+        for v1_sampled_dv in self.decision_variables {
+            // Parse the DecisionVariable
+            let dv = v1_sampled_dv
+                .decision_variable
+                .ok_or_else(|| crate::RawParseError::MissingField {
+                    message: "ommx.v1.SampledDecisionVariable",
+                    field: "decision_variable",
+                })?
+                .parse(&())?;
 
-        // Parse objectives if present
-        let objectives = self.objectives.map(|obj| obj.parse(&())).transpose()?;
+            // Parse the samples
+            let samples: crate::Sampled<f64> = v1_sampled_dv
+                .samples
+                .ok_or_else(|| crate::RawParseError::MissingField {
+                    message: "ommx.v1.SampledDecisionVariable",
+                    field: "samples",
+                })?
+                .try_into()
+                .map_err(|_| crate::RawParseError::MissingField {
+                    message: "ommx.v1.SampledDecisionVariable",
+                    field: "samples",
+                })?;
 
-        // Parse constraints
-        let constraints: Result<Vec<crate::SampledConstraint>, ParseError> = self
-            .constraints
-            .into_iter()
-            .map(|sc| sc.parse(&()))
-            .collect();
-        let constraints = constraints?;
+            // Create SampledDecisionVariable
+            let sampled_dv = crate::SampledDecisionVariable::new_internal(
+                dv.id(),
+                dv.kind(),
+                dv.bound(),
+                crate::DecisionVariableMetadata {
+                    name: dv.name.clone(),
+                    subscripts: dv.subscripts.clone(),
+                    parameters: dv.parameters.clone(),
+                    description: dv.description.clone(),
+                },
+                samples,
+            );
+
+            decision_variables.insert(dv.id(), sampled_dv);
+        }
+
+        // Parse objectives - required, not optional
+        let objectives = self
+            .objectives
+            .ok_or_else(|| crate::RawParseError::MissingField {
+                message: "ommx.v1.SampleSet",
+                field: "objectives",
+            })?
+            .parse(&())?;
+
+        // Parse constraints into BTreeMap
+        let mut constraints = std::collections::BTreeMap::new();
+        for v1_constraint in self.constraints {
+            let parsed_constraint: crate::SampledConstraint = v1_constraint.parse(&())?;
+            constraints.insert(*parsed_constraint.id(), parsed_constraint);
+        }
 
         let sense = self
             .sense
@@ -27,42 +72,58 @@ impl Parse for crate::v1::SampleSet {
                 value: self.sense,
             })?;
 
-        let provided_feasible_relaxed: std::collections::HashMap<u64, bool> = self.feasible_relaxed.into_iter().collect();
-        let provided_feasible: std::collections::HashMap<u64, bool> = self.feasible.into_iter().collect();
-        
+        let provided_feasible_relaxed: std::collections::HashMap<u64, bool> =
+            self.feasible_relaxed.into_iter().collect();
+        let provided_feasible: std::collections::HashMap<u64, bool> =
+            self.feasible.into_iter().collect();
+
         // Validate feasibility consistency when constraints are present
         if !constraints.is_empty() {
             for (sample_id, provided_feasible_value) in &provided_feasible {
-                let computed_feasible = constraints.iter().all(|constraint| {
-                    constraint.feasible().get(sample_id).copied().unwrap_or(false)
+                let computed_feasible = constraints.values().all(|constraint| {
+                    constraint
+                        .feasible()
+                        .get(sample_id)
+                        .copied()
+                        .unwrap_or(false)
                 });
-                
+
                 if computed_feasible != *provided_feasible_value {
-                    return Err(crate::RawParseError::SampleSetError(SampleSetError::InconsistentFeasibility {
-                        sample_id: *sample_id,
-                        provided_feasible: *provided_feasible_value,
-                        computed_feasible,
-                    }).into());
+                    return Err(crate::RawParseError::SampleSetError(
+                        SampleSetError::InconsistentFeasibility {
+                            sample_id: *sample_id,
+                            provided_feasible: *provided_feasible_value,
+                            computed_feasible,
+                        },
+                    )
+                    .into());
                 }
             }
-            
+
             for (sample_id, provided_feasible_relaxed_value) in &provided_feasible_relaxed {
                 // For now, feasible_relaxed uses same logic as feasible
                 // This could be customized later if relaxed constraints are handled differently
-                let computed_feasible_relaxed = constraints.iter().all(|constraint| {
-                    constraint.feasible().get(sample_id).copied().unwrap_or(false)
+                let computed_feasible_relaxed = constraints.values().all(|constraint| {
+                    constraint
+                        .feasible()
+                        .get(sample_id)
+                        .copied()
+                        .unwrap_or(false)
                 });
-                
+
                 if computed_feasible_relaxed != *provided_feasible_relaxed_value {
-                    return Err(crate::RawParseError::SampleSetError(SampleSetError::InconsistentFeasibilityRelaxed {
-                        sample_id: *sample_id,
-                        provided_feasible_relaxed: *provided_feasible_relaxed_value,
-                        computed_feasible_relaxed,
-                    }).into());
+                    return Err(crate::RawParseError::SampleSetError(
+                        SampleSetError::InconsistentFeasibilityRelaxed {
+                            sample_id: *sample_id,
+                            provided_feasible_relaxed: *provided_feasible_relaxed_value,
+                            computed_feasible_relaxed,
+                        },
+                    )
+                    .into());
                 }
             }
         }
-        
+
         Ok(SampleSet::new_with_feasible(
             decision_variables,
             objectives,
@@ -76,14 +137,15 @@ impl Parse for crate::v1::SampleSet {
 
 impl From<SampleSet> for crate::v1::SampleSet {
     fn from(sample_set: SampleSet) -> Self {
-        let decision_variables = sample_set.decision_variables().clone();
-        let objectives = sample_set
-            .objectives()
-            .as_ref()
-            .map(|obj| obj.clone().into());
-        let constraints = sample_set
+        let decision_variables: Vec<crate::v1::SampledDecisionVariable> = sample_set
+            .decision_variables()
+            .values()
+            .map(|dv| dv.clone().into())
+            .collect();
+        let objectives = Some(sample_set.objectives().clone().into());
+        let constraints: Vec<crate::v1::SampledConstraint> = sample_set
             .constraints()
-            .iter()
+            .values()
             .map(|sc| sc.clone().into())
             .collect();
         let sense = (*sample_set.sense()).into();
@@ -91,16 +153,16 @@ impl From<SampleSet> for crate::v1::SampleSet {
         // Compute feasible maps from constraint evaluations
         let mut feasible_relaxed = std::collections::HashMap::new();
         let mut feasible = std::collections::HashMap::new();
-        
+
         // Get all sample IDs from objectives
-        if let Some(objectives) = sample_set.objectives() {
-            for (sample_id, _) in objectives.iter() {
-                let sample_id_u64 = sample_id.into_inner();
-                let is_feasible = sample_set.is_sample_feasible(*sample_id).unwrap_or(false);
-                let is_feasible_relaxed = sample_set.is_sample_feasible_relaxed(*sample_id).unwrap_or(false);
-                feasible.insert(sample_id_u64, is_feasible);
-                feasible_relaxed.insert(sample_id_u64, is_feasible_relaxed);
-            }
+        for (sample_id, _) in sample_set.objectives().iter() {
+            let sample_id_u64 = sample_id.into_inner();
+            let is_feasible = sample_set.is_sample_feasible(*sample_id).unwrap_or(false);
+            let is_feasible_relaxed = sample_set
+                .is_sample_feasible_relaxed(*sample_id)
+                .unwrap_or(false);
+            feasible.insert(sample_id_u64, is_feasible);
+            feasible_relaxed.insert(sample_id_u64, is_feasible_relaxed);
         }
 
         crate::v1::SampleSet {
@@ -169,7 +231,6 @@ mod tests {
 
         assert_eq!(parsed.sense(), &crate::Sense::Minimize);
         assert_eq!(parsed.decision_variables().len(), 1);
-        assert!(parsed.objectives().is_some());
         assert_eq!(parsed.constraints().len(), 0);
 
         // Test feasibility checks
@@ -195,6 +256,12 @@ mod tests {
     fn test_unknown_sense_enum_value() {
         // Test with an invalid sense value in SampleSet
         let v1_sample_set = v1::SampleSet {
+            objectives: Some(v1::SampledValues {
+                entries: vec![v1::sampled_values::SampledValuesEntry {
+                    ids: vec![0],
+                    value: 10.0,
+                }],
+            }),
             sense: 999, // Unknown enum value
             ..Default::default()
         };
@@ -244,7 +311,9 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Inconsistent feasibility for sample 0"));
+        assert!(error
+            .to_string()
+            .contains("Inconsistent feasibility for sample 0"));
         assert!(error.to_string().contains("provided=true"));
         assert!(error.to_string().contains("computed=false"));
     }

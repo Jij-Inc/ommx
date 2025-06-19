@@ -49,15 +49,11 @@ impl Parse for crate::v1::Solution {
                     value: self.relaxation,
                 })?;
 
-        let mut solution = Solution::new(
-            objective,
-            evaluated_constraints,
-            decision_variables,
-        );
+        let mut solution = Solution::new(objective, evaluated_constraints, decision_variables);
         solution.optimality = optimality;
         solution.relaxation = relaxation;
 
-        // Validate feasibility consistency 
+        // Validate feasibility consistency
         let (provided_feasible, provided_feasible_relaxed) = match self.feasible_relaxed {
             Some(feasible_relaxed) => {
                 // New format since OMMX Python SDK 1.7.0
@@ -76,17 +72,23 @@ impl Parse for crate::v1::Solution {
         let computed_feasible_relaxed = solution.feasible_relaxed();
 
         if computed_feasible != provided_feasible {
-            return Err(crate::RawParseError::SolutionError(SolutionError::InconsistentFeasibility {
-                provided_feasible,
-                computed_feasible,
-            }).into());
+            return Err(crate::RawParseError::SolutionError(
+                SolutionError::InconsistentFeasibility {
+                    provided_feasible,
+                    computed_feasible,
+                },
+            )
+            .into());
         }
 
         if computed_feasible_relaxed != provided_feasible_relaxed {
-            return Err(crate::RawParseError::SolutionError(SolutionError::InconsistentFeasibilityRelaxed {
-                provided_feasible_relaxed,
-                computed_feasible_relaxed,
-            }).into());
+            return Err(crate::RawParseError::SolutionError(
+                SolutionError::InconsistentFeasibilityRelaxed {
+                    provided_feasible_relaxed,
+                    computed_feasible_relaxed,
+                },
+            )
+            .into());
         }
 
         Ok(solution)
@@ -245,7 +247,9 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Inconsistent feasibility for solution"));
+        assert!(error
+            .to_string()
+            .contains("Inconsistent feasibility for solution"));
         assert!(error.to_string().contains("provided=true"));
         assert!(error.to_string().contains("computed=false"));
     }
