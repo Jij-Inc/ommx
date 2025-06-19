@@ -339,25 +339,6 @@ pub struct SampledDecisionVariable {
     samples: Sampled<f64>,
 }
 
-impl EvaluatedDecisionVariable {
-    /// Create a new EvaluatedDecisionVariable (internal use only)
-    pub(crate) fn new_internal(
-        id: VariableID,
-        kind: Kind,
-        bound: Bound,
-        value: f64,
-        metadata: DecisionVariableMetadata,
-    ) -> Self {
-        Self {
-            id,
-            kind,
-            bound,
-            value,
-            metadata,
-        }
-    }
-}
-
 impl SampledDecisionVariable {
     /// Create a new SampledDecisionVariable (internal use only)
     pub(crate) fn new_internal(
@@ -383,13 +364,13 @@ impl SampledDecisionVariable {
     ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
         let value = *self.samples.get(sample_id)?;
 
-        Ok(EvaluatedDecisionVariable::new_internal(
-            self.id,
-            self.kind,
-            self.bound,
+        Ok(EvaluatedDecisionVariable {
+            id: self.id,
+            kind: self.kind,
+            bound: self.bound,
             value,
-            self.metadata.clone(),
-        ))
+            metadata: self.metadata.clone(),
+        })
     }
 }
 
@@ -408,18 +389,18 @@ impl crate::Evaluate for DecisionVariable {
             .copied()
             .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
 
-        Ok(EvaluatedDecisionVariable::new_internal(
-            self.id,
-            self.kind,
-            self.bound,
-            value,
-            DecisionVariableMetadata {
+        Ok(EvaluatedDecisionVariable {
+            id: self.id,
+            kind: self.kind,
+            bound: self.bound,
+            value: value,
+            metadata: DecisionVariableMetadata {
                 name: self.name.clone(),
                 subscripts: self.subscripts.clone(),
                 parameters: self.parameters.clone(),
                 description: self.description.clone(),
             },
-        ))
+        })
     }
 
     fn evaluate_samples(
