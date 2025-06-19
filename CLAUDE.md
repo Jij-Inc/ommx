@@ -212,56 +212,48 @@ impl Evaluate for DecisionVariable {
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
-    state: v1::State,                        // Essential: variable assignments
-    #[getset(get = "pub")]
     objective: f64,                          // Essential: objective value
     #[getset(get = "pub")]
-    evaluated_constraints: Vec<EvaluatedConstraint>, // Protected: constraint evaluations
+    evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>, // Protected: constraint evaluations
     #[getset(get = "pub")]
-    decision_variables: Vec<EvaluatedDecisionVariable>, // Protected: strongly-typed decision variables
-    #[getset(get = "pub")]
-    feasible: bool,                          // Protected: overall feasibility
-    #[getset(get = "pub")]
-    feasible_relaxed: bool,                  // Protected: relaxed feasibility
-    #[getset(get = "pub")]
-    optimality: v1::Optimality,              // Protected: optimality status
-    #[getset(get = "pub")]
-    relaxation: v1::Relaxation,              // Protected: relaxation status
+    decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>, // Protected: strongly-typed decision variables
+    pub optimality: v1::Optimality,          // Public: optimality status
+    pub relaxation: v1::Relaxation,          // Public: relaxation status
+    // Note: feasible and feasible_relaxed are computed on-demand via methods, not stored fields
 }
 
 // Multiple sample solution results with deduplication
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     #[getset(get = "pub")]
-    decision_variables: Vec<v1::SampledDecisionVariable>, // Protected: sampled variables
+    decision_variables: BTreeMap<VariableID, SampledDecisionVariable>, // Protected: sampled variables
     #[getset(get = "pub")]
-    objectives: Option<Sampled<f64>>,        // Protected: objective values
+    objectives: Sampled<f64>,                // Essential: objective values (required)
     #[getset(get = "pub")]
-    constraints: Vec<SampledConstraint>,     // Protected: constraint evaluations
-    #[getset(get = "pub")]
-    feasible_relaxed: FnvHashMap<u64, bool>, // Protected: relaxed feasibility map
-    #[getset(get = "pub")]
-    feasible: FnvHashMap<u64, bool>,         // Protected: strict feasibility map
+    constraints: BTreeMap<ConstraintID, SampledConstraint>, // Protected: constraint evaluations
     #[getset(get = "pub")]
     sense: Sense,                            // Essential: optimization sense
+    // Note: feasible maps cached internally, accessed via is_sample_feasible() methods
 }
 ```
 
 **Key Design Decisions**:
-- **Data Integrity**: Solution evaluation results are private with getters only
-- **Metadata Separation**: `SolutionMetadata` contains only auxiliary information like optimality status
-- **Feasibility Pre-computation**: Both `feasible` and `feasible_relaxed` stored to avoid repeated calculations
+- **Data Integrity**: Solution and SampleSet evaluation results are private with getters only
+- **BTreeMap Collections**: Use BTreeMap for O(log n) ID-based lookups with stable ordering
+- **On-Demand Feasibility**: Feasibility computed on-demand to save memory, with parse-time validation
+- **Required Objectives**: SampleSet objectives are required (not Optional) for consistent API
 - **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
-- **Efficient Storage**: `Sampled<f64>` for objectives enables deduplication when multiple samples share results
+- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
 
 **Benefits Achieved**:
 - **Data Integrity**: Prevents external modification of critical solution evaluation data
-- **Performance**: Pre-computed feasibility avoids repeated constraint checks
+- **Performance**: BTreeMap provides O(log n) lookups, on-demand feasibility computation saves memory
 - **Type Safety**: Strong typing with private fields and controlled access via getters  
 - **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
-- **Clean API**: Separation of essential solution properties from auxiliary metadata
+- **Stable Ordering**: BTreeMap ensures consistent ordering of variables and constraints by ID
+- **Parse Validation**: Validates feasibility consistency during Protocol Buffer parsing
 - **Seamless Integration**: Automatic conversion between strongly-typed Rust and v1 Protocol Buffer types
-- **Full Test Coverage**: All functionality verified through comprehensive test suites
+- **Full Test Coverage**: All functionality verified through comprehensive test suites (196 tests)
 
 **Key Benefits Achieved**:
 - **Performance**: Native Rust operations for mathematical computations
@@ -513,6 +505,8 @@ The OMMX Rust SDK v2 has achieved complete migration to strongly-typed architect
    - Private fields with `getset` crate for controlled access
    - Essential vs auxiliary data separation
    - Required vs optional field clarity (`value: f64` not `Option<f64>`, `samples: Sampled<f64>` not optional)
+   - BTreeMap collections for O(log n) ID-based lookups with stable ordering
+   - On-demand feasibility computation to optimize memory usage
 
 3. **Evaluate Trait Implementation**: All mathematical objects implement the `Evaluate` trait to generate evaluation results, ensuring type safety and consistency
 
@@ -520,7 +514,13 @@ The OMMX Rust SDK v2 has achieved complete migration to strongly-typed architect
 
 5. **Python Bindings Architecture**: Automatic type conversion in PyO3 bindings ensures Python API compatibility while using strongly-typed Rust backend
 
-6. **Comprehensive Test Coverage**: All functionality verified with 194 Rust tests + 98 Python tests, ensuring reliability across the entire stack
+6. **Comprehensive Test Coverage**: All functionality verified with 196 Rust tests + 98 Python tests, ensuring reliability across the entire stack
+
+7. **Optimized Data Structures (Latest ✅)**: Recent refactoring completed:
+   - `Solution`: Uses `BTreeMap<ConstraintID, EvaluatedConstraint>` and `BTreeMap<VariableID, EvaluatedDecisionVariable>`
+   - `SampleSet`: Uses `BTreeMap` collections and required `objectives: Sampled<f64>` (removed Optional wrapper)
+   - Feasibility computed on-demand with parse-time validation for data consistency
+   - Improved performance through efficient ID-based lookups and memory optimization
 
 **Current Status**: Ready for production use with complete feature parity and improved type safety compared to the original Protocol Buffer-based implementation.
 
