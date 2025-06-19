@@ -18,6 +18,18 @@ pub enum SolutionError {
         provided_feasible_relaxed: bool,
         computed_feasible_relaxed: bool,
     },
+
+    #[error("Inconsistent value for variable {id}: state={state_value}, substituted_value={substituted_value}")]
+    InconsistentVariableValue {
+        id: u64,
+        state_value: f64,
+        substituted_value: f64,
+    },
+
+    #[error("Missing value for variable {id}: not found in state and no substituted_value")]
+    MissingVariableValue {
+        id: u64,
+    },
 }
 
 /// Single solution result with data integrity guarantees

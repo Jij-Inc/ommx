@@ -6,13 +6,7 @@ impl Parse for crate::v1::Solution {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let message = "ommx.v1.Solution";
-        let state = self.state.ok_or_else(|| {
-            ParseError::from(crate::RawParseError::MissingField {
-                message,
-                field: "state",
-            })
-        })?;
+        let state = self.state.unwrap_or_default();
         let objective = self.objective;
 
         // Parse evaluated constraints
@@ -28,12 +22,22 @@ impl Parse for crate::v1::Solution {
                 (Some(value), None) | (None, Some(value)) => *value,
                 (Some(value), Some(substituted_value)) => {
                     if (substituted_value - value).abs() > ATol::default() {
-                        todo!()
+                        return Err(crate::RawParseError::SolutionError(
+                            SolutionError::InconsistentVariableValue {
+                                id: dv.id,
+                                state_value: *value,
+                                substituted_value: *substituted_value,
+                            },
+                        )
+                        .into());
                     }
                     *value
                 }
                 (None, None) => {
-                    todo!()
+                    return Err(crate::RawParseError::SolutionError(
+                        SolutionError::MissingVariableValue { id: dv.id },
+                    )
+                    .into());
                 }
             };
             dv.substituted_value = Some(value);
@@ -161,6 +165,10 @@ mod tests {
                 id: 1,
                 name: Some("x1".to_string()),
                 kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: -100.0,
+                    upper: 100.0,
+                }),
                 ..Default::default()
             }],
             feasible: true,
@@ -191,6 +199,7 @@ mod tests {
     fn test_unknown_enum_value_error() {
         // Test with an invalid optimality value
         let v1_solution = v1::Solution {
+            state: None,
             optimality: 99, // Unknown enum value
             relaxation: v1::Relaxation::Unspecified as i32,
             feasible: true,
@@ -207,6 +216,7 @@ mod tests {
 
         // Test with an invalid relaxation value
         let v1_solution2 = v1::Solution {
+            state: None,
             optimality: v1::Optimality::Optimal as i32,
             relaxation: 123, // Unknown enum value
             feasible: true,
@@ -229,6 +239,7 @@ mod tests {
         // Create a Solution with constraints that should make it infeasible
         // but with provided feasible value claiming it's feasible
         let v1_solution = v1::Solution {
+            state: None, // State can be None when there are no decision variables
             objective: 42.5,
             evaluated_constraints: vec![v1::EvaluatedConstraint {
                 id: 1,
@@ -250,10 +261,67 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
+        let error_str = error.to_string();
+        assert!(error_str.contains("Inconsistent feasibility for solution"));
+        assert!(error_str.contains("provided=true"));
+        assert!(error_str.contains("computed=false"));
+    }
+
+    #[test]
+    fn test_inconsistent_variable_value() {
+        use crate::v1;
+
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, 2.0)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            decision_variables: vec![v1::DecisionVariable {
+                id: 1,
+                substituted_value: Some(3.0), // Different from state value
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                ..Default::default()
+            }],
+            feasible: true,
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
         assert!(error
             .to_string()
-            .contains("Inconsistent feasibility for solution"));
-        assert!(error.to_string().contains("provided=true"));
-        assert!(error.to_string().contains("computed=false"));
+            .contains("Inconsistent value for variable 1"));
+        assert!(error.to_string().contains("state=2"));
+        assert!(error.to_string().contains("substituted_value=3"));
+    }
+
+    #[test]
+    fn test_missing_variable_value() {
+        use crate::v1;
+
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: Default::default(), // Empty state
+            }),
+            objective: 42.5,
+            decision_variables: vec![v1::DecisionVariable {
+                id: 1,
+                substituted_value: None, // No substituted value either
+                kind: v1::decision_variable::Kind::Continuous as i32,
+                ..Default::default()
+            }],
+            feasible: true,
+            ..Default::default()
+        };
+
+        let result: Result<Solution, ParseError> = v1_solution.parse(&());
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Missing value for variable 1"));
     }
 }
