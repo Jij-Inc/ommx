@@ -1,6 +1,6 @@
 mod parse;
 
-use crate::{EvaluatedConstraint, Sampled, Sense, EvaluatedDecisionVariable};
+use crate::{EvaluatedConstraint, EvaluatedDecisionVariable, Sampled, Sense};
 use fnv::FnvHashMap;
 use getset::Getters;
 
@@ -105,7 +105,7 @@ impl SampleSet {
                 }
             }
         }
-        
+
         // Get decision variables with substituted values - convert to EvaluatedDecisionVariable
         let decision_variables: Result<Vec<_>, _> = self
             .decision_variables
@@ -113,13 +113,16 @@ impl SampleSet {
             .filter_map(|dv| {
                 dv.decision_variable.as_ref().map(|dv_def| {
                     // Parse v1::DecisionVariable to ommx::DecisionVariable
-                    let parsed_dv: crate::DecisionVariable = crate::Parse::parse(dv_def.clone(), &())
-                        .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
-                    
+                    let parsed_dv: crate::DecisionVariable =
+                        crate::Parse::parse(dv_def.clone(), &())
+                            .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
+
                     // Get the value for this sample
-                    let value = state_entries.get(&dv_def.id).copied()
+                    let value = state_entries
+                        .get(&dv_def.id)
+                        .copied()
                         .ok_or(crate::UnknownSampleIDError { id: sample_id })?;
-                    
+
                     // Create EvaluatedDecisionVariable
                     Ok(crate::EvaluatedDecisionVariable::new_internal(
                         parsed_dv.id(),
@@ -193,7 +196,10 @@ impl Solution {
 
     /// Get decision variable IDs used in this solution
     pub fn decision_variable_ids(&self) -> std::collections::BTreeSet<u64> {
-        self.decision_variables.iter().map(|v| v.id().into_inner()).collect()
+        self.decision_variables
+            .iter()
+            .map(|v| v.id().into_inner())
+            .collect()
     }
 
     /// Get constraint IDs evaluated in this solution

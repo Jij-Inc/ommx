@@ -188,7 +188,9 @@ impl Instance {
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(
-            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?.into(),
+            self.0
+                .evaluate_samples(&samples.0, ommx::ATol::default())?
+                .into(),
         ))
     }
 

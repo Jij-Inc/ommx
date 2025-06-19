@@ -4,7 +4,7 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::{ATol, Bound, Sampled, SampleID, sampled::UnknownSampleIDError};
+use crate::{sampled::UnknownSampleIDError, ATol, Bound, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
@@ -356,7 +356,7 @@ impl EvaluatedDecisionVariable {
             metadata,
         }
     }
-    
+
     /// Convert to DecisionVariable with the evaluated value as substituted_value
     pub fn to_decision_variable(&self) -> Result<DecisionVariable, DecisionVariableError> {
         let mut dv = DecisionVariable {
@@ -369,10 +369,10 @@ impl EvaluatedDecisionVariable {
             parameters: self.metadata.parameters.clone(),
             description: self.metadata.description.clone(),
         };
-        
+
         dv.check_value_consistency(self.value, ATol::default())?;
         dv.substituted_value = Some(self.value);
-        
+
         Ok(dv)
     }
 }
@@ -394,11 +394,14 @@ impl SampledDecisionVariable {
             samples,
         }
     }
-    
+
     /// Get a specific evaluated decision variable by sample ID
-    pub fn get(&self, sample_id: SampleID) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
+    pub fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
         let value = *self.samples.get(sample_id)?;
-        
+
         Ok(EvaluatedDecisionVariable::new_internal(
             self.id,
             self.kind,
@@ -413,8 +416,14 @@ impl crate::Evaluate for DecisionVariable {
     type Output = EvaluatedDecisionVariable;
     type SampledOutput = SampledDecisionVariable;
 
-    fn evaluate(&self, state: &crate::v1::State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
-        let value = state.entries.get(&self.id.into_inner())
+    fn evaluate(
+        &self,
+        state: &crate::v1::State,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::Output> {
+        let value = state
+            .entries
+            .get(&self.id.into_inner())
             .copied()
             .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
 
@@ -432,17 +441,27 @@ impl crate::Evaluate for DecisionVariable {
         ))
     }
 
-    fn evaluate_samples(&self, samples: &crate::v1::Samples, _atol: crate::ATol) -> anyhow::Result<Self::SampledOutput> {
+    fn evaluate_samples(
+        &self,
+        samples: &crate::v1::Samples,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
         let variable_id = self.id.into_inner();
-        
+
         // Extract values for this variable from all samples
-        let mut grouped_values: std::collections::HashMap<ordered_float::OrderedFloat<f64>, Vec<crate::SampleID>> = std::collections::HashMap::new();
+        let mut grouped_values: std::collections::HashMap<
+            ordered_float::OrderedFloat<f64>,
+            Vec<crate::SampleID>,
+        > = std::collections::HashMap::new();
         for (sample_id, state) in samples.iter() {
             if let Some(value) = state.entries.get(&variable_id) {
-                grouped_values.entry(ordered_float::OrderedFloat(*value)).or_default().push(crate::SampleID::from(*sample_id));
+                grouped_values
+                    .entry(ordered_float::OrderedFloat(*value))
+                    .or_default()
+                    .push(crate::SampleID::from(*sample_id));
             }
         }
-        
+
         // Convert to Sampled format
         let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
@@ -462,7 +481,11 @@ impl crate::Evaluate for DecisionVariable {
         ))
     }
 
-    fn partial_evaluate(&mut self, state: &crate::v1::State, atol: crate::ATol) -> anyhow::Result<()> {
+    fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<()> {
         if let Some(value) = state.entries.get(&self.id.into_inner()) {
             self.substitute(*value, atol)?;
         }
