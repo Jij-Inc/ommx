@@ -107,10 +107,7 @@ impl From<Solution> for crate::v1::Solution {
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
             .values()
-            .map(|dv| {
-                let dv_converted = dv.to_decision_variable().unwrap();
-                dv_converted.into()
-            })
+            .map(|dv| dv.clone().into())
             .collect();
         let feasible = solution.feasible();
         let feasible_relaxed = Some(solution.feasible_relaxed());

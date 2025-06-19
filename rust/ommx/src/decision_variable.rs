@@ -357,24 +357,6 @@ impl EvaluatedDecisionVariable {
         }
     }
 
-    /// Convert to DecisionVariable with the evaluated value as substituted_value
-    pub fn to_decision_variable(&self) -> Result<DecisionVariable, DecisionVariableError> {
-        let mut dv = DecisionVariable {
-            id: self.id,
-            kind: self.kind,
-            bound: self.bound,
-            substituted_value: None,
-            name: self.metadata.name.clone(),
-            subscripts: self.metadata.subscripts.clone(),
-            parameters: self.metadata.parameters.clone(),
-            description: self.metadata.description.clone(),
-        };
-
-        dv.check_value_consistency(self.value, ATol::default())?;
-        dv.substituted_value = Some(self.value);
-
-        Ok(dv)
-    }
 }
 
 impl SampledDecisionVariable {
@@ -494,5 +476,20 @@ impl crate::Evaluate for DecisionVariable {
 
     fn required_ids(&self) -> crate::VariableIDSet {
         [self.id].into_iter().collect()
+    }
+}
+
+impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
+    fn from(eval_dv: EvaluatedDecisionVariable) -> Self {
+        crate::v1::DecisionVariable {
+            id: eval_dv.id.into_inner(),
+            kind: eval_dv.kind.into(),
+            bound: Some(eval_dv.bound.into()),
+            substituted_value: Some(eval_dv.value),
+            name: eval_dv.metadata.name,
+            subscripts: eval_dv.metadata.subscripts,
+            parameters: eval_dv.metadata.parameters.into_iter().collect(),
+            description: eval_dv.metadata.description,
+        }
     }
 }
