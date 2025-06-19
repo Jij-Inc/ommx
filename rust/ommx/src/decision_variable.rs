@@ -319,6 +319,41 @@ pub struct EvaluatedDecisionVariable {
     pub metadata: DecisionVariableMetadata,
 }
 
+impl EvaluatedDecisionVariable {
+    /// Create a new EvaluatedDecisionVariable from a DecisionVariable and value
+    ///
+    /// If the DecisionVariable has a substituted_value, this method verifies consistency
+    pub fn new(
+        decision_variable: DecisionVariable,
+        value: f64,
+        atol: crate::ATol,
+    ) -> Result<Self, DecisionVariableError> {
+        // Check consistency with existing substituted_value if present
+        if let Some(substituted_value) = decision_variable.substituted_value {
+            if (substituted_value - value).abs() > *atol {
+                return Err(DecisionVariableError::SubstitutedValueInconsistent {
+                    id: decision_variable.id,
+                    kind: decision_variable.kind,
+                    bound: decision_variable.bound,
+                    substituted_value,
+                    atol,
+                });
+            }
+        }
+
+        // Check if the value is consistent with the variable's constraints
+        decision_variable.check_value_consistency(value, atol)?;
+
+        Ok(Self {
+            id: decision_variable.id,
+            kind: decision_variable.kind,
+            bound: decision_variable.bound,
+            value,
+            metadata: decision_variable.metadata,
+        })
+    }
+}
+
 /// Multiple sample evaluation results with deduplication
 #[derive(Debug, Clone, Getters)]
 pub struct SampledDecisionVariable {
@@ -335,17 +370,42 @@ pub struct SampledDecisionVariable {
 
 impl SampledDecisionVariable {
     /// Create a new SampledDecisionVariable from a DecisionVariable and samples
+    ///
+    /// If the DecisionVariable has a substituted_value, this method verifies consistency
+    /// with all samples
     pub fn new(
         decision_variable: DecisionVariable,
         samples: Sampled<f64>,
-    ) -> Self {
-        Self {
+        atol: crate::ATol,
+    ) -> Result<Self, DecisionVariableError> {
+        // Check consistency with existing substituted_value if present
+        if let Some(substituted_value) = decision_variable.substituted_value {
+            // Check that all sample values are consistent with substituted_value
+            for (_, &sample_value) in samples.iter() {
+                if (substituted_value - sample_value).abs() > *atol {
+                    return Err(DecisionVariableError::SubstitutedValueInconsistent {
+                        id: decision_variable.id,
+                        kind: decision_variable.kind,
+                        bound: decision_variable.bound,
+                        substituted_value,
+                        atol,
+                    });
+                }
+            }
+        }
+
+        // Check if all sample values are consistent with the variable's constraints
+        for (_, &sample_value) in samples.iter() {
+            decision_variable.check_value_consistency(sample_value, atol)?;
+        }
+
+        Ok(Self {
             id: decision_variable.id,
             kind: decision_variable.kind,
             bound: decision_variable.bound,
             metadata: decision_variable.metadata,
             samples,
-        }
+        })
     }
 
     /// Get a specific evaluated decision variable by sample ID
@@ -355,13 +415,17 @@ impl SampledDecisionVariable {
     ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
         let value = *self.samples.get(sample_id)?;
 
-        Ok(EvaluatedDecisionVariable {
+        // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
+        let dv = DecisionVariable {
             id: self.id,
             kind: self.kind,
             bound: self.bound,
-            value,
+            substituted_value: None, // No substituted value when getting from samples
             metadata: self.metadata.clone(),
-        })
+        };
+
+        // unwrap is safe here since we already checked consistency in new()
+        Ok(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
     }
 }
 
@@ -372,7 +436,7 @@ impl crate::Evaluate for DecisionVariable {
     fn evaluate(
         &self,
         state: &crate::v1::State,
-        _atol: crate::ATol,
+        atol: crate::ATol,
     ) -> anyhow::Result<Self::Output> {
         let value = state
             .entries
@@ -380,13 +444,7 @@ impl crate::Evaluate for DecisionVariable {
             .copied()
             .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
 
-        Ok(EvaluatedDecisionVariable {
-            id: self.id,
-            kind: self.kind,
-            bound: self.bound,
-            value,
-            metadata: self.metadata.clone(),
-        })
+        Ok(EvaluatedDecisionVariable::new(self.clone(), value, atol)?)
     }
 
     fn evaluate_samples(
@@ -415,10 +473,7 @@ impl crate::Evaluate for DecisionVariable {
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
         let samples = crate::Sampled::new(ids, values)?;
 
-        Ok(SampledDecisionVariable::new(
-            self.clone(),
-            samples,
-        ))
+        Ok(SampledDecisionVariable::new(self.clone(), samples, _atol)?)
     }
 
     fn partial_evaluate(
@@ -469,13 +524,8 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
                 field: "substituted_value",
             })?;
 
-        Ok(EvaluatedDecisionVariable {
-            id: dv.id,
-            kind: dv.kind,
-            bound: dv.bound,
-            value,
-            metadata: dv.metadata,
-        })
+        EvaluatedDecisionVariable::new(dv, value, crate::ATol::default())
+            .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
     }
 }
 

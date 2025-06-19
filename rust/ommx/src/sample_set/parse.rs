@@ -36,7 +36,8 @@ impl Parse for crate::v1::SampleSet {
             let sampled_dv = crate::SampledDecisionVariable::new(
                 dv,
                 samples,
-            );
+                crate::ATol::default(),
+            ).map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))?;
 
             decision_variables.insert(dv_id, sampled_dv);
         }
@@ -193,6 +194,10 @@ mod tests {
                     id: 1,
                     name: Some("x1".to_string()),
                     kind: v1::decision_variable::Kind::Continuous as i32,
+                    bound: Some(v1::Bound {
+                        lower: 0.0,
+                        upper: 10.0,
+                    }),
                     ..Default::default()
                 }),
                 samples: Some(v1::SampledValues {
