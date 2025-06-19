@@ -618,6 +618,22 @@ class Rng:
         """
 
 class SampleSet:
+    objectives: builtins.dict[builtins.int, builtins.float]
+    r"""
+    Get objectives for all samples
+    """
+    feasible: builtins.dict[builtins.int, builtins.bool]
+    r"""
+    Get feasibility status for all samples
+    """
+    feasible_relaxed: builtins.dict[builtins.int, typing.Optional[builtins.bool]]
+    r"""
+    Get relaxed feasibility status for all samples
+    """
+    feasible_unrelaxed: builtins.dict[builtins.int, builtins.bool]
+    r"""
+    Get unrelaxed feasibility status for all samples
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
@@ -635,6 +651,34 @@ class Samples:
     def to_bytes(self) -> bytes: ...
 
 class Solution:
+    objective: builtins.float
+    r"""
+    Get the objective function value
+    """
+    state: State
+    r"""
+    Get the solution state containing variable values
+    """
+    feasible: builtins.bool
+    r"""
+    Check if the solution is feasible
+    """
+    feasible_relaxed: typing.Optional[builtins.bool]
+    r"""
+    Check if the solution is feasible in the relaxed problem
+    """
+    feasible_unrelaxed: builtins.bool
+    r"""
+    Check if the solution is feasible in the unrelaxed problem
+    """
+    optimality: builtins.int
+    r"""
+    Get the optimality status
+    """
+    relaxation: builtins.int
+    r"""
+    Get the relaxation status
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
@@ -656,6 +700,30 @@ class Sos1:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Sos1: ...
     def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
+
+class State:
+    r"""
+    State wrapper for Python
+    """
+
+    entries: builtins.dict[builtins.int, builtins.float]
+    def __new__(cls, entries: typing.Any) -> State: ...
+    @staticmethod
+    def from_bytes(bytes: bytes) -> State: ...
+    def to_bytes(self) -> bytes: ...
+    def set_entries(
+        self, entries: typing.Mapping[builtins.int, builtins.float]
+    ) -> None: ...
+    def get(self, key: builtins.int) -> typing.Optional[builtins.float]: ...
+    def set(self, key: builtins.int, value: builtins.float) -> None: ...
+    def __len__(self) -> builtins.int: ...
+    def __contains__(self, key: builtins.int) -> builtins.bool: ...
+    def keys(self) -> builtins.list[builtins.int]: ...
+    def values(self) -> builtins.list[builtins.float]: ...
+    def items(self) -> builtins.list[tuple[builtins.int, builtins.float]]: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> State: ...
+    def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
 class Equality(Enum):
     r"""
