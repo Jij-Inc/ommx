@@ -113,6 +113,7 @@ pub struct SampledConstraint {
 **IMPORTANT: Feasibility Semantics**:
 - **`feasible`**: Considers ALL constraints (including removed ones with `removed_reason.is_some()`)
 - **`feasible_relaxed`**: Only considers active constraints where `removed_reason.is_none()`
+- **`feasible_unrelaxed`**: Always identical to `feasible` (deprecated field maintained for backward compatibility)
 - This distinction is critical for constraint relaxation scenarios where removed constraints should not affect relaxed feasibility
 
 **Benefits**:
