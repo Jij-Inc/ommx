@@ -9,13 +9,13 @@ impl Parse for crate::v1::Solution {
         let objective = self.objective;
 
         // Parse evaluated constraints
-        let mut evaluated_constraints = FnvHashMap::default();
+        let mut evaluated_constraints = std::collections::BTreeMap::default();
         for ec in self.evaluated_constraints {
             let parsed_constraint = ec.parse(&())?;
             evaluated_constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
-        let mut decision_variables = FnvHashMap::default();
+        let mut decision_variables = std::collections::BTreeMap::default();
         for dv in self.decision_variables {
             let parsed: crate::DecisionVariable = dv.parse(&())?;
             // For parsing, we need to extract the value from substituted_value

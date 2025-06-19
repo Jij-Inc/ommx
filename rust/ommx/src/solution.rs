@@ -5,6 +5,7 @@ use crate::{
 };
 use fnv::FnvHashMap;
 use getset::Getters;
+use std::collections::BTreeMap;
 
 /// Single solution result with data integrity guarantees
 #[derive(Debug, Clone, PartialEq, Getters)]
@@ -12,9 +13,9 @@ pub struct Solution {
     #[getset(get = "pub")]
     objective: f64,
     #[getset(get = "pub")]
-    evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint>,
+    evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     #[getset(get = "pub")]
-    decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable>,
+    decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
@@ -91,8 +92,8 @@ impl SampleSet {
         };
 
         // Get decision variables with substituted values - convert to EvaluatedDecisionVariable
-        let mut decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable> =
-            FnvHashMap::default();
+        let mut decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable> =
+            BTreeMap::default();
         for dv in &self.decision_variables {
             if let Some(samples) = &dv.samples {
                 if let Some(decision_variable) = &dv.decision_variable {
@@ -127,8 +128,8 @@ impl SampleSet {
         }
 
         // Get evaluated constraints
-        let mut evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint> =
-            FnvHashMap::default();
+        let mut evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint> =
+            BTreeMap::default();
         for constraint in &self.constraints {
             let evaluated_constraint = constraint.get(sample_id)?;
             evaluated_constraints.insert(*evaluated_constraint.id(), evaluated_constraint);
@@ -157,8 +158,8 @@ impl Solution {
     /// Create a new Solution
     pub fn new(
         objective: f64,
-        evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint>,
-        decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable>,
+        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
         feasible: bool,
         feasible_relaxed: bool,
         optimality: crate::v1::Optimality,

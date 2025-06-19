@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use fnv::FnvHashMap;
+use std::collections::BTreeMap;
 
 impl Evaluate for Instance {
     type Output = crate::Solution;
@@ -17,7 +18,7 @@ impl Evaluate for Instance {
 
         let objective = self.objective.evaluate(&state, atol)?;
 
-        let mut evaluated_constraints = FnvHashMap::default();
+        let mut evaluated_constraints = BTreeMap::default();
         let mut feasible_relaxed = true;
         for constraint in self.constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
@@ -35,7 +36,7 @@ impl Evaluate for Instance {
             evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
 
-        let mut decision_variables = FnvHashMap::default();
+        let mut decision_variables = BTreeMap::default();
         for dv in self.decision_variables.values() {
             let evaluated_dv = dv.evaluate(&state, atol)?;
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
