@@ -32,15 +32,13 @@ impl Parse for crate::v1::SampleSet {
                 })?;
 
             // Create SampledDecisionVariable
-            let sampled_dv = crate::SampledDecisionVariable::new_internal(
-                dv.id(),
-                dv.kind(),
-                dv.bound(),
-                dv.metadata.clone(),
+            let dv_id = dv.id();
+            let sampled_dv = crate::SampledDecisionVariable::new(
+                dv,
                 samples,
             );
 
-            decision_variables.insert(dv.id(), sampled_dv);
+            decision_variables.insert(dv_id, sampled_dv);
         }
 
         // Parse objectives - required, not optional

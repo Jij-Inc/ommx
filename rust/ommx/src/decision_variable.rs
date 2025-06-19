@@ -334,19 +334,16 @@ pub struct SampledDecisionVariable {
 }
 
 impl SampledDecisionVariable {
-    /// Create a new SampledDecisionVariable (internal use only)
-    pub(crate) fn new_internal(
-        id: VariableID,
-        kind: Kind,
-        bound: Bound,
-        metadata: DecisionVariableMetadata,
+    /// Create a new SampledDecisionVariable from a DecisionVariable and samples
+    pub fn new(
+        decision_variable: DecisionVariable,
         samples: Sampled<f64>,
     ) -> Self {
         Self {
-            id,
-            kind,
-            bound,
-            metadata,
+            id: decision_variable.id,
+            kind: decision_variable.kind,
+            bound: decision_variable.bound,
+            metadata: decision_variable.metadata,
             samples,
         }
     }
@@ -418,11 +415,8 @@ impl crate::Evaluate for DecisionVariable {
         let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
         let samples = crate::Sampled::new(ids, values)?;
 
-        Ok(SampledDecisionVariable::new_internal(
-            self.id,
-            self.kind,
-            self.bound,
-            self.metadata.clone(),
+        Ok(SampledDecisionVariable::new(
+            self.clone(),
             samples,
         ))
     }
