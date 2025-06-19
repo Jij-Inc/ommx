@@ -1,11 +1,18 @@
 use super::*;
-use crate::{Parse, ParseError, SolutionError};
+use crate::{ATol, Parse, ParseError, SolutionError};
 
 impl Parse for crate::v1::Solution {
     type Output = Solution;
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Solution";
+        let state = self.state.ok_or_else(|| {
+            ParseError::from(crate::RawParseError::MissingField {
+                message,
+                field: "state",
+            })
+        })?;
         let objective = self.objective;
 
         // Parse evaluated constraints
@@ -16,7 +23,20 @@ impl Parse for crate::v1::Solution {
         }
 
         let mut decision_variables = std::collections::BTreeMap::default();
-        for dv in self.decision_variables {
+        for mut dv in self.decision_variables {
+            let value = match (state.entries.get(&dv.id), dv.substituted_value.as_ref()) {
+                (Some(value), None) | (None, Some(value)) => *value,
+                (Some(value), Some(substituted_value)) => {
+                    if (substituted_value - value).abs() > ATol::default() {
+                        todo!()
+                    }
+                    *value
+                }
+                (None, None) => {
+                    todo!()
+                }
+            };
+            dv.substituted_value = Some(value);
             let evaluated_dv: crate::EvaluatedDecisionVariable = dv.try_into()?;
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
