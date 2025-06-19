@@ -2976,7 +2976,11 @@ class Quadratic(AsConstraint):
 
         Returns dictionary with tuple keys (hashable) instead of list keys.
 
-        Examples:
+        Examples
+        =========
+
+        .. doctest::
+
             >>> from ommx.v1 import DecisionVariable
             >>> x = DecisionVariable.binary(1, name="x")
             >>> y = DecisionVariable.binary(2, name="y")
@@ -3274,7 +3278,11 @@ class Function(AsConstraint):
 
         Returns dictionary with tuple keys (hashable) instead of list keys.
 
-        Examples:
+        Examples
+        =========
+
+        .. doctest::
+
             >>> from ommx.v1 import Function, Linear, DecisionVariable
             >>> x = DecisionVariable.binary(1, name="x")
             >>> linear = Linear(terms={1: 2.5}, constant=1.0)
