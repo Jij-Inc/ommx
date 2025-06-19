@@ -85,7 +85,7 @@ impl Parse for crate::v1::SampleSet {
 
         // Create SampleSet with validation
         let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
-            .map_err(|e| crate::RawParseError::SampleSetError(e))?;
+            .map_err(crate::RawParseError::SampleSetError)?;
 
         // If constraints are present, validate feasibility consistency
         if !sample_set.constraints().is_empty() {
