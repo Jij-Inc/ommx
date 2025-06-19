@@ -6,39 +6,34 @@ impl Parse for crate::v1::Solution {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
-        let state = self.state.unwrap_or_default();
         let objective = self.objective;
 
         // Parse evaluated constraints
-        let evaluated_constraints: Result<Vec<EvaluatedConstraint>, ParseError> = self
-            .evaluated_constraints
-            .into_iter()
-            .map(|ec| ec.parse(&()))
-            .collect();
-        let evaluated_constraints = evaluated_constraints?;
+        let mut evaluated_constraints = FnvHashMap::default();
+        for ec in self.evaluated_constraints {
+            let parsed_constraint = ec.parse(&())?;
+            evaluated_constraints.insert(*parsed_constraint.id(), parsed_constraint);
+        }
 
-        let decision_variables: Result<Vec<_>, ParseError> = self
-            .decision_variables
-            .into_iter()
-            .map(|dv| {
-                let parsed: crate::DecisionVariable = dv.parse(&())?;
-                // For parsing, we need to extract the value from substituted_value
-                let value = parsed.substituted_value().unwrap_or(0.0);
-                Ok(crate::EvaluatedDecisionVariable::new_internal(
-                    parsed.id(),
-                    parsed.kind(),
-                    parsed.bound(),
-                    value,
-                    crate::DecisionVariableMetadata {
-                        name: parsed.name.clone(),
-                        subscripts: parsed.subscripts.clone(),
-                        parameters: parsed.parameters.clone(),
-                        description: parsed.description.clone(),
-                    },
-                ))
-            })
-            .collect();
-        let decision_variables = decision_variables?;
+        let mut decision_variables = FnvHashMap::default();
+        for dv in self.decision_variables {
+            let parsed: crate::DecisionVariable = dv.parse(&())?;
+            // For parsing, we need to extract the value from substituted_value
+            let value = parsed.substituted_value().unwrap_or(0.0);
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new_internal(
+                parsed.id(),
+                parsed.kind(),
+                parsed.bound(),
+                value,
+                crate::DecisionVariableMetadata {
+                    name: parsed.name.clone(),
+                    subscripts: parsed.subscripts.clone(),
+                    parameters: parsed.parameters.clone(),
+                    description: parsed.description.clone(),
+                },
+            );
+            decision_variables.insert(parsed.id(), evaluated_dv);
+        }
         let (feasible, feasible_relaxed) = match self.feasible_relaxed {
             Some(feasible_relaxed) => {
                 // New format since OMMX Python SDK 1.7.0
@@ -69,7 +64,6 @@ impl Parse for crate::v1::Solution {
                 })?;
 
         Ok(Solution {
-            state,
             objective,
             evaluated_constraints,
             decision_variables,
@@ -122,16 +116,16 @@ impl Parse for crate::v1::SampleSet {
 
 impl From<Solution> for crate::v1::Solution {
     fn from(solution: Solution) -> Self {
-        let state = solution.state().clone();
+        let state = solution.state();
         let objective = *solution.objective();
         let evaluated_constraints = solution
             .evaluated_constraints()
-            .iter()
+            .values()
             .map(|ec| ec.clone().into())
             .collect();
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
-            .iter()
+            .values()
             .map(|dv| {
                 let dv_converted = dv.to_decision_variable().unwrap();
                 dv_converted.into()

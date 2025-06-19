@@ -17,14 +17,14 @@ impl Evaluate for Instance {
 
         let objective = self.objective.evaluate(&state, atol)?;
 
-        let mut evaluated_constraints = Vec::new();
+        let mut evaluated_constraints = FnvHashMap::default();
         let mut feasible_relaxed = true;
         for constraint in self.constraints.values() {
             let evaluated = constraint.evaluate(&state, atol)?;
             if !*evaluated.feasible() {
                 feasible_relaxed = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
         let mut feasible = feasible_relaxed;
         for constraint in self.removed_constraints.values() {
@@ -32,18 +32,16 @@ impl Evaluate for Instance {
             if !*evaluated.feasible() {
                 feasible = false;
             }
-            evaluated_constraints.push(evaluated);
+            evaluated_constraints.insert(*evaluated.id(), evaluated);
         }
 
-        let decision_variables: Result<Vec<crate::EvaluatedDecisionVariable>, _> = self
-            .decision_variables
-            .values()
-            .map(|dv| dv.evaluate(&state, atol))
-            .collect();
-        let decision_variables = decision_variables?;
+        let mut decision_variables = FnvHashMap::default();
+        for dv in self.decision_variables.values() {
+            let evaluated_dv = dv.evaluate(&state, atol)?;
+            decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
+        }
 
         Ok(crate::Solution::new(
-            state,
             objective,
             evaluated_constraints,
             decision_variables,
@@ -176,7 +174,7 @@ mod tests {
             let s1 = instance.evaluate(&state, ATol::default()).unwrap();
             instance.partial_evaluate(&u, ATol::default()).unwrap();
             let s2 = instance.evaluate(&v, ATol::default()).unwrap();
-            prop_assert!(s1.state().abs_diff_eq(s2.state(), ATol::default()));
+            prop_assert!(s1.state().abs_diff_eq(&s2.state(), ATol::default()));
         }
     }
 }

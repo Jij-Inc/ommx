@@ -1,6 +1,8 @@
 mod parse;
 
-use crate::{EvaluatedConstraint, EvaluatedDecisionVariable, Sampled, Sense};
+use crate::{
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sampled, Sense, VariableID,
+};
 use fnv::FnvHashMap;
 use getset::Getters;
 
@@ -8,13 +10,11 @@ use getset::Getters;
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
-    state: crate::v1::State,
-    #[getset(get = "pub")]
     objective: f64,
     #[getset(get = "pub")]
-    evaluated_constraints: Vec<EvaluatedConstraint>,
+    evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint>,
     #[getset(get = "pub")]
-    decision_variables: Vec<EvaluatedDecisionVariable>,
+    decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
@@ -90,41 +90,26 @@ impl SampleSet {
             return Err(crate::UnknownSampleIDError { id: sample_id });
         };
 
-        // Get state from decision variables
-        let mut state_entries = std::collections::HashMap::new();
+        // Get decision variables with substituted values - convert to EvaluatedDecisionVariable
+        let mut decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable> =
+            FnvHashMap::default();
         for dv in &self.decision_variables {
             if let Some(samples) = &dv.samples {
-                // Convert v1::SampledValues to Sampled<f64> and get value
-                let sampled: crate::Sampled<f64> = samples
-                    .clone()
-                    .try_into()
-                    .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
-                let value = *sampled.get(sample_id)?;
                 if let Some(decision_variable) = &dv.decision_variable {
-                    state_entries.insert(decision_variable.id, value);
-                }
-            }
-        }
-
-        // Get decision variables with substituted values - convert to EvaluatedDecisionVariable
-        let decision_variables: Result<Vec<_>, _> = self
-            .decision_variables
-            .iter()
-            .filter_map(|dv| {
-                dv.decision_variable.as_ref().map(|dv_def| {
                     // Parse v1::DecisionVariable to ommx::DecisionVariable
                     let parsed_dv: crate::DecisionVariable =
-                        crate::Parse::parse(dv_def.clone(), &())
+                        crate::Parse::parse(decision_variable.clone(), &())
                             .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
 
-                    // Get the value for this sample
-                    let value = state_entries
-                        .get(&dv_def.id)
-                        .copied()
-                        .ok_or(crate::UnknownSampleIDError { id: sample_id })?;
+                    // Convert v1::SampledValues to Sampled<f64> and get value
+                    let sampled: crate::Sampled<f64> = samples
+                        .clone()
+                        .try_into()
+                        .map_err(|_| crate::UnknownSampleIDError { id: sample_id })?;
+                    let value = *sampled.get(sample_id)?;
 
                     // Create EvaluatedDecisionVariable
-                    Ok(crate::EvaluatedDecisionVariable::new_internal(
+                    let evaluated_dv = crate::EvaluatedDecisionVariable::new_internal(
                         parsed_dv.id(),
                         parsed_dv.kind(),
                         parsed_dv.bound(),
@@ -135,20 +120,19 @@ impl SampleSet {
                             parameters: parsed_dv.parameters.clone(),
                             description: parsed_dv.description.clone(),
                         },
-                    ))
-                })
-            })
-            .collect();
-        let decision_variables = decision_variables?;
-
-        let state = crate::v1::State {
-            entries: state_entries,
-        };
+                    );
+                    decision_variables.insert(parsed_dv.id(), evaluated_dv);
+                }
+            }
+        }
 
         // Get evaluated constraints
-        let evaluated_constraints: Result<Vec<_>, _> =
-            self.constraints.iter().map(|c| c.get(sample_id)).collect();
-        let evaluated_constraints = evaluated_constraints?;
+        let mut evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint> =
+            FnvHashMap::default();
+        for constraint in &self.constraints {
+            let evaluated_constraint = constraint.get(sample_id)?;
+            evaluated_constraints.insert(*evaluated_constraint.id(), evaluated_constraint);
+        }
 
         // Get feasibility
         let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
@@ -158,7 +142,6 @@ impl SampleSet {
             .unwrap_or(&false);
 
         Ok(Solution::new(
-            state,
             objective,
             evaluated_constraints,
             decision_variables,
@@ -173,17 +156,15 @@ impl SampleSet {
 impl Solution {
     /// Create a new Solution
     pub fn new(
-        state: crate::v1::State,
         objective: f64,
-        evaluated_constraints: Vec<EvaluatedConstraint>,
-        decision_variables: Vec<EvaluatedDecisionVariable>,
+        evaluated_constraints: FnvHashMap<ConstraintID, EvaluatedConstraint>,
+        decision_variables: FnvHashMap<VariableID, EvaluatedDecisionVariable>,
         feasible: bool,
         feasible_relaxed: bool,
         optimality: crate::v1::Optimality,
         relaxation: crate::v1::Relaxation,
     ) -> Self {
         Self {
-            state,
             objective,
             evaluated_constraints,
             decision_variables,
@@ -197,14 +178,14 @@ impl Solution {
     /// Get decision variable IDs used in this solution
     pub fn decision_variable_ids(&self) -> std::collections::BTreeSet<u64> {
         self.decision_variables
-            .iter()
-            .map(|v| v.id().into_inner())
+            .keys()
+            .map(|id| id.into_inner())
             .collect()
     }
 
     /// Get constraint IDs evaluated in this solution
     pub fn constraint_ids(&self) -> std::collections::BTreeSet<crate::ConstraintID> {
-        self.evaluated_constraints.iter().map(|c| *c.id()).collect()
+        self.evaluated_constraints.keys().cloned().collect()
     }
 
     /// Check if all constraints are feasible
@@ -215,5 +196,15 @@ impl Solution {
     /// Check if all constraints are feasible in the relaxed problem
     pub fn is_feasible_relaxed(&self) -> bool {
         *self.feasible_relaxed()
+    }
+
+    /// Generate state from decision variables (for backward compatibility)
+    pub fn state(&self) -> crate::v1::State {
+        let entries = self
+            .decision_variables
+            .iter()
+            .map(|(id, dv)| (id.into_inner(), *dv.value()))
+            .collect();
+        crate::v1::State { entries }
     }
 }
