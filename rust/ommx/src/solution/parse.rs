@@ -207,12 +207,11 @@ mod tests {
         };
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Unknown or unsupported enum value 99 for ommx.v1.Optimality"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Unknown or unsupported enum value 99 for ommx.v1.Optimality. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
 
         // Test with an invalid relaxation value
         let v1_solution2 = v1::Solution {
@@ -224,12 +223,11 @@ mod tests {
         };
 
         let result2: Result<Solution, ParseError> = v1_solution2.parse(&());
-        assert!(result2.is_err());
-
         let error2 = result2.unwrap_err();
-        assert!(error2
-            .to_string()
-            .contains("Unknown or unsupported enum value 123 for ommx.v1.Relaxation"));
+        insta::assert_snapshot!(error2.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Unknown or unsupported enum value 123 for ommx.v1.Relaxation. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
     }
 
     #[test]
@@ -258,13 +256,11 @@ mod tests {
         };
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        let error_str = error.to_string();
-        assert!(error_str.contains("Inconsistent feasibility for solution"));
-        assert!(error_str.contains("provided=true"));
-        assert!(error_str.contains("computed=false"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Inconsistent feasibility for solution: provided=true, computed=false
+        "###);
     }
 
     #[test]
@@ -287,14 +283,11 @@ mod tests {
         };
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Inconsistent value for variable 1"));
-        assert!(error.to_string().contains("state=2"));
-        assert!(error.to_string().contains("substituted_value=3"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Inconsistent value for variable 1: state=2, substituted_value=3
+        "###);
     }
 
     #[test]
@@ -317,9 +310,10 @@ mod tests {
         };
 
         let result: Result<Solution, ParseError> = v1_solution.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("Missing value for variable 1"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Missing value for variable 1: not found in state and no substituted_value
+        "###);
     }
 }

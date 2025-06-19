@@ -283,12 +283,11 @@ mod tests {
         };
 
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Unknown or unsupported enum value 999 for ommx.v1.Sense"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Unknown or unsupported enum value 999 for ommx.v1.Sense. This may be due to an unspecified value or a newer version of the protocol.
+        "###);
     }
 
     #[test]
@@ -324,13 +323,10 @@ mod tests {
         };
 
         let result: Result<SampleSet, ParseError> = v1_sample_set.parse(&());
-        assert!(result.is_err());
-
         let error = result.unwrap_err();
-        assert!(error
-            .to_string()
-            .contains("Inconsistent feasibility for sample 0"));
-        assert!(error.to_string().contains("provided=true"));
-        assert!(error.to_string().contains("computed=false"));
+        insta::assert_snapshot!(error.to_string(), @r###"
+        Traceback for OMMX Message parse error:
+        Inconsistent feasibility for sample 0: provided=true, computed=false
+        "###);
     }
 }
