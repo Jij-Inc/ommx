@@ -1,8 +1,8 @@
 mod parse;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sampled, SampledConstraint,
-    SampledDecisionVariable, Sense, Solution, VariableID,
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, Sampled,
+    SampledConstraint, SampledDecisionVariable, Sense, Solution, VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -36,10 +36,10 @@ pub struct SampleSet {
     constraints: BTreeMap<ConstraintID, SampledConstraint>,
     #[getset(get = "pub")]
     sense: Sense,
-    /// Cached feasible values (computed from constraints or parsed from original data)
-    cached_feasible: std::collections::HashMap<u64, bool>,
-    /// Cached feasible_relaxed values (computed from constraints or parsed from original data)
-    cached_feasible_relaxed: std::collections::HashMap<u64, bool>,
+    /// Feasible values (computed from constraints or parsed from original data)
+    feasible: BTreeMap<SampleID, bool>,
+    /// Feasible relaxed values (computed from constraints or parsed from original data)
+    feasible_relaxed: BTreeMap<SampleID, bool>,
 }
 
 impl SampleSet {
@@ -51,24 +51,22 @@ impl SampleSet {
         sense: Sense,
     ) -> Self {
         // Compute feasibility from constraints for all samples
-        let mut cached_feasible = std::collections::HashMap::new();
-        let mut cached_feasible_relaxed = std::collections::HashMap::new();
+        let mut feasible = BTreeMap::new();
+        let mut feasible_relaxed = BTreeMap::new();
 
         // Get all sample IDs from objectives
         for (sample_id, _) in objectives.iter() {
-            let sample_id_u64 = sample_id.into_inner();
-
             // Compute feasibility from constraints
-            let feasible = constraints.values().all(|constraint| {
+            let is_feasible = constraints.values().all(|constraint| {
                 constraint
                     .feasible()
-                    .get(&sample_id_u64)
+                    .get(&sample_id.into_inner())
                     .copied()
                     .unwrap_or(false)
             });
 
-            cached_feasible.insert(sample_id_u64, feasible);
-            cached_feasible_relaxed.insert(sample_id_u64, feasible);
+            feasible.insert(*sample_id, is_feasible);
+            feasible_relaxed.insert(*sample_id, is_feasible);
         }
 
         Self {
@@ -76,8 +74,8 @@ impl SampleSet {
             objectives,
             constraints,
             sense,
-            cached_feasible,
-            cached_feasible_relaxed,
+            feasible,
+            feasible_relaxed,
         }
     }
 
@@ -87,16 +85,16 @@ impl SampleSet {
         objectives: Sampled<f64>,
         constraints: BTreeMap<ConstraintID, SampledConstraint>,
         sense: Sense,
-        cached_feasible: std::collections::HashMap<u64, bool>,
-        cached_feasible_relaxed: std::collections::HashMap<u64, bool>,
+        feasible: BTreeMap<SampleID, bool>,
+        feasible_relaxed: BTreeMap<SampleID, bool>,
     ) -> Self {
         Self {
             decision_variables,
             objectives,
             constraints,
             sense,
-            cached_feasible,
-            cached_feasible_relaxed,
+            feasible,
+            feasible_relaxed,
         }
     }
 
@@ -107,14 +105,12 @@ impl SampleSet {
 
     /// Check if a specific sample is feasible
     pub fn is_sample_feasible(&self, sample_id: crate::SampleID) -> Option<bool> {
-        self.cached_feasible.get(&sample_id.into_inner()).copied()
+        self.feasible.get(&sample_id).copied()
     }
 
     /// Check if a specific sample is feasible in the relaxed problem
     pub fn is_sample_feasible_relaxed(&self, sample_id: crate::SampleID) -> Option<bool> {
-        self.cached_feasible_relaxed
-            .get(&sample_id.into_inner())
-            .copied()
+        self.feasible_relaxed.get(&sample_id).copied()
     }
 
     /// Get a specific solution by sample ID

@@ -72,10 +72,16 @@ impl Parse for crate::v1::SampleSet {
                 value: self.sense,
             })?;
 
-        let provided_feasible_relaxed: std::collections::HashMap<u64, bool> =
-            self.feasible_relaxed.into_iter().collect();
-        let provided_feasible: std::collections::HashMap<u64, bool> =
-            self.feasible.into_iter().collect();
+        let provided_feasible_relaxed: BTreeMap<SampleID, bool> = self
+            .feasible_relaxed
+            .into_iter()
+            .map(|(k, v)| (SampleID::from(k), v))
+            .collect();
+        let provided_feasible: BTreeMap<SampleID, bool> = self
+            .feasible
+            .into_iter()
+            .map(|(k, v)| (SampleID::from(k), v))
+            .collect();
 
         // Validate feasibility consistency when constraints are present
         if !constraints.is_empty() {
@@ -83,7 +89,7 @@ impl Parse for crate::v1::SampleSet {
                 let computed_feasible = constraints.values().all(|constraint| {
                     constraint
                         .feasible()
-                        .get(sample_id)
+                        .get(&sample_id.into_inner())
                         .copied()
                         .unwrap_or(false)
                 });
@@ -91,7 +97,7 @@ impl Parse for crate::v1::SampleSet {
                 if computed_feasible != *provided_feasible_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibility {
-                            sample_id: *sample_id,
+                            sample_id: sample_id.into_inner(),
                             provided_feasible: *provided_feasible_value,
                             computed_feasible,
                         },
@@ -106,7 +112,7 @@ impl Parse for crate::v1::SampleSet {
                 let computed_feasible_relaxed = constraints.values().all(|constraint| {
                     constraint
                         .feasible()
-                        .get(sample_id)
+                        .get(&sample_id.into_inner())
                         .copied()
                         .unwrap_or(false)
                 });
@@ -114,7 +120,7 @@ impl Parse for crate::v1::SampleSet {
                 if computed_feasible_relaxed != *provided_feasible_relaxed_value {
                     return Err(crate::RawParseError::SampleSetError(
                         SampleSetError::InconsistentFeasibilityRelaxed {
-                            sample_id: *sample_id,
+                            sample_id: sample_id.into_inner(),
                             provided_feasible_relaxed: *provided_feasible_relaxed_value,
                             computed_feasible_relaxed,
                         },
