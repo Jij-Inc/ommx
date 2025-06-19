@@ -7,11 +7,18 @@ mod dataset;
 mod decision_variable;
 mod descriptor;
 mod enums;
+mod function;
 mod instance;
-mod message;
+mod linear;
 mod mps;
+mod polynomial;
 mod qplib;
+mod quadratic;
 mod random;
+mod sample_set;
+mod samples;
+mod solution;
+mod state;
 
 pub use artifact::*;
 pub use bound::*;
@@ -22,11 +29,18 @@ pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
 pub use enums::*;
+pub use function::*;
 pub use instance::*;
-pub use message::*;
+pub use linear::*;
 pub use mps::*;
+pub use polynomial::*;
 pub use qplib::*;
+pub use quadratic::*;
 pub use random::*;
+pub use sample_set::*;
+pub use samples::*;
+pub use solution::*;
+pub use state::*;
 
 use pyo3::prelude::*;
 
@@ -63,6 +77,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Solution>()?;
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
+    m.add_class::<State>()?;
 
     // Enums
     m.add_class::<Sense>()?;
