@@ -71,7 +71,7 @@ impl SampleSet {
 
         // Verify that all constraints have the same sample IDs
         for (_, sampled_constraint) in &constraints {
-            if sampled_constraint
+            if !sampled_constraint
                 .evaluated_values()
                 .has_same_ids(&objective_sample_ids)
             {

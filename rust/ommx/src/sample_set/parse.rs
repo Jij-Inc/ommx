@@ -49,7 +49,41 @@ impl Parse for crate::v1::SampleSet {
         let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
             .map_err(|e| crate::RawParseError::SampleSetError(e))?;
 
-        // TODO: Check the consistency of feasibility maps
+        // Check the consistency of feasibility maps from the original v1 data
+        for (sample_id_u64, provided_feasible) in self.feasible {
+            let sample_id = crate::SampleID::from(sample_id_u64);
+            if let Ok(computed_feasible) = sample_set.is_sample_feasible(sample_id) {
+                if provided_feasible != computed_feasible {
+                    return Err(crate::RawParseError::SampleSetError(
+                        crate::SampleSetError::InconsistentFeasibility {
+                            sample_id: sample_id_u64,
+                            provided_feasible,
+                            computed_feasible,
+                        },
+                    )
+                    .context(message, "feasible"));
+                }
+            }
+        }
+
+        // Check the consistency of feasible_relaxed maps from the original v1 data
+        for (sample_id_u64, provided_feasible_relaxed) in self.feasible_relaxed {
+            let sample_id = crate::SampleID::from(sample_id_u64);
+            if let Ok(computed_feasible_relaxed) = sample_set.is_sample_feasible_relaxed(sample_id)
+            {
+                if provided_feasible_relaxed != computed_feasible_relaxed {
+                    return Err(crate::RawParseError::SampleSetError(
+                        crate::SampleSetError::InconsistentFeasibilityRelaxed {
+                            sample_id: sample_id_u64,
+                            provided_feasible_relaxed,
+                            computed_feasible_relaxed,
+                        },
+                    )
+                    .context(message, "feasible_relaxed"));
+                }
+            }
+        }
+
         Ok(sample_set)
     }
 }
@@ -144,11 +178,8 @@ mod tests {
                 ],
             }),
             constraints: vec![],
-            feasible_relaxed: [(0, true), (1, true), (2, false)].iter().cloned().collect(),
-            feasible: [(0, true), (1, false), (2, false)]
-                .iter()
-                .cloned()
-                .collect(),
+            feasible_relaxed: [(0, true), (1, true), (2, true)].iter().cloned().collect(),
+            feasible: [(0, true), (1, true), (2, true)].iter().cloned().collect(),
             sense: v1::instance::Sense::Minimize as i32,
             ..Default::default()
         };

@@ -96,6 +96,29 @@ impl<T> Sampled<T> {
         Self { offsets, data }
     }
 
+    pub fn new_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self
+    where
+        T: PartialEq,
+    {
+        let mut offsets = FnvHashMap::default();
+        let mut data = Vec::new();
+
+        for (id, value) in iter {
+            // Check if we already have this value in data
+            if let Some(existing_offset) = data.iter().position(|existing| existing == &value) {
+                // Reuse existing data
+                offsets.insert(id, existing_offset);
+            } else {
+                // Add new data
+                let new_offset = data.len();
+                data.push(value);
+                offsets.insert(id, new_offset);
+            }
+        }
+
+        Self { offsets, data }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
         self.offsets.iter().map(move |(id, offset)| {
             debug_assert!(*offset < self.data.len());
@@ -111,8 +134,8 @@ impl<T> Sampled<T> {
         if self.offsets.len() != ids.len() {
             return false;
         }
-        // Since SampleIDSet is sorted, we can compare the keys directly
-        self.offsets.keys().zip(ids.iter()).all(|(a, b)| a == b)
+        // Check that all IDs in the set are present in our offsets
+        ids.iter().all(|id| self.offsets.contains_key(id))
     }
 
     pub fn map<U, F: FnMut(T) -> U>(self, f: F) -> Sampled<U> {
@@ -135,18 +158,6 @@ impl<T> Sampled<T> {
                 &self.data[offset]
             })
             .ok_or(UnknownSampleIDError { id: sample_id })
-    }
-
-    /// Get a mutable reference to the value for a specific sample ID
-    pub fn get_mut(&mut self, sample_id: SampleID) -> Result<&mut T, UnknownSampleIDError> {
-        let sample_id_copy = sample_id; // Copy for error case
-        self.offsets
-            .get(&sample_id)
-            .map(|&offset| {
-                debug_assert!(offset < self.data.len());
-                &mut self.data[offset]
-            })
-            .ok_or(UnknownSampleIDError { id: sample_id_copy })
     }
 
     /// Gather up the sample ID for each sample.
@@ -217,19 +228,62 @@ mod tests {
     }
 
     #[test]
-    fn test_sampled_get_mut() {
-        let mut sampled = Sampled::new(
-            [[SampleID(1), SampleID(2)], [SampleID(5), SampleID(7)]],
-            [10, 20],
-        )
-        .unwrap();
+    fn test_new_dedup() {
+        let sampled = Sampled::new_dedup(
+            [
+                (SampleID(1), 10),
+                (SampleID(2), 20),
+                (SampleID(3), 10), // Same value as SampleID(1)
+                (SampleID(4), 30),
+                (SampleID(5), 20), // Same value as SampleID(2)
+            ]
+            .into_iter(),
+        );
 
-        // Test successful get_mut
-        *sampled.get_mut(SampleID(1)).unwrap() = 100;
-        assert_eq!(sampled.get(SampleID(1)).unwrap(), &100);
-        assert_eq!(sampled.get(SampleID(2)).unwrap(), &100); // Same data
+        // Should have 5 samples but only 3 data entries (deduplication occurred)
+        assert_eq!(sampled.num_samples(), 5);
+        assert_eq!(sampled.data.len(), 3); // Only 3 data entries stored due to deduplication
 
-        // Test get_mut with unknown sample ID
-        assert!(sampled.get_mut(SampleID(999)).is_err());
+        // Test that same values point to the same data
+        assert_eq!(sampled.get(SampleID(1)).unwrap(), &10);
+        assert_eq!(sampled.get(SampleID(3)).unwrap(), &10); // Same value
+        assert_eq!(sampled.get(SampleID(2)).unwrap(), &20);
+        assert_eq!(sampled.get(SampleID(5)).unwrap(), &20); // Same value
+        assert_eq!(sampled.get(SampleID(4)).unwrap(), &30);
+
+        // Verify that samples with same values share the same offset
+        let offset_1 = sampled.offsets[&SampleID(1)];
+        let offset_3 = sampled.offsets[&SampleID(3)];
+        assert_eq!(offset_1, offset_3); // Should point to same data
+
+        let offset_2 = sampled.offsets[&SampleID(2)];
+        let offset_5 = sampled.offsets[&SampleID(5)];
+        assert_eq!(offset_2, offset_5); // Should point to same data
+    }
+
+    #[test]
+    fn test_new_no_dedup_vs_new_dedup() {
+        let data = [
+            (SampleID(1), 10),
+            (SampleID(2), 20),
+            (SampleID(3), 10), // Duplicate value
+            (SampleID(4), 20), // Duplicate value
+        ];
+
+        let no_dedup = Sampled::new_no_dedup(data.iter().copied());
+        let dedup = Sampled::new_dedup(data.iter().copied());
+
+        // Both should have the same number of samples
+        assert_eq!(no_dedup.num_samples(), 4);
+        assert_eq!(dedup.num_samples(), 4);
+
+        // But different number of data entries
+        assert_eq!(no_dedup.data.len(), 4); // No deduplication - each sample has its own data entry
+        assert_eq!(dedup.data.len(), 2); // Deduplication applied - duplicate values share data entries
+
+        // Values should be the same
+        for (id, _) in data {
+            assert_eq!(no_dedup.get(id).unwrap(), dedup.get(id).unwrap());
+        }
     }
 }
