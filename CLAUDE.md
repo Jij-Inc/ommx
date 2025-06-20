@@ -18,97 +18,22 @@ OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathemati
 - **Python**: High-level API and solver integrations via PyO3 bindings
 - **Protocol Buffers**: Language-agnostic message schema for interoperability
 
-### Workspace Structure
-- **Rust Workspace**: `rust/ommx/`, `rust/protogen/`, `rust/dataset/`
-- **Python Workspace**: Multiple packages under `python/` managed by uv
-- **Shared Versioning**: Python packages versioned together, Rust independent
-
 ### Key Components
 1. **Message Schema** (`proto/`): Core data structures for optimization problems, constraints, solutions
 2. **Rust SDK** (`rust/ommx/`): Core algorithms, parsing, evaluation, artifact management
 3. **Python SDK** (`python/ommx/`): PyO3 bindings to Rust + Python-specific utilities
 4. **Solver Adapters** (`python/ommx-*-adapter/`): Integrations with OSS optimization solvers
 
-### Protocol Buffer Generation
-- Rust: Generated at build time via `build.rs`
-- Python: Pre-generated files committed to repo, regenerated via `task proto:python`
-
 ## Current Implementation Status
 
-### Python SDK v2 Migration Completed ✅
+### Rust SDK v2 Migration Completed ✅
 
-The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings:
-
-### Rust SDK v2 Design (Completed ✅)
-
-The Rust SDK v2 introduces strongly-typed Rust alternatives to protobuf-generated `ommx::v1::*` types:
+The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings.
 
 **Design Philosophy**:
 - Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
 - Improve type safety and reduce runtime errors
 - Enable efficient data structures for deduplication
-
-**Implemented Types**:
-- ✅ `Sampled<T>` - Efficient representation for `ommx::v1::Samples` with deduplication
-  - `SampleID(u64)` - Type-safe sample identifier
-  - Supports both `Sampled<v1::State>` and `Sampled<f64>` 
-  - Efficient storage: multiple sample IDs can share the same data
-
-**Constraint Types Implementation (Completed ✅)**:
-
-```rust
-// Auxiliary metadata for constraints (excluding essential id and equality)
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct ConstraintMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-    pub used_decision_variable_ids: Vec<u64>,
-    pub removed_reason: Option<String>,
-    pub removed_reason_parameters: FnvHashMap<String, String>,
-}
-
-// Single evaluation result with data integrity guarantees
-#[derive(Debug, Clone, PartialEq, Getters)]
-pub struct EvaluatedConstraint {
-    #[getset(get = "pub")]
-    id: ConstraintID,                    // Essential: constraint identifier
-    #[getset(get = "pub")]
-    equality: Equality,                  // Essential: constraint type (== 0 or <= 0)
-    pub metadata: ConstraintMetadata,    // Auxiliary metadata
-    #[getset(get = "pub")]
-    evaluated_value: f64,                // Protected: evaluation result
-    #[getset(get = "pub")]
-    dual_variable: Option<f64>,          // Protected: dual variable value
-    #[getset(get = "pub")]
-    feasible: bool,                      // Protected: pre-computed feasibility
-}
-
-// Multiple sample evaluation results with deduplication
-#[derive(Debug, Clone, Getters)]
-pub struct SampledConstraint {
-    #[getset(get = "pub")]
-    id: ConstraintID,                    // Essential: constraint identifier
-    #[getset(get = "pub")]
-    equality: Equality,                  // Essential: constraint type
-    pub metadata: ConstraintMetadata,    // Auxiliary metadata
-    #[getset(get = "pub")]
-    evaluated_values: Sampled<f64>,      // Protected: evaluation results
-    #[getset(get = "pub")]
-    dual_variables: Option<Sampled<f64>>, // Protected: dual variable values
-    #[getset(get = "pub")]
-    feasible: FnvHashMap<u64, bool>,     // Protected: feasibility map
-}
-```
-
-**Key Design Decisions**:
-- **Data Integrity**: Essential fields (`id`, `equality`) and evaluation data are private with getters only
-- **Metadata Separation**: `ConstraintMetadata` contains only auxiliary information, not essential constraint properties
-- **Removed Constraint Status**: `removed_reason` and `removed_reason_parameters` are essential fields in `EvaluatedConstraint`/`SampledConstraint`, not auxiliary metadata
-- **Feasibility Pre-computation**: `feasible` field stores pre-computed feasibility to avoid repeated calculations
-- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
-- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
 
 **IMPORTANT: Feasibility Semantics**:
 - **`feasible`**: Considers ALL constraints (including removed ones with `removed_reason.is_some()`)
@@ -116,503 +41,73 @@ pub struct SampledConstraint {
 - **`feasible_unrelaxed`**: Always identical to `feasible` (deprecated field maintained for backward compatibility)
 - This distinction is critical for constraint relaxation scenarios where removed constraints should not affect relaxed feasibility
 
-**Benefits**:
-- **Data Integrity**: Prevents external modification of critical constraint evaluation data
-- **Performance**: Pre-computed feasibility avoids repeated tolerance-based calculations
-- **Type Safety**: Strong typing with private fields and controlled access via getters
-- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
-- **Clean API**: Separation of essential properties from auxiliary metadata
-
-**Core Features Completed**:
-- ✅ All mathematical objects (`Linear`, `Quadratic`, `Polynomial`, `Function`) use Rust implementations
-- ✅ Instance class fully migrated to Rust backend with maintained API compatibility
-- ✅ All solver adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
-- ✅ Type-safe PyO3 enums (`Sense`, `Equality`, `Kind`) with Protocol Buffer conversion
-- ✅ Comprehensive testing and documentation updated
-- ✅ **Constraint evaluation system with data integrity guarantees**
-- ✅ **Sampled data structures with efficient deduplication**
-- ✅ **Parse trait implementations for Protocol Buffer conversion**
-
-**Recently Implemented**:
-- ✅ `Sampled<T>` with `get` method and `UnknownSampleIDError` error handling (`get_mut` removed for safety)
-- ✅ `Sampled<T>::new_dedup` with O(1) HashMap-based deduplication (requires `T: Hash + Eq + Clone`)
-- ✅ `EvaluatedConstraint` and `SampledConstraint` with private fields and getset getters
-- ✅ `ConstraintMetadata` separation for auxiliary data with `Default` implementation
-- ✅ Pre-computed feasibility fields to improve performance
-- ✅ `Parse` trait implementations for `v1::EvaluatedConstraint` and `v1::SampledConstraint`
-- ✅ Type-safe constraint evaluation with proper error handling
-- ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
-- ✅ **Solution and SampleSet types with data integrity guarantees**
-- ✅ **Parse trait implementations for v1::Solution and v1::SampleSet with full validation**
-- ✅ **Instance evaluation methods updated to use new Solution/SampleSet types**
-- ✅ **Constructor methods for controlled Solution/SampleSet creation**
-- ✅ **Comprehensive round-trip testing for Solution and SampleSet parsing**
-- ✅ **Flattened Solution structure with optimality and relaxation as direct fields**
-- ✅ **Improved error handling with UnknownEnumValue for better diagnostics**
-- ✅ **DecisionVariable Evaluate trait implementation with strongly-typed results**
-- ✅ **EvaluatedDecisionVariable and SampledDecisionVariable types with data integrity**
-- ✅ **Python bindings integration with automatic type conversion layer**
-- ✅ **SampleSet feasibility validation during parsing with consistency checks**
-- ✅ **Parse trait for v1::SampledDecisionVariable to modularize parsing logic**
-
-**Solution and SampleSet Implementation (Completed ✅)**:
-
-Following the same design principles as constraint types, strongly-typed Solution and SampleSet alternatives have been implemented:
-
-**DecisionVariable Types Implementation (Completed ✅)**:
-
-```rust
-// Auxiliary metadata for decision variables (excluding essential id, kind, bound, value)
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct DecisionVariableMetadata {
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
-}
-
-// Single evaluation result with data integrity guarantees
-#[derive(Debug, Clone, PartialEq, Getters)]
-pub struct EvaluatedDecisionVariable {
-    #[getset(get = "pub")]
-    id: VariableID,                          // Essential: variable identifier
-    #[getset(get = "pub")]
-    kind: Kind,                              // Essential: variable type (Binary, Integer, Continuous)
-    #[getset(get = "pub")]
-    bound: Bound,                            // Essential: variable bounds
-    #[getset(get = "pub")]
-    value: f64,                              // Essential: evaluated value (always present)
-    pub metadata: DecisionVariableMetadata,  // Auxiliary metadata
-}
-
-// Multiple sample evaluation results with deduplication
-#[derive(Debug, Clone, Getters)]
-pub struct SampledDecisionVariable {
-    #[getset(get = "pub")]
-    id: VariableID,                          // Essential: variable identifier
-    #[getset(get = "pub")]
-    kind: Kind,                              // Essential: variable type
-    #[getset(get = "pub")]
-    bound: Bound,                            // Essential: variable bounds
-    pub metadata: DecisionVariableMetadata,  // Auxiliary metadata
-    #[getset(get = "pub")]
-    samples: Sampled<f64>,                   // Essential: sample values (always present)
-}
-
-// DecisionVariable implements Evaluate trait to generate evaluation results
-impl Evaluate for DecisionVariable {
-    type Output = EvaluatedDecisionVariable;
-    type SampledOutput = SampledDecisionVariable;
-    
-    fn evaluate(&self, state: &State, _atol: ATol) -> Result<Self::Output>;
-    fn evaluate_samples(&self, samples: &Samples, _atol: ATol) -> Result<Self::SampledOutput>;
-}
-```
-
-**Key Design Decisions for DecisionVariable Types**:
-- **Essential vs Auxiliary Data**: Clear separation between core variable properties and metadata
-- **Required Values**: `EvaluatedDecisionVariable` uses `value: f64` (not `Option<f64>`) for confirmed values
-- **Required Samples**: `SampledDecisionVariable` uses `samples: Sampled<f64>` (not optional) for deduplication
-- **Evaluate Trait**: DecisionVariables generate evaluation results through trait implementation
-- **Data Integrity**: Private fields with getter access to prevent external modification
-- **Type Safety**: Strong typing with controlled access patterns
-
-```rust
-// Single solution result with data integrity guarantees  
-#[derive(Debug, Clone, PartialEq, Getters)]
-pub struct Solution {
-    #[getset(get = "pub")]
-    objective: f64,                          // Essential: objective value
-    #[getset(get = "pub")]
-    evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>, // Protected: constraint evaluations
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>, // Protected: strongly-typed decision variables
-    pub optimality: v1::Optimality,          // Public: optimality status
-    pub relaxation: v1::Relaxation,          // Public: relaxation status
-    // Note: feasible and feasible_relaxed are computed on-demand via methods, not stored fields
-}
-
-// Multiple sample solution results with deduplication
-#[derive(Debug, Clone, Getters)]
-pub struct SampleSet {
-    #[getset(get = "pub")]
-    decision_variables: BTreeMap<VariableID, SampledDecisionVariable>, // Protected: sampled variables
-    #[getset(get = "pub")]
-    objectives: Sampled<f64>,                // Essential: objective values (required)
-    #[getset(get = "pub")]
-    constraints: BTreeMap<ConstraintID, SampledConstraint>, // Protected: constraint evaluations
-    #[getset(get = "pub")]
-    sense: Sense,                            // Essential: optimization sense
-    // Note: feasible maps cached internally, accessed via is_sample_feasible() methods
-}
-```
-
-**Key Design Decisions**:
-- **Data Integrity**: Solution and SampleSet evaluation results are private with getters only
-- **BTreeMap Collections**: Use BTreeMap for O(log n) ID-based lookups with stable ordering
-- **On-Demand Feasibility**: Feasibility computed on-demand to save memory, with parse-time validation
-- **Required Objectives**: SampleSet objectives are required (not Optional) for consistent API
-- **Type Safety**: Uses `getset` crate for clean getter methods while preventing external modification
-- **Efficient Storage**: `Sampled<f64>` enables deduplication when multiple samples share results
-
-**Benefits Achieved**:
-- **Data Integrity**: Prevents external modification of critical solution evaluation data
-- **Performance**: BTreeMap provides O(log n) lookups, on-demand feasibility computation saves memory
-- **Type Safety**: Strong typing with private fields and controlled access via getters  
-- **Memory Efficiency**: `Sampled<T>` enables efficient storage with deduplication
-- **Stable Ordering**: BTreeMap ensures consistent ordering of variables and constraints by ID
-- **Parse Validation**: Validates feasibility consistency during Protocol Buffer parsing
-- **Seamless Integration**: Automatic conversion between strongly-typed Rust and v1 Protocol Buffer types
-- **Full Test Coverage**: All functionality verified through comprehensive test suites (196 tests)
-
-**Key Benefits Achieved**:
-- **Performance**: Native Rust operations for mathematical computations
-- **Type Safety**: PyO3 enums with proper type checking
-- **API Consistency**: Unified `ommx.v1` import pattern across all components
-- **Maintainability**: Elimination of direct `_ommx_rust` usage in favor of Python SDK extensions
-
-**Migration Pattern**:
-```python
-# Established pattern: Rust implementation wrapped in Python
-class Linear(AsConstraint):
-    raw: _ommx_rust.Linear  # Rust implementation
-    
-    def __init__(self, *, terms: dict[int, float], constant: float = 0):
-        self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
-    
-    def evaluate(self, state: State) -> float:
-        return self.raw.evaluate(to_state(state).SerializeToString())
-```
-
-### Python Bindings Architecture (python/ommx/src/)
-
-The Rust implementation for Python bindings follows a modular structure with one class per file:
-
-**Mathematical Types**:
-- `linear.rs`: `Linear` class for linear expressions
-- `quadratic.rs`: `Quadratic` class for quadratic expressions  
-- `polynomial.rs`: `Polynomial` class for general polynomial expressions
-- `function.rs`: `Function` class as a wrapper for all mathematical types
-
-**Core Components**:
-- `instance.rs`: `Instance` class for optimization problems
-- `constraint.rs`: `Constraint` class for problem constraints
-- `decision_variable.rs`: `DecisionVariable` class
-- `state.rs`: `State` class for variable assignments
-- `solution.rs`: `Solution` class for optimization results
-- `sample_set.rs`: `SampleSet` class for multiple solutions
-- `samples.rs`: `Samples` class for sample collections
-
-**Utilities**:
-- `enums.rs`: PyO3 enum definitions (`Sense`, `Equality`, `Kind`)
-- `bound.rs`: Variable bounds handling
-- `random.rs`: Random number generation utilities
-
-This modular structure improves maintainability and makes the codebase easier to navigate.
+**Implementation Details**: See actual code in `rust/ommx/src/` for current type definitions and API.
 
 ## Development Commands
 
-This project uses [Taskfile](https://taskfile.dev/) for task management. Run `task -l` to see all available commands.
+This project uses [Taskfile](https://taskfile.dev/) for task management. **⚠️ All commands must be run from the project root directory.**
 
-**⚠️ Important**: All `task` commands must be run from the project root directory. The task command searches for `Taskfile.yml` from the current directory, so available commands will vary depending on your current location. Always ensure you are in the repository root before running any task commands.
-
-### Essential Commands
-
-**Setup and Dependencies:**
+**Essential Commands:**
 ```bash
-# Python development environment
-task python:sync
+# Setup
+task python:sync               # Setup Python development environment
+task python:upgrade           # Install/upgrade dependencies
 
-# Install/upgrade dependencies
-task python:upgrade
+# Testing
+task python:test              # Run all Python tests (linting, type checking, pytest)
+task rust:test               # Run Rust tests only
+task format                  # Format all code (Python and Rust)
+
+# Development
+task proto                   # Generate all protobuf code
+task rust:check             # Run cargo check
+task rust:clippy            # Run Rust linting
+task python:lint            # Run Python linting
+
+# Documentation
+task api_reference          # Build and open Python API docs
+task book_en                # Build and open English Jupyter Book
 ```
 
-**Testing:**
-```bash
-# Run all tests
-task python:test        # Python tests (includes linting, type checking, and pytest)
-task rust:test          # Rust tests only
-task python:test-ci     # CI mode (no pyright for main ommx package)
-```
-
-**Code Quality:**
-```bash
-# Format all code (Python and Rust)
-task format
-
-# Python formatting
-task python:format
-
-# Python linting
-task python:lint         # Run ruff check on all Python packages
-
-# Rust checks
-task rust:check         # Run cargo check
-task rust:clippy        # Run clippy linting
-task rust:format        # Format Rust code
-
-# Type checking (Python)
-task python:ommx:pyright
-```
-
-**Building and Documentation:**
-```bash
-# Generate code from protobuf
-task proto              # Generate all (Rust and Python)
-task proto:python       # Generate Python code only
-task proto:rust         # Generate Rust code only
-task proto:doc          # Generate documentation from protobuf
-
-# Build documentation
-task api_reference      # Python API docs (build and open)
-task rust:doc           # Rust docs
-task book_en            # English Jupyter Book (build and open)
-task book_ja            # Japanese Jupyter Book (build and open)
-
-# Additional documentation commands
-task api_reference:build       # Build Python API docs only
-task api_reference:open        # Open Python API docs
-task book_en:build            # Build English book only
-task book_en:open             # Open English book
-task book_en:watch            # Watch and rebuild English book
-task book_ja:build            # Build Japanese book only
-task book_ja:open             # Open Japanese book
-task book_ja:watch            # Watch and rebuild Japanese book
-```
-
-**Other Useful Commands:**
-```bash
-# Python benchmarks
-task python:bench              # Run benchmarks for OMMX Python SDK
-
-# Generate stubs for Rust extension
-task python:stubgen
-
-# Version management
-task python:set-version        # Set version for all Python packages
-task rust:set-version          # Set version for Rust SDK
-
-# Codspeed benchmarks
-task codspeed:list            # List all Codspeed workflows
-task codspeed:trigger         # Trigger GitHub Actions workflow
-
-# Generate LLMs.txt
-task python:generate-llms-txt
-```
-
-### Package-Specific Commands
-
-**Core OMMX:**
+**Package-Specific Testing:**
 - `task python:ommx:test` - Test main Python package
-- `task python:ommx:test-ci` - Test without pyright (CI mode)
-- `task python:ommx:pytest` - Run pytest only
-- `task python:ommx:pyright` - Type check only
-- `task python:ommx:lint` - Lint check only
-- `task python:ommx:bench` - Run benchmarks
+- `task python:ommx-*-adapter:test` - Test specific adapter
 
-**Adapters:**
-- `task python:ommx-openjij-adapter:test`
-- `task python:ommx-python-mip-adapter:test`
-- `task python:ommx-pyscipopt-adapter:test`
-- `task python:ommx-highs-adapter:test`
+Run `task -l` to see all available commands.
 
-Each adapter also has individual commands for:
-- `:lint` - Run ruff check
-- `:pyright` - Type checking
-- `:pytest` - Run tests
-- `:markdown-code-runner` - Run markdown code examples (Python-MIP, PySCIPOpt, HiGHS only)
+## Development Guidelines
 
-## Testing Strategy
+### Core Development Principles
+1. **API Philosophy**: Always use `ommx.v1` unified API, avoid direct `_ommx_rust` imports
+2. **Incremental Development**: Make small changes → test → commit
+3. **Always run `task python:test` after making changes**
+4. **Prefer extending Python SDK over using raw APIs**
 
-**Python Testing:**
-- Main package: ruff linting + pytest + pyright type checking + doctests
-- Adapters: ruff linting + pytest with solver-specific integration tests
-- CI mode available for environments without pyright
+### Adapter Development
+When developing solver adapters:
+- Use only `ommx.v1` imports, avoid Protocol Buffer direct imports
+- Let Python SDK handle type conversions
+- Add missing functionality to Python SDK classes, not raw API usage
 
-**Rust Testing:**
-- Standard cargo test with extensive property-based testing (proptest)
-- Benchmarks using criterion/codspeed
-
-## Development Workflow
-
-1. **Protocol Changes**: Modify `.proto` files → `task proto` → update implementations
-2. **Rust Changes**: Develop in `rust/ommx/` → Python bindings auto-generated via PyO3
-3. **Python Changes**: Work in `python/ommx/` or adapter packages
-4. **Documentation**: Jupyter notebooks in `docs/en/` and `docs/ja/` directories
-
-## Version Management
-
-**Python**: All packages versioned together via `task python:set-version -- x.y.z`
-**Rust**: Independent versioning via `task rust:set-version -- x.y.z`
-
-## Lint and Format Configuration
-
-- **Python**: Ruff for formatting and linting (excludes .ipynb files)
-- **Rust**: Standard clippy lints
-- **Type Checking**: pyright for Python type checking
-
-When making changes, always run the appropriate linting/testing commands before committing.
-
-## Important Notes for Development
-
-1. **API Philosophy**: Avoid `_ommx_rust` direct imports; always use `ommx.v1` unified API. When needed functionality is missing, extend the Python SDK rather than using raw APIs
-2. **Protocol Buffers Compatibility**: Ensure proper use of `ParseFromString()` method when converting from Protocol Buffers messages to Rust implementations
-3. **Test Coverage**: The test suite includes comprehensive tests covering core functionality, QUBO conversion, MPS format handling, decision variable analysis, constraint wrappers, and doctests
-4. **Performance**: Core mathematical operations are implemented in Rust for optimal performance while maintaining Python usability
-5. **Error Handling**: Rust implementations provide detailed error messages for debugging mathematical programming issues
-
-## Development Guidance
-
-### General Development Principles
-- When modifying Rust code, always make small incremental changes and ensure `cargo check` passes at each step
-- Always run `task python:test` after making changes to ensure all tests pass
-- Use incremental approach: implement one component at a time, test, then commit
-- Maintain backward compatibility during migration phases
-- **Important**: Prefer extending Python SDK over using raw APIs - this ensures API stability and better user experience
-
-### Adapter Development Guidelines
-
-When developing or modifying solver adapters:
-
-1. **Import Standards**: Use only `ommx.v1` imports, avoid Protocol Buffer and `_ommx_rust` direct imports
-2. **API Usage**: Use Python SDK methods instead of raw API calls
-3. **Type Conversions**: Let Python SDK handle conversions between Rust and Python types
-4. **Extension Pattern**: If needed functionality is missing, add it to Python SDK classes
-5. **Testing**: Ensure all tests pass including doctests and pyright checks
-
-**Example Pattern**:
+**Good Pattern:**
 ```python
-# Good: Using Python SDK
 from ommx.v1 import Instance, DecisionVariable, Function, Solution
+```
 
-# Bad: Using raw or Protocol Buffer APIs
+**Bad Pattern:**
+```python
 from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Optimality
 ```
 
-### Current Development Status
-- **Core Migration ✅**: Protocol Buffer to Rust migration completed across all components
-- **Adapter Support ✅**: All major adapters (Python-MIP, PySCIPOpt, HiGHS) migrated to v2 API
-- **Documentation ✅**: Comprehensive migration guide and adapter specifications available
-- **API Stability ✅**: Unified `ommx.v1` API established with proper extension patterns
-- **Performance ✅**: Rust backend providing optimal performance for mathematical operations
-- **Constraint System ✅**: Complete constraint evaluation system with data integrity guarantees
-- **Decision Variable System ✅**: Complete decision variable evaluation system with strongly-typed results
-- **Solution System ✅**: Complete solution and sample set system with data integrity guarantees
-- **Type Safety ✅**: Strongly-typed implementations with private fields and controlled access
-- **Parse Integration ✅**: Full Protocol Buffer to Rust type conversion via Parse trait
-- **Python Integration ✅**: Seamless integration with automatic type conversion in PyO3 bindings
-- **Testing Coverage ✅**: Comprehensive test suite covering all Rust and Python functionality (194 Rust + 98 Python tests)
+## Critical Development Rules
 
-## Latest Implementation Achievements (rust-idiomatic-solution branch)
+### 🚫 Prohibitions
+- **NEVER use `cd` command** - Work from repository root only
+- **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API
+- **NEVER modify v1_ext directory** - Contains deprecated implementations
 
-**Completed Strongly-Typed Architecture ✅**:
-The OMMX Rust SDK v2 has achieved complete migration to strongly-typed architecture with the following key accomplishments:
-
-1. **Complete Type System Redesign**: All core types (`Constraint`, `DecisionVariable`, `Solution`, `SampleSet`) now use strongly-typed Rust implementations instead of Protocol Buffer auto-generated types
-
-2. **Data Integrity Architecture**: Consistent design pattern across all types using:
-   - Private fields with `getset` crate for controlled access
-   - Essential vs auxiliary data separation
-   - Required vs optional field clarity (`value: f64` not `Option<f64>`, `samples: Sampled<f64>` not optional)
-   - BTreeMap collections for O(log n) ID-based lookups with stable ordering
-   - On-demand feasibility computation to optimize memory usage
-
-3. **Evaluate Trait Implementation**: All mathematical objects implement the `Evaluate` trait to generate evaluation results, ensuring type safety and consistency
-
-4. **Seamless Protocol Buffer Integration**: Complete `From`/`Into` conversion layer between strongly-typed Rust types and v1 Protocol Buffer types for backward compatibility
-
-5. **Python Bindings Architecture**: Automatic type conversion in PyO3 bindings ensures Python API compatibility while using strongly-typed Rust backend
-
-6. **Comprehensive Test Coverage**: All functionality verified with 196 Rust tests + 98 Python tests, ensuring reliability across the entire stack
-
-7. **Optimized Data Structures (Latest ✅)**: Recent refactoring completed:
-   - `Solution`: Uses `BTreeMap<ConstraintID, EvaluatedConstraint>` and `BTreeMap<VariableID, EvaluatedDecisionVariable>`
-   - `SampleSet`: Uses `BTreeMap` collections and required `objectives: Sampled<f64>` (removed Optional wrapper)
-   - Feasibility computed on-demand with parse-time validation for data consistency
-   - Improved performance through efficient ID-based lookups and memory optimization
-   - `Sampled<T>::new_dedup` now uses HashMap for O(1) deduplication instead of O(n) linear search
-   - Removed `Sampled<T>::get_mut` to prevent unintended shared mutations in deduplicated data
-
-**Current Status**: Ready for production use with complete feature parity and improved type safety compared to the original Protocol Buffer-based implementation.
-
-## Rust SDK v2 Implementation Status
-
-### Completed Phases ✅
-
-**Phase 1: Core Types**
-- ✅ `Sampled<T>` with deduplication support
-- ✅ `ConstraintID`, `VariableID`, `SampleID` type-safe wrappers
-- ✅ `ConstraintMetadata`, `DecisionVariableMetadata` for auxiliary data
-- ✅ `EvaluatedConstraint`, `SampledConstraint` with data integrity
-- ✅ `EvaluatedDecisionVariable`, `SampledDecisionVariable` with data integrity
-
-**Phase 2: Solution Types**
-- ✅ `Solution` with BTreeMap collections and on-demand feasibility
-- ✅ `SampleSet` with efficient sample validation
-- ✅ Parse trait implementations for all v1 types
-- ✅ Complete round-trip conversion support
-
-**Phase 3: Integration**
-- ✅ Instance evaluation methods using new types
-- ✅ Python bindings with automatic type conversion
-- ✅ Comprehensive test coverage (204 tests)
-- ✅ Documentation updates
-
-**Phase 4: Optimization**
-- ✅ HashMap-based O(1) deduplication in `Sampled::new_dedup`
-- ✅ Removed `get_mut` for safer API
-- ✅ Fixed `has_same_ids` for correct behavior
-- ✅ Parse-time validation for early error detection
-
-### Key Design Achievements
-
-1. **Type Safety**: All core types use strongly-typed Rust implementations
-2. **Data Integrity**: Private fields with controlled access via getters
-3. **Performance**: O(log n) BTreeMap lookups, O(1) HashMap deduplication
-4. **Memory Efficiency**: Deduplication support throughout
-5. **Error Handling**: Context-aware parsing with detailed error traces
-6. **API Consistency**: Clean separation of essential vs auxiliary data
-
-### Migration Guide
-
-For users upgrading from v1:
-1. Replace direct Protocol Buffer usage with Rust SDK types
-2. Use `parse()` method for Protocol Buffer → Rust conversion
-3. Use `into()` method for Rust → Protocol Buffer conversion
-4. Replace `Sampled::get_mut` with immutable patterns
-5. Update trait bounds for `new_dedup` users (now requires `T: Hash + Eq + Clone`)
-
-### Future Considerations
-
-While the core implementation is complete, potential future enhancements could include:
-- Copy-on-Write for `Sampled<T>` mutations (if needed)
-- Additional performance optimizations based on usage patterns
-- Extended Python API leveraging the Rust performance benefits
-- Additional solver adapter integrations
-
-## Development Notes
-
-### 🚫 Critical Prohibitions
-- **NEVER use `cd` command** - Work from repository root directory only
-- **NEVER create inline tests** - Add tests to python/ommx-tests/tests only
-- **NEVER run `python -c` directly** - Use proper test framework
-- **NEVER modify v1_ext directory** - Contains deprecated Protocol Buffer implementations
-- **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API instead
-
-### 📁 Directory Guidelines  
-- **All tasks MUST be performed from the repository root directory**
-- Task commands require being in the root directory to access the main `Taskfile.yml`
-- Return to root after completing any subtasks
-- Use absolute paths when referencing files across packages
-- Never use `cd` to navigate to subdirectories when running task commands
-
-### 🧪 Testing Guidelines
-- Add new Python test code to python/ommx-tests/tests directory only
-- Run tests using pytest through task commands
-- Verify test compatibility across adapter packages before committing
-
-### 🔧 Code Quality
-- Always run `task format` before committing changes
+### 🧪 Testing & Quality
+- Add tests to `python/ommx-tests/tests` only
+- Always run `task format` before committing
 - Ensure `task python:test` passes completely
-- Follow incremental development: small changes → test → commit
