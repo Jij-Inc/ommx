@@ -18,22 +18,16 @@ impl Parse for crate::v1::Solution {
         }
 
         let mut decision_variables = std::collections::BTreeMap::default();
-        for mut dv in self.decision_variables {
+        for dv in self.decision_variables {
+            // Parse the DecisionVariable to get strongly-typed version
+            let parsed_dv = dv
+                .clone()
+                .parse_as(&(), message, "decision_variables")?;
+            
+            // Get the value from state or substituted_value
             let value = match (state.entries.get(&dv.id), dv.substituted_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
-                (Some(value), Some(substituted_value)) => {
-                    if (substituted_value - value).abs() > ATol::default() {
-                        return Err(crate::RawParseError::SolutionError(
-                            SolutionError::InconsistentVariableValue {
-                                id: dv.id,
-                                state_value: *value,
-                                substituted_value: *substituted_value,
-                            },
-                        )
-                        .context(message, "decision_variables"));
-                    }
-                    *value
-                }
+                (Some(value), Some(_substituted_value)) => *value, // EvaluatedDecisionVariable::new will check consistency
                 (None, None) => {
                     return Err(crate::RawParseError::SolutionError(
                         SolutionError::MissingVariableValue { id: dv.id },
@@ -41,10 +35,12 @@ impl Parse for crate::v1::Solution {
                     .context(message, "decision_variables"));
                 }
             };
-            dv.substituted_value = Some(value);
-            let evaluated_dv: crate::EvaluatedDecisionVariable = dv
-                .try_into()
-                .map_err(|e: ParseError| e.context(message, "decision_variables"))?;
+            
+            // Use EvaluatedDecisionVariable::new which handles consistency validation
+            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value, ATol::default())
+                .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))
+                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+            
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
         let optimality = self
@@ -284,6 +280,10 @@ mod tests {
                 id: 1,
                 substituted_value: Some(3.0), // Different from state value
                 kind: v1::decision_variable::Kind::Continuous as i32,
+                bound: Some(v1::Bound {
+                    lower: 0.0,
+                    upper: 10.0,
+                }),
                 ..Default::default()
             }],
             feasible: true,
@@ -295,7 +295,7 @@ mod tests {
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
-        Inconsistent value for variable 1: state=2, substituted_value=3
+        Substituted value for ID=1 is inconsistent: kind=Continuous, bound=[0, 10], substituted_value=3, atol=ATol(1e-6)
         "###);
     }
 
