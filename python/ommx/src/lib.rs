@@ -7,6 +7,8 @@ mod dataset;
 mod decision_variable;
 mod descriptor;
 mod enums;
+mod evaluated_constraint;
+mod evaluated_decision_variable;
 mod function;
 mod instance;
 mod linear;
@@ -29,6 +31,8 @@ pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
 pub use enums::*;
+pub use evaluated_constraint::*;
+pub use evaluated_decision_variable::*;
 pub use function::*;
 pub use instance::*;
 pub use linear::*;
@@ -78,11 +82,15 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
+    m.add_class::<EvaluatedDecisionVariable>()?;
+    m.add_class::<EvaluatedConstraint>()?;
 
     // Enums
     m.add_class::<Sense>()?;
     m.add_class::<Equality>()?;
     m.add_class::<Kind>()?;
+    m.add_class::<Optimality>()?;
+    m.add_class::<Relaxation>()?;
 
     // Random
     m.add_class::<Rng>()?;
