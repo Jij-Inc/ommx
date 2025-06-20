@@ -4,7 +4,7 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, SampleID, Sampled};
+use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
@@ -517,12 +517,13 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
         let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
 
         // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
-        let value = v1_dv
-            .substituted_value
-            .ok_or(crate::RawParseError::MissingField {
+        let value = v1_dv.substituted_value.ok_or(
+            RawParseError::MissingField {
                 message,
                 field: "substituted_value",
-            })?;
+            }
+            .context(message, "substituted_value"),
+        )?;
 
         EvaluatedDecisionVariable::new(dv, value, crate::ATol::default())
             .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
@@ -590,9 +591,10 @@ mod tests {
         };
 
         let result: Result<EvaluatedDecisionVariable, _> = v1_dv.try_into();
-        assert!(result.is_err());
-
-        let error = result.unwrap_err();
-        assert!(error.to_string().contains("substituted_value"));
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.DecisionVariable[substituted_value]
+        Field substituted_value in ommx.v1.DecisionVariable is missing.
+        "###);
     }
 }
