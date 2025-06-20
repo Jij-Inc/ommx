@@ -86,6 +86,16 @@ impl<T> Sampled<T> {
         Ok(out)
     }
 
+    pub fn new_no_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self {
+        let mut offsets = FnvHashMap::default();
+        let mut data = Vec::new();
+        for (n, (id, value)) in iter.enumerate() {
+            offsets.insert(id, n);
+            data.push(value);
+        }
+        Self { offsets, data }
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
         self.offsets.iter().map(move |(id, offset)| {
             debug_assert!(*offset < self.data.len());
