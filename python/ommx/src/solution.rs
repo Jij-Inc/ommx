@@ -87,20 +87,15 @@ impl Solution {
     pub fn extract_decision_variables<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyDict>> {
         let result_dict = PyDict::new(py);
         
-        for (_, dv) in self.0.decision_variables() {
-            if let Some(dv_name) = &dv.metadata.name {
-                if dv_name == name {
-                    if !dv.metadata.parameters.is_empty() {
-                        return Err(PyValueError::new_err("Decision variable with parameters is not supported"));
-                    }
-                    let key_tuple = PyTuple::new(py, &dv.metadata.subscripts)?;
-                    if result_dict.contains(&key_tuple)? {
-                        return Err(PyValueError::new_err(format!("Duplicate subscript: {:?}", dv.metadata.subscripts)));
-                    }
-                    result_dict.set_item(key_tuple, *dv.value())?;
-                }
-            }
+        // Use the Rust SDK method and convert to Python dict
+        let extracted = self.0.extract_decision_variables(name)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        
+        for (subscripts, value) in extracted {
+            let key_tuple = PyTuple::new(py, &subscripts)?;
+            result_dict.set_item(key_tuple, value)?;
         }
+        
         Ok(result_dict)
     }
 
@@ -108,20 +103,15 @@ impl Solution {
     pub fn extract_constraints<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyDict>> {
         let result_dict = PyDict::new(py);
         
-        for (_, ec) in self.0.evaluated_constraints() {
-            if let Some(constraint_name) = &ec.metadata.name {
-                if constraint_name == name {
-                    if !ec.metadata.parameters.is_empty() {
-                        return Err(PyValueError::new_err("Constraint with parameters is not supported"));
-                    }
-                    let key_tuple = PyTuple::new(py, &ec.metadata.subscripts)?;
-                    if result_dict.contains(&key_tuple)? {
-                        return Err(PyValueError::new_err(format!("Duplicate subscript: {:?}", ec.metadata.subscripts)));
-                    }
-                    result_dict.set_item(key_tuple, *ec.evaluated_value())?;
-                }
-            }
+        // Use the Rust SDK method and convert to Python dict
+        let extracted = self.0.extract_constraints(name)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        
+        for (subscripts, value) in extracted {
+            let key_tuple = PyTuple::new(py, &subscripts)?;
+            result_dict.set_item(key_tuple, value)?;
         }
+        
         Ok(result_dict)
     }
 }

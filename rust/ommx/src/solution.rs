@@ -2,7 +2,7 @@ mod parse;
 
 use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, VariableID};
 use getset::Getters;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Error occurred during Solution validation
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +28,15 @@ pub enum SolutionError {
 
     #[error("Missing value for variable {id}: not found in state and no substituted_value")]
     MissingVariableValue { id: u64 },
+
+    #[error("Decision variable with parameters is not supported")]
+    ParameterizedVariable,
+
+    #[error("Constraint with parameters is not supported")]
+    ParameterizedConstraint,
+
+    #[error("Duplicate subscript: {subscripts:?}")]
+    DuplicateSubscript { subscripts: Vec<i64> },
 }
 
 /// Single solution result with data integrity guarantees
@@ -95,5 +104,93 @@ impl Solution {
             .map(|(id, dv)| (id.into_inner(), *dv.value()))
             .collect();
         crate::v1::State { entries }
+    }
+
+    /// Extract decision variables by name with subscripts as key
+    ///
+    /// Returns a mapping from subscripts (as a vector) to the variable's value.
+    /// This is useful for extracting variables that have the same name but different subscripts.
+    ///
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - A decision variable with parameters is found
+    /// - The same subscript is found multiple times
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use ommx::*;
+    /// # use std::collections::{HashMap, BTreeMap};
+    /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
+    /// // Assuming you have a solution with variables named "x" with subscripts [0], [1], [2]
+    /// let extracted: HashMap<Vec<i64>, f64> = solution.extract_decision_variables("x")?;
+    /// // extracted will contain: {vec![0] => 1.0, vec![1] => 0.0, vec![2] => 0.0}
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn extract_decision_variables(&self, name: &str) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
+        let mut result = HashMap::new();
+        
+        for dv in self.decision_variables.values() {
+            if let Some(dv_name) = &dv.metadata.name {
+                if dv_name == name {
+                    if !dv.metadata.parameters.is_empty() {
+                        return Err(SolutionError::ParameterizedVariable);
+                    }
+                    let key = dv.metadata.subscripts.clone();
+                    if result.contains_key(&key) {
+                        return Err(SolutionError::DuplicateSubscript { 
+                            subscripts: key 
+                        });
+                    }
+                    result.insert(key, *dv.value());
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    /// Extract constraints by name with subscripts as key
+    ///
+    /// Returns a mapping from subscripts (as a vector) to the constraint's evaluated value.
+    /// This is useful for extracting constraints that have the same name but different subscripts.
+    ///
+    /// # Errors
+    /// 
+    /// Returns an error if:
+    /// - A constraint with parameters is found
+    /// - The same subscript is found multiple times
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use ommx::*;
+    /// # use std::collections::{HashMap, BTreeMap};
+    /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
+    /// // Assuming you have a solution with constraints named "c" with subscripts [0], [1]
+    /// let extracted: HashMap<Vec<i64>, f64> = solution.extract_constraints("c")?;
+    /// // extracted will contain: {vec![0] => 0.0, vec![1] => 0.0}
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    pub fn extract_constraints(&self, name: &str) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
+        let mut result = HashMap::new();
+        
+        for ec in self.evaluated_constraints.values() {
+            if let Some(constraint_name) = &ec.metadata.name {
+                if constraint_name == name {
+                    if !ec.metadata.parameters.is_empty() {
+                        return Err(SolutionError::ParameterizedConstraint);
+                    }
+                    let key = ec.metadata.subscripts.clone();
+                    if result.contains_key(&key) {
+                        return Err(SolutionError::DuplicateSubscript { 
+                            subscripts: key 
+                        });
+                    }
+                    result.insert(key, *ec.evaluated_value());
+                }
+            }
+        }
+        Ok(result)
     }
 }
