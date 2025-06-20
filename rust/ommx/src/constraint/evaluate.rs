@@ -25,8 +25,6 @@ impl Evaluate for Constraint {
             parameters: self.parameters.clone(),
             description: self.description.clone(),
             used_decision_variable_ids,
-            removed_reason: None,
-            removed_reason_parameters: FnvHashMap::default(),
         };
 
         let feasible = match self.equality {
@@ -41,6 +39,8 @@ impl Evaluate for Constraint {
             evaluated_value,
             dual_variable: None,
             feasible,
+            removed_reason: None,
+            removed_reason_parameters: FnvHashMap::default(),
         })
     }
 
@@ -75,8 +75,6 @@ impl Evaluate for Constraint {
                 .into_iter()
                 .map(|id| id.into_inner())
                 .collect(),
-            removed_reason: None,
-            removed_reason_parameters: FnvHashMap::default(),
         };
 
         Ok(SampledConstraint {
@@ -86,6 +84,8 @@ impl Evaluate for Constraint {
             evaluated_values,
             dual_variables: None, // TODO: Support dual variables in the future
             feasible,
+            removed_reason: None,
+            removed_reason_parameters: FnvHashMap::default(),
         })
     }
 
@@ -108,16 +108,15 @@ impl Evaluate for RemovedConstraint {
 
     fn evaluate(&self, solution: &crate::v1::State, atol: ATol) -> anyhow::Result<Self::Output> {
         let evaluated = self.constraint.evaluate(solution, atol)?;
-        let mut metadata = evaluated.metadata;
-        metadata.removed_reason = Some(self.removed_reason.clone());
-        metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(EvaluatedConstraint {
             id: evaluated.id,
             equality: evaluated.equality,
-            metadata,
+            metadata: evaluated.metadata,
             evaluated_value: evaluated.evaluated_value,
             dual_variable: evaluated.dual_variable,
             feasible: evaluated.feasible,
+            removed_reason: Some(self.removed_reason.clone()),
+            removed_reason_parameters: self.removed_reason_parameters.clone(),
         })
     }
 
@@ -127,16 +126,15 @@ impl Evaluate for RemovedConstraint {
         atol: ATol,
     ) -> anyhow::Result<Self::SampledOutput> {
         let evaluated = self.constraint.evaluate_samples(samples, atol)?;
-        let mut metadata = evaluated.metadata;
-        metadata.removed_reason = Some(self.removed_reason.clone());
-        metadata.removed_reason_parameters = self.removed_reason_parameters.clone();
         Ok(SampledConstraint {
             id: evaluated.id,
             equality: evaluated.equality,
-            metadata,
+            metadata: evaluated.metadata,
             evaluated_values: evaluated.evaluated_values,
             dual_variables: evaluated.dual_variables,
             feasible: evaluated.feasible,
+            removed_reason: Some(self.removed_reason.clone()),
+            removed_reason_parameters: self.removed_reason_parameters.clone(),
         })
     }
 

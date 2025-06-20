@@ -34,19 +34,20 @@ impl Solution {
     /// Check if the solution is feasible
     #[getter]
     pub fn feasible(&self) -> bool {
-        self.0.feasible
+        // The `feasible` means feasible in the unrelaxed problem
+        self.feasible_unrelaxed()
     }
 
     /// Check if the solution is feasible in the relaxed problem
     #[getter]
-    pub fn feasible_relaxed(&self) -> Option<bool> {
-        self.0.feasible_relaxed
+    pub fn feasible_relaxed(&self) -> bool {
+        self.0.get_feasible_relaxed()
     }
 
     /// Check if the solution is feasible in the unrelaxed problem  
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
-        self.0.feasible
+        self.0.get_feasible_unrelaxed()
     }
 
     /// Get the optimality status

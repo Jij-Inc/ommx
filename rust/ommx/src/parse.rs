@@ -1,6 +1,6 @@
 use crate::{
     polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
-    InstanceError, SampleID, SubstitutionError,
+    InstanceError, SampleID, SampleSetError, SolutionError, SubstitutionError,
 };
 use prost::DecodeError;
 use std::fmt;
@@ -81,13 +81,19 @@ pub enum RawParseError {
         field: &'static str,
     },
 
-    /// Since protobuf requires all enum has `UNSPECIFIED` value as default value,
-    /// this error is returned when the enum value is not set.
-    #[error("Enum ({enum_name}) value is unspecified.")]
-    UnspecifiedEnum { enum_name: &'static str },
+    /// When an integer value doesn't correspond to a known enum variant during deserialization.
+    /// This includes cases where the value is unspecified (0) or a new variant added in a newer version.
+    #[error("Unknown or unsupported enum value {value} for {enum_name}. This may be due to an unspecified value or a newer version of the protocol.")]
+    UnknownEnumValue { enum_name: &'static str, value: i32 },
 
     #[error(transparent)]
     InstanceError(#[from] InstanceError),
+
+    #[error(transparent)]
+    SolutionError(#[from] SolutionError),
+
+    #[error(transparent)]
+    SampleSetError(#[from] SampleSetError),
 
     #[error(transparent)]
     SubstitutionError(#[from] SubstitutionError),

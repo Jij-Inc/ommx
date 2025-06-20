@@ -154,7 +154,9 @@ mod infeasible_detected;
 mod instance;
 mod macros;
 mod polynomial_base;
+mod sample_set;
 mod sampled;
+mod solution;
 mod substitute;
 
 pub use atol::*;
@@ -168,7 +170,9 @@ pub use infeasible_detected::*;
 pub use instance::*;
 pub use parse::*;
 pub use polynomial_base::*;
+pub use sample_set::*;
 pub use sampled::*;
+pub use solution::*;
 pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files

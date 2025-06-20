@@ -129,9 +129,9 @@ impl Instance {
         ConstraintHints(self.0.constraint_hints().clone())
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let inner: ommx::v1::Instance = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+        PyBytes::new(py, &inner.encode_to_vec())
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
@@ -172,7 +172,7 @@ impl Instance {
     pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
         let solution = self.0.evaluate(&state, ommx::ATol::default())?;
-        Ok(Solution(solution))
+        Ok(Solution(solution.into()))
     }
 
     pub fn partial_evaluate<'py>(
@@ -188,7 +188,9 @@ impl Instance {
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
         Ok(SampleSet(
-            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
+            self.0
+                .evaluate_samples(&samples.0, ommx::ATol::default())?
+                .into(),
         ))
     }
 
@@ -197,7 +199,7 @@ impl Instance {
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
-        let state = ommx::random::sample(&mut *rng_guard, strategy);
+        let state = ommx::random::sample(&mut rng_guard, strategy);
         let bytes = state.encode_to_vec();
         Ok(PyBytes::new(py, &bytes))
     }
@@ -228,7 +230,7 @@ impl Instance {
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
-        let samples = ommx::random::sample(&mut *rng_guard, strategy);
+        let samples = ommx::random::sample(&mut rng_guard, strategy);
         let bytes = samples.encode_to_vec();
         Ok(PyBytes::new(py, &bytes))
     }
@@ -483,8 +485,8 @@ impl ParametricInstance {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -514,7 +516,7 @@ impl Parameters {
         Ok(Self(inner))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        Ok(PyBytes::new(py, &self.0.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 }
