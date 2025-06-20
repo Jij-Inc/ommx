@@ -194,6 +194,45 @@ elif objective.degree() == 2:
     constant = objective.constant_term           # float
 ```
 
+## State Constructor Changes (PyO3 Migration)
+
+**Enhancement**: `State(entries=...)` constructor enhanced to accept both `dict[int, float]` and `Iterable[tuple[int, float]]`.
+
+**Before (Protobuf)**:
+```python
+# These worked with protobuf State
+state = State(entries=zip(variables, values))  # ✅ Worked
+state = State(entries=[(1, 0.5), (2, 1.0)])   # ✅ Worked
+```
+
+**After (PyO3) - Enhanced Constructor**:
+```python
+# All these patterns now work with enhanced PyO3 State constructor
+state = State(entries=zip(variables, values))        # ✅ Works with iterables
+state = State(entries=[(1, 0.5), (2, 1.0)])         # ✅ Works with iterables  
+state = State(entries=dict(zip(variables, values)))  # ✅ Works with dict
+state = State(entries={1: 0.5, 2: 1.0})             # ✅ Works with dict
+```
+
+**Adapter Code Example**:
+```python
+# In adapter code (e.g., ommx-openjij-adapter)
+def decode_to_samples(response: oj.Response) -> Samples:
+    # Both patterns now work with enhanced PyO3 State:
+    state = State(entries=zip(response.variables, sample))           # ✅ Works directly
+    # OR
+    state = State(entries=dict(zip(response.variables, sample)))     # ✅ Also works
+```
+
+**Migration Status**:
+- ✅ **Completed**: `ommx.v1.State` migrated to PyO3 `_ommx_rust.State`
+- ✅ **Completed**: Enhanced State constructor to accept both dict and iterables
+- ✅ **Completed**: Adapter compatibility fixes for State constructor changes
+  - ✅ OpenJij adapter: Compatible with both `zip()` and `dict(zip())` patterns
+  - ✅ PyScipOpt adapter: Enhanced `to_state()` function for protobuf/PyO3 compatibility
+  - ✅ Enhanced `ToState` type alias to include legacy protobuf State
+- ⏳ **Planned**: `ommx.v1.Solution` and `ommx.v1.SampleSet` migrations
+
 ---
 
-**Note**: v2 API migration is complete. This guide is maintained as a historical record and future reference.
+**Note**: v2 API migration is ongoing. PyO3 performance optimization in progress for core data structures.
