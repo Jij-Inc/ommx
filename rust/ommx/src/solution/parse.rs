@@ -6,13 +6,14 @@ impl Parse for crate::v1::Solution {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Solution";
         let state = self.state.unwrap_or_default();
         let objective = self.objective;
 
         // Parse evaluated constraints
         let mut evaluated_constraints = std::collections::BTreeMap::default();
         for ec in self.evaluated_constraints {
-            let parsed_constraint = ec.parse(&())?;
+            let parsed_constraint = ec.parse_as(&(), message, "evaluated_constraints")?;
             evaluated_constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
@@ -29,7 +30,7 @@ impl Parse for crate::v1::Solution {
                                 substituted_value: *substituted_value,
                             },
                         )
-                        .into());
+                        .context(message, "decision_variables"));
                     }
                     *value
                 }
@@ -37,11 +38,13 @@ impl Parse for crate::v1::Solution {
                     return Err(crate::RawParseError::SolutionError(
                         SolutionError::MissingVariableValue { id: dv.id },
                     )
-                    .into());
+                    .context(message, "decision_variables"));
                 }
             };
             dv.substituted_value = Some(value);
-            let evaluated_dv: crate::EvaluatedDecisionVariable = dv.try_into()?;
+            let evaluated_dv: crate::EvaluatedDecisionVariable = dv
+                .try_into()
+                .map_err(|e: ParseError| e.context(message, "decision_variables"))?;
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
         let optimality =
@@ -50,14 +53,16 @@ impl Parse for crate::v1::Solution {
                 .map_err(|_| crate::RawParseError::UnknownEnumValue {
                     enum_name: "ommx.v1.Optimality",
                     value: self.optimality,
-                })?;
+                })
+                .map_err(|e| ParseError::from(e).context(message, "optimality"))?;
         let relaxation =
             self.relaxation
                 .try_into()
                 .map_err(|_| crate::RawParseError::UnknownEnumValue {
                     enum_name: "ommx.v1.Relaxation",
                     value: self.relaxation,
-                })?;
+                })
+                .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
 
         let mut solution = Solution::new(objective, evaluated_constraints, decision_variables);
         solution.optimality = optimality;
@@ -88,7 +93,7 @@ impl Parse for crate::v1::Solution {
                     computed_feasible,
                 },
             )
-            .into());
+            .context(message, "feasible"));
         }
 
         if computed_feasible_relaxed != provided_feasible_relaxed {
@@ -98,7 +103,7 @@ impl Parse for crate::v1::Solution {
                     computed_feasible_relaxed,
                 },
             )
-            .into());
+            .context(message, "feasible_relaxed"));
         }
 
         Ok(solution)
@@ -210,6 +215,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[optimality]
         Unknown or unsupported enum value 99 for ommx.v1.Optimality. This may be due to an unspecified value or a newer version of the protocol.
         "###);
 
@@ -226,6 +232,7 @@ mod tests {
         let error2 = result2.unwrap_err();
         insta::assert_snapshot!(error2.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[relaxation]
         Unknown or unsupported enum value 123 for ommx.v1.Relaxation. This may be due to an unspecified value or a newer version of the protocol.
         "###);
     }
@@ -259,6 +266,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[feasible]
         Inconsistent feasibility for solution: provided=true, computed=false
         "###);
     }
@@ -286,6 +294,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[decision_variables]
         Inconsistent value for variable 1: state=2, substituted_value=3
         "###);
     }
@@ -313,6 +322,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.Solution[decision_variables]
         Missing value for variable 1: not found in state and no substituted_value
         "###);
     }
