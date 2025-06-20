@@ -134,7 +134,8 @@ pub struct SampledConstraint {
 - ✅ **Parse trait implementations for Protocol Buffer conversion**
 
 **Recently Implemented**:
-- ✅ `Sampled<T>` with `get`/`get_mut` methods and `UnknownSampleIDError` error handling
+- ✅ `Sampled<T>` with `get` method and `UnknownSampleIDError` error handling (`get_mut` removed for safety)
+- ✅ `Sampled<T>::new_dedup` with O(1) HashMap-based deduplication (requires `T: Hash + Eq + Clone`)
 - ✅ `EvaluatedConstraint` and `SampledConstraint` with private fields and getset getters
 - ✅ `ConstraintMetadata` separation for auxiliary data with `Default` implementation
 - ✅ Pre-computed feasibility fields to improve performance
@@ -142,7 +143,7 @@ pub struct SampledConstraint {
 - ✅ Type-safe constraint evaluation with proper error handling
 - ✅ Efficient constraint feasibility checking methods (`feasible_ids`, `infeasible_ids`)
 - ✅ **Solution and SampleSet types with data integrity guarantees**
-- ✅ **Parse trait implementations for v1::Solution and v1::SampleSet**
+- ✅ **Parse trait implementations for v1::Solution and v1::SampleSet with full validation**
 - ✅ **Instance evaluation methods updated to use new Solution/SampleSet types**
 - ✅ **Constructor methods for controlled Solution/SampleSet creation**
 - ✅ **Comprehensive round-trip testing for Solution and SampleSet parsing**
@@ -151,6 +152,8 @@ pub struct SampledConstraint {
 - ✅ **DecisionVariable Evaluate trait implementation with strongly-typed results**
 - ✅ **EvaluatedDecisionVariable and SampledDecisionVariable types with data integrity**
 - ✅ **Python bindings integration with automatic type conversion layer**
+- ✅ **SampleSet feasibility validation during parsing with consistency checks**
+- ✅ **Parse trait for v1::SampledDecisionVariable to modularize parsing logic**
 
 **Solution and SampleSet Implementation (Completed ✅)**:
 
@@ -528,6 +531,8 @@ The OMMX Rust SDK v2 has achieved complete migration to strongly-typed architect
    - `SampleSet`: Uses `BTreeMap` collections and required `objectives: Sampled<f64>` (removed Optional wrapper)
    - Feasibility computed on-demand with parse-time validation for data consistency
    - Improved performance through efficient ID-based lookups and memory optimization
+   - `Sampled<T>::new_dedup` now uses HashMap for O(1) deduplication instead of O(n) linear search
+   - Removed `Sampled<T>::get_mut` to prevent unintended shared mutations in deduplicated data
 
 **Current Status**: Ready for production use with complete feature parity and improved type safety compared to the original Protocol Buffer-based implementation.
 
