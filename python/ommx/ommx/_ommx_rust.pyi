@@ -285,6 +285,96 @@ class Descriptor:
     def __str__(self) -> builtins.str: ...
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
 
+class EvaluatedConstraint:
+    id: builtins.int
+    r"""
+    Get the constraint ID
+    """
+    equality: Equality
+    r"""
+    Get the constraint equality type
+    """
+    evaluated_value: builtins.float
+    r"""
+    Get the evaluated constraint value
+    """
+    dual_variable: typing.Optional[builtins.float]
+    r"""
+    Get the dual variable value
+    """
+    feasible: builtins.bool
+    r"""
+    Get the feasibility status
+    """
+    removed_reason: typing.Optional[builtins.str]
+    r"""
+    Get the removal reason
+    """
+    name: typing.Optional[builtins.str]
+    r"""
+    Get the constraint name
+    """
+    subscripts: builtins.list[builtins.int]
+    r"""
+    Get the subscripts
+    """
+    parameters: builtins.dict[builtins.str, builtins.str]
+    r"""
+    Get the parameters
+    """
+    description: typing.Optional[builtins.str]
+    r"""
+    Get the description
+    """
+    used_decision_variable_ids: builtins.list[builtins.int]
+    r"""
+    Get the used decision variable IDs
+    """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> EvaluatedConstraint: ...
+    def to_bytes(self) -> bytes: ...
+
+class EvaluatedDecisionVariable:
+    id: builtins.int
+    r"""
+    Get the variable ID
+    """
+    kind: Kind
+    r"""
+    Get the variable kind
+    """
+    value: builtins.float
+    r"""
+    Get the evaluated value
+    """
+    lower_bound: builtins.float
+    r"""
+    Get the lower bound
+    """
+    upper_bound: builtins.float
+    r"""
+    Get the upper bound
+    """
+    name: typing.Optional[builtins.str]
+    r"""
+    Get the variable name
+    """
+    subscripts: builtins.list[builtins.int]
+    r"""
+    Get the subscripts
+    """
+    parameters: builtins.dict[builtins.str, builtins.str]
+    r"""
+    Get the parameters
+    """
+    description: typing.Optional[builtins.str]
+    r"""
+    Get the description
+    """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> EvaluatedDecisionVariable: ...
+    def to_bytes(self) -> bytes: ...
+
 class Function:
     linear_terms: builtins.dict[builtins.int, builtins.float]
     r"""
@@ -680,9 +770,25 @@ class Solution:
     r"""
     Get the relaxation status
     """
+    decision_variables: builtins.dict[builtins.int, EvaluatedDecisionVariable]
+    r"""
+    Get decision variables information as a map from ID to EvaluatedDecisionVariable
+    """
+    evaluated_constraints: builtins.dict[builtins.int, EvaluatedConstraint]
+    r"""
+    Get evaluated constraints information as a map from ID to EvaluatedConstraint
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
+    def extract_decision_variables(self, name: builtins.str) -> dict:
+        r"""
+        Extract decision variables by name with subscripts as key (returns a Python dict)
+        """
+    def extract_constraints(self, name: builtins.str) -> dict:
+        r"""
+        Extract constraints by name with subscripts as key (returns a Python dict)
+        """
 
 class Sos1:
     r"""
