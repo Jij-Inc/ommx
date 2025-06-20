@@ -7,6 +7,10 @@ impl Parse for crate::v1::Solution {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Solution";
+
+        let provided_feasible = self.get_feasible();
+        let provided_feasible_relaxed = self.get_feasible_relaxed();
+
         let state = self.state.unwrap_or_default();
         let objective = self.objective;
 
@@ -20,10 +24,8 @@ impl Parse for crate::v1::Solution {
         let mut decision_variables = std::collections::BTreeMap::default();
         for dv in self.decision_variables {
             // Parse the DecisionVariable to get strongly-typed version
-            let parsed_dv = dv
-                .clone()
-                .parse_as(&(), message, "decision_variables")?;
-            
+            let parsed_dv = dv.clone().parse_as(&(), message, "decision_variables")?;
+
             // Get the value from state or substituted_value
             let value = match (state.entries.get(&dv.id), dv.substituted_value.as_ref()) {
                 (Some(value), None) | (None, Some(value)) => *value,
@@ -35,12 +37,13 @@ impl Parse for crate::v1::Solution {
                     .context(message, "decision_variables"));
                 }
             };
-            
+
             // Use EvaluatedDecisionVariable::new which handles consistency validation
-            let evaluated_dv = crate::EvaluatedDecisionVariable::new(parsed_dv, value, ATol::default())
-                .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))
-                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
-            
+            let evaluated_dv =
+                crate::EvaluatedDecisionVariable::new(parsed_dv, value, ATol::default())
+                    .map_err(crate::RawParseError::InvalidDecisionVariable)
+                    .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
         let optimality = self
@@ -65,20 +68,6 @@ impl Parse for crate::v1::Solution {
         solution.relaxation = relaxation;
 
         // Validate feasibility consistency
-        let (provided_feasible, provided_feasible_relaxed) = match self.feasible_relaxed {
-            Some(feasible_relaxed) => {
-                // New format since OMMX Python SDK 1.7.0
-                // https://github.com/Jij-Inc/ommx/pull/280
-                (self.feasible, feasible_relaxed)
-            }
-            None => {
-                // Before OMMX Python SDK 1.7.0, the `feasible` field means current `feasible_relaxed`,
-                // and the deprecated `feasible_unrelaxed` is the same as `feasible`.
-                #[allow(deprecated)]
-                (self.feasible_unrelaxed, self.feasible)
-            }
-        };
-
         let computed_feasible = solution.feasible();
         let computed_feasible_relaxed = solution.feasible_relaxed();
 
