@@ -47,7 +47,7 @@ impl Parse for crate::v1::SampleSet {
 
         // Create SampleSet with validation
         let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
-            .map_err(|e| crate::RawParseError::SampleSetError(e))?;
+            .map_err(crate::RawParseError::SampleSetError)?;
 
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {

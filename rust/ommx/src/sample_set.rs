@@ -60,7 +60,7 @@ impl SampleSet {
         let objective_sample_ids = objectives.ids();
 
         // Verify that all decision variables have the same sample IDs
-        for (_, sampled_dv) in &decision_variables {
+        for sampled_dv in decision_variables.values() {
             if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
                 return Err(SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
@@ -70,7 +70,7 @@ impl SampleSet {
         }
 
         // Verify that all constraints have the same sample IDs
-        for (_, sampled_constraint) in &constraints {
+        for sampled_constraint in constraints.values() {
             if !sampled_constraint
                 .evaluated_values()
                 .has_same_ids(&objective_sample_ids)
