@@ -2992,7 +2992,23 @@ class Quadratic(AsConstraint):
         return self.raw.constant_term
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import DecisionVariable
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> y = DecisionVariable.binary(2, name="y")
+            >>> quad = x * y + 2 * x + 3
+            >>> quad.terms
+            {(1,): 2.0, (1, 2): 1.0, (): 3.0}
+        """
         return self.raw.terms()
 
     def __repr__(self) -> str:
@@ -3278,7 +3294,23 @@ class Function(AsConstraint):
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Function, Linear, DecisionVariable
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> linear = Linear(terms={1: 2.5}, constant=1.0)
+            >>> func = Function(linear)
+            >>> func.terms
+            {(1,): 2.5, (): 1.0}
+        """
         return self.raw.terms()
 
     @staticmethod

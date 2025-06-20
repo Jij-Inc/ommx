@@ -4,7 +4,11 @@ use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
 use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Parse};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict, PyTuple},
+    Bound, PyAny,
+};
 use std::collections::BTreeMap;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -103,14 +107,14 @@ impl Polynomial {
         Polynomial(&self.0 * &quadratic.0)
     }
 
-    pub fn terms(&self) -> BTreeMap<Vec<u64>, f64> {
-        self.0
-            .iter()
-            .map(|(ids, coeff)| {
-                let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
-                (u64_ids, coeff.into_inner())
-            })
-            .collect()
+    pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let result = PyDict::new(py);
+        for (ids, coeff) in self.0.iter() {
+            let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
+            let py_tuple = PyTuple::new(py, &u64_ids)?;
+            result.set_item(py_tuple, coeff.into_inner())?;
+        }
+        Ok(result)
     }
 
     #[staticmethod]
