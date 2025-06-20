@@ -4248,21 +4248,27 @@ class SampleSet(UserAnnotationBase):
         solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).get(sample_id)
         return Solution.from_bytes(solution.to_bytes())
 
-    def best_feasible(self) -> Solution:
+    def best_feasible(self) -> Solution | None:
         """
         Get the best feasible solution
         """
         solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible()
-        return Solution.from_bytes(solution.to_bytes())
+        if solution is not None:
+            return Solution.from_bytes(solution.to_bytes())
+        else:
+            return None
 
-    def best_feasible_unrelaxed(self) -> Solution:
+    def best_feasible_unrelaxed(self) -> Solution | None:
         """
         Get the best feasible solution without relaxation
         """
         solution = _ommx_rust.SampleSet.from_bytes(
             self.to_bytes()
         ).best_feasible_unrelaxed()
-        return Solution.from_bytes(solution.to_bytes())
+        if solution is not None:
+            return Solution.from_bytes(solution.to_bytes())
+        else:
+            return None
 
 
 @dataclass
