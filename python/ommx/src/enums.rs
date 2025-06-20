@@ -204,3 +204,135 @@ impl From<Kind> for ommx::Kind {
         }
     }
 }
+
+/// Optimality status of a solution
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyclass(eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Optimality {
+    /// The solver cannot determine whether the solution is optimal
+    Unspecified = 0,
+    /// The solver has determined that the solution is optimal
+    Optimal = 1,
+    /// The solver has determined that the solution is not optimal
+    NotOptimal = 2,
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Optimality {
+    /// Convert from Protocol Buffer optimality value
+    #[staticmethod]
+    pub fn from_pb(value: i32) -> PyResult<Self> {
+        match value {
+            0 => Ok(Optimality::Unspecified),
+            1 => Ok(Optimality::Optimal),
+            2 => Ok(Optimality::NotOptimal),
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid optimality value: {}",
+                value
+            ))),
+        }
+    }
+
+    /// Convert to Protocol Buffer optimality value
+    pub fn to_pb(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __repr__(&self) -> String {
+        match self {
+            Optimality::Unspecified => "Optimality.Unspecified".to_string(),
+            Optimality::Optimal => "Optimality.Optimal".to_string(),
+            Optimality::NotOptimal => "Optimality.NotOptimal".to_string(),
+        }
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}", *self as i32)
+    }
+}
+
+impl From<ommx::v1::Optimality> for Optimality {
+    fn from(optimality: ommx::v1::Optimality) -> Self {
+        match optimality {
+            ommx::v1::Optimality::Unspecified => Optimality::Unspecified,
+            ommx::v1::Optimality::Optimal => Optimality::Optimal,
+            ommx::v1::Optimality::NotOptimal => Optimality::NotOptimal,
+            _ => Optimality::Unspecified, // Default for unknown variants
+        }
+    }
+}
+
+impl From<Optimality> for ommx::v1::Optimality {
+    fn from(optimality: Optimality) -> Self {
+        match optimality {
+            Optimality::Unspecified => ommx::v1::Optimality::Unspecified,
+            Optimality::Optimal => ommx::v1::Optimality::Optimal,
+            Optimality::NotOptimal => ommx::v1::Optimality::NotOptimal,
+        }
+    }
+}
+
+/// Relaxation status of a solution
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass_enum)]
+#[pyclass(eq, eq_int)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Relaxation {
+    /// No relaxation is used
+    Unspecified = 0,
+    /// The solution is obtained by a relaxed linear programming problem
+    LpRelaxed = 1,
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl Relaxation {
+    /// Convert from Protocol Buffer relaxation value
+    #[staticmethod]
+    pub fn from_pb(value: i32) -> PyResult<Self> {
+        match value {
+            0 => Ok(Relaxation::Unspecified),
+            1 => Ok(Relaxation::LpRelaxed),
+            _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid relaxation value: {}",
+                value
+            ))),
+        }
+    }
+
+    /// Convert to Protocol Buffer relaxation value
+    pub fn to_pb(&self) -> i32 {
+        *self as i32
+    }
+
+    fn __repr__(&self) -> String {
+        match self {
+            Relaxation::Unspecified => "Relaxation.Unspecified".to_string(),
+            Relaxation::LpRelaxed => "Relaxation.LpRelaxed".to_string(),
+        }
+    }
+
+    fn __str__(&self) -> String {
+        format!("{}", *self as i32)
+    }
+}
+
+impl From<ommx::v1::Relaxation> for Relaxation {
+    fn from(relaxation: ommx::v1::Relaxation) -> Self {
+        match relaxation {
+            ommx::v1::Relaxation::Unspecified => Relaxation::Unspecified,
+            ommx::v1::Relaxation::LpRelaxed => Relaxation::LpRelaxed,
+            _ => Relaxation::Unspecified, // Default for unknown variants
+        }
+    }
+}
+
+impl From<Relaxation> for ommx::v1::Relaxation {
+    fn from(relaxation: Relaxation) -> Self {
+        match relaxation {
+            Relaxation::Unspecified => ommx::v1::Relaxation::Unspecified,
+            Relaxation::LpRelaxed => ommx::v1::Relaxation::LpRelaxed,
+        }
+    }
+}
