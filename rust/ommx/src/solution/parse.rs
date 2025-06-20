@@ -47,22 +47,22 @@ impl Parse for crate::v1::Solution {
                 .map_err(|e: ParseError| e.context(message, "decision_variables"))?;
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
-        let optimality =
-            self.optimality
-                .try_into()
-                .map_err(|_| crate::RawParseError::UnknownEnumValue {
-                    enum_name: "ommx.v1.Optimality",
-                    value: self.optimality,
-                })
-                .map_err(|e| ParseError::from(e).context(message, "optimality"))?;
-        let relaxation =
-            self.relaxation
-                .try_into()
-                .map_err(|_| crate::RawParseError::UnknownEnumValue {
-                    enum_name: "ommx.v1.Relaxation",
-                    value: self.relaxation,
-                })
-                .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
+        let optimality = self
+            .optimality
+            .try_into()
+            .map_err(|_| crate::RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Optimality",
+                value: self.optimality,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "optimality"))?;
+        let relaxation = self
+            .relaxation
+            .try_into()
+            .map_err(|_| crate::RawParseError::UnknownEnumValue {
+                enum_name: "ommx.v1.Relaxation",
+                value: self.relaxation,
+            })
+            .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
 
         let mut solution = Solution::new(objective, evaluated_constraints, decision_variables);
         solution.optimality = optimality;

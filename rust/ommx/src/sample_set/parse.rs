@@ -7,7 +7,7 @@ impl Parse for crate::v1::SampleSet {
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.SampleSet";
-        
+
         // Parse decision variables into BTreeMap
         let mut decision_variables = std::collections::BTreeMap::new();
         for v1_sampled_dv in self.decision_variables {
@@ -33,12 +33,10 @@ impl Parse for crate::v1::SampleSet {
 
             // Create SampledDecisionVariable
             let dv_id = dv.id();
-            let sampled_dv = crate::SampledDecisionVariable::new(
-                dv,
-                samples,
-                crate::ATol::default(),
-            ).map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))
-            .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
+            let sampled_dv =
+                crate::SampledDecisionVariable::new(dv, samples, crate::ATol::default())
+                    .map_err(crate::RawParseError::InvalidDecisionVariable)
+                    .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             decision_variables.insert(dv_id, sampled_dv);
         }
@@ -56,7 +54,8 @@ impl Parse for crate::v1::SampleSet {
         // Parse constraints into BTreeMap
         let mut constraints = std::collections::BTreeMap::new();
         for v1_constraint in self.constraints {
-            let parsed_constraint: crate::SampledConstraint = v1_constraint.parse_as(&(), message, "constraints")?;
+            let parsed_constraint: crate::SampledConstraint =
+                v1_constraint.parse_as(&(), message, "constraints")?;
             constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
