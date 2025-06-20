@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Parse, ParseError, SampleSetError};
+use crate::{Parse, ParseError};
 use std::collections::BTreeMap;
 
 impl Parse for crate::v1::SampleSet {
@@ -20,11 +20,13 @@ impl Parse for crate::v1::SampleSet {
         // Parse objectives - required, not optional
         let objectives = self
             .objectives
-            .ok_or(crate::RawParseError::MissingField {
-                message: "ommx.v1.SampleSet",
-                field: "objectives",
-            })
-            .map_err(|e| ParseError::from(e).context(message, "objectives"))?
+            .ok_or(
+                crate::RawParseError::MissingField {
+                    message,
+                    field: "objectives",
+                }
+                .context(message, "objectives"),
+            )?
             .parse_as(&(), message, "objectives")?;
 
         // Parse constraints into BTreeMap
@@ -35,84 +37,19 @@ impl Parse for crate::v1::SampleSet {
             constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
-        let sense = self
-            .sense
-            .try_into()
-            .map_err(|_| crate::RawParseError::UnknownEnumValue {
+        let sense = self.sense.try_into().map_err(|_| {
+            crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
                 value: self.sense,
-            })
-            .map_err(|e| ParseError::from(e).context(message, "sense"))?;
-
-        let provided_feasible_relaxed: BTreeMap<SampleID, bool> = self
-            .feasible_relaxed
-            .into_iter()
-            .map(|(k, v)| (SampleID::from(k), v))
-            .collect();
-        let provided_feasible: BTreeMap<SampleID, bool> = self
-            .feasible
-            .into_iter()
-            .map(|(k, v)| (SampleID::from(k), v))
-            .collect();
+            }
+            .context(message, "sense")
+        })?;
 
         // Create SampleSet with validation
         let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
-            .map_err(crate::RawParseError::SampleSetError)
-            .map_err(|e| ParseError::from(e).context(message, "new"))?;
+            .map_err(|e| crate::RawParseError::SampleSetError(e))?;
 
-        // If constraints are present, validate feasibility consistency
-        if !sample_set.constraints().is_empty() {
-            for (sample_id, provided_feasible_value) in &provided_feasible {
-                let computed_feasible =
-                    sample_set.is_sample_feasible(*sample_id).map_err(|_| {
-                        crate::RawParseError::SampleSetError(
-                            SampleSetError::InconsistentSampleIDs {
-                                context: "feasible validation".to_string(),
-                                expected: sample_set.sample_ids(),
-                                found: provided_feasible.keys().copied().collect(),
-                            },
-                        )
-                        .context(message, "feasible")
-                    })?;
-                if computed_feasible != *provided_feasible_value {
-                    return Err(crate::RawParseError::SampleSetError(
-                        SampleSetError::InconsistentFeasibility {
-                            sample_id: sample_id.into_inner(),
-                            provided_feasible: *provided_feasible_value,
-                            computed_feasible,
-                        },
-                    )
-                    .context(message, "feasible"));
-                }
-            }
-
-            for (sample_id, provided_feasible_relaxed_value) in &provided_feasible_relaxed {
-                let computed_feasible_relaxed = sample_set
-                    .is_sample_feasible_relaxed(*sample_id)
-                    .map_err(|_| {
-                    crate::RawParseError::SampleSetError(SampleSetError::InconsistentSampleIDs {
-                        context: "feasible_relaxed validation".to_string(),
-                        expected: sample_set.sample_ids(),
-                        found: provided_feasible_relaxed.keys().copied().collect(),
-                    })
-                    .context(message, "feasible_relaxed")
-                })?;
-                if computed_feasible_relaxed != *provided_feasible_relaxed_value {
-                    return Err(crate::RawParseError::SampleSetError(
-                        SampleSetError::InconsistentFeasibilityRelaxed {
-                            sample_id: sample_id.into_inner(),
-                            provided_feasible_relaxed: *provided_feasible_relaxed_value,
-                            computed_feasible_relaxed,
-                        },
-                    )
-                    .context(message, "feasible_relaxed"));
-                }
-            }
-        } else {
-            // If no constraints, all samples are feasible (no validation needed)
-            // The SampleSet::new already computed this correctly
-        }
-
+        // TODO: Check the consistency of feasibility maps
         Ok(sample_set)
     }
 }

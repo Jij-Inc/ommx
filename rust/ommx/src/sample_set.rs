@@ -1,7 +1,7 @@
 mod parse;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, Sampled,
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, SampleIDSet, Sampled,
     SampledConstraint, SampledDecisionVariable, Sense, Solution, UnknownSampleIDError, VariableID,
 };
 use getset::Getters;
@@ -24,11 +24,10 @@ pub enum SampleSetError {
         computed_feasible_relaxed: bool,
     },
 
-    #[error("Inconsistent sample IDs in {context}: expected {expected:?}, found {found:?}")]
+    #[error("Inconsistent sample IDs: expected {expected:?}, found {found:?}")]
     InconsistentSampleIDs {
-        context: String,
-        expected: std::collections::BTreeSet<SampleID>,
-        found: std::collections::BTreeSet<SampleID>,
+        expected: SampleIDSet,
+        found: SampleIDSet,
     },
 }
 
@@ -58,34 +57,27 @@ impl SampleSet {
         sense: Sense,
     ) -> Result<Self, SampleSetError> {
         // Get all sample IDs from objectives
-        let objective_sample_ids: std::collections::BTreeSet<SampleID> =
-            objectives.iter().map(|(id, _)| *id).collect();
+        let objective_sample_ids = objectives.ids();
 
         // Verify that all decision variables have the same sample IDs
-        for (var_id, sampled_dv) in &decision_variables {
-            let dv_sample_ids: std::collections::BTreeSet<SampleID> =
-                sampled_dv.samples().iter().map(|(id, _)| *id).collect();
-            if dv_sample_ids != objective_sample_ids {
+        for (_, sampled_dv) in &decision_variables {
+            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
                 return Err(SampleSetError::InconsistentSampleIDs {
-                    context: format!("Decision variable {}", var_id.into_inner()),
                     expected: objective_sample_ids.clone(),
-                    found: dv_sample_ids,
+                    found: sampled_dv.samples().ids(),
                 });
             }
         }
 
         // Verify that all constraints have the same sample IDs
-        for (constraint_id, sampled_constraint) in &constraints {
-            let constraint_sample_ids: std::collections::BTreeSet<SampleID> = sampled_constraint
+        for (_, sampled_constraint) in &constraints {
+            if sampled_constraint
                 .evaluated_values()
-                .iter()
-                .map(|(id, _)| *id)
-                .collect();
-            if constraint_sample_ids != objective_sample_ids {
+                .has_same_ids(&objective_sample_ids)
+            {
                 return Err(SampleSetError::InconsistentSampleIDs {
-                    context: format!("Constraint {}", constraint_id.into_inner()),
                     expected: objective_sample_ids.clone(),
-                    found: constraint_sample_ids,
+                    found: sampled_constraint.evaluated_values().ids(),
                 });
             }
         }
@@ -131,8 +123,8 @@ impl SampleSet {
     }
 
     /// Get sample IDs available in this sample set
-    pub fn sample_ids(&self) -> std::collections::BTreeSet<crate::SampleID> {
-        self.objectives.iter().map(|(id, _)| *id).collect()
+    pub fn sample_ids(&self) -> SampleIDSet {
+        self.objectives.ids()
     }
 
     /// Check if a specific sample is feasible

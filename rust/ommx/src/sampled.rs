@@ -4,7 +4,7 @@ mod parse;
 use anyhow::{bail, Result};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
-use std::hash::Hash;
+use std::{collections::BTreeSet, hash::Hash};
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
@@ -15,6 +15,8 @@ impl SampleID {
         self.0
     }
 }
+
+pub type SampleIDSet = BTreeSet<SampleID>;
 
 #[derive(Debug, Clone)]
 pub struct Sampled<T> {
@@ -89,6 +91,18 @@ impl<T> Sampled<T> {
             debug_assert!(*offset < self.data.len());
             (id, &self.data[*offset])
         })
+    }
+
+    pub fn ids(&self) -> SampleIDSet {
+        self.offsets.keys().copied().collect()
+    }
+
+    pub fn has_same_ids(&self, ids: &SampleIDSet) -> bool {
+        if self.offsets.len() != ids.len() {
+            return false;
+        }
+        // Since SampleIDSet is sorted, we can compare the keys directly
+        self.offsets.keys().zip(ids.iter()).all(|(a, b)| a == b)
     }
 
     pub fn map<U, F: FnMut(T) -> U>(self, f: F) -> Sampled<U> {
