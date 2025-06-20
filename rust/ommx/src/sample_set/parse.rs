@@ -1,5 +1,6 @@
 use super::*;
 use crate::{Parse, ParseError, SampleSetError};
+use std::collections::BTreeMap;
 
 impl Parse for crate::v1::SampleSet {
     type Output = SampleSet;
@@ -9,35 +10,10 @@ impl Parse for crate::v1::SampleSet {
         let message = "ommx.v1.SampleSet";
 
         // Parse decision variables into BTreeMap
-        let mut decision_variables = std::collections::BTreeMap::new();
+        let mut decision_variables = BTreeMap::new();
         for v1_sampled_dv in self.decision_variables {
-            // Parse the DecisionVariable
-            let dv = v1_sampled_dv
-                .decision_variable
-                .ok_or(crate::RawParseError::MissingField {
-                    message: "ommx.v1.SampledDecisionVariable",
-                    field: "decision_variable",
-                })
-                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?
-                .parse_as(&(), message, "decision_variables")?;
-
-            // Parse the samples
-            let samples: crate::Sampled<f64> = v1_sampled_dv
-                .samples
-                .ok_or(crate::RawParseError::MissingField {
-                    message: "ommx.v1.SampledDecisionVariable",
-                    field: "samples",
-                })
-                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?
-                .parse_as(&(), message, "decision_variables")?;
-
-            // Create SampledDecisionVariable
-            let dv_id = dv.id();
-            let sampled_dv =
-                crate::SampledDecisionVariable::new(dv, samples, crate::ATol::default())
-                    .map_err(crate::RawParseError::InvalidDecisionVariable)
-                    .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
-
+            let sampled_dv = v1_sampled_dv.parse_as(&(), message, "decision_variables")?;
+            let dv_id = *sampled_dv.id();
             decision_variables.insert(dv_id, sampled_dv);
         }
 
