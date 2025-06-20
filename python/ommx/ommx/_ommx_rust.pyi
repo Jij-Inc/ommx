@@ -643,8 +643,8 @@ class SampleSet:
     def sample_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
-    def best_feasible(self) -> Solution: ...
-    def best_feasible_unrelaxed(self) -> Solution: ...
+    def best_feasible(self) -> typing.Optional[Solution]: ...
+    def best_feasible_unrelaxed(self) -> typing.Optional[Solution]: ...
 
 class Samples:
     @staticmethod
@@ -672,11 +672,11 @@ class Solution:
     r"""
     Check if the solution is feasible in the unrelaxed problem
     """
-    optimality: builtins.int
+    optimality: Optimality
     r"""
     Get the optimality status
     """
-    relaxation: builtins.int
+    relaxation: Relaxation
     r"""
     Get the relaxation status
     """
@@ -768,6 +768,51 @@ class Kind(Enum):
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer kind value
+        """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+
+class Optimality(Enum):
+    r"""
+    Optimality status of a solution
+    """
+
+    Unspecified = ...
+    Optimal = ...
+    NotOptimal = ...
+
+    @staticmethod
+    def from_pb(value: builtins.int) -> Optimality:
+        r"""
+        Convert from Protocol Buffer optimality value
+        """
+
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to Protocol Buffer optimality value
+        """
+
+    def __repr__(self) -> builtins.str: ...
+    def __str__(self) -> builtins.str: ...
+
+class Relaxation(Enum):
+    r"""
+    Relaxation status of a solution
+    """
+
+    Unspecified = ...
+    LpRelaxed = ...
+
+    @staticmethod
+    def from_pb(value: builtins.int) -> Relaxation:
+        r"""
+        Convert from Protocol Buffer relaxation value
+        """
+
+    def to_pb(self) -> builtins.int:
+        r"""
+        Convert to Protocol Buffer relaxation value
         """
 
     def __repr__(self) -> builtins.str: ...

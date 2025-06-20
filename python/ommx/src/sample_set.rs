@@ -1,7 +1,7 @@
 use crate::Solution;
 use anyhow::Result;
 use ommx::{Message, Parse};
-use pyo3::{prelude::*, types::PyBytes, Bound, exceptions::PyValueError};
+use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes, Bound};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -25,7 +25,10 @@ impl SampleSet {
 
     pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let solution = self.0.get(sample_id).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let solution = self
+            .0
+            .get(sample_id)
+            .map_err(|e| PyValueError::new_err(e.to_string()))?;
         Ok(Solution(solution))
     }
 
@@ -34,11 +37,17 @@ impl SampleSet {
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.0.sample_ids().iter().map(|id| id.into_inner()).collect()
+        self.0
+            .sample_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.0.sample_ids().iter()
+        self.0
+            .sample_ids()
+            .iter()
             .filter(|&&sample_id| self.0.is_sample_feasible(sample_id).unwrap_or(false))
             .map(|id| id.into_inner())
             .collect()
@@ -56,28 +65,49 @@ impl SampleSet {
         }
 
         let best_id = match self.0.sense() {
-            ommx::Sense::Minimize => {
-                feasible_ids.iter()
-                    .min_by(|&&a, &&b| {
-                        let a_obj = self.0.objectives().get(ommx::SampleID::from(a)).unwrap_or(&f64::INFINITY);
-                        let b_obj = self.0.objectives().get(ommx::SampleID::from(b)).unwrap_or(&f64::INFINITY);
-                        a_obj.partial_cmp(b_obj).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .copied()
-            }
-            ommx::Sense::Maximize => {
-                feasible_ids.iter()
-                    .max_by(|&&a, &&b| {
-                        let a_obj = self.0.objectives().get(ommx::SampleID::from(a)).unwrap_or(&f64::NEG_INFINITY);
-                        let b_obj = self.0.objectives().get(ommx::SampleID::from(b)).unwrap_or(&f64::NEG_INFINITY);
-                        a_obj.partial_cmp(b_obj).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .copied()
-            }
+            ommx::Sense::Minimize => feasible_ids
+                .iter()
+                .min_by(|&&a, &&b| {
+                    let a_obj = self
+                        .0
+                        .objectives()
+                        .get(ommx::SampleID::from(a))
+                        .unwrap_or(&f64::INFINITY);
+                    let b_obj = self
+                        .0
+                        .objectives()
+                        .get(ommx::SampleID::from(b))
+                        .unwrap_or(&f64::INFINITY);
+                    a_obj
+                        .partial_cmp(b_obj)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .copied(),
+            ommx::Sense::Maximize => feasible_ids
+                .iter()
+                .max_by(|&&a, &&b| {
+                    let a_obj = self
+                        .0
+                        .objectives()
+                        .get(ommx::SampleID::from(a))
+                        .unwrap_or(&f64::NEG_INFINITY);
+                    let b_obj = self
+                        .0
+                        .objectives()
+                        .get(ommx::SampleID::from(b))
+                        .unwrap_or(&f64::NEG_INFINITY);
+                    a_obj
+                        .partial_cmp(b_obj)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .copied(),
         };
 
         if let Some(id) = best_id {
-            let solution = self.0.get(ommx::SampleID::from(id)).map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let solution = self
+                .0
+                .get(ommx::SampleID::from(id))
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
             Ok(Some(Solution(solution)))
         } else {
             Ok(None)
@@ -92,7 +122,9 @@ impl SampleSet {
     /// Get objectives for all samples
     #[getter]
     pub fn objectives(&self) -> BTreeMap<u64, f64> {
-        self.0.objectives().iter()
+        self.0
+            .objectives()
+            .iter()
             .map(|(sample_id, objective)| (sample_id.into_inner(), *objective))
             .collect()
     }
@@ -106,9 +138,14 @@ impl SampleSet {
     /// Get relaxed feasibility status for all samples
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
-        self.0.sample_ids().iter()
+        self.0
+            .sample_ids()
+            .iter()
             .map(|&sample_id| {
-                let feasible = self.0.is_sample_feasible_relaxed(sample_id).unwrap_or(false);
+                let feasible = self
+                    .0
+                    .is_sample_feasible_relaxed(sample_id)
+                    .unwrap_or(false);
                 (sample_id.into_inner(), feasible)
             })
             .collect()
@@ -117,7 +154,9 @@ impl SampleSet {
     /// Get unrelaxed feasibility status for all samples
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
-        self.0.sample_ids().iter()
+        self.0
+            .sample_ids()
+            .iter()
             .map(|&sample_id| {
                 let feasible = self.0.is_sample_feasible(sample_id).unwrap_or(false);
                 (sample_id.into_inner(), feasible)
