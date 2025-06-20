@@ -96,24 +96,31 @@ impl<T> Sampled<T> {
         Self { offsets, data }
     }
 
-    pub fn new_dedup(iter: impl Iterator<Item = (SampleID, T)>) -> Self
+    pub fn new_dedup<I>(iter: I) -> Self
     where
-        T: PartialEq,
+        I: Iterator<Item = (SampleID, T)>,
+        T: Hash + Eq + Clone,
     {
         let mut offsets = FnvHashMap::default();
         let mut data = Vec::new();
+        let mut value_to_offset: FnvHashMap<T, usize> = FnvHashMap::default();
 
         for (id, value) in iter {
-            // Check if we already have this value in data
-            if let Some(existing_offset) = data.iter().position(|existing| existing == &value) {
-                // Reuse existing data
-                offsets.insert(id, existing_offset);
-            } else {
-                // Add new data
-                let new_offset = data.len();
-                data.push(value);
-                offsets.insert(id, new_offset);
-            }
+            // Check if we already have this value using HashMap lookup (O(1))
+            let offset = match value_to_offset.get(&value) {
+                Some(&existing_offset) => {
+                    // Reuse existing data
+                    existing_offset
+                }
+                None => {
+                    // Add new data
+                    let new_offset = data.len();
+                    value_to_offset.insert(value.clone(), new_offset);
+                    data.push(value);
+                    new_offset
+                }
+            };
+            offsets.insert(id, offset);
         }
 
         Self { offsets, data }
