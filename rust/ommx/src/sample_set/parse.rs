@@ -6,6 +6,8 @@ impl Parse for crate::v1::SampleSet {
     type Context = ();
 
     fn parse(self, _: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.SampleSet";
+        
         // Parse decision variables into BTreeMap
         let mut decision_variables = std::collections::BTreeMap::new();
         for v1_sampled_dv in self.decision_variables {
@@ -15,8 +17,9 @@ impl Parse for crate::v1::SampleSet {
                 .ok_or(crate::RawParseError::MissingField {
                     message: "ommx.v1.SampledDecisionVariable",
                     field: "decision_variable",
-                })?
-                .parse(&())?;
+                })
+                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?
+                .parse_as(&(), message, "decision_variables")?;
 
             // Parse the samples
             let samples: crate::Sampled<f64> = v1_sampled_dv
@@ -24,12 +27,9 @@ impl Parse for crate::v1::SampleSet {
                 .ok_or(crate::RawParseError::MissingField {
                     message: "ommx.v1.SampledDecisionVariable",
                     field: "samples",
-                })?
-                .try_into()
-                .map_err(|_| crate::RawParseError::MissingField {
-                    message: "ommx.v1.SampledDecisionVariable",
-                    field: "samples",
-                })?;
+                })
+                .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?
+                .parse_as(&(), message, "decision_variables")?;
 
             // Create SampledDecisionVariable
             let dv_id = dv.id();
@@ -37,7 +37,8 @@ impl Parse for crate::v1::SampleSet {
                 dv,
                 samples,
                 crate::ATol::default(),
-            ).map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))?;
+            ).map_err(|e| crate::RawParseError::InvalidDecisionVariable(e))
+            .map_err(|e| ParseError::from(e).context(message, "decision_variables"))?;
 
             decision_variables.insert(dv_id, sampled_dv);
         }
@@ -48,13 +49,14 @@ impl Parse for crate::v1::SampleSet {
             .ok_or(crate::RawParseError::MissingField {
                 message: "ommx.v1.SampleSet",
                 field: "objectives",
-            })?
-            .parse(&())?;
+            })
+            .map_err(|e| ParseError::from(e).context(message, "objectives"))?
+            .parse_as(&(), message, "objectives")?;
 
         // Parse constraints into BTreeMap
         let mut constraints = std::collections::BTreeMap::new();
         for v1_constraint in self.constraints {
-            let parsed_constraint: crate::SampledConstraint = v1_constraint.parse(&())?;
+            let parsed_constraint: crate::SampledConstraint = v1_constraint.parse_as(&(), message, "constraints")?;
             constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
@@ -64,7 +66,8 @@ impl Parse for crate::v1::SampleSet {
             .map_err(|_| crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
                 value: self.sense,
-            })?;
+            })
+            .map_err(|e| ParseError::from(e).context(message, "sense"))?;
 
         let provided_feasible_relaxed: BTreeMap<SampleID, bool> = self
             .feasible_relaxed
@@ -79,7 +82,8 @@ impl Parse for crate::v1::SampleSet {
 
         // Create SampleSet with validation
         let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
-            .map_err(crate::RawParseError::SampleSetError)?;
+            .map_err(crate::RawParseError::SampleSetError)
+            .map_err(|e| ParseError::from(e).context(message, "new"))?;
 
         // If constraints are present, validate feasibility consistency
         if !sample_set.constraints().is_empty() {
@@ -93,6 +97,7 @@ impl Parse for crate::v1::SampleSet {
                                 found: provided_feasible.keys().copied().collect(),
                             },
                         )
+                        .context(message, "feasible")
                     })?;
                 if computed_feasible != *provided_feasible_value {
                     return Err(crate::RawParseError::SampleSetError(
@@ -102,7 +107,7 @@ impl Parse for crate::v1::SampleSet {
                             computed_feasible,
                         },
                     )
-                    .into());
+                    .context(message, "feasible"));
                 }
             }
 
@@ -115,6 +120,7 @@ impl Parse for crate::v1::SampleSet {
                         expected: sample_set.sample_ids(),
                         found: provided_feasible_relaxed.keys().copied().collect(),
                     })
+                    .context(message, "feasible_relaxed")
                 })?;
                 if computed_feasible_relaxed != *provided_feasible_relaxed_value {
                     return Err(crate::RawParseError::SampleSetError(
@@ -124,7 +130,7 @@ impl Parse for crate::v1::SampleSet {
                             computed_feasible_relaxed,
                         },
                     )
-                    .into());
+                    .context(message, "feasible_relaxed"));
                 }
             }
         } else {
@@ -286,6 +292,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[sense]
         Unknown or unsupported enum value 999 for ommx.v1.Sense. This may be due to an unspecified value or a newer version of the protocol.
         "###);
     }
@@ -326,6 +333,7 @@ mod tests {
         let error = result.unwrap_err();
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
+        └─ommx.v1.SampleSet[feasible]
         Inconsistent feasibility for sample 0: provided=true, computed=false
         "###);
     }
