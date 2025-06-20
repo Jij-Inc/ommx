@@ -2,7 +2,7 @@ mod parse;
 
 use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, VariableID};
 use getset::Getters;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Error occurred during Solution validation
 #[derive(Debug, thiserror::Error)]
@@ -65,15 +65,12 @@ impl Solution {
     }
 
     /// Get decision variable IDs used in this solution
-    pub fn decision_variable_ids(&self) -> std::collections::BTreeSet<u64> {
-        self.decision_variables
-            .keys()
-            .map(|id| id.into_inner())
-            .collect()
+    pub fn decision_variable_ids(&self) -> BTreeSet<VariableID> {
+        self.decision_variables.keys().cloned().collect()
     }
 
     /// Get constraint IDs evaluated in this solution
-    pub fn constraint_ids(&self) -> std::collections::BTreeSet<crate::ConstraintID> {
+    pub fn constraint_ids(&self) -> BTreeSet<ConstraintID> {
         self.evaluated_constraints.keys().cloned().collect()
     }
 
@@ -88,18 +85,6 @@ impl Solution {
             .values()
             .filter(|c| c.removed_reason().is_none())
             .all(|c| *c.feasible())
-    }
-
-    /// Check if all constraints are feasible (deprecated alias)
-    #[deprecated(note = "Use feasible() instead")]
-    pub fn is_feasible(&self) -> bool {
-        self.feasible()
-    }
-
-    /// Check if all constraints are feasible in the relaxed problem (deprecated alias)
-    #[deprecated(note = "Use feasible_relaxed() instead")]
-    pub fn is_feasible_relaxed(&self) -> bool {
-        self.feasible_relaxed()
     }
 
     /// Generate state from decision variables (for backward compatibility)
