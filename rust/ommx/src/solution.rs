@@ -112,7 +112,7 @@ impl Solution {
     /// This is useful for extracting variables that have the same name but different subscripts.
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - A decision variable with parameters is found
     /// - The same subscript is found multiple times
@@ -128,9 +128,12 @@ impl Solution {
     /// // extracted will contain: {vec![0] => 1.0, vec![1] => 0.0, vec![2] => 0.0}
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn extract_decision_variables(&self, name: &str) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
+    pub fn extract_decision_variables(
+        &self,
+        name: &str,
+    ) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
         let mut result = HashMap::new();
-        
+
         for dv in self.decision_variables.values() {
             if let Some(dv_name) = &dv.metadata.name {
                 if dv_name == name {
@@ -139,9 +142,7 @@ impl Solution {
                     }
                     let key = dv.metadata.subscripts.clone();
                     if result.contains_key(&key) {
-                        return Err(SolutionError::DuplicateSubscript { 
-                            subscripts: key 
-                        });
+                        return Err(SolutionError::DuplicateSubscript { subscripts: key });
                     }
                     result.insert(key, *dv.value());
                 }
@@ -156,7 +157,7 @@ impl Solution {
     /// This is useful for extracting constraints that have the same name but different subscripts.
     ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - A constraint with parameters is found
     /// - The same subscript is found multiple times
@@ -174,7 +175,7 @@ impl Solution {
     /// ```
     pub fn extract_constraints(&self, name: &str) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
         let mut result = HashMap::new();
-        
+
         for ec in self.evaluated_constraints.values() {
             if let Some(constraint_name) = &ec.metadata.name {
                 if constraint_name == name {
@@ -183,9 +184,7 @@ impl Solution {
                     }
                     let key = ec.metadata.subscripts.clone();
                     if result.contains_key(&key) {
-                        return Err(SolutionError::DuplicateSubscript { 
-                            subscripts: key 
-                        });
+                        return Err(SolutionError::DuplicateSubscript { subscripts: key });
                     }
                     result.insert(key, *ec.evaluated_value());
                 }

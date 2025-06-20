@@ -1,6 +1,11 @@
 use anyhow::Result;
 use ommx::{Message, Parse};
-use pyo3::{prelude::*, types::{PyBytes, PyTuple, PyDict}, Bound, exceptions::PyValueError};
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::{PyBytes, PyDict, PyTuple},
+    Bound,
+};
 use std::collections::BTreeMap;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -68,50 +73,69 @@ impl Solution {
     /// Get decision variables information as a map from ID to EvaluatedDecisionVariable
     #[getter]
     pub fn decision_variables(&self) -> BTreeMap<u64, crate::EvaluatedDecisionVariable> {
-        self.0.decision_variables()
+        self.0
+            .decision_variables()
             .iter()
-            .map(|(id, dv)| (id.into_inner(), crate::EvaluatedDecisionVariable(dv.clone())))
+            .map(|(id, dv)| {
+                (
+                    id.into_inner(),
+                    crate::EvaluatedDecisionVariable(dv.clone()),
+                )
+            })
             .collect()
     }
 
     /// Get evaluated constraints information as a map from ID to EvaluatedConstraint
     #[getter]
     pub fn evaluated_constraints(&self) -> BTreeMap<u64, crate::EvaluatedConstraint> {
-        self.0.evaluated_constraints()
+        self.0
+            .evaluated_constraints()
             .iter()
             .map(|(id, ec)| (id.into_inner(), crate::EvaluatedConstraint(ec.clone())))
             .collect()
     }
 
     /// Extract decision variables by name with subscripts as key (returns a Python dict)
-    pub fn extract_decision_variables<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyDict>> {
+    pub fn extract_decision_variables<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+    ) -> PyResult<Bound<'py, PyDict>> {
         let result_dict = PyDict::new(py);
-        
+
         // Use the Rust SDK method and convert to Python dict
-        let extracted = self.0.extract_decision_variables(name)
+        let extracted = self
+            .0
+            .extract_decision_variables(name)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        
+
         for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             result_dict.set_item(key_tuple, value)?;
         }
-        
+
         Ok(result_dict)
     }
 
     /// Extract constraints by name with subscripts as key (returns a Python dict)
-    pub fn extract_constraints<'py>(&self, py: Python<'py>, name: &str) -> PyResult<Bound<'py, PyDict>> {
+    pub fn extract_constraints<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+    ) -> PyResult<Bound<'py, PyDict>> {
         let result_dict = PyDict::new(py);
-        
+
         // Use the Rust SDK method and convert to Python dict
-        let extracted = self.0.extract_constraints(name)
+        let extracted = self
+            .0
+            .extract_constraints(name)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        
+
         for (subscripts, value) in extracted {
             let key_tuple = PyTuple::new(py, &subscripts)?;
             result_dict.set_item(key_tuple, value)?;
         }
-        
+
         Ok(result_dict)
     }
 }

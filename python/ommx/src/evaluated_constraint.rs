@@ -42,7 +42,7 @@ impl EvaluatedConstraint {
     /// Get the dual variable value
     #[getter]
     pub fn dual_variable(&self) -> Option<f64> {
-        self.0.dual_variable().clone()
+        *self.0.dual_variable()
     }
 
     /// Get the feasibility status
@@ -72,7 +72,12 @@ impl EvaluatedConstraint {
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0.metadata.parameters.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+        self.0
+            .metadata
+            .parameters
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Get the description
