@@ -587,11 +587,11 @@ class Instance(InstanceBase, UserAnnotationBase):
         id                                        
         0   Binary   -0.0    1.0         []    1.0
         1   Binary   -0.0    1.0         []    0.0
-        2   Binary   -0.0    1.0         []    0.0
+        2   Binary   -0.0    1.0         []   -0.0
         
         """
         out = self.raw.evaluate(to_state(state).to_bytes())
-        return Solution.from_bytes(out.to_bytes())
+        return Solution(out)
 
     def partial_evaluate(self, state: ToState) -> Instance:
         """
@@ -632,8 +632,8 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        out = temp_instance.partial_evaluate(to_state(state).to_bytes())
-        return Instance.from_bytes(out)
+        temp_instance.partial_evaluate(to_state(state).to_bytes())
+        return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
         """
@@ -666,7 +666,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         {0}
 
         """
-        return _ommx_rust.Instance.from_bytes(self.to_bytes()).required_ids()
+        return self.raw.required_ids()
 
     def to_qubo(
         self,
@@ -1056,8 +1056,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             Use :py:meth:`to_qubo` driver for the full QUBO conversion.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return instance.as_qubo_format()
+        return self.raw.as_qubo_format()
 
     def as_hubo_format(self) -> tuple[dict[tuple[int, ...], float], float]:
         """
@@ -1068,8 +1067,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             Use :py:meth:`to_hubo` driver for the full HUBO conversion.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return instance.as_hubo_format()
+        return self.raw.as_hubo_format()
 
     def penalty_method(self) -> ParametricInstance:
         r"""
@@ -1153,8 +1151,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
+        return ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1234,27 +1231,24 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(
-            instance.uniform_penalty_method().to_bytes()
+            self.raw.uniform_penalty_method().to_bytes()
         )
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(
-            instance.as_parametric_instance().to_bytes()
+            self.raw.as_parametric_instance().to_bytes()
         )
 
     def evaluate_samples(self, samples: ToSamples) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         samples_ = Samples(samples)
-        return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
+        return SampleSet(self.raw.evaluate_samples(samples_))
 
     def random_state(self, rng: _ommx_rust.Rng) -> State:
         """
@@ -1461,9 +1455,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             False
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.relax_constraint(constraint_id, reason, parameters)
-        self.raw = instance
+        self.raw.relax_constraint(constraint_id, reason, parameters)
 
     def restore_constraint(self, constraint_id: int):
         """
@@ -1473,9 +1465,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Note that this drops the removed reason and associated parameters. See :py:meth:`relax_constraint` for details.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.restore_constraint(constraint_id)
-        self.raw = instance
+        self.raw.restore_constraint(constraint_id)
 
     def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
@@ -1570,9 +1560,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if not decision_variable_ids:
                 # No integer variables
                 return
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.log_encode(decision_variable_ids)
-        self.raw = instance
+        self.raw.log_encode(decision_variable_ids)
 
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
@@ -1636,11 +1624,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         3   Integer   -0.0    5.0  ommx.slack        [0]
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.convert_inequality_to_equality_with_integer_slack(
+        self.raw.convert_inequality_to_equality_with_integer_slack(
             constraint_id, max_integer_range
         )
-        self.raw = instance
 
     def add_integer_slack_to_inequality(
         self, constraint_id: int, slack_upper_bound: int
@@ -1715,10 +1701,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        b = instance.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
-        self.raw = instance
-        return b
+        return self.raw.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
 
     def decision_variable_analysis(self) -> "DecisionVariableAnalysis":
         """
@@ -1751,8 +1734,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> analysis.used_in_constraints()
         {0: {1, 2}}
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return DecisionVariableAnalysis(instance.decision_variable_analysis())
+        return DecisionVariableAnalysis(self.raw.decision_variable_analysis())
 
 
 @dataclass
@@ -1941,7 +1923,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
-        return Instance.from_bytes(instance.to_bytes())
+        return Instance(instance)
 
 
 class VariableBase(ABC):
@@ -4221,7 +4203,7 @@ class SampleSet(UserAnnotationBase):
         Get a sample for a given ID as a solution format
         """
         solution = self.raw.get(sample_id)
-        return Solution.from_bytes(solution.to_bytes())
+        return Solution(solution)
 
     def best_feasible(self) -> Solution | None:
         """
@@ -4229,7 +4211,7 @@ class SampleSet(UserAnnotationBase):
         """
         solution = self.raw.best_feasible()
         if solution is not None:
-            return Solution.from_bytes(solution.to_bytes())
+            return Solution(solution)
         else:
             return None
 
@@ -4239,7 +4221,7 @@ class SampleSet(UserAnnotationBase):
         """
         solution = self.raw.best_feasible_unrelaxed()
         if solution is not None:
-            return Solution.from_bytes(solution.to_bytes())
+            return Solution(solution)
         else:
             return None
 
