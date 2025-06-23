@@ -2,7 +2,7 @@ mod parse;
 
 use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, VariableID};
 use getset::Getters;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Error occurred during Solution validation
 #[derive(Debug, thiserror::Error)]
@@ -124,15 +124,15 @@ impl Solution {
     /// # use std::collections::{HashMap, BTreeMap};
     /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
     /// // Assuming you have a solution with variables named "x" with subscripts [0], [1], [2]
-    /// let extracted: HashMap<Vec<i64>, f64> = solution.extract_decision_variables("x")?;
+    /// let extracted: BTreeMap<Vec<i64>, f64> = solution.extract_decision_variables("x")?;
     /// // extracted will contain: {vec![0] => 1.0, vec![1] => 0.0, vec![2] => 0.0}
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn extract_decision_variables(
         &self,
         name: &str,
-    ) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
-        let mut result = HashMap::new();
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
+        let mut result = BTreeMap::new();
 
         for dv in self.decision_variables.values() {
             if let Some(dv_name) = &dv.metadata.name {
@@ -169,12 +169,15 @@ impl Solution {
     /// # use std::collections::{HashMap, BTreeMap};
     /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
     /// // Assuming you have a solution with constraints named "c" with subscripts [0], [1]
-    /// let extracted: HashMap<Vec<i64>, f64> = solution.extract_constraints("c")?;
+    /// let extracted: BTreeMap<Vec<i64>, f64> = solution.extract_constraints("c")?;
     /// // extracted will contain: {vec![0] => 0.0, vec![1] => 0.0}
     /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
-    pub fn extract_constraints(&self, name: &str) -> Result<HashMap<Vec<i64>, f64>, SolutionError> {
-        let mut result = HashMap::new();
+    pub fn extract_constraints(
+        &self,
+        name: &str,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
+        let mut result = BTreeMap::new();
 
         for ec in self.evaluated_constraints.values() {
             if let Some(constraint_name) = &ec.metadata.name {

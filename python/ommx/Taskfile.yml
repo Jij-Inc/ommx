@@ -25,6 +25,24 @@ tasks:
       - uv run pytest -vv --doctest-modules python/ommx-tests
     dir: ../.. # Doctest users ${repo_root}/data/
 
+  pytest-doctest:
+    desc: Run only doctest modules
+    cmds:
+      - uv run pytest -vv --doctest-modules python/ommx-tests/tests/test_doctests.py
+    dir: ../.. # Doctest users ${repo_root}/data/
+
+  pytest-bench:
+    desc: Run only benchmark tests
+    cmds:
+      - uv run pytest -vv python/ommx-tests/tests/test_bench_*.py
+    dir: ../.. # Doctest users ${repo_root}/data/
+
+  pytest-unit:
+    desc: Run unit tests (excluding doctest and bench)
+    cmds:
+      - uv run pytest -vv python/ommx-tests/tests --ignore=python/ommx-tests/tests/test_doctests.py --ignore-glob=python/ommx-tests/tests/test_bench_*.py
+    dir: ../.. # Doctest users ${repo_root}/data/
+
   pyright:
     desc: Type check OMMX Python SDK
     cmds:
