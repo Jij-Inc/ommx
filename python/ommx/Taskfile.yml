@@ -1,5 +1,10 @@
 # https://taskfile.dev
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+#
+# Some tasks have to run in `../..` since they uses `${repo_root}/data`
+#
+
 version: "3"
 
 tasks:
@@ -10,38 +15,34 @@ tasks:
   test:
     desc: Run tests for OMMX Python SDK
     cmds:
-      - task: pytest
       - task: pyright
       - task: lint
-
-  test-ci:
-    desc: Run tests for OMMX Python SDK (CI mode; without pyright)
-    cmds:
       - task: pytest
 
   pytest:
     desc: Run pytest for OMMX Python SDK
     cmds:
-      - uv run pytest -vv --doctest-modules python/ommx-tests
-    dir: ../.. # Doctest users ${repo_root}/data/
+      - task: pytest-unit
+      - task: pytest-doctest
+      - task: pytest-bench
 
   pytest-doctest:
     desc: Run only doctest modules
     cmds:
       - uv run pytest -vv --doctest-modules python/ommx-tests/tests/test_doctests.py
-    dir: ../.. # Doctest users ${repo_root}/data/
+    dir: ../..
 
   pytest-bench:
     desc: Run only benchmark tests
     cmds:
       - uv run pytest -vv python/ommx-tests/tests/test_bench_*.py
-    dir: ../.. # Doctest users ${repo_root}/data/
+    dir: ../..
 
   pytest-unit:
     desc: Run unit tests (excluding doctest and bench)
     cmds:
       - uv run pytest -vv python/ommx-tests/tests --ignore=python/ommx-tests/tests/test_doctests.py --ignore-glob=python/ommx-tests/tests/test_bench_*.py
-    dir: ../.. # Doctest users ${repo_root}/data/
+    dir: ../..
 
   pyright:
     desc: Type check OMMX Python SDK
@@ -59,4 +60,4 @@ tasks:
     desc: Run benchmarks for OMMX Python SDK
     cmds:
       - uv run pytest python/ommx-tests --codspeed
-    dir: ../.. # Doctest users ${repo_root}/data/
+    dir: ../..
