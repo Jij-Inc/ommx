@@ -4,7 +4,6 @@ from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
-import collections.abc
 
 from .solution_pb2 import (
     State as _PbState,
@@ -23,7 +22,6 @@ from .parametric_instance_pb2 import (
 )
 from .sample_set_pb2 import (
     SampleSet as _SampleSet,
-    Samples,
     SampledValues as _SampledValues,
     SampledConstraint as _SampledConstraint,
 )
@@ -40,6 +38,7 @@ from .. import _ommx_rust
 
 # Define PyO3 types
 State = _ommx_rust.State
+Samples = _ommx_rust.Samples
 
 # Import PyO3 enums
 Sense = _ommx_rust.Sense
@@ -109,31 +108,10 @@ def to_state(state: ToState) -> State:
     return State(entries=state)  # type: ignore
 
 
-def _state_to_protobuf(state: State):
-    """Convert _ommx_rust.State to protobuf State for legacy compatibility"""
-    pb_state = _PbState()
-    pb_state.ParseFromString(state.to_bytes())
-    return pb_state
-
-
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
 """
-
-
-def to_samples(samples: ToSamples) -> Samples:
-    if isinstance(samples, collections.abc.Sequence):
-        samples = {i: state for i, state in enumerate(samples)}
-    if not isinstance(samples, Samples):
-        # Do not compress the samples
-        samples = Samples(
-            entries=[
-                Samples.SamplesEntry(state=_state_to_protobuf(to_state(state)), ids=[i])
-                for i, state in samples.items()
-            ]
-        )
-    return samples
 
 
 class InstanceBase(ABC):
@@ -1277,9 +1255,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Evaluate the instance with multiple states.
         """
         instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        samples_ = _ommx_rust.Samples.from_bytes(
-            to_samples(samples).SerializeToString()
-        )
+        samples_ = Samples(samples)
         return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
 
     def random_state(self, rng: _ommx_rust.Rng) -> State:
@@ -1394,15 +1370,13 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> rng = Rng()
         >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
-        >>> len(samples.entries)
-        2
-        >>> sum(len(entry.ids) for entry in samples.entries)
+        >>> samples.num_samples()
         5
 
         Each generated state respects variable bounds:
 
-        >>> for entry in samples.entries:
-        ...     state = entry.state
+        >>> for sample_id in samples.sample_ids():
+        ...     state = samples.get_state(sample_id)
         ...     for var_id, value in state.entries.items():
         ...         assert value in [0.0, 1.0], f"Binary variable {var_id} has invalid value {value}"
 
@@ -1413,9 +1387,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             num_samples=num_samples,
             max_sample_id=max_sample_id,
         )
-        samples = Samples()
-        samples.ParseFromString(samples_bytes)
-        return samples
+        return Samples.from_bytes(samples_bytes)
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
