@@ -1,16 +1,39 @@
 use anyhow::Result;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
-    types::{PyBytes, PyDict, PyList, PyString},
+    types::{PyBytes, PyDict, PyString},
     Bound,
 };
 use std::collections::{BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
+
+impl From<ommx::v1::State> for Samples {
+    fn from(state: ommx::v1::State) -> Self {
+        Self(ommx::Sampled::from(state))
+    }
+}
+
+fn type_error() -> PyErr {
+    PyTypeError::new_err("entries must be a State, dict[int, State], or iterable[State]")
+}
+
+fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
+    if let Ok(state) = value.extract::<crate::State>() {
+        return Ok(state.0);
+    }
+    if let Ok(state_dict) = value.extract::<HashMap<u64, f64>>() {
+        let mut state = ommx::v1::State::default();
+        state.entries = state_dict;
+        return Ok(state);
+    }
+    Err(type_error())
+}
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -22,83 +45,70 @@ impl Samples {
             return Ok(state);
         }
 
-        let mut sampled = ommx::Sampled::default();
-
-        // Try to extract as a State (dict[int, float])
+        // Almost same as `extract_state`, but we need to handle empty case
+        if let Ok(state) = entries.extract::<crate::State>() {
+            return Ok(Self::from(state.0));
+        }
         if let Ok(state_dict) = entries.extract::<HashMap<u64, f64>>() {
             if state_dict.is_empty() {
-                return Ok(Self(sampled));
+                return Ok(Self::default());
             }
             let mut state = ommx::v1::State::default();
             state.entries = state_dict;
-            sampled
-                .append(std::iter::once(SampleID::from(0u64)), state)
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
-            return Ok(Self(sampled));
+            return Ok(Self::from(state));
         }
 
         // Try to extract as dict[int, State] or dict[int, dict[int, float]]
         if let Ok(dict) = entries.downcast::<PyDict>() {
+            let mut state_cand = ommx::v1::State::default();
+            let mut sample_cand: ommx::Sampled<ommx::v1::State> = ommx::Sampled::default();
             for (key, value) in dict.iter() {
-                let sample_id: u64 = key.extract().map_err(|_| {
-                    PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "entries must be a State, dict[int, State], or iterable[State]",
-                    )
-                })?;
+                let sample_id: u64 = key.extract().map_err(|_| type_error())?;
 
-                // Try to extract value as State (dict[int, float])
-                if let Ok(state_dict) = value.extract::<HashMap<u64, f64>>() {
-                    let mut state = ommx::v1::State::default();
-                    state.entries = state_dict;
-                    sampled
-                        .append(std::iter::once(SampleID::from(sample_id)), state)
-                        .map_err(|e| {
-                            PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
-                        })?;
-                } else {
-                    return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "Dictionary values must be State objects or dict[int, float]",
-                    ));
+                if let Ok(value) = value.extract::<f64>() {
+                    state_cand.entries.insert(sample_id, value);
+                    continue;
                 }
+                if let Ok(state) = extract_state(&value) {
+                    sample_cand
+                        .append(std::iter::once(SampleID::from(sample_id)), state)
+                        .unwrap(); // safe unwrap since key is unique
+                    continue;
+                }
+                return Err(type_error());
             }
-            return Ok(Self(sampled));
-        }
-
-        // Check if it's a string (which is iterable but should be rejected)
-        if entries.downcast::<PyString>().is_ok() {
-            return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                "entries must be a State, dict[int, State], or iterable[State]",
-            ));
+            return Ok(
+                match (state_cand.entries.is_empty(), sample_cand.is_empty()) {
+                    (true, true) => Self::default(),
+                    (false, true) => Self::from(state_cand),
+                    (true, false) => Self(sample_cand),
+                    (false, false) => {
+                        return Err(type_error());
+                    }
+                },
+            );
         }
 
         // Try to extract as iterable[State]
         if let Ok(iter) = entries.try_iter() {
+            let mut sampled = ommx::Sampled::default();
             for (i, item) in iter.enumerate() {
-                let sample_id = i as u64;
+                let sample_id = SampleID::from(i as u64);
                 let item = item?;
-
-                // Try to extract item as State (dict[int, float])
-                if let Ok(state_dict) = item.extract::<HashMap<u64, f64>>() {
-                    let mut state = ommx::v1::State::default();
-                    state.entries = state_dict;
+                if let Ok(state) = extract_state(&item) {
                     sampled
-                        .append(std::iter::once(SampleID::from(sample_id)), state)
+                        .append(std::iter::once(sample_id), state)
                         .map_err(|e| {
                             PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
                         })?;
-                } else {
-                    return Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-                        "Iterable items must be State objects or dict[int, float]",
-                    ));
+                    continue;
                 }
+                return Err(type_error());
             }
             return Ok(Self(sampled));
         }
 
-        // If none of the above worked, return an error
-        Err(PyErr::new::<pyo3::exceptions::PyTypeError, _>(
-            "entries must be a State, dict[int, State], or iterable[State]",
-        ))
+        Err(type_error())
     }
 
     #[staticmethod]

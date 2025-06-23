@@ -33,6 +33,28 @@ impl<T> Default for Sampled<T> {
     }
 }
 
+impl<T> From<T> for Sampled<T> {
+    fn from(value: T) -> Self {
+        let mut offsets = FnvHashMap::default();
+        offsets.insert(SampleID(0), 0);
+        Self {
+            offsets,
+            data: vec![value],
+        }
+    }
+}
+
+impl<T> From<(SampleID, T)> for Sampled<T> {
+    fn from((id, value): (SampleID, T)) -> Self {
+        let mut offsets = FnvHashMap::default();
+        offsets.insert(id, 0);
+        Self {
+            offsets,
+            data: vec![value],
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("Duplicated sample ID: {id:?}")]
 pub struct DuplicatedSampleIDError {
@@ -124,6 +146,14 @@ impl<T> Sampled<T> {
         }
 
         Self { offsets, data }
+    }
+
+    pub fn len(&self) -> usize {
+        self.offsets.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.offsets.is_empty()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {

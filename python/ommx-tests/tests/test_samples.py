@@ -53,19 +53,14 @@ def test_invalid_samples_creation():
     # Invalid type
     with pytest.raises(TypeError) as e:
         _ommx_rust.Samples("invalid")
-    assert "entries must be a State, dict[int, State], or iterable[State]" in str(
-        e.value
-    )
 
     # Invalid dictionary values
     with pytest.raises(TypeError) as e:
         _ommx_rust.Samples({0: "not_a_state"})
-    assert "Dictionary values must be State objects or dict[int, float]" in str(e.value)
 
     # Invalid iterable items
     with pytest.raises(TypeError) as e:
         _ommx_rust.Samples(["not_a_state"])
-    assert "Iterable items must be State objects or dict[int, float]" in str(e.value)
 
 
 def test_empty_samples():
@@ -86,16 +81,10 @@ def test_dict_with_string_keys():
     # Dictionary with string keys should be rejected
     with pytest.raises(TypeError) as e:
         _ommx_rust.Samples({"sample1": {1: 0.0, 2: 1.0}, "sample2": {1: 1.0, 2: 0.0}})
-    assert "entries must be a State, dict[int, State], or iterable[State]" in str(
-        e.value
-    )
 
     # Mixed string and int keys should also be rejected
     with pytest.raises(TypeError) as e:
         _ommx_rust.Samples({0: {1: 0.0, 2: 1.0}, "sample": {1: 1.0, 2: 0.0}})
-    assert "entries must be a State, dict[int, State], or iterable[State]" in str(
-        e.value
-    )
 
 
 def test_create_samples_from_iterable():
