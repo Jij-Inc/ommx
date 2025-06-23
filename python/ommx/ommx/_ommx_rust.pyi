@@ -757,13 +757,13 @@ class SampleSet:
     def best_feasible_unrelaxed(self) -> typing.Optional[Solution]: ...
     def extract_decision_variables(
         self, name: builtins.str, sample_id: builtins.int
-    ) -> builtins.dict[builtins.list[builtins.int], builtins.float]:
+    ) -> builtins.list[tuple[builtins.list[builtins.int], builtins.float]]:
         r"""
         Extract decision variable values for a given name and sample ID
         """
     def extract_constraints(
         self, name: builtins.str, sample_id: builtins.int
-    ) -> builtins.dict[builtins.list[builtins.int], builtins.float]:
+    ) -> builtins.list[tuple[builtins.list[builtins.int], builtins.float]]:
         r"""
         Extract constraint values for a given name and sample ID
         """
