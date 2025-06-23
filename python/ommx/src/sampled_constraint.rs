@@ -61,7 +61,9 @@ impl SampledConstraint {
     /// Get the removal reason parameters
     #[getter]
     pub fn removed_reason_parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0.removed_reason_parameters().iter()
+        self.0
+            .removed_reason_parameters()
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
@@ -73,7 +75,7 @@ impl SampledConstraint {
     }
 
     /// Get the evaluated values for all samples
-    #[getter]  
+    #[getter]
     pub fn evaluated_values(&self) -> BTreeMap<u64, f64> {
         self.0
             .evaluated_values()

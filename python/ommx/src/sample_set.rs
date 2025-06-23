@@ -208,9 +208,9 @@ impl SampleSet {
         &self,
         name: &str,
         sample_id: u64,
-    ) -> anyhow::Result<std::collections::HashMap<Vec<i64>, f64>> {
+    ) -> anyhow::Result<Vec<(Vec<i64>, f64)>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let mut result = std::collections::HashMap::new();
+        let mut result = Vec::new();
 
         for (_, variable) in self.0.decision_variables() {
             if variable.metadata.name.as_ref() != Some(&name.to_string()) {
@@ -218,15 +218,14 @@ impl SampleSet {
             }
 
             let subscripts = variable.metadata.subscripts.clone();
-            if result.contains_key(&subscripts) {
-                anyhow::bail!(
-                    "Duplicate decision variable subscript: {:?}",
-                    subscripts
-                );
+
+            // Check for duplicates
+            if result.iter().any(|(s, _)| s == &subscripts) {
+                anyhow::bail!("Duplicate decision variable subscript: {:?}", subscripts);
             }
 
             let value = *variable.samples().get(sample_id)?;
-            result.insert(subscripts, value);
+            result.push((subscripts, value));
         }
 
         Ok(result)
@@ -237,9 +236,9 @@ impl SampleSet {
         &self,
         name: &str,
         sample_id: u64,
-    ) -> anyhow::Result<std::collections::HashMap<Vec<i64>, f64>> {
+    ) -> anyhow::Result<Vec<(Vec<i64>, f64)>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let mut result = std::collections::HashMap::new();
+        let mut result = Vec::new();
 
         for (_, constraint) in self.0.constraints() {
             if constraint.metadata.name.as_ref() != Some(&name.to_string()) {
@@ -247,12 +246,14 @@ impl SampleSet {
             }
 
             let subscripts = constraint.metadata.subscripts.clone();
-            if result.contains_key(&subscripts) {
+
+            // Check for duplicates
+            if result.iter().any(|(s, _)| s == &subscripts) {
                 anyhow::bail!("Duplicate constraint subscript: {:?}", subscripts);
             }
 
             let value = *constraint.evaluated_values().get(sample_id)?;
-            result.insert(subscripts, value);
+            result.push((subscripts, value));
         }
 
         Ok(result)

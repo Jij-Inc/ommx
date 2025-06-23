@@ -257,7 +257,10 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             constraint.evaluated_values().clone().into();
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
-        let feasible = constraint.feasible().clone().into_iter()
+        let feasible = constraint
+            .feasible()
+            .clone()
+            .into_iter()
             .map(|(id, value)| (id.into_inner(), value))
             .collect();
 

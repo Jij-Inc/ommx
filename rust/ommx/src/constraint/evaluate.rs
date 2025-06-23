@@ -58,9 +58,7 @@ impl Evaluate for Constraint {
             .iter()
             .map(|(sample_id, evaluated_value)| match self.equality {
                 Equality::EqualToZero => (*sample_id, evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => {
-                    (*sample_id, *evaluated_value < *atol)
-                }
+                Equality::LessThanOrEqualToZero => (*sample_id, *evaluated_value < *atol),
             })
             .collect();
 

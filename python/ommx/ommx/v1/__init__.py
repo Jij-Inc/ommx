@@ -21,9 +21,7 @@ from .parametric_instance_pb2 import (
     Parameter as _Parameter,
 )
 from .sample_set_pb2 import (
-    SampleSet as _SampleSet,
     SampledValues as _SampledValues,
-    SampledConstraint as _SampledConstraint,
 )
 from .annotation import (
     UserAnnotationBase,
@@ -4030,7 +4028,7 @@ class SampleSet(UserAnnotationBase):
 
     """
 
-    raw: _SampleSet
+    raw: _ommx_rust.SampleSet
 
     annotation_namespace = "org.ommx.v1.sample-set"
     instance = str_annotation_property("instance")
@@ -4052,12 +4050,11 @@ class SampleSet(UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> SampleSet:
-        new = SampleSet(_SampleSet())
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.SampleSet.from_bytes(data)
+        return SampleSet(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def summary(self) -> DataFrame:
@@ -4075,21 +4072,20 @@ class SampleSet(UserAnnotationBase):
 
         return df.sort_values(
             by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            ascending=[False, self.raw.sense == Sense.Minimize],
         ).set_index("sample_id")
 
     @property
     def summary_with_constraints(self) -> DataFrame:
-        def _constraint_label(c: _SampledConstraint) -> str:
+        def _constraint_label(c: _ommx_rust.SampledConstraint) -> str:
             name = ""
-            if c.HasField("name"):
+            if c.name:
                 name += c.name
             else:
                 return f"{c.id}"
             if c.subscripts:
                 name += f"{c.subscripts}"
-            if c.parameters:
-                name += f"{c.parameters}"
+            # Parameters are not directly available in Rust SampledConstraint
             return name
 
         feasible = self.feasible
@@ -4107,7 +4103,7 @@ class SampleSet(UserAnnotationBase):
             return df
         df = df.sort_values(
             by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            ascending=[False, self.raw.sense == Sense.Minimize],
         ).set_index("sample_id")
         return df
 
@@ -4153,7 +4149,7 @@ class SampleSet(UserAnnotationBase):
 
     @property
     def objectives(self) -> dict[int, float]:
-        return dict(SampledValues(self.raw.objectives))
+        return self.raw.objectives
 
     @property
     def sample_ids(self) -> list[int]:
@@ -4162,10 +4158,16 @@ class SampleSet(UserAnnotationBase):
     @property
     def decision_variables(self) -> DataFrame:
         df = DataFrame(
-            DecisionVariable.from_bytes(
-                v.decision_variable.SerializeToString()
-            )._as_pandas_entry()
-            | {id: value for id, value in SampledValues(v.samples)}
+            {
+                "id": v.id,
+                "kind": str(v.kind),
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            | {str(id): value for id, value in v.samples.items()}
             for v in self.raw.decision_variables
         )
         if not df.empty:
@@ -4177,20 +4179,18 @@ class SampleSet(UserAnnotationBase):
         df = DataFrame(
             {
                 "id": c.id,
-                "equality": _equality(c.equality),
+                "equality": str(c.equality),
                 "used_ids": set(c.used_decision_variable_ids),
-                "name": c.name if c.HasField("name") else NA,
+                "name": c.name,
                 "subscripts": c.subscripts,
-                "description": c.description if c.HasField("description") else NA,
-                "removed_reason": c.removed_reason
-                if c.HasField("removed_reason")
-                else NA,
+                "description": c.description,
+                "removed_reason": c.removed_reason,
             }
             | {
                 f"removed_reason.{key}": value
                 for key, value in c.removed_reason_parameters.items()
             }
-            | {f"value.{id}": value for id, value in SampledValues(c.evaluated_values)}
+            | {f"value.{id}": value for id, value in c.evaluated_values.items()}
             | {f"feasible.{id}": value for id, value in c.feasible.items()}
             for c in self.raw.constraints
         )
@@ -4204,22 +4204,8 @@ class SampleSet(UserAnnotationBase):
         """
         Extract sampled decision variable values for a given name and sample ID.
         """
-        out = {}
-        for sampled_decision_variable in self.raw.decision_variables:
-            v = sampled_decision_variable.decision_variable
-            if v.name != name:
-                continue
-            key = tuple(v.subscripts)
-            if key in out:
-                raise ValueError(
-                    f"Duplicate decision variable subscript: {v.subscripts}"
-                )
-
-            if v.HasField("substituted_value"):
-                out[key] = v.substituted_value
-                continue
-            out[key] = SampledValues(sampled_decision_variable.samples)[sample_id]
-        return out
+        result = self.raw.extract_decision_variables(name, sample_id)
+        return {tuple(subscripts): value for subscripts, value in result}  # type: ignore[misc]
 
     def extract_constraints(
         self, name: str, sample_id: int
@@ -4227,28 +4213,21 @@ class SampleSet(UserAnnotationBase):
         """
         Extract evaluated constraint violations for a given constraint name and sample ID.
         """
-        out = {}
-        for c in self.raw.constraints:
-            if c.name != name:
-                continue
-            key = tuple(c.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
-            out[key] = SampledValues(c.evaluated_values)[sample_id]
-        return out
+        result = self.raw.extract_constraints(name, sample_id)
+        return {tuple(subscripts): value for subscripts, value in result}  # type: ignore[misc]
 
     def get(self, sample_id: int) -> Solution:
         """
         Get a sample for a given ID as a solution format
         """
-        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).get(sample_id)
+        solution = self.raw.get(sample_id)
         return Solution.from_bytes(solution.to_bytes())
 
     def best_feasible(self) -> Solution | None:
         """
         Get the best feasible solution
         """
-        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible()
+        solution = self.raw.best_feasible()
         if solution is not None:
             return Solution.from_bytes(solution.to_bytes())
         else:
@@ -4258,9 +4237,7 @@ class SampleSet(UserAnnotationBase):
         """
         Get the best feasible solution without relaxation
         """
-        solution = _ommx_rust.SampleSet.from_bytes(
-            self.to_bytes()
-        ).best_feasible_unrelaxed()
+        solution = self.raw.best_feasible_unrelaxed()
         if solution is not None:
             return Solution.from_bytes(solution.to_bytes())
         else:

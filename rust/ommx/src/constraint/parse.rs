@@ -193,7 +193,9 @@ impl Parse for v1::SampledConstraint {
             metadata,
             evaluated_values,
             dual_variables: None, // v1::SampledConstraint doesn't have dual_variables field
-            feasible: self.feasible.into_iter()
+            feasible: self
+                .feasible
+                .into_iter()
                 .map(|(id, value)| (SampleID::from(id), value))
                 .collect(),
             removed_reason: self.removed_reason,

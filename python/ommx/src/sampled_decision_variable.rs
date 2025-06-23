@@ -61,7 +61,10 @@ impl SampledDecisionVariable {
     /// Get the parameters
     #[getter]
     pub fn parameters(&self) -> std::collections::HashMap<String, String> {
-        self.0.metadata.parameters.iter()
+        self.0
+            .metadata
+            .parameters
+            .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }
