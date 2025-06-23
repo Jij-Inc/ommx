@@ -57,23 +57,23 @@ def next_version(version: str) -> str:
     Generate the next version from the given version string.
 
     Args:
-        version (str): The version string (e.g., '1.2.3' or '1.2.3rc1').
+        version (str): The version string (e.g., '1.2.3', '1.2.3rc1', '1.2.3a1', '1.2.3b2').
 
     Returns:
         str: The next version string.
     """
-    # Regular expression for parsing versions
-    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:rc(\d+))?$", version)
+    # Regular expression for parsing versions with alpha, beta, and rc support
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?$", version)
     if not match:
         raise ValueError(f"Invalid version format: {version}")
 
-    major, minor, patch, rc = match.groups()
+    major, minor, patch, pre_type, pre_num = match.groups()
     major, minor, patch = int(major), int(minor), int(patch)
 
-    if rc is not None:
-        # If it is a release candidate, increment the rc number
-        rc = int(rc) + 1
-        return f"{major}.{minor}.{patch}rc{rc}"
+    if pre_type is not None:
+        # If it has a pre-release identifier, increment the pre-release number
+        pre_num = int(pre_num) + 1
+        return f"{major}.{minor}.{patch}{pre_type}{pre_num}"
     else:
         # Otherwise, increment the patch version
         patch += 1
