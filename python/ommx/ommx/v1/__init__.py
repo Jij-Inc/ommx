@@ -2207,6 +2207,20 @@ class Solution(UserAnnotationBase):
             df = df.set_index("id")
         return df
 
+    @property
+    def decision_variable_ids(self) -> set[int]:
+        """
+        Get the IDs of decision variables in this solution.
+        """
+        return self.raw.decision_variable_ids
+
+    @property
+    def constraint_ids(self) -> set[int]:
+        """
+        Get the IDs of constraints in this solution.
+        """
+        return self.raw.constraint_ids
+
     def extract_decision_variables(self, name: str) -> dict[tuple[int, ...], float]:
         """
         Extract the values of decision variables based on the `name` with `subscripts` key.

@@ -6,7 +6,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyTuple},
     Bound,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -104,6 +104,24 @@ impl Solution {
             .evaluated_constraints()
             .iter()
             .map(|(id, ec)| (id.into_inner(), crate::EvaluatedConstraint(ec.clone())))
+            .collect()
+    }
+
+    #[getter]
+    pub fn decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .decision_variable_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    #[getter]
+    pub fn constraint_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .constraint_ids()
+            .iter()
+            .map(|id| id.into_inner())
             .collect()
     }
 

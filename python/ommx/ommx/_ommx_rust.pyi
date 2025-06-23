@@ -741,9 +741,18 @@ class SampleSet:
     def best_feasible_unrelaxed(self) -> typing.Optional[Solution]: ...
 
 class Samples:
+    def __new__(cls, _entries: typing.Any) -> Samples: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> Samples: ...
     def to_bytes(self) -> bytes: ...
+    def num_samples(self) -> builtins.int:
+        r"""
+        Get the number of samples
+        """
+    def sample_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Get all sample IDs
+        """
 
 class Solution:
     objective: builtins.float
@@ -782,6 +791,8 @@ class Solution:
     r"""
     Get evaluated constraints information as a map from ID to EvaluatedConstraint
     """
+    decision_variable_ids: builtins.set[builtins.int]
+    constraint_ids: builtins.set[builtins.int]
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...

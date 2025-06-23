@@ -353,9 +353,9 @@ class OMMXHighsAdapter(SolverAdapter):
         row_dual = solution_info.row_dual
         row_dual_len = len(row_dual)
 
-        for constraint in solution.raw.evaluated_constraints:
-            if constraint.id < row_dual_len:
-                constraint.dual_variable = row_dual[constraint.id]
+        for constraint_id in solution.constraint_ids:
+            if constraint_id < row_dual_len:
+                solution.set_dual_variable(constraint_id, row_dual[constraint_id])
 
         return solution
 
