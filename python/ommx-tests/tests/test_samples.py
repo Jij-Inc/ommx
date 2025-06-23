@@ -51,15 +51,15 @@ def test_samples_serialization():
 def test_invalid_samples_creation():
     """Test error cases for Samples creation"""
     # Invalid type
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(TypeError):
         _ommx_rust.Samples("invalid")
 
     # Invalid dictionary values
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(TypeError):
         _ommx_rust.Samples({0: "not_a_state"})
 
     # Invalid iterable items
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(TypeError):
         _ommx_rust.Samples(["not_a_state"])
 
 
@@ -79,11 +79,11 @@ def test_empty_samples():
 def test_dict_with_string_keys():
     """Test creating Samples from dict with string keys (should fail)"""
     # Dictionary with string keys should be rejected
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(TypeError):
         _ommx_rust.Samples({"sample1": {1: 0.0, 2: 1.0}, "sample2": {1: 1.0, 2: 0.0}})
 
     # Mixed string and int keys should also be rejected
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(TypeError):
         _ommx_rust.Samples({0: {1: 0.0, 2: 1.0}, "sample": {1: 1.0, 2: 0.0}})
 
 
