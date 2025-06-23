@@ -255,7 +255,7 @@ mod tests {
         assert_eq!(*parsed.id(), ConstraintID(42));
         assert_eq!(*parsed.equality(), Equality::EqualToZero);
         assert_eq!(*parsed.evaluated_value(), 1.5);
-        assert_eq!(*parsed.dual_variable(), Some(0.5));
+        assert_eq!(parsed.dual_variable, Some(0.5));
         assert_eq!(parsed.metadata.name, Some("test_constraint".to_string()));
         assert_eq!(
             parsed.metadata.description,

@@ -214,7 +214,7 @@ impl Solution {
     ) -> Result<Option<f64>, SolutionError> {
         self.evaluated_constraints
             .get(&constraint_id)
-            .map(|c| *c.dual_variable())
+            .map(|c| c.dual_variable)
             .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
     }
 
@@ -225,7 +225,7 @@ impl Solution {
         value: Option<f64>,
     ) -> Result<(), SolutionError> {
         if let Some(constraint) = self.evaluated_constraints.get_mut(&constraint_id) {
-            *constraint.dual_variable_mut() = value;
+            constraint.dual_variable = value;
             Ok(())
         } else {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })

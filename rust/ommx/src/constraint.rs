@@ -3,14 +3,12 @@ mod arbitrary;
 mod evaluate;
 mod parse;
 
-use std::collections::BTreeMap;
-
-pub use arbitrary::*;
-
 use crate::{sampled::UnknownSampleIDError, Function, SampleID, Sampled};
+pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
-use getset::{Getters, MutGetters, Setters};
+use getset::Getters;
+use std::collections::BTreeMap;
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -102,23 +100,23 @@ pub struct ConstraintMetadata {
 }
 
 /// Single evaluation result using the new design
-#[derive(Debug, Clone, PartialEq, Getters, MutGetters, Setters)]
+#[derive(Debug, Clone, PartialEq, Getters)]
 pub struct EvaluatedConstraint {
     #[getset(get = "pub")]
     id: ConstraintID,
     #[getset(get = "pub")]
     equality: Equality,
-    pub metadata: ConstraintMetadata,
     #[getset(get = "pub")]
     evaluated_value: f64,
-    #[getset(get = "pub", get_mut = "pub", set = "pub")]
-    dual_variable: Option<f64>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
     removed_reason: Option<String>,
     #[getset(get = "pub")]
     removed_reason_parameters: FnvHashMap<String, String>,
+
+    pub dual_variable: Option<f64>,
+    pub metadata: ConstraintMetadata,
 }
 
 /// Multiple sample evaluation results with deduplication
@@ -128,17 +126,17 @@ pub struct SampledConstraint {
     id: ConstraintID,
     #[getset(get = "pub")]
     equality: Equality,
-    pub metadata: ConstraintMetadata,
     #[getset(get = "pub")]
     evaluated_values: Sampled<f64>,
-    #[getset(get = "pub")]
-    dual_variables: Option<Sampled<f64>>,
     #[getset(get = "pub")]
     feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     removed_reason: Option<String>,
     #[getset(get = "pub")]
     removed_reason_parameters: FnvHashMap<String, String>,
+
+    pub dual_variables: Option<Sampled<f64>>,
+    pub metadata: ConstraintMetadata,
 }
 
 impl EvaluatedConstraint {
@@ -156,7 +154,7 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
         let evaluated_value = *constraint.evaluated_value();
-        let dual_variable = *constraint.dual_variable();
+        let dual_variable = constraint.dual_variable;
 
         crate::v1::EvaluatedConstraint {
             id,

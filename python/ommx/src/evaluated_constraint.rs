@@ -42,13 +42,13 @@ impl EvaluatedConstraint {
     /// Get the dual variable value
     #[getter]
     pub fn dual_variable(&self) -> Option<f64> {
-        *self.0.dual_variable()
+        self.0.dual_variable
     }
 
     /// Set the dual variable value
     #[setter]
     pub fn set_dual_variable(&mut self, value: Option<f64>) {
-        *self.0.dual_variable_mut() = value;
+        self.0.dual_variable = value;
     }
 
     /// Get the feasibility status
