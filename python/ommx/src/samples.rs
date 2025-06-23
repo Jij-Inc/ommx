@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ommx::{Message, Parse, SampleID};
 use pyo3::{
-    exceptions::PyTypeError,
+    exceptions::{PyKeyError, PyTypeError},
     prelude::*,
     types::{PyBytes, PyDict},
     Bound,
@@ -131,5 +131,16 @@ impl Samples {
     /// Get all sample IDs
     pub fn sample_ids(&self) -> BTreeSet<u64> {
         self.0.ids().into_iter().map(|id| id.into_inner()).collect()
+    }
+
+    /// Get the state for a specific sample ID
+    pub fn get_state(&self, sample_id: u64) -> PyResult<crate::State> {
+        let id = ommx::SampleID::from(sample_id);
+        Ok(crate::State(
+            self.0
+                .get(id)
+                .map_err(|e| PyKeyError::new_err(e.to_string()))?
+                .clone(),
+        ))
     }
 }

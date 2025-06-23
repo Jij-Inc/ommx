@@ -753,6 +753,10 @@ class Samples:
         r"""
         Get all sample IDs
         """
+    def get_state(self, sample_id: builtins.int) -> State:
+        r"""
+        Get the state for a specific sample ID
+        """
 
 class Solution:
     objective: builtins.float
