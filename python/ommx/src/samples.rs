@@ -3,7 +3,7 @@ use ommx::{Message, Parse, SampleID};
 use pyo3::{
     exceptions::PyTypeError,
     prelude::*,
-    types::{PyBytes, PyDict, PyString},
+    types::{PyBytes, PyDict},
     Bound,
 };
 use std::collections::{BTreeSet, HashMap};
