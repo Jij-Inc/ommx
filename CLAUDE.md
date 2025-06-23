@@ -43,6 +43,58 @@ The project has completed its migration from Protocol Buffers auto-generated Pyt
 
 **Implementation Details**: See actual code in `rust/ommx/src/` for current type definitions and API.
 
+## SampleSet Migration Progress
+
+### Current Migration Task
+**Objective**: Replace `ommx.v1.SampleSet.raw` from protobuf `_SampleSet` to Rust native `_ommx_rust.SampleSet`
+
+### ommx.v1.SampleSet API Implementation Status
+
+**✅ Implemented in _ommx_rust.SampleSet:**
+- `sense` property - Optimization direction (minimize/maximize)
+- `constraints` property - Returns `Vec<SampledConstraint>`
+- `decision_variables` property - Returns `Vec<SampledDecisionVariable>`
+- `objectives` property - Objective function values dictionary
+- `sample_ids()` method - Sample IDs as BTreeSet
+- `sample_ids_list` property - Sample IDs as Vec (for compatibility)
+- `feasible`, `feasible_relaxed`, `feasible_unrelaxed` properties - Feasibility dictionaries
+- `get()` method - Get Solution for specific sample ID
+- `best_feasible()`, `best_feasible_unrelaxed()` methods - Optimal solution methods
+- `extract_decision_variables()`, `extract_constraints()` methods - Value extraction by name
+- `from_bytes()`, `to_bytes()` methods - Serialization support
+- `num_samples()`, `feasible_ids()`, `feasible_unrelaxed_ids()` methods - Additional utilities
+
+**✅ Supporting Classes Implemented:**
+- `SampledConstraint` wrapper with properties:
+  - `id()`, `equality()`, `name()`, `subscripts()`, `description()`
+  - `removed_reason()`, `removed_reason_parameters()`
+  - `used_decision_variable_ids()`, `evaluated_values()`, `feasible()`
+- `SampledDecisionVariable` wrapper with properties:
+  - `id()`, `kind()`, `bound()`, `name()`, `subscripts()`, `description()`, `parameters()`
+  - `samples()` - sampled values for all samples
+- `SampledValues` and `SampledValuesEntry` for value iteration
+
+**✅ ALL CORE APIs IMPLEMENTED in _ommx_rust.SampleSet!**
+
+The _ommx_rust.SampleSet now has complete API parity with ommx.v1.SampleSet for all core functionality.
+
+**📋 Will be implemented in ommx.v1.SampleSet (Python-side):**
+- `summary` - DataFrame with sample overview
+- `summary_with_constraints` - DataFrame with constraints included  
+- `decision_variables` - DataFrame property (uses individual APIs from _ommx_rust)
+- `constraints` - DataFrame property (uses individual APIs from _ommx_rust)
+
+### Implementation Strategy
+1. **Phase 1**: Core SampleSet APIs (properties and basic methods)
+2. **Phase 2**: DataFrame generation methods
+3. **Phase 3**: Advanced methods (best_feasible, extract_*)
+4. **Phase 4**: Complete compatibility testing and replacement
+
+### Key Technical Decisions
+- Use `BTreeMap<SampleID, bool>` for `SampledConstraint.feasible` (more efficient than `Sampled<bool>`)
+- Provide individual property access (`kind()`, `bound()`) rather than full object reconstruction
+- Maintain backward compatibility during transition period
+
 ## Development Commands
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. **⚠️ All commands must be run from the project root directory.**

@@ -192,4 +192,69 @@ impl SampleSet {
             .map(|(_, variable)| crate::SampledDecisionVariable(variable.clone()))
             .collect()
     }
+
+    /// Get sample IDs as a list (property version)
+    #[getter]
+    pub fn sample_ids_list(&self) -> Vec<u64> {
+        self.0
+            .sample_ids()
+            .iter()
+            .map(|&sample_id| sample_id.into_inner())
+            .collect()
+    }
+
+    /// Extract decision variable values for a given name and sample ID
+    pub fn extract_decision_variables(
+        &self,
+        name: &str,
+        sample_id: u64,
+    ) -> anyhow::Result<std::collections::HashMap<Vec<i64>, f64>> {
+        let sample_id = ommx::SampleID::from(sample_id);
+        let mut result = std::collections::HashMap::new();
+
+        for (_, variable) in self.0.decision_variables() {
+            if variable.metadata.name.as_ref() != Some(&name.to_string()) {
+                continue;
+            }
+
+            let subscripts = variable.metadata.subscripts.clone();
+            if result.contains_key(&subscripts) {
+                anyhow::bail!(
+                    "Duplicate decision variable subscript: {:?}",
+                    subscripts
+                );
+            }
+
+            let value = *variable.samples().get(sample_id)?;
+            result.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
+    /// Extract constraint values for a given name and sample ID
+    pub fn extract_constraints(
+        &self,
+        name: &str,
+        sample_id: u64,
+    ) -> anyhow::Result<std::collections::HashMap<Vec<i64>, f64>> {
+        let sample_id = ommx::SampleID::from(sample_id);
+        let mut result = std::collections::HashMap::new();
+
+        for (_, constraint) in self.0.constraints() {
+            if constraint.metadata.name.as_ref() != Some(&name.to_string()) {
+                continue;
+            }
+
+            let subscripts = constraint.metadata.subscripts.clone();
+            if result.contains_key(&subscripts) {
+                anyhow::bail!("Duplicate constraint subscript: {:?}", subscripts);
+            }
+
+            let value = *constraint.evaluated_values().get(sample_id)?;
+            result.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
 }

@@ -729,6 +729,22 @@ class SampleSet:
     r"""
     Get unrelaxed feasibility status for all samples
     """
+    sense: Sense
+    r"""
+    Get the optimization sense (minimize or maximize)
+    """
+    constraints: builtins.list[SampledConstraint]
+    r"""
+    Get constraints for compatibility with existing Python code
+    """
+    decision_variables: builtins.list[SampledDecisionVariable]
+    r"""
+    Get decision variables for compatibility with existing Python code
+    """
+    sample_ids_list: builtins.list[builtins.int]
+    r"""
+    Get sample IDs as a list (property version)
+    """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
@@ -739,6 +755,123 @@ class SampleSet:
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
     def best_feasible(self) -> typing.Optional[Solution]: ...
     def best_feasible_unrelaxed(self) -> typing.Optional[Solution]: ...
+    def extract_decision_variables(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> builtins.dict[builtins.list[builtins.int], builtins.float]:
+        r"""
+        Extract decision variable values for a given name and sample ID
+        """
+    def extract_constraints(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> builtins.dict[builtins.list[builtins.int], builtins.float]:
+        r"""
+        Extract constraint values for a given name and sample ID
+        """
+
+class SampledConstraint:
+    id: builtins.int
+    r"""
+    Get the constraint ID
+    """
+    equality: Equality
+    r"""
+    Get the constraint equality type
+    """
+    name: typing.Optional[builtins.str]
+    r"""
+    Get the constraint name
+    """
+    subscripts: builtins.list[builtins.int]
+    r"""
+    Get the subscripts
+    """
+    description: typing.Optional[builtins.str]
+    r"""
+    Get the description
+    """
+    removed_reason: typing.Optional[builtins.str]
+    r"""
+    Get the removal reason
+    """
+    removed_reason_parameters: builtins.dict[builtins.str, builtins.str]
+    r"""
+    Get the removal reason parameters
+    """
+    used_decision_variable_ids: builtins.list[builtins.int]
+    r"""
+    Get the used decision variable IDs
+    """
+    evaluated_values: builtins.dict[builtins.int, builtins.float]
+    r"""
+    Get the evaluated values for all samples
+    """
+    feasible: builtins.dict[builtins.int, builtins.bool]
+    r"""
+    Get the feasibility status for all samples
+    """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> SampledConstraint: ...
+    def to_bytes(self) -> bytes: ...
+    def has_field(self, field_name: builtins.str) -> builtins.bool:
+        r"""
+        Check if a field is set (HasField equivalent)
+        """
+
+class SampledDecisionVariable:
+    id: builtins.int
+    r"""
+    Get the decision variable ID
+    """
+    kind: Kind
+    r"""
+    Get the decision variable kind
+    """
+    bound: Bound
+    r"""
+    Get the decision variable bound
+    """
+    name: typing.Optional[builtins.str]
+    r"""
+    Get the decision variable name
+    """
+    subscripts: builtins.list[builtins.int]
+    r"""
+    Get the subscripts
+    """
+    description: typing.Optional[builtins.str]
+    r"""
+    Get the description
+    """
+    parameters: builtins.dict[builtins.str, builtins.str]
+    r"""
+    Get the parameters
+    """
+    samples: builtins.dict[builtins.int, builtins.float]
+    r"""
+    Get the sampled values for all samples
+    """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> SampledDecisionVariable: ...
+    def to_bytes(self) -> bytes: ...
+
+class SampledValues:
+    entries: builtins.list[SampledValuesEntry]
+    r"""
+    Get entries for iteration
+    """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> SampledValues: ...
+    def to_bytes(self) -> bytes: ...
+
+class SampledValuesEntry:
+    ids: builtins.list[builtins.int]
+    r"""
+    Get the sample IDs
+    """
+    value: builtins.float
+    r"""
+    Get the value
+    """
 
 class Samples:
     def __new__(cls, entries: typing.Any) -> Samples: ...

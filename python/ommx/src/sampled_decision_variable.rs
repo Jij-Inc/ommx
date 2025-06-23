@@ -22,13 +22,48 @@ impl SampledDecisionVariable {
         Ok(PyBytes::new(py, &v1_variable.encode_to_vec()))
     }
 
-    /// Get the decision variable
+    /// Get the decision variable ID
     #[getter]
-    pub fn decision_variable(&self) -> crate::DecisionVariable {
-        // Create a minimal DecisionVariable from metadata
-        let metadata = &self.0.metadata;
-        let dv = ommx::DecisionVariable::binary(ommx::VariableID::from(metadata.id));
-        crate::DecisionVariable(dv)
+    pub fn id(&self) -> u64 {
+        self.0.id().into_inner()
+    }
+
+    /// Get the decision variable kind
+    #[getter]
+    pub fn kind(&self) -> crate::Kind {
+        (*self.0.kind()).into()
+    }
+
+    /// Get the decision variable bound
+    #[getter]
+    pub fn bound(&self) -> crate::VariableBound {
+        crate::VariableBound(*self.0.bound())
+    }
+
+    /// Get the decision variable name
+    #[getter]
+    pub fn name(&self) -> Option<String> {
+        self.0.metadata.name.clone()
+    }
+
+    /// Get the subscripts
+    #[getter]
+    pub fn subscripts(&self) -> Vec<i64> {
+        self.0.metadata.subscripts.clone()
+    }
+
+    /// Get the description
+    #[getter]
+    pub fn description(&self) -> Option<String> {
+        self.0.metadata.description.clone()
+    }
+
+    /// Get the parameters
+    #[getter]
+    pub fn parameters(&self) -> std::collections::HashMap<String, String> {
+        self.0.metadata.parameters.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// Get the sampled values for all samples
