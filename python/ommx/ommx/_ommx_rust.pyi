@@ -757,6 +757,10 @@ class Samples:
         r"""
         Get the state for a specific sample ID
         """
+    def append(self, sample_ids: typing.Sequence[builtins.int], state: State) -> None:
+        r"""
+        Append a sample with the given sample IDs and state
+        """
 
 class Solution:
     objective: builtins.float

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ommx.v1 import Instance, State, Samples, SampleSet, _state_to_protobuf
+from ommx.v1 import Instance, State, Samples, SampleSet
 from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
@@ -177,10 +177,10 @@ def decode_to_samples(response: oj.Response) -> Samples:
     """
     Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`Samples`
     """
-    # Filling into ommx.v1.Samples
+    # Create empty samples and append each state with its sample IDs
     # Since OpenJij does not issue the sample ID, we need to generate it in the responsibility of this OMMX Adapter
+    samples = Samples({})  # Create empty samples
     sample_id = 0
-    entries = []
 
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
@@ -192,8 +192,9 @@ def decode_to_samples(response: oj.Response) -> Samples:
         for _ in range(response.record.num_occurrences[i]):
             ids.append(sample_id)
             sample_id += 1
-        entries.append(Samples.SamplesEntry(state=_state_to_protobuf(state), ids=ids))
-    return Samples(entries=entries)
+        samples.append(ids, state)
+
+    return samples
 
 
 @deprecated("Use `OMMXOpenJijSAAdapter.sample` instead")
