@@ -148,14 +148,6 @@ impl<T> Sampled<T> {
         Self { offsets, data }
     }
 
-    pub fn len(&self) -> usize {
-        self.offsets.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.offsets.is_empty()
-    }
-
     pub fn iter(&self) -> impl Iterator<Item = (&SampleID, &T)> {
         self.offsets.iter().map(move |(id, offset)| {
             debug_assert!(*offset < self.data.len());

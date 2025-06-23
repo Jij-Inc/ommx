@@ -78,7 +78,10 @@ impl Samples {
                 return Err(type_error());
             }
             return Ok(
-                match (state_cand.entries.is_empty(), sample_cand.is_empty()) {
+                match (
+                    state_cand.entries.is_empty(),
+                    sample_cand.num_samples() == 0,
+                ) {
                     (true, true) => Self::default(),
                     (false, true) => Self::from(state_cand),
                     (true, false) => Self(sample_cand),
