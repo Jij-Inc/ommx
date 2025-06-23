@@ -1701,7 +1701,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
 
         """
-        return self.raw.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
+        return self.raw.add_integer_slack_to_inequality(
+            constraint_id, slack_upper_bound
+        )
 
     def decision_variable_analysis(self) -> "DecisionVariableAnalysis":
         """

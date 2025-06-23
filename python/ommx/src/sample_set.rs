@@ -212,7 +212,7 @@ impl SampleSet {
         let sample_id = ommx::SampleID::from(sample_id);
         let mut result = Vec::new();
 
-        for (_, variable) in self.0.decision_variables() {
+        for variable in self.0.decision_variables().values() {
             if variable.metadata.name.as_ref() != Some(&name.to_string()) {
                 continue;
             }
@@ -240,7 +240,7 @@ impl SampleSet {
         let sample_id = ommx::SampleID::from(sample_id);
         let mut result = Vec::new();
 
-        for (_, constraint) in self.0.constraints() {
+        for constraint in self.0.constraints().values() {
             if constraint.metadata.name.as_ref() != Some(&name.to_string()) {
                 continue;
             }
