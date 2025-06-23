@@ -187,8 +187,9 @@ impl Instance {
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
+        let v1_samples: ommx::v1::Samples = samples.0.clone().into();
         Ok(SampleSet(
-            self.0.evaluate_samples(&samples.0, ommx::ATol::default())?,
+            self.0.evaluate_samples(&v1_samples, ommx::ATol::default())?,
         ))
     }
 
