@@ -854,25 +854,6 @@ class SampledDecisionVariable:
     def from_bytes(bytes: bytes) -> SampledDecisionVariable: ...
     def to_bytes(self) -> bytes: ...
 
-class SampledValues:
-    entries: builtins.list[SampledValuesEntry]
-    r"""
-    Get entries for iteration
-    """
-    @staticmethod
-    def from_bytes(bytes: bytes) -> SampledValues: ...
-    def to_bytes(self) -> bytes: ...
-
-class SampledValuesEntry:
-    ids: builtins.list[builtins.int]
-    r"""
-    Get the sample IDs
-    """
-    value: builtins.float
-    r"""
-    Get the value
-    """
-
 class Samples:
     def __new__(cls, entries: typing.Any) -> Samples: ...
     @staticmethod

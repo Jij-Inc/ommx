@@ -20,7 +20,6 @@ mod random;
 mod sample_set;
 mod sampled_constraint;
 mod sampled_decision_variable;
-mod sampled_values;
 mod samples;
 mod solution;
 mod state;
@@ -47,7 +46,6 @@ pub use random::*;
 pub use sample_set::*;
 pub use sampled_constraint::*;
 pub use sampled_decision_variable::*;
-pub use sampled_values::*;
 pub use samples::*;
 pub use solution::*;
 pub use state::*;
@@ -92,8 +90,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<EvaluatedConstraint>()?;
     m.add_class::<SampledConstraint>()?;
     m.add_class::<SampledDecisionVariable>()?;
-    m.add_class::<SampledValues>()?;
-    m.add_class::<SampledValuesEntry>()?;
 
     // Enums
     m.add_class::<Sense>()?;
