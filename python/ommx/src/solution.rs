@@ -1,9 +1,8 @@
 use anyhow::Result;
 use ommx::{Message, Parse};
 use pyo3::{
-    exceptions::PyValueError,
     prelude::*,
-    types::{PyBytes, PyDict, PyList, PyTuple},
+    types::{PyBytes, PyDict, PyTuple},
     Bound,
 };
 use std::collections::BTreeMap;
