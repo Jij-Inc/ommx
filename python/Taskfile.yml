@@ -88,6 +88,7 @@ tasks:
     desc: Set the version for all Python projects
     cmds:
       - uv run set-version.py {{.CLI_ARGS}}
+      - task: sync
 
   stubgen:
     desc: Generate stubs files for Rust extension
@@ -98,3 +99,8 @@ tasks:
     desc: Generate LLMs.txt
     cmds:
       - uv run generate_llms_txt.py
+
+  ipython:
+    desc: Start an IPython shell
+    cmds:
+      - uv run ipython
