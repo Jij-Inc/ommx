@@ -86,7 +86,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     constraints=[(sum(w[i] * x[i] for i in range(6)) <= 47).set_id(0)],
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -162,13 +162,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
-                ...     constraints=[x + y <= 1],
+                ...     constraints=[(x + y <= 1).set_id(0)],
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
                 >>> solution.get_dual_variable(0)
-                0.0
+                1.0
 
         """
         adapter = cls(ommx_instance, relax=relax, verbose=verbose)
