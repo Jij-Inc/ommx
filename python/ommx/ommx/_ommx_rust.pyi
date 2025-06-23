@@ -333,6 +333,10 @@ class EvaluatedConstraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> EvaluatedConstraint: ...
     def to_bytes(self) -> bytes: ...
+    def set_dual_variable(self, value: typing.Optional[builtins.float]) -> None:
+        r"""
+        Set the dual variable value
+        """
 
 class EvaluatedDecisionVariable:
     id: builtins.int
@@ -781,6 +785,14 @@ class Solution:
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
+    def set_optimality(self, optimality: Optimality) -> None:
+        r"""
+        Set the optimality status
+        """
+    def set_relaxation(self, relaxation: Relaxation) -> None:
+        r"""
+        Set the relaxation status
+        """
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract decision variables by name with subscripts as key (returns a Python dict)
@@ -788,6 +800,22 @@ class Solution:
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
         Extract constraints by name with subscripts as key (returns a Python dict)
+        """
+    def get_constraint_value(self, constraint_id: builtins.int) -> builtins.float:
+        r"""
+        Get the evaluated value of a specific constraint by ID
+        """
+    def get_dual_variable(
+        self, constraint_id: builtins.int
+    ) -> typing.Optional[builtins.float]:
+        r"""
+        Get the dual variable value of a specific constraint by ID
+        """
+    def set_dual_variable(
+        self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
+    ) -> None:
+        r"""
+        Set the dual variable value for a specific constraint by ID
         """
 
 class Sos1:

@@ -107,7 +107,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            >>> solution.get_constraint_value(0)
             -1.0
 
         Infeasible Problem
@@ -167,8 +167,8 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
-                >>> solution.raw.evaluated_constraints[0].dual_variable
-                1.0
+                >>> solution.get_dual_variable(0)
+                0.0
 
         """
         adapter = cls(ommx_instance, relax=relax, verbose=verbose)
@@ -247,16 +247,14 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             if pi is not None:
                 id = int(constraint.name)
                 dual_variables[id] = pi
-        for constraint in solution.raw.evaluated_constraints:
-            id = constraint.id
-            if id in dual_variables:
-                constraint.dual_variable = dual_variables[id]
+        for constraint_id, dual_value in dual_variables.items():
+            solution.set_dual_variable(constraint_id, dual_value)
 
         if data.status == mip.OptimizationStatus.OPTIMAL:
-            solution.raw.optimality = Solution.OPTIMAL
+            solution.optimality = Solution.OPTIMAL
 
         if self._relax:
-            solution.raw.relaxation = Solution.LP_RELAXED
+            solution.relaxation = Solution.LP_RELAXED
         return solution
 
     def decode_to_state(self, data: mip.Model) -> State:

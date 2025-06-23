@@ -2302,6 +2302,28 @@ class Solution(UserAnnotationBase):
         # Return the _ommx_rust.Relaxation enum directly
         return self.raw.relaxation
 
+    @optimality.setter
+    def optimality(self, value: _ommx_rust.Optimality) -> None:
+        """Set the optimality status."""
+        self.raw.optimality = value
+
+    @relaxation.setter
+    def relaxation(self, value: _ommx_rust.Relaxation) -> None:
+        """Set the relaxation status."""
+        self.raw.relaxation = value
+
+    def set_dual_variable(self, constraint_id: int, value: float | None) -> None:
+        """Set the dual variable value for a specific constraint."""
+        self.raw.set_dual_variable(constraint_id, value)
+
+    def get_dual_variable(self, constraint_id: int) -> float | None:
+        """Get the dual variable value for a specific constraint."""
+        return self.raw.get_dual_variable(constraint_id)
+
+    def get_constraint_value(self, constraint_id: int) -> float:
+        """Get the evaluated value of a specific constraint."""
+        return self.raw.get_constraint_value(constraint_id)
+
 
 def _kind(kind: _ommx_rust.Kind) -> str:
     if kind == _ommx_rust.Kind.Continuous:

@@ -1,6 +1,7 @@
 use anyhow::Result;
 use ommx::{Message, Parse};
 use pyo3::{
+    exceptions::PyKeyError,
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
     Bound,
@@ -69,6 +70,18 @@ impl Solution {
         self.0.relaxation.into()
     }
 
+    /// Set the optimality status
+    #[setter]
+    pub fn set_optimality(&mut self, optimality: crate::Optimality) {
+        self.0.optimality = optimality.into();
+    }
+
+    /// Set the relaxation status
+    #[setter]
+    pub fn set_relaxation(&mut self, relaxation: crate::Relaxation) {
+        self.0.relaxation = relaxation.into();
+    }
+
     /// Get decision variables information as a map from ID to EvaluatedDecisionVariable
     #[getter]
     pub fn decision_variables(&self) -> BTreeMap<u64, crate::EvaluatedDecisionVariable> {
@@ -120,5 +133,26 @@ impl Solution {
             dict.set_item(key_tuple, value)?;
         }
         Ok(dict)
+    }
+
+    /// Get the evaluated value of a specific constraint by ID
+    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.0.get_constraint_value(constraint_id)
+            .map_err(|e| PyKeyError::new_err(e.to_string()))
+    }
+
+    /// Get the dual variable value of a specific constraint by ID
+    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.0.get_dual_variable(constraint_id)
+            .map_err(|e| PyKeyError::new_err(e.to_string()))
+    }
+
+    /// Set the dual variable value for a specific constraint by ID
+    pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.0.set_dual_variable(constraint_id, value)
+            .map_err(|e| PyKeyError::new_err(e.to_string()))
     }
 }

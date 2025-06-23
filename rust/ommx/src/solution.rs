@@ -37,6 +37,9 @@ pub enum SolutionError {
 
     #[error("Duplicate subscript: {subscripts:?}")]
     DuplicateSubscript { subscripts: Vec<i64> },
+
+    #[error("Unknown constraint ID: {id:?}")]
+    UnknownConstraintID { id: ConstraintID },
 }
 
 /// Single solution result with data integrity guarantees
@@ -194,5 +197,38 @@ impl Solution {
             }
         }
         Ok(result)
+    }
+
+    /// Get the evaluated value of a specific constraint by ID
+    pub fn get_constraint_value(&self, constraint_id: ConstraintID) -> Result<f64, SolutionError> {
+        self.evaluated_constraints
+            .get(&constraint_id)
+            .map(|c| *c.evaluated_value())
+            .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
+    }
+
+    /// Get the dual variable value of a specific constraint by ID
+    pub fn get_dual_variable(
+        &self,
+        constraint_id: ConstraintID,
+    ) -> Result<Option<f64>, SolutionError> {
+        self.evaluated_constraints
+            .get(&constraint_id)
+            .map(|c| *c.dual_variable())
+            .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
+    }
+
+    /// Set the dual variable value for a specific constraint by ID
+    pub fn set_dual_variable(
+        &mut self,
+        constraint_id: ConstraintID,
+        value: Option<f64>,
+    ) -> Result<(), SolutionError> {
+        if let Some(constraint) = self.evaluated_constraints.get_mut(&constraint_id) {
+            *constraint.dual_variable_mut() = value;
+            Ok(())
+        } else {
+            Err(SolutionError::UnknownConstraintID { id: constraint_id })
+        }
     }
 }

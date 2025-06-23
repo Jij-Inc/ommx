@@ -8,7 +8,7 @@ pub use arbitrary::*;
 use crate::{sampled::UnknownSampleIDError, Function, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
-use getset::Getters;
+use getset::{Getters, MutGetters, Setters};
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -100,7 +100,7 @@ pub struct ConstraintMetadata {
 }
 
 /// Single evaluation result using the new design
-#[derive(Debug, Clone, PartialEq, Getters)]
+#[derive(Debug, Clone, PartialEq, Getters, MutGetters, Setters)]
 pub struct EvaluatedConstraint {
     #[getset(get = "pub")]
     id: ConstraintID,
@@ -109,7 +109,7 @@ pub struct EvaluatedConstraint {
     pub metadata: ConstraintMetadata,
     #[getset(get = "pub")]
     evaluated_value: f64,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", get_mut = "pub", set = "pub")]
     dual_variable: Option<f64>,
     #[getset(get = "pub")]
     feasible: bool,
