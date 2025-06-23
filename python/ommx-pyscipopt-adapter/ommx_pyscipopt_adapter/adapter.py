@@ -89,7 +89,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     constraints=[(sum(w[i] * x[i] for i in range(6)) <= 47).set_id(0)],
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -110,7 +110,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            >>> solution.get_constraint_value(0)
             -1.0
 
         Infeasible Problem
