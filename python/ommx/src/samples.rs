@@ -9,6 +9,7 @@ use std::collections::{BTreeSet, HashMap};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
+#[derive(Clone)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
@@ -16,6 +17,11 @@ pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
 impl Samples {
     #[new]
     pub fn new(entries: Bound<PyAny>) -> PyResult<Self> {
+        // pass through
+        if let Ok(state) = entries.extract::<Self>() {
+            return Ok(state);
+        }
+
         let mut sampled = ommx::Sampled::default();
 
         // Try to extract as a State (dict[int, float])
