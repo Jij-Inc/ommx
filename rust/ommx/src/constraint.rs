@@ -3,6 +3,8 @@ mod arbitrary;
 mod evaluate;
 mod parse;
 
+use std::collections::BTreeMap;
+
 pub use arbitrary::*;
 
 use crate::{sampled::UnknownSampleIDError, Function, SampleID, Sampled};
@@ -132,7 +134,7 @@ pub struct SampledConstraint {
     #[getset(get = "pub")]
     dual_variables: Option<Sampled<f64>>,
     #[getset(get = "pub")]
-    feasible: FnvHashMap<u64, bool>,
+    feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
     removed_reason: Option<String>,
     #[getset(get = "pub")]
@@ -183,7 +185,7 @@ impl SampledConstraint {
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
 
-        let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
+        let feasible = *self.feasible.get(&sample_id).unwrap_or(&false);
 
         Ok(EvaluatedConstraint {
             id: *self.id(),
@@ -255,7 +257,9 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             constraint.evaluated_values().clone().into();
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
-        let feasible = constraint.feasible().clone().into_iter().collect();
+        let feasible = constraint.feasible().clone().into_iter()
+            .map(|(id, value)| (id.into_inner(), value))
+            .collect();
 
         crate::v1::SampledConstraint {
             id,

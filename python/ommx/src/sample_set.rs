@@ -163,4 +163,33 @@ impl SampleSet {
             })
             .collect()
     }
+
+    /// Get the optimization sense (minimize or maximize)
+    #[getter]
+    pub fn sense(&self) -> crate::Sense {
+        match self.0.sense() {
+            ommx::Sense::Minimize => crate::Sense::Minimize,
+            ommx::Sense::Maximize => crate::Sense::Maximize,
+        }
+    }
+
+    /// Get constraints for compatibility with existing Python code
+    #[getter]
+    pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
+        self.0
+            .constraints()
+            .iter()
+            .map(|(_, constraint)| crate::SampledConstraint(constraint.clone()))
+            .collect()
+    }
+
+    /// Get decision variables for compatibility with existing Python code
+    #[getter]
+    pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
+        self.0
+            .decision_variables()
+            .iter()
+            .map(|(_, variable)| crate::SampledDecisionVariable(variable.clone()))
+            .collect()
+    }
 }

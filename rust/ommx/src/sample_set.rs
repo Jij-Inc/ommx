@@ -91,7 +91,7 @@ impl SampleSet {
             let is_feasible = constraints.values().all(|constraint| {
                 constraint
                     .feasible()
-                    .get(&sample_id.into_inner())
+                    .get(&sample_id)
                     .copied()
                     .unwrap_or(false)
             });
@@ -103,7 +103,7 @@ impl SampleSet {
                 .all(|constraint| {
                     constraint
                         .feasible()
-                        .get(&sample_id.into_inner())
+                        .get(&sample_id)
                         .copied()
                         .unwrap_or(false)
                 });

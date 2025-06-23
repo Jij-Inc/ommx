@@ -54,12 +54,12 @@ impl Evaluate for Constraint {
         // Convert v1::SampledValues to Sampled<f64>
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
 
-        let feasible: FnvHashMap<u64, bool> = evaluated_values
+        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
             .iter()
             .map(|(sample_id, evaluated_value)| match self.equality {
-                Equality::EqualToZero => (sample_id.into_inner(), evaluated_value.abs() < *atol),
+                Equality::EqualToZero => (*sample_id, evaluated_value.abs() < *atol),
                 Equality::LessThanOrEqualToZero => {
-                    (sample_id.into_inner(), *evaluated_value < *atol)
+                    (*sample_id, *evaluated_value < *atol)
                 }
             })
             .collect();
