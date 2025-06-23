@@ -138,21 +138,24 @@ impl Solution {
     /// Get the evaluated value of a specific constraint by ID
     pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0.get_constraint_value(constraint_id)
+        self.0
+            .get_constraint_value(constraint_id)
             .map_err(|e| PyKeyError::new_err(e.to_string()))
     }
 
     /// Get the dual variable value of a specific constraint by ID
     pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0.get_dual_variable(constraint_id)
+        self.0
+            .get_dual_variable(constraint_id)
             .map_err(|e| PyKeyError::new_err(e.to_string()))
     }
 
     /// Set the dual variable value for a specific constraint by ID
     pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0.set_dual_variable(constraint_id, value)
+        self.0
+            .set_dual_variable(constraint_id, value)
             .map_err(|e| PyKeyError::new_err(e.to_string()))
     }
 }
