@@ -9,7 +9,6 @@ import collections.abc
 from .solution_pb2 import (
     Optimality,
     Relaxation,
-    Solution as _Solution,
     State as _PbState,
 )
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -48,6 +47,8 @@ State = _ommx_rust.State
 Sense = _ommx_rust.Sense
 Equality = _ommx_rust.Equality
 Kind = _ommx_rust.Kind
+Optimality = _ommx_rust.Optimality
+Relaxation = _ommx_rust.Relaxation
 
 # Import constraint hints classes directly
 OneHot = _ommx_rust.OneHot
@@ -2121,12 +2122,12 @@ class Solution(UserAnnotationBase):
     This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
     """
 
-    raw: _Solution
-    """The raw protobuf message."""
+    raw: _ommx_rust.Solution
+    """The raw _ommx_rust.Solution object."""
 
-    OPTIMAL = Optimality.OPTIMALITY_OPTIMAL
-    NOT_OPTIMAL = Optimality.OPTIMALITY_NOT_OPTIMAL
-    LP_RELAXED = Relaxation.RELAXATION_LP_RELAXED
+    OPTIMAL = Optimality.Optimal
+    NOT_OPTIMAL = Optimality.NotOptimal
+    LP_RELAXED = Relaxation.LpRelaxed
 
     annotation_namespace = "org.ommx.v1.solution"
     instance = str_annotation_property("instance")
@@ -2152,18 +2153,15 @@ class Solution(UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
-        raw = _Solution()
-        raw.ParseFromString(data)
+        raw = _ommx_rust.Solution.from_bytes(data)
         return Solution(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def state(self) -> State:
-        # Convert protobuf State to _ommx_rust.State
-        pb_state = self.raw.state
-        return State.from_bytes(pb_state.SerializeToString())
+        return self.raw.state
 
     @property
     def objective(self) -> float:
@@ -2171,10 +2169,20 @@ class Solution(UserAnnotationBase):
 
     @property
     def decision_variables(self) -> DataFrame:
+        # Use the new decision_variables property that returns dict of EvaluatedDecisionVariable
         df = DataFrame(
-            DecisionVariable.from_protobuf(v)._as_pandas_entry()
-            | {"value": self.raw.state.entries[v.id]}
-            for v in self.raw.decision_variables
+            {
+                "id": v.id,
+                "kind": _kind(v.kind),
+                "lower": v.lower_bound,
+                "upper": v.upper_bound,
+                "name": v.name if v.name else NA,
+                "subscripts": v.subscripts,
+                "description": v.description if v.description else NA,
+                "substituted_value": NA,  # This field is not available in the new API
+                "value": v.value,
+            }
+            for v in self.raw.decision_variables.values()
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2182,25 +2190,20 @@ class Solution(UserAnnotationBase):
 
     @property
     def constraints(self) -> DataFrame:
+        # Use the new evaluated_constraints property
         df = DataFrame(
             {
                 "id": c.id,
                 "equality": _equality(c.equality),
                 "value": c.evaluated_value,
                 "used_ids": set(c.used_decision_variable_ids),
-                "name": c.name if c.HasField("name") else NA,
+                "name": c.name if c.name else NA,
                 "subscripts": c.subscripts,
-                "description": c.description if c.HasField("description") else NA,
-                "dual_variable": c.dual_variable if c.HasField("dual_variable") else NA,
-                "removed_reason": c.removed_reason
-                if c.HasField("removed_reason")
-                else NA,
+                "description": c.description if c.description else NA,
+                "dual_variable": c.dual_variable if c.dual_variable is not None else NA,
+                "removed_reason": c.removed_reason if c.removed_reason else NA,
             }
-            | {
-                f"removed_reason.{key}": value
-                for key, value in c.removed_reason_parameters.items()
-            }
-            for c in self.raw.evaluated_constraints
+            for c in self.raw.evaluated_constraints.values()
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2230,17 +2233,8 @@ class Solution(UserAnnotationBase):
             {(0,): 1.0, (1,): 1.0, (2,): 1.0}
 
         """
-        out = {}
-        for v in self.raw.decision_variables:
-            if v.name != name:
-                continue
-            if v.parameters:
-                raise ValueError("Decision variable with parameters is not supported")
-            key = tuple(v.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate subscript: {key}")
-            out[key] = self.state.entries[v.id]
-        return out
+        # Use the extract method from _ommx_rust.Solution
+        return self.raw.extract_decision_variables(name)
 
     def extract_constraints(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -2268,17 +2262,8 @@ class Solution(UserAnnotationBase):
             {(0,): 0.0, (1,): 0.0}
 
         """
-        out = {}
-        for c in self.raw.evaluated_constraints:
-            if c.name != name:
-                continue
-            if c.parameters:
-                raise ValueError("Constraint with parameters is not supported")
-            key = tuple(c.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate subscript: {key}")
-            out[key] = c.evaluated_value
-        return out
+        # Use the extract method from _ommx_rust.Solution
+        return self.raw.extract_constraints(name)
 
     @property
     def feasible(self) -> bool:
@@ -2300,29 +2285,34 @@ class Solution(UserAnnotationBase):
         """
         Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
         """
-        # For compatibility: object created by 1.6.0 only contains `feasible` field and does not contain `feasible_relaxed` field.
-        if self.raw.HasField("feasible_relaxed"):
-            return self.raw.feasible_relaxed
-        else:
-            return self.raw.feasible
+        return self.raw.feasible_relaxed
 
     @property
     def feasible_unrelaxed(self) -> bool:
         """
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
-        if self.raw.HasField("feasible_relaxed"):
-            return self.raw.feasible
-        else:
-            return self.raw.feasible_unrelaxed
+        return self.raw.feasible
 
     @property
-    def optimality(self) -> Optimality.ValueType:
+    def optimality(self) -> _ommx_rust.Optimality:
+        # Return the _ommx_rust.Optimality enum directly
         return self.raw.optimality
 
     @property
-    def relaxation(self) -> Relaxation.ValueType:
+    def relaxation(self) -> _ommx_rust.Relaxation:
+        # Return the _ommx_rust.Relaxation enum directly
         return self.raw.relaxation
+
+
+def _kind(kind: _ommx_rust.Kind) -> str:
+    if kind == _ommx_rust.Kind.Continuous:
+        return "Continuous"
+    if kind == _ommx_rust.Kind.Binary:
+        return "Binary"
+    if kind == _ommx_rust.Kind.Integer:
+        return "Integer"
+    raise ValueError(f"Unknown kind: {kind}")
 
 
 def _function_type(function: _Function) -> str:
