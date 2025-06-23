@@ -20,6 +20,7 @@ members = [
 
 [manifest.dependency-groups]
 dev = [
+    { name = "ipython", specifier = ">=8.18.1" },
     { name = "jupyter", specifier = ">=1.1.1" },
     { name = "jupyter-book", specifier = ">=1.0.3" },
     { name = "jupyterlab", specifier = ">=4.3.5" },
