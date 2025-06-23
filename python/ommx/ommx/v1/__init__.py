@@ -7,8 +7,6 @@ from abc import ABC, abstractmethod
 import collections.abc
 
 from .solution_pb2 import (
-    Optimality,
-    Relaxation,
     State as _PbState,
 )
 from .instance_pb2 import Instance as _Instance, Parameters
