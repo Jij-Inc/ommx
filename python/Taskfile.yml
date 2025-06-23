@@ -98,3 +98,8 @@ tasks:
     desc: Generate LLMs.txt
     cmds:
       - uv run generate_llms_txt.py
+
+  ipython:
+    desc: Start an IPython shell
+    cmds:
+      - uv run ipython
