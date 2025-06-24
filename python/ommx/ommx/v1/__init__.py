@@ -1495,7 +1495,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Added binary variables are also appeared in :attr:`decision_variables`
 
-        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    3.0                x        [0]
@@ -1595,7 +1595,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1669,7 +1669,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
