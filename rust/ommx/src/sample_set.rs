@@ -61,9 +61,9 @@ pub struct SampleSet {
     constraints: BTreeMap<ConstraintID, SampledConstraint>,
     #[getset(get = "pub")]
     sense: Sense,
-    /// Feasible values (computed from constraints or parsed from original data)
+    #[getset(get = "pub")]
     feasible: BTreeMap<SampleID, bool>,
-    /// Feasible relaxed values (computed from constraints or parsed from original data)
+    #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
 }
 
@@ -144,6 +144,24 @@ impl SampleSet {
     /// Get sample IDs available in this sample set
     pub fn sample_ids(&self) -> SampleIDSet {
         self.objectives.ids()
+    }
+
+    pub fn feasible_ids(&self) -> SampleIDSet {
+        self.feasible
+            .iter()
+            .filter_map(|(id, &is_feasible)| if is_feasible { Some(*id) } else { None })
+            .collect()
+    }
+
+    pub fn feasible_relaxed_ids(&self) -> SampleIDSet {
+        self.feasible_relaxed
+            .iter()
+            .filter_map(|(id, &is_feasible)| if is_feasible { Some(*id) } else { None })
+            .collect()
+    }
+
+    pub fn feasible_unrelaxed_ids(&self) -> SampleIDSet {
+        self.feasible_ids()
     }
 
     /// Check if a specific sample is feasible

@@ -2,7 +2,6 @@ use crate::Solution;
 use anyhow::Result;
 use ommx::{Message, Parse};
 use pyo3::{
-    exceptions::PyValueError,
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
     Bound, PyResult, Python,
@@ -28,12 +27,9 @@ impl SampleSet {
         Ok(PyBytes::new(py, &v1_sample_set.encode_to_vec()))
     }
 
-    pub fn get(&self, sample_id: u64) -> PyResult<Solution> {
+    pub fn get(&self, sample_id: u64) -> Result<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let solution = self
-            .0
-            .get(sample_id)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        let solution = self.0.get(sample_id)?;
         Ok(Solution(solution))
     }
 
@@ -51,9 +47,16 @@ impl SampleSet {
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
         self.0
-            .sample_ids()
+            .feasible_ids()
             .iter()
-            .filter(|&&sample_id| self.0.is_sample_feasible(sample_id).unwrap_or(false))
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn feasible_relaxed_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .feasible_relaxed_ids()
+            .iter()
             .map(|id| id.into_inner())
             .collect()
     }
@@ -102,36 +105,27 @@ impl SampleSet {
     /// Get feasibility status for all samples
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
-        self.feasible_unrelaxed()
+        self.0
+            .feasible()
+            .iter()
+            .map(|(sample_id, &is_feasible)| (sample_id.into_inner(), is_feasible))
+            .collect()
     }
 
     /// Get relaxed feasibility status for all samples
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
         self.0
-            .sample_ids()
+            .feasible_relaxed()
             .iter()
-            .map(|&sample_id| {
-                let feasible = self
-                    .0
-                    .is_sample_feasible_relaxed(sample_id)
-                    .unwrap_or(false);
-                (sample_id.into_inner(), feasible)
-            })
+            .map(|(sample_id, &is_feasible)| (sample_id.into_inner(), is_feasible))
             .collect()
     }
 
     /// Get unrelaxed feasibility status for all samples
     #[getter]
     pub fn feasible_unrelaxed(&self) -> BTreeMap<u64, bool> {
-        self.0
-            .sample_ids()
-            .iter()
-            .map(|&sample_id| {
-                let feasible = self.0.is_sample_feasible(sample_id).unwrap_or(false);
-                (sample_id.into_inner(), feasible)
-            })
-            .collect()
+        self.feasible()
     }
 
     /// Get the optimization sense (minimize or maximize)
