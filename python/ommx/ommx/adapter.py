@@ -58,7 +58,7 @@ class SamplerAdapter(SolverAdapter):
 
     @classmethod
     def solve(cls, ommx_instance: Instance, **kwargs) -> Solution:
-        solution = cls.sample(ommx_instance, **kwargs).best_feasible()
+        solution = cls.sample(ommx_instance, **kwargs).best_feasible
         if solution is None:
             raise NoFeasibleSample("No feasible sample found by the sampler.")
         return solution
@@ -68,7 +68,7 @@ class SamplerAdapter(SolverAdapter):
         return self.sampler_input
 
     def decode(self, data: SamplerOutput) -> Solution:
-        solution = self.decode_to_sampleset(data).best_feasible()
+        solution = self.decode_to_sampleset(data).best_feasible
         if solution is None:
             raise NoFeasibleSample("No feasible sample found by the sampler.")
         return solution

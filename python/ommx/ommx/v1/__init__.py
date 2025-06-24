@@ -3988,7 +3988,7 @@ class SampleSet(UserAnnotationBase):
 
     .. doctest::
 
-        >>> solution = sample_set.best_feasible()
+        >>> solution = sample_set.best_feasible
         >>> solution.objective
         3.0
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
@@ -4197,21 +4197,58 @@ class SampleSet(UserAnnotationBase):
         solution = self.raw.get(sample_id)
         return Solution(solution)
 
+    @property
+    def best_feasible_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution.
+        Returns None if no feasible solution exists.
+        """
+        return self.raw.best_feasible_id
+
+    @property
+    def best_feasible_relaxed_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution without relaxation.
+        Returns None if no feasible solution exists.
+        """
+        return self.raw.best_feasible_relaxed_id
+
+    @property
+    def best_feasible_unrelaxed_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution without relaxation.
+        Returns None if no feasible solution exists.
+        """
+        return self.best_feasible_unrelaxed_id
+
+    @property
     def best_feasible(self) -> Solution | None:
         """
         Get the best feasible solution
         """
-        solution = self.raw.best_feasible()
+        solution = self.raw.best_feasible
         if solution is not None:
             return Solution(solution)
         else:
             return None
 
+    @property
+    def best_feasible_relaxed(self) -> Solution | None:
+        """
+        Get the best feasible solution without relaxation
+        """
+        solution = self.raw.best_feasible_relaxed
+        if solution is not None:
+            return Solution(solution)
+        else:
+            return None
+
+    @property
     def best_feasible_unrelaxed(self) -> Solution | None:
         """
         Get the best feasible solution without relaxation
         """
-        solution = self.raw.best_feasible_unrelaxed()
+        solution = self.raw.best_feasible_unrelaxed
         if solution is not None:
             return Solution(solution)
         else:

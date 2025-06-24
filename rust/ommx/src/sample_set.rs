@@ -173,4 +173,50 @@ impl SampleSet {
             decision_variables,
         ))
     }
+
+    pub fn best_feasible_id(&self) -> Option<SampleID> {
+        let mut feasible_objectives: Vec<(SampleID, f64)> = self
+            .feasible
+            .iter()
+            .filter_map(|(k, v)| if *v { Some(k) } else { None })
+            .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
+            .collect();
+        if feasible_objectives.is_empty() {
+            return None;
+        }
+        feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match self.sense {
+            // safe unwrap since we checked for non-empty feasible_objectives
+            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+        }
+    }
+
+    pub fn best_feasible_relaxed_id(&self) -> Option<SampleID> {
+        let mut feasible_objectives: Vec<(SampleID, f64)> = self
+            .feasible_relaxed
+            .iter()
+            .filter_map(|(k, v)| if *v { Some(k) } else { None })
+            .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
+            .collect();
+        if feasible_objectives.is_empty() {
+            return None;
+        }
+        feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match self.sense {
+            // safe unwrap since we checked for non-empty feasible_objectives
+            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+        }
+    }
+
+    /// Get the best feasible solution
+    pub fn best_feasible(&self) -> Option<Solution> {
+        self.best_feasible_id().and_then(|id| self.get(id).ok())
+    }
+
+    pub fn best_feasible_relaxed(&self) -> Option<Solution> {
+        self.best_feasible_relaxed_id()
+            .and_then(|id| self.get(id).ok())
+    }
 }

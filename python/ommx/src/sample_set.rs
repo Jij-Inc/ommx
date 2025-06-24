@@ -58,64 +58,31 @@ impl SampleSet {
         self.feasible_ids()
     }
 
-    pub fn best_feasible(&self) -> PyResult<Option<Solution>> {
-        let feasible_ids = self.feasible_ids();
-        if feasible_ids.is_empty() {
-            return Ok(None);
-        }
-
-        let best_id = match self.0.sense() {
-            ommx::Sense::Minimize => feasible_ids
-                .iter()
-                .min_by(|&&a, &&b| {
-                    let a_obj = self
-                        .0
-                        .objectives()
-                        .get(ommx::SampleID::from(a))
-                        .unwrap_or(&f64::INFINITY);
-                    let b_obj = self
-                        .0
-                        .objectives()
-                        .get(ommx::SampleID::from(b))
-                        .unwrap_or(&f64::INFINITY);
-                    a_obj
-                        .partial_cmp(b_obj)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .copied(),
-            ommx::Sense::Maximize => feasible_ids
-                .iter()
-                .max_by(|&&a, &&b| {
-                    let a_obj = self
-                        .0
-                        .objectives()
-                        .get(ommx::SampleID::from(a))
-                        .unwrap_or(&f64::NEG_INFINITY);
-                    let b_obj = self
-                        .0
-                        .objectives()
-                        .get(ommx::SampleID::from(b))
-                        .unwrap_or(&f64::NEG_INFINITY);
-                    a_obj
-                        .partial_cmp(b_obj)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                })
-                .copied(),
-        };
-
-        if let Some(id) = best_id {
-            let solution = self
-                .0
-                .get(ommx::SampleID::from(id))
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
-            Ok(Some(Solution(solution)))
-        } else {
-            Ok(None)
-        }
+    #[getter]
+    pub fn best_feasible_id(&self) -> Option<u64> {
+        self.0.best_feasible_id().map(|id| id.into_inner())
     }
 
-    pub fn best_feasible_unrelaxed(&self) -> PyResult<Option<Solution>> {
-        // For now, this is the same as best_feasible
+    #[getter]
+    pub fn best_feasible_relaxed_id(&self) -> Option<u64> {
+        self.0.best_feasible_relaxed_id().map(|id| id.into_inner())
+    }
+
+    #[getter]
+    pub fn best_feasible(&self) -> Option<Solution> {
+        self.0.best_feasible().map(|solution| Solution(solution))
+    }
+
+    #[getter]
+    pub fn best_feasible_relaxed(&self) -> Option<Solution> {
+        self.0
+            .best_feasible_relaxed()
+            .map(|solution| Solution(solution))
+    }
+
+    #[getter]
+    pub fn best_feasible_unrelaxed(&self) -> Option<Solution> {
+        // Exactly the same as best_feasible
         self.best_feasible()
     }
 

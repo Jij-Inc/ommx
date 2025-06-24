@@ -713,6 +713,11 @@ class Rng:
         """
 
 class SampleSet:
+    best_feasible_id: typing.Optional[builtins.int]
+    best_feasible_relaxed_id: typing.Optional[builtins.int]
+    best_feasible: typing.Optional[Solution]
+    best_feasible_relaxed: typing.Optional[Solution]
+    best_feasible_unrelaxed: typing.Optional[Solution]
     objectives: builtins.dict[builtins.int, builtins.float]
     r"""
     Get objectives for all samples
@@ -753,8 +758,6 @@ class SampleSet:
     def sample_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
-    def best_feasible(self) -> typing.Optional[Solution]: ...
-    def best_feasible_unrelaxed(self) -> typing.Optional[Solution]: ...
     def extract_decision_variables(
         self, name: builtins.str, sample_id: builtins.int
     ) -> builtins.list[tuple[builtins.list[builtins.int], builtins.float]]:
