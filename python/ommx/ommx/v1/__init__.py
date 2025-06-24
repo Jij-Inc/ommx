@@ -4178,8 +4178,7 @@ class SampleSet(UserAnnotationBase):
         """
         Extract sampled decision variable values for a given name and sample ID.
         """
-        result = self.raw.extract_decision_variables(name, sample_id)
-        return {tuple(subscripts): value for subscripts, value in result.items()}
+        return self.raw.extract_decision_variables(name, sample_id)
 
     def extract_constraints(
         self, name: str, sample_id: int
@@ -4187,8 +4186,7 @@ class SampleSet(UserAnnotationBase):
         """
         Extract evaluated constraint violations for a given constraint name and sample ID.
         """
-        result = self.raw.extract_constraints(name, sample_id)
-        return {tuple(subscripts): value for subscripts, value in result.items()}
+        return self.raw.extract_constraints(name, sample_id)
 
     def get(self, sample_id: int) -> Solution:
         """

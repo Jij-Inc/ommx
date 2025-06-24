@@ -40,8 +40,8 @@ pub enum SampleSetError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
-    #[error("Unknown sample ID: {sample_id}")]
-    UnknownSampleID { sample_id: u64 },
+    #[error(transparent)]
+    UnknownSampleIDError(#[from] UnknownSampleIDError),
 }
 
 /// Multiple sample solution results with deduplication

@@ -18,36 +18,22 @@ impl SampleSet {
             .values()
             .filter(|v| v.metadata.name.as_ref() == Some(&name.to_string()))
             .collect();
-
         if variables_with_name.is_empty() {
             return Err(SampleSetError::UnknownVariableName {
                 name: name.to_string(),
             });
         }
-
-        // Build the result map for the specific sample
         let mut result = BTreeMap::new();
-
         for variable in &variables_with_name {
             let subscripts = variable.metadata.subscripts.clone();
-
-            // Check for duplicates
-            if result.contains_key(&subscripts) {
+            let value = *variable.samples().get(sample_id)?;
+            if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),
                     subscripts,
                 });
             }
-
-            let value = *variable.samples().get(sample_id).map_err(|_| {
-                SampleSetError::UnknownSampleID {
-                    sample_id: sample_id.into_inner(),
-                }
-            })?;
-
-            result.insert(subscripts, value);
         }
-
         Ok(result)
     }
 
@@ -65,36 +51,22 @@ impl SampleSet {
             .values()
             .filter(|c| c.metadata.name.as_ref() == Some(&name.to_string()))
             .collect();
-
         if constraints_with_name.is_empty() {
             return Err(SampleSetError::UnknownConstraintName {
                 name: name.to_string(),
             });
         }
-
-        // Build the result map for the specific sample
         let mut result = BTreeMap::new();
-
         for constraint in &constraints_with_name {
             let subscripts = constraint.metadata.subscripts.clone();
-
-            // Check for duplicates
-            if result.contains_key(&subscripts) {
+            let value = *constraint.evaluated_values().get(sample_id)?;
+            if result.insert(subscripts.clone(), value).is_some() {
                 return Err(SampleSetError::DuplicateSubscripts {
                     name: name.to_string(),
                     subscripts,
                 });
             }
-
-            let value = *constraint.evaluated_values().get(sample_id).map_err(|_| {
-                SampleSetError::UnknownSampleID {
-                    sample_id: sample_id.into_inner(),
-                }
-            })?;
-
-            result.insert(subscripts, value);
         }
-
         Ok(result)
     }
 }
