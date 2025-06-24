@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
-    Equality as _Equality,
     Constraint as _Constraint,
     RemovedConstraint as _RemovedConstraint,
 )
@@ -2275,16 +2274,6 @@ class Solution(UserAnnotationBase):
         return self.raw.get_constraint_value(constraint_id)
 
 
-def _function_type(function: _Function) -> str:
-    if function.HasField("constant"):
-        return "constant"
-    if function.HasField("linear"):
-        return "linear"
-    if function.HasField("quadratic"):
-        return "quadratic"
-    if function.HasField("polynomial"):
-        return "polynomial"
-    raise ValueError("Unknown function type")
 
 
 @dataclass
@@ -3655,7 +3644,7 @@ class Constraint:
         | Polynomial
         | Function
         | _ommx_rust.Function,
-        equality: _Equality.ValueType | _ommx_rust.Equality,
+        equality: _ommx_rust.Equality,
         id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -3787,16 +3776,11 @@ class Constraint:
 
     def _as_pandas_entry(self) -> dict:
         c = self.raw
-        # Use PyO3 Equality directly
-        equality_for_display = c.equality
-        # Convert Rust function to protobuf for _function_type
-        pb_function = _Function()
-        pb_function.ParseFromString(c.function.encode())
         return {
             "id": c.id,
-            "equality": str(equality_for_display),
-            "type": _function_type(pb_function),
-            "used_ids": Function(c.function).raw.required_ids(),
+            "equality": str(c.equality),
+            "type": c.function.type_name,
+            "used_ids": c.function.required_ids(),
             "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
             "description": NA,  # Description not supported in Rust implementation

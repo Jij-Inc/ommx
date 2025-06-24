@@ -260,4 +260,15 @@ impl Function {
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
     }
+
+    #[getter]
+    pub fn type_name(&self) -> &str {
+        match self.0 {
+            ommx::Function::Zero => "Zero",
+            ommx::Function::Constant(_) => "Constant",
+            ommx::Function::Linear(_) => "Linear",
+            ommx::Function::Quadratic(_) => "Quadratic",
+            ommx::Function::Polynomial(_) => "Polynomial",
+        }
+    }
 }

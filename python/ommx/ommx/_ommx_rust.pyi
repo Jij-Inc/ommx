@@ -403,6 +403,7 @@ class Function:
     Returns the constant term. Returns 0.0 if function has no constant term.
     Works for all polynomial functions by filtering the degree-0 term.
     """
+    type_name: builtins.str
     @staticmethod
     def from_scalar(scalar: builtins.float) -> Function: ...
     @staticmethod
