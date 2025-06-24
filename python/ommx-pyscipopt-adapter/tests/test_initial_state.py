@@ -1,5 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable
-from ommx.v1.solution_pb2 import State
+from ommx.v1 import Instance, DecisionVariable, State
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 

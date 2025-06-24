@@ -5,9 +5,6 @@ from dataclasses import dataclass, field
 from pandas import DataFrame, NA, Series
 from abc import ABC, abstractmethod
 
-from .solution_pb2 import (
-    State as _PbState,
-)
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
@@ -89,21 +86,10 @@ __all__ = [
     "ToSamples",
 ]
 
-ToState: TypeAlias = Union[State, _PbState, Mapping[int, float]]
+ToState: TypeAlias = Union[State, Mapping[int, float]]
 """
 Type alias for convertible types to :class:`State`.
 """
-
-
-def to_state(state: ToState) -> State:
-    if isinstance(state, State):
-        return state
-    # Handle protobuf State objects from legacy code
-    if hasattr(state, "entries") and hasattr(state, "SerializeToString"):
-        # Convert protobuf State to PyO3 State
-        if isinstance(state, _PbState):
-            return State.from_bytes(state.SerializeToString())
-    return State(entries=state)  # type: ignore
 
 
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
@@ -590,7 +576,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         2   Binary   -0.0    1.0         []   -0.0
         
         """
-        out = self.raw.evaluate(to_state(state).to_bytes())
+        out = self.raw.evaluate(State(state).to_bytes())
         return Solution(out)
 
     def partial_evaluate(self, state: ToState) -> Instance:
@@ -632,7 +618,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        temp_instance.partial_evaluate(to_state(state).to_bytes())
+        temp_instance.partial_evaluate(State(state).to_bytes())
         return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -2739,7 +2725,7 @@ class Linear(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -2760,7 +2746,7 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -2909,7 +2895,7 @@ class Quadratic(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -2933,7 +2919,7 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Quadratic.from_raw(new_raw)
 
     @property
@@ -3128,7 +3114,7 @@ class Polynomial(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -3152,7 +3138,7 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3349,7 +3335,7 @@ class Function(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Function:
         """
@@ -3373,7 +3359,7 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:

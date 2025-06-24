@@ -14,7 +14,6 @@ from ommx.v1 import (
     Constraint,
     State,
     ToState,
-    to_state,
 )
 
 from .exception import OMMXPySCIPOptAdapterError
@@ -457,7 +456,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _add_initial_state(self, initial_state: ToState) -> None:
         initial_sol = self.model.createSol()
-        for var_id, value in to_state(initial_state).entries.items():
+        for var_id, value in State(initial_state).entries.items():
             var_name = str(var_id)
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)
