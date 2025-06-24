@@ -135,7 +135,7 @@ impl Solution {
         let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
             .decision_variables
             .values()
-            .filter(|v| v.metadata.name.as_ref() == Some(&name.to_string()))
+            .filter(|v| v.metadata.name.as_deref() == Some(name))
             .collect();
         if variables_with_name.is_empty() {
             return Err(SolutionError::UnknownVariableName {
@@ -177,7 +177,7 @@ impl Solution {
         let constraints_with_name: Vec<&EvaluatedConstraint> = self
             .evaluated_constraints
             .values()
-            .filter(|c| c.metadata.name.as_ref() == Some(&name.to_string()))
+            .filter(|c| c.metadata.name.as_deref() == Some(name))
             .collect();
         if constraints_with_name.is_empty() {
             return Err(SolutionError::UnknownConstraintName {

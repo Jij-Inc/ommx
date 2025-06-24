@@ -16,7 +16,7 @@ impl SampleSet {
         let variables_with_name: Vec<&SampledDecisionVariable> = self
             .decision_variables
             .values()
-            .filter(|v| v.metadata.name.as_ref() == Some(&name.to_string()))
+            .filter(|v| v.metadata.name.as_deref() == Some(name))
             .collect();
         if variables_with_name.is_empty() {
             return Err(SampleSetError::UnknownVariableName {
@@ -52,7 +52,7 @@ impl SampleSet {
         let constraints_with_name: Vec<&SampledConstraint> = self
             .constraints
             .values()
-            .filter(|c| c.metadata.name.as_ref() == Some(&name.to_string()))
+            .filter(|c| c.metadata.name.as_deref() == Some(name))
             .collect();
         if constraints_with_name.is_empty() {
             return Err(SampleSetError::UnknownConstraintName {
