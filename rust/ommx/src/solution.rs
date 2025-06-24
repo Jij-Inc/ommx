@@ -40,6 +40,12 @@ pub enum SolutionError {
 
     #[error("Unknown constraint ID: {id:?}")]
     UnknownConstraintID { id: ConstraintID },
+
+    #[error("No decision variables with name '{name}' found")]
+    UnknownVariableName { name: String },
+
+    #[error("No constraint with name '{name}' found")]
+    UnknownConstraintName { name: String },
 }
 
 /// Single solution result with data integrity guarantees
@@ -117,39 +123,36 @@ impl Solution {
     /// # Errors
     ///
     /// Returns an error if:
+    /// - No decision variables with the given name are found
     /// - A decision variable with parameters is found
     /// - The same subscript is found multiple times
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use ommx::*;
-    /// # use std::collections::{HashMap, BTreeMap};
-    /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
-    /// // Assuming you have a solution with variables named "x" with subscripts [0], [1], [2]
-    /// let extracted: BTreeMap<Vec<i64>, f64> = solution.extract_decision_variables("x")?;
-    /// // extracted will contain: {vec![0] => 1.0, vec![1] => 0.0, vec![2] => 0.0}
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
     pub fn extract_decision_variables(
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        let mut result = BTreeMap::new();
+        // Collect all variables with the given name
+        let variables_with_name: Vec<&EvaluatedDecisionVariable> = self
+            .decision_variables
+            .values()
+            .filter(|v| v.metadata.name.as_ref() == Some(&name.to_string()))
+            .collect();
+        if variables_with_name.is_empty() {
+            return Err(SolutionError::UnknownVariableName {
+                name: name.to_string(),
+            });
+        }
 
-        for dv in self.decision_variables.values() {
-            if let Some(dv_name) = &dv.metadata.name {
-                if dv_name == name {
-                    if !dv.metadata.parameters.is_empty() {
-                        return Err(SolutionError::ParameterizedVariable);
-                    }
-                    let key = dv.metadata.subscripts.clone();
-                    if result.contains_key(&key) {
-                        return Err(SolutionError::DuplicateSubscript { subscripts: key });
-                    }
-                    result.insert(key, *dv.value());
-                }
+        let mut result = BTreeMap::new();
+        for dv in &variables_with_name {
+            if !dv.metadata.parameters.is_empty() {
+                return Err(SolutionError::ParameterizedVariable);
             }
+            let key = dv.metadata.subscripts.clone();
+            if result.contains_key(&key) {
+                return Err(SolutionError::DuplicateSubscript { subscripts: key });
+            }
+            result.insert(key, *dv.value());
         }
         Ok(result)
     }
@@ -162,39 +165,36 @@ impl Solution {
     /// # Errors
     ///
     /// Returns an error if:
+    /// - No constraints with the given name are found
     /// - A constraint with parameters is found
     /// - The same subscript is found multiple times
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use ommx::*;
-    /// # use std::collections::{HashMap, BTreeMap};
-    /// # let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new());
-    /// // Assuming you have a solution with constraints named "c" with subscripts [0], [1]
-    /// let extracted: BTreeMap<Vec<i64>, f64> = solution.extract_constraints("c")?;
-    /// // extracted will contain: {vec![0] => 0.0, vec![1] => 0.0}
-    /// # Ok::<(), Box<dyn std::error::Error>>(())
-    /// ```
     pub fn extract_constraints(
         &self,
         name: &str,
     ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        let mut result = BTreeMap::new();
+        // Collect all constraints with the given name
+        let constraints_with_name: Vec<&EvaluatedConstraint> = self
+            .evaluated_constraints
+            .values()
+            .filter(|c| c.metadata.name.as_ref() == Some(&name.to_string()))
+            .collect();
+        if constraints_with_name.is_empty() {
+            return Err(SolutionError::UnknownConstraintName {
+                name: name.to_string(),
+            });
+        }
 
-        for ec in self.evaluated_constraints.values() {
-            if let Some(constraint_name) = &ec.metadata.name {
-                if constraint_name == name {
-                    if !ec.metadata.parameters.is_empty() {
-                        return Err(SolutionError::ParameterizedConstraint);
-                    }
-                    let key = ec.metadata.subscripts.clone();
-                    if result.contains_key(&key) {
-                        return Err(SolutionError::DuplicateSubscript { subscripts: key });
-                    }
-                    result.insert(key, *ec.evaluated_value());
-                }
+        let mut result = BTreeMap::new();
+        for ec in &constraints_with_name {
+            if !ec.metadata.parameters.is_empty() {
+                return Err(SolutionError::ParameterizedConstraint);
             }
+            let key = ec.metadata.subscripts.clone();
+            if result.contains_key(&key) {
+                return Err(SolutionError::DuplicateSubscript { subscripts: key });
+            }
+            result.insert(key, *ec.evaluated_value());
         }
         Ok(result)
     }

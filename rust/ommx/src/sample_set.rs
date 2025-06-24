@@ -40,6 +40,12 @@ pub enum SampleSetError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
+    #[error("Decision variable with parameters is not supported")]
+    ParameterizedVariable,
+
+    #[error("Constraint with parameters is not supported")]
+    ParameterizedConstraint,
+
     #[error(transparent)]
     UnknownSampleIDError(#[from] UnknownSampleIDError),
 }

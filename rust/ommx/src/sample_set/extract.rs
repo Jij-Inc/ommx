@@ -25,6 +25,9 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for variable in &variables_with_name {
+            if !variable.metadata.parameters.is_empty() {
+                return Err(SampleSetError::ParameterizedVariable);
+            }
             let subscripts = variable.metadata.subscripts.clone();
             let value = *variable.samples().get(sample_id)?;
             if result.insert(subscripts.clone(), value).is_some() {
@@ -58,6 +61,9 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for constraint in &constraints_with_name {
+            if !constraint.metadata.parameters.is_empty() {
+                return Err(SampleSetError::ParameterizedConstraint);
+            }
             let subscripts = constraint.metadata.subscripts.clone();
             let value = *constraint.evaluated_values().get(sample_id)?;
             if result.insert(subscripts.clone(), value).is_some() {
@@ -302,6 +308,65 @@ mod tests {
         assert!(matches!(
             result,
             Err(crate::SampleSetError::UnknownConstraintName { name }) if name == "nonexistent"
+        ));
+    }
+
+    #[test]
+    fn test_extract_parameterized_variable_error() {
+        use crate::{
+            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            SampleID, SampledDecisionVariable, Sense, VariableID,
+        };
+
+        // Create a parameterized decision variable (should cause error)
+        let mut decision_variables = BTreeMap::new();
+
+        let mut dv = DecisionVariable::new(
+            VariableID::from(1),
+            Kind::Continuous,
+            crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
+            None,
+            crate::ATol::default(),
+        )
+        .unwrap();
+        dv.metadata = DecisionVariableMetadata {
+            name: Some("x".to_string()),
+            subscripts: vec![0],
+            parameters: {
+                let mut params = fnv::FnvHashMap::default();
+                params.insert("param1".to_string(), "value1".to_string());
+                params
+            }, // This makes it parameterized
+            ..Default::default()
+        };
+
+        // Create sampled values
+        let mut samples = crate::Sampled::default();
+        samples.append([SampleID::from(0)], 1.0).unwrap();
+
+        decision_variables.insert(
+            VariableID::from(1),
+            SampledDecisionVariable::new(dv, samples, crate::ATol::default()).unwrap(),
+        );
+
+        // Create objectives
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 10.0).unwrap();
+
+        // Create sample set
+        let sample_set = SampleSet::new(
+            decision_variables,
+            objectives,
+            BTreeMap::new(),
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        // Test that extracting parameterized variable fails
+        let result = sample_set.extract_decision_variables("x", SampleID::from(0));
+        assert!(matches!(
+            result,
+            Err(crate::SampleSetError::ParameterizedVariable)
         ));
     }
 }
