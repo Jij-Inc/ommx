@@ -5,6 +5,7 @@ use crate::{
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
+    exceptions::PyKeyError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -305,6 +306,48 @@ impl Instance {
 
     pub fn as_maximization_problem(&mut self) -> bool {
         self.0.as_maximization_problem()
+    }
+
+    /// Get a specific decision variable by ID
+    pub fn get_decision_variable(&self, variable_id: u64) -> PyResult<DecisionVariable> {
+        self.0
+            .decision_variables()
+            .get(&VariableID::from(variable_id))
+            .map(|var| DecisionVariable(var.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Decision variable with ID {} not found",
+                    variable_id
+                ))
+            })
+    }
+
+    /// Get a specific constraint by ID
+    pub fn get_constraint(&self, constraint_id: u64) -> PyResult<Constraint> {
+        self.0
+            .constraints()
+            .get(&ConstraintID::from(constraint_id))
+            .map(|constraint| Constraint(constraint.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Constraint with ID {} not found",
+                    constraint_id
+                ))
+            })
+    }
+
+    /// Get a specific removed constraint by ID
+    pub fn get_removed_constraint(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
+        self.0
+            .removed_constraints()
+            .get(&ConstraintID::from(constraint_id))
+            .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Removed constraint with ID {} not found",
+                    constraint_id
+                ))
+            })
     }
 }
 
