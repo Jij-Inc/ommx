@@ -2,6 +2,30 @@
 
 This document is a guide for migrating the OMMX Python SDK from Protocol Buffer-based (v1) to Rust-PyO3-based (v2).
 
+## ⚠️ Important: Deprecation of `raw` Attributes
+
+In v2, the `raw` attribute is deprecated across all migrated classes (`Instance`, `Solution`, `SampleSet`, etc.). Direct access to `.raw` should be avoided. Instead, use the methods directly available on the classes themselves:
+
+**Examples:**
+```python
+# ❌ Deprecated: Don't access through raw
+solution.raw.evaluated_constraints[0].evaluated_value
+instance.raw.decision_variables
+sample_set.raw.samples
+
+# ✅ Recommended: Use direct methods
+solution.get_constraint_value(0)
+instance.get_decision_variables()
+sample_set.get(sample_id)
+```
+
+These direct methods provide:
+- Better performance through native Rust implementation
+- Improved type safety
+- Cleaner, more intuitive APIs
+
+While `raw` attributes remain available for backward compatibility, they will be removed in future versions.
+
 ## Import Changes
 
 **Old approach (v1)**:
@@ -147,6 +171,7 @@ def _make_quadratic_expr(self, f: Function) -> pyscipopt.Expr:
 
 - **`AttributeError: 'builtins.Function' object has no attribute 'HasField'`**: Use `.degree()` check followed by direct property access (`.linear_terms`, `.constant_term`, etc.)
 - **`TypeError: 'float' object is not callable`**: Access `function.constant_term` as a property, not `function.constant_term()`
+- **Using `.raw` attributes**: The `raw` attribute is deprecated. Use methods directly available on the classes (e.g., `solution.get_constraint_value()`, `instance.get_decision_variables()`) for better performance and type safety
 
 ## Important Notes
 
@@ -231,8 +256,125 @@ def decode_to_samples(response: oj.Response) -> Samples:
   - ✅ OpenJij adapter: Compatible with both `zip()` and `dict(zip())` patterns
   - ✅ PyScipOpt adapter: Enhanced `to_state()` function for protobuf/PyO3 compatibility
   - ✅ Enhanced `ToState` type alias to include legacy protobuf State
-- ⏳ **Planned**: `ommx.v1.Solution` and `ommx.v1.SampleSet` migrations
+- ✅ **Completed**: `ommx.v1.Solution` migrated to PyO3 `_ommx_rust.Solution`
+- ✅ **Completed**: `ommx.v1.SampleSet` migrated to PyO3 `_ommx_rust.SampleSet`
+
+## Solution API Changes
+
+**Enhancement**: `Solution` now provides direct methods for accessing constraints and dual variables.
+
+### Accessing Constraint Values
+
+**Before (Protobuf)**:
+```python
+# Direct access to evaluated_constraints list
+solution.raw.evaluated_constraints[0].evaluated_value  # ❌ No longer available
+```
+
+**After (PyO3)**:
+```python
+# Use new getter methods
+solution.get_constraint_value(0)  # ✅ Get constraint value by ID
+```
+
+### Managing Dual Variables
+
+**Before (Protobuf)**:
+```python
+# Direct modification of constraint objects
+for constraint in solution.raw.evaluated_constraints:
+    constraint.dual_variable = dual_variables[constraint.id]  # ❌ No longer available
+```
+
+**After (PyO3)**:
+```python
+# Use new setter/getter methods
+solution.set_dual_variable(constraint_id, dual_value)  # ✅ Set dual variable by ID
+solution.get_dual_variable(constraint_id)             # ✅ Get dual variable by ID
+```
+
+### Accessing Constraint IDs
+
+**Before (Protobuf)**:
+```python
+# Iterate through evaluated_constraints
+for constraint in solution.raw.evaluated_constraints:
+    id = constraint.id  # ❌ No longer available
+```
+
+**After (PyO3)**:
+```python
+# Use constraint_ids property
+for constraint_id in solution.constraint_ids:  # ✅ Returns set of constraint IDs
+    value = solution.get_constraint_value(constraint_id)
+```
+
+### Adapter Implementation Examples
+
+**HiGHS Adapter**:
+```python
+# Old approach
+for constraint in solution.raw.evaluated_constraints:
+    if constraint.id < row_dual_len:
+        constraint.dual_variable = row_dual[constraint.id]
+
+# New approach
+for constraint_id in solution.constraint_ids:
+    if constraint_id < row_dual_len:
+        solution.set_dual_variable(constraint_id, row_dual[constraint_id])
+```
+
+**Python-MIP Adapter**:
+```python
+# Old approach
+for constraint in solution.raw.evaluated_constraints:
+    id = constraint.id
+    if id in dual_variables:
+        constraint.dual_variable = dual_variables[id]
+
+# New approach
+for constraint_id, dual_value in dual_variables.items():
+    solution.set_dual_variable(constraint_id, dual_value)
+```
+
+### Complete Solution API Reference
+
+```python
+# Properties
+solution.objective           # float - objective value
+solution.constraint_ids      # set[int] - all constraint IDs
+solution.feasible           # bool - feasibility status
+solution.feasible_relaxed   # bool - relaxed feasibility status
+
+# Methods
+solution.get_constraint_value(constraint_id: int) -> float
+solution.get_dual_variable(constraint_id: int) -> Optional[float]
+solution.set_dual_variable(constraint_id: int, value: Optional[float]) -> None
+solution.extract_decision_variables(name: str) -> dict[tuple[int, ...], float]
+solution.extract_constraints(name: str) -> dict[tuple[int, ...], float]
+
+# State access (backward compatible)
+solution.state              # State object with variable values
+solution.state.entries      # dict[int, float] - variable ID to value mapping
+```
+
+## SampleSet API Reference
+
+The `SampleSet` class now provides direct methods for accessing samples and extracting data:
+
+```python
+# Properties
+sample_set.sample_ids         # set[int] - all sample IDs
+sample_set.feasible_ids       # set[int] - feasible sample IDs
+sample_set.best_feasible_id   # Optional[int] - best feasible sample ID
+sample_set.best_feasible      # Optional[Solution] - best feasible solution
+
+# Methods
+sample_set.get(sample_id: int) -> Solution
+sample_set.extract_decision_variables(name: str, sample_id: int) -> dict[tuple[int, ...], float]
+sample_set.extract_constraints(name: str, sample_id: int) -> dict[tuple[int, ...], float]
+```
 
 ---
 
-**Note**: v2 API migration is ongoing. PyO3 performance optimization in progress for core data structures.
+**Note**: v2 API migration is complete. All core data structures now use PyO3 for improved performance.
