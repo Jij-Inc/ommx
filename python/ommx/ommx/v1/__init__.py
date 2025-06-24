@@ -4,6 +4,8 @@ from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
+import copy
+
 
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
@@ -612,7 +614,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
-        temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
+        temp_instance = copy.deepcopy(self.raw)
         temp_instance.partial_evaluate(State(state).to_bytes())
         return Instance(temp_instance)
 
