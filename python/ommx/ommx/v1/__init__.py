@@ -95,65 +95,8 @@ Type alias for convertible types to :class:`Samples`.
 """
 
 
-class InstanceBase(ABC):
-    @abstractmethod
-    def get_decision_variables(self) -> list[DecisionVariable]: ...
-    @abstractmethod
-    def get_constraints(self) -> list[Constraint]: ...
-    @abstractmethod
-    def get_removed_constraints(self) -> list[RemovedConstraint]: ...
-
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.get_decision_variables():
-            if v.id == variable_id:
-                return v
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    def get_constraint(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.get_constraints():
-            if c.id == constraint_id:
-                return c
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
-        """
-        Get a removed constraint by ID.
-        """
-        for rc in self.get_removed_constraints():
-            if rc.id == removed_constraint_id:
-                return rc
-        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
-
-    @property
-    def decision_variables_df(self) -> DataFrame:
-        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def constraints_df(self) -> DataFrame:
-        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def removed_constraints_df(self) -> DataFrame:
-        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-
 @dataclass
-class Instance(InstanceBase, UserAnnotationBase):
+class Instance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -469,6 +412,54 @@ class Instance(InstanceBase, UserAnnotationBase):
                 self.raw.removed_constraints.items()
             )
         ]
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.get_decision_variables():
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.get_constraints():
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.get_removed_constraints():
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
+    @property
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def evaluate(self, state: ToState) -> Solution:
         r"""
@@ -1720,7 +1711,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
 @dataclass
-class ParametricInstance(InstanceBase, UserAnnotationBase):
+class ParametricInstance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
 
@@ -1888,6 +1879,54 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             if p.id == parameter_id:
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
+
+    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.get_decision_variables():
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.get_constraints():
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.get_removed_constraints():
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
+    @property
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     @property
     def parameters(self) -> DataFrame:
