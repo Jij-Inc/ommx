@@ -1303,9 +1303,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         True
 
         """
-        state_bytes = self.raw.random_state(rng)
-        state = State.from_bytes(state_bytes)
-        return state
+        return self.raw.random_state(rng)
 
     def random_samples(
         self,
@@ -1354,13 +1352,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...         assert value in [0.0, 1.0], f"Binary variable {var_id} has invalid value {value}"
 
         """
-        samples_bytes = self.raw.random_samples(
+        return self.raw.random_samples(
             rng,
             num_different_samples=num_different_samples,
             num_samples=num_samples,
             max_sample_id=max_sample_id,
         )
-        return Samples.from_bytes(samples_bytes)
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
