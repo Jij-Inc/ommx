@@ -760,13 +760,11 @@ class SampleSet:
     def feasible_unrelaxed_ids(self) -> builtins.set[builtins.int]: ...
     def extract_decision_variables(
         self, name: builtins.str, sample_id: builtins.int
-    ) -> builtins.list[tuple[builtins.list[builtins.int], builtins.float]]:
+    ) -> dict:
         r"""
         Extract decision variable values for a given name and sample ID
         """
-    def extract_constraints(
-        self, name: builtins.str, sample_id: builtins.int
-    ) -> builtins.list[tuple[builtins.list[builtins.int], builtins.float]]:
+    def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
         Extract constraint values for a given name and sample ID
         """

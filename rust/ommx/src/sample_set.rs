@@ -1,3 +1,4 @@
+mod extract;
 mod parse;
 
 use crate::{
@@ -29,6 +30,18 @@ pub enum SampleSetError {
         expected: SampleIDSet,
         found: SampleIDSet,
     },
+
+    #[error("Duplicate subscripts for {name}: {subscripts:?}")]
+    DuplicateSubscripts { name: String, subscripts: Vec<i64> },
+
+    #[error("No decision variables with name '{name}' found")]
+    UnknownVariableName { name: String },
+
+    #[error("No constraint with name '{name}' found")]
+    UnknownConstraintName { name: String },
+
+    #[error("Unknown sample ID: {sample_id}")]
+    UnknownSampleID { sample_id: u64 },
 }
 
 /// Multiple sample solution results with deduplication

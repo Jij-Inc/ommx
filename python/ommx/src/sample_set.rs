@@ -1,7 +1,12 @@
 use crate::Solution;
 use anyhow::Result;
 use ommx::{Message, Parse};
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyBytes, Bound};
+use pyo3::{
+    exceptions::PyValueError,
+    prelude::*,
+    types::{PyBytes, PyDict, PyTuple},
+    Bound, PyResult, Python,
+};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -70,14 +75,12 @@ impl SampleSet {
 
     #[getter]
     pub fn best_feasible(&self) -> Option<Solution> {
-        self.0.best_feasible().map(|solution| Solution(solution))
+        self.0.best_feasible().map(Solution)
     }
 
     #[getter]
     pub fn best_feasible_relaxed(&self) -> Option<Solution> {
-        self.0
-            .best_feasible_relaxed()
-            .map(|solution| Solution(solution))
+        self.0.best_feasible_relaxed().map(Solution)
     }
 
     #[getter]
@@ -171,58 +174,37 @@ impl SampleSet {
     }
 
     /// Extract decision variable values for a given name and sample ID
-    pub fn extract_decision_variables(
+    pub fn extract_decision_variables<'py>(
         &self,
+        py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> anyhow::Result<Vec<(Vec<i64>, f64)>> {
+    ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let mut result = Vec::new();
-
-        for variable in self.0.decision_variables().values() {
-            if variable.metadata.name.as_ref() != Some(&name.to_string()) {
-                continue;
-            }
-
-            let subscripts = variable.metadata.subscripts.clone();
-
-            // Check for duplicates
-            if result.iter().any(|(s, _)| s == &subscripts) {
-                anyhow::bail!("Duplicate decision variable subscript: {:?}", subscripts);
-            }
-
-            let value = *variable.samples().get(sample_id)?;
-            result.push((subscripts, value));
+        let extracted = self.0.extract_decision_variables(name, sample_id)?;
+        let dict = PyDict::new(py);
+        for (subscripts, value) in extracted {
+            // Convert Vec<i64> to tuple for use as dict key
+            let key = PyTuple::new(py, &subscripts)?;
+            dict.set_item(key, value)?;
         }
-
-        Ok(result)
+        Ok(dict)
     }
 
     /// Extract constraint values for a given name and sample ID
-    pub fn extract_constraints(
+    pub fn extract_constraints<'py>(
         &self,
+        py: Python<'py>,
         name: &str,
         sample_id: u64,
-    ) -> anyhow::Result<Vec<(Vec<i64>, f64)>> {
+    ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let mut result = Vec::new();
-
-        for constraint in self.0.constraints().values() {
-            if constraint.metadata.name.as_ref() != Some(&name.to_string()) {
-                continue;
-            }
-
-            let subscripts = constraint.metadata.subscripts.clone();
-
-            // Check for duplicates
-            if result.iter().any(|(s, _)| s == &subscripts) {
-                anyhow::bail!("Duplicate constraint subscript: {:?}", subscripts);
-            }
-
-            let value = *constraint.evaluated_values().get(sample_id)?;
-            result.push((subscripts, value));
+        let extracted = self.0.extract_constraints(name, sample_id)?;
+        let dict = PyDict::new(py);
+        for (subscripts, value) in extracted {
+            let key = PyTuple::new(py, &subscripts)?;
+            dict.set_item(key, value)?;
         }
-
-        Ok(result)
+        Ok(dict)
     }
 }
