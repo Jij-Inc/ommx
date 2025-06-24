@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ommx::{Message, Parse};
 use pyo3::{prelude::*, types::PyBytes, Bound};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -70,8 +70,12 @@ impl SampledConstraint {
 
     /// Get the used decision variable IDs
     #[getter]
-    pub fn used_decision_variable_ids(&self) -> Vec<u64> {
-        self.0.metadata.used_decision_variable_ids.clone()
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .used_decision_variable_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 
     /// Get the evaluated values for all samples

@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::Result;
 use ommx::{Message, Parse};
 use pyo3::{prelude::*, types::PyBytes, Bound};
@@ -94,7 +96,11 @@ impl EvaluatedConstraint {
 
     /// Get the used decision variable IDs
     #[getter]
-    pub fn used_decision_variable_ids(&self) -> Vec<u64> {
-        self.0.metadata.used_decision_variable_ids.clone()
+    pub fn used_decision_variable_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .used_decision_variable_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
     }
 }

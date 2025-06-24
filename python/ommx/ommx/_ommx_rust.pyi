@@ -326,7 +326,7 @@ class EvaluatedConstraint:
     r"""
     Get the description
     """
-    used_decision_variable_ids: builtins.list[builtins.int]
+    used_decision_variable_ids: builtins.set[builtins.int]
     r"""
     Get the used decision variable IDs
     """
@@ -799,7 +799,7 @@ class SampledConstraint:
     r"""
     Get the removal reason parameters
     """
-    used_decision_variable_ids: builtins.list[builtins.int]
+    used_decision_variable_ids: builtins.set[builtins.int]
     r"""
     Get the used decision variable IDs
     """

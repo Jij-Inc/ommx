@@ -140,7 +140,6 @@ impl Parse for v1::EvaluatedConstraint {
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
-            used_decision_variable_ids: self.used_decision_variable_ids,
         };
 
         let feasible = match equality {
@@ -155,6 +154,11 @@ impl Parse for v1::EvaluatedConstraint {
             evaluated_value: self.evaluated_value,
             dual_variable: self.dual_variable,
             feasible,
+            used_decision_variable_ids: self
+                .used_decision_variable_ids
+                .into_iter()
+                .map(VariableID::from)
+                .collect(),
             removed_reason: self.removed_reason,
             removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         })
@@ -184,7 +188,6 @@ impl Parse for v1::SampledConstraint {
             subscripts: self.subscripts,
             parameters: self.parameters.into_iter().collect(),
             description: self.description,
-            used_decision_variable_ids: self.used_decision_variable_ids,
         };
 
         Ok(SampledConstraint {
@@ -198,6 +201,11 @@ impl Parse for v1::SampledConstraint {
                 .into_iter()
                 .map(|(id, value)| (SampleID::from(id), value))
                 .collect(),
+            used_decision_variable_ids: self
+                .used_decision_variable_ids
+                .into_iter()
+                .map(VariableID::from)
+                .collect(),
             removed_reason: self.removed_reason,
             removed_reason_parameters: self.removed_reason_parameters.into_iter().collect(),
         })
@@ -208,6 +216,7 @@ impl Parse for v1::SampledConstraint {
 mod tests {
     use super::*;
     use crate::v1;
+    use maplit::btreeset;
 
     #[test]
     fn error_message() {
@@ -256,12 +265,15 @@ mod tests {
         assert_eq!(*parsed.equality(), Equality::EqualToZero);
         assert_eq!(*parsed.evaluated_value(), 1.5);
         assert_eq!(parsed.dual_variable, Some(0.5));
+        assert_eq!(
+            parsed.used_decision_variable_ids(),
+            &btreeset! {1.into(), 2.into(), 3.into()}
+        );
         assert_eq!(parsed.metadata.name, Some("test_constraint".to_string()));
         assert_eq!(
             parsed.metadata.description,
             Some("A test constraint".to_string())
         );
-        assert_eq!(parsed.metadata.used_decision_variable_ids, vec![1, 2, 3]);
         assert_eq!(parsed.metadata.subscripts, vec![10, 20]);
         // feasible should be false because 1.5 > ATol::default() for EqualToZero constraint
         assert!(!(*parsed.feasible()));
