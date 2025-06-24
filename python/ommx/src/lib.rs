@@ -7,6 +7,8 @@ mod dataset;
 mod decision_variable;
 mod descriptor;
 mod enums;
+mod evaluated_constraint;
+mod evaluated_decision_variable;
 mod function;
 mod instance;
 mod linear;
@@ -16,6 +18,8 @@ mod qplib;
 mod quadratic;
 mod random;
 mod sample_set;
+mod sampled_constraint;
+mod sampled_decision_variable;
 mod samples;
 mod solution;
 mod state;
@@ -29,6 +33,8 @@ pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
 pub use enums::*;
+pub use evaluated_constraint::*;
+pub use evaluated_decision_variable::*;
 pub use function::*;
 pub use instance::*;
 pub use linear::*;
@@ -38,6 +44,8 @@ pub use qplib::*;
 pub use quadratic::*;
 pub use random::*;
 pub use sample_set::*;
+pub use sampled_constraint::*;
+pub use sampled_decision_variable::*;
 pub use samples::*;
 pub use solution::*;
 pub use state::*;
@@ -78,11 +86,17 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<SampleSet>()?;
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
+    m.add_class::<EvaluatedDecisionVariable>()?;
+    m.add_class::<EvaluatedConstraint>()?;
+    m.add_class::<SampledConstraint>()?;
+    m.add_class::<SampledDecisionVariable>()?;
 
     // Enums
     m.add_class::<Sense>()?;
     m.add_class::<Equality>()?;
     m.add_class::<Kind>()?;
+    m.add_class::<Optimality>()?;
+    m.add_class::<Relaxation>()?;
 
     // Random
     m.add_class::<Rng>()?;

@@ -12,19 +12,13 @@ impl Evaluate for Constraint {
         atol: crate::ATol,
     ) -> anyhow::Result<Self::Output> {
         let evaluated_value = self.function.evaluate(solution, atol)?;
-        let used_decision_variable_ids = self
-            .function
-            .required_ids()
-            .into_iter()
-            .map(|id| id.into_inner())
-            .collect();
+        let used_decision_variable_ids = self.function.required_ids();
 
         let metadata = ConstraintMetadata {
             name: self.name.clone(),
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.clone(),
             description: self.description.clone(),
-            used_decision_variable_ids,
         };
 
         let feasible = match self.equality {
@@ -39,6 +33,7 @@ impl Evaluate for Constraint {
             evaluated_value,
             dual_variable: None,
             feasible,
+            used_decision_variable_ids,
             removed_reason: None,
             removed_reason_parameters: FnvHashMap::default(),
         })
@@ -54,13 +49,11 @@ impl Evaluate for Constraint {
         // Convert v1::SampledValues to Sampled<f64>
         let evaluated_values: crate::Sampled<f64> = evaluated_values_v1.try_into()?;
 
-        let feasible: FnvHashMap<u64, bool> = evaluated_values
+        let feasible: std::collections::BTreeMap<crate::SampleID, bool> = evaluated_values
             .iter()
             .map(|(sample_id, evaluated_value)| match self.equality {
-                Equality::EqualToZero => (sample_id.into_inner(), evaluated_value.abs() < *atol),
-                Equality::LessThanOrEqualToZero => {
-                    (sample_id.into_inner(), *evaluated_value < *atol)
-                }
+                Equality::EqualToZero => (*sample_id, evaluated_value.abs() < *atol),
+                Equality::LessThanOrEqualToZero => (*sample_id, *evaluated_value < *atol),
             })
             .collect();
 
@@ -69,12 +62,6 @@ impl Evaluate for Constraint {
             subscripts: self.subscripts.clone(),
             parameters: self.parameters.clone(),
             description: self.description.clone(),
-            used_decision_variable_ids: self
-                .function
-                .required_ids()
-                .into_iter()
-                .map(|id| id.into_inner())
-                .collect(),
         };
 
         Ok(SampledConstraint {
@@ -84,6 +71,7 @@ impl Evaluate for Constraint {
             evaluated_values,
             dual_variables: None, // TODO: Support dual variables in the future
             feasible,
+            used_decision_variable_ids: self.function.required_ids(),
             removed_reason: None,
             removed_reason_parameters: FnvHashMap::default(),
         })
@@ -115,6 +103,7 @@ impl Evaluate for RemovedConstraint {
             evaluated_value: evaluated.evaluated_value,
             dual_variable: evaluated.dual_variable,
             feasible: evaluated.feasible,
+            used_decision_variable_ids: evaluated.used_decision_variable_ids,
             removed_reason: Some(self.removed_reason.clone()),
             removed_reason_parameters: self.removed_reason_parameters.clone(),
         })
@@ -133,6 +122,7 @@ impl Evaluate for RemovedConstraint {
             evaluated_values: evaluated.evaluated_values,
             dual_variables: evaluated.dual_variables,
             feasible: evaluated.feasible,
+            used_decision_variable_ids: evaluated.used_decision_variable_ids,
             removed_reason: Some(self.removed_reason.clone()),
             removed_reason_parameters: self.removed_reason_parameters.clone(),
         })

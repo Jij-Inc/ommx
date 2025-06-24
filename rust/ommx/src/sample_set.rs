@@ -1,3 +1,4 @@
+mod extract;
 mod parse;
 
 use crate::{
@@ -29,6 +30,24 @@ pub enum SampleSetError {
         expected: SampleIDSet,
         found: SampleIDSet,
     },
+
+    #[error("Duplicate subscripts for {name}: {subscripts:?}")]
+    DuplicateSubscripts { name: String, subscripts: Vec<i64> },
+
+    #[error("No decision variables with name '{name}' found")]
+    UnknownVariableName { name: String },
+
+    #[error("No constraint with name '{name}' found")]
+    UnknownConstraintName { name: String },
+
+    #[error("Decision variable with parameters is not supported")]
+    ParameterizedVariable,
+
+    #[error("Constraint with parameters is not supported")]
+    ParameterizedConstraint,
+
+    #[error(transparent)]
+    UnknownSampleIDError(#[from] UnknownSampleIDError),
 }
 
 /// Multiple sample solution results with deduplication
@@ -42,9 +61,9 @@ pub struct SampleSet {
     constraints: BTreeMap<ConstraintID, SampledConstraint>,
     #[getset(get = "pub")]
     sense: Sense,
-    /// Feasible values (computed from constraints or parsed from original data)
+    #[getset(get = "pub")]
     feasible: BTreeMap<SampleID, bool>,
-    /// Feasible relaxed values (computed from constraints or parsed from original data)
+    #[getset(get = "pub")]
     feasible_relaxed: BTreeMap<SampleID, bool>,
 }
 
@@ -91,7 +110,7 @@ impl SampleSet {
             let is_feasible = constraints.values().all(|constraint| {
                 constraint
                     .feasible()
-                    .get(&sample_id.into_inner())
+                    .get(sample_id)
                     .copied()
                     .unwrap_or(false)
             });
@@ -103,7 +122,7 @@ impl SampleSet {
                 .all(|constraint| {
                     constraint
                         .feasible()
-                        .get(&sample_id.into_inner())
+                        .get(sample_id)
                         .copied()
                         .unwrap_or(false)
                 });
@@ -125,6 +144,24 @@ impl SampleSet {
     /// Get sample IDs available in this sample set
     pub fn sample_ids(&self) -> SampleIDSet {
         self.objectives.ids()
+    }
+
+    pub fn feasible_ids(&self) -> SampleIDSet {
+        self.feasible
+            .iter()
+            .filter_map(|(id, &is_feasible)| if is_feasible { Some(*id) } else { None })
+            .collect()
+    }
+
+    pub fn feasible_relaxed_ids(&self) -> SampleIDSet {
+        self.feasible_relaxed
+            .iter()
+            .filter_map(|(id, &is_feasible)| if is_feasible { Some(*id) } else { None })
+            .collect()
+    }
+
+    pub fn feasible_unrelaxed_ids(&self) -> SampleIDSet {
+        self.feasible_ids()
     }
 
     /// Check if a specific sample is feasible
@@ -172,5 +209,51 @@ impl SampleSet {
             evaluated_constraints,
             decision_variables,
         ))
+    }
+
+    pub fn best_feasible_id(&self) -> Option<SampleID> {
+        let mut feasible_objectives: Vec<(SampleID, f64)> = self
+            .feasible
+            .iter()
+            .filter_map(|(k, v)| if *v { Some(k) } else { None })
+            .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
+            .collect();
+        if feasible_objectives.is_empty() {
+            return None;
+        }
+        feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match self.sense {
+            // safe unwrap since we checked for non-empty feasible_objectives
+            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+        }
+    }
+
+    pub fn best_feasible_relaxed_id(&self) -> Option<SampleID> {
+        let mut feasible_objectives: Vec<(SampleID, f64)> = self
+            .feasible_relaxed
+            .iter()
+            .filter_map(|(k, v)| if *v { Some(k) } else { None })
+            .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
+            .collect();
+        if feasible_objectives.is_empty() {
+            return None;
+        }
+        feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match self.sense {
+            // safe unwrap since we checked for non-empty feasible_objectives
+            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+        }
+    }
+
+    /// Get the best feasible solution
+    pub fn best_feasible(&self) -> Option<Solution> {
+        self.best_feasible_id().and_then(|id| self.get(id).ok())
+    }
+
+    pub fn best_feasible_relaxed(&self) -> Option<Solution> {
+        self.best_feasible_relaxed_id()
+            .and_then(|id| self.get(id).ok())
     }
 }

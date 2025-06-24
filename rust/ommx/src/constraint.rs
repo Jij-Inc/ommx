@@ -3,12 +3,14 @@ mod arbitrary;
 mod evaluate;
 mod parse;
 
+use crate::{
+    sampled::UnknownSampleIDError, Function, SampleID, Sampled, VariableID, VariableIDSet,
+};
 pub use arbitrary::*;
-
-use crate::{sampled::UnknownSampleIDError, Function, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use getset::Getters;
+use std::collections::BTreeMap;
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -96,7 +98,6 @@ pub struct ConstraintMetadata {
     pub subscripts: Vec<i64>,
     pub parameters: FnvHashMap<String, String>,
     pub description: Option<String>,
-    pub used_decision_variable_ids: Vec<u64>,
 }
 
 /// Single evaluation result using the new design
@@ -106,17 +107,19 @@ pub struct EvaluatedConstraint {
     id: ConstraintID,
     #[getset(get = "pub")]
     equality: Equality,
-    pub metadata: ConstraintMetadata,
     #[getset(get = "pub")]
     evaluated_value: f64,
-    #[getset(get = "pub")]
-    dual_variable: Option<f64>,
     #[getset(get = "pub")]
     feasible: bool,
     #[getset(get = "pub")]
     removed_reason: Option<String>,
     #[getset(get = "pub")]
     removed_reason_parameters: FnvHashMap<String, String>,
+    #[getset(get = "pub")]
+    used_decision_variable_ids: VariableIDSet,
+
+    pub dual_variable: Option<f64>,
+    pub metadata: ConstraintMetadata,
 }
 
 /// Multiple sample evaluation results with deduplication
@@ -126,17 +129,19 @@ pub struct SampledConstraint {
     id: ConstraintID,
     #[getset(get = "pub")]
     equality: Equality,
-    pub metadata: ConstraintMetadata,
     #[getset(get = "pub")]
     evaluated_values: Sampled<f64>,
     #[getset(get = "pub")]
-    dual_variables: Option<Sampled<f64>>,
+    feasible: BTreeMap<SampleID, bool>,
     #[getset(get = "pub")]
-    feasible: FnvHashMap<u64, bool>,
+    used_decision_variable_ids: VariableIDSet,
     #[getset(get = "pub")]
     removed_reason: Option<String>,
     #[getset(get = "pub")]
     removed_reason_parameters: FnvHashMap<String, String>,
+
+    pub dual_variables: Option<Sampled<f64>>,
+    pub metadata: ConstraintMetadata,
 }
 
 impl EvaluatedConstraint {
@@ -154,13 +159,17 @@ impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
         let evaluated_value = *constraint.evaluated_value();
-        let dual_variable = *constraint.dual_variable();
+        let dual_variable = constraint.dual_variable;
 
         crate::v1::EvaluatedConstraint {
             id,
             equality,
             evaluated_value,
-            used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
+            used_decision_variable_ids: constraint
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
             subscripts: constraint.metadata.subscripts,
             parameters: constraint.metadata.parameters.into_iter().collect(),
             name: constraint.metadata.name,
@@ -183,7 +192,7 @@ impl SampledConstraint {
             .and_then(|duals| duals.get(sample_id).ok())
             .copied();
 
-        let feasible = *self.feasible.get(&sample_id.into_inner()).unwrap_or(&false);
+        let feasible = *self.feasible.get(&sample_id).unwrap_or(&false);
 
         Ok(EvaluatedConstraint {
             id: *self.id(),
@@ -192,6 +201,7 @@ impl SampledConstraint {
             evaluated_value,
             dual_variable,
             feasible,
+            used_decision_variable_ids: self.used_decision_variable_ids.clone(),
             removed_reason: self.removed_reason().clone(),
             removed_reason_parameters: self.removed_reason_parameters().clone(),
         })
@@ -255,7 +265,12 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             constraint.evaluated_values().clone().into();
         let id = constraint.id().into_inner();
         let equality = (*constraint.equality()).into();
-        let feasible = constraint.feasible().clone().into_iter().collect();
+        let feasible = constraint
+            .feasible()
+            .clone()
+            .into_iter()
+            .map(|(id, value)| (id.into_inner(), value))
+            .collect();
 
         crate::v1::SampledConstraint {
             id,
@@ -267,7 +282,11 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
             removed_reason: constraint.removed_reason,
             removed_reason_parameters: constraint.removed_reason_parameters.into_iter().collect(),
             evaluated_values: Some(evaluated_values),
-            used_decision_variable_ids: constraint.metadata.used_decision_variable_ids,
+            used_decision_variable_ids: constraint
+                .used_decision_variable_ids
+                .into_iter()
+                .map(|id| id.into_inner())
+                .collect(),
             feasible,
         }
     }

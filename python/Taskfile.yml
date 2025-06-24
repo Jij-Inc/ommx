@@ -64,7 +64,7 @@ tasks:
   test-ci:
     desc: Run tests for all Python projects (CI mode; without pyright for ommx)
     cmds:
-      - task: ommx:test-ci
+      - task: ommx:pytest
       - task: ommx-openjij-adapter:test
       - task: ommx-python-mip-adapter:test
       - task: ommx-pyscipopt-adapter:test

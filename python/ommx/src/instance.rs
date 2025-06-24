@@ -172,7 +172,7 @@ impl Instance {
     pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
         let solution = self.0.evaluate(&state, ommx::ATol::default())?;
-        Ok(Solution(solution.into()))
+        Ok(Solution(solution))
     }
 
     pub fn partial_evaluate<'py>(
@@ -187,21 +187,20 @@ impl Instance {
     }
 
     pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
+        let v1_samples: ommx::v1::Samples = samples.0.clone().into();
         Ok(SampleSet(
             self.0
-                .evaluate_samples(&samples.0, ommx::ATol::default())?
-                .into(),
+                .evaluate_samples(&v1_samples, ommx::ATol::default())?,
         ))
     }
 
-    pub fn random_state<'py>(&self, py: Python<'py>, rng: &Rng) -> Result<Bound<'py, PyBytes>> {
+    pub fn random_state<'py>(&self, rng: &Rng) -> Result<crate::State> {
         let strategy = self.0.arbitrary_state();
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
         let state = ommx::random::sample(&mut rng_guard, strategy);
-        let bytes = state.encode_to_vec();
-        Ok(PyBytes::new(py, &bytes))
+        Ok(crate::State(state))
     }
 
     #[pyo3(signature = (
@@ -213,12 +212,11 @@ impl Instance {
     ))]
     pub fn random_samples<'py>(
         &self,
-        py: Python<'py>,
         rng: &Rng,
         num_different_samples: usize,
         num_samples: usize,
         max_sample_id: Option<u64>,
-    ) -> Result<Bound<'py, PyBytes>> {
+    ) -> Result<crate::Samples> {
         let max_sample_id = max_sample_id.unwrap_or(num_samples as u64);
         let params = ommx::random::SamplesParameters::new(
             num_different_samples,
@@ -231,8 +229,7 @@ impl Instance {
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
         let samples = ommx::random::sample(&mut rng_guard, strategy);
-        let bytes = samples.encode_to_vec();
-        Ok(PyBytes::new(py, &bytes))
+        Ok(crate::Samples(samples))
     }
 
     pub fn relax_constraint(

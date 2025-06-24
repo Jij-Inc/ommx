@@ -15,6 +15,9 @@ impl State {
     #[new]
     pub fn new(entries: &Bound<PyAny>) -> PyResult<Self> {
         // FIXME: Set type annotations for `entries` to be more specific after pyo3-stub-gen supports it
+        if let Ok(state) = entries.extract::<Self>() {
+            return Ok(state);
+        }
         if let Ok(entries) = entries.extract::<HashMap<u64, f64>>() {
             let mut state = ommx::v1::State::default();
             state.entries = entries;
