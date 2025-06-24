@@ -131,21 +131,21 @@ class InstanceBase(ABC):
         raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
 
     @property
-    def decision_variables(self) -> DataFrame:
+    def decision_variables_df(self) -> DataFrame:
         df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
         if not df.empty:
             df = df.set_index("id")
         return df
 
     @property
-    def constraints(self) -> DataFrame:
+    def constraints_df(self) -> DataFrame:
         df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
         if not df.empty:
             df = df.set_index("id")
         return df
 
     @property
-    def removed_constraints(self) -> DataFrame:
+    def removed_constraints_df(self) -> DataFrame:
         df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
         if not df.empty:
             df = df.set_index("id")
@@ -729,7 +729,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
 
-        >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    2.0                x        [0]
@@ -1495,7 +1495,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Added binary variables are also appeared in :attr:`decision_variables`
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    3.0                x        [0]
@@ -1595,7 +1595,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1669,7 +1669,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
