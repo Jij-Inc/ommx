@@ -94,15 +94,18 @@ impl Equality {
         *self as i32
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&self) -> &str {
         match self {
-            Equality::EqualToZero => "Equality.EqualToZero".to_string(),
-            Equality::LessThanOrEqualToZero => "Equality.LessThanOrEqualToZero".to_string(),
+            Equality::EqualToZero => "Equality.EqualToZero",
+            Equality::LessThanOrEqualToZero => "Equality.LessThanOrEqualToZero",
         }
     }
 
-    fn __str__(&self) -> String {
-        format!("{}", *self as i32)
+    fn __str__(&self) -> &str {
+        match self {
+            Equality::EqualToZero => "=0",
+            Equality::LessThanOrEqualToZero => "<=0",
+        }
     }
 }
 

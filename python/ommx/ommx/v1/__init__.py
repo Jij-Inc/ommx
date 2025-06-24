@@ -76,7 +76,6 @@ __all__ = [
     "Equality",
     "Kind",
     # Utility
-    "SampledValues",
     "Rng",
     # Type Alias
     "ToState",
@@ -2129,7 +2128,7 @@ class Solution(UserAnnotationBase):
         df = DataFrame(
             {
                 "id": c.id,
-                "equality": _equality(c.equality),
+                "equality": str(c.equality),
                 "value": c.evaluated_value,
                 "used_ids": set(c.used_decision_variable_ids),
                 "name": c.name if c.name else NA,
@@ -2286,20 +2285,6 @@ def _function_type(function: _Function) -> str:
     if function.HasField("polynomial"):
         return "polynomial"
     raise ValueError("Unknown function type")
-
-
-def _equality(equality: _ommx_rust.Equality | _Equality.ValueType) -> str:
-    if (
-        equality == _ommx_rust.Equality.EqualToZero
-        or equality == _Equality.EQUALITY_EQUAL_TO_ZERO
-    ):
-        return "=0"
-    if (
-        equality == _ommx_rust.Equality.LessThanOrEqualToZero
-        or equality == _Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-    ):
-        return "<=0"
-    raise ValueError("Unknown equality")
 
 
 @dataclass
@@ -3809,7 +3794,7 @@ class Constraint:
         pb_function.ParseFromString(c.function.encode())
         return {
             "id": c.id,
-            "equality": _equality(equality_for_display),
+            "equality": str(equality_for_display),
             "type": _function_type(pb_function),
             "used_ids": Function(c.function).raw.required_ids(),
             "name": c.name if c.name else NA,
