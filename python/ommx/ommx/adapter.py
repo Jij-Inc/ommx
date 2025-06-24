@@ -84,8 +84,7 @@ class UnboundedDetected(Exception):
 
 class NoFeasibleSample(Exception):
     """
-    Exception raised when no feasible solution is found by the solver.
-    This is a subclass of `Exception` and can be caught in the usual way.
+    Exception raised when no feasible solution is found by SamplerAdapter.
     """
 
     pass
