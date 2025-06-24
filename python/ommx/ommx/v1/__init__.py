@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
-from pandas import DataFrame, NA, Series
+from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
 
 from .instance_pb2 import Instance as _Instance, Parameters
@@ -16,9 +16,6 @@ from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
-)
-from .sample_set_pb2 import (
-    SampledValues as _SampledValues,
 )
 from .annotation import (
     UserAnnotationBase,
@@ -4237,28 +4234,6 @@ class SampleSet(UserAnnotationBase):
             return Solution(solution)
         else:
             return None
-
-
-@dataclass
-class SampledValues:
-    raw: _SampledValues
-
-    def as_series(self) -> Series:
-        return Series(dict(self))
-
-    def __iter__(self):
-        for entry in self.raw.entries:
-            for id in entry.ids:
-                yield id, entry.value
-
-    def __getitem__(self, sample_id: int) -> float:
-        for entry in self.raw.entries:
-            if sample_id in entry.ids:
-                return entry.value
-        raise KeyError(f"Sample ID {sample_id} not found")
-
-    def __repr__(self) -> str:
-        return self.as_series().__repr__()
 
 
 @dataclass
