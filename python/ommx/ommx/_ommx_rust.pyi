@@ -814,10 +814,6 @@ class SampledConstraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> SampledConstraint: ...
     def to_bytes(self) -> bytes: ...
-    def has_field(self, field_name: builtins.str) -> builtins.bool:
-        r"""
-        Check if a field is set (HasField equivalent)
-        """
 
 class SampledDecisionVariable:
     id: builtins.int

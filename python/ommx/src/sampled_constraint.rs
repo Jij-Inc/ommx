@@ -97,14 +97,4 @@ impl SampledConstraint {
             .map(|(&sample_id, feasible)| (sample_id.into_inner(), *feasible))
             .collect()
     }
-
-    /// Check if a field is set (HasField equivalent)
-    pub fn has_field(&self, field_name: &str) -> bool {
-        match field_name {
-            "name" => self.0.metadata.name.is_some(),
-            "description" => self.0.metadata.description.is_some(),
-            "removed_reason" => self.0.removed_reason().is_some(),
-            _ => false,
-        }
-    }
 }
