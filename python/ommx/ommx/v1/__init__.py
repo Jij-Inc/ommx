@@ -2274,8 +2274,6 @@ class Solution(UserAnnotationBase):
         return self.raw.get_constraint_value(constraint_id)
 
 
-
-
 @dataclass
 class DecisionVariable(VariableBase):
     """
