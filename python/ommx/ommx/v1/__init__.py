@@ -2125,7 +2125,7 @@ class Solution(UserAnnotationBase):
         df = DataFrame(
             {
                 "id": v.id,
-                "kind": _kind(v.kind),
+                "kind": str(v.kind),
                 "lower": v.lower_bound,
                 "upper": v.upper_bound,
                 "name": v.name if v.name else NA,
@@ -2291,16 +2291,6 @@ class Solution(UserAnnotationBase):
     def get_constraint_value(self, constraint_id: int) -> float:
         """Get the evaluated value of a specific constraint."""
         return self.raw.get_constraint_value(constraint_id)
-
-
-def _kind(kind: _ommx_rust.Kind) -> str:
-    if kind == _ommx_rust.Kind.Continuous:
-        return "Continuous"
-    if kind == _ommx_rust.Kind.Binary:
-        return "Binary"
-    if kind == _ommx_rust.Kind.Integer:
-        return "Integer"
-    raise ValueError(f"Unknown kind: {kind}")
 
 
 def _function_type(function: _Function) -> str:
