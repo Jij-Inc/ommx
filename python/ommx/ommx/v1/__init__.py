@@ -1860,7 +1860,7 @@ class ParametricInstance(UserAnnotationBase):
         """
         return [Parameter(raw) for raw in self.raw.parameters]
 
-    def get_parameter(self, parameter_id: int) -> Parameter:
+    def get_parameter_by_id(self, parameter_id: int) -> Parameter:
         """
         Get a parameter by ID.
         """
@@ -1878,7 +1878,7 @@ class ParametricInstance(UserAnnotationBase):
                 return v
         raise ValueError(f"Decision variable ID {variable_id} is not found")
 
-    def get_constraint(self, constraint_id: int) -> Constraint:
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
         """
         Get a constraint by ID.
         """
@@ -1887,7 +1887,7 @@ class ParametricInstance(UserAnnotationBase):
                 return c
         raise ValueError(f"Constraint ID {constraint_id} is not found")
 
-    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+    def get_removed_constraint_by_id(self, removed_constraint_id: int) -> RemovedConstraint:
         """
         Get a removed constraint by ID.
         """
