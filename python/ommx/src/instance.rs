@@ -193,7 +193,7 @@ impl Instance {
         ))
     }
 
-    pub fn random_state<'py>(&self, rng: &Rng) -> Result<crate::State> {
+    pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
         let strategy = self.0.arbitrary_state();
         let mut rng_guard = rng
             .lock()
@@ -209,7 +209,7 @@ impl Instance {
         num_samples = *ommx::random::SamplesParameters::default().num_samples(),
         max_sample_id = None
     ))]
-    pub fn random_samples<'py>(
+    pub fn random_samples(
         &self,
         rng: &Rng,
         num_different_samples: usize,
