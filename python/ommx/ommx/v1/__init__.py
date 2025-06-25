@@ -417,7 +417,9 @@ class Instance(UserAnnotationBase):
         """
         return Constraint.from_raw(self.raw.get_constraint_by_id(constraint_id))
 
-    def get_removed_constraint_by_id(self, removed_constraint_id: int) -> RemovedConstraint:
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
         """
         Get a removed constraint by ID.
         """
@@ -1887,7 +1889,9 @@ class ParametricInstance(UserAnnotationBase):
                 return c
         raise ValueError(f"Constraint ID {constraint_id} is not found")
 
-    def get_removed_constraint_by_id(self, removed_constraint_id: int) -> RemovedConstraint:
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
         """
         Get a removed constraint by ID.
         """
