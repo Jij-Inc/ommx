@@ -5,6 +5,7 @@ use crate::{
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
 use pyo3::{
+    exceptions::PyKeyError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -83,35 +84,33 @@ impl Instance {
         Ok(())
     }
 
+    /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
-    pub fn decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         self.0
             .decision_variables()
             .iter()
-            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
+            .map(|(_, var)| DecisionVariable(var.clone()))
             .collect()
     }
 
+    /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
-    pub fn constraints(&self) -> HashMap<u64, Constraint> {
+    pub fn constraints(&self) -> Vec<Constraint> {
         self.0
             .constraints()
             .iter()
-            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .map(|(_, constraint)| Constraint(constraint.clone()))
             .collect()
     }
 
+    /// List of all removed constraints in the instance sorted by their IDs.
     #[getter]
-    pub fn removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+    pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
         self.0
             .removed_constraints()
             .iter()
-            .map(|(id, removed_constraint)| {
-                (
-                    id.into_inner(),
-                    RemovedConstraint(removed_constraint.clone()),
-                )
-            })
+            .map(|(_, removed_constraint)| RemovedConstraint(removed_constraint.clone()))
             .collect()
     }
 
@@ -194,7 +193,7 @@ impl Instance {
         ))
     }
 
-    pub fn random_state<'py>(&self, rng: &Rng) -> Result<crate::State> {
+    pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
         let strategy = self.0.arbitrary_state();
         let mut rng_guard = rng
             .lock()
@@ -210,7 +209,7 @@ impl Instance {
         num_samples = *ommx::random::SamplesParameters::default().num_samples(),
         max_sample_id = None
     ))]
-    pub fn random_samples<'py>(
+    pub fn random_samples(
         &self,
         rng: &Rng,
         num_different_samples: usize,
@@ -305,6 +304,45 @@ impl Instance {
 
     pub fn as_maximization_problem(&mut self) -> bool {
         self.0.as_maximization_problem()
+    }
+
+    /// Get a specific decision variable by ID
+    pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
+        self.0
+            .decision_variables()
+            .get(&VariableID::from(variable_id))
+            .map(|var| DecisionVariable(var.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Decision variable with ID {} not found",
+                    variable_id
+                ))
+            })
+    }
+
+    /// Get a specific constraint by ID
+    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
+        self.0
+            .constraints()
+            .get(&ConstraintID::from(constraint_id))
+            .map(|constraint| Constraint(constraint.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!("Constraint with ID {} not found", constraint_id))
+            })
+    }
+
+    /// Get a specific removed constraint by ID
+    pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
+        self.0
+            .removed_constraints()
+            .get(&ConstraintID::from(constraint_id))
+            .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Removed constraint with ID {} not found",
+                    constraint_id
+                ))
+            })
     }
 }
 

@@ -95,65 +95,8 @@ Type alias for convertible types to :class:`Samples`.
 """
 
 
-class InstanceBase(ABC):
-    @abstractmethod
-    def get_decision_variables(self) -> list[DecisionVariable]: ...
-    @abstractmethod
-    def get_constraints(self) -> list[Constraint]: ...
-    @abstractmethod
-    def get_removed_constraints(self) -> list[RemovedConstraint]: ...
-
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.get_decision_variables():
-            if v.id == variable_id:
-                return v
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    def get_constraint(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.get_constraints():
-            if c.id == constraint_id:
-                return c
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
-        """
-        Get a removed constraint by ID.
-        """
-        for rc in self.get_removed_constraints():
-            if rc.id == removed_constraint_id:
-                return rc
-        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
-
-    @property
-    def decision_variables(self) -> DataFrame:
-        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def constraints(self) -> DataFrame:
-        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def removed_constraints(self) -> DataFrame:
-        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-
 @dataclass
-class Instance(InstanceBase, UserAnnotationBase):
+class Instance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -441,34 +384,69 @@ class Instance(InstanceBase, UserAnnotationBase):
         """Get constraint hints that provide additional information to solvers."""
         return self.raw.constraint_hints
 
-    def get_decision_variables(self) -> list[DecisionVariable]:
+    @property
+    def decision_variables(self) -> list[DecisionVariable]:
         """
-        Get decision variables as a list of :class:`DecisionVariable` instances.
+        Get decision variables as a list of :class:`DecisionVariable` instances sorted by their IDs.
         """
-        return [
-            DecisionVariable(rust_dv)
-            for _, rust_dv in sorted(self.raw.decision_variables.items())
-        ]
+        return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
-    def get_constraints(self) -> list[Constraint]:
+    @property
+    def constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint` instances.
+        Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
         """
-        return [
-            Constraint.from_raw(rust_constraint)
-            for _, rust_constraint in sorted(self.raw.constraints.items())
-        ]
+        return [Constraint.from_raw(c) for c in self.raw.constraints]
 
-    def get_removed_constraints(self) -> list[RemovedConstraint]:
+    @property
+    def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [
-            RemovedConstraint.from_raw(rust_removed_constraint)
-            for _, rust_removed_constraint in sorted(
-                self.raw.removed_constraints.items()
-            )
-        ]
+        return [RemovedConstraint.from_raw(rc) for rc in self.raw.removed_constraints]
+
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        return DecisionVariable(self.raw.get_decision_variable_by_id(variable_id))
+
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        return Constraint.from_raw(self.raw.get_constraint_by_id(constraint_id))
+
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        return RemovedConstraint.from_raw(
+            self.raw.get_removed_constraint_by_id(removed_constraint_id)
+        )
+
+    @property
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def evaluate(self, state: ToState) -> Solution:
         r"""
@@ -729,7 +707,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
 
-        >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    2.0                x        [0]
@@ -746,7 +724,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
-        >>> instance.get_removed_constraint(0)
+        >>> instance.get_removed_constraint_by_id(0)
         RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
 
         Solvers will return solutions which only contain log-encoded binary variables like:
@@ -789,7 +767,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         continuous_variables = [
             var.id
-            for var in self.get_decision_variables()
+            for var in self.decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
@@ -800,7 +778,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Prepare inequality constraints
         ineq_ids = [
             c.id
-            for c in self.get_constraints()
+            for c in self.constraints
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
@@ -814,7 +792,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
 
         # Penalty method
-        if self.get_constraints():
+        if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
                 raise ValueError(
                     "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -822,7 +800,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if penalty_weights:
                 pi = self.penalty_method()
                 weights = {
-                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
@@ -830,7 +808,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
-                weight = pi.get_parameters()[0]
+                weight = pi.parameters[0]
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
@@ -886,7 +864,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         continuous_variables = [
             var.id
-            for var in self.get_decision_variables()
+            for var in self.decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
@@ -897,7 +875,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Prepare inequality constraints
         ineq_ids = [
             c.id
-            for c in self.get_constraints()
+            for c in self.constraints
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
@@ -911,7 +889,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
 
         # Penalty method
-        if self.get_constraints():
+        if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
                 raise ValueError(
                     "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -919,7 +897,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if penalty_weights:
                 pi = self.penalty_method()
                 weights = {
-                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
@@ -927,7 +905,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
-                weight = pi.get_parameters()[0]
+                weight = pi.parameters[0]
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
@@ -1101,23 +1079,23 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The constraint is put in :attr:`removed_constraints`
 
-        >>> pi.get_constraints()
+        >>> pi.constraints
         []
-        >>> len(pi.get_removed_constraints())
+        >>> len(pi.removed_constraints)
         2
-        >>> pi.get_removed_constraints()[0]
+        >>> pi.removed_constraints[0]
         RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
-        >>> pi.get_removed_constraints()[1]
+        >>> pi.removed_constraints[1]
         RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
 
         There are two parameters corresponding to the two constraints
 
-        >>> len(pi.get_parameters())
+        >>> len(pi.parameters)
         2
-        >>> p1 = pi.get_parameters()[0]
+        >>> p1 = pi.parameters[0]
         >>> p1.id, p1.name
         (3, 'penalty_weight')
-        >>> p2 = pi.get_parameters()[1]
+        >>> p2 = pi.parameters[1]
         >>> p2.id, p2.name
         (4, 'penalty_weight')
 
@@ -1184,18 +1162,18 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The constraint is put in :attr:`removed_constraints`
 
-        >>> pi.get_constraints()
+        >>> pi.constraints
         []
-        >>> len(pi.get_removed_constraints())
+        >>> len(pi.removed_constraints)
         1
-        >>> pi.get_removed_constraints()[0]
+        >>> pi.removed_constraints[0]
         RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
 
         There is only one parameter in the instance
 
-        >>> len(pi.get_parameters())
+        >>> len(pi.parameters)
         1
-        >>> p = pi.get_parameters()[0]
+        >>> p = pi.parameters[0]
         >>> p.id
         3
         >>> p.name
@@ -1384,19 +1362,19 @@ class Instance(InstanceBase, UserAnnotationBase):
             ...     constraints=[(sum(x) == 3).set_id(1)],
             ...     sense=Instance.MAXIMIZE,
             ... )
-            >>> instance.get_constraints()
+            >>> instance.constraints
             [Constraint(x0 + x1 + x2 - 3 == 0)]
 
             >>> instance.relax_constraint(1, "manual relaxation")
-            >>> instance.get_constraints()
+            >>> instance.constraints
             []
-            >>> instance.get_removed_constraints()
+            >>> instance.removed_constraints
             [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
 
             >>> instance.restore_constraint(1)
-            >>> instance.get_constraints()
+            >>> instance.constraints
             [Constraint(x0 + x1 + x2 - 3 == 0)]
-            >>> instance.get_removed_constraints()
+            >>> instance.removed_constraints
             []
 
         Evaluate relaxed instance, and show :py:attr:`~Solution.feasible_unrelaxed`.
@@ -1495,7 +1473,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Added binary variables are also appeared in :attr:`decision_variables`
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    3.0                x        [0]
@@ -1534,7 +1512,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         if not decision_variable_ids:
             decision_variable_ids = {
                 var.id
-                for var in self.get_decision_variables()
+                for var in self.decision_variables
                 if var.kind == DecisionVariable.INTEGER
             }
             if not decision_variable_ids:
@@ -1581,7 +1559,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     ],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 - 5 <= 0)
 
         Introduce an integer slack variable
@@ -1590,12 +1568,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 + x3 - 5 == 0)
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1655,7 +1633,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     ],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 - 4 <= 0)
 
         Introduce an integer slack variable :math:`s \in [0, 2]`
@@ -1664,12 +1642,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     constraint_id=0,
         ...     slack_upper_bound=2
         ... )
-        >>> b, instance.get_constraints()[0]
+        >>> b, instance.constraints[0]
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1720,7 +1698,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
 
 @dataclass
-class ParametricInstance(InstanceBase, UserAnnotationBase):
+class ParametricInstance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
 
@@ -1852,7 +1830,8 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
-    def get_decision_variables(self) -> list[DecisionVariable]:
+    @property
+    def decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
@@ -1860,13 +1839,15 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
         ]
 
-    def get_constraints(self) -> list[Constraint]:
+    @property
+    def constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint
         """
         return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
-    def get_removed_constraints(self) -> list[RemovedConstraint]:
+    @property
+    def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
@@ -1874,13 +1855,14 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
         ]
 
-    def get_parameters(self) -> list[Parameter]:
+    @property
+    def parameters(self) -> list[Parameter]:
         """
         Get parameters as a list of :class:`Parameter`.
         """
         return [Parameter(raw) for raw in self.raw.parameters]
 
-    def get_parameter(self, parameter_id: int) -> Parameter:
+    def get_parameter_by_id(self, parameter_id: int) -> Parameter:
         """
         Get a parameter by ID.
         """
@@ -1889,9 +1871,59 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.decision_variables:
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.constraints:
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.removed_constraints:
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
     @property
-    def parameters(self) -> DataFrame:
-        df = DataFrame(p._as_pandas_entry() for p in self.get_parameters())
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def parameters_df(self) -> DataFrame:
+        df = DataFrame(p._as_pandas_entry() for p in self.parameters)
         if not df.empty:
             df = df.set_index("id")
         return df

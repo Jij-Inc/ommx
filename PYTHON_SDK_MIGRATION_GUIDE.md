@@ -13,9 +13,9 @@ solution.raw.evaluated_constraints[0].evaluated_value
 instance.raw.decision_variables
 sample_set.raw.samples
 
-# ✅ Recommended: Use direct methods
+# ✅ Recommended: Use direct properties and methods
 solution.get_constraint_value(0)
-instance.get_decision_variables()
+instance.decision_variables  # Now a property returning a list
 sample_set.get(sample_id)
 ```
 
@@ -171,7 +171,7 @@ def _make_quadratic_expr(self, f: Function) -> pyscipopt.Expr:
 
 - **`AttributeError: 'builtins.Function' object has no attribute 'HasField'`**: Use `.degree()` check followed by direct property access (`.linear_terms`, `.constant_term`, etc.)
 - **`TypeError: 'float' object is not callable`**: Access `function.constant_term` as a property, not `function.constant_term()`
-- **Using `.raw` attributes**: The `raw` attribute is deprecated. Use methods directly available on the classes (e.g., `solution.get_constraint_value()`, `instance.get_decision_variables()`) for better performance and type safety
+- **Using `.raw` attributes**: The `raw` attribute is deprecated. Use methods directly available on the classes (e.g., `solution.get_constraint_value()`, `instance.decision_variables`) for better performance and type safety
 
 ## Important Notes
 
@@ -374,6 +374,117 @@ sample_set.get(sample_id: int) -> Solution
 sample_set.extract_decision_variables(name: str, sample_id: int) -> dict[tuple[int, ...], float]
 sample_set.extract_constraints(name: str, sample_id: int) -> dict[tuple[int, ...], float]
 ```
+
+## Adapter API Changes (v2.0-rc.4)
+
+**Breaking Change**: Instance API methods changed from methods to properties and return types changed from dictionaries to lists.
+
+### Instance API Changes
+
+**Before**:
+```python
+# Methods returning dictionaries
+for var_id, var in instance.decision_variables().items():
+    process_variable(var_id, var)
+
+for constraint_id, constraint in instance.constraints().items():
+    process_constraint(constraint_id, constraint)
+
+# Raw access for iteration
+for var_id, var in instance.raw.decision_variables.items():
+    process_variable(var_id, var)
+```
+
+**After**:
+```python
+# Properties returning lists (ID-sorted)
+for var in instance.decision_variables:
+    process_variable(var.id, var)
+
+for constraint in instance.constraints:
+    process_constraint(constraint.id, constraint)
+
+# No raw access needed - use properties directly
+for var in instance.decision_variables:
+    process_variable(var.id, var)
+```
+
+### Instance Sense Access
+
+**Before**:
+```python
+if instance.raw.sense == Instance.MAXIMIZE:
+    # Handle maximize
+elif instance.raw.sense == Instance.MINIMIZE:
+    # Handle minimize
+```
+
+**After**:
+```python
+if instance.sense == Instance.MAXIMIZE:
+    # Handle maximize
+elif instance.sense == Instance.MINIMIZE:
+    # Handle minimize
+```
+
+### Adapter Implementation Updates
+
+**Python-MIP Adapter**:
+```python
+# Before
+def _set_decision_variables(self):
+    for var_id, var in self.instance.raw.decision_variables.items():
+        # Process variable
+
+# After
+def _set_decision_variables(self):
+    for var in self.instance.decision_variables:
+        # Process variable using var.id and var properties
+```
+
+**State Creation Pattern**:
+```python
+# Before
+return State(entries={
+    var_id: data.var_by_name(str(var_id)).x
+    for var_id, var in self.instance.raw.decision_variables.items()
+})
+
+# After
+return State(entries={
+    var.id: data.var_by_name(str(var.id)).x
+    for var in self.instance.decision_variables
+})
+```
+
+### New Instance Methods
+
+**Individual Access**:
+```python
+# Get specific items by ID (with KeyError on missing ID)
+var = instance.get_decision_variable_by_id(variable_id)  # Individual variable access
+constraint = instance.get_constraint_by_id(constraint_id)  # Individual constraint access
+removed_constraint = instance.get_removed_constraint(constraint_id)  # Individual removed constraint access
+```
+
+### Required Adapter Changes
+
+1. **Replace `.raw` access**: Use direct properties instead of `.raw.decision_variables.items()`
+2. **Update iteration patterns**: Change from `dict.items()` to direct list iteration
+3. **Access individual IDs**: Use `.id` property on each object instead of dict keys
+4. **Update sense access**: Use `instance.sense` instead of `instance.raw.sense`
+5. **Use new individual access methods**: Use `get_decision_variable_by_id()` and `get_constraint_by_id()` for individual item access
+
+### Migration Checklist for Adapters
+
+- [ ] Replace `instance.raw.decision_variables.items()` → `instance.decision_variables`
+- [ ] Replace `instance.raw.constraints.items()` → `instance.constraints`
+- [ ] Replace `instance.raw.sense` → `instance.sense`
+- [ ] Update variable access from `(var_id, var)` → `var` (use `var.id`)
+- [ ] Update constraint access from `(constraint_id, constraint)` → `constraint` (use `constraint.id`)
+- [ ] Update test assertions from `len(instance.decision_variables())` → `len(instance.decision_variables)`
+- [ ] Use `instance.get_decision_variable_by_id(id)` for individual variable access
+- [ ] Use `instance.get_constraint_by_id(id)` for individual constraint access
 
 ---
 
