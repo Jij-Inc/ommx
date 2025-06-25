@@ -281,7 +281,7 @@ pub enum DecisionVariableError {
         bound: Bound,
     },
 
-    #[error("Substituted value for ID={id} cannot be overwrite: previous={previous_value}, new={new_value}, atol={atol:?}")]
+    #[error("Substituted value for ID={id} cannot be overwritten: previous={previous_value}, new={new_value}, atol={atol:?}")]
     SubstitutedValueOverwrite {
         id: VariableID,
         previous_value: f64,
