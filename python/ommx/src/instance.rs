@@ -84,35 +84,33 @@ impl Instance {
         Ok(())
     }
 
+    /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
-    pub fn decision_variables(&self) -> HashMap<u64, DecisionVariable> {
+    pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         self.0
             .decision_variables()
             .iter()
-            .map(|(id, var)| (id.into_inner(), DecisionVariable(var.clone())))
+            .map(|(_, var)| DecisionVariable(var.clone()))
             .collect()
     }
 
+    /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
-    pub fn constraints(&self) -> HashMap<u64, Constraint> {
+    pub fn constraints(&self) -> Vec<Constraint> {
         self.0
             .constraints()
             .iter()
-            .map(|(id, constraint)| (id.into_inner(), Constraint(constraint.clone())))
+            .map(|(_, constraint)| Constraint(constraint.clone()))
             .collect()
     }
 
+    /// List of all removed constraints in the instance sorted by their IDs.
     #[getter]
-    pub fn removed_constraints(&self) -> HashMap<u64, RemovedConstraint> {
+    pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
         self.0
             .removed_constraints()
             .iter()
-            .map(|(id, removed_constraint)| {
-                (
-                    id.into_inner(),
-                    RemovedConstraint(removed_constraint.clone()),
-                )
-            })
+            .map(|(_, removed_constraint)| RemovedConstraint(removed_constraint.clone()))
             .collect()
     }
 
@@ -329,10 +327,7 @@ impl Instance {
             .get(&ConstraintID::from(constraint_id))
             .map(|constraint| Constraint(constraint.clone()))
             .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Constraint with ID {} not found",
-                    constraint_id
-                ))
+                PyKeyError::new_err(format!("Constraint with ID {} not found", constraint_id))
             })
     }
 

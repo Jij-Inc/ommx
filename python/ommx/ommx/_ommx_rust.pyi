@@ -479,9 +479,18 @@ class Function:
 class Instance:
     sense: Sense
     objective: Function
-    decision_variables: builtins.dict[builtins.int, DecisionVariable]
-    constraints: builtins.dict[builtins.int, Constraint]
-    removed_constraints: builtins.dict[builtins.int, RemovedConstraint]
+    decision_variables: builtins.list[DecisionVariable]
+    r"""
+    List of all decision variables in the instance sorted by their IDs.
+    """
+    constraints: builtins.list[Constraint]
+    r"""
+    List of all decision variables in the instance sorted by their IDs.
+    """
+    removed_constraints: builtins.list[RemovedConstraint]
+    r"""
+    List of all removed constraints in the instance sorted by their IDs.
+    """
     description: typing.Optional[InstanceDescription]
     constraint_hints: ConstraintHints
     @staticmethod

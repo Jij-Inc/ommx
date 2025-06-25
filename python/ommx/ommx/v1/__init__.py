@@ -386,32 +386,21 @@ class Instance(UserAnnotationBase):
 
     def get_decision_variables(self) -> list[DecisionVariable]:
         """
-        Get decision variables as a list of :class:`DecisionVariable` instances.
+        Get decision variables as a list of :class:`DecisionVariable` instances sorted by their IDs.
         """
-        return [
-            DecisionVariable(rust_dv)
-            for _, rust_dv in sorted(self.raw.decision_variables.items())
-        ]
+        return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
     def get_constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint` instances.
+        Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
         """
-        return [
-            Constraint.from_raw(rust_constraint)
-            for _, rust_constraint in sorted(self.raw.constraints.items())
-        ]
+        return [Constraint.from_raw(c) for c in self.raw.constraints]
 
     def get_removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [
-            RemovedConstraint.from_raw(rust_removed_constraint)
-            for _, rust_removed_constraint in sorted(
-                self.raw.removed_constraints.items()
-            )
-        ]
+        return [RemovedConstraint.from_raw(rc) for rc in self.raw.removed_constraints]
 
     def get_decision_variable(self, variable_id: int) -> DecisionVariable:
         """
