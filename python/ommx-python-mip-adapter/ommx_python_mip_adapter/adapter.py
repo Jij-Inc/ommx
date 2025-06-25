@@ -27,13 +27,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        if ommx_instance.raw.sense == Instance.MAXIMIZE:
+        if ommx_instance.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
-        elif ommx_instance.raw.sense == Instance.MINIMIZE:
+        elif ommx_instance.sense == Instance.MINIMIZE:
             sense = mip.MINIMIZE
         else:
             raise OMMXPythonMIPAdapterError(
-                f"Unsupported sense: {ommx_instance.raw.sense}"
+                f"Unsupported sense: {ommx_instance.sense}"
             )
         self.instance = ommx_instance
         self.model = mip.Model(
@@ -297,13 +297,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         return State(
             entries={
-                var_id: data.var_by_name(str(var_id)).x  # type: ignore
-                for var_id, var in self.instance.raw.decision_variables.items()
+                var.id: data.var_by_name(str(var.id)).x  # type: ignore
+                for var in self.instance.decision_variables
             }
         )
 
     def _set_decision_variables(self):
-        for var_id, var in self.instance.raw.decision_variables.items():
+        for var in self.instance.decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
                     name=str(var.id),
@@ -358,7 +358,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for constraint in self.instance.constraints():
+        for constraint in self.instance.constraints:
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0

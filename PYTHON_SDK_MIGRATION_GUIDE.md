@@ -375,6 +375,114 @@ sample_set.extract_decision_variables(name: str, sample_id: int) -> dict[tuple[i
 sample_set.extract_constraints(name: str, sample_id: int) -> dict[tuple[int, ...], float]
 ```
 
+## Adapter API Changes (v2.0-rc.4)
+
+**Breaking Change**: Instance API methods changed from methods to properties and return types changed from dictionaries to lists.
+
+### Instance API Changes
+
+**Before**:
+```python
+# Methods returning dictionaries
+for var_id, var in instance.decision_variables().items():
+    process_variable(var_id, var)
+
+for constraint_id, constraint in instance.constraints().items():
+    process_constraint(constraint_id, constraint)
+
+# Raw access for iteration
+for var_id, var in instance.raw.decision_variables.items():
+    process_variable(var_id, var)
+```
+
+**After**:
+```python
+# Properties returning lists (ID-sorted)
+for var in instance.decision_variables:
+    process_variable(var.id, var)
+
+for constraint in instance.constraints:
+    process_constraint(constraint.id, constraint)
+
+# No raw access needed - use properties directly
+for var in instance.decision_variables:
+    process_variable(var.id, var)
+```
+
+### Instance Sense Access
+
+**Before**:
+```python
+if instance.raw.sense == Instance.MAXIMIZE:
+    # Handle maximize
+elif instance.raw.sense == Instance.MINIMIZE:
+    # Handle minimize
+```
+
+**After**:
+```python
+if instance.sense == Instance.MAXIMIZE:
+    # Handle maximize
+elif instance.sense == Instance.MINIMIZE:
+    # Handle minimize
+```
+
+### Adapter Implementation Updates
+
+**Python-MIP Adapter**:
+```python
+# Before
+def _set_decision_variables(self):
+    for var_id, var in self.instance.raw.decision_variables.items():
+        # Process variable
+
+# After
+def _set_decision_variables(self):
+    for var in self.instance.decision_variables:
+        # Process variable using var.id and var properties
+```
+
+**State Creation Pattern**:
+```python
+# Before
+return State(entries={
+    var_id: data.var_by_name(str(var_id)).x
+    for var_id, var in self.instance.raw.decision_variables.items()
+})
+
+# After
+return State(entries={
+    var.id: data.var_by_name(str(var.id)).x
+    for var in self.instance.decision_variables
+})
+```
+
+### New Instance Methods
+
+**Individual Access**:
+```python
+# Get specific items by ID (with KeyError on missing ID)
+var = instance.get_decision_variable(variable_id)
+constraint = instance.get_constraint(constraint_id)
+removed_constraint = instance.get_removed_constraint(constraint_id)
+```
+
+### Required Adapter Changes
+
+1. **Replace `.raw` access**: Use direct properties instead of `.raw.decision_variables.items()`
+2. **Update iteration patterns**: Change from `dict.items()` to direct list iteration
+3. **Access individual IDs**: Use `.id` property on each object instead of dict keys
+4. **Update sense access**: Use `instance.sense` instead of `instance.raw.sense`
+
+### Migration Checklist for Adapters
+
+- [ ] Replace `instance.raw.decision_variables.items()` → `instance.decision_variables`
+- [ ] Replace `instance.raw.constraints.items()` → `instance.constraints`
+- [ ] Replace `instance.raw.sense` → `instance.sense`
+- [ ] Update variable access from `(var_id, var)` → `var` (use `var.id`)
+- [ ] Update constraint access from `(constraint_id, constraint)` → `constraint` (use `constraint.id`)
+- [ ] Update test assertions from `len(instance.decision_variables())` → `len(instance.decision_variables)`
+
 ---
 
 **Note**: v2 API migration is complete. All core data structures now use PyO3 for improved performance.
