@@ -543,15 +543,19 @@ class Instance:
     def __deepcopy__(self, _memo: typing.Any) -> Instance: ...
     def as_minimization_problem(self) -> builtins.bool: ...
     def as_maximization_problem(self) -> builtins.bool: ...
-    def get_decision_variable(self, variable_id: builtins.int) -> DecisionVariable:
+    def get_decision_variable_by_id(
+        self, variable_id: builtins.int
+    ) -> DecisionVariable:
         r"""
         Get a specific decision variable by ID
         """
-    def get_constraint(self, constraint_id: builtins.int) -> Constraint:
+    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
         r"""
         Get a specific constraint by ID
         """
-    def get_removed_constraint(self, constraint_id: builtins.int) -> RemovedConstraint:
+    def get_removed_constraint_by_id(
+        self, constraint_id: builtins.int
+    ) -> RemovedConstraint:
         r"""
         Get a specific removed constraint by ID
         """

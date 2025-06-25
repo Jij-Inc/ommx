@@ -405,24 +405,24 @@ class Instance(UserAnnotationBase):
         """
         return [RemovedConstraint.from_raw(rc) for rc in self.raw.removed_constraints]
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
         """
         Get a decision variable by ID.
         """
-        return DecisionVariable(self.raw.get_decision_variable(variable_id))
+        return DecisionVariable(self.raw.get_decision_variable_by_id(variable_id))
 
-    def get_constraint(self, constraint_id: int) -> Constraint:
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
         """
         Get a constraint by ID.
         """
-        return Constraint.from_raw(self.raw.get_constraint(constraint_id))
+        return Constraint.from_raw(self.raw.get_constraint_by_id(constraint_id))
 
-    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
+    def get_removed_constraint_by_id(self, removed_constraint_id: int) -> RemovedConstraint:
         """
         Get a removed constraint by ID.
         """
         return RemovedConstraint.from_raw(
-            self.raw.get_removed_constraint(removed_constraint_id)
+            self.raw.get_removed_constraint_by_id(removed_constraint_id)
         )
 
     @property
@@ -722,7 +722,7 @@ class Instance(UserAnnotationBase):
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
-        >>> instance.get_removed_constraint(0)
+        >>> instance.get_removed_constraint_by_id(0)
         RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
 
         Solvers will return solutions which only contain log-encoded binary variables like:
@@ -1869,7 +1869,7 @@ class ParametricInstance(UserAnnotationBase):
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
         """
         Get a decision variable by ID.
         """

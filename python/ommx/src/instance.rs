@@ -307,7 +307,7 @@ impl Instance {
     }
 
     /// Get a specific decision variable by ID
-    pub fn get_decision_variable(&self, variable_id: u64) -> PyResult<DecisionVariable> {
+    pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
         self.0
             .decision_variables()
             .get(&VariableID::from(variable_id))
@@ -321,7 +321,7 @@ impl Instance {
     }
 
     /// Get a specific constraint by ID
-    pub fn get_constraint(&self, constraint_id: u64) -> PyResult<Constraint> {
+    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
         self.0
             .constraints()
             .get(&ConstraintID::from(constraint_id))
@@ -332,7 +332,7 @@ impl Instance {
     }
 
     /// Get a specific removed constraint by ID
-    pub fn get_removed_constraint(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
+    pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
         self.0
             .removed_constraints()
             .get(&ConstraintID::from(constraint_id))
