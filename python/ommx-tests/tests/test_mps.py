@@ -86,7 +86,7 @@ def test_output():
     dvars_before = instance.decision_variables
     dvars_after = loaded.decision_variables
     assert len(dvars_before) == len(dvars_after)
-    for (b, a) in zip(dvars_before, dvars_after):
+    for b, a in zip(dvars_before, dvars_after):
         assert b.id == a.id
         # Note: MPS format does not preserve variable names (see Instance.write_mps docstring)
         # assert b.name == a.name  # Skip name check as it's not preserved
@@ -98,7 +98,7 @@ def test_output():
     constr_before = instance.constraints
     constr_after = loaded.constraints
     assert len(constr_before) == len(constr_after)
-    for (b, a) in zip(constr_before, constr_after):
+    for b, a in zip(constr_before, constr_after):
         assert b.id == a.id
         # Note: MPS format does not preserve constraint names (see Instance.write_mps docstring)
         # assert before.name == after.name  # Skip name check as it's not preserved

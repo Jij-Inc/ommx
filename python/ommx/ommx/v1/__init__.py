@@ -421,7 +421,9 @@ class Instance(UserAnnotationBase):
         """
         Get a removed constraint by ID.
         """
-        return RemovedConstraint.from_raw(self.raw.get_removed_constraint(removed_constraint_id))
+        return RemovedConstraint.from_raw(
+            self.raw.get_removed_constraint(removed_constraint_id)
+        )
 
     @property
     def decision_variables_df(self) -> DataFrame:

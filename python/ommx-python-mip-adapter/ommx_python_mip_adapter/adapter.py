@@ -32,9 +32,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         elif ommx_instance.sense == Instance.MINIMIZE:
             sense = mip.MINIMIZE
         else:
-            raise OMMXPythonMIPAdapterError(
-                f"Unsupported sense: {ommx_instance.sense}"
-            )
+            raise OMMXPythonMIPAdapterError(f"Unsupported sense: {ommx_instance.sense}")
         self.instance = ommx_instance
         self.model = mip.Model(
             sense=sense,
