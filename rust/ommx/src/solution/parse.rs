@@ -284,7 +284,7 @@ mod tests {
         insta::assert_snapshot!(error.to_string(), @r###"
         Traceback for OMMX Message parse error:
         └─ommx.v1.Solution[decision_variables]
-        Substituted value for ID=1 is inconsistent: kind=Continuous, bound=[0, 10], substituted_value=3, atol=ATol(1e-6)
+        Substituted value for ID=1 cannot be overwrite: previous=3, new=2, atol=ATol(1e-6)
         "###);
     }
 
