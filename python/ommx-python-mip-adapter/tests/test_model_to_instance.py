@@ -48,7 +48,7 @@ def test_milp():
     assert ommx_instance.sense == Instance.MINIMIZE
 
     # Check the decision variables
-    assert len(ommx_instance.get_decision_variables()) == 3
+    assert len(ommx_instance.decision_variables()) == 3
     decision_variables_x1 = ommx_instance.get_decision_variable(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
@@ -78,7 +78,7 @@ def test_milp():
     assert linear_terms[2] == -3
 
     # Check the constraints
-    assert len(ommx_instance.get_constraints()) == 3
+    assert len(ommx_instance.constraints()) == 3
 
     constraint1 = ommx_instance.get_constraint(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
@@ -141,7 +141,7 @@ def test_no_objective_model():
     assert ommx_instance.sense == Instance.MAXIMIZE
 
     # Check the decision variables
-    assert len(ommx_instance.get_decision_variables()) == 2
+    assert len(ommx_instance.decision_variables()) == 2
     decision_variables_x1 = ommx_instance.get_decision_variable(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
@@ -160,7 +160,7 @@ def test_no_objective_model():
     assert ommx_instance.objective.num_terms() == 0  # Zero function has 0 terms
 
     # Check the constraints
-    assert len(ommx_instance.get_constraints()) == 2
+    assert len(ommx_instance.constraints()) == 2
 
     constraint1 = ommx_instance.get_constraint(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO

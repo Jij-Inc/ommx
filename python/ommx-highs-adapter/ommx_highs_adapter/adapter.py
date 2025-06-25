@@ -414,7 +414,7 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.get_decision_variables())
+                for i, var in enumerate(self.instance.decision_variables())
             }
         )
 
@@ -425,7 +425,7 @@ class OMMXHighsAdapter(SolverAdapter):
         types = []
         var_ids = []
 
-        for i, var in enumerate(self.instance.get_decision_variables()):
+        for i, var in enumerate(self.instance.decision_variables()):
             var_ids.append(var.id)
             if var.kind == DecisionVariable.BINARY:
                 lower[i] = 0
@@ -476,7 +476,7 @@ class OMMXHighsAdapter(SolverAdapter):
             raise OMMXHighsAdapterError(f"Unsupported sense: {self.instance.sense}")
 
     def _set_constraints(self):
-        for constr in self.instance.get_constraints():
+        for constr in self.instance.constraints():
             const_expr = self._linear_expr_conversion(constr.function)
             if isinstance(const_expr, float):
                 val = const_expr

@@ -281,7 +281,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.get_decision_variables():
+        for var in self.instance.decision_variables():
             if var.kind == DecisionVariable.BINARY:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:
@@ -382,7 +382,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 vars = [self.varname_map[str(v)] for v in sos1.variables]
                 self.model.addConsSOS1(vars, name=name)
 
-        for constraint in self.instance.get_constraints():
+        for constraint in self.instance.constraints():
             if constraint.id in excluded:
                 continue
 
