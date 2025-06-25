@@ -6,8 +6,10 @@ members = ["python/ommx*"]
 
 [dependency-groups]
 dev = [
+  "datalayer-pycrdt>=0.12.17",
   "ipython>=8.18.1",
   "jupyter-book>=1.0.3",
+  "jupyter-collaboration>=4.0.2",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",
