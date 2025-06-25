@@ -226,7 +226,8 @@ impl DecisionVariableAnalysis {
 }
 
 fn check_integer(id: VariableID, value: f64, atol: ATol) -> Result<(), StateValidationError> {
-    if value.fract().abs() > atol {
+    let rounded = value.round();
+    if (rounded - value).abs() > atol {
         return Err(StateValidationError::NotAnInteger { id, value });
     }
     Ok(())

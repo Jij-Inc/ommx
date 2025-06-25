@@ -232,7 +232,8 @@ impl DecisionVariable {
         }
         match self.kind {
             Kind::Integer | Kind::Binary | Kind::SemiInteger => {
-                if value.fract().abs() >= atol {
+                let rounded = value.round();
+                if (rounded - value).abs() >= atol {
                     return Err(err());
                 }
             }
@@ -260,6 +261,7 @@ impl DecisionVariable {
                     id: self.id,
                     previous_value,
                     new_value,
+                    atol,
                 });
             }
         } else {
@@ -279,11 +281,12 @@ pub enum DecisionVariableError {
         bound: Bound,
     },
 
-    #[error("Substituted value for ID={id} cannot be overwrite: previous={previous_value}, new={new_value}")]
+    #[error("Substituted value for ID={id} cannot be overwritten: previous={previous_value}, new={new_value}, atol={atol:?}")]
     SubstitutedValueOverwrite {
         id: VariableID,
         previous_value: f64,
         new_value: f64,
+        atol: ATol,
     },
 
     #[error("Substituted value for ID={id} is inconsistent: kind={kind:?}, bound={bound}, substituted_value={substituted_value}, atol={atol:?}")]
@@ -331,11 +334,10 @@ impl EvaluatedDecisionVariable {
         // Check consistency with existing substituted_value if present
         if let Some(substituted_value) = decision_variable.substituted_value {
             if (substituted_value - value).abs() > *atol {
-                return Err(DecisionVariableError::SubstitutedValueInconsistent {
+                return Err(DecisionVariableError::SubstitutedValueOverwrite {
                     id: decision_variable.id,
-                    kind: decision_variable.kind,
-                    bound: decision_variable.bound,
-                    substituted_value,
+                    previous_value: substituted_value,
+                    new_value: value,
                     atol,
                 });
             }
@@ -383,11 +385,10 @@ impl SampledDecisionVariable {
             // Check that all sample values are consistent with substituted_value
             for (_, &sample_value) in samples.iter() {
                 if (substituted_value - sample_value).abs() > *atol {
-                    return Err(DecisionVariableError::SubstitutedValueInconsistent {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
                         id: decision_variable.id,
-                        kind: decision_variable.kind,
-                        bound: decision_variable.bound,
-                        substituted_value,
+                        previous_value: substituted_value,
+                        new_value: sample_value,
                         atol,
                     });
                 }
