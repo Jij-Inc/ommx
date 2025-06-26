@@ -199,7 +199,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
         continuous_variables = [
             var.id
-            for var in self.ommx_instance.get_decision_variables()
+            for var in self.ommx_instance.decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
@@ -210,7 +210,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         # Prepare inequality constraints
         ineq_ids = [
             c.id
-            for c in self.ommx_instance.get_constraints()
+            for c in self.ommx_instance.constraints
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
@@ -224,7 +224,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 )
 
         # Penalty method
-        if self.ommx_instance.get_constraints():
+        if self.ommx_instance.constraints:
             if self.uniform_penalty_weight is not None and self.penalty_weights:
                 raise ValueError(
                     "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -233,7 +233,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 pi = self.ommx_instance.penalty_method()
                 weights = {
                     p.id: self.penalty_weights[p.subscripts[0]]
-                    for p in pi.get_parameters()
+                    for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
@@ -241,7 +241,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     self.uniform_penalty_weight = 1.0
                 pi = self.ommx_instance.uniform_penalty_method()
-                weight = pi.get_parameters()[0]
+                weight = pi.parameters[0]
                 unconstrained = pi.with_parameters(
                     {weight.id: self.uniform_penalty_weight}
                 )
