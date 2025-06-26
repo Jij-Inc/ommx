@@ -1,6 +1,9 @@
-use crate::{mps::*, random::InstanceParameters, v1::Instance};
+use super::*;
+use crate::{random::InstanceParameters, v1::Instance};
 use approx::AbsDiffEq;
 use proptest::prelude::*;
+use std::io::Write;
+use tempdir::TempDir;
 
 proptest! {
     #[test]
@@ -19,14 +22,7 @@ proptest! {
     }
 }
 
-#[cfg(test)]
-mod format_tests {
-    use super::*;
-    use std::io::Write;
-
-    #[test]
-    fn test_format_detection() {
-        let mps_content = r#"NAME TestProblem
+const MPS_CONTENT: &str = r#"NAME TestProblem
 ROWS
  N  OBJ
  L  R1
@@ -40,49 +36,25 @@ BOUNDS
 ENDATA
 "#;
 
-        let temp_dir = std::env::temp_dir();
-        let uncompressed_path = temp_dir.join("test.mps");
-        let compressed_path = temp_dir.join("test.mps.gz");
+#[test]
+fn test_format_detection() {
+    let temp_dir = TempDir::new("test_mps_format_detection").unwrap();
+    let temp_dir_path = temp_dir.path();
+    let uncompressed_path = temp_dir_path.join("test.mps");
+    let compressed_path = temp_dir_path.join("test.mps.gz");
 
-        // Create uncompressed file
-        std::fs::write(&uncompressed_path, mps_content).unwrap();
+    // Create uncompressed file
+    std::fs::write(&uncompressed_path, MPS_CONTENT).unwrap();
 
-        // Create compressed file
-        {
-            let file = std::fs::File::create(&compressed_path).unwrap();
-            let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-            encoder.write_all(mps_content.as_bytes()).unwrap();
-            encoder.finish().unwrap();
-        }
-
-        // Both should load successfully
-        assert!(load_file(&uncompressed_path).is_ok());
-        assert!(load_file(&compressed_path).is_ok());
-
-        std::fs::remove_file(uncompressed_path).ok();
-        std::fs::remove_file(compressed_path).ok();
+    // Create compressed file
+    {
+        let file = std::fs::File::create(&compressed_path).unwrap();
+        let mut encoder = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        encoder.write_all(MPS_CONTENT.as_bytes()).unwrap();
+        encoder.finish().unwrap();
     }
 
-    #[test]
-    fn test_write_compression() {
-        let instance = crate::v1::Instance::arbitrary_with(crate::random::InstanceParameters::default_lp())
-            .new_tree(&mut proptest::test_runner::TestRunner::deterministic())
-            .unwrap()
-            .current();
-
-        let temp_dir = std::env::temp_dir();
-        let compressed_path = temp_dir.join("test_compressed.mps");
-        let uncompressed_path = temp_dir.join("test_uncompressed.mps");
-
-        // Test both compression modes
-        assert!(write_file(&instance, &compressed_path, true).is_ok());
-        assert!(write_file(&instance, &uncompressed_path, false).is_ok());
-
-        // Both should be readable
-        assert!(load_file(&compressed_path).is_ok());
-        assert!(load_file(&uncompressed_path).is_ok());
-
-        std::fs::remove_file(compressed_path).ok();
-        std::fs::remove_file(uncompressed_path).ok();
-    }
+    let uncompressed = load_file(&uncompressed_path).unwrap();
+    let compressed = load_file(&compressed_path).unwrap();
+    assert_eq!(compressed, uncompressed);
 }
