@@ -166,11 +166,11 @@ ENDATA
         let uncompressed_path = temp_dir.join("test_write_uncompressed.mps");
 
         // Test writing compressed (default)
-        let compressed_result = write_file(&instance, &compressed_path, None);
+        let compressed_result = write_file(&instance, &compressed_path, true);
         assert!(compressed_result.is_ok(), "Should write compressed file");
 
         // Test writing uncompressed
-        let uncompressed_result = write_file(&instance, &uncompressed_path, Some(false));
+        let uncompressed_result = write_file(&instance, &uncompressed_path, false);
         assert!(
             uncompressed_result.is_ok(),
             "Should write uncompressed file"

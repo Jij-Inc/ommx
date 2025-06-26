@@ -14,6 +14,6 @@ pub fn load_mps_bytes(py: Python<'_>, path: String) -> Result<Bound<'_, PyBytes>
 #[pyo3(signature = (instance, path, compress=true))]
 pub fn write_mps_file(instance: Bound<PyBytes>, path: String, compress: bool) -> Result<()> {
     let instance = Instance::decode(instance.as_bytes())?;
-    ommx::mps::write_file(&instance, path, Some(compress))?;
+    ommx::mps::write_file(&instance, path, compress)?;
     Ok(())
 }
