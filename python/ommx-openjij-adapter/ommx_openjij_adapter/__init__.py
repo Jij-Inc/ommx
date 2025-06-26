@@ -232,8 +232,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             if self.penalty_weights:
                 pi = self.ommx_instance.penalty_method()
                 weights = {
-                    p.id: self.penalty_weights[p.subscripts[0]]
-                    for p in pi.parameters
+                    p.id: self.penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
