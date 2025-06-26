@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ommx.v1 import Instance, State, Samples, SampleSet
+from ommx.v1 import Instance, State, Samples, SampleSet, DecisionVariable, Constraint
 from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
@@ -54,6 +54,8 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     """ Penalty weights for each constraint, passed to ``Instance.to_qubo`` or ``Instance.to_hubo`` """
     inequality_integer_slack_max_range: int = 32
     """ Max range for integer slack variables in inequality constraints, passed to ``Instance.to_qubo`` or ``Instance.to_hubo`` """
+
+    _instance_prepared: bool = False
 
     @classmethod
     def sample(
@@ -140,26 +142,16 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     @property
     def sampler_input(self) -> dict[tuple[int, ...], float]:
-        if self.ommx_instance.objective.degree() > 2:
-            hubo, _offset = self.ommx_instance.to_hubo(
-                uniform_penalty_weight=self.uniform_penalty_weight,
-                penalty_weights=self.penalty_weights,
-                inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
-            )
-            return hubo
+        self._prepare_convert()
+        if self._is_hubo:
+            return self._hubo
         else:
-            qubo, _offset = self.ommx_instance.to_qubo(
-                uniform_penalty_weight=self.uniform_penalty_weight,
-                penalty_weights=self.penalty_weights,
-                inequality_integer_slack_max_range=self.inequality_integer_slack_max_range,
-            )
-            return qubo
+            return self._qubo
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()
-        degree = self.ommx_instance.objective.degree()
         input = self.sampler_input
-        if degree > 2:
+        if self._is_hubo:
             return sampler.sample_hubo(
                 input,  # type: ignore
                 vartype="BINARY",
@@ -186,6 +178,87 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 reinitialize_state=self.reinitialize_state,
                 seed=self.seed,
             )
+
+    # Manually perform the conversion process to QUBO/HUBO, instead of using
+    # `to_hubo` or `to_qubo`.
+    #
+    # This is so that we can manually call `as_hubo_format()`, check if the
+    # finalized instance is higher-order, and if not, call
+    # `as_qubo_format()`.
+    #
+    # We could do alternative methods like simply checking the degrees of
+    # the objective function and all constraints. But some instances will
+    # see to be higher-order but ultimately representable as QUBO after the
+    # conversion (eg. due to simplifying binary `x * x`). So we chose to do
+    # it this way.
+    def _prepare_convert(self):
+        if self._instance_prepared:
+            return
+
+        self.ommx_instance.as_minimization_problem()
+
+        continuous_variables = [
+            var.id
+            for var in self.ommx_instance.get_decision_variables()
+            if var.kind == DecisionVariable.CONTINUOUS
+        ]
+        if len(continuous_variables) > 0:
+            raise ValueError(
+                f"Continuous variables are not supported in HUBO conversion: IDs={continuous_variables}"
+            )
+
+        # Prepare inequality constraints
+        ineq_ids = [
+            c.id
+            for c in self.ommx_instance.get_constraints()
+            if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
+        ]
+        for ineq_id in ineq_ids:
+            try:
+                self.ommx_instance.convert_inequality_to_equality_with_integer_slack(
+                    ineq_id, self.inequality_integer_slack_max_range
+                )
+            except RuntimeError:
+                self.ommx_instance.add_integer_slack_to_inequality(
+                    ineq_id, self.inequality_integer_slack_max_range
+                )
+
+        # Penalty method
+        if self.ommx_instance.get_constraints():
+            if self.uniform_penalty_weight is not None and self.penalty_weights:
+                raise ValueError(
+                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                )
+            if self.penalty_weights:
+                pi = self.ommx_instance.penalty_method()
+                weights = {
+                    p.id: self.penalty_weights[p.subscripts[0]]
+                    for p in pi.get_parameters()
+                }
+                unconstrained = pi.with_parameters(weights)
+            else:
+                if self.uniform_penalty_weight is None:
+                    # If both are None, defaults to uniform_penalty_weight = 1.0
+                    self.uniform_penalty_weight = 1.0
+                pi = self.ommx_instance.uniform_penalty_method()
+                weight = pi.get_parameters()[0]
+                unconstrained = pi.with_parameters(
+                    {weight.id: self.uniform_penalty_weight}
+                )
+            self.ommx_instance.raw = unconstrained.raw
+
+        self.ommx_instance.log_encode()
+
+        hubo, _ = self.ommx_instance.as_hubo_format()
+        if any(len(k) > 2 for k in hubo.keys()):
+            self._is_hubo = True
+            self._hubo = hubo
+        else:
+            self._is_hubo = False
+            qubo, _ = self.ommx_instance.as_qubo_format()
+            self._qubo = qubo
+
+        self._instance_prepared = True
 
 
 @deprecated("Renamed to `decode_to_samples`")
