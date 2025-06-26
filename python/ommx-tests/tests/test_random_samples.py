@@ -21,13 +21,12 @@ def test_random_samples_basic():
     )
 
     # Check structure
-    assert len(samples.entries) == 3
-    assert sum(len(entry.ids) for entry in samples.entries) == 10
+    assert samples.num_samples() == 10
+    # Note: The actual number of unique sample IDs may differ from num_different_samples
 
     # Check that each state respects variable bounds
-    for entry in samples.entries:
-        state = entry.state
-        assert state is not None
+    for sample_id in samples.sample_ids():
+        state = samples.get_state(sample_id)
         for var_id, value in state.entries.items():
             assert value in [0.0, 1.0], (
                 f"Binary variable {var_id} has invalid value {value}"
@@ -55,8 +54,10 @@ def test_random_samples_only_used_variables():
 
     # Check that only used variables have values
     used_vars = {0, 1, 2, 3}
-    for entry in samples.entries:
-        state = entry.state
+    assert samples.num_samples() == 5
+
+    for sample_id in samples.sample_ids():
+        state = samples.get_state(sample_id)
         assert set(state.entries.keys()) == used_vars
 
 
@@ -84,8 +85,10 @@ def test_random_samples_with_different_variable_types():
     )
 
     # Check bounds for each variable type
-    for entry in samples.entries:
-        state = entry.state
+    assert samples.num_samples() == 20
+
+    for sample_id in samples.sample_ids():
+        state = samples.get_state(sample_id)
 
         # Binary variable
         assert state.entries[0] in [0.0, 1.0]
@@ -117,11 +120,9 @@ def test_random_samples_custom_max_sample_id():
         max_sample_id=100,
     )
 
-    # Check that all sample IDs are within bounds
-    all_ids = []
-    for entry in samples.entries:
-        all_ids.extend(entry.ids)
+    # Check basic structure and sample ID bounds
+    assert samples.num_samples() == 5
 
-    assert len(all_ids) == 5
+    # Check that all sample IDs are within bounds
+    all_ids = samples.sample_ids()
     assert all(0 <= sample_id <= 100 for sample_id in all_ids)
-    assert len(set(all_ids)) == 5  # All IDs should be unique

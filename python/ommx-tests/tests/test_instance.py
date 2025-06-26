@@ -88,8 +88,8 @@ def test_convert_inequality_to_equality_with_integer_slack_trivial():
     instance.convert_inequality_to_equality_with_integer_slack(
         constraint_id=0, max_integer_range=32
     )
-    assert instance.get_constraints() == []
-    removed = instance.get_removed_constraints()[0]
+    assert instance.constraints == []
+    removed = instance.removed_constraints[0]
     assert removed.id == 0
 
 
@@ -133,8 +133,8 @@ def test_add_integer_slack_to_inequality_trivial():
     assert b is None
 
     # Check that the constraint is removed
-    assert instance.get_constraints() == []
-    removed = instance.get_removed_constraints()[0]
+    assert instance.constraints == []
+    removed = instance.removed_constraints[0]
     assert removed.id == 0
 
 

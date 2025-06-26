@@ -35,10 +35,10 @@ impl DecisionVariable {
             ATol::default(),
         )?;
 
-        decision_variable.name = name;
-        decision_variable.subscripts = subscripts;
-        decision_variable.parameters = parameters.into_iter().collect();
-        decision_variable.description = description;
+        decision_variable.metadata.name = name;
+        decision_variable.metadata.subscripts = subscripts;
+        decision_variable.metadata.parameters = parameters.into_iter().collect();
+        decision_variable.metadata.description = description;
 
         Ok(Self(decision_variable))
     }
@@ -61,17 +61,18 @@ impl DecisionVariable {
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone().unwrap_or_default()
+        self.0.metadata.name.clone().unwrap_or_default()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.subscripts.clone()
+        self.0.metadata.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
         self.0
+            .metadata
             .parameters
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -80,7 +81,7 @@ impl DecisionVariable {
 
     #[getter]
     pub fn description(&self) -> String {
-        self.0.description.clone().unwrap_or_default()
+        self.0.metadata.description.clone().unwrap_or_default()
     }
 
     #[staticmethod]

@@ -27,14 +27,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         :param solver: Passes a specific solver to the Python-MIP model.
         :param verbose: If True, enable Python-MIP's verbose mode
         """
-        if ommx_instance.raw.sense == Instance.MAXIMIZE:
+        if ommx_instance.sense == Instance.MAXIMIZE:
             sense = mip.MAXIMIZE
-        elif ommx_instance.raw.sense == Instance.MINIMIZE:
+        elif ommx_instance.sense == Instance.MINIMIZE:
             sense = mip.MINIMIZE
         else:
-            raise OMMXPythonMIPAdapterError(
-                f"Unsupported sense: {ommx_instance.raw.sense}"
-            )
+            raise OMMXPythonMIPAdapterError(f"Unsupported sense: {ommx_instance.sense}")
         self.instance = ommx_instance
         self.model = mip.Model(
             sense=sense,
@@ -86,7 +84,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     constraints=[(sum(w[i] * x[i] for i in range(6)) <= 47).set_id(0)],
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -107,7 +105,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            >>> solution.get_constraint_value(0)
             -1.0
 
         Infeasible Problem
@@ -162,12 +160,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
                 >>> instance = Instance.from_components(
                 ...     decision_variables=[x, y],
                 ...     objective=x + y,
-                ...     constraints=[x + y <= 1],
+                ...     constraints=[(x + y <= 1).set_id(0)],
                 ...     sense=Instance.MAXIMIZE,
                 ... )
 
                 >>> solution = OMMXPythonMIPAdapter.solve(instance)
-                >>> solution.raw.evaluated_constraints[0].dual_variable
+                >>> solution.get_dual_variable(0)
                 1.0
 
         """
@@ -247,16 +245,14 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             if pi is not None:
                 id = int(constraint.name)
                 dual_variables[id] = pi
-        for constraint in solution.raw.evaluated_constraints:
-            id = constraint.id
-            if id in dual_variables:
-                constraint.dual_variable = dual_variables[id]
+        for constraint_id, dual_value in dual_variables.items():
+            solution.set_dual_variable(constraint_id, dual_value)
 
         if data.status == mip.OptimizationStatus.OPTIMAL:
-            solution.raw.optimality = Solution.OPTIMAL
+            solution.optimality = Solution.OPTIMAL
 
         if self._relax:
-            solution.raw.relaxation = Solution.LP_RELAXED
+            solution.relaxation = Solution.LP_RELAXED
         return solution
 
     def decode_to_state(self, data: mip.Model) -> State:
@@ -299,13 +295,13 @@ class OMMXPythonMIPAdapter(SolverAdapter):
 
         return State(
             entries={
-                var_id: data.var_by_name(str(var_id)).x  # type: ignore
-                for var_id, var in self.instance.raw.decision_variables.items()
+                var.id: data.var_by_name(str(var.id)).x  # type: ignore
+                for var in self.instance.decision_variables
             }
         )
 
     def _set_decision_variables(self):
-        for var_id, var in self.instance.raw.decision_variables.items():
+        for var in self.instance.decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
                     name=str(var.id),
@@ -360,7 +356,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         self.model.objective = self._as_lin_expr(self.instance.objective)
 
     def _set_constraints(self):
-        for constraint in self.instance.get_constraints():
+        for constraint in self.instance.constraints:
             lin_expr = self._as_lin_expr(constraint.function)
             if constraint.equality == Constraint.EQUAL_TO_ZERO:
                 constr_expr = lin_expr == 0

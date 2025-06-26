@@ -48,20 +48,20 @@ def test_milp():
     assert ommx_instance.sense == Instance.MINIMIZE
 
     # Check the decision variables
-    assert len(ommx_instance.get_decision_variables()) == 3
-    decision_variables_x1 = ommx_instance.get_decision_variable(0)
+    assert len(ommx_instance.decision_variables) == 3
+    decision_variables_x1 = ommx_instance.get_decision_variable_by_id(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == CONTINUOUS_LOWER_BOUND
     assert decision_variables_x1.bound.upper == CONTINUOUS_UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.get_decision_variable(1)
+    decision_variables_x2 = ommx_instance.get_decision_variable_by_id(1)
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.INTEGER
     assert decision_variables_x2.bound.lower == INTEGER_LOWER_BOUND
     assert decision_variables_x2.bound.upper == INTEGER_UPPER_BOUND
     assert decision_variables_x2.name == "2"
-    decision_variables_x3 = ommx_instance.get_decision_variable(2)
+    decision_variables_x3 = ommx_instance.get_decision_variable_by_id(2)
     assert decision_variables_x3.id == 2
     assert decision_variables_x3.kind == DecisionVariable.BINARY
     assert decision_variables_x3.bound.lower == 0
@@ -78,9 +78,9 @@ def test_milp():
     assert linear_terms[2] == -3
 
     # Check the constraints
-    assert len(ommx_instance.get_constraints()) == 3
+    assert len(ommx_instance.constraints) == 3
 
-    constraint1 = ommx_instance.get_constraint(0)
+    constraint1 = ommx_instance.get_constraint_by_id(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     assert constraint1.function.degree() == 1
     assert constraint1.function.constant_term == 6
@@ -89,7 +89,7 @@ def test_milp():
     assert constraint1_terms[0] == 4
     assert constraint1_terms[1] == -5
 
-    constraint2 = ommx_instance.get_constraint(1)
+    constraint2 = ommx_instance.get_constraint_by_id(1)
     assert constraint2.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint2.function.degree() == 1
     assert constraint2.function.constant_term == -9
@@ -98,7 +98,7 @@ def test_milp():
     assert constraint2_terms[0] == -7
     assert constraint2_terms[2] == 8
 
-    constraint3 = ommx_instance.get_constraint(2)
+    constraint3 = ommx_instance.get_constraint_by_id(2)
     assert constraint3.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
     assert constraint3.function.degree() == 1
     assert constraint3.function.constant_term == -12
@@ -141,14 +141,14 @@ def test_no_objective_model():
     assert ommx_instance.sense == Instance.MAXIMIZE
 
     # Check the decision variables
-    assert len(ommx_instance.get_decision_variables()) == 2
-    decision_variables_x1 = ommx_instance.get_decision_variable(0)
+    assert len(ommx_instance.decision_variables) == 2
+    decision_variables_x1 = ommx_instance.get_decision_variable_by_id(0)
     assert decision_variables_x1.id == 0
     assert decision_variables_x1.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x1.bound.lower == LOWER_BOUND
     assert decision_variables_x1.bound.upper == UPPER_BOUND
     assert decision_variables_x1.name == "1"
-    decision_variables_x2 = ommx_instance.get_decision_variable(1)
+    decision_variables_x2 = ommx_instance.get_decision_variable_by_id(1)
     assert decision_variables_x2.id == 1
     assert decision_variables_x2.kind == DecisionVariable.CONTINUOUS
     assert decision_variables_x2.bound.lower == LOWER_BOUND
@@ -160,9 +160,9 @@ def test_no_objective_model():
     assert ommx_instance.objective.num_terms() == 0  # Zero function has 0 terms
 
     # Check the constraints
-    assert len(ommx_instance.get_constraints()) == 2
+    assert len(ommx_instance.constraints) == 2
 
-    constraint1 = ommx_instance.get_constraint(0)
+    constraint1 = ommx_instance.get_constraint_by_id(0)
     assert constraint1.equality == Constraint.EQUAL_TO_ZERO
     assert constraint1.function.degree() == 1
     assert constraint1.function.constant_term == -5
@@ -171,7 +171,7 @@ def test_no_objective_model():
     assert constraint1_terms[0] == 1
     assert constraint1_terms[1] == 2
 
-    constraint2 = ommx_instance.get_constraint(1)
+    constraint2 = ommx_instance.get_constraint_by_id(1)
     assert constraint2.equality == Constraint.EQUAL_TO_ZERO
     assert constraint2.function.degree() == 1
     assert constraint2.function.constant_term == -10

@@ -273,23 +273,24 @@ def decode_to_samples(response: oj.Response) -> Samples:
     """
     Convert `openjij.Response <https://openjij.github.io/OpenJij/reference/openjij/index.html#openjij.Response>`_ to :class:`Samples`
     """
-    # Filling into ommx.v1.Samples
+    # Create empty samples and append each state with its sample IDs
     # Since OpenJij does not issue the sample ID, we need to generate it in the responsibility of this OMMX Adapter
+    samples = Samples({})  # Create empty samples
     sample_id = 0
-    entries = []
 
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
-        state = State(entries=zip(response.variables, sample))  # type: ignore
+        state = State(entries=zip(response.variables, sample))
         # `num_occurrences` is encoded into sample ID list.
         # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
         ids = []
         for _ in range(response.record.num_occurrences[i]):
             ids.append(sample_id)
             sample_id += 1
-        entries.append(Samples.SamplesEntry(state=state, ids=ids))
-    return Samples(entries=entries)
+        samples.append(ids, state)
+
+    return samples
 
 
 @deprecated("Use `OMMXOpenJijSAAdapter.sample` instead")

@@ -2,15 +2,14 @@ from __future__ import annotations
 from typing import Optional, Iterable, overload, Mapping
 from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
-from pandas import DataFrame, NA, Series
+from pandas import DataFrame, NA
 from abc import ABC, abstractmethod
-import collections.abc
+import copy
 
-from .solution_pb2 import State, Optimality, Relaxation, Solution as _Solution
+
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import (
-    Equality as _Equality,
     Constraint as _Constraint,
     RemovedConstraint as _RemovedConstraint,
 )
@@ -18,12 +17,6 @@ from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
-)
-from .sample_set_pb2 import (
-    SampleSet as _SampleSet,
-    Samples,
-    SampledValues as _SampledValues,
-    SampledConstraint as _SampledConstraint,
 )
 from .annotation import (
     UserAnnotationBase,
@@ -36,10 +29,16 @@ from .annotation import (
 
 from .. import _ommx_rust
 
+# Define PyO3 types
+State = _ommx_rust.State
+Samples = _ommx_rust.Samples
+
 # Import PyO3 enums
 Sense = _ommx_rust.Sense
 Equality = _ommx_rust.Equality
 Kind = _ommx_rust.Kind
+Optimality = _ommx_rust.Optimality
+Relaxation = _ommx_rust.Relaxation
 
 # Import constraint hints classes directly
 OneHot = _ommx_rust.OneHot
@@ -78,7 +77,6 @@ __all__ = [
     "Equality",
     "Kind",
     # Utility
-    "SampledValues",
     "Rng",
     # Type Alias
     "ToState",
@@ -91,91 +89,14 @@ Type alias for convertible types to :class:`State`.
 """
 
 
-def to_state(state: ToState) -> State:
-    if isinstance(state, State):
-        return state
-    return State(entries=state)
-
-
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """
 Type alias for convertible types to :class:`Samples`.
 """
 
 
-def to_samples(samples: ToSamples) -> Samples:
-    if isinstance(samples, collections.abc.Sequence):
-        samples = {i: state for i, state in enumerate(samples)}
-    if not isinstance(samples, Samples):
-        # Do not compress the samples
-        samples = Samples(
-            entries=[
-                Samples.SamplesEntry(state=to_state(state), ids=[i])
-                for i, state in samples.items()
-            ]
-        )
-    return samples
-
-
-class InstanceBase(ABC):
-    @abstractmethod
-    def get_decision_variables(self) -> list[DecisionVariable]: ...
-    @abstractmethod
-    def get_constraints(self) -> list[Constraint]: ...
-    @abstractmethod
-    def get_removed_constraints(self) -> list[RemovedConstraint]: ...
-
-    def get_decision_variable(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.get_decision_variables():
-            if v.id == variable_id:
-                return v
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    def get_constraint(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.get_constraints():
-            if c.id == constraint_id:
-                return c
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    def get_removed_constraint(self, removed_constraint_id: int) -> RemovedConstraint:
-        """
-        Get a removed constraint by ID.
-        """
-        for rc in self.get_removed_constraints():
-            if rc.id == removed_constraint_id:
-                return rc
-        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
-
-    @property
-    def decision_variables(self) -> DataFrame:
-        df = DataFrame(v._as_pandas_entry() for v in self.get_decision_variables())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def constraints(self) -> DataFrame:
-        df = DataFrame(c._as_pandas_entry() for c in self.get_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def removed_constraints(self) -> DataFrame:
-        df = DataFrame(rc._as_pandas_entry() for rc in self.get_removed_constraints())
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-
 @dataclass
-class Instance(InstanceBase, UserAnnotationBase):
+class Instance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -463,34 +384,69 @@ class Instance(InstanceBase, UserAnnotationBase):
         """Get constraint hints that provide additional information to solvers."""
         return self.raw.constraint_hints
 
-    def get_decision_variables(self) -> list[DecisionVariable]:
+    @property
+    def decision_variables(self) -> list[DecisionVariable]:
         """
-        Get decision variables as a list of :class:`DecisionVariable` instances.
+        Get decision variables as a list of :class:`DecisionVariable` instances sorted by their IDs.
         """
-        return [
-            DecisionVariable(rust_dv)
-            for _, rust_dv in sorted(self.raw.decision_variables.items())
-        ]
+        return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
-    def get_constraints(self) -> list[Constraint]:
+    @property
+    def constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint` instances.
+        Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
         """
-        return [
-            Constraint.from_raw(rust_constraint)
-            for _, rust_constraint in sorted(self.raw.constraints.items())
-        ]
+        return [Constraint.from_raw(c) for c in self.raw.constraints]
 
-    def get_removed_constraints(self) -> list[RemovedConstraint]:
+    @property
+    def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [
-            RemovedConstraint.from_raw(rust_removed_constraint)
-            for _, rust_removed_constraint in sorted(
-                self.raw.removed_constraints.items()
-            )
-        ]
+        return [RemovedConstraint.from_raw(rc) for rc in self.raw.removed_constraints]
+
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        return DecisionVariable(self.raw.get_decision_variable_by_id(variable_id))
+
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        return Constraint.from_raw(self.raw.get_constraint_by_id(constraint_id))
+
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        return RemovedConstraint.from_raw(
+            self.raw.get_removed_constraint_by_id(removed_constraint_id)
+        )
+
+    @property
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def evaluate(self, state: ToState) -> Solution:
         r"""
@@ -592,11 +548,11 @@ class Instance(InstanceBase, UserAnnotationBase):
         id                                        
         0   Binary   -0.0    1.0         []    1.0
         1   Binary   -0.0    1.0         []    0.0
-        2   Binary   -0.0    1.0         []    0.0
+        2   Binary   -0.0    1.0         []   -0.0
         
         """
-        out = self.raw.evaluate(to_state(state).SerializeToString())
-        return Solution.from_bytes(out.to_bytes())
+        out = self.raw.evaluate(State(state).to_bytes())
+        return Solution(out)
 
     def partial_evaluate(self, state: ToState) -> Instance:
         """
@@ -636,9 +592,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         """
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
-        temp_instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        out = temp_instance.partial_evaluate(to_state(state).SerializeToString())
-        return Instance.from_bytes(out)
+        temp_instance = copy.deepcopy(self.raw)
+        temp_instance.partial_evaluate(State(state).to_bytes())
+        return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
         """
@@ -671,7 +627,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         {0}
 
         """
-        return _ommx_rust.Instance.from_bytes(self.to_bytes()).required_ids()
+        return self.raw.required_ids()
 
     def to_qubo(
         self,
@@ -751,7 +707,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
             * ``ommx.log_encode`` binary variables :math:`x_3, \ldots, x_8` introduced by :py:meth:`log_encode`.
 
-        >>> instance.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    2.0                x        [0]
@@ -768,7 +724,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
-        >>> instance.get_removed_constraint(0)
+        >>> instance.get_removed_constraint_by_id(0)
         RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
 
         Solvers will return solutions which only contain log-encoded binary variables like:
@@ -811,7 +767,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         continuous_variables = [
             var.id
-            for var in self.get_decision_variables()
+            for var in self.decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
@@ -822,7 +778,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Prepare inequality constraints
         ineq_ids = [
             c.id
-            for c in self.get_constraints()
+            for c in self.constraints
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
@@ -836,7 +792,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
 
         # Penalty method
-        if self.get_constraints():
+        if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
                 raise ValueError(
                     "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -844,7 +800,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if penalty_weights:
                 pi = self.penalty_method()
                 weights = {
-                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
@@ -852,7 +808,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
-                weight = pi.get_parameters()[0]
+                weight = pi.parameters[0]
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
@@ -908,7 +864,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         continuous_variables = [
             var.id
-            for var in self.get_decision_variables()
+            for var in self.decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:
@@ -919,7 +875,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         # Prepare inequality constraints
         ineq_ids = [
             c.id
-            for c in self.get_constraints()
+            for c in self.constraints
             if c.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
         ]
         for ineq_id in ineq_ids:
@@ -933,7 +889,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                 )
 
         # Penalty method
-        if self.get_constraints():
+        if self.constraints:
             if uniform_penalty_weight is not None and penalty_weights:
                 raise ValueError(
                     "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
@@ -941,7 +897,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             if penalty_weights:
                 pi = self.penalty_method()
                 weights = {
-                    p.id: penalty_weights[p.subscripts[0]] for p in pi.get_parameters()
+                    p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
                 unconstrained = pi.with_parameters(weights)
             else:
@@ -949,7 +905,7 @@ class Instance(InstanceBase, UserAnnotationBase):
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
-                weight = pi.get_parameters()[0]
+                weight = pi.parameters[0]
                 unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
             self.raw = unconstrained.raw
 
@@ -1061,8 +1017,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             Use :py:meth:`to_qubo` driver for the full QUBO conversion.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return instance.as_qubo_format()
+        return self.raw.as_qubo_format()
 
     def as_hubo_format(self) -> tuple[dict[tuple[int, ...], float], float]:
         """
@@ -1073,8 +1028,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             Use :py:meth:`to_hubo` driver for the full HUBO conversion.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return instance.as_hubo_format()
+        return self.raw.as_hubo_format()
 
     def penalty_method(self) -> ParametricInstance:
         r"""
@@ -1125,23 +1079,23 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The constraint is put in :attr:`removed_constraints`
 
-        >>> pi.get_constraints()
+        >>> pi.constraints
         []
-        >>> len(pi.get_removed_constraints())
+        >>> len(pi.removed_constraints)
         2
-        >>> pi.get_removed_constraints()[0]
+        >>> pi.removed_constraints[0]
         RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
-        >>> pi.get_removed_constraints()[1]
+        >>> pi.removed_constraints[1]
         RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
 
         There are two parameters corresponding to the two constraints
 
-        >>> len(pi.get_parameters())
+        >>> len(pi.parameters)
         2
-        >>> p1 = pi.get_parameters()[0]
+        >>> p1 = pi.parameters[0]
         >>> p1.id, p1.name
         (3, 'penalty_weight')
-        >>> p2 = pi.get_parameters()[1]
+        >>> p2 = pi.parameters[1]
         >>> p2.id, p2.name
         (4, 'penalty_weight')
 
@@ -1158,8 +1112,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return ParametricInstance.from_bytes(instance.penalty_method().to_bytes())
+        return ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1209,18 +1162,18 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         The constraint is put in :attr:`removed_constraints`
 
-        >>> pi.get_constraints()
+        >>> pi.constraints
         []
-        >>> len(pi.get_removed_constraints())
+        >>> len(pi.removed_constraints)
         1
-        >>> pi.get_removed_constraints()[0]
+        >>> pi.removed_constraints[0]
         RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
 
         There is only one parameter in the instance
 
-        >>> len(pi.get_parameters())
+        >>> len(pi.parameters)
         1
-        >>> p = pi.get_parameters()[0]
+        >>> p = pi.parameters[0]
         >>> p.id
         3
         >>> p.name
@@ -1239,29 +1192,24 @@ class Instance(InstanceBase, UserAnnotationBase):
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(
-            instance.uniform_penalty_method().to_bytes()
+            self.raw.uniform_penalty_method().to_bytes()
         )
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
         return ParametricInstance.from_bytes(
-            instance.as_parametric_instance().to_bytes()
+            self.raw.as_parametric_instance().to_bytes()
         )
 
     def evaluate_samples(self, samples: ToSamples) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        samples_ = _ommx_rust.Samples.from_bytes(
-            to_samples(samples).SerializeToString()
-        )
-        return SampleSet.from_bytes(instance.evaluate_samples(samples_).to_bytes())
+        samples_ = Samples(samples)
+        return SampleSet(self.raw.evaluate_samples(samples_))
 
     def random_state(self, rng: _ommx_rust.Rng) -> State:
         """
@@ -1335,10 +1283,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         True
 
         """
-        state_bytes = self.raw.random_state(rng)
-        state = State()
-        state.ParseFromString(state_bytes)
-        return state
+        return self.raw.random_state(rng)
 
     def random_samples(
         self,
@@ -1376,28 +1321,23 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         >>> rng = Rng()
         >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
-        >>> len(samples.entries)
-        2
-        >>> sum(len(entry.ids) for entry in samples.entries)
+        >>> samples.num_samples()
         5
 
         Each generated state respects variable bounds:
 
-        >>> for entry in samples.entries:
-        ...     state = entry.state
+        >>> for sample_id in samples.sample_ids():
+        ...     state = samples.get_state(sample_id)
         ...     for var_id, value in state.entries.items():
         ...         assert value in [0.0, 1.0], f"Binary variable {var_id} has invalid value {value}"
 
         """
-        samples_bytes = self.raw.random_samples(
+        return self.raw.random_samples(
             rng,
             num_different_samples=num_different_samples,
             num_samples=num_samples,
             max_sample_id=max_sample_id,
         )
-        samples = Samples()
-        samples.ParseFromString(samples_bytes)
-        return samples
 
     def relax_constraint(self, constraint_id: int, reason: str, **parameters):
         """
@@ -1422,19 +1362,19 @@ class Instance(InstanceBase, UserAnnotationBase):
             ...     constraints=[(sum(x) == 3).set_id(1)],
             ...     sense=Instance.MAXIMIZE,
             ... )
-            >>> instance.get_constraints()
+            >>> instance.constraints
             [Constraint(x0 + x1 + x2 - 3 == 0)]
 
             >>> instance.relax_constraint(1, "manual relaxation")
-            >>> instance.get_constraints()
+            >>> instance.constraints
             []
-            >>> instance.get_removed_constraints()
+            >>> instance.removed_constraints
             [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
 
             >>> instance.restore_constraint(1)
-            >>> instance.get_constraints()
+            >>> instance.constraints
             [Constraint(x0 + x1 + x2 - 3 == 0)]
-            >>> instance.get_removed_constraints()
+            >>> instance.removed_constraints
             []
 
         Evaluate relaxed instance, and show :py:attr:`~Solution.feasible_unrelaxed`.
@@ -1473,9 +1413,7 @@ class Instance(InstanceBase, UserAnnotationBase):
             False
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.relax_constraint(constraint_id, reason, parameters)
-        self.raw = instance
+        self.raw.relax_constraint(constraint_id, reason, parameters)
 
     def restore_constraint(self, constraint_id: int):
         """
@@ -1485,9 +1423,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Note that this drops the removed reason and associated parameters. See :py:meth:`relax_constraint` for details.
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.restore_constraint(constraint_id)
-        self.raw = instance
+        self.raw.restore_constraint(constraint_id)
 
     def log_encode(self, decision_variable_ids: set[int] = set({})):
         r"""
@@ -1537,7 +1473,7 @@ class Instance(InstanceBase, UserAnnotationBase):
 
         Added binary variables are also appeared in :attr:`decision_variables`
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
         0   Integer   -0.0    3.0                x        [0]
@@ -1576,15 +1512,13 @@ class Instance(InstanceBase, UserAnnotationBase):
         if not decision_variable_ids:
             decision_variable_ids = {
                 var.id
-                for var in self.get_decision_variables()
+                for var in self.decision_variables
                 if var.kind == DecisionVariable.INTEGER
             }
             if not decision_variable_ids:
                 # No integer variables
                 return
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.log_encode(decision_variable_ids)
-        self.raw = instance
+        self.raw.log_encode(decision_variable_ids)
 
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
@@ -1625,7 +1559,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     ],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 - 5 <= 0)
 
         Introduce an integer slack variable
@@ -1634,12 +1568,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     constraint_id=0,
         ...     max_integer_range=32
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 + x3 - 5 == 0)
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1648,11 +1582,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         3   Integer   -0.0    5.0  ommx.slack        [0]
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        instance.convert_inequality_to_equality_with_integer_slack(
+        self.raw.convert_inequality_to_equality_with_integer_slack(
             constraint_id, max_integer_range
         )
-        self.raw = instance
 
     def add_integer_slack_to_inequality(
         self, constraint_id: int, slack_upper_bound: int
@@ -1701,7 +1633,7 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     ],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        >>> instance.get_constraints()[0]
+        >>> instance.constraints[0]
         Constraint(x0 + 2*x1 - 4 <= 0)
 
         Introduce an integer slack variable :math:`s \in [0, 2]`
@@ -1710,12 +1642,12 @@ class Instance(InstanceBase, UserAnnotationBase):
         ...     constraint_id=0,
         ...     slack_upper_bound=2
         ... )
-        >>> b, instance.get_constraints()[0]
+        >>> b, instance.constraints[0]
         (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
 
         The slack variable is added to the decision variables with name `ommx.slack` and the constraint ID is stored in `subscripts`.
 
-        >>> instance.decision_variables[["kind", "lower", "upper", "name", "subscripts"]]  # doctest: +NORMALIZE_WHITESPACE
+        >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
         0   Integer   -0.0    3.0           x        [0]
@@ -1727,10 +1659,9 @@ class Instance(InstanceBase, UserAnnotationBase):
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
 
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        b = instance.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)
-        self.raw = instance
-        return b
+        return self.raw.add_integer_slack_to_inequality(
+            constraint_id, slack_upper_bound
+        )
 
     def decision_variable_analysis(self) -> "DecisionVariableAnalysis":
         """
@@ -1763,12 +1694,11 @@ class Instance(InstanceBase, UserAnnotationBase):
         >>> analysis.used_in_constraints()
         {0: {1, 2}}
         """
-        instance = _ommx_rust.Instance.from_bytes(self.to_bytes())
-        return DecisionVariableAnalysis(instance.decision_variable_analysis())
+        return DecisionVariableAnalysis(self.raw.decision_variable_analysis())
 
 
 @dataclass
-class ParametricInstance(InstanceBase, UserAnnotationBase):
+class ParametricInstance(UserAnnotationBase):
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
 
@@ -1900,7 +1830,8 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
     def to_bytes(self) -> bytes:
         return self.raw.SerializeToString()
 
-    def get_decision_variables(self) -> list[DecisionVariable]:
+    @property
+    def decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
@@ -1908,13 +1839,15 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
         ]
 
-    def get_constraints(self) -> list[Constraint]:
+    @property
+    def constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint
         """
         return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
 
-    def get_removed_constraints(self) -> list[RemovedConstraint]:
+    @property
+    def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
@@ -1922,13 +1855,14 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
             RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
         ]
 
-    def get_parameters(self) -> list[Parameter]:
+    @property
+    def parameters(self) -> list[Parameter]:
         """
         Get parameters as a list of :class:`Parameter`.
         """
         return [Parameter(raw) for raw in self.raw.parameters]
 
-    def get_parameter(self, parameter_id: int) -> Parameter:
+    def get_parameter_by_id(self, parameter_id: int) -> Parameter:
         """
         Get a parameter by ID.
         """
@@ -1937,9 +1871,59 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
                 return Parameter(p)
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
+    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
+        """
+        Get a decision variable by ID.
+        """
+        for v in self.decision_variables:
+            if v.id == variable_id:
+                return v
+        raise ValueError(f"Decision variable ID {variable_id} is not found")
+
+    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
+        """
+        Get a constraint by ID.
+        """
+        for c in self.constraints:
+            if c.id == constraint_id:
+                return c
+        raise ValueError(f"Constraint ID {constraint_id} is not found")
+
+    def get_removed_constraint_by_id(
+        self, removed_constraint_id: int
+    ) -> RemovedConstraint:
+        """
+        Get a removed constraint by ID.
+        """
+        for rc in self.removed_constraints:
+            if rc.id == removed_constraint_id:
+                return rc
+        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+
     @property
-    def parameters(self) -> DataFrame:
-        df = DataFrame(p._as_pandas_entry() for p in self.get_parameters())
+    def decision_variables_df(self) -> DataFrame:
+        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def constraints_df(self) -> DataFrame:
+        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def removed_constraints_df(self) -> DataFrame:
+        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def parameters_df(self) -> DataFrame:
+        df = DataFrame(p._as_pandas_entry() for p in self.parameters)
         if not df.empty:
             df = df.set_index("id")
         return df
@@ -1953,7 +1937,7 @@ class ParametricInstance(InstanceBase, UserAnnotationBase):
         pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
-        return Instance.from_bytes(instance.to_bytes())
+        return Instance(instance)
 
 
 class VariableBase(ABC):
@@ -2102,12 +2086,12 @@ class Solution(UserAnnotationBase):
     This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
     """
 
-    raw: _Solution
-    """The raw protobuf message."""
+    raw: _ommx_rust.Solution
+    """The raw _ommx_rust.Solution object."""
 
-    OPTIMAL = Optimality.OPTIMALITY_OPTIMAL
-    NOT_OPTIMAL = Optimality.OPTIMALITY_NOT_OPTIMAL
-    LP_RELAXED = Relaxation.RELAXATION_LP_RELAXED
+    OPTIMAL = Optimality.Optimal
+    NOT_OPTIMAL = Optimality.NotOptimal
+    LP_RELAXED = Relaxation.LpRelaxed
 
     annotation_namespace = "org.ommx.v1.solution"
     instance = str_annotation_property("instance")
@@ -2133,12 +2117,11 @@ class Solution(UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
-        raw = _Solution()
-        raw.ParseFromString(data)
+        raw = _ommx_rust.Solution.from_bytes(data)
         return Solution(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def state(self) -> State:
@@ -2150,10 +2133,20 @@ class Solution(UserAnnotationBase):
 
     @property
     def decision_variables(self) -> DataFrame:
+        # Use the new decision_variables property that returns dict of EvaluatedDecisionVariable
         df = DataFrame(
-            DecisionVariable.from_protobuf(v)._as_pandas_entry()
-            | {"value": self.raw.state.entries[v.id]}
-            for v in self.raw.decision_variables
+            {
+                "id": v.id,
+                "kind": str(v.kind),
+                "lower": v.lower_bound,
+                "upper": v.upper_bound,
+                "name": v.name if v.name else NA,
+                "subscripts": v.subscripts,
+                "description": v.description if v.description else NA,
+                "substituted_value": NA,  # This field is not available in the new API
+                "value": v.value,
+            }
+            for v in self.raw.decision_variables.values()
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2161,29 +2154,38 @@ class Solution(UserAnnotationBase):
 
     @property
     def constraints(self) -> DataFrame:
+        # Use the new evaluated_constraints property
         df = DataFrame(
             {
                 "id": c.id,
-                "equality": _equality(c.equality),
+                "equality": str(c.equality),
                 "value": c.evaluated_value,
                 "used_ids": set(c.used_decision_variable_ids),
-                "name": c.name if c.HasField("name") else NA,
+                "name": c.name if c.name else NA,
                 "subscripts": c.subscripts,
-                "description": c.description if c.HasField("description") else NA,
-                "dual_variable": c.dual_variable if c.HasField("dual_variable") else NA,
-                "removed_reason": c.removed_reason
-                if c.HasField("removed_reason")
-                else NA,
+                "description": c.description if c.description else NA,
+                "dual_variable": c.dual_variable if c.dual_variable is not None else NA,
+                "removed_reason": c.removed_reason if c.removed_reason else NA,
             }
-            | {
-                f"removed_reason.{key}": value
-                for key, value in c.removed_reason_parameters.items()
-            }
-            for c in self.raw.evaluated_constraints
+            for c in self.raw.evaluated_constraints.values()
         )
         if not df.empty:
             df = df.set_index("id")
         return df
+
+    @property
+    def decision_variable_ids(self) -> set[int]:
+        """
+        Get the IDs of decision variables in this solution.
+        """
+        return self.raw.decision_variable_ids
+
+    @property
+    def constraint_ids(self) -> set[int]:
+        """
+        Get the IDs of constraints in this solution.
+        """
+        return self.raw.constraint_ids
 
     def extract_decision_variables(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -2209,17 +2211,8 @@ class Solution(UserAnnotationBase):
             {(0,): 1.0, (1,): 1.0, (2,): 1.0}
 
         """
-        out = {}
-        for v in self.raw.decision_variables:
-            if v.name != name:
-                continue
-            if v.parameters:
-                raise ValueError("Decision variable with parameters is not supported")
-            key = tuple(v.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate subscript: {key}")
-            out[key] = self.state.entries[v.id]
-        return out
+        # Use the extract method from _ommx_rust.Solution
+        return self.raw.extract_decision_variables(name)
 
     def extract_constraints(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -2247,17 +2240,8 @@ class Solution(UserAnnotationBase):
             {(0,): 0.0, (1,): 0.0}
 
         """
-        out = {}
-        for c in self.raw.evaluated_constraints:
-            if c.name != name:
-                continue
-            if c.parameters:
-                raise ValueError("Constraint with parameters is not supported")
-            key = tuple(c.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate subscript: {key}")
-            out[key] = c.evaluated_value
-        return out
+        # Use the extract method from _ommx_rust.Solution
+        return self.raw.extract_constraints(name)
 
     @property
     def feasible(self) -> bool:
@@ -2279,55 +2263,46 @@ class Solution(UserAnnotationBase):
         """
         Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
         """
-        # For compatibility: object created by 1.6.0 only contains `feasible` field and does not contain `feasible_relaxed` field.
-        if self.raw.HasField("feasible_relaxed"):
-            return self.raw.feasible_relaxed
-        else:
-            return self.raw.feasible
+        return self.raw.feasible_relaxed
 
     @property
     def feasible_unrelaxed(self) -> bool:
         """
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
-        if self.raw.HasField("feasible_relaxed"):
-            return self.raw.feasible
-        else:
-            return self.raw.feasible_unrelaxed
+        return self.raw.feasible
 
     @property
-    def optimality(self) -> Optimality.ValueType:
+    def optimality(self) -> _ommx_rust.Optimality:
+        # Return the _ommx_rust.Optimality enum directly
         return self.raw.optimality
 
     @property
-    def relaxation(self) -> Relaxation.ValueType:
+    def relaxation(self) -> _ommx_rust.Relaxation:
+        # Return the _ommx_rust.Relaxation enum directly
         return self.raw.relaxation
 
+    @optimality.setter
+    def optimality(self, value: _ommx_rust.Optimality) -> None:
+        """Set the optimality status."""
+        self.raw.optimality = value
 
-def _function_type(function: _Function) -> str:
-    if function.HasField("constant"):
-        return "constant"
-    if function.HasField("linear"):
-        return "linear"
-    if function.HasField("quadratic"):
-        return "quadratic"
-    if function.HasField("polynomial"):
-        return "polynomial"
-    raise ValueError("Unknown function type")
+    @relaxation.setter
+    def relaxation(self, value: _ommx_rust.Relaxation) -> None:
+        """Set the relaxation status."""
+        self.raw.relaxation = value
 
+    def set_dual_variable(self, constraint_id: int, value: float | None) -> None:
+        """Set the dual variable value for a specific constraint."""
+        self.raw.set_dual_variable(constraint_id, value)
 
-def _equality(equality: _ommx_rust.Equality | _Equality.ValueType) -> str:
-    if (
-        equality == _ommx_rust.Equality.EqualToZero
-        or equality == _Equality.EQUALITY_EQUAL_TO_ZERO
-    ):
-        return "=0"
-    if (
-        equality == _ommx_rust.Equality.LessThanOrEqualToZero
-        or equality == _Equality.EQUALITY_LESS_THAN_OR_EQUAL_TO_ZERO
-    ):
-        return "<=0"
-    raise ValueError("Unknown equality")
+    def get_dual_variable(self, constraint_id: int) -> float | None:
+        """Get the dual variable value for a specific constraint."""
+        return self.raw.get_dual_variable(constraint_id)
+
+    def get_constraint_value(self, constraint_id: int) -> float:
+        """Get the evaluated value of a specific constraint."""
+        return self.raw.get_constraint_value(constraint_id)
 
 
 @dataclass
@@ -2750,7 +2725,7 @@ class Linear(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -2771,7 +2746,7 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -2920,7 +2895,7 @@ class Quadratic(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -2944,7 +2919,7 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Quadratic.from_raw(new_raw)
 
     @property
@@ -2971,7 +2946,23 @@ class Quadratic(AsConstraint):
         return self.raw.constant_term
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import DecisionVariable
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> y = DecisionVariable.binary(2, name="y")
+            >>> quad = x * y + 2 * x + 3
+            >>> quad.terms
+            {(1,): 2.0, (1, 2): 1.0, (): 3.0}
+        """
         return self.raw.terms()
 
     def __repr__(self) -> str:
@@ -3123,7 +3114,7 @@ class Polynomial(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -3147,7 +3138,7 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3257,7 +3248,23 @@ class Function(AsConstraint):
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
     @property
-    def terms(self) -> dict[list[int], float]:
+    def terms(self) -> dict[tuple[int, ...], float]:
+        """All terms as a dictionary mapping variable id tuples to coefficients
+
+        Returns dictionary with tuple keys (hashable) instead of list keys.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Function, Linear, DecisionVariable
+            >>> x = DecisionVariable.binary(1, name="x")
+            >>> linear = Linear(terms={1: 2.5}, constant=1.0)
+            >>> func = Function(linear)
+            >>> func.terms
+            {(1,): 2.5, (): 1.0}
+        """
         return self.raw.terms()
 
     @staticmethod
@@ -3328,7 +3335,7 @@ class Function(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(to_state(state).SerializeToString())
+        return self.raw.evaluate(State(state).to_bytes())
 
     def partial_evaluate(self, state: ToState) -> Function:
         """
@@ -3352,7 +3359,7 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(to_state(state).SerializeToString())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
         return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -3666,7 +3673,7 @@ class Constraint:
         | Polynomial
         | Function
         | _ommx_rust.Function,
-        equality: _Equality.ValueType | _ommx_rust.Equality,
+        equality: _ommx_rust.Equality,
         id: Optional[int] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -3798,16 +3805,11 @@ class Constraint:
 
     def _as_pandas_entry(self) -> dict:
         c = self.raw
-        # Use PyO3 Equality directly
-        equality_for_display = c.equality
-        # Convert Rust function to protobuf for _function_type
-        pb_function = _Function()
-        pb_function.ParseFromString(c.function.encode())
         return {
             "id": c.id,
-            "equality": _equality(equality_for_display),
-            "type": _function_type(pb_function),
-            "used_ids": Function(c.function).raw.required_ids(),
+            "equality": str(c.equality),
+            "type": c.function.type_name,
+            "used_ids": c.function.required_ids(),
             "name": c.name if c.name else NA,
             "subscripts": c.subscripts,
             "description": NA,  # Description not supported in Rust implementation
@@ -3967,7 +3969,7 @@ class SampleSet(UserAnnotationBase):
 
     .. doctest::
 
-        >>> solution = sample_set.best_feasible()
+        >>> solution = sample_set.best_feasible
         >>> solution.objective
         3.0
         >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
@@ -3981,7 +3983,7 @@ class SampleSet(UserAnnotationBase):
 
     """
 
-    raw: _SampleSet
+    raw: _ommx_rust.SampleSet
 
     annotation_namespace = "org.ommx.v1.sample-set"
     instance = str_annotation_property("instance")
@@ -4003,12 +4005,11 @@ class SampleSet(UserAnnotationBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> SampleSet:
-        new = SampleSet(_SampleSet())
-        new.raw.ParseFromString(data)
-        return new
+        raw = _ommx_rust.SampleSet.from_bytes(data)
+        return SampleSet(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def summary(self) -> DataFrame:
@@ -4026,21 +4027,20 @@ class SampleSet(UserAnnotationBase):
 
         return df.sort_values(
             by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            ascending=[False, self.raw.sense == Sense.Minimize],
         ).set_index("sample_id")
 
     @property
     def summary_with_constraints(self) -> DataFrame:
-        def _constraint_label(c: _SampledConstraint) -> str:
+        def _constraint_label(c: _ommx_rust.SampledConstraint) -> str:
             name = ""
-            if c.HasField("name"):
+            if c.name:
                 name += c.name
             else:
                 return f"{c.id}"
             if c.subscripts:
                 name += f"{c.subscripts}"
-            if c.parameters:
-                name += f"{c.parameters}"
+            # Parameters are not directly available in Rust SampledConstraint
             return name
 
         feasible = self.feasible
@@ -4058,7 +4058,7 @@ class SampleSet(UserAnnotationBase):
             return df
         df = df.sort_values(
             by=["feasible", "objective"],
-            ascending=[False, self.raw.sense == Instance.MINIMIZE],
+            ascending=[False, self.raw.sense == Sense.Minimize],
         ).set_index("sample_id")
         return df
 
@@ -4104,7 +4104,7 @@ class SampleSet(UserAnnotationBase):
 
     @property
     def objectives(self) -> dict[int, float]:
-        return dict(SampledValues(self.raw.objectives))
+        return self.raw.objectives
 
     @property
     def sample_ids(self) -> list[int]:
@@ -4113,10 +4113,16 @@ class SampleSet(UserAnnotationBase):
     @property
     def decision_variables(self) -> DataFrame:
         df = DataFrame(
-            DecisionVariable.from_bytes(
-                v.decision_variable.SerializeToString()
-            )._as_pandas_entry()
-            | {id: value for id, value in SampledValues(v.samples)}
+            {
+                "id": v.id,
+                "kind": str(v.kind),
+                "lower": v.bound.lower,
+                "upper": v.bound.upper,
+                "name": v.name,
+                "subscripts": v.subscripts,
+                "description": v.description,
+            }
+            | {str(id): value for id, value in v.samples.items()}
             for v in self.raw.decision_variables
         )
         if not df.empty:
@@ -4128,20 +4134,18 @@ class SampleSet(UserAnnotationBase):
         df = DataFrame(
             {
                 "id": c.id,
-                "equality": _equality(c.equality),
+                "equality": str(c.equality),
                 "used_ids": set(c.used_decision_variable_ids),
-                "name": c.name if c.HasField("name") else NA,
+                "name": c.name,
                 "subscripts": c.subscripts,
-                "description": c.description if c.HasField("description") else NA,
-                "removed_reason": c.removed_reason
-                if c.HasField("removed_reason")
-                else NA,
+                "description": c.description,
+                "removed_reason": c.removed_reason,
             }
             | {
                 f"removed_reason.{key}": value
                 for key, value in c.removed_reason_parameters.items()
             }
-            | {f"value.{id}": value for id, value in SampledValues(c.evaluated_values)}
+            | {f"value.{id}": value for id, value in c.evaluated_values.items()}
             | {f"feasible.{id}": value for id, value in c.feasible.items()}
             for c in self.raw.constraints
         )
@@ -4155,22 +4159,7 @@ class SampleSet(UserAnnotationBase):
         """
         Extract sampled decision variable values for a given name and sample ID.
         """
-        out = {}
-        for sampled_decision_variable in self.raw.decision_variables:
-            v = sampled_decision_variable.decision_variable
-            if v.name != name:
-                continue
-            key = tuple(v.subscripts)
-            if key in out:
-                raise ValueError(
-                    f"Duplicate decision variable subscript: {v.subscripts}"
-                )
-
-            if v.HasField("substituted_value"):
-                out[key] = v.substituted_value
-                continue
-            out[key] = SampledValues(sampled_decision_variable.samples)[sample_id]
-        return out
+        return self.raw.extract_decision_variables(name, sample_id)
 
     def extract_constraints(
         self, name: str, sample_id: int
@@ -4178,60 +4167,71 @@ class SampleSet(UserAnnotationBase):
         """
         Extract evaluated constraint violations for a given constraint name and sample ID.
         """
-        out = {}
-        for c in self.raw.constraints:
-            if c.name != name:
-                continue
-            key = tuple(c.subscripts)
-            if key in out:
-                raise ValueError(f"Duplicate constraint subscript: {c.subscripts}")
-            out[key] = SampledValues(c.evaluated_values)[sample_id]
-        return out
+        return self.raw.extract_constraints(name, sample_id)
 
     def get(self, sample_id: int) -> Solution:
         """
         Get a sample for a given ID as a solution format
         """
-        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).get(sample_id)
-        return Solution.from_bytes(solution.to_bytes())
+        solution = self.raw.get(sample_id)
+        return Solution(solution)
 
-    def best_feasible(self) -> Solution:
+    @property
+    def best_feasible_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution.
+        Returns None if no feasible solution exists.
+        """
+        return self.raw.best_feasible_id
+
+    @property
+    def best_feasible_relaxed_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution without relaxation.
+        Returns None if no feasible solution exists.
+        """
+        return self.raw.best_feasible_relaxed_id
+
+    @property
+    def best_feasible_unrelaxed_id(self) -> int | None:
+        """
+        Get the sample ID of the best feasible solution without relaxation.
+        Returns None if no feasible solution exists.
+        """
+        return self.best_feasible_unrelaxed_id
+
+    @property
+    def best_feasible(self) -> Solution | None:
         """
         Get the best feasible solution
         """
-        solution = _ommx_rust.SampleSet.from_bytes(self.to_bytes()).best_feasible()
-        return Solution.from_bytes(solution.to_bytes())
+        solution = self.raw.best_feasible
+        if solution is not None:
+            return Solution(solution)
+        else:
+            return None
 
-    def best_feasible_unrelaxed(self) -> Solution:
+    @property
+    def best_feasible_relaxed(self) -> Solution | None:
         """
         Get the best feasible solution without relaxation
         """
-        solution = _ommx_rust.SampleSet.from_bytes(
-            self.to_bytes()
-        ).best_feasible_unrelaxed()
-        return Solution.from_bytes(solution.to_bytes())
+        solution = self.raw.best_feasible_relaxed
+        if solution is not None:
+            return Solution(solution)
+        else:
+            return None
 
-
-@dataclass
-class SampledValues:
-    raw: _SampledValues
-
-    def as_series(self) -> Series:
-        return Series(dict(self))
-
-    def __iter__(self):
-        for entry in self.raw.entries:
-            for id in entry.ids:
-                yield id, entry.value
-
-    def __getitem__(self, sample_id: int) -> float:
-        for entry in self.raw.entries:
-            if sample_id in entry.ids:
-                return entry.value
-        raise KeyError(f"Sample ID {sample_id} not found")
-
-    def __repr__(self) -> str:
-        return self.as_series().__repr__()
+    @property
+    def best_feasible_unrelaxed(self) -> Solution | None:
+        """
+        Get the best feasible solution without relaxation
+        """
+        solution = self.raw.best_feasible_unrelaxed
+        if solution is not None:
+            return Solution(solution)
+        else:
+            return None
 
 
 @dataclass

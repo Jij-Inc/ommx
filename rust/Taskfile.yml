@@ -32,3 +32,18 @@ tasks:
     desc: Format Rust code
     cmds:
       - cargo fmt --all
+
+  insta:
+    desc: Run insta snapshot tests (use --accept to accept changes)
+    cmds:
+      - cargo insta test {{.CLI_ARGS}}
+
+  insta:review:
+    desc: Review insta snapshot changes
+    cmds:
+      - cargo insta review
+
+  insta:accept:
+    desc: Run insta tests and accept all changes
+    cmds:
+      - cargo insta test --accept

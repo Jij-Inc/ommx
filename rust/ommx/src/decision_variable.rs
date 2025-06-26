@@ -4,9 +4,10 @@ mod parse;
 pub use arbitrary::*;
 use getset::CopyGetters;
 
-use crate::{ATol, Bound};
+use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
+use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
@@ -116,10 +117,7 @@ pub struct DecisionVariable {
     #[getset(get_copy = "pub")]
     substituted_value: Option<f64>,
 
-    pub name: Option<String>,
-    pub subscripts: Vec<i64>,
-    pub parameters: FnvHashMap<String, String>,
-    pub description: Option<String>,
+    pub metadata: DecisionVariableMetadata,
 }
 
 impl DecisionVariable {
@@ -138,10 +136,7 @@ impl DecisionVariable {
                 .consistent_bound(bound, atol)
                 .ok_or(DecisionVariableError::BoundInconsistentToKind { id, kind, bound })?,
             substituted_value: None, // will be set later
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
+            metadata: DecisionVariableMetadata::default(),
         };
         if let Some(substituted_value) = substituted_value {
             new.check_value_consistency(substituted_value, atol)?;
@@ -237,7 +232,8 @@ impl DecisionVariable {
         }
         match self.kind {
             Kind::Integer | Kind::Binary | Kind::SemiInteger => {
-                if value.fract().abs() >= atol {
+                let rounded = value.round();
+                if (rounded - value).abs() >= atol {
                     return Err(err());
                 }
             }
@@ -265,6 +261,7 @@ impl DecisionVariable {
                     id: self.id,
                     previous_value,
                     new_value,
+                    atol,
                 });
             }
         } else {
@@ -284,11 +281,12 @@ pub enum DecisionVariableError {
         bound: Bound,
     },
 
-    #[error("Substituted value for ID={id} cannot be overwrite: previous={previous_value}, new={new_value}")]
+    #[error("Substituted value for ID={id} cannot be overwritten: previous={previous_value}, new={new_value}, atol={atol:?}")]
     SubstitutedValueOverwrite {
         id: VariableID,
         previous_value: f64,
         new_value: f64,
+        atol: ATol,
     },
 
     #[error("Substituted value for ID={id} is inconsistent: kind={kind:?}, bound={bound}, substituted_value={substituted_value}, atol={atol:?}")]
@@ -299,4 +297,305 @@ pub enum DecisionVariableError {
         substituted_value: f64,
         atol: ATol,
     },
+}
+
+/// Auxiliary metadata for decision variables (excluding essential id, kind, bound, substituted_value)
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DecisionVariableMetadata {
+    pub name: Option<String>,
+    pub subscripts: Vec<i64>,
+    pub parameters: FnvHashMap<String, String>,
+    pub description: Option<String>,
+}
+
+/// Single evaluation result with data integrity guarantees
+#[derive(Debug, Clone, PartialEq, Getters)]
+pub struct EvaluatedDecisionVariable {
+    #[getset(get = "pub")]
+    id: VariableID,
+    #[getset(get = "pub")]
+    kind: Kind,
+    #[getset(get = "pub")]
+    bound: Bound,
+    #[getset(get = "pub")]
+    value: f64,
+    pub metadata: DecisionVariableMetadata,
+}
+
+impl EvaluatedDecisionVariable {
+    /// Create a new EvaluatedDecisionVariable from a DecisionVariable and value
+    ///
+    /// If the DecisionVariable has a substituted_value, this method verifies consistency
+    pub fn new(
+        decision_variable: DecisionVariable,
+        value: f64,
+        atol: crate::ATol,
+    ) -> Result<Self, DecisionVariableError> {
+        // Check consistency with existing substituted_value if present
+        if let Some(substituted_value) = decision_variable.substituted_value {
+            if (substituted_value - value).abs() > *atol {
+                return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                    id: decision_variable.id,
+                    previous_value: substituted_value,
+                    new_value: value,
+                    atol,
+                });
+            }
+        }
+
+        // Check if the value is consistent with the variable's constraints
+        decision_variable.check_value_consistency(value, atol)?;
+
+        Ok(Self {
+            id: decision_variable.id,
+            kind: decision_variable.kind,
+            bound: decision_variable.bound,
+            value,
+            metadata: decision_variable.metadata,
+        })
+    }
+}
+
+/// Multiple sample evaluation results with deduplication
+#[derive(Debug, Clone, Getters)]
+pub struct SampledDecisionVariable {
+    #[getset(get = "pub")]
+    id: VariableID,
+    #[getset(get = "pub")]
+    kind: Kind,
+    #[getset(get = "pub")]
+    bound: Bound,
+    pub metadata: DecisionVariableMetadata,
+    #[getset(get = "pub")]
+    samples: Sampled<f64>,
+}
+
+impl SampledDecisionVariable {
+    /// Create a new SampledDecisionVariable from a DecisionVariable and samples
+    ///
+    /// If the DecisionVariable has a substituted_value, this method verifies consistency
+    /// with all samples
+    pub fn new(
+        decision_variable: DecisionVariable,
+        samples: Sampled<f64>,
+        atol: crate::ATol,
+    ) -> Result<Self, DecisionVariableError> {
+        // Check consistency with existing substituted_value if present
+        if let Some(substituted_value) = decision_variable.substituted_value {
+            // Check that all sample values are consistent with substituted_value
+            for (_, &sample_value) in samples.iter() {
+                if (substituted_value - sample_value).abs() > *atol {
+                    return Err(DecisionVariableError::SubstitutedValueOverwrite {
+                        id: decision_variable.id,
+                        previous_value: substituted_value,
+                        new_value: sample_value,
+                        atol,
+                    });
+                }
+            }
+        }
+
+        // Check if all sample values are consistent with the variable's constraints
+        for (_, &sample_value) in samples.iter() {
+            decision_variable.check_value_consistency(sample_value, atol)?;
+        }
+
+        Ok(Self {
+            id: decision_variable.id,
+            kind: decision_variable.kind,
+            bound: decision_variable.bound,
+            metadata: decision_variable.metadata,
+            samples,
+        })
+    }
+
+    /// Get a specific evaluated decision variable by sample ID
+    pub fn get(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<EvaluatedDecisionVariable, UnknownSampleIDError> {
+        let value = *self.samples.get(sample_id)?;
+
+        // Create a DecisionVariable to use with EvaluatedDecisionVariable::new
+        let dv = DecisionVariable {
+            id: self.id,
+            kind: self.kind,
+            bound: self.bound,
+            substituted_value: None, // No substituted value when getting from samples
+            metadata: self.metadata.clone(),
+        };
+
+        // unwrap is safe here since we already checked consistency in new()
+        Ok(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
+    }
+}
+
+impl crate::Evaluate for DecisionVariable {
+    type Output = EvaluatedDecisionVariable;
+    type SampledOutput = SampledDecisionVariable;
+
+    fn evaluate(
+        &self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<Self::Output> {
+        let value = state
+            .entries
+            .get(&self.id.into_inner())
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("Variable ID {} not found in state", self.id))?;
+
+        Ok(EvaluatedDecisionVariable::new(self.clone(), value, atol)?)
+    }
+
+    fn evaluate_samples(
+        &self,
+        samples: &crate::v1::Samples,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        let variable_id = self.id.into_inner();
+
+        // Extract values for this variable from all samples
+        let mut grouped_values: std::collections::HashMap<
+            ordered_float::OrderedFloat<f64>,
+            Vec<crate::SampleID>,
+        > = std::collections::HashMap::new();
+        for (sample_id, state) in samples.iter() {
+            if let Some(value) = state.entries.get(&variable_id) {
+                grouped_values
+                    .entry(ordered_float::OrderedFloat(*value))
+                    .or_default()
+                    .push(crate::SampleID::from(*sample_id));
+            }
+        }
+
+        // Convert to Sampled format
+        let ids: Vec<Vec<crate::SampleID>> = grouped_values.values().cloned().collect();
+        let values: Vec<f64> = grouped_values.keys().map(|k| k.into_inner()).collect();
+        let samples = crate::Sampled::new(ids, values)?;
+
+        Ok(SampledDecisionVariable::new(self.clone(), samples, _atol)?)
+    }
+
+    fn partial_evaluate(
+        &mut self,
+        state: &crate::v1::State,
+        atol: crate::ATol,
+    ) -> anyhow::Result<()> {
+        if let Some(value) = state.entries.get(&self.id.into_inner()) {
+            self.substitute(*value, atol)?;
+        }
+        Ok(())
+    }
+
+    fn required_ids(&self) -> crate::VariableIDSet {
+        [self.id].into_iter().collect()
+    }
+}
+
+impl From<EvaluatedDecisionVariable> for crate::v1::DecisionVariable {
+    fn from(eval_dv: EvaluatedDecisionVariable) -> Self {
+        crate::v1::DecisionVariable {
+            id: eval_dv.id.into_inner(),
+            kind: eval_dv.kind.into(),
+            bound: Some(eval_dv.bound.into()),
+            substituted_value: Some(eval_dv.value),
+            name: eval_dv.metadata.name,
+            subscripts: eval_dv.metadata.subscripts,
+            parameters: eval_dv.metadata.parameters.into_iter().collect(),
+            description: eval_dv.metadata.description,
+        }
+    }
+}
+
+impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVariable {
+    type Error = crate::ParseError;
+
+    fn try_from(v1_dv: crate::v1::DecisionVariable) -> Result<Self, Self::Error> {
+        let message = "ommx.v1.DecisionVariable";
+
+        // Parse the DecisionVariable first to get strongly typed fields
+        let dv: DecisionVariable = v1_dv.clone().parse_as(&(), message, "decision_variable")?;
+
+        // Extract the value from substituted_value (required for EvaluatedDecisionVariable)
+        let value = v1_dv.substituted_value.ok_or(
+            RawParseError::MissingField {
+                message,
+                field: "substituted_value",
+            }
+            .context(message, "substituted_value"),
+        )?;
+
+        EvaluatedDecisionVariable::new(dv, value, crate::ATol::default())
+            .map_err(|e| crate::RawParseError::InvalidDecisionVariable(e).into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::v1;
+
+    #[test]
+    fn test_evaluated_decision_variable_try_from() {
+        // Test successful conversion
+        let v1_dv = v1::DecisionVariable {
+            id: 42,
+            kind: v1::decision_variable::Kind::Integer as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            substituted_value: Some(5.0),
+            name: Some("test_var".to_string()),
+            subscripts: vec![1, 2],
+            parameters: vec![("param1".to_string(), "value1".to_string())]
+                .into_iter()
+                .collect(),
+            description: Some("A test variable".to_string()),
+        };
+
+        let evaluated_dv: EvaluatedDecisionVariable = v1_dv.try_into().unwrap();
+
+        assert_eq!(*evaluated_dv.id(), VariableID::from(42));
+        assert_eq!(*evaluated_dv.kind(), crate::Kind::Integer);
+        assert_eq!(*evaluated_dv.value(), 5.0);
+        assert_eq!(evaluated_dv.metadata.name, Some("test_var".to_string()));
+        assert_eq!(evaluated_dv.metadata.subscripts, vec![1, 2]);
+        assert_eq!(
+            evaluated_dv.metadata.description,
+            Some("A test variable".to_string())
+        );
+
+        // Test round-trip conversion
+        let v1_converted: v1::DecisionVariable = evaluated_dv.into();
+        assert_eq!(v1_converted.id, 42);
+        assert_eq!(v1_converted.substituted_value, Some(5.0));
+        assert_eq!(v1_converted.name, Some("test_var".to_string()));
+    }
+
+    #[test]
+    fn test_evaluated_decision_variable_try_from_missing_value() {
+        // Test conversion failure when substituted_value is missing
+        let v1_dv = v1::DecisionVariable {
+            id: 42,
+            kind: v1::decision_variable::Kind::Integer as i32,
+            bound: Some(v1::Bound {
+                lower: 0.0,
+                upper: 10.0,
+            }),
+            substituted_value: None, // Missing value should cause error
+            name: Some("test_var".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let result: Result<EvaluatedDecisionVariable, _> = v1_dv.try_into();
+        insta::assert_snapshot!(result.unwrap_err(), @r###"
+        Traceback for OMMX Message parse error:
+        └─ommx.v1.DecisionVariable[substituted_value]
+        Field substituted_value in ommx.v1.DecisionVariable is missing.
+        "###);
+    }
 }

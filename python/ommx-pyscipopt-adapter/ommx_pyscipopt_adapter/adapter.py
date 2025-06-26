@@ -14,7 +14,6 @@ from ommx.v1 import (
     Constraint,
     State,
     ToState,
-    to_state,
 )
 
 from .exception import OMMXPySCIPOptAdapterError
@@ -89,7 +88,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> instance = Instance.from_components(
             ...     decision_variables=x,
             ...     objective=sum(p[i] * x[i] for i in range(6)),
-            ...     constraints=[sum(w[i] * x[i] for i in range(6)) <= 47],
+            ...     constraints=[(sum(w[i] * x[i] for i in range(6)) <= 47).set_id(0)],
             ...     sense=Instance.MAXIMIZE,
             ... )
 
@@ -110,7 +109,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> solution.objective
             42.0
-            >>> solution.raw.evaluated_constraints[0].evaluated_value
+            >>> solution.get_constraint_value(0)
             -1.0
 
         Infeasible Problem
@@ -272,8 +271,8 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             varname_map = {var.name: var for var in data.getVars()}
             return State(
                 entries={
-                    var_id: sol[varname_map[str(var_id)]]
-                    for var_id, _ in self.instance.raw.decision_variables.items()
+                    var.id: sol[varname_map[str(var.id)]]
+                    for var in self.instance.decision_variables
                 }
             )
         except Exception:
@@ -282,7 +281,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.get_decision_variables():
+        for var in self.instance.decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:
@@ -383,7 +382,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
                 vars = [self.varname_map[str(v)] for v in sos1.variables]
                 self.model.addConsSOS1(vars, name=name)
 
-        for constraint in self.instance.get_constraints():
+        for constraint in self.instance.constraints:
             if constraint.id in excluded:
                 continue
 
@@ -457,7 +456,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
     def _add_initial_state(self, initial_state: ToState) -> None:
         initial_sol = self.model.createSol()
-        for var_id, value in to_state(initial_state).entries.items():
+        for var_id, value in State(initial_state).entries.items():
             var_name = str(var_id)
             if var_name in self.varname_map:
                 self.model.setSolVal(initial_sol, self.varname_map[var_name], value)

@@ -11,9 +11,9 @@ def test_example_mps():
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
     assert instance.raw.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
-    dvars = instance.get_decision_variables()
+    dvars = instance.decision_variables
     dvars.sort(key=lambda x: x.name)
-    constraints = instance.get_constraints()
+    constraints = instance.constraints
     constraints.sort(key=lambda c: c.name or "")
 
     assert len(dvars) == 3
@@ -83,12 +83,10 @@ def test_output():
     loaded = ommx.mps.load_file(test_out_file)
 
     # convert to a format easier to test.
-    dvars_before = instance.raw.decision_variables
-    dvars_after = loaded.raw.decision_variables
-    assert dvars_before.keys() == dvars_after.keys()
-    for key in dvars_before.keys():
-        b = dvars_before[key]
-        a = dvars_after[key]
+    dvars_before = instance.decision_variables
+    dvars_after = loaded.decision_variables
+    assert len(dvars_before) == len(dvars_after)
+    for b, a in zip(dvars_before, dvars_after):
         assert b.id == a.id
         # Note: MPS format does not preserve variable names (see Instance.write_mps docstring)
         # assert b.name == a.name  # Skip name check as it's not preserved
@@ -97,19 +95,16 @@ def test_output():
         assert b.bound.upper == a.bound.upper
         assert b.subscripts == a.subscripts
 
-    constr_before = instance.raw.constraints
-    constr_after = loaded.raw.constraints
-    assert constr_before.keys() == constr_after.keys()
-
-    for key in constr_before.keys():
-        before = constr_before[key]
-        after = constr_after[key]
-        assert before.id == after.id
+    constr_before = instance.constraints
+    constr_after = loaded.constraints
+    assert len(constr_before) == len(constr_after)
+    for b, a in zip(constr_before, constr_after):
+        assert b.id == a.id
         # Note: MPS format does not preserve constraint names (see Instance.write_mps docstring)
         # assert before.name == after.name  # Skip name check as it's not preserved
-        assert before.equality == after.equality
-        assert before.subscripts == after.subscripts
-        assert before.function.almost_equal(after.function)
+        assert b.equality == a.equality
+        assert b.subscripts == a.subscripts
+        assert b.function.almost_equal(a.function)
 
     # same as above for objective function
-    assert instance.raw.objective.almost_equal(loaded.raw.objective)
+    assert instance.objective.almost_equal(loaded.objective)
