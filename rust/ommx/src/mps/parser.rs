@@ -415,7 +415,7 @@ impl Mps {
         // Try to detect if the file is gzipped by reading the first 2 bytes
         let mut file_start = [0u8; 2];
         let mut f = fs::File::open(&path)?;
-        
+
         match f.read_exact(&mut file_start) {
             Ok(()) => {
                 // Check for gzip magic number (0x1f, 0x8b)
