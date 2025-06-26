@@ -412,8 +412,29 @@ impl State {
 
 impl Mps {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let f = fs::File::open(path)?;
-        Self::from_zipped_reader(f)
+        // Try to detect if the file is gzipped by reading the first 2 bytes
+        let mut file_start = [0u8; 2];
+        let mut f = fs::File::open(&path)?;
+        
+        match f.read_exact(&mut file_start) {
+            Ok(()) => {
+                // Check for gzip magic number (0x1f, 0x8b)
+                if file_start == [0x1f, 0x8b] {
+                    // File is gzipped, reopen and use zipped reader
+                    let f = fs::File::open(path)?;
+                    Self::from_zipped_reader(f)
+                } else {
+                    // File is not gzipped, reopen and use raw reader
+                    let f = fs::File::open(path)?;
+                    Self::from_raw_reader(f)
+                }
+            }
+            Err(_) => {
+                // File is too short, assume it's not gzipped
+                let f = fs::File::open(path)?;
+                Self::from_raw_reader(f)
+            }
+        }
     }
 
     pub fn from_zipped_reader(reader: impl Read) -> Result<Self> {

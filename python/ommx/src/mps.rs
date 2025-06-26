@@ -16,3 +16,11 @@ pub fn write_mps_file(instance: Bound<PyBytes>, path: String) -> Result<()> {
     ommx::mps::write_file(&instance, path)?;
     Ok(())
 }
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction(name = "write_mps_file_with_compression")]
+pub fn write_mps_file_with_compression(instance: Bound<PyBytes>, path: String, compress: bool) -> Result<()> {
+    let instance = Instance::decode(instance.as_bytes())?;
+    ommx::mps::write_file_with_compression(&instance, path, compress)?;
+    Ok(())
+}
