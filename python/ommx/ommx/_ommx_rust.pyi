@@ -739,11 +739,11 @@ class Rng:
         """
 
 class SampleSet:
-    best_feasible_id: typing.Optional[builtins.int]
-    best_feasible_relaxed_id: typing.Optional[builtins.int]
-    best_feasible: typing.Optional[Solution]
-    best_feasible_relaxed: typing.Optional[Solution]
-    best_feasible_unrelaxed: typing.Optional[Solution]
+    best_feasible_id: builtins.int
+    best_feasible_relaxed_id: builtins.int
+    best_feasible: Solution
+    best_feasible_relaxed: Solution
+    best_feasible_unrelaxed: Solution
     objectives: builtins.dict[builtins.int, builtins.float]
     r"""
     Get objectives for all samples

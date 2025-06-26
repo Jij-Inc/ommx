@@ -4177,61 +4177,79 @@ class SampleSet(UserAnnotationBase):
         return Solution(solution)
 
     @property
-    def best_feasible_id(self) -> int | None:
+    def best_feasible_id(self) -> int:
         """
         Get the sample ID of the best feasible solution.
-        Returns None if no feasible solution exists.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
         return self.raw.best_feasible_id
 
     @property
-    def best_feasible_relaxed_id(self) -> int | None:
+    def best_feasible_relaxed_id(self) -> int:
         """
         Get the sample ID of the best feasible solution without relaxation.
-        Returns None if no feasible solution exists.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
         return self.raw.best_feasible_relaxed_id
 
     @property
-    def best_feasible_unrelaxed_id(self) -> int | None:
+    def best_feasible_unrelaxed_id(self) -> int:
         """
         Get the sample ID of the best feasible solution without relaxation.
-        Returns None if no feasible solution exists.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
-        return self.best_feasible_unrelaxed_id
+        return self.best_feasible_id
 
     @property
-    def best_feasible(self) -> Solution | None:
+    def best_feasible(self) -> Solution:
         """
-        Get the best feasible solution
+        Get the best feasible solution.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
         solution = self.raw.best_feasible
-        if solution is not None:
-            return Solution(solution)
-        else:
-            return None
+        return Solution(solution)
 
     @property
-    def best_feasible_relaxed(self) -> Solution | None:
+    def best_feasible_relaxed(self) -> Solution:
         """
-        Get the best feasible solution without relaxation
+        Get the best feasible solution without relaxation.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
         solution = self.raw.best_feasible_relaxed
-        if solution is not None:
-            return Solution(solution)
-        else:
-            return None
+        return Solution(solution)
 
     @property
-    def best_feasible_unrelaxed(self) -> Solution | None:
+    def best_feasible_unrelaxed(self) -> Solution:
         """
-        Get the best feasible solution without relaxation
+        Get the best feasible solution without relaxation.
+
+        Raises
+        ------
+        RuntimeError
+            If no feasible solution exists.
         """
         solution = self.raw.best_feasible_unrelaxed
-        if solution is not None:
-            return Solution(solution)
-        else:
-            return None
+        return Solution(solution)
 
 
 @dataclass

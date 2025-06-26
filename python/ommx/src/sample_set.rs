@@ -67,27 +67,27 @@ impl SampleSet {
     }
 
     #[getter]
-    pub fn best_feasible_id(&self) -> Option<u64> {
-        self.0.best_feasible_id().map(|id| id.into_inner())
+    pub fn best_feasible_id(&self) -> Result<u64> {
+        Ok(self.0.best_feasible_id()?.into_inner())
     }
 
     #[getter]
-    pub fn best_feasible_relaxed_id(&self) -> Option<u64> {
-        self.0.best_feasible_relaxed_id().map(|id| id.into_inner())
+    pub fn best_feasible_relaxed_id(&self) -> Result<u64> {
+        Ok(self.0.best_feasible_relaxed_id()?.into_inner())
     }
 
     #[getter]
-    pub fn best_feasible(&self) -> Option<Solution> {
-        self.0.best_feasible().map(Solution)
+    pub fn best_feasible(&self) -> Result<Solution> {
+        Ok(Solution(self.0.best_feasible()?))
     }
 
     #[getter]
-    pub fn best_feasible_relaxed(&self) -> Option<Solution> {
-        self.0.best_feasible_relaxed().map(Solution)
+    pub fn best_feasible_relaxed(&self) -> Result<Solution> {
+        Ok(Solution(self.0.best_feasible_relaxed()?))
     }
 
     #[getter]
-    pub fn best_feasible_unrelaxed(&self) -> Option<Solution> {
+    pub fn best_feasible_unrelaxed(&self) -> Result<Solution> {
         // Exactly the same as best_feasible
         self.best_feasible()
     }

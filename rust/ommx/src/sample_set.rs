@@ -48,6 +48,12 @@ pub enum SampleSetError {
 
     #[error(transparent)]
     UnknownSampleIDError(#[from] UnknownSampleIDError),
+
+    #[error("No feasible solution found")]
+    NoFeasibleSolution,
+
+    #[error("No feasible solution found in relaxed problem")]
+    NoFeasibleSolutionRelaxed,
 }
 
 /// Multiple sample solution results with deduplication
@@ -211,7 +217,7 @@ impl SampleSet {
         ))
     }
 
-    pub fn best_feasible_id(&self) -> Option<SampleID> {
+    pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {
         let mut feasible_objectives: Vec<(SampleID, f64)> = self
             .feasible
             .iter()
@@ -219,17 +225,17 @@ impl SampleSet {
             .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
             .collect();
         if feasible_objectives.is_empty() {
-            return None;
+            return Err(SampleSetError::NoFeasibleSolution);
         }
         feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
         match self.sense {
             // safe unwrap since we checked for non-empty feasible_objectives
-            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
-            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+            Sense::Minimize => Ok(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Ok(feasible_objectives.last().unwrap().0),
         }
     }
 
-    pub fn best_feasible_relaxed_id(&self) -> Option<SampleID> {
+    pub fn best_feasible_relaxed_id(&self) -> Result<SampleID, SampleSetError> {
         let mut feasible_objectives: Vec<(SampleID, f64)> = self
             .feasible_relaxed
             .iter()
@@ -237,23 +243,24 @@ impl SampleSet {
             .map(|id| (*id, *self.objectives.get(*id).unwrap())) // safe unwrap since the IDs are consistent
             .collect();
         if feasible_objectives.is_empty() {
-            return None;
+            return Err(SampleSetError::NoFeasibleSolutionRelaxed);
         }
         feasible_objectives.sort_by(|a, b| a.1.total_cmp(&b.1));
         match self.sense {
             // safe unwrap since we checked for non-empty feasible_objectives
-            Sense::Minimize => Some(feasible_objectives.first().unwrap().0),
-            Sense::Maximize => Some(feasible_objectives.last().unwrap().0),
+            Sense::Minimize => Ok(feasible_objectives.first().unwrap().0),
+            Sense::Maximize => Ok(feasible_objectives.last().unwrap().0),
         }
     }
 
     /// Get the best feasible solution
-    pub fn best_feasible(&self) -> Option<Solution> {
-        self.best_feasible_id().and_then(|id| self.get(id).ok())
+    pub fn best_feasible(&self) -> Result<Solution, SampleSetError> {
+        let id = self.best_feasible_id()?;
+        self.get(id).map_err(SampleSetError::from)
     }
 
-    pub fn best_feasible_relaxed(&self) -> Option<Solution> {
-        self.best_feasible_relaxed_id()
-            .and_then(|id| self.get(id).ok())
+    pub fn best_feasible_relaxed(&self) -> Result<Solution, SampleSetError> {
+        let id = self.best_feasible_relaxed_id()?;
+        self.get(id).map_err(SampleSetError::from)
     }
 }
