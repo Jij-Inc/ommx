@@ -27,7 +27,19 @@ mod file_format_tests {
     #[test]
     fn test_current_behavior_with_compressed_file() {
         // Create a simple MPS content
-        let mps_content = "NAME TestProblem\nROWS\n N  OBJ\n L  R1\nCOLUMNS\n    X1        OBJ                 1\n    X1        R1                  1\nRHS\n    RHS1      R1                  5\nBOUNDS\n UP BND1      X1                  4\nENDATA\n";
+        let mps_content = r#"NAME TestProblem
+ROWS
+ N  OBJ
+ L  R1
+COLUMNS
+    X1        OBJ                 1
+    X1        R1                  1
+RHS
+    RHS1      R1                  5
+BOUNDS
+ UP BND1      X1                  4
+ENDATA
+"#;
         
         // Create a temporary compressed file
         let temp_dir = std::env::temp_dir();
@@ -49,7 +61,19 @@ mod file_format_tests {
     #[test]
     fn test_current_behavior_with_uncompressed_file() {
         // Create a simple MPS content
-        let mps_content = "NAME TestProblem\nROWS\n N  OBJ\n L  R1\nCOLUMNS\n    X1        OBJ                 1\n    X1        R1                  1\nRHS\n    RHS1      R1                  5\nBOUNDS\n UP BND1      X1                  4\nENDATA\n";
+        let mps_content = r#"NAME TestProblem
+ROWS
+ N  OBJ
+ L  R1
+COLUMNS
+    X1        OBJ                 1
+    X1        R1                  1
+RHS
+    RHS1      R1                  5
+BOUNDS
+ UP BND1      X1                  4
+ENDATA
+"#;
         
         // Create a temporary uncompressed file
         let temp_dir = std::env::temp_dir();
@@ -69,7 +93,19 @@ mod file_format_tests {
 
     #[test]
     fn test_file_format_detection() {
-        let mps_content = "NAME TestProblem\nROWS\n N  OBJ\n L  R1\nCOLUMNS\n    X1        OBJ                 1\n    X1        R1                  1\nRHS\n    RHS1      R1                  5\nBOUNDS\n UP BND1      X1                  4\nENDATA\n";
+        let mps_content = r#"NAME TestProblem
+ROWS
+ N  OBJ
+ L  R1
+COLUMNS
+    X1        OBJ                 1
+    X1        R1                  1
+RHS
+    RHS1      R1                  5
+BOUNDS
+ UP BND1      X1                  4
+ENDATA
+"#;
         
         let temp_dir = std::env::temp_dir();
         
@@ -114,11 +150,11 @@ mod file_format_tests {
         let uncompressed_path = temp_dir.join("test_write_uncompressed.mps");
         
         // Test writing compressed (default)
-        let compressed_result = write_file(&instance, &compressed_path);
+        let compressed_result = write_file(&instance, &compressed_path, None);
         assert!(compressed_result.is_ok(), "Should write compressed file");
         
         // Test writing uncompressed
-        let uncompressed_result = write_file_with_compression(&instance, &uncompressed_path, false);
+        let uncompressed_result = write_file(&instance, &uncompressed_path, Some(false));
         assert!(uncompressed_result.is_ok(), "Should write uncompressed file");
         
         // Both files should be readable

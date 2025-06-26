@@ -104,7 +104,6 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     // MPS
     m.add_function(wrap_pyfunction!(load_mps_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(write_mps_file, m)?)?;
-    m.add_function(wrap_pyfunction!(write_mps_file_with_compression, m)?)?;
 
     // Qplib
     m.add_function(wrap_pyfunction!(load_qplib_bytes, m)?)?;
