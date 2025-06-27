@@ -29,8 +29,6 @@ dev = [
     { name = "markdown-code-runner", specifier = ">=2.1.0" },
     { name = "matplotlib", specifier = ">=3.9.4" },
     { name = "mypy-protobuf", specifier = ">=3.6.0" },
-    { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "nbformat", specifier = ">=5.9.2" },
     { name = "nbqa", specifier = ">=1.9.1" },
     { name = "nbval", specifier = ">=0.11.0" },
     { name = "networkx", specifier = ">=3.2.1" },
