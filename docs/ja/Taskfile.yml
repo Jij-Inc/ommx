@@ -8,6 +8,16 @@ tasks:
     cmds:
       - uv run jupyter-book build .
 
+  test-tutorial:
+    desc: "Test the book in docs/ja/tutorial"
+    cmds:
+      - uv run jupyter nbconvert --to notebook --execute tutorial/*.ipynb
+
+  test-user-guide:
+    desc: "Test the book in docs/ja/user_guide"
+    cmds:
+      - uv run jupyter nbconvert --to notebook --execute user_guide/*.ipynb
+
   open:
     desc: "Open the book in docs/ja"
     cmds:
