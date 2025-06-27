@@ -8,15 +8,15 @@ tasks:
     cmds:
       - uv run jupyter-book build .
 
-  test-tutorial:
-    desc: "Test the book in docs/en/tutorial"
+  pyright:
+    desc: "Run type checks on the book notebooks"
     cmds:
-      - uv run jupyter nbconvert --to notebook --execute tutorial/*.ipynb
+      - uv run pyright tutorial/*.ipynb user_guide/*.ipynb
 
-  test-user-guide:
-    desc: "Test the book in docs/en/user_guide"
+  test:
+    desc: "Test each notebook in the book"
     cmds:
-      - uv run jupyter nbconvert --to notebook --execute user_guide/*.ipynb
+      - uv run pytest --nbval-lax tutorial/*.ipynb user_guide/*.ipynb
 
   open:
     desc: "Open the book in docs/en"
