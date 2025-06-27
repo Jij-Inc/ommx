@@ -739,11 +739,11 @@ class Rng:
         """
 
 class SampleSet:
-    best_feasible_id: typing.Optional[builtins.int]
-    best_feasible_relaxed_id: typing.Optional[builtins.int]
-    best_feasible: typing.Optional[Solution]
-    best_feasible_relaxed: typing.Optional[Solution]
-    best_feasible_unrelaxed: typing.Optional[Solution]
+    best_feasible_id: builtins.int
+    best_feasible_relaxed_id: builtins.int
+    best_feasible: Solution
+    best_feasible_relaxed: Solution
+    best_feasible_unrelaxed: Solution
     objectives: builtins.dict[builtins.int, builtins.float]
     r"""
     Get objectives for all samples
@@ -1136,4 +1136,6 @@ def load_qplib_bytes(path: builtins.str) -> bytes: ...
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
-def write_mps_file(instance: bytes, path: builtins.str) -> None: ...
+def write_mps_file(
+    instance: bytes, path: builtins.str, compress: builtins.bool = True
+) -> None: ...

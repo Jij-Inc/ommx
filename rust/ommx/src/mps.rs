@@ -87,9 +87,9 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
     Ok(instance.encode_to_vec())
 }
 
-/// Writes out the instance as an MPS file to the specified path.
+/// Writes out the instance as an MPS file to the specified path with compression control.
 ///
-/// This function automatically Gzips the output.
+/// If `compress` is true, the output will be gzipped. If false, it will be written as plain text.
 ///
 /// Only linear problems are supported.
 ///
@@ -98,19 +98,24 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
 pub fn write_file(
     instance: &crate::v1::Instance,
     out_path: impl AsRef<Path>,
+    compress: bool,
 ) -> Result<(), MpsWriteError> {
     let path = std::path::absolute(out_path.as_ref())?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let file = std::fs::File::options()
+    let mut file = std::fs::File::options()
         .create(true)
         .write(true)
         .truncate(true)
         .open(path)?;
 
-    let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
-    to_mps::write_mps(instance, &mut writer)?;
+    if compress {
+        let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
+        to_mps::write_mps(instance, &mut writer)?;
+    } else {
+        to_mps::write_mps(instance, &mut file)?;
+    }
     Ok(())
 }
 
