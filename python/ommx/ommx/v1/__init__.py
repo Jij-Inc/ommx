@@ -4210,7 +4210,7 @@ class SampleSet(UserAnnotationBase):
         RuntimeError
             If no feasible solution exists.
         """
-        return self.best_feasible_id
+        return self.best_feasible_unrelaxed_id
 
     @property
     def best_feasible(self) -> Solution:
