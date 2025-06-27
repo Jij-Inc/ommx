@@ -13,11 +13,11 @@ dependencies = [
   "matplotlib>=3.9.4",
   "nbconvert>=7.16.4",
   "networkx>=3.2.1",
-  "ommx-highs-adapter>=2.0.0rc1",
-  "ommx-openjij-adapter>=2.0.0rc1",
-  "ommx-pyscipopt-adapter>=2.0.0rc1",
-  "ommx-python-mip-adapter>=2.0.0rc1",
-  "ommx>=2.0.0rc1",
+  "ommx-highs-adapter>=2.0.0rc2",
+  "ommx-openjij-adapter>=2.0.0rc2",
+  "ommx-pyscipopt-adapter>=2.0.0rc2",
+  "ommx-python-mip-adapter>=2.0.0rc2",
+  "ommx>=2.0.0rc2",
 ]
 
 [dependency-groups]
