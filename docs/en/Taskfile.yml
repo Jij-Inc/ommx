@@ -11,7 +11,7 @@ tasks:
   pyright:
     desc: "Run type checks on the book notebooks"
     cmds:
-      - uv run pyright tutorial/*.ipynb user_guide/*.ipynb
+      - uv run nbqa pyright tutorial/*.ipynb user_guide/*.ipynb
 
   test:
     desc: "Test each notebook in the book"
