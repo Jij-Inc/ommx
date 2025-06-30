@@ -289,21 +289,19 @@ impl SampleSet {
         Ok(Solution {
             state: Some(state),
             objective: self.objectives()?.get(sample_id).with_context(|| {
-                format!("SampleSet lacks objective for sample with ID={}", sample_id)
+                format!("SampleSet lacks objective for sample with ID={sample_id}")
             })?,
             decision_variables,
             feasible_relaxed: Some(*self.feasible_relaxed().get(&sample_id).with_context(
                 || {
                     format!(
-                        "SampleSet lacks feasibility for sample with ID={}",
-                        sample_id
+                        "SampleSet lacks feasibility for sample with ID={sample_id}"
                     )
                 },
             )?),
             feasible: *self.feasible_unrelaxed().get(&sample_id).with_context(|| {
                 format!(
-                    "SampleSet lacks unrelaxed feasibility for sample with ID={}",
-                    sample_id
+                    "SampleSet lacks unrelaxed feasibility for sample with ID={sample_id}"
                 )
             })?,
             evaluated_constraints,

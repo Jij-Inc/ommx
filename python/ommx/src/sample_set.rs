@@ -141,9 +141,7 @@ impl SampleSet {
     #[getter]
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
         self.0
-            .constraints()
-            .iter()
-            .map(|(_, constraint)| crate::SampledConstraint(constraint.clone()))
+            .constraints().values().map(|constraint| crate::SampledConstraint(constraint.clone()))
             .collect()
     }
 
@@ -151,9 +149,7 @@ impl SampleSet {
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
         self.0
-            .decision_variables()
-            .iter()
-            .map(|(_, variable)| crate::SampledDecisionVariable(variable.clone()))
+            .decision_variables().values().map(|variable| crate::SampledDecisionVariable(variable.clone()))
             .collect()
     }
 

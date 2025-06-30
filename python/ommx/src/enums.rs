@@ -21,8 +21,7 @@ impl Sense {
             1 => Ok(Sense::Minimize),
             2 => Ok(Sense::Maximize),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid sense value: {}",
-                value
+                "Invalid sense value: {value}"
             ))),
         }
     }
@@ -83,8 +82,7 @@ impl Equality {
             1 => Ok(Equality::EqualToZero),
             2 => Ok(Equality::LessThanOrEqualToZero),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid equality value: {}",
-                value
+                "Invalid equality value: {value}"
             ))),
         }
     }
@@ -157,8 +155,7 @@ impl Kind {
             4 => Ok(Kind::SemiInteger),
             5 => Ok(Kind::SemiContinuous),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid kind value: {}",
-                value
+                "Invalid kind value: {value}"
             ))),
         }
     }
@@ -180,7 +177,7 @@ impl Kind {
 
     fn __str__(&self) -> String {
         let rust_kind: ommx::Kind = (*self).into();
-        format!("{:?}", rust_kind)
+        format!("{rust_kind:?}")
     }
 }
 
@@ -232,8 +229,7 @@ impl Optimality {
             1 => Ok(Optimality::Optimal),
             2 => Ok(Optimality::NotOptimal),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid optimality value: {}",
-                value
+                "Invalid optimality value: {value}"
             ))),
         }
     }
@@ -298,8 +294,7 @@ impl Relaxation {
             0 => Ok(Relaxation::Unspecified),
             1 => Ok(Relaxation::LpRelaxed),
             _ => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
-                "Invalid relaxation value: {}",
-                value
+                "Invalid relaxation value: {value}"
             ))),
         }
     }

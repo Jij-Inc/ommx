@@ -15,10 +15,10 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         let Some(annotations) = annotation_dict.get(&name) else {
-            log::warn!("Skip: No metadata found for '{}'", name);
+            log::warn!("Skip: No metadata found for '{name}'");
             continue;
         };
-        log::info!("Loading: {}", name);
+        log::info!("Loading: {name}");
         let instance = match ommx::mps::load_zipped_reader(file) {
             Ok(instance) => instance,
             Err(err) => {

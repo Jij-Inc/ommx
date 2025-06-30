@@ -106,7 +106,7 @@ impl RawEntry {
             ("continuous", self.continuous as usize),
             ("non_zero", self.non_zero as usize),
         ] {
-            annotation.set_other(format!("org.ommx.miplib.{}", key), value.to_string());
+            annotation.set_other(format!("org.ommx.miplib.{key}"), value.to_string());
         }
         annotation.set_other(
             "org.ommx.miplib.status".to_string(),

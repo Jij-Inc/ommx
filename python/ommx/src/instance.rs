@@ -88,9 +88,7 @@ impl Instance {
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         self.0
-            .decision_variables()
-            .iter()
-            .map(|(_, var)| DecisionVariable(var.clone()))
+            .decision_variables().values().map(|var| DecisionVariable(var.clone()))
             .collect()
     }
 
@@ -98,9 +96,7 @@ impl Instance {
     #[getter]
     pub fn constraints(&self) -> Vec<Constraint> {
         self.0
-            .constraints()
-            .iter()
-            .map(|(_, constraint)| Constraint(constraint.clone()))
+            .constraints().values().map(|constraint| Constraint(constraint.clone()))
             .collect()
     }
 
@@ -108,9 +104,7 @@ impl Instance {
     #[getter]
     pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
         self.0
-            .removed_constraints()
-            .iter()
-            .map(|(_, removed_constraint)| RemovedConstraint(removed_constraint.clone()))
+            .removed_constraints().values().map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
             .collect()
     }
 
@@ -314,8 +308,7 @@ impl Instance {
             .map(|var| DecisionVariable(var.clone()))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
-                    "Decision variable with ID {} not found",
-                    variable_id
+                    "Decision variable with ID {variable_id} not found"
                 ))
             })
     }
@@ -327,7 +320,7 @@ impl Instance {
             .get(&ConstraintID::from(constraint_id))
             .map(|constraint| Constraint(constraint.clone()))
             .ok_or_else(|| {
-                PyKeyError::new_err(format!("Constraint with ID {} not found", constraint_id))
+                PyKeyError::new_err(format!("Constraint with ID {constraint_id} not found"))
             })
     }
 
@@ -339,8 +332,7 @@ impl Instance {
             .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
-                    "Removed constraint with ID {} not found",
-                    constraint_id
+                    "Removed constraint with ID {constraint_id} not found"
                 ))
             })
     }
