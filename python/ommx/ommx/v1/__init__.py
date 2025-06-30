@@ -1744,7 +1744,7 @@ class ParametricInstance(UserAnnotationBase):
         ...     parameters=p + w + [W],
         ...     objective=objective,
         ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE.to_pb(),
+        ...     sense=Instance.MAXIMIZE,
         ... )
 
         Substitute parameters to get an instance
@@ -1803,7 +1803,7 @@ class ParametricInstance(UserAnnotationBase):
         | Polynomial
         | Function,
         constraints: Iterable[Constraint | _Constraint],
-        sense: _Instance.Sense.ValueType,
+        sense: _Instance.Sense.ValueType | Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
         description: Optional[_Instance.Description] = None,
@@ -1812,6 +1812,9 @@ class ParametricInstance(UserAnnotationBase):
             objective = Function(objective)
         raw_objective = _Function()
         raw_objective.ParseFromString(objective.to_bytes())
+
+        if isinstance(sense, Sense):
+            sense = _Instance.Sense.ValueType(sense.to_pb())
 
         return ParametricInstance(
             _ParametricInstance(
