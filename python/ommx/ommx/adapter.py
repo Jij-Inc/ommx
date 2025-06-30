@@ -56,19 +56,6 @@ class SamplerAdapter(SolverAdapter):
     def decode_to_sampleset(self, data: SamplerOutput) -> SampleSet:
         pass
 
-    @classmethod
-    def solve(cls, ommx_instance: Instance, **kwargs) -> Solution:
-        sample_set = cls.sample(ommx_instance, **kwargs)
-        return sample_set.best_feasible
-
-    @property
-    def solver_input(self) -> SamplerInput:
-        return self.sampler_input
-
-    def decode(self, data: SamplerOutput) -> Solution:
-        sample_set = self.decode_to_sampleset(data)
-        return sample_set.best_feasible
-
 
 class InfeasibleDetected(Exception):
     pass
