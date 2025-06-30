@@ -207,19 +207,6 @@ impl SampleSet {
         Ok(dict)
     }
 
-    /// Get all samples as a list sorted by sample ID
-    #[getter]
-    pub fn samples(&self) -> Result<Vec<Solution>> {
-        let mut sample_ids: Vec<_> = self.0.sample_ids().iter().cloned().collect();
-        sample_ids.sort_by_key(|id| id.into_inner());
-
-        let mut samples = Vec::new();
-        for sample_id in sample_ids {
-            let solution = self.0.get(sample_id)?;
-            samples.push(Solution(solution));
-        }
-        Ok(samples)
-    }
 
     /// Get a specific sampled decision variable by ID
     pub fn get_decision_variable_by_id(

@@ -776,10 +776,6 @@ class SampleSet:
     r"""
     Get sample IDs as a list (property version)
     """
-    samples: builtins.list[Solution]
-    r"""
-    Get all samples as a list sorted by sample ID
-    """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...

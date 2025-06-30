@@ -130,11 +130,11 @@ Add the following APIs to `rust/ommx/src/`:
 
 **SampleSet class:**
 1. ✅ `get_sample_by_id(id)` method - Alias for existing `get(id)` method
-2. ✅ `samples` property - Returns `Vec<Solution>` sorted by sample ID
-3. ✅ `decision_variables` property - Returns `Vec<SampledDecisionVariable>` sorted by ID (already existed)
-4. ✅ `constraints` property - Returns `Vec<SampledConstraint>` sorted by ID (already existed)
-5. ✅ `get_decision_variable_by_id(id)` method - Returns specific `SampledDecisionVariable`
-6. ✅ `get_constraint_by_id(id)` method - Returns specific `SampledConstraint`
+2. ✅ `decision_variables` property - Returns `Vec<SampledDecisionVariable>` sorted by ID (already existed)
+3. ✅ `constraints` property - Returns `Vec<SampledConstraint>` sorted by ID (already existed)
+4. ✅ `get_decision_variable_by_id(id)` method - Returns specific `SampledDecisionVariable`
+5. ✅ `get_constraint_by_id(id)` method - Returns specific `SampledConstraint`
+6. ❌ `samples` property - **REMOVED** (too heavy for large sample sets)
 
 #### Phase 2: Python SDK Updates
 Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
