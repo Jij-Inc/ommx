@@ -111,3 +111,51 @@ from ommx.v1.solution_pb2 import Optimality
 - Add tests to `python/ommx-tests/tests` only
 - Always run `task format` before committing
 - Ensure `task python:test` passes completely
+
+## Current Development: API Consistency Improvements
+
+### Goal
+Align Solution and SampleSet APIs with Instance's design pattern for better consistency and user experience.
+
+### Implementation Plan
+
+#### Phase 1: Rust SDK Updates
+Add the following APIs to `rust/ommx/src/`:
+
+**Solution class:**
+1. `decision_variables` property - Returns `Vec<EvaluatedDecisionVariable>` sorted by ID
+2. `constraints` property - Returns `Vec<EvaluatedConstraint>` sorted by ID
+3. `get_decision_variable_by_id(id)` method - Returns specific `EvaluatedDecisionVariable`
+4. `get_constraint_by_id(id)` method - Returns specific `EvaluatedConstraint`
+
+**SampleSet class:**
+1. `get_sample_by_id(id)` method - Alias for existing `get(id)` method
+2. `samples` property - Returns `Vec<Solution>` sorted by sample ID
+3. `decision_variables` property - Returns `Vec<SampledDecisionVariable>` sorted by ID
+4. `constraints` property - Returns `Vec<SampledConstraint>` sorted by ID
+
+#### Phase 2: Python SDK Updates
+Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
+
+**Solution class:**
+- Add `decision_variables` property (wraps Rust `decision_variables`, returns list of `EvaluatedDecisionVariable`)
+- Add `constraints` property (wraps Rust `constraints`, returns list of `EvaluatedConstraint`)
+- Expose `get_decision_variable_by_id()` and `get_constraint_by_id()`
+- Note: These methods return evaluated types while maintaining consistent naming with Instance
+
+**SampleSet class:**
+- Add `get_sample_by_id()` alias
+- Add `samples` property
+- Add `decision_variables` property (returns list of `SampledDecisionVariable`)
+- Add `constraints` property (returns list of `SampledConstraint`)
+
+#### Phase 3: Testing & Documentation
+1. Add comprehensive tests in `python/ommx-tests/tests/`
+2. Update API documentation
+3. Update PYTHON_SDK_MIGRATION_GUIDE.md with new APIs
+
+### Design Principles
+- **Backward Compatibility**: All existing APIs remain functional
+- **Consistency**: Follow Instance's patterns (list properties, `get_*_by_id` methods)
+- **Performance**: Use lazy evaluation and caching where appropriate
+- **Type Safety**: Maintain strong typing throughout the stack
