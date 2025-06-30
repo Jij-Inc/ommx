@@ -48,6 +48,12 @@ ConstraintHints = _ommx_rust.ConstraintHints
 # Import Rng class
 Rng = _ommx_rust.Rng
 
+# Import evaluated classes
+EvaluatedDecisionVariable = _ommx_rust.EvaluatedDecisionVariable
+EvaluatedConstraint = _ommx_rust.EvaluatedConstraint
+SampledDecisionVariable = _ommx_rust.SampledDecisionVariable
+SampledConstraint = _ommx_rust.SampledConstraint
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -78,6 +84,11 @@ __all__ = [
     "Kind",
     # Utility
     "Rng",
+    # Evaluated types
+    "EvaluatedDecisionVariable",
+    "EvaluatedConstraint", 
+    "SampledDecisionVariable",
+    "SampledConstraint",
     # Type Alias
     "ToState",
     "ToSamples",
@@ -2146,7 +2157,7 @@ class Solution(UserAnnotationBase):
                 "substituted_value": NA,  # This field is not available in the new API
                 "value": v.value,
             }
-            for v in self.raw.decision_variables.values()
+            for v in self.decision_variables
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2167,7 +2178,7 @@ class Solution(UserAnnotationBase):
                 "dual_variable": c.dual_variable if c.dual_variable is not None else NA,
                 "removed_reason": c.removed_reason if c.removed_reason else NA,
             }
-            for c in self.raw.evaluated_constraints.values()
+            for c in self.constraints
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2298,11 +2309,29 @@ class Solution(UserAnnotationBase):
 
     def get_dual_variable(self, constraint_id: int) -> float | None:
         """Get the dual variable value for a specific constraint."""
-        return self.raw.get_dual_variable(constraint_id)
+        return self.raw.get_constraint_by_id(constraint_id).dual_variable
 
     def get_constraint_value(self, constraint_id: int) -> float:
         """Get the evaluated value of a specific constraint."""
-        return self.raw.get_constraint_value(constraint_id)
+        return self.raw.get_constraint_by_id(constraint_id).evaluated_value
+
+    @property 
+    def decision_variables(self) -> list[EvaluatedDecisionVariable]:
+        """Get evaluated decision variables as a list sorted by ID."""
+        return self.raw.decision_variables
+
+    @property
+    def constraints(self) -> list[EvaluatedConstraint]:
+        """Get evaluated constraints as a list sorted by ID.""" 
+        return self.raw.constraints
+
+    def get_decision_variable_by_id(self, variable_id: int) -> EvaluatedDecisionVariable:
+        """Get a specific evaluated decision variable by ID."""
+        return self.raw.get_decision_variable_by_id(variable_id)
+
+    def get_constraint_by_id(self, constraint_id: int) -> EvaluatedConstraint:
+        """Get a specific evaluated constraint by ID."""
+        return self.raw.get_constraint_by_id(constraint_id)
 
 
 @dataclass
@@ -4175,6 +4204,30 @@ class SampleSet(UserAnnotationBase):
         """
         solution = self.raw.get(sample_id)
         return Solution(solution)
+
+    def get_sample_by_id(self, sample_id: int) -> Solution:
+        """
+        Get sample by ID (alias for get method)
+        """
+        return self.get(sample_id)
+
+    def get_decision_variable_by_id(self, variable_id: int) -> SampledDecisionVariable:
+        """Get a specific sampled decision variable by ID."""
+        return self.raw.get_decision_variable_by_id(variable_id)
+
+    def get_constraint_by_id(self, constraint_id: int) -> SampledConstraint:
+        """Get a specific sampled constraint by ID."""
+        return self.raw.get_constraint_by_id(constraint_id)
+
+    @property
+    def decision_variables(self) -> list[SampledDecisionVariable]:
+        """Get sampled decision variables as a list sorted by ID."""
+        return self.raw.decision_variables
+
+    @property
+    def constraints(self) -> list[SampledConstraint]:
+        """Get sampled constraints as a list sorted by ID."""
+        return self.raw.constraints
 
     @property
     def best_feasible_id(self) -> int:

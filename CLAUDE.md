@@ -136,20 +136,25 @@ Add the following APIs to `rust/ommx/src/`:
 5. ✅ `get_constraint_by_id(id)` method - Returns specific `SampledConstraint`
 6. ❌ `samples` property - **REMOVED** (too heavy for large sample sets)
 
-#### Phase 2: Python SDK Updates
+#### Phase 2: Python SDK Updates ✅ COMPLETED
 Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
 
 **Solution class:**
-- Add `decision_variables` property (wraps Rust `decision_variables`, returns list of `EvaluatedDecisionVariable`)
-- Add `constraints` property (wraps Rust `constraints`, returns list of `EvaluatedConstraint`)
-- Expose `get_decision_variable_by_id()` and `get_constraint_by_id()`
-- Note: These methods return evaluated types while maintaining consistent naming with Instance
+- ✅ Add `decision_variables` property - Returns `list[EvaluatedDecisionVariable]`
+- ✅ Add `constraints` property - Returns `list[EvaluatedConstraint]`
+- ✅ Add `get_decision_variable_by_id()` method
+- ✅ Add `get_constraint_by_id()` method
+- ✅ Update existing `get_constraint_value()` and `get_dual_variable()` to use new methods
 
 **SampleSet class:**
-- Add `get_sample_by_id()` alias
-- Add `samples` property
-- Add `decision_variables` property (returns list of `SampledDecisionVariable`)
-- Add `constraints` property (returns list of `SampledConstraint`)
+- ✅ Add `get_sample_by_id()` method (alias for existing `get()`)
+- ✅ Add `get_decision_variable_by_id()` method
+- ✅ Add `get_constraint_by_id()` method
+
+**Type System:**
+- ✅ Added `EvaluatedDecisionVariable`, `EvaluatedConstraint`, `SampledDecisionVariable`, `SampledConstraint` to `ommx.v1` namespace
+- ✅ Updated `__all__` exports for new types
+- ✅ Fixed existing DataFrame properties to use new APIs
 
 #### Phase 3: Testing & Documentation
 1. Add comprehensive tests in `python/ommx-tests/tests/`
@@ -159,7 +164,7 @@ Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
 ### Implementation Status
 
 ✅ **Phase 1 Complete**: All Rust SDK APIs implemented and stub files regenerated. Removed duplicate methods (`get_constraint_value`, `get_dual_variable`) in favor of accessing via `get_constraint_by_id()`
-⏳ **Phase 2 Pending**: Python SDK wrapper implementation
+✅ **Phase 2 Complete**: Python SDK wrapper implementation completed
 ⏳ **Phase 3 Pending**: Testing and documentation updates
 
 ### API Consistency Achievement
