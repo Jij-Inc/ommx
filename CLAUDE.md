@@ -119,20 +119,22 @@ Align Solution and SampleSet APIs with Instance's design pattern for better cons
 
 ### Implementation Plan
 
-#### Phase 1: Rust SDK Updates
+#### Phase 1: Rust SDK Updates ✅ COMPLETED
 Add the following APIs to `rust/ommx/src/`:
 
 **Solution class:**
-1. `decision_variables` property - Returns `Vec<EvaluatedDecisionVariable>` sorted by ID
-2. `constraints` property - Returns `Vec<EvaluatedConstraint>` sorted by ID
-3. `get_decision_variable_by_id(id)` method - Returns specific `EvaluatedDecisionVariable`
-4. `get_constraint_by_id(id)` method - Returns specific `EvaluatedConstraint`
+1. ✅ `decision_variables` property - Returns `Vec<EvaluatedDecisionVariable>` sorted by ID
+2. ✅ `constraints` property - Returns `Vec<EvaluatedConstraint>` sorted by ID
+3. ✅ `get_decision_variable_by_id(id)` method - Returns specific `EvaluatedDecisionVariable`
+4. ✅ `get_constraint_by_id(id)` method - Returns specific `EvaluatedConstraint`
 
 **SampleSet class:**
-1. `get_sample_by_id(id)` method - Alias for existing `get(id)` method
-2. `samples` property - Returns `Vec<Solution>` sorted by sample ID
-3. `decision_variables` property - Returns `Vec<SampledDecisionVariable>` sorted by ID
-4. `constraints` property - Returns `Vec<SampledConstraint>` sorted by ID
+1. ✅ `get_sample_by_id(id)` method - Alias for existing `get(id)` method
+2. ✅ `samples` property - Returns `Vec<Solution>` sorted by sample ID
+3. ✅ `decision_variables` property - Returns `Vec<SampledDecisionVariable>` sorted by ID (already existed)
+4. ✅ `constraints` property - Returns `Vec<SampledConstraint>` sorted by ID (already existed)
+5. ✅ `get_decision_variable_by_id(id)` method - Returns specific `SampledDecisionVariable`
+6. ✅ `get_constraint_by_id(id)` method - Returns specific `SampledConstraint`
 
 #### Phase 2: Python SDK Updates
 Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
@@ -153,6 +155,22 @@ Update `python/ommx/ommx/v1/__init__.py` to expose new Rust APIs:
 1. Add comprehensive tests in `python/ommx-tests/tests/`
 2. Update API documentation
 3. Update PYTHON_SDK_MIGRATION_GUIDE.md with new APIs
+
+### Implementation Status
+
+✅ **Phase 1 Complete**: All Rust SDK APIs implemented and stub files regenerated. Removed duplicate methods (`get_constraint_value`, `get_dual_variable`) in favor of accessing via `get_constraint_by_id()`
+⏳ **Phase 2 Pending**: Python SDK wrapper implementation
+⏳ **Phase 3 Pending**: Testing and documentation updates
+
+### API Consistency Achievement
+
+All three core classes now follow consistent patterns:
+
+- **Instance**: `decision_variables` → `list[DecisionVariable]`, `get_decision_variable_by_id()` → `DecisionVariable`
+- **Solution**: `decision_variables` → `list[EvaluatedDecisionVariable]`, `get_decision_variable_by_id()` → `EvaluatedDecisionVariable`  
+- **SampleSet**: `decision_variables` → `list[SampledDecisionVariable]`, `get_decision_variable_by_id()` → `SampledDecisionVariable`
+
+Same patterns apply to constraints and sample access methods.
 
 ### Design Principles
 - **Backward Compatibility**: All existing APIs remain functional
