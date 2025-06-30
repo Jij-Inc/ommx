@@ -105,8 +105,8 @@ pub struct Constraint {
     /// Constraint ID
     ///
     /// - Constraint IDs are managed separately from decision variable IDs.
-    ///   We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
-    ///   and constraint `x == 0` with constraint ID `1`.
+    ///    We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+    ///    and constraint `x == 0` with constraint ID `1`.
     /// - IDs are not required to be sequential.
     /// - IDs must be unique with other types of constraints.
     #[prost(uint64, tag = "1")]

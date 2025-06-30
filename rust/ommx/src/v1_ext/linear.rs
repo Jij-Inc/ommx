@@ -311,10 +311,7 @@ mod tests {
             linear.to_string(),
             "x1 - x2 - 2*x3 + 0.3333333333333333*x4 + 3"
         );
-        assert_eq!(
-            format!("{linear:.2}"),
-            "x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00"
-        );
+        assert_eq!(format!("{linear:.2}"), "x1 - x2 - 2.00*x3 + 0.33*x4 + 3.00");
         assert_eq!(super::Linear::zero().to_string(), "0");
 
         let linear = super::Linear::new([(1, -1.0)].into_iter(), 0.0);

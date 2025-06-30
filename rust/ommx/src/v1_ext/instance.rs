@@ -360,9 +360,7 @@ impl Instance {
         }
 
         let bound = v.bound.as_ref().with_context(|| {
-            format!(
-                "Bound must be set and finite for log-encoding: ID={decision_variable_id}"
-            )
+            format!("Bound must be set and finite for log-encoding: ID={decision_variable_id}")
         })?;
 
         // Bound of integer may be non-integer value

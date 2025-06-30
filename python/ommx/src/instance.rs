@@ -88,7 +88,9 @@ impl Instance {
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
         self.0
-            .decision_variables().values().map(|var| DecisionVariable(var.clone()))
+            .decision_variables()
+            .values()
+            .map(|var| DecisionVariable(var.clone()))
             .collect()
     }
 
@@ -96,7 +98,9 @@ impl Instance {
     #[getter]
     pub fn constraints(&self) -> Vec<Constraint> {
         self.0
-            .constraints().values().map(|constraint| Constraint(constraint.clone()))
+            .constraints()
+            .values()
+            .map(|constraint| Constraint(constraint.clone()))
             .collect()
     }
 
@@ -104,7 +108,9 @@ impl Instance {
     #[getter]
     pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
         self.0
-            .removed_constraints().values().map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .removed_constraints()
+            .values()
+            .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
             .collect()
     }
 
@@ -307,9 +313,7 @@ impl Instance {
             .get(&VariableID::from(variable_id))
             .map(|var| DecisionVariable(var.clone()))
             .ok_or_else(|| {
-                PyKeyError::new_err(format!(
-                    "Decision variable with ID {variable_id} not found"
-                ))
+                PyKeyError::new_err(format!("Decision variable with ID {variable_id} not found"))
             })
     }
 
