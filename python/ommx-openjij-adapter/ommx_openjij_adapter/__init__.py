@@ -65,6 +65,39 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     _instance_prepared: bool = False
 
+    def __init__(
+        self,
+        ommx_instance: Instance,
+        *,
+        beta_min: float | None = None,
+        beta_max: float | None = None,
+        num_sweeps: int | None = None,
+        num_reads: int | None = None,
+        schedule: list | None = None,
+        initial_state: list | dict | None = None,
+        updater: str | None = None,
+        sparse: bool | None = None,
+        reinitialize_state: bool | None = None,
+        seed: int | None = None,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 32,
+    ):
+        self.ommx_instance = copy.deepcopy(ommx_instance)
+        self.beta_min = beta_min
+        self.beta_max = beta_max
+        self.num_sweeps = num_sweeps
+        self.num_reads = num_reads
+        self.schedule = schedule
+        self.initial_state = initial_state
+        self.updater = updater
+        self.sparse = sparse
+        self.reinitialize_state = reinitialize_state
+        self.seed = seed
+        self.uniform_penalty_weight = uniform_penalty_weight
+        self.penalty_weights = penalty_weights
+        self.inequality_integer_slack_max_range = inequality_integer_slack_max_range
+
     @classmethod
     def sample(
         cls,
@@ -139,39 +172,6 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             inequality_integer_slack_max_range=inequality_integer_slack_max_range,
         )
         return sample_set.best_feasible
-
-    def __init__(
-        self,
-        ommx_instance: Instance,
-        *,
-        beta_min: float | None = None,
-        beta_max: float | None = None,
-        num_sweeps: int | None = None,
-        num_reads: int | None = None,
-        schedule: list | None = None,
-        initial_state: list | dict | None = None,
-        updater: str | None = None,
-        sparse: bool | None = None,
-        reinitialize_state: bool | None = None,
-        seed: int | None = None,
-        uniform_penalty_weight: Optional[float] = None,
-        penalty_weights: dict[int, float] = {},
-        inequality_integer_slack_max_range: int = 32,
-    ):
-        self.ommx_instance = copy.deepcopy(ommx_instance)
-        self.beta_min = beta_min
-        self.beta_max = beta_max
-        self.num_sweeps = num_sweeps
-        self.num_reads = num_reads
-        self.schedule = schedule
-        self.initial_state = initial_state
-        self.updater = updater
-        self.sparse = sparse
-        self.reinitialize_state = reinitialize_state
-        self.seed = seed
-        self.uniform_penalty_weight = uniform_penalty_weight
-        self.penalty_weights = penalty_weights
-        self.inequality_integer_slack_max_range = inequality_integer_slack_max_range
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         samples = decode_to_samples(data)
