@@ -219,8 +219,7 @@ impl SampleSet {
             .map(|dv| crate::SampledDecisionVariable(dv.clone()))
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
-                    "Unknown decision variable ID: {}",
-                    variable_id
+                    "Unknown decision variable ID: {variable_id}"
                 ))
             })
     }
@@ -234,8 +233,7 @@ impl SampleSet {
             .map(|sc| crate::SampledConstraint(sc.clone()))
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
-                    "Unknown constraint ID: {}",
-                    constraint_id
+                    "Unknown constraint ID: {constraint_id}"
                 ))
             })
     }

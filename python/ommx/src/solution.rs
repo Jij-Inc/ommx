@@ -169,7 +169,7 @@ impl Solution {
             .get(&var_id)
             .map(|dv| crate::EvaluatedDecisionVariable(dv.clone()))
             .ok_or_else(|| {
-                PyKeyError::new_err(format!("Unknown decision variable ID: {}", variable_id))
+                PyKeyError::new_err(format!("Unknown decision variable ID: {variable_id}"))
             })
     }
 
