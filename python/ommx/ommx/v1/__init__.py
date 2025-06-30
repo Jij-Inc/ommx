@@ -481,14 +481,14 @@ class Instance(UserAnnotationBase):
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})
         >>> solution.objective
         1.0
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value used_ids subscripts
         id                                    
         0       <=0    0.0   {0, 1}         []
 
         The values of decision variables are also stored in the solution:
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
         0   Binary   -0.0    1.0         []    1.0
@@ -531,7 +531,7 @@ class Instance(UserAnnotationBase):
         >>> solution = instance.evaluate({0: 1, 1: 0})
         >>> solution.objective
         1.0
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value used_ids subscripts
         id                                    
         0        =0    0.0   {0, 1}         []
@@ -543,7 +543,7 @@ class Instance(UserAnnotationBase):
         * When the bound is :math:`[2, 5]`, the value is ``2``
         * When the bound is :math:`[-3, -1]`, the value is ``-1``
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
         0   Binary   -0.0    1.0         []    1.0
@@ -741,7 +741,7 @@ class Instance(UserAnnotationBase):
 
         The log-encoded integer variables are automatically evaluated from the binary variables.
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts  value
         id                                                          
         0   Integer   -0.0    2.0                x        [0]    2.0
@@ -757,7 +757,7 @@ class Instance(UserAnnotationBase):
         >>> solution.objective
         2.0
 
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value            used_ids subscripts          removed_reason
         id                                                                       
         0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
@@ -2132,7 +2132,7 @@ class Solution(UserAnnotationBase):
         return self.raw.objective
 
     @property
-    def decision_variables(self) -> DataFrame:
+    def decision_variables_df(self) -> DataFrame:
         # Use the new decision_variables property that returns dict of EvaluatedDecisionVariable
         df = DataFrame(
             {
@@ -2153,7 +2153,7 @@ class Solution(UserAnnotationBase):
         return df
 
     @property
-    def constraints(self) -> DataFrame:
+    def constraints_df(self) -> DataFrame:
         # Use the new evaluated_constraints property
         df = DataFrame(
             {
@@ -3958,7 +3958,7 @@ class SampleSet(UserAnnotationBase):
         >>> solution = sample_set.get(sample_id=0)
         >>> solution.objective
         1.0
-        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
         0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
@@ -3972,7 +3972,7 @@ class SampleSet(UserAnnotationBase):
         >>> solution = sample_set.best_feasible
         >>> solution.objective
         3.0
-        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
         0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
@@ -4111,7 +4111,7 @@ class SampleSet(UserAnnotationBase):
         return self.summary.index.tolist()  # type: ignore[attr-defined]
 
     @property
-    def decision_variables(self) -> DataFrame:
+    def decision_variables_df(self) -> DataFrame:
         df = DataFrame(
             {
                 "id": v.id,
@@ -4130,7 +4130,7 @@ class SampleSet(UserAnnotationBase):
         return df
 
     @property
-    def constraints(self) -> DataFrame:
+    def constraints_df(self) -> DataFrame:
         df = DataFrame(
             {
                 "id": c.id,
