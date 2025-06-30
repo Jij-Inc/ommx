@@ -17,7 +17,6 @@ jobs:
   jupyter-book:
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
       matrix:
         lang: [ja, en]
     env:
@@ -40,7 +39,7 @@ jobs:
       - name: Install OMMX Book dependencies
         run: pip install -r requirements.txt
 
-      - name: Jupyter Book 
+      - name: Jupyter Book
         env:
           GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
         run: |
