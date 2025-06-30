@@ -42,7 +42,10 @@ from ommx.v1 import Instance, DecisionVariable
 from ommx.v1 import (
     Instance, DecisionVariable, Constraint,
     Function, Linear, Quadratic, Polynomial,
-    Solution, State
+    Solution, State, SampleSet,
+    # New evaluated types (v2.0.0rc3+)
+    EvaluatedDecisionVariable, EvaluatedConstraint,
+    SampledDecisionVariable, SampledConstraint
 )
 ```
 
@@ -196,13 +199,39 @@ function.evaluate(state: State | dict[int, float]) -> float
 function.partial_evaluate(state: State | dict[int, float]) -> Function
 ```
 
+### Solution Class (v2.0.0rc3+)
+```python
+# New list-based properties (consistent with Instance)
+solution.decision_variables  # list[EvaluatedDecisionVariable] - sorted by ID
+solution.constraints        # list[EvaluatedConstraint] - sorted by ID
+
+# New individual access methods
+solution.get_decision_variable_by_id(variable_id: int) -> EvaluatedDecisionVariable
+solution.get_constraint_by_id(constraint_id: int) -> EvaluatedConstraint
+```
+
+### SampleSet Class (v2.0.0rc3+)
+```python
+# New list-based properties (consistent with Instance)
+sample_set.decision_variables # list[SampledDecisionVariable] - sorted by ID
+sample_set.constraints       # list[SampledConstraint] - sorted by ID
+
+# New individual access methods
+sample_set.get_sample_by_id(sample_id: int) -> Solution  # Alias for get()
+sample_set.get_decision_variable_by_id(variable_id: int) -> SampledDecisionVariable
+sample_set.get_constraint_by_id(constraint_id: int) -> SampledConstraint
+```
+
 ## Recommended Implementation Patterns
 
 ```python
-# Unified imports
+# Unified imports (v2.0.0rc3+)
 from ommx.v1 import (
     Instance, DecisionVariable, Constraint,
-    Function, Linear, Solution, State
+    Function, Linear, Solution, State, SampleSet,
+    # New evaluated types for consistent API access
+    EvaluatedDecisionVariable, EvaluatedConstraint,
+    SampledDecisionVariable, SampledConstraint
 )
 
 # DecisionVariable creation (new factory methods)
@@ -217,6 +246,24 @@ elif objective.degree() == 2:
     linear_terms = objective.linear_terms        # dict[int, float]
     quadratic_terms = objective.quadratic_terms  # dict[tuple[int, int], float]
     constant = objective.constant_term           # float
+
+# Consistent API patterns across all classes (v2.0.0rc3+)
+# All three classes now follow the same pattern:
+
+# Instance
+for var in instance.decision_variables:  # list[DecisionVariable]
+    process_variable(var.id, var)
+var = instance.get_decision_variable_by_id(var_id)  # DecisionVariable
+
+# Solution  
+for var in solution.decision_variables:  # list[EvaluatedDecisionVariable]
+    process_evaluated_variable(var.id, var.value)
+var = solution.get_decision_variable_by_id(var_id)  # EvaluatedDecisionVariable
+
+# SampleSet
+for var in sample_set.decision_variables:  # list[SampledDecisionVariable] 
+    process_sampled_variable(var.id, var.samples)
+var = sample_set.get_decision_variable_by_id(var_id)  # SampledDecisionVariable
 ```
 
 ## State Constructor Changes (PyO3 Migration)
@@ -343,8 +390,13 @@ for constraint_id, dual_value in dual_variables.items():
 # Properties
 solution.objective           # float - objective value
 solution.constraint_ids      # set[int] - all constraint IDs
+solution.decision_variable_ids  # set[int] - all decision variable IDs
 solution.feasible           # bool - feasibility status
 solution.feasible_relaxed   # bool - relaxed feasibility status
+
+# New list-based properties (v2.0.0rc3+)
+solution.decision_variables  # list[EvaluatedDecisionVariable] - sorted by ID
+solution.constraints        # list[EvaluatedConstraint] - sorted by ID
 
 # Methods
 solution.get_constraint_value(constraint_id: int) -> float
@@ -353,9 +405,42 @@ solution.set_dual_variable(constraint_id: int, value: Optional[float]) -> None
 solution.extract_decision_variables(name: str) -> dict[tuple[int, ...], float]
 solution.extract_constraints(name: str) -> dict[tuple[int, ...], float]
 
+# New individual access methods (v2.0.0rc3+)
+solution.get_decision_variable_by_id(variable_id: int) -> EvaluatedDecisionVariable
+solution.get_constraint_by_id(constraint_id: int) -> EvaluatedConstraint
+
 # State access (backward compatible)
 solution.state              # State object with variable values
 solution.state.entries      # dict[int, float] - variable ID to value mapping
+```
+
+### Solution API Consistency Improvements (v2.0.0rc3+)
+
+**Enhancement**: Solution API now follows the same patterns as Instance for consistency.
+
+**New Properties**:
+```python
+# List-based access (consistent with Instance)
+solution.decision_variables  # list[EvaluatedDecisionVariable] - sorted by ID
+solution.constraints        # list[EvaluatedConstraint] - sorted by ID
+
+# Individual access by ID (consistent with Instance)
+solution.get_decision_variable_by_id(variable_id: int) -> EvaluatedDecisionVariable
+solution.get_constraint_by_id(constraint_id: int) -> EvaluatedConstraint
+```
+
+**Migration Pattern**:
+```python
+# Before: Direct access to constraint values
+solution.get_constraint_value(constraint_id)
+solution.get_dual_variable(constraint_id)
+
+# After: Access through constraint objects (alternative pattern)
+constraint = solution.get_constraint_by_id(constraint_id)
+value = constraint.evaluated_value
+dual_var = constraint.dual_variable
+
+# Both patterns are supported for backward compatibility
 ```
 
 ## SampleSet API Reference
@@ -369,11 +454,44 @@ sample_set.feasible_ids       # set[int] - feasible sample IDs
 sample_set.best_feasible_id   # Optional[int] - best feasible sample ID
 sample_set.best_feasible      # Optional[Solution] - best feasible solution
 
+# New list-based properties (v2.0.0rc3+)
+sample_set.decision_variables # list[SampledDecisionVariable] - sorted by ID
+sample_set.constraints       # list[SampledConstraint] - sorted by ID
+
 # Methods
 sample_set.get(sample_id: int) -> Solution
 sample_set.extract_decision_variables(name: str, sample_id: int) -> dict[tuple[int, ...], float]
 sample_set.extract_constraints(name: str, sample_id: int) -> dict[tuple[int, ...], float]
+
+# New individual access methods (v2.0.0rc3+)
+sample_set.get_sample_by_id(sample_id: int) -> Solution  # Alias for get()
+sample_set.get_decision_variable_by_id(variable_id: int) -> SampledDecisionVariable
+sample_set.get_constraint_by_id(constraint_id: int) -> SampledConstraint
 ```
+
+### SampleSet API Consistency Improvements (v2.0.0rc3+)
+
+**Enhancement**: SampleSet API now follows the same patterns as Instance and Solution for consistency.
+
+**New Properties**:
+```python
+# List-based access (consistent with Instance and Solution)
+sample_set.decision_variables # list[SampledDecisionVariable] - sorted by ID
+sample_set.constraints       # list[SampledConstraint] - sorted by ID
+
+# Individual access by ID (consistent with Instance and Solution)
+sample_set.get_sample_by_id(sample_id: int) -> Solution  # Alias for existing get()
+sample_set.get_decision_variable_by_id(variable_id: int) -> SampledDecisionVariable
+sample_set.get_constraint_by_id(constraint_id: int) -> SampledConstraint
+```
+
+**API Consistency Achievement**:
+All three core classes now follow the same pattern:
+- **Instance**: `decision_variables` → `list[DecisionVariable]`, `get_decision_variable_by_id()` → `DecisionVariable`
+- **Solution**: `decision_variables` → `list[EvaluatedDecisionVariable]`, `get_decision_variable_by_id()` → `EvaluatedDecisionVariable`  
+- **SampleSet**: `decision_variables` → `list[SampledDecisionVariable]`, `get_decision_variable_by_id()` → `SampledDecisionVariable`
+
+Same patterns apply to constraints and other access methods.
 
 ## Adapter API Changes (v2.0-rc.4)
 
