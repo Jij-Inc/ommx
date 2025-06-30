@@ -203,7 +203,7 @@ fn main() -> Result<()> {
 
         Command::List => {
             for image_name in ommx::artifact::get_images()? {
-                println!("{}", image_name);
+                println!("{image_name}");
             }
         }
     }

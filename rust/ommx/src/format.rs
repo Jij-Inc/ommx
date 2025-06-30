@@ -3,9 +3,9 @@ use std::fmt;
 
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
     if let Some(precision) = f.precision() {
-        write!(f, "{1:.0$}", precision, coefficient)?;
+        write!(f, "{coefficient:.precision$}")?;
     } else {
-        write!(f, "{}", coefficient)?;
+        write!(f, "{coefficient}")?;
     }
     Ok(())
 }
@@ -25,10 +25,10 @@ fn write_term(f: &mut fmt::Formatter, ids: MonomialDyn, coefficient: f64) -> fmt
     }
     let mut ids = ids.iter().peekable();
     if let Some(id) = ids.next() {
-        write!(f, "x{}", id)?;
+        write!(f, "x{id}")?;
     }
     for id in ids {
-        write!(f, "*x{}", id)?;
+        write!(f, "*x{id}")?;
     }
     Ok(())
 }
@@ -89,9 +89,9 @@ impl fmt::Display for crate::Function {
         match self {
             crate::Function::Zero => write!(f, "0"),
             crate::Function::Constant(c) => write!(f, "{}", c.into_inner()),
-            crate::Function::Linear(linear) => write!(f, "{}", linear),
-            crate::Function::Quadratic(quadratic) => write!(f, "{}", quadratic),
-            crate::Function::Polynomial(polynomial) => write!(f, "{}", polynomial),
+            crate::Function::Linear(linear) => write!(f, "{linear}"),
+            crate::Function::Quadratic(quadratic) => write!(f, "{quadratic}"),
+            crate::Function::Polynomial(polynomial) => write!(f, "{polynomial}"),
         }
     }
 }
@@ -103,26 +103,26 @@ mod tests {
     #[test]
     fn test_polynomial_base_display_empty() {
         let poly: Linear = Linear::default();
-        assert_eq!(format!("{}", poly), "0");
+        assert_eq!(format!("{poly}"), "0");
     }
 
     #[test]
     fn test_polynomial_base_display_single_term() {
         let poly = coeff!(3.0) * linear!(1);
-        assert_eq!(format!("{}", poly), "3*x1");
+        assert_eq!(format!("{poly}"), "3*x1");
     }
 
     #[test]
     fn test_polynomial_base_display_constant() {
         let poly = Linear::from(coeff!(5.0));
-        assert_eq!(format!("{}", poly), "5");
+        assert_eq!(format!("{poly}"), "5");
     }
 
     #[test]
     fn test_polynomial_base_display_multiple_terms() {
         let poly = coeff!(2.0) * linear!(1) - coeff!(3.0) * linear!(2) + coeff!(1.0);
 
-        let result = format!("{}", poly);
+        let result = format!("{poly}");
         // Terms should be sorted by degree (highest first), then lexicographically
         assert_eq!(result, "2*x1 - 3*x2 + 1");
     }
@@ -131,7 +131,7 @@ mod tests {
     fn test_polynomial_base_display_quadratic() {
         let poly = coeff!(4.0) * quadratic!(1, 2) - coeff!(2.0) * quadratic!(1) + coeff!(3.0);
 
-        let result = format!("{}", poly);
+        let result = format!("{poly}");
         // Quadratic term should come first (highest degree), then linear, then constant
         assert_eq!(result, "4*x1*x2 - 2*x1 + 3");
     }
@@ -139,12 +139,12 @@ mod tests {
     #[test]
     fn test_polynomial_base_display_coefficient_one() {
         let poly = coeff!(1.0) * linear!(1);
-        assert_eq!(format!("{}", poly), "x1");
+        assert_eq!(format!("{poly}"), "x1");
     }
 
     #[test]
     fn test_polynomial_base_display_coefficient_negative_one() {
         let poly = coeff!(-1.0) * linear!(1);
-        assert_eq!(format!("{}", poly), "-x1");
+        assert_eq!(format!("{poly}"), "-x1");
     }
 }

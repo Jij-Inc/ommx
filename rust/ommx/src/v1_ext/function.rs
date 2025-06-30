@@ -403,10 +403,10 @@ impl AbsDiffEq for Function {
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.function {
-            Some(FunctionEnum::Constant(c)) => write!(f, "{}", c),
-            Some(FunctionEnum::Linear(linear)) => write!(f, "{}", linear),
-            Some(FunctionEnum::Quadratic(quadratic)) => write!(f, "{}", quadratic),
-            Some(FunctionEnum::Polynomial(poly)) => write!(f, "{}", poly),
+            Some(FunctionEnum::Constant(c)) => write!(f, "{c}"),
+            Some(FunctionEnum::Linear(linear)) => write!(f, "{linear}"),
+            Some(FunctionEnum::Quadratic(quadratic)) => write!(f, "{quadratic}"),
+            Some(FunctionEnum::Polynomial(poly)) => write!(f, "{poly}"),
             None => write!(f, "0"),
         }
     }

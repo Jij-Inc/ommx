@@ -117,7 +117,7 @@ impl Artifact<OciArchive> {
 
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
-        log::info!("Pushing: {}", name);
+        log::info!("Pushing: {name}");
         let mut remote = RemoteBuilder::new(name)?;
         if let Ok((domain, username, password)) = auth_from_env() {
             remote.add_basic_auth(&domain, &username, &password);
@@ -133,7 +133,7 @@ impl Artifact<OciArchive> {
             log::trace!("Already exists in locally: {}", path.display());
             return Ok(());
         }
-        log::info!("Loading: {}", image_name);
+        log::info!("Loading: {image_name}");
         ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(())
     }
@@ -147,7 +147,7 @@ impl Artifact<OciDir> {
 
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
-        log::info!("Pushing: {}", name);
+        log::info!("Pushing: {name}");
         let mut remote = RemoteBuilder::new(name)?;
         if let Ok((domain, username, password)) = auth_from_env() {
             remote.add_basic_auth(&domain, &username, &password);
@@ -183,7 +183,7 @@ impl Artifact<Remote> {
             log::trace!("Already exists in locally: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
-        log::info!("Pulling: {}", image_name);
+        log::info!("Pulling: {image_name}");
         if let Ok((domain, username, password)) = auth_from_env() {
             self.0.add_basic_auth(&domain, &username, &password);
         }
