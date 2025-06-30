@@ -86,7 +86,7 @@ __all__ = [
     "Rng",
     # Evaluated types
     "EvaluatedDecisionVariable",
-    "EvaluatedConstraint", 
+    "EvaluatedConstraint",
     "SampledDecisionVariable",
     "SampledConstraint",
     # Type Alias
@@ -2315,17 +2315,19 @@ class Solution(UserAnnotationBase):
         """Get the evaluated value of a specific constraint."""
         return self.raw.get_constraint_by_id(constraint_id).evaluated_value
 
-    @property 
+    @property
     def decision_variables(self) -> list[EvaluatedDecisionVariable]:
         """Get evaluated decision variables as a list sorted by ID."""
         return self.raw.decision_variables
 
     @property
     def constraints(self) -> list[EvaluatedConstraint]:
-        """Get evaluated constraints as a list sorted by ID.""" 
+        """Get evaluated constraints as a list sorted by ID."""
         return self.raw.constraints
 
-    def get_decision_variable_by_id(self, variable_id: int) -> EvaluatedDecisionVariable:
+    def get_decision_variable_by_id(
+        self, variable_id: int
+    ) -> EvaluatedDecisionVariable:
         """Get a specific evaluated decision variable by ID."""
         return self.raw.get_decision_variable_by_id(variable_id)
 

@@ -207,7 +207,6 @@ impl SampleSet {
         Ok(dict)
     }
 
-
     /// Get a specific sampled decision variable by ID
     pub fn get_decision_variable_by_id(
         &self,
