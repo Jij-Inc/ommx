@@ -4,8 +4,6 @@ from ommx.v1 import (
     Instance,
     State,
     Samples,
-    SamplerInput,
-    SamplerOutput,
     SampleSet,
     Solution,
     DecisionVariable,
@@ -196,10 +194,10 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             return self._qubo
 
     @property
-    def solver_input(self) -> SamplerInput:
+    def solver_input(self) -> dict[tuple[int, ...], float]:
         return self.sampler_input
 
-    def decode(self, data: SamplerOutput) -> Solution:
+    def decode(self, data: oj.Response) -> Solution:
         sample_set = self.decode_to_sampleset(data)
         return sample_set.best_feasible
 
