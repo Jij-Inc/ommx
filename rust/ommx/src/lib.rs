@@ -176,6 +176,7 @@ pub use solution::*;
 pub use substitute::*;
 
 /// Module created from `ommx.v1` proto files
+#[allow(clippy::doc_overindented_list_items)] // prost breaks markdown indents
 pub mod v1 {
     include!("ommx.v1.rs");
 }

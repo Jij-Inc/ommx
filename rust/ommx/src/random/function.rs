@@ -63,11 +63,7 @@ impl FunctionParameters {
             .sum::<usize>();
         let largest_max_terms = multi_choose(self.max_id + 1, self.max_degree as usize) as usize;
         let max = std::cmp::min(self.num_terms, largest_max_terms);
-        let min = if self.num_terms >= sub_max_terms {
-            self.num_terms - sub_max_terms
-        } else {
-            0
-        };
+        let min = self.num_terms.saturating_sub(sub_max_terms);
         min..=max
     }
 
