@@ -33,6 +33,11 @@ impl SampleSet {
         Ok(Solution(solution))
     }
 
+    /// Get sample by ID (alias for get method)
+    pub fn get_sample_by_id(&self, sample_id: u64) -> Result<Solution> {
+        self.get(sample_id)
+    }
+
     pub fn num_samples(&self) -> usize {
         self.0.sample_ids().len()
     }
@@ -142,8 +147,8 @@ impl SampleSet {
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
         self.0
             .constraints()
-            .iter()
-            .map(|(_, constraint)| crate::SampledConstraint(constraint.clone()))
+            .values()
+            .map(|constraint| crate::SampledConstraint(constraint.clone()))
             .collect()
     }
 
@@ -152,8 +157,8 @@ impl SampleSet {
     pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
         self.0
             .decision_variables()
-            .iter()
-            .map(|(_, variable)| crate::SampledDecisionVariable(variable.clone()))
+            .values()
+            .map(|variable| crate::SampledDecisionVariable(variable.clone()))
             .collect()
     }
 
@@ -200,5 +205,36 @@ impl SampleSet {
             dict.set_item(key, value)?;
         }
         Ok(dict)
+    }
+
+    /// Get a specific sampled decision variable by ID
+    pub fn get_decision_variable_by_id(
+        &self,
+        variable_id: u64,
+    ) -> PyResult<crate::SampledDecisionVariable> {
+        let var_id = ommx::VariableID::from(variable_id);
+        self.0
+            .decision_variables()
+            .get(&var_id)
+            .map(|dv| crate::SampledDecisionVariable(dv.clone()))
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err(format!(
+                    "Unknown decision variable ID: {variable_id}"
+                ))
+            })
+    }
+
+    /// Get a specific sampled constraint by ID  
+    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::SampledConstraint> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.0
+            .constraints()
+            .get(&constraint_id)
+            .map(|sc| crate::SampledConstraint(sc.clone()))
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err(format!(
+                    "Unknown constraint ID: {constraint_id}"
+                ))
+            })
     }
 }

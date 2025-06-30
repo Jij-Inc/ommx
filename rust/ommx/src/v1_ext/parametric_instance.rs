@@ -57,7 +57,7 @@ impl ParametricInstance {
         if !required_ids.is_subset(&given_ids) {
             for ids in required_ids.difference(&given_ids) {
                 let parameter = self.parameters.iter().find(|p| p.id == *ids).unwrap();
-                log::error!("Missing parameter: {:?}", parameter);
+                log::error!("Missing parameter: {parameter:?}");
             }
             bail!(
                 "Missing parameters: Required IDs {:?}, got {:?}",

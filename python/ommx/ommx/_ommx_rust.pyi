@@ -780,6 +780,10 @@ class SampleSet:
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
     def get(self, sample_id: builtins.int) -> Solution: ...
+    def get_sample_by_id(self, sample_id: builtins.int) -> Solution:
+        r"""
+        Get sample by ID (alias for get method)
+        """
     def num_samples(self) -> builtins.int: ...
     def sample_ids(self) -> builtins.set[builtins.int]: ...
     def feasible_ids(self) -> builtins.set[builtins.int]: ...
@@ -794,6 +798,16 @@ class SampleSet:
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
         Extract constraint values for a given name and sample ID
+        """
+    def get_decision_variable_by_id(
+        self, variable_id: builtins.int
+    ) -> SampledDecisionVariable:
+        r"""
+        Get a specific sampled decision variable by ID
+        """
+    def get_constraint_by_id(self, constraint_id: builtins.int) -> SampledConstraint:
+        r"""
+        Get a specific sampled constraint by ID
         """
 
 class SampledConstraint:
@@ -929,13 +943,13 @@ class Solution:
     r"""
     Get the relaxation status
     """
-    decision_variables: builtins.dict[builtins.int, EvaluatedDecisionVariable]
+    decision_variables: builtins.list[EvaluatedDecisionVariable]
     r"""
-    Get decision variables information as a map from ID to EvaluatedDecisionVariable
+    Get evaluated decision variables as a list sorted by ID
     """
-    evaluated_constraints: builtins.dict[builtins.int, EvaluatedConstraint]
+    constraints: builtins.list[EvaluatedConstraint]
     r"""
-    Get evaluated constraints information as a map from ID to EvaluatedConstraint
+    Get evaluated constraints as a list sorted by ID
     """
     decision_variable_ids: builtins.set[builtins.int]
     constraint_ids: builtins.set[builtins.int]
@@ -958,21 +972,21 @@ class Solution:
         r"""
         Extract constraints by name with subscripts as key (returns a Python dict)
         """
-    def get_constraint_value(self, constraint_id: builtins.int) -> builtins.float:
-        r"""
-        Get the evaluated value of a specific constraint by ID
-        """
-    def get_dual_variable(
-        self, constraint_id: builtins.int
-    ) -> typing.Optional[builtins.float]:
-        r"""
-        Get the dual variable value of a specific constraint by ID
-        """
     def set_dual_variable(
         self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
     ) -> None:
         r"""
         Set the dual variable value for a specific constraint by ID
+        """
+    def get_decision_variable_by_id(
+        self, variable_id: builtins.int
+    ) -> EvaluatedDecisionVariable:
+        r"""
+        Get a specific evaluated decision variable by ID
+        """
+    def get_constraint_by_id(self, constraint_id: builtins.int) -> EvaluatedConstraint:
+        r"""
+        Get a specific evaluated constraint by ID
         """
 
 class Sos1:
