@@ -62,7 +62,7 @@ pub struct Solution {
     /// Relaxation status - not guaranteed by Solution itself
     pub relaxation: crate::v1::Relaxation,
     #[getset(get = "pub")]
-    sense: Sense,
+    sense: Option<Sense>,
 }
 
 impl Solution {
@@ -82,7 +82,7 @@ impl Solution {
             decision_variables,
             optimality: crate::v1::Optimality::Unspecified,
             relaxation: crate::v1::Relaxation::Unspecified,
-            sense,
+            sense: Some(sense),
         }
     }
 

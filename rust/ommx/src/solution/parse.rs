@@ -14,13 +14,17 @@ impl Parse for crate::v1::Solution {
         let state = self.state.unwrap_or_default();
         let objective = self.objective;
 
-        let sense = self.sense.try_into().map_err(|_| {
-            crate::RawParseError::UnknownEnumValue {
+        let v1_sense = crate::v1::instance::Sense::try_from(self.sense)
+            .map_err(|_| crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
                 value: self.sense,
-            }
-            .context(message, "sense")
-        })?;
+            })
+            .map_err(|e| ParseError::from(e).context(message, "sense"))?;
+        let sense = match v1_sense {
+            crate::v1::instance::Sense::Unspecified => None,
+            crate::v1::instance::Sense::Minimize => Some(crate::Sense::Minimize),
+            crate::v1::instance::Sense::Maximize => Some(crate::Sense::Maximize),
+        };
 
         // Parse evaluated constraints
         let mut evaluated_constraints = std::collections::BTreeMap::default();
@@ -71,10 +75,14 @@ impl Parse for crate::v1::Solution {
             })
             .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
 
-        let mut solution =
-            Solution::new(objective, evaluated_constraints, decision_variables, sense);
-        solution.optimality = optimality;
-        solution.relaxation = relaxation;
+        let solution = Solution {
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            optimality,
+            relaxation,
+            sense,
+        };
 
         // Validate feasibility consistency
         let computed_feasible = solution.feasible();
@@ -124,7 +132,11 @@ impl From<Solution> for crate::v1::Solution {
         let relaxation = solution.relaxation.into();
         // For backward compatibility, set feasible_unrelaxed to the same value as feasible
         let feasible_unrelaxed = feasible;
-        let sense = (*solution.sense()).into();
+        let sense = match solution.sense {
+            None => crate::v1::instance::Sense::Unspecified as i32,
+            Some(crate::Sense::Minimize) => crate::v1::instance::Sense::Minimize as i32,
+            Some(crate::Sense::Maximize) => crate::v1::instance::Sense::Maximize as i32,
+        };
 
         #[allow(deprecated)]
         crate::v1::Solution {
@@ -189,7 +201,7 @@ mod tests {
         assert_eq!(parsed.relaxation, v1::Relaxation::Unspecified);
         assert_eq!(parsed.evaluated_constraints().len(), 1);
         assert_eq!(parsed.decision_variables().len(), 1);
-        assert_eq!(parsed.sense(), &crate::Sense::Maximize);
+        assert_eq!(parsed.sense().unwrap(), crate::Sense::Maximize);
 
         // Test round-trip conversion
         let v1_converted: v1::Solution = parsed.into();
@@ -197,6 +209,27 @@ mod tests {
         assert!(v1_converted.feasible);
         assert_eq!(v1_converted.feasible_relaxed, Some(true));
         assert_eq!(v1_converted.sense, v1::instance::Sense::Maximize as i32);
+    }
+
+    #[test]
+    fn test_solution_parser_unspecified_sense() {
+        let v1_solution = v1::Solution {
+            state: Some(v1::State {
+                entries: [(1, 2.0), (2, 3.0)].iter().cloned().collect(),
+            }),
+            objective: 42.5,
+            evaluated_constraints: vec![],
+            decision_variables: vec![],
+            feasible: true,
+            feasible_relaxed: Some(true),
+            optimality: v1::Optimality::Optimal as i32,
+            relaxation: v1::Relaxation::Unspecified as i32,
+            sense: v1::instance::Sense::Unspecified as i32,
+            ..Default::default()
+        };
+
+        let parsed: Solution = v1_solution.parse(&()).unwrap();
+        assert!(parsed.sense().is_none());
     }
 
     #[test]
