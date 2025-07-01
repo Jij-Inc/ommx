@@ -325,7 +325,7 @@ mod tests {
             .new_tree(&mut runner)
             .expect("Failed to create a new tree");
         let ids = tree.current();
-        println!("{:?}", ids);
+        println!("{ids:?}");
     }
 
     #[test]

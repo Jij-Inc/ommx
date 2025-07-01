@@ -204,7 +204,7 @@ impl Instance {
             .constraints
             .iter()
             .position(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
         let c = self.constraints.remove(index);
         self.removed_constraints.push(RemovedConstraint {
             constraint: Some(c),
@@ -219,7 +219,7 @@ impl Instance {
             .removed_constraints
             .iter()
             .position(|c| c.constraint.as_ref().is_some_and(|c| c.id == constraint_id))
-            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
         let c = self.removed_constraints.remove(index).constraint.unwrap();
         self.constraints.push(c);
         Ok(())
@@ -351,7 +351,7 @@ impl Instance {
             .decision_variables
             .iter()
             .find(|dv| dv.id == decision_variable_id)
-            .with_context(|| format!("Decision variable ID {} not found", decision_variable_id))?;
+            .with_context(|| format!("Decision variable ID {decision_variable_id} not found"))?;
         if v.kind() != Kind::Integer {
             bail!(
                 "The decision variable is not an integer type: ID={}",
@@ -360,10 +360,7 @@ impl Instance {
         }
 
         let bound = v.bound.as_ref().with_context(|| {
-            format!(
-                "Bound must be set and finite for log-encoding: ID={}",
-                decision_variable_id
-            )
+            format!("Bound must be set and finite for log-encoding: ID={decision_variable_id}")
         })?;
 
         // Bound of integer may be non-integer value
@@ -488,11 +485,11 @@ impl Instance {
             .constraints
             .iter_mut()
             .find(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
         let function = constraint
             .function
             .as_ref()
-            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
 
         // If the constraint contains continuous decision variables, integer slack variable cannot be introduced
         for id in function.required_ids() {
@@ -589,14 +586,14 @@ impl Instance {
             .constraints
             .iter_mut()
             .find(|c| c.id == constraint_id)
-            .with_context(|| format!("Constraint ID {} not found", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} not found"))?;
         if constraint.equality() != Equality::LessThanOrEqualToZero {
             bail!("The constraint is not inequality: ID={}", constraint_id);
         }
         let f = constraint
             .function
             .as_ref()
-            .with_context(|| format!("Constraint ID {} does not have a function", constraint_id))?;
+            .with_context(|| format!("Constraint ID {constraint_id} does not have a function"))?;
 
         for id in f.required_ids() {
             let kind = kinds

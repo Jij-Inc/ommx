@@ -16,8 +16,7 @@ impl InstanceAnnotations {
 
     fn get(&self, key: &str) -> Result<&String> {
         self.0.get(key).context(format!(
-            "Annotation does not have the entry with the key `{}`",
-            key
+            "Annotation does not have the entry with the key `{key}`"
         ))
     }
 
@@ -122,8 +121,7 @@ impl ParametricInstanceAnnotations {
 
     fn get(&self, key: &str) -> Result<&String> {
         self.0.get(key).context(format!(
-            "Annotation does not have the entry with the key `{}`",
-            key
+            "Annotation does not have the entry with the key `{key}`"
         ))
     }
 

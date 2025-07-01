@@ -24,7 +24,7 @@ def test_constant_constraint_feasible():
     assert solution.state.entries == {0: 1.0}
     assert solution.objective == 1.0
 
-    assert len(solution.raw.evaluated_constraints) == 2
+    assert len(solution.constraints) == 2
 
 
 @pytest.mark.skip(

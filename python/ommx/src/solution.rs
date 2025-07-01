@@ -6,7 +6,7 @@ use pyo3::{
     types::{PyBytes, PyDict, PyTuple},
     Bound,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
@@ -91,28 +91,25 @@ impl Solution {
         self.0.relaxation = relaxation.into();
     }
 
-    /// Get decision variables information as a map from ID to EvaluatedDecisionVariable
+    /// Get evaluated decision variables as a list sorted by ID
     #[getter]
-    pub fn decision_variables(&self) -> BTreeMap<u64, crate::EvaluatedDecisionVariable> {
+    pub fn decision_variables(&self) -> Vec<crate::EvaluatedDecisionVariable> {
+        // BTreeMap is already sorted by key
         self.0
             .decision_variables()
-            .iter()
-            .map(|(id, dv)| {
-                (
-                    id.into_inner(),
-                    crate::EvaluatedDecisionVariable(dv.clone()),
-                )
-            })
+            .values()
+            .map(|dv| crate::EvaluatedDecisionVariable(dv.clone()))
             .collect()
     }
 
-    /// Get evaluated constraints information as a map from ID to EvaluatedConstraint
+    /// Get evaluated constraints as a list sorted by ID
     #[getter]
-    pub fn evaluated_constraints(&self) -> BTreeMap<u64, crate::EvaluatedConstraint> {
+    pub fn constraints(&self) -> Vec<crate::EvaluatedConstraint> {
+        // BTreeMap is already sorted by key
         self.0
             .evaluated_constraints()
-            .iter()
-            .map(|(id, ec)| (id.into_inner(), crate::EvaluatedConstraint(ec.clone())))
+            .values()
+            .map(|ec| crate::EvaluatedConstraint(ec.clone()))
             .collect()
     }
 
@@ -162,27 +159,41 @@ impl Solution {
         Ok(dict)
     }
 
-    /// Get the evaluated value of a specific constraint by ID
-    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0
-            .get_constraint_value(constraint_id)
-            .map_err(|e| PyKeyError::new_err(e.to_string()))
-    }
-
-    /// Get the dual variable value of a specific constraint by ID
-    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
-        let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0
-            .get_dual_variable(constraint_id)
-            .map_err(|e| PyKeyError::new_err(e.to_string()))
-    }
-
     /// Set the dual variable value for a specific constraint by ID
     pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
         self.0
             .set_dual_variable(constraint_id, value)
             .map_err(|e| PyKeyError::new_err(e.to_string()))
+    }
+
+    /// Get a specific evaluated decision variable by ID
+    pub fn get_decision_variable_by_id(
+        &self,
+        variable_id: u64,
+    ) -> PyResult<crate::EvaluatedDecisionVariable> {
+        let var_id = ommx::VariableID::from(variable_id);
+        self.0
+            .decision_variables()
+            .get(&var_id)
+            .map(|dv| crate::EvaluatedDecisionVariable(dv.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!("Unknown decision variable ID: {variable_id}"))
+            })
+    }
+
+    /// Get a specific evaluated constraint by ID
+    pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.0
+            .evaluated_constraints()
+            .get(&constraint_id)
+            .map(|ec| crate::EvaluatedConstraint(ec.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Unknown constraint ID: {}",
+                    constraint_id.into_inner()
+                ))
+            })
     }
 }

@@ -78,7 +78,7 @@ impl std::fmt::Display for RemovedConstraint {
             let params: Vec<String> = self
                 .removed_reason_parameters
                 .iter()
-                .map(|(k, v)| format!("{}={}", k, v))
+                .map(|(k, v)| format!("{k}={v}"))
                 .collect();
             reason_str = format!("{}, {}", reason_str, params.join(", "));
         }

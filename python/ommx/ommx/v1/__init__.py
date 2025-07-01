@@ -48,6 +48,12 @@ ConstraintHints = _ommx_rust.ConstraintHints
 # Import Rng class
 Rng = _ommx_rust.Rng
 
+# Import evaluated classes
+EvaluatedDecisionVariable = _ommx_rust.EvaluatedDecisionVariable
+EvaluatedConstraint = _ommx_rust.EvaluatedConstraint
+SampledDecisionVariable = _ommx_rust.SampledDecisionVariable
+SampledConstraint = _ommx_rust.SampledConstraint
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -78,6 +84,11 @@ __all__ = [
     "Kind",
     # Utility
     "Rng",
+    # Evaluated types
+    "EvaluatedDecisionVariable",
+    "EvaluatedConstraint",
+    "SampledDecisionVariable",
+    "SampledConstraint",
     # Type Alias
     "ToState",
     "ToSamples",
@@ -481,14 +492,14 @@ class Instance(UserAnnotationBase):
         >>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})
         >>> solution.objective
         1.0
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value used_ids subscripts
         id                                    
         0       <=0    0.0   {0, 1}         []
 
         The values of decision variables are also stored in the solution:
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
         0   Binary   -0.0    1.0         []    1.0
@@ -531,7 +542,7 @@ class Instance(UserAnnotationBase):
         >>> solution = instance.evaluate({0: 1, 1: 0})
         >>> solution.objective
         1.0
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value used_ids subscripts
         id                                    
         0        =0    0.0   {0, 1}         []
@@ -543,7 +554,7 @@ class Instance(UserAnnotationBase):
         * When the bound is :math:`[2, 5]`, the value is ``2``
         * When the bound is :math:`[-3, -1]`, the value is ``-1``
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
         0   Binary   -0.0    1.0         []    1.0
@@ -741,7 +752,7 @@ class Instance(UserAnnotationBase):
 
         The log-encoded integer variables are automatically evaluated from the binary variables.
 
-        >>> solution.decision_variables.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts  value
         id                                                          
         0   Integer   -0.0    2.0                x        [0]    2.0
@@ -757,7 +768,7 @@ class Instance(UserAnnotationBase):
         >>> solution.objective
         2.0
 
-        >>> solution.constraints.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
            equality  value            used_ids subscripts          removed_reason
         id                                                                       
         0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
@@ -1733,7 +1744,7 @@ class ParametricInstance(UserAnnotationBase):
         ...     parameters=p + w + [W],
         ...     objective=objective,
         ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE.to_pb(),
+        ...     sense=Instance.MAXIMIZE,
         ... )
 
         Substitute parameters to get an instance
@@ -1792,7 +1803,7 @@ class ParametricInstance(UserAnnotationBase):
         | Polynomial
         | Function,
         constraints: Iterable[Constraint | _Constraint],
-        sense: _Instance.Sense.ValueType,
+        sense: _Instance.Sense.ValueType | Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
         description: Optional[_Instance.Description] = None,
@@ -1801,6 +1812,9 @@ class ParametricInstance(UserAnnotationBase):
             objective = Function(objective)
         raw_objective = _Function()
         raw_objective.ParseFromString(objective.to_bytes())
+
+        if isinstance(sense, Sense):
+            sense = _Instance.Sense.ValueType(sense.to_pb())
 
         return ParametricInstance(
             _ParametricInstance(
@@ -2132,7 +2146,7 @@ class Solution(UserAnnotationBase):
         return self.raw.objective
 
     @property
-    def decision_variables(self) -> DataFrame:
+    def decision_variables_df(self) -> DataFrame:
         # Use the new decision_variables property that returns dict of EvaluatedDecisionVariable
         df = DataFrame(
             {
@@ -2146,14 +2160,14 @@ class Solution(UserAnnotationBase):
                 "substituted_value": NA,  # This field is not available in the new API
                 "value": v.value,
             }
-            for v in self.raw.decision_variables.values()
+            for v in self.decision_variables
         )
         if not df.empty:
             df = df.set_index("id")
         return df
 
     @property
-    def constraints(self) -> DataFrame:
+    def constraints_df(self) -> DataFrame:
         # Use the new evaluated_constraints property
         df = DataFrame(
             {
@@ -2167,7 +2181,7 @@ class Solution(UserAnnotationBase):
                 "dual_variable": c.dual_variable if c.dual_variable is not None else NA,
                 "removed_reason": c.removed_reason if c.removed_reason else NA,
             }
-            for c in self.raw.evaluated_constraints.values()
+            for c in self.constraints
         )
         if not df.empty:
             df = df.set_index("id")
@@ -2303,11 +2317,31 @@ class Solution(UserAnnotationBase):
 
     def get_dual_variable(self, constraint_id: int) -> float | None:
         """Get the dual variable value for a specific constraint."""
-        return self.raw.get_dual_variable(constraint_id)
+        return self.raw.get_constraint_by_id(constraint_id).dual_variable
 
     def get_constraint_value(self, constraint_id: int) -> float:
         """Get the evaluated value of a specific constraint."""
-        return self.raw.get_constraint_value(constraint_id)
+        return self.raw.get_constraint_by_id(constraint_id).evaluated_value
+
+    @property
+    def decision_variables(self) -> list[EvaluatedDecisionVariable]:
+        """Get evaluated decision variables as a list sorted by ID."""
+        return self.raw.decision_variables
+
+    @property
+    def constraints(self) -> list[EvaluatedConstraint]:
+        """Get evaluated constraints as a list sorted by ID."""
+        return self.raw.constraints
+
+    def get_decision_variable_by_id(
+        self, variable_id: int
+    ) -> EvaluatedDecisionVariable:
+        """Get a specific evaluated decision variable by ID."""
+        return self.raw.get_decision_variable_by_id(variable_id)
+
+    def get_constraint_by_id(self, constraint_id: int) -> EvaluatedConstraint:
+        """Get a specific evaluated constraint by ID."""
+        return self.raw.get_constraint_by_id(constraint_id)
 
 
 @dataclass
@@ -3963,7 +3997,7 @@ class SampleSet(UserAnnotationBase):
         >>> solution = sample_set.get(sample_id=0)
         >>> solution.objective
         1.0
-        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
         0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
@@ -3977,7 +4011,7 @@ class SampleSet(UserAnnotationBase):
         >>> solution = sample_set.best_feasible
         >>> solution.objective
         3.0
-        >>> solution.decision_variables  # doctest: +NORMALIZE_WHITESPACE
+        >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
         0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
@@ -4116,7 +4150,7 @@ class SampleSet(UserAnnotationBase):
         return self.summary.index.tolist()  # type: ignore[attr-defined]
 
     @property
-    def decision_variables(self) -> DataFrame:
+    def decision_variables_df(self) -> DataFrame:
         df = DataFrame(
             {
                 "id": v.id,
@@ -4135,7 +4169,7 @@ class SampleSet(UserAnnotationBase):
         return df
 
     @property
-    def constraints(self) -> DataFrame:
+    def constraints_df(self) -> DataFrame:
         df = DataFrame(
             {
                 "id": c.id,
@@ -4180,6 +4214,30 @@ class SampleSet(UserAnnotationBase):
         """
         solution = self.raw.get(sample_id)
         return Solution(solution)
+
+    def get_sample_by_id(self, sample_id: int) -> Solution:
+        """
+        Get sample by ID (alias for get method)
+        """
+        return self.get(sample_id)
+
+    def get_decision_variable_by_id(self, variable_id: int) -> SampledDecisionVariable:
+        """Get a specific sampled decision variable by ID."""
+        return self.raw.get_decision_variable_by_id(variable_id)
+
+    def get_constraint_by_id(self, constraint_id: int) -> SampledConstraint:
+        """Get a specific sampled constraint by ID."""
+        return self.raw.get_constraint_by_id(constraint_id)
+
+    @property
+    def decision_variables(self) -> list[SampledDecisionVariable]:
+        """Get sampled decision variables as a list sorted by ID."""
+        return self.raw.decision_variables
+
+    @property
+    def constraints(self) -> list[SampledConstraint]:
+        """Get sampled constraints as a list sorted by ID."""
+        return self.raw.constraints
 
     @property
     def best_feasible_id(self) -> int:
