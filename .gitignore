@@ -19,9 +19,6 @@ Untitled*.ipynb
 *.nbconvert.ipynb
 .ipynb_checkpoints/
 
-# Jupyter MCP
-.jupyter_ystore.db
-
 # Python
 .venv*/
 __pycache__/
