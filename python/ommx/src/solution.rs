@@ -58,6 +58,15 @@ impl Solution {
         self.0.feasible()
     }
 
+    // Get the optimization sense (minimize or maximize)
+    #[getter]
+    pub fn sense(&self) -> crate::Sense {
+        match  self.0.sense() {
+            ommx::Sense::Minimize => crate::Sense::Minimize,
+            ommx::Sense::Maximize => crate::Sense::Maximize,
+        }
+    }
+
     /// Get the optimality status
     #[getter]
     pub fn optimality(&self) -> crate::Optimality {
