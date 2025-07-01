@@ -205,6 +205,21 @@ impl Monomial for QuadraticMonomial {
         }
     }
 
+    fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
+        if let Self::Pair(VariableIDPair { lower, upper }) = self {
+            if lower != upper {
+                // If the pair is not the same, we cannot reduce it.
+                return false;
+            }
+            if binary_ids.contains(lower) {
+                // If both IDs are binary, we can reduce it to linear.
+                *self = Self::Linear(*lower);
+                return true;
+            }
+        }
+        false
+    }
+
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
         match self {
             Self::Pair(pair) => Box::new(pair.iter()),

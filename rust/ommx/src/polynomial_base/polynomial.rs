@@ -344,6 +344,10 @@ impl Monomial for MonomialDyn {
         }
     }
 
+    fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
+        todo!()
+    }
+
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
         Box::new(self.0.iter().copied())
     }

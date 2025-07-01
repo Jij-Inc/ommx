@@ -19,7 +19,7 @@ pub use parse::*;
 pub use polynomial::*;
 pub use quadratic::*;
 
-use crate::{coeff, v1::State, Coefficient, VariableID};
+use crate::{coeff, v1::State, Coefficient, VariableID, VariableIDSet};
 use anyhow::{Context, Result};
 use fnv::{FnvHashMap, FnvHashSet};
 use num::{
@@ -40,6 +40,11 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
 
     fn as_linear(&self) -> Option<VariableID>;
     fn as_quadratic(&self) -> Option<VariableIDPair>;
+
+    /// Reduce power to linear `x^n -> x` for binary variables.
+    ///
+    /// This returns `true` if the monomial is reduced.
+    fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool;
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_>;
     /// Create a new monomial from a set of ids. If the size of IDs are too large, it will return `None`.
