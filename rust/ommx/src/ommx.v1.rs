@@ -560,6 +560,9 @@ pub struct Solution {
     /// Whether the solution is obtained by a relaxed linear programming solver.
     #[prost(enumeration = "Relaxation", tag = "7")]
     pub relaxation: i32,
+    /// Whether the problem is a minimization or maximization problem.
+    #[prost(enumeration = "instance::Sense", tag = "10")]
+    pub sense: i32,
 }
 /// The solver proved that the problem is infeasible.
 ///

@@ -2296,6 +2296,11 @@ class Solution(UserAnnotationBase):
         # Return the _ommx_rust.Relaxation enum directly
         return self.raw.relaxation
 
+    @property
+    def sense(self) -> _ommx_rust.Sense:
+        # Return the _ommx_rust.Sense enum directly
+        return self.raw.sense
+
     @optimality.setter
     def optimality(self, value: _ommx_rust.Optimality) -> None:
         """Set the optimality status."""
@@ -4308,6 +4313,10 @@ class SampleSet(UserAnnotationBase):
         """
         solution = self.raw.best_feasible_unrelaxed
         return Solution(solution)
+
+    @property
+    def sense(self) -> _ommx_rust.Sense:
+        return self.raw.sense
 
 
 @dataclass
