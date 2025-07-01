@@ -61,10 +61,7 @@ impl Solution {
     // Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> crate::Sense {
-        match self.0.sense() {
-            ommx::Sense::Minimize => crate::Sense::Minimize,
-            ommx::Sense::Maximize => crate::Sense::Maximize,
-        }
+        self.0.sense().clone().into()
     }
 
     /// Get the optimality status
