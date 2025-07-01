@@ -8,11 +8,6 @@ tasks:
     cmds:
       - uv run jupyter-book build .
 
-  pyright:
-    desc: "Run type checks on the book notebooks"
-    cmds:
-      - uv run nbqa pyright tutorial/*.ipynb user_guide/*.ipynb
-
   test:
     desc: "Test each notebook in the book"
     cmds:
