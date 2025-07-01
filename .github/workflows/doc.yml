@@ -17,6 +17,7 @@ jobs:
   jupyter-book:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         lang: [ja, en]
     env:
