@@ -123,7 +123,7 @@ impl Monomial for LinearMonomial {
         None
     }
 
-    fn reduce_binary_power(&mut self) -> bool {
+    fn reduce_binary_power(&mut self, _: &VariableIDSet) -> bool {
         // Linear monomials are already linear, so no reduction is needed.
         false
     }

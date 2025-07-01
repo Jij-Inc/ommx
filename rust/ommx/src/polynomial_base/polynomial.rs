@@ -345,7 +345,28 @@ impl Monomial for MonomialDyn {
     }
 
     fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
-        todo!()
+        if self.0.len() <= 1 {
+            // No need to reduce if the degree is already linear or constant
+            return false;
+        }
+        let mut current = self.0[0];
+        let mut i = 1;
+        let mut changed = false;
+        while i < self.0.len() {
+            if self.0[i] == current {
+                // Found a duplicate ID, reduce it
+                if binary_ids.contains(&current) {
+                    // If the ID is in the binary IDs, we can reduce it
+                    self.0.remove(i);
+                    changed = true;
+                    continue;
+                }
+            } else {
+                current = self.0[i];
+            }
+            i += 1;
+        }
+        changed
     }
 
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID> + '_> {
@@ -414,6 +435,79 @@ impl Monomial for MonomialDyn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_reduce_binary_power() {
+        // Test case 1: x1 * x1 * x2 should reduce to x1 * x2 when x1 is binary
+        let x1 = VariableID::from(1);
+        let x2 = VariableID::from(2);
+
+        // Create monomial x1 * x1 * x2
+        let mut monomial = MonomialDyn::new(vec![x1, x1, x2]);
+
+        // Create binary variable set containing x1
+        let mut binary_ids = VariableIDSet::default();
+        binary_ids.insert(x1);
+
+        // Apply reduction
+        let changed = monomial.reduce_binary_power(&binary_ids);
+
+        // Verify the result
+        assert!(changed);
+        assert_eq!(monomial.0.len(), 2);
+        assert_eq!(monomial.0[0], x1);
+        assert_eq!(monomial.0[1], x2);
+
+        // Test case 2: No change when variables are not binary
+        let x3 = VariableID::from(3);
+        let x4 = VariableID::from(4);
+        
+        // Create monomial x3 * x3 * x4
+        let mut monomial2 = MonomialDyn::new(vec![x3, x3, x4]);
+        
+        // Binary set doesn't contain x3
+        let changed2 = monomial2.reduce_binary_power(&binary_ids);
+        
+        // Should not change
+        assert!(!changed2);
+        assert_eq!(monomial2.0.len(), 3);
+        assert_eq!(monomial2.0[0], x3);
+        assert_eq!(monomial2.0[1], x3);
+        assert_eq!(monomial2.0[2], x4);
+
+        // Test case 3: No change for linear monomial
+        let mut monomial3 = MonomialDyn::new(vec![x1]);
+        let changed3 = monomial3.reduce_binary_power(&binary_ids);
+        
+        // Should not change (already linear)
+        assert!(!changed3);
+        assert_eq!(monomial3.0.len(), 1);
+        assert_eq!(monomial3.0[0], x1);
+
+        // Test case 4: No change for constant monomial
+        let mut monomial4 = MonomialDyn::new(vec![]);
+        let changed4 = monomial4.reduce_binary_power(&binary_ids);
+        
+        // Should not change (constant)
+        assert!(!changed4);
+        assert_eq!(monomial4.0.len(), 0);
+
+        // Test case 5: Multiple binary variables x1^3 * x2^2 -> x1 * x2 when both are binary
+        let mut monomial5 = MonomialDyn::new(vec![x1, x1, x1, x2, x2]);
+        
+        // Add x2 to binary set
+        let mut binary_ids2 = VariableIDSet::default();
+        binary_ids2.insert(x1);
+        binary_ids2.insert(x2);
+        
+        let changed5 = monomial5.reduce_binary_power(&binary_ids2);
+        
+        // Should reduce to x1 * x2
+        assert!(changed5);
+        assert_eq!(monomial5.0.len(), 2);
+        assert_eq!(monomial5.0[0], x1);
+        assert_eq!(monomial5.0[1], x2);
+    }
 
     #[test]
     fn largest_terms() {
