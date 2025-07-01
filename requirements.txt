@@ -185,20 +185,20 @@ numpy==1.26.4
     #   pandas
     #   pyscipopt
     #   scipy
-ommx==2.0.0rc2
+ommx==2.0.0rc3
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-highs-adapter
     #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-highs-adapter==2.0.0rc2
+ommx-highs-adapter==2.0.0rc3
     # via ommx-book (pyproject.toml)
-ommx-openjij-adapter==2.0.0rc2
+ommx-openjij-adapter==2.0.0rc3
     # via ommx-book (pyproject.toml)
-ommx-pyscipopt-adapter==2.0.0rc2
+ommx-pyscipopt-adapter==2.0.0rc3
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==2.0.0rc2
+ommx-python-mip-adapter==2.0.0rc3
     # via ommx-book (pyproject.toml)
 openjij==0.9.2
     # via ommx-openjij-adapter
