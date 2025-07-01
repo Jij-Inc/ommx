@@ -13,12 +13,13 @@ impl Parse for crate::v1::Solution {
 
         let state = self.state.unwrap_or_default();
         let objective = self.objective;
-    
+
         let sense = self.sense.try_into().map_err(|_| {
             crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
                 value: self.sense,
-            }.context(message, "sense")
+            }
+            .context(message, "sense")
         })?;
 
         // Parse evaluated constraints
@@ -70,7 +71,8 @@ impl Parse for crate::v1::Solution {
             })
             .map_err(|e| ParseError::from(e).context(message, "relaxation"))?;
 
-        let mut solution = Solution::new(objective, evaluated_constraints, decision_variables, sense);
+        let mut solution =
+            Solution::new(objective, evaluated_constraints, decision_variables, sense);
         solution.optimality = optimality;
         solution.relaxation = relaxation;
 

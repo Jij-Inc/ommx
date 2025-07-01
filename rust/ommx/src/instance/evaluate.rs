@@ -33,7 +33,8 @@ impl Evaluate for Instance {
 
         let sense = *self.sense();
 
-        let solution = crate::Solution::new(objective, evaluated_constraints, decision_variables, sense);
+        let solution =
+            crate::Solution::new(objective, evaluated_constraints, decision_variables, sense);
 
         Ok(solution)
     }
