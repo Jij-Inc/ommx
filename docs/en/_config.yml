@@ -10,6 +10,8 @@ author: Jij Inc.
 execute:
   execute_notebooks: force
   timeout: 60
+  exclude_patterns:
+    - "release_note/ommx-1.*.ipynb"
 
 # Define the name of the latex output file for PDF builds
 latex:
