@@ -4,6 +4,7 @@ package ommx.v1;
 
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
+import "ommx/v1/instance.proto";
 
 // A set of values of decision variables, without any evaluation, even the
 // feasiblity of the solution.
@@ -58,6 +59,9 @@ message Solution {
 
   // Whether the solution is obtained by a relaxed linear programming solver.
   Relaxation relaxation = 7;
+
+  // Whether the problem is a minimization or maximization problem.
+  Instance.Sense sense = 10;
 }
 
 // The solver proved that the problem is infeasible.

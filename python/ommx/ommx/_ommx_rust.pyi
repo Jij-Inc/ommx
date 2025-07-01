@@ -935,6 +935,7 @@ class Solution:
     r"""
     Check if the solution is feasible in the unrelaxed problem
     """
+    sense: Sense
     optimality: Optimality
     r"""
     Get the optimality status

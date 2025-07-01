@@ -1,6 +1,6 @@
 mod parse;
 
-use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, VariableID};
+use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sense, VariableID};
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -61,6 +61,8 @@ pub struct Solution {
     pub optimality: crate::v1::Optimality,
     /// Relaxation status - not guaranteed by Solution itself
     pub relaxation: crate::v1::Relaxation,
+    #[getset(get = "pub")]
+    sense: Option<Sense>,
 }
 
 impl Solution {
@@ -72,6 +74,7 @@ impl Solution {
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+        sense: Sense,
     ) -> Self {
         Self {
             objective,
@@ -79,6 +82,7 @@ impl Solution {
             decision_variables,
             optimality: crate::v1::Optimality::Unspecified,
             relaxation: crate::v1::Relaxation::Unspecified,
+            sense: Some(sense),
         }
     }
 
