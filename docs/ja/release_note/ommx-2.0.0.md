@@ -59,5 +59,5 @@ OpenJijは3次以上の高次の多項式を目的関数として、次数下げ
 Linuxのaarch64向けのバイナリパッケージ(wheel)が提供されるようになりました。これにより以下の環境などでより簡単にOMMXを利用できるようになりました。
 
 - macOS上でのDocker等のLinux VM上での利用
-- AWS GravitonやAmpareなどの高性能ARM CPUを利用したIaaS及びそれに対応したPaaS
+- AWS GravitonやAmpereなどの高性能ARM CPUを利用したIaaS及びそれに対応したPaaS
 - GitHub Actionsの `ubuntu-24.04-arm` 環境
