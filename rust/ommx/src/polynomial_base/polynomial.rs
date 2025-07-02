@@ -461,13 +461,13 @@ mod tests {
         // Test case 2: No change when variables are not binary
         let x3 = VariableID::from(3);
         let x4 = VariableID::from(4);
-        
+
         // Create monomial x3 * x3 * x4
         let mut monomial2 = MonomialDyn::new(vec![x3, x3, x4]);
-        
+
         // Binary set doesn't contain x3
         let changed2 = monomial2.reduce_binary_power(&binary_ids);
-        
+
         // Should not change
         assert!(!changed2);
         assert_eq!(monomial2.0.len(), 3);
@@ -478,7 +478,7 @@ mod tests {
         // Test case 3: No change for linear monomial
         let mut monomial3 = MonomialDyn::new(vec![x1]);
         let changed3 = monomial3.reduce_binary_power(&binary_ids);
-        
+
         // Should not change (already linear)
         assert!(!changed3);
         assert_eq!(monomial3.0.len(), 1);
@@ -487,21 +487,21 @@ mod tests {
         // Test case 4: No change for constant monomial
         let mut monomial4 = MonomialDyn::new(vec![]);
         let changed4 = monomial4.reduce_binary_power(&binary_ids);
-        
+
         // Should not change (constant)
         assert!(!changed4);
         assert_eq!(monomial4.0.len(), 0);
 
         // Test case 5: Multiple binary variables x1^3 * x2^2 -> x1 * x2 when both are binary
         let mut monomial5 = MonomialDyn::new(vec![x1, x1, x1, x2, x2]);
-        
+
         // Add x2 to binary set
         let mut binary_ids2 = VariableIDSet::default();
         binary_ids2.insert(x1);
         binary_ids2.insert(x2);
-        
+
         let changed5 = monomial5.reduce_binary_power(&binary_ids2);
-        
+
         // Should reduce to x1 * x2
         assert!(changed5);
         assert_eq!(monomial5.0.len(), 2);
