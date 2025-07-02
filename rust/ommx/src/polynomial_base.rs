@@ -171,6 +171,18 @@ impl<M: Monomial> PolynomialBase<M> {
             .filter_map(|(monomial, coeff)| monomial.as_quadratic().map(|pair| (pair, *coeff)))
     }
 
+    pub fn reduce_binary_power(&mut self, binary_ids: &VariableIDSet) -> bool {
+        let mut reduced = false;
+        let mut new = Self::default();
+        for (monomial, coefficient) in &self.terms {
+            let mut m = monomial.clone();
+            reduced |= m.reduce_binary_power(binary_ids);
+            new.add_term(m, *coefficient);
+        }
+        *self = new;
+        reduced
+    }
+
     /// The maximum absolute value of the coefficients including the constant.
     ///
     /// `None` means this polynomial is exactly zero.
@@ -249,6 +261,72 @@ mod tests {
             ),
         ]
         "###);
+    }
+
+    #[test]
+    fn test_polynomial_base_reduce_binary_power() {
+        use crate::{linear, quadratic};
+        use ::approx::assert_abs_diff_eq;
+        
+        // Test case 1: Linear polynomial - no change expected
+        let original_linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(1.0);
+        let mut linear_poly = original_linear.clone();
+        
+        let mut binary_ids = VariableIDSet::default();
+        binary_ids.insert(VariableID::from(1));
+        
+        let changed = linear_poly.reduce_binary_power(&binary_ids);
+        assert!(!changed); // Linear terms should not change
+        assert_abs_diff_eq!(linear_poly, original_linear);
+        
+        // Test case 2: Quadratic polynomial with binary variable
+        // x1^2 + x1*x2 + x2^2 + 4 -> x1 + x1*x2 + x2^2 + 4 when x1 is binary
+        let mut quad_poly = coeff!(1.0) * quadratic!(1, 1) 
+            + coeff!(2.0) * quadratic!(1, 2) 
+            + coeff!(3.0) * quadratic!(2, 2) 
+            + coeff!(4.0);
+        
+        let expected = coeff!(1.0) * quadratic!(1)  // x1^2 -> x1
+            + coeff!(2.0) * quadratic!(1, 2) 
+            + coeff!(3.0) * quadratic!(2, 2) 
+            + coeff!(4.0);
+        
+        let changed2 = quad_poly.reduce_binary_power(&binary_ids);
+        assert!(changed2);
+        assert_abs_diff_eq!(quad_poly, expected);
+        
+        // Test case 3: Multiple binary variables
+        binary_ids.insert(VariableID::from(2));
+        binary_ids.insert(VariableID::from(3));
+        
+        // x1^2 + x2^2 + x3^2 + x1*x2 -> x1 + x2 + x3 + x1*x2
+        let mut quad_poly2 = coeff!(5.0) * quadratic!(1, 1)
+            + coeff!(6.0) * quadratic!(2, 2)
+            + coeff!(7.0) * quadratic!(3, 3)
+            + coeff!(8.0) * quadratic!(1, 2);
+        
+        let expected2 = coeff!(5.0) * quadratic!(1)  // x1^2 -> x1
+            + coeff!(6.0) * quadratic!(2)  // x2^2 -> x2
+            + coeff!(7.0) * quadratic!(3)  // x3^2 -> x3
+            + coeff!(8.0) * quadratic!(1, 2);
+        
+        let changed3 = quad_poly2.reduce_binary_power(&binary_ids);
+        assert!(changed3);
+        assert_abs_diff_eq!(quad_poly2, expected2);
+        
+        // Test case 4: No change case - all non-binary variables
+        let original_quad3 = coeff!(1.0) * quadratic!(4, 4) + coeff!(2.0) * quadratic!(5, 5);
+        let mut quad_poly3 = original_quad3.clone();
+        let changed4 = quad_poly3.reduce_binary_power(&binary_ids);
+        assert!(!changed4); // No change since x4 and x5 are not binary
+        assert_abs_diff_eq!(quad_poly3, original_quad3);
+        
+        // Test case 5: Empty polynomial
+        let mut empty_poly = Quadratic::default();
+        let expected_empty = Quadratic::default();
+        let changed5 = empty_poly.reduce_binary_power(&binary_ids);
+        assert!(!changed5); // No change for empty polynomial
+        assert_abs_diff_eq!(empty_poly, expected_empty);
     }
 
     #[test]
