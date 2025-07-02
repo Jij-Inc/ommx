@@ -12,6 +12,7 @@ import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
+import ommx.v1.instance_pb2
 import sys
 import typing
 
@@ -127,6 +128,7 @@ class Solution(google.protobuf.message.Message):
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     OPTIMALITY_FIELD_NUMBER: builtins.int
     RELAXATION_FIELD_NUMBER: builtins.int
+    SENSE_FIELD_NUMBER: builtins.int
     objective: builtins.float
     feasible: builtins.bool
     """The feasibility of the solution for all, remaining and removed constraints.
@@ -149,6 +151,8 @@ class Solution(google.protobuf.message.Message):
     """The optimality of the solution."""
     relaxation: global___Relaxation.ValueType
     """Whether the solution is obtained by a relaxed linear programming solver."""
+    sense: ommx.v1.instance_pb2.Instance.Sense.ValueType
+    """Whether the problem is a minimization or maximization problem."""
     @property
     def state(self) -> global___State: ...
     @property
@@ -181,6 +185,7 @@ class Solution(google.protobuf.message.Message):
         feasible_unrelaxed: builtins.bool = ...,
         optimality: global___Optimality.ValueType = ...,
         relaxation: global___Relaxation.ValueType = ...,
+        sense: ommx.v1.instance_pb2.Instance.Sense.ValueType = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -214,6 +219,8 @@ class Solution(google.protobuf.message.Message):
             b"optimality",
             "relaxation",
             b"relaxation",
+            "sense",
+            b"sense",
             "state",
             b"state",
         ],

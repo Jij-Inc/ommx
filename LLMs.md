@@ -26,6 +26,7 @@
   - [OMMX Rust SDK](https://jij-inc.github.io/ommx/rust/ommx/index.html)
   - [OMMX Python SDK](https://jij-inc.github.io/ommx/python/ommx/autoapi/index.html)
 - [Release Note](#release-note)
+  - [Ommx-2.0.0](#ommx-2.0.0)
   - [Ommx-1.9.0](#ommx-1.9.0)
   - [Ommx-1.8.0](#ommx-1.8.0)
   - [Ommx-1.7.0](#ommx-1.7.0)
@@ -132,7 +133,8 @@ To solve the 0-1 Knapsack Problem through the OMMX PySCIPOpt Adapter, follow the
 In Step 1, we create an `ommx.v1.Instance` object defined in the OMMX Message Instance schema. There are several ways to generate this object, but in this guide, we'll illustrate how to write it directly using the OMMX Python SDK.
 
 ```{tip}
-There are four ways to prepare an `ommx.v1.Instance`:
+There are four ways to prepare an `ommx.v1.Instance` object:
+
 1. Write `ommx.v1.Instance` directly with the OMMX Python SDK.
 2. Convert an MPS file to `ommx.v1.Instance` using the OMMX Python SDK.
 3. Convert a problem instance from a different optimization tool into `ommx.v1.Instance` using an OMMX Adapter.
@@ -153,7 +155,7 @@ $$
 \end{align*}
 $$
 
-We set the following data as parameters for this model.
+Here, we set the following data as parameters for this mathematical model:
 
 
 ```python
@@ -164,7 +166,7 @@ W = 47  # Capacity of the knapsack
 N = len(v)  # Total number of items
 ```
 
-Below is an example code using the OMMX Python SDK to describe this problem instance.
+Based on this mathematical model and data, the code for describing the problem instance using the OMMX Python SDK is as follows:
 
 
 ```python
@@ -189,9 +191,7 @@ x = [
 objective = sum(v[i] * x[i] for i in range(N))
 
 # Define the constraint
-constraint = sum(w[i] * x[i] for i in range(N)) - W <= 0
-# Specify the name of the constraint
-constraint.add_name("Weight limit")
+constraint = (sum(w[i] * x[i] for i in range(N)) <= W).add_name("Weight limit")
 
 # Create an instance
 instance = Instance.from_components(
@@ -208,45 +208,45 @@ instance = Instance.from_components(
 
 ### Step 2: Running Optimization with OMMX Adapter
 
-To optimize the instance prepared in Step 1, we convert it to a PySCIPOpt `Model` and run SCIP optimization via the OMMX PySCIPOpt Adapter.
+To optimize the instance prepared in Step 1, we run the optimization calculation via the OMMX PySCIPOpt Adapter as follows:
 
 
 ```python
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# Obtain an ommx.v1.Solution objection through a PySCIPOpt model.
+# Obtain an ommx.v1.Solution object through a PySCIPOpt model.
 solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
-The variable `solution` is an `ommx.v1.Solution` object that holds the results returned by SCIP.
+The variable `solution` here is an `ommx.v1.Solution` object that contains the results of the optimization calculation by SCIP.
 
 ## Analyzing the Results
 
-From the `solution` in Step 2, we can check:
+From the calculation results obtained in Step 2, we can check and analyze:
 
-- The optimal solution (which items to pick to maximize total value)
-- The optimal value (maximum total value)
-- The status of constraints (how close we are to the knapsack weight limit)
+- The optimal solution (the way to select items that maximizes the total value of items)
+- The optimal value (the highest total value of items)
+- The constraints (the margin of the total weight of items against the weight limit)
 
-We can do this with various properties in the `ommx.v1.Solution` class.
+To do this, we use the properties implemented in the `ommx.v1.Solution` class.
 
 ### Analyzing the Optimal Solution
 
-The `decision_variables` property returns a `pandas.DataFrame` containing information on each variable, such as ID, type, name, and value:
+The `decision_variables_df` property returns a `pandas.DataFrame` object containing information on each variable, such as ID, type, name, and value:
 
 
 
 ```python
-solution.decision_variables
+solution.decision_variables_df
 ```
 
-Using this `pandas.DataFrame`, for example, you can easily create a table in pandas that shows which items are included in the knapsack.
+Using this `pandas.DataFrame` object, you can easily create a table in pandas that shows, for example, "whether to put items in the knapsack":
 
 
 ```python
 import pandas as pd
 
-df = solution.decision_variables
+df = solution.decision_variables_df
 pd.DataFrame.from_dict(
     {
         "Item number": df.index,
@@ -255,11 +255,11 @@ pd.DataFrame.from_dict(
 )
 ```
 
-From this analysis, we see that choosing items 0 and 3 maximizes the total value while satisfying the knapsack’s weight constraint.
+From this analysis result, we can see that choosing items 0 and 3 maximizes the total value while satisfying the knapsack's weight constraint.
 
 ### Analyzing the Optimal Value
 
-`objective` stores the best value found. In this case, it should match the sum of items 0 and 3.
+The `objective` property stores the optimal value. In this case, it should be the sum of the values of items 0 and 3:
 
 
 ```python
@@ -271,21 +271,22 @@ assert np.isclose(solution.objective, expected)
 
 ### Analyzing Constraints
 
-The `constraints` property returns a `pandas.DataFrame` that includes details about each constraint’s equality or inequality, its left-hand-side value (`"value"`), name, and more.
+The `constraints_df` property returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
 
 
 ```python
-solution.constraints
+solution.constraints_df
 ```
 
-Specifically, The `"value"` is helpful for understanding how much slack remains in each constraint. Here, item 0 weighs $11$, item 3 weighs $35$, and the knapsack’s capacity is $47$. Therefore, for the weight constraint 
+Specifically, the `"value"` is helpful for understanding how much slack remains in each constraint. In this case, item 0 has weight $w_0 = 11$, item 3 has weight $w_3 = 35$, and the knapsack's capacity $W$ is $47$. Therefore, for the weight constraint 
 
 $$
 \begin{align*}
 \sum_{i=0}^{n-1} w_i x_i - W \leq 0
 \end{align*}
 $$
-the left-hand side "value" is $-1$, indicating there is exactly 1 unit of slack under the capacity.
+
+the left-hand side "value" is $-1$, indicating there is exactly $1$ unit of slack under the capacity.
 
 
 
@@ -446,12 +447,12 @@ For more detailed information, you can use the `SampleSet.decision_variables` an
 
 
 ```python
-sample_set.decision_variables.head(2)
+sample_set.decision_variables_df.head(2)
 ```
 
 
 ```python
-sample_set.constraints.head(2)
+sample_set.constraints_df.head(2)
 ```
 
 To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.v1.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.
@@ -598,14 +599,14 @@ for name, solution in solutions.items():
 plt.legend()
 ```
 
-It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables` when analyzing the results of multiple solvers.
+It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables_df` when analyzing the results of multiple solvers.
 
 
 ```python
 import pandas
 
 decision_variables = pandas.concat([
-    solution.decision_variables.assign(solver=solver)
+    solution.decision_variables_df.assign(solver=solver)
     for solver, solution in solutions.items()
 ])
 decision_variables
@@ -688,7 +689,7 @@ instance = Instance.from_components(
 solution = OMMXPySCIPOptAdapter.solve(instance)
 
 # Analyze the optimal solution
-df_vars = solution.decision_variables
+df_vars = solution.decision_variables_df
 df = pd.DataFrame.from_dict(
     {
         "Item Number": df_vars.index,
@@ -941,13 +942,13 @@ assert np.isclose(solution.objective, best)
 
 As mentioned in [Solve with multiple adapters and compare the results](../tutorial/switching_adapters), OMMX Adapters have a common API. This common API is realized by inheriting the abstract base classes provided by the OMMX Python SDK. OMMX provides two abstract base classes depending on the type of adapter:
 
-- `ommx.adapter.SolverAdapter`: An abstract base class for optimization solvers that return one solution
-- `ommx.adapter.SamplerAdapter`: An abstract base class for sampling-based optimization solvers
+- [`ommx.adapter.SolverAdapter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/adapter/index.html#ommx.adapter.SolverAdapter): An abstract base class for optimization solvers that return one solution
+- [`ommx.adapter.SamplerAdapter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/adapter/index.html#ommx.adapter.SamplerAdapter): An abstract base class for sampling-based optimization solvers
 
 Solvers that produce multiple solutions can be automatically treated as solvers returning a single solution by selecting the best sample. Therefore, `SamplerAdapter` inherits `SolverAdapter`. If you are unsure which one to implement, consider the number of solutions: if the solver returns one solution, use `SolverAdapter`; if it returns multiple solutions, use `SamplerAdapter`. For example, exact solvers like [PySCIPOpt](https://github.com/scipopt/PySCIPOpt) should use `SolverAdapter`, while samplers like [OpenJij](https://github.com/OpenJij/OpenJij) should use `SamplerAdapter`.
 
 In OMMX, a class inheriting `ommx.adapter.SolverAdapter` is called a **Solver Adapter** and one inheriting `ommx.adapter.SamplerAdapter` is called a **Sampler Adapter**.
-For clear explaination in this chapter, the software that the adapter wraps (such as PySCIPOpt or OpenJij) is referred as "backend solver".
+For clear explanation in this chapter, the software that the adapter wraps (such as PySCIPOpt or OpenJij) is referred to as "backend solver".
 
 ## Adapter Workflow
 
@@ -955,13 +956,13 @@ The adapter process can be roughly divided into these 3 steps:
 
 1. Convert `ommx.v1.Instance` into a format the backend solver can understand
 2. Run the backend solver to obtain a solution
-3. Convert the backend solver’s output into `ommx.v1.Solution` or `ommx.v1.SampleSet`
+3. Convert the backend solver's output into `ommx.v1.Solution` or `ommx.v1.SampleSet`
 
-Because the step 2 is nothing but the usage of the backend solver, we assume you to known it well. This tutorial explains steps 1 and 3.
+Because step 2 is nothing but the usage of the backend solver, we assume you are familiar with it. This tutorial explains steps 1 and 3.
 
 Many backend solvers are designed to receive only the minimum necessary information to represent an optimization problem in a form suitable for their algorithms, whereas `ommx.v1.Instance` contains more information, assuming optimization as part of data analysis. Therefore, step 1 involves discarding much of this information. Additionally, OMMX manages decision variables and constraints with IDs that are not necessarily sequential, while some backend solvers manage them by names or sequential numbers. This correspondence is needed in step 3, so the adapter must manage it.
 
-Conversely, in step 3, `ommx.v1.Solution` or `ommx.v1.SampleSet`, because these stores information same as `ommx.v1.Instance`, cannot be constructed solely from the backend solver's output. Instead, the adapter will construct `ommx.v1.State` or `ommx.v1.Samples` from the backend solver's output and the information from step 1, then convert it to `ommx.v1.Solution` or `ommx.v1.SampleSet` using `ommx.v1.Instance`.
+Conversely, in step 3, `ommx.v1.Solution` or `ommx.v1.SampleSet` cannot be constructed solely from the backend solver's output. Instead, the adapter will construct `ommx.v1.State` or `ommx.v1.Samples` from the backend solver's output and the information from step 1, then convert it to `ommx.v1.Solution` or `ommx.v1.SampleSet` using `ommx.v1.Instance`.
 
 ## Implementing a Solver Adapter
 
@@ -991,12 +992,17 @@ PySCIPOpt manages decision variables by name, so register the OMMX decision vari
 
 ```python
 import pyscipopt
-from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, State, Optimality, Function
+from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, State, Function
 
-def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[str, pyscipopt.Variable]:
-    """Add decision variables to the model and create a mapping from variable names to variables"""
+def set_decision_variables(
+    model: pyscipopt.Model,  # For tutorial purposes, we pass state as arguments, but managing with class is common
+    instance: Instance
+) -> dict[str, pyscipopt.Variable]:
+    """
+    Add decision variables to the model and create a mapping from variable names to variables
+    """
     # Create PySCIPOpt variables from OMMX decision variable information
-    for var in instance.raw.decision_variables:
+    for var in instance.decision_variables:
         if var.kind == DecisionVariable.BINARY:
             model.addVar(name=str(var.id), vtype="B")
         elif var.kind == DecisionVariable.INTEGER:
@@ -1010,11 +1016,12 @@ def set_decision_variables(model: pyscipopt.Model, instance: Instance) -> dict[s
         else:
             # Throw an error if an unsupported decision variable type is encountered
             raise OMMXPySCIPOptAdapterError(
-                f"Unsupported decision variable kind: id: {var.id}, kind: {var.kind}"
+                f"Unsupported decision variable kind: "
+                f"id: {var.id}, kind: {var.kind}"
             )
 
     # If the objective is quadratic, add an auxiliary variable for linearization
-    if instance.raw.objective.HasField("quadratic"):
+    if instance.objective.degree() == 2:
         model.addVar(
             name="auxiliary_for_linearized_objective", vtype="C", lb=None, ub=None
         )
@@ -1031,29 +1038,28 @@ Implement a function to convert `ommx.v1.Function` to `pyscipopt.Expr`. Since `o
 ```python
 def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
     """Helper function to generate a linear expression"""
-    linear = function.linear
     return (
         pyscipopt.quicksum(
-            term.coefficient * varname_map[str(term.id)]
-            for term in linear.terms
+            coeff * varname_map[str(id)]
+            for id, coeff in function.linear_terms.items()
         )
-        + linear.constant
+        + function.constant_term
     )
+
 
 def make_quadratic_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
     """Helper function to generate a quadratic expression"""
-    quad = function.quadratic
     quad_terms = pyscipopt.quicksum(
-        varname_map[str(row)] * varname_map[str(column)] * value
-        for row, column, value in zip(quad.rows, quad.columns, quad.values)
+        varname_map[str(row)] * varname_map[str(col)] * coeff
+        for (row, col), coeff in function.quadratic_terms.items()
     )
 
     linear_terms = pyscipopt.quicksum(
-        term.coefficient * varname_map[str(term.id)]
-        for term in quad.linear.terms
+        coeff * varname_map[str(var_id)]
+        for var_id, coeff in function.linear_terms.items()
     )
 
-    constant = quad.linear.constant
+    constant = function.constant_term
 
     return quad_terms + linear_terms + constant
 ```
@@ -1068,7 +1074,7 @@ import math
 
 def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """Set the objective function for the model"""
-    objective = instance.raw.objective
+    objective = instance.objective
 
     if instance.sense == Instance.MAXIMIZE:
         sense = "maximize"
@@ -1079,12 +1085,13 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
             f"Sense not supported: {instance.sense}"
         )
 
-    if objective.HasField("constant"):
-        model.setObjective(objective.constant, sense=sense)
-    elif objective.HasField("linear"):
+    degree = objective.degree()
+    if degree == 0:
+        model.setObjective(objective.constant_term, sense=sense)
+    elif degree == 1:
         expr = make_linear_expr(objective, varname_map)
         model.setObjective(expr, sense=sense)
-    elif objective.HasField("quadratic"):
+    elif degree == 2:
         # Since PySCIPOpt doesn't support quadratic objectives directly, linearize using an auxiliary variable
         auxilary_var = varname_map["auxiliary_for_linearized_objective"]
 
@@ -1103,34 +1110,39 @@ def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict)
         raise OMMXPySCIPOptAdapterError(
             "The objective function must be `constant`, `linear`, or `quadratic`."
         )
-
+        
 def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dict):
     """Set the constraints for the model"""
     # Process regular constraints
-    for constraint in instance.raw.constraints:
+    for constraint in instance.constraints:
         # Generate an expression based on the type of constraint function
-        if constraint.function.HasField("linear"):
-            expr = make_linear_expr(constraint.function, varname_map)
-        elif constraint.function.HasField("quadratic"):
-            expr = make_quadratic_expr(constraint.function, varname_map)
-        elif constraint.function.HasField("constant"):
+        f = constraint.function
+        degree = f.degree()
+        if degree == 0:
             # For constant constraints, check feasibility
+            constant_value = f.constant_term
             if constraint.equality == Constraint.EQUAL_TO_ZERO and math.isclose(
-                constraint.function.constant, 0, abs_tol=1e-6
+                constant_value, 0, abs_tol=1e-6
             ):
                 continue
             elif (
                 constraint.equality == Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-                and constraint.function.constant <= 1e-6
+                and constant_value <= 1e-6
             ):
                 continue
             else:
                 raise OMMXPySCIPOptAdapterError(
-                    f"Infeasible constant constraint found: id {constraint.id}"
+                    f"Infeasible constant constraint was found: id {constraint.id}"
                 )
+        elif degree == 1:
+            expr = make_linear_expr(f, varname_map)
+        elif degree == 2:
+            expr = make_quadratic_expr(f, varname_map)
         else:
             raise OMMXPySCIPOptAdapterError(
-                f"Constraints must be either `constant`, `linear` or `quadratic`. id: {constraint.id}, type: {constraint.function.WhichOneof('function')}"
+                f"Constraints must be either `constant`, `linear` or `quadratic`. "
+                f"id: {constraint.id}, "
+                f"degree: {degree}"
             )
 
         # Add constraints based on the type (equality/inequality)
@@ -1140,7 +1152,8 @@ def set_constraints(model: pyscipopt.Model, instance: Instance, varname_map: dic
             constr_expr = expr <= 0
         else:
             raise OMMXPySCIPOptAdapterError(
-                f"Not supported constraint equality: id: {constraint.id}, equality: {constraint.equality}"
+                f"Not supported constraint equality: "
+                f"id: {constraint.id}, equality: {constraint.equality}"
             )
 
         # Add the constraint to the model
@@ -1185,7 +1198,7 @@ def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
         return State(
             entries={
                 var.id: sol[varname_map[str(var.id)]]
-                for var in instance.raw.decision_variables
+                for var in instance.decision_variables
             }
         )
     except Exception:
@@ -1231,19 +1244,27 @@ Using the functions prepared so far, you can implement it as follows:
 from ommx.adapter import SolverAdapter
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
-    def __init__(self, ommx_instance: Instance):
+    def __init__(
+        self,
+        ommx_instance: Instance,
+    ):
         self.instance = ommx_instance
         self.model = pyscipopt.Model()
         self.model.hideOutput()
-        
+
         # Build the model with helper functions
         self.varname_map = set_decision_variables(self.model, self.instance)
         set_objective(self.model, self.instance, self.varname_map)
         set_constraints(self.model, self.instance, self.varname_map)
 
     @classmethod
-    def solve(cls, ommx_instance: Instance) -> Solution:
-        """Solve an ommx.v1.Instance using PySCIPopt and return an ommx.v1.Solution"""
+    def solve(
+        cls,
+        ommx_instance: Instance,
+    ) -> Solution:
+        """
+        Solve an ommx.v1.Instance using PySCIPopt and return an ommx.v1.Solution
+        """
         adapter = cls(ommx_instance)
         model = adapter.solver_input
         model.optimize()
@@ -1255,7 +1276,10 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         return self.model
 
     def decode(self, data: pyscipopt.Model) -> Solution:
-        """Generate an ommx.v1.Solution from an optimized pyscipopt.Model and the OMMX Instance"""
+        """
+        Generate an ommx.v1.Solution from an optimized pyscipopt.Model and the OMMX Instance
+        """
+        # Check solution status
         if data.getStatus() == "infeasible":
             raise InfeasibleDetected("Model was infeasible")
 
@@ -1267,9 +1291,9 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         # Evaluate the state using the instance
         solution = self.instance.evaluate(state)
 
-        # Set the optimality status if the model is optimal
+        # Set the optimality status
         if data.getStatus() == "optimal":
-            solution.raw.optimality = Optimality.OPTIMALITY_OPTIMAL
+            solution.optimality = Solution.OPTIMAL
 
         return solution
 ```
@@ -1337,20 +1361,22 @@ from ommx.v1 import Instance, SampleSet, Solution, Samples, State
 
 def decode_to_samples(response: oj.Response) -> Samples:
     # Generate sample IDs
+    samples = Samples({})  # Create empty samples
     sample_id = 0
-    entries = []
 
     num_reads = len(response.record.num_occurrences)
     for i in range(num_reads):
         sample = response.record.sample[i]
         state = State(entries=zip(response.variables, sample))
-        # Encode `num_occurrences` into a list of sample IDs
+        # `num_occurrences` is encoded into sample ID list.
+        # For example, if `num_occurrences` is 2, there are two samples with the same state, thus two sample IDs are generated.
         ids = []
         for _ in range(response.record.num_occurrences[i]):
             ids.append(sample_id)
             sample_id += 1
-        entries.append(Samples.SamplesEntry(state=state, ids=ids))
-    return Samples(entries=entries)
+        samples.append(ids, state)
+
+    return samples
 ```
 
 Note that at this stage, `ommx.v1.Instance` or its extracted correspondence table is not needed because there is no need to consider ID correspondence.
@@ -1398,7 +1424,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         sampler = oj.SASampler()
         # Convert to QUBO dictionary format
         # If the Instance is not in QUBO format, an error will be raised here
-        qubo, _offset = self.ommx_instance.as_qubo_format()
+        qubo, _offset = self.ommx_instance.to_qubo()
         return sampler.sample_qubo(qubo)
 
     # Common method for performing sampling
@@ -1411,7 +1437,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
     # In this adapter, `SamplerInput` uses a QUBO dictionary
     @property
     def sampler_input(self) -> dict[tuple[int, int], float]:
-        qubo, _offset = self.ommx_instance.as_qubo_format()
+        qubo, _offset = self.ommx_instance.to_qubo()
         return qubo
    
     # Convert OpenJij Response to a SampleSet
@@ -1419,6 +1445,50 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         samples = decode_to_samples(data)
         # The information stored in `ommx.v1.Instance` is required here
         return self.ommx_instance.evaluate_samples(samples)
+
+    # We also add API for `SolverAdapter`
+    @property
+    def solver_input(self) -> dict[tuple[int, ...], float]:
+        return self.sampler_input
+
+    # Here we return the best feasible solution from the SampleSet
+    def decode(self, data: oj.Response) -> Solution:
+        sample_set = self.decode_to_sampleset(data)
+        return sample_set.best_feasible
+
+    @classmethod
+    def solve(
+        cls,
+        ommx_instance: Instance,
+    ) -> Solution:
+        sample_set = cls.sample( ommx_instance,)
+        return sample_set.best_feasible
+```
+
+### Sampling using our Adapter
+
+Let's sample from the following optimization problem using our Adapter:
+
+$$
+\begin{align*}
+\max & \quad x_0 + x_1 \\
+\text{s.t.} & \quad x_0 \cdot x_1 = 1 \\
+& \quad x_0, x_1 \in \{0, 1\}
+\end{align*}
+$$
+
+
+```python
+x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=x[0] + x[1],
+    constraints=[x[0] * x[1] == 1],
+    sense=Instance.MAXIMIZE,
+)
+
+sample_set = OMMXOpenJijSAAdapter.sample(instance)
+sample_set.summary
 ```
 
 ## Summary
@@ -1490,8 +1560,7 @@ We'll demonstrate how to provide an initial solution using the following instanc
 
 
 ```python
-from ommx.v1 import Instance, DecisionVariable
-from ommx.v1.solution_pb2 import State
+from ommx.v1 import Instance, DecisionVariable, State
 
 x = DecisionVariable.integer(1, lower=0, upper=5)
 y = DecisionVariable.integer(2, lower=0, upper=5)
@@ -1631,11 +1700,13 @@ linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
 print(linear)
 ```
 
-In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms` and `constant` properties.
+In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms`, `linear_terms` and `constant_term` properties.
 
 
 ```python
-print(f"{linear.terms=}, {linear.constant=}")
+print(f"{linear.terms=}")
+print(f"{linear.linear_terms=}")
+print(f"{linear.constant_term=}")
 ```
 
 Another approach is to create from `ommx.v1.DecisionVariable`. `ommx.v1.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.v1.Linear`, you can first create decision variables using `ommx.v1.DecisionVariable` and then use them to create polynomials.
@@ -1687,11 +1758,11 @@ print(Function(p))
 
 
 ```python
-value, used_id = linear.evaluate({1: 1, 2: 0})
-print(f"{value=}, {used_id=}")
+value= linear.evaluate({1: 1, 2: 0})
+print(f"{value=}")
 ```
 
-The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns the evaluated value and the IDs of the decision variables used. This is useful when you want to know which parts were used when evaluating against `ommx.v1.State`, which is the solution obtained by solving the optimization problem. `evaluate` returns an error if the necessary decision variable IDs are missing.
+The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns an error if the necessary decision variable IDs are missing.
 
 
 ```python
@@ -1701,12 +1772,12 @@ except RuntimeError as e:
     print(f"Error: {e}")
 ```
 
-If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method. This takes the same arguments as `evaluate` but returns the decision variables without assigned values unevaluated.
+If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method.
 
 
 ```python
-linear2, used_id = linear.partial_evaluate({1: 1})
-print(f"{linear2=}, {used_id=}")
+linear2= linear.partial_evaluate({1: 1})
+print(f"{linear2=}")
 ```
 
 The result of partial evaluation is a polynomial, so it is returned in the same type as the original polynomial.
@@ -1782,7 +1853,7 @@ Decision variables and constraints can be obtained in the form of [`pandas.DataF
 
 
 ```python
-instance.decision_variables
+instance.decision_variables_df
 ```
 
 First, `kind`, `lower`, and `upper` are essential information for the mathematical model.
@@ -1796,19 +1867,19 @@ Additionally, OMMX is designed to handle metadata that may be needed when integr
 - `description` is a more detailed explanation of the decision variable.
 - When dealing with many mathematical optimization problems, decision variables are often handled as multidimensional arrays. For example, it is common to consider constraints with subscripts like $x_i + y_i \leq 1, \forall i \in [1, N]$. In this case, `x` and `y` are the names of the decision variables, so they are stored in `name`, and the part corresponding to $i$ is stored in `subscripts`. `subscripts` is a list of integers, but if the subscript cannot be represented as an integer, there is a `parameters` property that allows storage in the form of `dict[str, str]`.
 
-If you need a list of [`ommx.v1.DecisionVariable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.DecisionVariable) directly, you can use the [`get_decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraints) method.
+If you need a list of [`ommx.v1.DecisionVariable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.DecisionVariable) directly, you can use the [`decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables) property.
 
 
 ```python
-for v in instance.get_decision_variables():
+for v in instance.decision_variables:
     print(f"{v.id=}, {v.name=}")
 ```
 
-To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable) method.
+To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable_by_id) method.
 
 
 ```python
-x1 = instance.get_decision_variable(1)
+x1 = instance.get_decision_variable_by_id(1)
 print(f"{x1.id=}, {x1.name=}")
 ```
 
@@ -1838,11 +1909,11 @@ c = (x * y == 0).set_id(100).add_name("prod-zero")
 print(f"{c.id=}, {c.name=}")
 ```
 
-You can also use the [`get_constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraints) method to directly obtain a list of [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint). To obtain `ommx.v1.Constraint` by its the constraint ID, use the [`get_constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint) method.
+You can also use the [`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) property to directly obtain a list of [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint). To obtain `ommx.v1.Constraint` by its the constraint ID, use the [`get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id) method.
 
 
 ```python
-for c in instance.get_constraints():
+for c in instance.constraints:
     print(c)
 ```
 
@@ -2051,15 +2122,12 @@ Normally, solutions are provided by a solver, commonly referred to as a sampler,
 
 Each sample is assigned an ID. Some samplers issue their own IDs for logging, so OMMX allows specifying sample IDs. If omitted, IDs are assigned sequentially starting from `0`.
 
-A helper function `ommx.v1.to_samples` can convert to `ommx.v1.Samples`.
-
 
 ```python
-from ommx.v1 import to_samples
-from ommx.v1.sample_set_pb2 import Samples
+from ommx.v1 import Samples
 
 # When specifying Sample ID
-samples = to_samples({
+samples = Samples({
     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
@@ -2067,7 +2135,7 @@ samples = to_samples({
 assert isinstance(samples, Samples)
 
 # When automatically assigning Sample ID
-samples = to_samples([
+samples = Samples([
     {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
     {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
     {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
@@ -2101,7 +2169,7 @@ solution = sample_set.get(sample_id=0)
 assert isinstance(solution, Solution)
 
 print(f"{solution.objective=}")
-solution.decision_variables
+solution.decision_variables_df
 ```
 
 Retrieving the best solution
@@ -2110,10 +2178,10 @@ Retrieving the best solution
 
 
 ```python
-solution = sample_set.best_feasible()
+solution = sample_set.best_feasible
 
 print(f"{solution.objective=}")
-solution.decision_variables
+solution.decision_variables_df
 ```
 
 Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
@@ -2129,8 +2197,8 @@ sample_set_infeasible = instance.evaluate_samples([
 display(sample_set_infeasible.summary)
 
 try:
-    sample_set_infeasible.best_feasible()
-    assert False # best_feasible() should raise RuntimeError
+    sample_set_infeasible.best_feasible
+    assert False # best_feasible should raise RuntimeError
 except RuntimeError as e:
     print(e)
 ```
@@ -2145,8 +2213,82 @@ OMMX does not provide a method to determine which infeasible solution is the bes
 
 ## Release Note
 
+### Ommx-2.0.0
+
+
+This is the first major version release in about a year since the [OMMX Python SDK 1.0.0](https://github.com/Jij-Inc/ommx/releases/tag/python-1.0.0) release on 2024/7/10. This version includes significant performance improvements, API enhancements with breaking changes, and the addition of new features.
+
+```{note}
+In OMMX, the SDK version and the data format version are independent. The new SDK can read all existing data.
+```
+
+## Performance Improvements
+
+In the initial design of OMMX, the main purpose was to provide a standardized data format, so the model generation API in the SDK was primarily for testing and debugging, and performance was not a major concern. However, as features like QUBO conversion at the OMMX level became available, performance bottlenecks became more frequent.
+
+This version significantly improves the performance of the OMMX API. Since many parts have been improved at the computational complexity order level, a significant performance improvement can be expected, especially for large-scale problems. In particular, improvements have been made in the following areas:
+
+- The implementation of the API, which was auto-generated from Protocol Buffers schema definitions for Python, has been replaced with an implementation based on the Rust SDK. This reduces the overhead of unnecessary serialization and deserialization, speeding up API calls.
+- In the Rust SDK as well, the parts that were auto-generated from the schema definition have been re-implemented more naturally in Rust. By using more appropriate data structures, a significant performance improvement has been achieved. In addition, consistency checks, such as the inability to register a polynomial containing variables not registered as decision variables as an objective function, which could not be described in Protocol Buffers, can now be guaranteed at the Rust type level, enabling more efficient and strict checks.
+- We have set up an online profiling and continuous benchmarking environment for the Rust and Python SDKs with [CodSpeed](https://codspeed.io/Jij-Inc/ommx). Although we have made significant improvements in this release, there are still many areas that are far from optimal, and we will continue to make improvements in the future.
+
+## API Updates
+
+As mentioned above, in addition to replacing the API that was auto-generated from the Protocol Buffers definition, we have improved the API to be more natural and easier for AI assistants like [GitHub Copilot] and [Claude Code] to generate, in line with their widespread adoption. This time, we are making API improvements that include breaking changes for the major version upgrade.
+
+We have prepared a migration guide specifically for use with [Claude Code] in the [Python SDK v1 to v2 Migration Guide](https://github.com/Jij-Inc/ommx/blob/main/PYTHON_SDK_MIGRATION_GUIDE.md). You can migrate more smoothly by loading this into [Claude Code] before performing the migration. Using type checking with `pyright` or `mypy` will make the migration even smoother.
+
+[GitHub Copilot]: https://github.com/features/copilot
+[Claude Code]: https://www.anthropic.com/claude-code
+[`ommx.v1.Instance`]: https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance
+[`ommx.v1.ParametricInstance`]: https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.ParametricInstance
+[`ommx.v1.Solution`]: https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Solution
+[`ommx.v1.SampleSet`]: https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.SampleSet
+[`DataFrame`]: https://pandas.pydata.org/pandas-docs/stable/reference/frame.html
+
+### Deprecation of the `raw` API
+
+Before 2.0.0, fields like `ommx.v1.Instance.raw` were fields with classes auto-generated from Protocol Buffers, but as mentioned above, this has been replaced with an implementation based on the Rust SDK. We will not maintain compatibility at this layer, and instead, you can now achieve the necessary processing by directly using the [`ommx.v1.Instance`] API. We will phase out the `raw` API in the future.
+
+### Renaming of Function APIs that Return DataFrame
+
+Previously, properties like `Instance.decision_variables` and `Instance.constraints` returned a [`DataFrame`], but these have been renamed to [`Instance.decision_variables_df`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables_df) and [`Instance.constraints_df`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints_df) to clarify that they return a [`DataFrame`].
+
+Instead, properties like [`Instance.decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables) and [`Instance.constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) now return `list[ommx.v1.DecisionVariable]` and `list[ommx.v1.Constraint]`, respectively. These are sorted by the ID of the decision variable and constraint. These are more natural to handle than returning a [`DataFrame`] when used in regular Python code. To get a decision variable or constraint from its ID, use [`Instance.get_decision_variable_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable_by_id) and [`Instance.get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id).
+
+These changes are also applied to classes such as [`ommx.v1.ParametricInstance`], [`ommx.v1.Solution`], and [`ommx.v1.SampleSet`].
+
+## New Features
+
+The main purpose of this release was to finalize the internal structure changes and breaking API changes, but some new features have also been added.
+
+### HUBO (high-order unconstrained binary optimization) support in OpenJij adapter
+
+OpenJij can directly and quickly handle higher-order polynomials of degree 3 or more as objective functions without performing operations such as degree reduction. This can now be handled directly via the OMMX Adapter. In addition, a [`to_hubo`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.to_hubo) method has been added to [`ommx.v1.Instance`], similar to [`to_qubo`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.to_qubo), which automatically performs binary encoding of integer variables and converts inequality constraints to equality constraints.
+
+```{warning}
+Originally, `Instance` had a method called `as_pubo_format`, but in 2.0.0 it was renamed to [`as_hubo_format`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.as_hubo_format) and the return value was also changed. PUBO (polynomial unconstrained binary optimization) and HUBO (high-order unconstrained binary optimization) are often used with almost the same meaning to indicate that they can handle higher-order terms of degree 3 or more compared to QUBO (Quadratic Unconstrained Binary Optimization), but the OMMX project has decided to use the name HUBO from now on.
+```
+
+### ARM CPU support for Linux
+
+Binary packages (wheels) for Linux aarch64 are now provided. This makes it easier to use OMMX in the following environments:
+
+- Use on Linux VMs such as Docker on macOS
+- IaaS using high-performance ARM CPUs such as AWS Graviton and Ampere, and corresponding PaaS
+- GitHub Actions `ubuntu-24.04-arm` environment
+
+
+
+-------------
+
 ### Ommx-1.9.0
 
+```{warning}
+This document was written for the OMMX Python SDK 1.9.0 release and is not compatible with Python SDK 2.0.0 or later.
+```
+
+# OMMX Python SDK 1.9.0
 
 This release significantly enhances the conversion functionality from `ommx.v1.Instance` to QUBO, with added support for **inequality constraints** and **integer variables**. Additionally, a new Driver API `to_qubo` has been introduced to simplify the QUBO conversion process.
 
@@ -2351,6 +2493,11 @@ Please submit any feedback or bug reports to [GitHub Issues](https://github.com/
 
 ### Ommx-1.8.0
 
+```{warning}
+This document was written for the OMMX Python SDK 1.8.0 release and is not compatible with Python SDK 2.0.0 or later.
+```
+
+# OMMX Python SDK 1.8.0
 
 [](https://github.com/Jij-Inc/ommx/releases/tag/python-1.8.0)
 
@@ -2410,6 +2557,11 @@ solution.objective
 
 ### Ommx-1.7.0
 
+```{warning}
+This document was written for the OMMX Python SDK 1.7.0 release and is not compatible with Python SDK 2.0.0 or later.
+```
+
+# OMMX Python SDK 1.7.0
 
 [](https://github.com/Jij-Inc/ommx/releases/tag/python-1.7.0)
 
@@ -2585,6 +2737,11 @@ Summary
 
 ### Ommx-1.5.0
 
+```{warning}
+This document was written for the OMMX Python SDK 1.5.0 release and is not compatible with Python SDK 2.0.0 or later.
+```
+
+# OMMX Python SDK 1.5.0
 
 [](https://github.com/Jij-Inc/ommx/releases/tag/python-1.5.0)
 

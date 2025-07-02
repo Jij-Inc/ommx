@@ -8,6 +8,11 @@ tasks:
     cmds:
       - uv run jupyter-book build .
 
+  test:
+    desc: "Test each notebook in the book"
+    cmds:
+      - uv run pytest --nbval-lax tutorial/*.ipynb user_guide/*.ipynb
+
   open:
     desc: "Open the book in docs/en"
     cmds:

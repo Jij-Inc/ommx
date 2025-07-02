@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from ommx.v1 import Instance, State, Samples, SampleSet, DecisionVariable, Constraint
+from ommx.v1 import (
+    Instance,
+    State,
+    Samples,
+    SampleSet,
+    Solution,
+    DecisionVariable,
+    Constraint,
+)
 from ommx.adapter import SamplerAdapter
 import openjij as oj
 from typing_extensions import deprecated
@@ -57,6 +65,39 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
     _instance_prepared: bool = False
 
+    def __init__(
+        self,
+        ommx_instance: Instance,
+        *,
+        beta_min: float | None = None,
+        beta_max: float | None = None,
+        num_sweeps: int | None = None,
+        num_reads: int | None = None,
+        schedule: list | None = None,
+        initial_state: list | dict | None = None,
+        updater: str | None = None,
+        sparse: bool | None = None,
+        reinitialize_state: bool | None = None,
+        seed: int | None = None,
+        uniform_penalty_weight: Optional[float] = None,
+        penalty_weights: dict[int, float] = {},
+        inequality_integer_slack_max_range: int = 32,
+    ):
+        self.ommx_instance = copy.deepcopy(ommx_instance)
+        self.beta_min = beta_min
+        self.beta_max = beta_max
+        self.num_sweeps = num_sweeps
+        self.num_reads = num_reads
+        self.schedule = schedule
+        self.initial_state = initial_state
+        self.updater = updater
+        self.sparse = sparse
+        self.reinitialize_state = reinitialize_state
+        self.seed = seed
+        self.uniform_penalty_weight = uniform_penalty_weight
+        self.penalty_weights = penalty_weights
+        self.inequality_integer_slack_max_range = inequality_integer_slack_max_range
+
     @classmethod
     def sample(
         cls,
@@ -95,8 +136,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         response = sampler._sample()
         return sampler.decode_to_sampleset(response)
 
-    def __init__(
-        self,
+    @classmethod
+    def solve(
+        cls,
         ommx_instance: Instance,
         *,
         beta_min: float | None = None,
@@ -112,21 +154,24 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         uniform_penalty_weight: Optional[float] = None,
         penalty_weights: dict[int, float] = {},
         inequality_integer_slack_max_range: int = 32,
-    ):
-        self.ommx_instance = copy.deepcopy(ommx_instance)
-        self.beta_min = beta_min
-        self.beta_max = beta_max
-        self.num_sweeps = num_sweeps
-        self.num_reads = num_reads
-        self.schedule = schedule
-        self.initial_state = initial_state
-        self.updater = updater
-        self.sparse = sparse
-        self.reinitialize_state = reinitialize_state
-        self.seed = seed
-        self.uniform_penalty_weight = uniform_penalty_weight
-        self.penalty_weights = penalty_weights
-        self.inequality_integer_slack_max_range = inequality_integer_slack_max_range
+    ) -> Solution:
+        sample_set = cls.sample(
+            ommx_instance,
+            beta_min=beta_min,
+            beta_max=beta_max,
+            num_sweeps=num_sweeps,
+            num_reads=num_reads,
+            schedule=schedule,
+            initial_state=initial_state,
+            updater=updater,
+            sparse=sparse,
+            reinitialize_state=reinitialize_state,
+            seed=seed,
+            uniform_penalty_weight=uniform_penalty_weight,
+            penalty_weights=penalty_weights,
+            inequality_integer_slack_max_range=inequality_integer_slack_max_range,
+        )
+        return sample_set.best_feasible
 
     def decode_to_sampleset(self, data: oj.Response) -> SampleSet:
         samples = decode_to_samples(data)
@@ -147,6 +192,14 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             return self._hubo
         else:
             return self._qubo
+
+    @property
+    def solver_input(self) -> dict[tuple[int, ...], float]:
+        return self.sampler_input
+
+    def decode(self, data: oj.Response) -> Solution:
+        sample_set = self.decode_to_sampleset(data)
+        return sample_set.best_feasible
 
     def _sample(self) -> oj.Response:
         sampler = oj.SASampler()

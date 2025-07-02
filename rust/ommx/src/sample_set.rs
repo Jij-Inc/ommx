@@ -210,10 +210,13 @@ impl SampleSet {
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
         }
 
+        let sense = *self.sense();
+
         Ok(Solution::new(
             objective,
             evaluated_constraints,
             decision_variables,
+            sense,
         ))
     }
 
