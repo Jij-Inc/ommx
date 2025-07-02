@@ -336,6 +336,19 @@ impl AbsDiffEq for DecisionVariableAnalysis {
 }
 
 impl Instance {
+    pub fn binary_ids(&self) -> VariableIDSet {
+        self.decision_variables
+            .iter()
+            .filter_map(|(id, dv)| {
+                if dv.kind() == Kind::Binary {
+                    Some(*id)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
     pub fn analyze_decision_variables(&self) -> DecisionVariableAnalysis {
         let mut all = VariableIDSet::default();
         let mut fixed = BTreeMap::default();
@@ -440,6 +453,8 @@ mod tests {
                 + analysis.semi_integer.len() + analysis.semi_continuous.len()
             );
             let mut all: VariableIDSet = analysis.binary.keys().cloned().collect();
+            prop_assert_eq!(&all, &instance.binary_ids());
+
             all.extend(analysis.integer.keys());
             all.extend(analysis.continuous.keys());
             all.extend(analysis.semi_integer.keys());
