@@ -605,6 +605,14 @@ class Instance(UserAnnotationBase):
         >>> x.substituted_value
         1.0
 
+        It appears in the decision variables DataFrame:
+
+        >>> new_instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper subscripts substituted_value
+        id                                                   
+        1   Binary   -0.0    1.0         []               1.0
+        2   Binary   -0.0    1.0         []              <NA>
+
         """
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
