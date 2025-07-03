@@ -609,7 +609,7 @@ class Instance(UserAnnotationBase):
 
         >>> new_instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts substituted_value
-        id                                                   
+        id
         1   Binary   -0.0    1.0         []               1.0
         2   Binary   -0.0    1.0         []              <NA>
 
@@ -2660,7 +2660,9 @@ class DecisionVariable(VariableBase):
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
             "description": self.description if self.description else NA,
-            "substituted_value": self.substituted_value if self.substituted_value is not None else NA,
+            "substituted_value": self.substituted_value
+            if self.substituted_value is not None
+            else NA,
         } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
