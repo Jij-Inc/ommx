@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_polynomial_base_display_coefficient_one() {
-        let poly = coeff!(1.0) * linear!(1);
+        let poly: Linear = linear!(1).into();
         assert_eq!(format!("{poly}"), "x1");
     }
 

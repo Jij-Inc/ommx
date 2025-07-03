@@ -2,6 +2,7 @@ mod approx;
 mod arbitrary;
 mod evaluate;
 mod parse;
+mod reduce_binary_power;
 
 use crate::{
     sampled::UnknownSampleIDError, Function, SampleID, Sampled, VariableID, VariableIDSet,

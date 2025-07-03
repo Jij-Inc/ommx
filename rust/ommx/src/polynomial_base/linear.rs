@@ -123,6 +123,11 @@ impl Monomial for LinearMonomial {
         None
     }
 
+    fn reduce_binary_power(&mut self, _: &VariableIDSet) -> bool {
+        // Linear monomials are already linear, so no reduction is needed.
+        false
+    }
+
     fn ids(&self) -> Box<dyn Iterator<Item = VariableID>> {
         match self {
             LinearMonomial::Variable(id) => Box::new(std::iter::once(*id)),

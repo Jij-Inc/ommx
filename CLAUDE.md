@@ -111,3 +111,7 @@ from ommx.v1.solution_pb2 import Optimality
 - Add tests to `python/ommx-tests/tests` only
 - Always run `task format` before committing
 - Ensure `task python:test` passes completely
+
+### 📝 Rust SDK Testing Guidelines
+- Use `assert_abs_diff_eq!` to compare entire polynomials instead of checking individual terms with `get`
+- Include clear comments in test cases explaining the intent and expected behavior
