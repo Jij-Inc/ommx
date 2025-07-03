@@ -271,4 +271,21 @@ impl Function {
             ommx::Function::Polynomial(_) => "Polynomial",
         }
     }
+
+    /// Reduce binary powers in the function.
+    ///
+    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    ///
+    /// Args:
+    ///     binary_ids: Set of binary variable IDs to reduce powers for
+    ///
+    /// Returns:
+    ///     True if any reduction was performed, False otherwise
+    pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
+        let variable_id_set: ommx::VariableIDSet = binary_ids
+            .into_iter()
+            .map(|id| ommx::VariableID::from(id))
+            .collect();
+        self.0.reduce_binary_power(&variable_id_set)
+    }
 }

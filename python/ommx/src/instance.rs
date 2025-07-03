@@ -340,6 +340,16 @@ impl Instance {
                 ))
             })
     }
+
+    /// Reduce binary powers in the instance.
+    ///
+    /// This method replaces binary powers in the instance with their equivalent linear expressions.
+    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    ///
+    /// Returns `True` if any reduction was performed, `False` otherwise.
+    pub fn reduce_binary_power(&mut self) -> bool {
+        self.0.reduce_binary_power()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

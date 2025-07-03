@@ -475,6 +475,20 @@ class Function:
     def partial_evaluate(self, state: bytes) -> Function: ...
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
+    def reduce_binary_power(
+        self, binary_ids: builtins.set[builtins.int]
+    ) -> builtins.bool:
+        r"""
+        Reduce binary powers in the function.
+
+        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+
+        Args:
+            binary_ids: Set of binary variable IDs to reduce powers for
+
+        Returns:
+            True if any reduction was performed, False otherwise
+        """
 
 class Instance:
     sense: Sense
@@ -558,6 +572,15 @@ class Instance:
     ) -> RemovedConstraint:
         r"""
         Get a specific removed constraint by ID
+        """
+    def reduce_binary_power(self) -> builtins.bool:
+        r"""
+        Reduce binary powers in the instance.
+
+        This method replaces binary powers in the instance with their equivalent linear expressions.
+        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+
+        Returns `True` if any reduction was performed, `False` otherwise.
         """
 
 class InstanceDescription:
