@@ -11,7 +11,7 @@ impl Function {
         match self {
             Function::Zero => false,
             Function::Constant(_) => false,
-            Function::Linear(l) => l.reduce_binary_power(binary_ids),
+            Function::Linear(_) => false, // Linear functions are already in reduced form.
             Function::Quadratic(q) => q.reduce_binary_power(binary_ids),
             Function::Polynomial(p) => p.reduce_binary_power(binary_ids),
         }
