@@ -446,8 +446,7 @@ mod tests {
         let mut monomial = MonomialDyn::new(vec![x1, x1, x2]);
 
         // Create binary variable set containing x1
-        let mut binary_ids = VariableIDSet::default();
-        binary_ids.insert(x1);
+        let binary_ids = crate::variable_ids!(1);
 
         // Apply reduction
         let changed = monomial.reduce_binary_power(&binary_ids);
@@ -496,9 +495,7 @@ mod tests {
         let mut monomial5 = MonomialDyn::new(vec![x1, x1, x1, x2, x2]);
 
         // Add x2 to binary set
-        let mut binary_ids2 = VariableIDSet::default();
-        binary_ids2.insert(x1);
-        binary_ids2.insert(x2);
+        let binary_ids2 = crate::variable_ids!(1, 2);
 
         let changed5 = monomial5.reduce_binary_power(&binary_ids2);
 

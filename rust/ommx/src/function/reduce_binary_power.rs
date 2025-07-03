@@ -26,8 +26,7 @@ mod tests {
 
     #[test]
     fn test_function_reduce_binary_power() {
-        let mut binary_ids = VariableIDSet::default();
-        binary_ids.insert(VariableID::from(1));
+        let binary_ids = crate::variable_ids!(1);
 
         // Test Zero function
         let mut f = Function::Zero;

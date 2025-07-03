@@ -30,8 +30,7 @@ mod tests {
 
     #[test]
     fn test_constraint_reduce_binary_power() {
-        let mut binary_ids = VariableIDSet::default();
-        binary_ids.insert(VariableID::from(1));
+        let binary_ids = crate::variable_ids!(1);
 
         // Create a constraint with x1^2 + x2 <= 0
         let function = Function::Quadratic(quadratic!(1, 1) + quadratic!(2));

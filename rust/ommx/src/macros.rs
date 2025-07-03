@@ -126,6 +126,37 @@ macro_rules! monomial {
     };
 }
 
+/// Creates a [`crate::VariableIDSet`] from variable ID literals.
+///
+/// This macro creates a `VariableIDSet` from one or more variable ID literals.
+/// It's a convenience wrapper for creating binary variable sets for use with
+/// binary power reduction operations.
+///
+/// # Examples
+///
+/// ```
+/// use ommx::{variable_ids, VariableIDSet, VariableID};
+///
+/// // Create a set containing variable x1
+/// let binary_set = variable_ids!(1);
+///
+/// // Create a set containing variables x1 and x3
+/// let binary_set = variable_ids!(1, 3);
+///
+/// // Create a set containing variables x1, x2, and x5
+/// let binary_set = variable_ids!(1, 2, 5);
+/// ```
+#[macro_export]
+macro_rules! variable_ids {
+    ($($id:literal),+) => {
+        {
+            let mut set = $crate::VariableIDSet::default();
+            $(set.insert($crate::VariableID::from($id));)+
+            set
+        }
+    };
+}
+
 macro_rules! impl_add_inverse {
     ($lhs:ty, $rhs:ty) => {
         impl ::std::ops::Add<$rhs> for $lhs {
