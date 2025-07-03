@@ -87,7 +87,10 @@ impl DecisionVariable {
     #[getter]
     pub fn substituted_value(&self) -> Result<f64> {
         self.0.substituted_value().ok_or_else(|| {
-            anyhow::anyhow!("DecisionVariable(id={}) does not have a substituted value", self.id())
+            anyhow::anyhow!(
+                "DecisionVariable(id={}) does not have a substituted value",
+                self.id()
+            )
         })
     }
 
