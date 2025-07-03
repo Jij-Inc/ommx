@@ -605,6 +605,14 @@ class Instance(UserAnnotationBase):
         >>> x.substituted_value
         1.0
 
+        It appears in the decision variables DataFrame:
+
+        >>> new_instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
+              kind  lower  upper subscripts substituted_value
+        id
+        1   Binary   -0.0    1.0         []               1.0
+        2   Binary   -0.0    1.0         []              <NA>
+
         """
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
@@ -2605,7 +2613,7 @@ class DecisionVariable(VariableBase):
         return self.raw.bound.upper
 
     @property
-    def substituted_value(self) -> float:
+    def substituted_value(self) -> float | None:
         """
         The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
         """
@@ -2652,7 +2660,9 @@ class DecisionVariable(VariableBase):
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
             "description": self.description if self.description else NA,
-            "substituted_value": NA,  # Not available in current Rust API
+            "substituted_value": self.substituted_value
+            if self.substituted_value is not None
+            else NA,
         } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
