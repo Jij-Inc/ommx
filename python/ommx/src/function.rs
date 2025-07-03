@@ -284,7 +284,7 @@ impl Function {
     pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
         let variable_id_set: ommx::VariableIDSet = binary_ids
             .into_iter()
-            .map(|id| ommx::VariableID::from(id))
+            .map(ommx::VariableID::from)
             .collect();
         self.0.reduce_binary_power(&variable_id_set)
     }
