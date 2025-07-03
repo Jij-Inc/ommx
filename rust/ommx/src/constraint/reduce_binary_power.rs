@@ -26,7 +26,7 @@ impl RemovedConstraint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, quadratic};
+    use crate::quadratic;
 
     #[test]
     fn test_constraint_reduce_binary_power() {
@@ -34,8 +34,7 @@ mod tests {
         binary_ids.insert(VariableID::from(1));
 
         // Create a constraint with x1^2 + x2 <= 0
-        let function =
-            Function::Quadratic(coeff!(1.0) * quadratic!(1, 1) + coeff!(1.0) * quadratic!(2));
+        let function = Function::Quadratic(quadratic!(1, 1) + quadratic!(2));
 
         let mut constraint = Constraint {
             id: ConstraintID::from(1),
@@ -52,8 +51,7 @@ mod tests {
         assert!(changed);
 
         // Check that x1^2 was reduced to x1
-        let expected_function =
-            Function::Quadratic(coeff!(1.0) * quadratic!(1) + coeff!(1.0) * quadratic!(2));
+        let expected_function = Function::Quadratic(quadratic!(1) + quadratic!(2));
         assert_eq!(constraint.function, expected_function);
     }
 }

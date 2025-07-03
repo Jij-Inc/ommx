@@ -281,12 +281,12 @@ mod tests {
 
         // Test case 2: Quadratic polynomial with binary variable
         // x1^2 + x1*x2 + x2^2 + 4 -> x1 + x1*x2 + x2^2 + 4 when x1 is binary
-        let mut quad_poly = coeff!(1.0) * quadratic!(1, 1)
+        let mut quad_poly = quadratic!(1, 1)
             + coeff!(2.0) * quadratic!(1, 2)
             + coeff!(3.0) * quadratic!(2, 2)
             + coeff!(4.0);
 
-        let expected = coeff!(1.0) * quadratic!(1)
+        let expected = quadratic!(1)
             + coeff!(2.0) * quadratic!(1, 2)
             + coeff!(3.0) * quadratic!(2, 2)
             + coeff!(4.0);
@@ -315,7 +315,7 @@ mod tests {
         assert_abs_diff_eq!(quad_poly2, expected2);
 
         // Test case 4: No change case - all non-binary variables
-        let original_quad3 = coeff!(1.0) * quadratic!(4, 4) + coeff!(2.0) * quadratic!(5, 5);
+        let original_quad3 = quadratic!(4, 4) + coeff!(2.0) * quadratic!(5, 5);
         let mut quad_poly3 = original_quad3.clone();
         let changed4 = quad_poly3.reduce_binary_power(&binary_ids);
         assert!(!changed4); // No change since x4 and x5 are not binary

@@ -38,12 +38,10 @@ mod tests {
         assert!(!f.reduce_binary_power(&binary_ids));
 
         // Test Quadratic function with binary variable
-        let mut f =
-            Function::Quadratic(coeff!(1.0) * quadratic!(1, 1) + coeff!(2.0) * quadratic!(1, 2));
+        let mut f = Function::Quadratic(quadratic!(1, 1) + coeff!(2.0) * quadratic!(1, 2));
         assert!(f.reduce_binary_power(&binary_ids));
 
-        let expected =
-            Function::Quadratic(coeff!(1.0) * quadratic!(1) + coeff!(2.0) * quadratic!(1, 2));
+        let expected = Function::Quadratic(quadratic!(1) + coeff!(2.0) * quadratic!(1, 2));
         assert_abs_diff_eq!(f, expected);
     }
 }
