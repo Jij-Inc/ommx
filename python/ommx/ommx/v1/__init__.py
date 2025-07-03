@@ -2644,6 +2644,10 @@ class DecisionVariable(VariableBase):
         return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
+        try:
+            substituted_value = self.raw.substituted_value
+        except AttributeError:
+            substituted_value = NA
         return {
             "id": self.id,
             "kind": str(self.kind),
@@ -2652,7 +2656,7 @@ class DecisionVariable(VariableBase):
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
             "description": self.description if self.description else NA,
-            "substituted_value": NA,  # Not available in current Rust API
+            "substituted_value": substituted_value,
         } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
