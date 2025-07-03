@@ -2605,7 +2605,7 @@ class DecisionVariable(VariableBase):
         return self.raw.bound.upper
 
     @property
-    def substituted_value(self) -> float:
+    def substituted_value(self) -> float | None:
         """
         The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
         """
@@ -2644,10 +2644,6 @@ class DecisionVariable(VariableBase):
         return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
 
     def _as_pandas_entry(self) -> dict:
-        try:
-            substituted_value = self.raw.substituted_value
-        except AttributeError:
-            substituted_value = NA
         return {
             "id": self.id,
             "kind": str(self.kind),
@@ -2656,7 +2652,7 @@ class DecisionVariable(VariableBase):
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
             "description": self.description if self.description else NA,
-            "substituted_value": substituted_value,
+            "substituted_value": self.substituted_value if self.substituted_value is not None else NA,
         } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
