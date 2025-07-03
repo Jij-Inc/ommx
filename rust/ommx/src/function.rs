@@ -11,6 +11,7 @@ mod arbitrary;
 mod evaluate;
 mod mul;
 mod parse;
+mod reduce_binary_power;
 mod sub;
 mod substitute;
 
