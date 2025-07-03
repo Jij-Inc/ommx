@@ -1,7 +1,7 @@
 use crate::VariableBound;
 use anyhow::Result;
 use ommx::{v1, ATol, Message, Parse, VariableID};
-use pyo3::{exceptions::PyAttributeError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// DecisionVariable wrapper for Python
@@ -85,12 +85,12 @@ impl DecisionVariable {
     }
 
     #[getter]
-    pub fn substituted_value(&self) -> PyResult<f64> {
+    pub fn substituted_value(&self) -> Result<f64> {
         self.0.substituted_value().ok_or_else(|| {
-            PyAttributeError::new_err(format!(
-                "Substituted value is not available for variable with id {}",
+            anyhow::anyhow!(
+                "DecisionVariable(id={}) does not have a substituted value",
                 self.id()
-            ))
+            )
         })
     }
 
