@@ -586,20 +586,25 @@ class Instance(UserAnnotationBase):
         Examples
         =========
 
-        .. doctest::
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = DecisionVariable.binary(1)
+        >>> y = DecisionVariable.binary(2)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x, y],
+        ...     objective=x + y,
+        ...     constraints=[x + y <= 1],
+        ...     sense=Instance.MINIMIZE
+        ... )
+        >>> new_instance = instance.partial_evaluate({1: 1})
+        >>> new_instance.objective
+        Function(x2 + 1)
 
-            >>> from ommx.v1 import Instance, DecisionVariable
-            >>> x = DecisionVariable.binary(1)
-            >>> y = DecisionVariable.binary(2)
-            >>> instance = Instance.from_components(
-            ...     decision_variables=[x, y],
-            ...     objective=x + y,
-            ...     constraints=[x + y <= 1],
-            ...     sense=Instance.MINIMIZE
-            ... )
-            >>> new_instance = instance.partial_evaluate({1: 1})
-            >>> new_instance.objective
-            Function(x2 + 1)
+        Substituted value is stored in the decision variable:
+
+        >>> x = new_instance.get_decision_variable_by_id(1)
+        >>> x.substituted_value
+        1.0
+
         """
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
@@ -2598,6 +2603,13 @@ class DecisionVariable(VariableBase):
     def upper(self) -> float:
         """Upper bound of the decision variable"""
         return self.raw.bound.upper
+
+    @property
+    def substituted_value(self) -> float:
+        """
+        The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
+        """
+        return self.raw.substituted_value
 
     @property
     def subscripts(self) -> list[int]:

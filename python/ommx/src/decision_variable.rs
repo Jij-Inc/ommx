@@ -84,6 +84,16 @@ impl DecisionVariable {
         self.0.metadata.description.clone().unwrap_or_default()
     }
 
+    #[getter]
+    pub fn substituted_value(&self) -> Result<f64> {
+        self.0.substituted_value().ok_or_else(|| {
+            anyhow::anyhow!(
+                "DecisionVariable(id={}) does not have a substituted value",
+                self.id()
+            )
+        })
+    }
+
     #[staticmethod]
     #[pyo3(signature = (id, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn binary(

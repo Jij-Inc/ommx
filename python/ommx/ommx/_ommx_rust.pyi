@@ -186,6 +186,7 @@ class DecisionVariable:
     subscripts: builtins.list[builtins.int]
     parameters: builtins.dict[builtins.str, builtins.str]
     description: builtins.str
+    substituted_value: builtins.float
     def __new__(
         cls,
         id: builtins.int,
