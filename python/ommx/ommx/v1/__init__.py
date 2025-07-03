@@ -1531,6 +1531,48 @@ class Instance(UserAnnotationBase):
                 return
         self.raw.log_encode(decision_variable_ids)
 
+    def reduce_binary_power(self) -> bool:
+        """
+        Reduce binary powers in the instance.
+
+        This method replaces binary powers in the instance with their equivalent linear expressions.
+        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+
+        :return: ``True`` if any reduction was performed, ``False`` otherwise.
+
+        Examples
+        =========
+
+        Consider an instance with binary variables and quadratic terms:
+
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] * x[0] + x[0] * x[1],  # x0^2 + x0*x1
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0*x0 + x0*x1)
+
+        After reducing binary powers, x0^2 becomes x0:
+
+        >>> changed = instance.reduce_binary_power()
+        >>> changed
+        True
+        >>> instance.objective
+        Function(x0*x1 + x0)
+
+        Running it again should not change anything:
+
+        >>> changed = instance.reduce_binary_power()
+        >>> changed
+        False
+
+        """
+        return self.raw.reduce_binary_power()
+
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: int, max_integer_range: int
     ):
@@ -3570,6 +3612,47 @@ class Function(AsConstraint):
             5.0
         """
         return self.raw.constant_term
+
+    def reduce_binary_power(self, binary_ids: set[int]) -> bool:
+        """
+        Reduce binary powers in the function.
+
+        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+
+        Args:
+            binary_ids: Set of binary variable IDs to reduce powers for
+
+        Returns:
+            True if any reduction was performed, False otherwise
+
+        Examples
+        =========
+
+        Consider a function with binary variables and quadratic terms:
+
+        >>> from ommx.v1 import DecisionVariable, Function
+        >>> x0 = DecisionVariable.binary(0)
+        >>> x1 = DecisionVariable.binary(1)
+        >>> f = Function(x0 * x0 + x0 * x1)  # x0^2 + x0*x1
+        >>> f
+        Function(x0*x0 + x0*x1)
+
+        After reducing binary powers for variable 0, x0^2 becomes x0:
+
+        >>> changed = f.reduce_binary_power({0})
+        >>> changed
+        True
+        >>> f
+        Function(x0*x1 + x0)
+
+        Running it again should not change anything:
+
+        >>> changed = f.reduce_binary_power({0})
+        >>> changed
+        False
+
+        """
+        return self.raw.reduce_binary_power(binary_ids)
 
     def __repr__(self) -> str:
         return self.raw.__repr__()
