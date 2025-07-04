@@ -10,6 +10,6 @@ impl Instance {
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let inner = v1::Instance::decode(bytes)?;
-        Ok(Parse::parse(inner.clone(), &())?)
+        Ok(Parse::parse(inner, &())?)
     }
 }
