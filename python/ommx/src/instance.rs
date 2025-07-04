@@ -22,9 +22,7 @@ pub struct Instance(ommx::Instance);
 impl Instance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Instance::decode(bytes.as_bytes())?;
-        let parsed = Parse::parse(inner.clone(), &())?;
-        Ok(Self(parsed))
+        Ok(Self(ommx::Instance::from_bytes(bytes.as_bytes())?))
     }
 
     #[staticmethod]
@@ -129,8 +127,8 @@ impl Instance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        PyBytes::new(py, &inner.encode_to_vec())
+        let buf = self.0.to_bytes();
+        PyBytes::new(py, &buf)
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
