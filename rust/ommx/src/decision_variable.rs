@@ -1,5 +1,6 @@
 mod arbitrary;
 mod parse;
+mod serialize;
 
 pub use arbitrary::*;
 use getset::CopyGetters;

@@ -1,5 +1,6 @@
 mod extract;
 mod parse;
+mod serialize;
 
 use crate::{
     ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, SampleIDSet, Sampled,

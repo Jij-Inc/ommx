@@ -1,4 +1,5 @@
 mod parse;
+mod serialize;
 
 use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sense, VariableID};
 use getset::Getters;
