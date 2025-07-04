@@ -1,5 +1,4 @@
 use anyhow::Result;
-use ommx::{Message, Parse};
 use pyo3::{prelude::*, types::PyBytes, Bound};
 use std::collections::BTreeMap;
 
@@ -12,14 +11,11 @@ pub struct SampledDecisionVariable(pub ommx::SampledDecisionVariable);
 impl SampledDecisionVariable {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_variable = ommx::v1::SampledDecisionVariable::decode(bytes.as_bytes())?;
-        let variable = v1_variable.parse(&())?;
-        Ok(Self(variable))
+        Ok(Self(ommx::SampledDecisionVariable::from_bytes(bytes.as_bytes())?))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let v1_variable: ommx::v1::SampledDecisionVariable = self.0.clone().into();
-        Ok(PyBytes::new(py, &v1_variable.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     /// Get the decision variable ID

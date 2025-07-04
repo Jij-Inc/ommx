@@ -3,7 +3,7 @@ use crate::{Linear, Quadratic, Rng};
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
-use ommx::{v1, ATol, Coefficient, CoefficientError, Evaluate, Message, Parse};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -38,16 +38,12 @@ impl Polynomial {
     }
 
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = v1::Polynomial::decode(bytes.as_bytes())?;
-        let parsed = Parse::parse(inner, &())?;
-        Ok(Self(parsed))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        Ok(Self(ommx::Polynomial::from_bytes(bytes.as_bytes())?))
     }
 
-    pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let inner: v1::Polynomial = self.0.clone().into();
-        let bytes = Message::encode_to_vec(&inner);
-        Ok(PyBytes::new(py, &bytes))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     #[pyo3(signature = (other, atol=ATol::default().into_inner()))]
