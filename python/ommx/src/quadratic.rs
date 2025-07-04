@@ -2,9 +2,7 @@ use crate::{Linear, Polynomial, Rng};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{
-    ATol, Coefficient, CoefficientError, Evaluate, Monomial, VariableIDPair,
-};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, Monomial, VariableIDPair};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},

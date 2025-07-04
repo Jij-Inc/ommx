@@ -12,7 +12,9 @@ pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint);
 impl EvaluatedConstraint {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::EvaluatedConstraint::from_bytes(bytes.as_bytes())?))
+        Ok(Self(ommx::EvaluatedConstraint::from_bytes(
+            bytes.as_bytes(),
+        )?))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
