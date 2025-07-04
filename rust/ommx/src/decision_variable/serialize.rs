@@ -25,9 +25,14 @@ impl EvaluatedDecisionVariable {
         let parsed_dv: DecisionVariable = Parse::parse(inner, &())?;
         // Convert DecisionVariable to EvaluatedDecisionVariable
         // We need the value from substituted_value field
-        let value = parsed_dv.substituted_value()
+        let value = parsed_dv
+            .substituted_value()
             .ok_or_else(|| anyhow::anyhow!("Missing value for EvaluatedDecisionVariable"))?;
-        Ok(EvaluatedDecisionVariable::new(parsed_dv, value, crate::ATol::default())?)
+        Ok(EvaluatedDecisionVariable::new(
+            parsed_dv,
+            value,
+            crate::ATol::default(),
+        )?)
     }
 }
 

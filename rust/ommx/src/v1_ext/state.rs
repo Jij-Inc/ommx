@@ -47,4 +47,3 @@ impl AbsDiffEq for State {
                 .all(|key| self.entries.contains_key(key))
     }
 }
-

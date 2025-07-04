@@ -160,7 +160,6 @@ impl ParametricInstance {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
