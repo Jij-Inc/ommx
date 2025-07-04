@@ -23,6 +23,12 @@ impl PartialEq<u32> for Degree {
     }
 }
 
+impl PartialOrd<u32> for Degree {
+    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
 impl fmt::Display for Degree {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
