@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 
 use anyhow::Result;
-use ommx::{Message, Parse};
 use pyo3::{prelude::*, types::PyBytes, Bound};
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -13,14 +12,13 @@ pub struct EvaluatedConstraint(pub ommx::EvaluatedConstraint);
 impl EvaluatedConstraint {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_inner = ommx::v1::EvaluatedConstraint::decode(bytes.as_bytes())?;
-        let inner = v1_inner.parse(&())?;
-        Ok(Self(inner))
+        Ok(Self(ommx::EvaluatedConstraint::from_bytes(
+            bytes.as_bytes(),
+        )?))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let v1_constraint: ommx::v1::EvaluatedConstraint = self.0.clone().into();
-        Ok(PyBytes::new(py, &v1_constraint.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     /// Get the constraint ID

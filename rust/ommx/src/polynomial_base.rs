@@ -10,6 +10,7 @@ mod mul;
 mod parse;
 mod polynomial;
 mod quadratic;
+mod serialize;
 mod substitute;
 
 pub use binary_ids::*;

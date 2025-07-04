@@ -1,7 +1,7 @@
 use crate::{Equality, Function};
 use anyhow::Result;
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Evaluate, Message, Parse};
+use ommx::{ConstraintID, Evaluate, Message};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
@@ -81,15 +81,12 @@ impl Constraint {
     }
 
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Constraint::decode(bytes.as_bytes())?;
-        let parsed = Parse::parse(inner, &())?;
-        Ok(Self(parsed))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        Ok(Self(ommx::Constraint::from_bytes(bytes.as_bytes())?))
     }
 
-    pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let inner: ommx::v1::Constraint = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     pub fn evaluate<'py>(
@@ -222,15 +219,12 @@ impl RemovedConstraint {
     }
 
     #[staticmethod]
-    pub fn decode(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::RemovedConstraint::decode(bytes.as_bytes())?;
-        let parsed = Parse::parse(inner, &())?;
-        Ok(Self(parsed))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
+        Ok(Self(ommx::RemovedConstraint::from_bytes(bytes.as_bytes())?))
     }
 
-    pub fn encode<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let inner: ommx::v1::RemovedConstraint = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     pub fn __repr__(&self) -> String {

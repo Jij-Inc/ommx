@@ -9,6 +9,7 @@ mod log_encode;
 mod parse;
 mod pass;
 mod reduce_binary_power;
+mod serialize;
 mod substitute;
 
 use std::{collections::BTreeMap, ops::Neg};

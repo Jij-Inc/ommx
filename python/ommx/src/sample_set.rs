@@ -1,6 +1,5 @@
 use crate::Solution;
 use anyhow::Result;
-use ommx::{Message, Parse};
 use pyo3::{
     prelude::*,
     types::{PyBytes, PyDict, PyTuple},
@@ -17,14 +16,11 @@ pub struct SampleSet(pub ommx::SampleSet);
 impl SampleSet {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let v1_inner = ommx::v1::SampleSet::decode(bytes.as_bytes())?;
-        let inner = v1_inner.parse(&())?;
-        Ok(Self(inner))
+        Ok(Self(ommx::SampleSet::from_bytes(bytes.as_bytes())?))
     }
 
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        let v1_sample_set: ommx::v1::SampleSet = self.0.clone().into();
-        Ok(PyBytes::new(py, &v1_sample_set.encode_to_vec()))
+    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.0.to_bytes())
     }
 
     pub fn get(&self, sample_id: u64) -> Result<Solution> {

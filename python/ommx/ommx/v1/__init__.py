@@ -2431,7 +2431,7 @@ class DecisionVariable(VariableBase):
 
     @staticmethod
     def from_bytes(data: bytes) -> DecisionVariable:
-        rust_dv = _ommx_rust.DecisionVariable.decode(data)
+        rust_dv = _ommx_rust.DecisionVariable.from_bytes(data)
         return DecisionVariable(rust_dv)
 
     @staticmethod
@@ -2441,7 +2441,7 @@ class DecisionVariable(VariableBase):
         return DecisionVariable.from_bytes(data)
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     def to_protobuf(self) -> _DecisionVariable:
         """Convert to protobuf DecisionVariable via serialization"""
@@ -2768,11 +2768,11 @@ class Linear(AsConstraint):
 
     @staticmethod
     def from_bytes(data: bytes) -> Linear:
-        raw = _ommx_rust.Linear.decode(data)
+        raw = _ommx_rust.Linear.from_bytes(data)
         return Linear.from_raw(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     @staticmethod
     def random(rng: _ommx_rust.Rng, num_terms: int = 3, max_id: int = 10) -> Linear:
@@ -2942,11 +2942,11 @@ class Quadratic(AsConstraint):
 
     @staticmethod
     def from_bytes(data: bytes) -> Quadratic:
-        raw = _ommx_rust.Quadratic.decode(data)
+        raw = _ommx_rust.Quadratic.from_bytes(data)
         return Quadratic.from_raw(raw)
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     @staticmethod
     def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_id: int = 10) -> Quadratic:
@@ -3153,7 +3153,7 @@ class Polynomial(AsConstraint):
 
     @staticmethod
     def from_bytes(data: bytes) -> Polynomial:
-        raw = _ommx_rust.Polynomial.decode(data)
+        raw = _ommx_rust.Polynomial.from_bytes(data)
         return Polynomial.from_raw(raw)
 
     @property
@@ -3162,7 +3162,7 @@ class Polynomial(AsConstraint):
         return {tuple(ids): coeff for ids, coeff in raw_terms.items()}
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     @staticmethod
     def random(
@@ -3346,7 +3346,7 @@ class Function(AsConstraint):
         elif isinstance(inner, _ommx_rust.Function):
             self.raw = inner
         elif isinstance(inner, _Function):
-            self.raw = _ommx_rust.Function.decode(inner.SerializeToString())
+            self.raw = _ommx_rust.Function.from_bytes(inner.SerializeToString())
         else:
             raise TypeError(f"Cannot create Function from {type(inner).__name__}")
 
@@ -3379,11 +3379,11 @@ class Function(AsConstraint):
     @staticmethod
     def from_bytes(data: bytes) -> Function:
         new = Function(0)
-        new.raw = _ommx_rust.Function.decode(data)
+        new.raw = _ommx_rust.Function.from_bytes(data)
         return new
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     @staticmethod
     def random(
@@ -3859,7 +3859,7 @@ class Constraint:
 
     @staticmethod
     def from_bytes(data: bytes) -> Constraint:
-        rust_constraint = _ommx_rust.Constraint.decode(data)
+        rust_constraint = _ommx_rust.Constraint.from_bytes(data)
         return Constraint.from_raw(rust_constraint)
 
     @staticmethod
@@ -3869,7 +3869,7 @@ class Constraint:
         return Constraint.from_bytes(data)
 
     def to_bytes(self) -> bytes:
-        return self.raw.encode()
+        return self.raw.to_bytes()
 
     def to_protobuf(self) -> _Constraint:
         """Convert to protobuf Constraint"""
@@ -3979,7 +3979,7 @@ class RemovedConstraint:
     def from_protobuf(pb_removed_constraint: _RemovedConstraint) -> RemovedConstraint:
         """Convert from protobuf RemovedConstraint to Rust RemovedConstraint"""
         # Use Rust decode method to convert Protocol Buffer to Rust implementation
-        rust_removed_constraint = _ommx_rust.RemovedConstraint.decode(
+        rust_removed_constraint = _ommx_rust.RemovedConstraint.from_bytes(
             pb_removed_constraint.SerializeToString()
         )
         return RemovedConstraint(rust_removed_constraint)

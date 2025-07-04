@@ -12,6 +12,7 @@ mod evaluate;
 mod mul;
 mod parse;
 mod reduce_binary_power;
+mod serialize;
 mod sub;
 mod substitute;
 

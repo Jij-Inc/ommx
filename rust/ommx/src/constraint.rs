@@ -3,6 +3,7 @@ mod arbitrary;
 mod evaluate;
 mod parse;
 mod reduce_binary_power;
+mod serialize;
 
 use crate::{
     sampled::UnknownSampleIDError, Function, SampleID, Sampled, VariableID, VariableIDSet,
