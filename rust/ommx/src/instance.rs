@@ -93,7 +93,7 @@ impl Instance {
 
         // Validate constraint_hints using Parse trait
         let hints: v1::ConstraintHints = constraint_hints.into();
-        let context = (decision_variables, constraints);
+        let context = (decision_variables, constraints, BTreeMap::new());
         let constraint_hints = hints.parse(&context)?;
 
         Ok(Instance {
