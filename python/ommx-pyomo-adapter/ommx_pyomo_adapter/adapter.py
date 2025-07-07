@@ -269,8 +269,7 @@ class OMMXPyomoAdapter(SolverAdapter):
             entries = {}
             for var in self.instance.decision_variables:
                 var_name = str(var.id)
-                pyomo_var = getattr(self.model, var_name)
-                value = pyo.value(pyomo_var)
+                value = self.model.component(var_name).value
                 if value is None:
                     raise OMMXPyomoAdapterError(
                         f"Variable {var_name} has no value - model may not be solved"
