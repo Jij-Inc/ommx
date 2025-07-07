@@ -20,4 +20,7 @@ pub enum InstanceError {
 
     #[error("Non-unique constraint ID is found where uniqueness is required: {id:?}")]
     NonUniqueConstraintID { id: ConstraintID },
+
+    #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
+    DependentVariableUsed { id: VariableID },
 }

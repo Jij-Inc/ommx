@@ -110,12 +110,23 @@ impl Instance {
     }
 
     /// Validate that all required variable IDs are defined in the instance
+    /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
+        let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        
+        // Check if all required IDs are defined
         if !required_ids.is_subset(&variable_ids) {
             let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
             return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
         }
+        
+        // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
+        let mut intersection = required_ids.intersection(&dependency_keys);
+        if let Some(&id) = intersection.next() {
+            return Err(InstanceError::DependentVariableUsed { id }.into());
+        }
+        
         Ok(())
     }
 
@@ -174,7 +185,7 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff,
+        assign, coeff, linear,
         constraint::{Constraint, ConstraintID, Equality},
         polynomial_base::{Linear, LinearMonomial},
         Coefficient, DecisionVariable, Function, VariableID,
@@ -571,6 +582,113 @@ mod tests {
         assert_eq!(
             instance.constraints.get(&ConstraintID::from(2)),
             Some(&new_constraint2)
+        );
+    }
+
+    #[test]
+    fn test_insert_constraint_with_dependency_key() {
+        // Create instance with decision variables and dependency
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::binary(VariableID::from(3)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Add a dependency: x2 = x1 + 1
+        instance.decision_variable_dependency = assign! {
+            2 <- linear!(1) + coeff!(1.0)
+        };
+
+        // Try to insert constraint using variable 2 (which is in dependency keys)
+        let constraint = create_constraint(10, 2);
+        let result = instance.insert_constraint(constraint);
+
+        // Should fail with DependentVariableUsed error
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
+        );
+        // Ensure no constraint was added
+        assert_eq!(instance.constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_set_objective_with_dependency_key() {
+        // Create instance with decision variables and dependency
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Add a dependency: x2 = x1 + 1
+        instance.decision_variable_dependency = assign! {
+            2 <- linear!(1) + coeff!(1.0)
+        };
+
+        // Try to set objective using variable 2 (which is in dependency keys)
+        let new_objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(2)),
+            coeff!(1.0),
+        ));
+        let result = instance.set_objective(new_objective);
+
+        // Should fail with DependentVariableUsed error
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
+        );
+        // Ensure objective was not changed
+        assert_eq!(
+            instance.objective,
+            Function::Linear(Linear::single_term(
+                LinearMonomial::Variable(VariableID::from(1)),
+                coeff!(1.0),
+            ))
         );
     }
 }
