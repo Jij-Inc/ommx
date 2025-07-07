@@ -113,14 +113,28 @@ impl Instance {
     pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
         // Validate that all variables in the objective are defined
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
+        let required_ids = objective.required_ids();
+        if !required_ids.is_subset(&variable_ids) {
+            let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
+            return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
         }
-
         self.objective = objective;
         Ok(())
+    }
+
+    /// Insert a constraint into the instance. If the constraint already exists, it will be replaced.
+    pub fn insert_constraint(
+        &mut self,
+        constraint: Constraint,
+    ) -> anyhow::Result<Option<Constraint>> {
+        // Validate that all variables in the constraints are defined
+        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
+        let required_ids = constraint.required_ids();
+        if !required_ids.is_subset(&variable_ids) {
+            let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
+            return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
+        }
+        Ok(self.constraints.insert(constraint.id, constraint))
     }
 
     /// Convert the instance to a minimization problem.
