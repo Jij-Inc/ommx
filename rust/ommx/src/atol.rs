@@ -1,6 +1,6 @@
 use anyhow::bail;
 use ordered_float::NotNan;
-use std::ops::{Add, Deref, Sub};
+use std::ops::{Add, Deref, Neg, Sub};
 
 use crate::Coefficient;
 
@@ -95,5 +95,12 @@ impl Sub<ATol> for f64 {
     type Output = f64;
     fn sub(self, rhs: ATol) -> Self::Output {
         self - rhs.into_inner()
+    }
+}
+
+impl Neg for ATol {
+    type Output = f64;
+    fn neg(self) -> Self::Output {
+        -self.into_inner()
     }
 }
