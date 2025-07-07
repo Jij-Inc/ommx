@@ -1,4 +1,4 @@
-from ommx.v1 import Instance, DecisionVariable, Function
+from ommx.v1 import Instance, DecisionVariable, Function, ConstraintHints, OneHot
 import math
 import pytest
 
@@ -310,3 +310,40 @@ def test_evaluate_irrelevant_integer_variables():
         (3,): -2.0,
         (4,): 0.0,
     }
+
+
+def test_restore_constraint_hint():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[0] + x[1] + x[2] == 1).set_id(0)],  # one-hot constraint
+        sense=Instance.MINIMIZE,
+        constraint_hints=ConstraintHints(
+            one_hot_constraints=[OneHot(id=0, variables=[0, 1, 2])]
+        ),
+    )
+    instance_bytes = instance.to_bytes()
+    parsed_instance = Instance.from_bytes(instance_bytes)
+    assert parsed_instance.constraint_hints.one_hot_constraints == [
+        OneHot(id=0, variables=[0, 1, 2])
+    ]
+
+
+def test_restore_constraint_hint_relaxed():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[(x[0] + x[1] + x[2] == 1).set_id(0)],  # one-hot constraint
+        sense=Instance.MINIMIZE,
+        constraint_hints=ConstraintHints(
+            one_hot_constraints=[OneHot(id=0, variables=[0, 1, 2])]
+        ),
+    )
+    instance.relax_constraint(0, reason="test")
+    instance_bytes = instance.to_bytes()
+    parsed_instance = Instance.from_bytes(instance_bytes)
+    assert parsed_instance.constraint_hints.one_hot_constraints == [
+        OneHot(id=0, variables=[0, 1, 2])
+    ]
