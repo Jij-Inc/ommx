@@ -386,4 +386,170 @@ mod tests {
             "###
         );
     }
+
+    #[test]
+    fn test_insert_constraint_success() {
+        // Create a simple instance with two decision variables
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Insert a new constraint using variable 1
+        let constraint = create_constraint(10, 1);
+        let result = instance.insert_constraint(constraint.clone()).unwrap();
+
+        // Should return None since no constraint with ID 10 existed before
+        assert!(result.is_none());
+        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.constraints.get(&ConstraintID::from(10)), Some(&constraint));
+    }
+
+    #[test]
+    fn test_insert_constraint_replace_existing() {
+        // Create instance with one constraint
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut constraints = BTreeMap::new();
+        let original_constraint = create_constraint(5, 1);
+        constraints.insert(ConstraintID::from(5), original_constraint.clone());
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Insert a new constraint with the same ID but using variable 2
+        let new_constraint = create_constraint(5, 2);
+        let result = instance.insert_constraint(new_constraint.clone()).unwrap();
+
+        // Should return the old constraint that was replaced
+        assert_eq!(result, Some(original_constraint));
+        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.constraints.get(&ConstraintID::from(5)), Some(&new_constraint));
+    }
+
+    #[test]
+    fn test_insert_constraint_undefined_variable() {
+        // Create instance with only variable 1 and 2
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Try to insert constraint using undefined variable 999
+        let constraint = create_constraint(10, 999);
+        let result = instance.insert_constraint(constraint);
+
+        // Should fail with undefined variable error
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.to_string(), "Undefined variable ID is used: VariableID(999)");
+        // Ensure no constraint was added
+        assert_eq!(instance.constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_insert_constraint_multiple_operations() {
+        // Test multiple insertions and replacements
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::binary(VariableID::from(3)),
+        );
+
+        let objective = Function::Linear(Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(1)),
+            coeff!(1.0),
+        ));
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+            ConstraintHints::default(),
+        )
+        .unwrap();
+
+        // Insert multiple constraints
+        let constraint1 = create_constraint(1, 1);
+        let constraint2 = create_constraint(2, 2);
+        let constraint3 = create_constraint(3, 3);
+
+        assert!(instance.insert_constraint(constraint1.clone()).unwrap().is_none());
+        assert!(instance.insert_constraint(constraint2.clone()).unwrap().is_none());
+        assert!(instance.insert_constraint(constraint3.clone()).unwrap().is_none());
+        assert_eq!(instance.constraints.len(), 3);
+
+        // Replace constraint 2 with new one
+        let new_constraint2 = create_constraint(2, 1);
+        let replaced = instance.insert_constraint(new_constraint2.clone()).unwrap();
+        assert_eq!(replaced, Some(constraint2));
+        assert_eq!(instance.constraints.len(), 3);
+        assert_eq!(instance.constraints.get(&ConstraintID::from(2)), Some(&new_constraint2));
+    }
 }
