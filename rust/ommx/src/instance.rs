@@ -109,15 +109,20 @@ impl Instance {
         })
     }
 
-    /// Set the objective function
-    pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
-        // Validate that all variables in the objective are defined
+    /// Validate that all required variable IDs are defined in the instance
+    fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
-        let required_ids = objective.required_ids();
         if !required_ids.is_subset(&variable_ids) {
             let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
             return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
         }
+        Ok(())
+    }
+
+    /// Set the objective function
+    pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
+        // Validate that all variables in the objective are defined
+        self.validate_required_ids(objective.required_ids())?;
         self.objective = objective;
         Ok(())
     }
@@ -128,12 +133,7 @@ impl Instance {
         constraint: Constraint,
     ) -> anyhow::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
-        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
-        let required_ids = constraint.required_ids();
-        if !required_ids.is_subset(&variable_ids) {
-            let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
-            return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
-        }
+        self.validate_required_ids(constraint.required_ids())?;
         Ok(self.constraints.insert(constraint.id, constraint))
     }
 
@@ -421,7 +421,10 @@ mod tests {
         // Should return None since no constraint with ID 10 existed before
         assert!(result.is_none());
         assert_eq!(instance.constraints.len(), 1);
-        assert_eq!(instance.constraints.get(&ConstraintID::from(10)), Some(&constraint));
+        assert_eq!(
+            instance.constraints.get(&ConstraintID::from(10)),
+            Some(&constraint)
+        );
     }
 
     #[test]
@@ -462,7 +465,10 @@ mod tests {
         // Should return the old constraint that was replaced
         assert_eq!(result, Some(original_constraint));
         assert_eq!(instance.constraints.len(), 1);
-        assert_eq!(instance.constraints.get(&ConstraintID::from(5)), Some(&new_constraint));
+        assert_eq!(
+            instance.constraints.get(&ConstraintID::from(5)),
+            Some(&new_constraint)
+        );
     }
 
     #[test]
@@ -499,7 +505,10 @@ mod tests {
         // Should fail with undefined variable error
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.to_string(), "Undefined variable ID is used: VariableID(999)");
+        assert_eq!(
+            err.to_string(),
+            "Undefined variable ID is used: VariableID(999)"
+        );
         // Ensure no constraint was added
         assert_eq!(instance.constraints.len(), 0);
     }
@@ -540,9 +549,18 @@ mod tests {
         let constraint2 = create_constraint(2, 2);
         let constraint3 = create_constraint(3, 3);
 
-        assert!(instance.insert_constraint(constraint1.clone()).unwrap().is_none());
-        assert!(instance.insert_constraint(constraint2.clone()).unwrap().is_none());
-        assert!(instance.insert_constraint(constraint3.clone()).unwrap().is_none());
+        assert!(instance
+            .insert_constraint(constraint1.clone())
+            .unwrap()
+            .is_none());
+        assert!(instance
+            .insert_constraint(constraint2.clone())
+            .unwrap()
+            .is_none());
+        assert!(instance
+            .insert_constraint(constraint3.clone())
+            .unwrap()
+            .is_none());
         assert_eq!(instance.constraints.len(), 3);
 
         // Replace constraint 2 with new one
@@ -550,6 +568,9 @@ mod tests {
         let replaced = instance.insert_constraint(new_constraint2.clone()).unwrap();
         assert_eq!(replaced, Some(constraint2));
         assert_eq!(instance.constraints.len(), 3);
-        assert_eq!(instance.constraints.get(&ConstraintID::from(2)), Some(&new_constraint2));
+        assert_eq!(
+            instance.constraints.get(&ConstraintID::from(2)),
+            Some(&new_constraint2)
+        );
     }
 }
