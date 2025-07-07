@@ -2,7 +2,7 @@ use super::parse::*;
 use crate::{
     parse::{Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
+    Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -17,13 +17,14 @@ impl Parse for v1::OneHot {
     type Context = (
         BTreeMap<VariableID, DecisionVariable>,
         BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
     );
     fn parse(
         self,
-        (decision_variable, constraints): &Self::Context,
+        (decision_variable, constraints, removed_constraints): &Self::Context,
     ) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.OneHot";
-        let constraint_id = as_constraint_id(constraints, self.constraint_id)
+        let constraint_id = as_constraint_id(constraints, removed_constraints, self.constraint_id)
             .map_err(|e| e.context(message, "constraint_id"))?;
         let mut variables = BTreeSet::new();
         for v in &self.decision_variables {
@@ -55,17 +56,19 @@ impl Parse for v1::Sos1 {
     type Context = (
         BTreeMap<VariableID, DecisionVariable>,
         BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
     );
     fn parse(
         self,
-        (decision_variable, constraints): &Self::Context,
+        (decision_variable, constraints, removed_constraints): &Self::Context,
     ) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.Sos1";
-        let binary_constraint_id = as_constraint_id(constraints, self.binary_constraint_id)
-            .map_err(|e| e.context(message, "binary_constraint_id"))?;
+        let binary_constraint_id =
+            as_constraint_id(constraints, removed_constraints, self.binary_constraint_id)
+                .map_err(|e| e.context(message, "binary_constraint_id"))?;
         let mut big_m_constraint_ids = BTreeSet::new();
         for id in &self.big_m_constraint_ids {
-            let id = as_constraint_id(constraints, *id)
+            let id = as_constraint_id(constraints, removed_constraints, *id)
                 .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
             if !big_m_constraint_ids.insert(id) {
                 return Err(
@@ -104,6 +107,7 @@ impl Parse for v1::ConstraintHints {
     type Context = (
         BTreeMap<VariableID, DecisionVariable>,
         BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";

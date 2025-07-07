@@ -112,13 +112,13 @@ impl Parse for v1::Instance {
         let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
             .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
 
-        let context = (decision_variables, constraints);
+        let context = (decision_variables, constraints, removed_constraints);
         let constraint_hints = if let Some(hints) = self.constraint_hints {
             hints.parse_as(&context, message, "constraint_hints")?
         } else {
             Default::default()
         };
-        let (decision_variables, constraints) = context;
+        let (decision_variables, constraints, removed_constraints) = context;
 
         Ok(Instance {
             sense,
@@ -175,10 +175,11 @@ impl From<Instance> for v1::Instance {
 
 pub(super) fn as_constraint_id(
     constraints: &BTreeMap<ConstraintID, Constraint>,
+    removed_constraints: &BTreeMap<ConstraintID, RemovedConstraint>,
     id: u64,
 ) -> Result<ConstraintID, ParseError> {
     let id = ConstraintID::from(id);
-    if !constraints.contains_key(&id) {
+    if !constraints.contains_key(&id) && !removed_constraints.contains_key(&id) {
         return Err(
             RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
         );
