@@ -256,7 +256,11 @@ impl DecisionVariable {
         Ok(())
     }
 
-    /// Impose additional bound with current bound.
+    /// Impose additional bound with current bound by computing their intersection.
+    /// 
+    /// This method computes the intersection of the current bound and the new bound,
+    /// then sets the result as the new bound. If the intersection is empty,
+    /// an `EmptyBoundIntersection` error is returned.
     pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let intersected = self.bound.intersection(&bound).ok_or(
             DecisionVariableError::EmptyBoundIntersection {

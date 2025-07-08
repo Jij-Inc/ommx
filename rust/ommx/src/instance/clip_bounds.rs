@@ -9,8 +9,8 @@ impl Instance {
     ///
     /// If any operation fails, all changes are rolled back to maintain consistency.
     pub fn clip_bounds(&mut self, bounds: &Bounds, atol: ATol) -> anyhow::Result<()> {
-        // Clone the current decision variables for potential rollback
-        let backup = self.decision_variables.clone();
+        // Track original bounds for potential rollback
+        let mut original_bounds = BTreeMap::new();
 
         // Attempt to apply all bound changes
         let result: anyhow::Result<()> = (|| {
@@ -19,14 +19,23 @@ impl Instance {
                     .decision_variables
                     .get_mut(id)
                     .ok_or(InstanceError::UndefinedVariableID { id: *id })?;
+                
+                // Store original bound before modification
+                original_bounds.insert(*id, decision_variable.bound());
+                
                 decision_variable.clip_bound(*new_bound, atol)?;
             }
             Ok(())
         })();
 
-        // If any error occurred, rollback to the original state
+        // If any error occurred, rollback only the modified entries
         if result.is_err() {
-            self.decision_variables = backup;
+            for (id, original_bound) in original_bounds {
+                if let Some(dv) = self.decision_variables.get_mut(&id) {
+                    // Safe to unwrap because we're restoring a previously valid bound
+                    dv.set_bound(original_bound, atol).unwrap();
+                }
+            }
         }
 
         result
@@ -148,8 +157,13 @@ mod tests {
 
     #[test]
     fn test_clip_bounds_empty() {
+        let mut dv = DecisionVariable::continuous(VariableID::from(1));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        let original_bound = dv.bound();
+        
         let decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(1) => dv,
         };
 
         let mut instance = Instance {
@@ -160,5 +174,11 @@ mod tests {
         // Apply empty bounds map (should succeed and change nothing)
         let new_bounds = btreemap! {};
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
+        
+        // Assert that the bound remains unchanged
+        assert_eq!(
+            instance.decision_variables[&VariableID::from(1)].bound(),
+            original_bound
+        );
     }
 }
