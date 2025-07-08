@@ -138,13 +138,23 @@ impl Instance {
         Ok(())
     }
 
-    /// Insert a constraint into the instance. If the constraint already exists, it will be replaced.
+    /// Insert a constraint into the instance.
+    ///
+    /// - If the constraint already exists, it will be replaced.
+    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - Otherwise, it adds the constraint to the instance.
+    ///
     pub fn insert_constraint(
         &mut self,
         constraint: Constraint,
     ) -> anyhow::Result<Option<Constraint>> {
         // Validate that all variables in the constraints are defined
         self.validate_required_ids(constraint.required_ids())?;
+        use std::collections::btree_map::Entry;
+        if let Entry::Occupied(mut o) = self.removed_constraints.entry(constraint.id) {
+            let removed = std::mem::replace(&mut o.get_mut().constraint, constraint);
+            return Ok(Some(removed));
+        }
         Ok(self.constraints.insert(constraint.id, constraint))
     }
 
