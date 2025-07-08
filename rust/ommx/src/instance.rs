@@ -147,13 +147,12 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        coeff, linear,
+        coeff,
         constraint::{Constraint, ConstraintID},
-        DecisionVariable, VariableID,
+        linear, DecisionVariable, VariableID,
     };
     use maplit::btreemap;
     use std::collections::BTreeSet;
-
 
     #[test]
     fn test_instance_new_fails_with_undefined_variable_in_objective() {
