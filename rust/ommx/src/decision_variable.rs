@@ -559,6 +559,72 @@ mod tests {
     use crate::v1;
 
     #[test]
+    fn test_clip_bound_normal_intersection() {
+        // Test case 1: Normal intersection
+        let mut dv = DecisionVariable::continuous(VariableID::from(1));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default()).unwrap();
+        dv.clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
+
+        // Test case 2: Intersection with infinite bounds
+        let mut dv = DecisionVariable::continuous(VariableID::from(2));
+        dv.set_bound(Bound::new(f64::NEG_INFINITY, 10.0).unwrap(), ATol::default()).unwrap();
+        dv.clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
+
+        // Test case 3: Clip bound is completely contained
+        let mut dv = DecisionVariable::continuous(VariableID::from(3));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default()).unwrap();
+        dv.clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(2.0, 8.0).unwrap());
+    }
+
+    #[test]
+    fn test_clip_bound_empty_intersection() {
+        // Test case 1: Non-overlapping bounds [0, 5] and [10, 15]
+        let mut dv = DecisionVariable::continuous(VariableID::from(1));
+        dv.set_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default()).unwrap();
+        let result = dv.clip_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+
+        // Test case 2: Reverse order
+        let mut dv = DecisionVariable::continuous(VariableID::from(2));
+        dv.set_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default()).unwrap();
+        let result = dv.clip_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
+
+    #[test]
+    fn test_clip_bound_with_kinds() {
+        // Test with Integer kind
+        let mut dv = DecisionVariable::integer(VariableID::from(1));
+        dv.set_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(2.0, 5.0).unwrap()); // Rounded to integer bounds
+        dv.clip_bound(Bound::new(2.1, 4.9).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(3.0, 4.0).unwrap());
+
+        // Test with Binary kind - clip to [0, 0]
+        let mut dv = DecisionVariable::binary(VariableID::from(2));
+        assert_eq!(dv.bound(), Bound::new(0.0, 1.0).unwrap());
+        dv.clip_bound(Bound::new(-1.0, 0.5).unwrap(), ATol::default()).unwrap();
+        assert_eq!(dv.bound(), Bound::new(0.0, 0.0).unwrap());
+
+        // Test with Binary kind - empty intersection
+        let mut dv = DecisionVariable::binary(VariableID::from(3));
+        let result = dv.clip_bound(Bound::new(1.1, 2.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
+
+    #[test]
     fn test_evaluated_decision_variable_try_from() {
         // Test successful conversion
         let v1_dv = v1::DecisionVariable {
