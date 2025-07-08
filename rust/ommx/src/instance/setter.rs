@@ -56,11 +56,12 @@ mod tests {
     use super::*;
     use crate::{
         assign, coeff,
-        constraint::{Constraint, ConstraintID},
+        constraint::{Constraint, ConstraintID, RemovedConstraint},
         linear,
         polynomial_base::{Linear, LinearMonomial},
         DecisionVariable, Function, VariableID,
     };
+    use fnv::FnvHashMap;
     use maplit::btreemap;
 
     #[test]
@@ -115,7 +116,7 @@ mod tests {
         ));
 
         let mut constraints = BTreeMap::new();
-        let original_constraint = 
+        let original_constraint =
             Constraint::equal_to_zero(ConstraintID::from(5), (linear!(1) + coeff!(1.0)).into());
         constraints.insert(ConstraintID::from(5), original_constraint.clone());
 
@@ -129,7 +130,7 @@ mod tests {
         .unwrap();
 
         // Insert a new constraint with the same ID but using variable 2
-        let new_constraint = 
+        let new_constraint =
             Constraint::equal_to_zero(ConstraintID::from(5), (linear!(2) + coeff!(1.0)).into());
         let result = instance.insert_constraint(new_constraint.clone()).unwrap();
 
@@ -170,7 +171,7 @@ mod tests {
         .unwrap();
 
         // Try to insert constraint using undefined variable 999
-        let constraint = 
+        let constraint =
             Constraint::equal_to_zero(ConstraintID::from(10), (linear!(999) + coeff!(1.0)).into());
         let result = instance.insert_constraint(constraint);
 
@@ -217,11 +218,11 @@ mod tests {
         .unwrap();
 
         // Insert multiple constraints
-        let constraint1 = 
+        let constraint1 =
             Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into());
-        let constraint2 = 
+        let constraint2 =
             Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(1.0)).into());
-        let constraint3 = 
+        let constraint3 =
             Constraint::equal_to_zero(ConstraintID::from(3), (linear!(3) + coeff!(1.0)).into());
 
         assert!(instance
@@ -239,7 +240,7 @@ mod tests {
         assert_eq!(instance.constraints.len(), 3);
 
         // Replace constraint 2 with new one
-        let new_constraint2 = 
+        let new_constraint2 =
             Constraint::equal_to_zero(ConstraintID::from(2), (linear!(1) + coeff!(1.0)).into());
         let replaced = instance.insert_constraint(new_constraint2.clone()).unwrap();
         assert_eq!(replaced, Some(constraint2));
@@ -274,7 +275,7 @@ mod tests {
         };
 
         // Try to insert constraint using variable 2 (which is in dependency keys)
-        let constraint = 
+        let constraint =
             Constraint::equal_to_zero(ConstraintID::from(10), (linear!(2) + coeff!(1.0)).into());
         let result = instance.insert_constraint(constraint);
         assert_eq!(
@@ -318,5 +319,67 @@ mod tests {
         );
         // Ensure objective was not changed
         assert_eq!(instance.objective, Function::from(linear!(1) + coeff!(1.0)));
+    }
+
+    #[test]
+    fn test_insert_constraint_replace_removed_constraint() {
+        // Create instance with one active constraint and one removed constraint
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+
+        let objective = (linear!(1) + coeff!(1.0)).into();
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(
+                ConstraintID::from(1),
+                (linear!(1) + coeff!(1.0)).into(),
+            ),
+            ConstraintID::from(2) => Constraint::equal_to_zero(
+                ConstraintID::from(2),
+                (linear!(2) + coeff!(2.0)).into(),
+            ),
+        };
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            ConstraintHints::default(),
+        )
+        .unwrap();
+        instance.relax_constraint(ConstraintID::from(2), "test".to_string(), []);
+
+        // Verify initial state
+        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.removed_constraints.len(), 1);
+
+        // Insert a new constraint with the same ID as the removed constraint
+        let new_constraint = Constraint::equal_to_zero(
+            ConstraintID::from(2),
+            (linear!(1) + linear!(2) + coeff!(3.0)).into(),
+        );
+        let result = instance.insert_constraint(new_constraint.clone()).unwrap();
+
+        // Should return the old removed constraint
+        assert_eq!(
+            result,
+            Some(Constraint::equal_to_zero(
+                ConstraintID::from(2),
+                (linear!(2) + coeff!(2.0)).into(),
+            ))
+        );
+
+        assert_eq!(instance.constraints.len(), 1);
+        assert_eq!(instance.removed_constraints.len(), 1);
+        assert_eq!(
+            instance
+                .removed_constraints
+                .get(&ConstraintID::from(2))
+                .unwrap()
+                .constraint,
+            new_constraint
+        );
     }
 }
