@@ -1,5 +1,4 @@
 import pytest
-import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
 from ommx_pyomo_adapter import (
@@ -53,6 +52,7 @@ def test_error_not_solved_model():
     adapter = OMMXPyomoAdapter(instance)
     # Create a mock results object without solving
     from pyomo.opt import SolverResults
+
     results = SolverResults()
     results.solver.termination_condition = TerminationCondition.unknown
     # Don't solve the model, so variables have no values

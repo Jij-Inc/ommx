@@ -139,24 +139,26 @@ class OMMXPyomoAdapter(SolverAdapter):
                     ...
                 ommx.adapter.UnboundedDetected: Model was unbounded
         """
-        adapter = cls(ommx_instance, solver_name=solver_name, solver_options=solver_options)
+        adapter = cls(
+            ommx_instance, solver_name=solver_name, solver_options=solver_options
+        )
         model = adapter.solver_input
-        
+
         # Create solver
         try:
             solver = pyo.SolverFactory(solver_name)
             if not solver.available():
                 raise OMMXPyomoAdapterError(f"Solver '{solver_name}' is not available")
-        except Exception as e:
+        except Exception:
             raise OMMXPyomoAdapterError(f"Solver '{solver_name}' is not available")
-        
+
         # Set solver options
         for key, value in adapter.solver_options.items():
             solver.options[key] = value
-        
+
         # Solve
         results = solver.solve(model, tee=False)
-        
+
         return adapter.decode(results)
 
     @property
@@ -208,11 +210,14 @@ class OMMXPyomoAdapter(SolverAdapter):
         # Check solver status and handle errors
         if results.solver.termination_condition == TerminationCondition.infeasible:
             raise InfeasibleDetected("Model was infeasible")
-        
+
         if results.solver.termination_condition == TerminationCondition.unbounded:
             raise UnboundedDetected("Model was unbounded")
-        
-        if results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded:
+
+        if (
+            results.solver.termination_condition
+            == TerminationCondition.infeasibleOrUnbounded
+        ):
             raise InfeasibleDetected("Model was infeasible or unbounded")
 
         state = self.decode_to_state(results)
@@ -258,11 +263,14 @@ class OMMXPyomoAdapter(SolverAdapter):
         # Check solver status and handle errors
         if results.solver.termination_condition == TerminationCondition.infeasible:
             raise InfeasibleDetected("Model was infeasible")
-        
+
         if results.solver.termination_condition == TerminationCondition.unbounded:
             raise UnboundedDetected("Model was unbounded")
-        
-        if results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded:
+
+        if (
+            results.solver.termination_condition
+            == TerminationCondition.infeasibleOrUnbounded
+        ):
             raise InfeasibleDetected("Model was infeasible or unbounded")
 
         try:
@@ -277,34 +285,30 @@ class OMMXPyomoAdapter(SolverAdapter):
                 entries[var.id] = value
             return State(entries=entries)
         except Exception as e:
-            raise OMMXPyomoAdapterError(
-                f"Failed to decode state from results: {e}"
-            )
+            raise OMMXPyomoAdapterError(f"Failed to decode state from results: {e}")
 
     def _set_decision_variables(self):
         self.varname_map = {}
-        
+
         for var in self.instance.decision_variables:
             var_name = str(var.id)
-            
+
             if var.kind == DecisionVariable.BINARY:
                 pyomo_var = pyo.Var(domain=pyo.Binary)
             elif var.kind == DecisionVariable.INTEGER:
                 pyomo_var = pyo.Var(
-                    domain=pyo.Integers,
-                    bounds=(var.bound.lower, var.bound.upper)
+                    domain=pyo.Integers, bounds=(var.bound.lower, var.bound.upper)
                 )
             elif var.kind == DecisionVariable.CONTINUOUS:
                 pyomo_var = pyo.Var(
-                    domain=pyo.Reals,
-                    bounds=(var.bound.lower, var.bound.upper)
+                    domain=pyo.Reals, bounds=(var.bound.lower, var.bound.upper)
                 )
             else:
                 raise OMMXPyomoAdapterError(
                     f"Unsupported decision variable kind: "
                     f"id: {var.id}, kind: {var.kind}"
                 )
-            
+
             self.model.add_component(name=var_name, val=pyomo_var)
             self.varname_map[var_name] = pyomo_var
 
@@ -319,7 +323,9 @@ class OMMXPyomoAdapter(SolverAdapter):
             # If objective function is quadratic, add the auxiliary variable for the linearized objective function,
             # because Pyomo quadratic objectives may need linearization for some solvers.
             aux_var = pyo.Var(domain=pyo.Reals)
-            self.model.add_component(name="auxiliary_for_linearized_objective", val=aux_var)
+            self.model.add_component(
+                name="auxiliary_for_linearized_objective", val=aux_var
+            )
             self.varname_map["auxiliary_for_linearized_objective"] = aux_var
 
     def _set_objective(self):
@@ -328,13 +334,11 @@ class OMMXPyomoAdapter(SolverAdapter):
         elif self.instance.sense == Instance.MINIMIZE:
             sense = pyo.minimize
         else:
-            raise OMMXPyomoAdapterError(
-                f"Sense not supported: {self.instance.sense}"
-            )
+            raise OMMXPyomoAdapterError(f"Sense not supported: {self.instance.sense}")
 
         objective = self.instance.objective
         degree = objective.degree()
-        
+
         if degree == 0:
             obj_expr = objective.constant_term
         elif degree == 1:
@@ -361,21 +365,23 @@ class OMMXPyomoAdapter(SolverAdapter):
                 constr_expr = aux_var <= quad_expr
 
             self.model.add_component(
-                name="constraint_for_linearized_objective", 
-                val=pyo.Constraint(expr=constr_expr)
+                name="constraint_for_linearized_objective",
+                val=pyo.Constraint(expr=constr_expr),
             )
         else:
             raise OMMXPyomoAdapterError(
                 "The objective function must be constant, linear, or quadratic."
             )
 
-        self.model.add_component(name="objective", val=pyo.Objective(expr=obj_expr, sense=sense))
+        self.model.add_component(
+            name="objective", val=pyo.Objective(expr=obj_expr, sense=sense)
+        )
 
     def _set_constraints(self):
         for constraint in self.instance.constraints:
             f = constraint.function
             degree = f.degree()
-            
+
             if degree == 0:
                 # Constant constraint is not passed to Pyomo, but checked for feasibility
                 constant_value = f.constant_term
@@ -413,7 +419,9 @@ class OMMXPyomoAdapter(SolverAdapter):
                     f"id: {constraint.id}, equality: {constraint.equality}"
                 )
 
-            self.model.add_component(name=f"constraint_{constraint.id}", val=pyo.Constraint(expr=constr_expr))
+            self.model.add_component(
+                name=f"constraint_{constraint.id}", val=pyo.Constraint(expr=constr_expr)
+            )
 
     def _make_linear_expr(self, f: Function):
         expr = f.constant_term
