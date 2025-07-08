@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 mod arbitrary;
+mod clip_bounds;
 mod constraint_hints;
 mod decision_variable;
 mod error;

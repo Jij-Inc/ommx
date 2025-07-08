@@ -6,6 +6,7 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
+use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
@@ -243,6 +244,7 @@ impl DecisionVariable {
         Ok(())
     }
 
+    /// Set a bound on the decision variable by removing the previous bound.
     pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
@@ -253,6 +255,32 @@ impl DecisionVariable {
         )?;
         self.bound = bound;
         Ok(())
+    }
+
+    /// Impose additional bound with current bound by computing their intersection.
+    ///
+    /// This method computes the intersection of the current bound and the new bound,
+    /// then sets the result as the new bound. If the intersection is empty,
+    /// an `EmptyBoundIntersection` error is returned.
+    ///
+    /// Returns `Ok(true)` if the bound was actually changed, `Ok(false)` if the bound
+    /// remained the same.
+    pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<bool, DecisionVariableError> {
+        let intersected = self.bound.intersection(&bound).ok_or(
+            DecisionVariableError::EmptyBoundIntersection {
+                id: self.id,
+                existing_bound: self.bound,
+                new_bound: bound,
+            },
+        )?;
+
+        // Check if the bound actually changes
+        if self.bound.abs_diff_eq(&intersected, atol) {
+            Ok(false)
+        } else {
+            self.set_bound(intersected, atol)?;
+            Ok(true)
+        }
     }
 
     pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
@@ -297,6 +325,13 @@ pub enum DecisionVariableError {
         bound: Bound,
         substituted_value: f64,
         atol: ATol,
+    },
+
+    #[error("Empty bound intersection for ID={id}: existing bound={existing_bound}, new bound={new_bound}")]
+    EmptyBoundIntersection {
+        id: VariableID,
+        existing_bound: Bound,
+        new_bound: Bound,
     },
 }
 
@@ -536,6 +571,113 @@ impl std::convert::TryFrom<crate::v1::DecisionVariable> for EvaluatedDecisionVar
 mod tests {
     use super::*;
     use crate::v1;
+
+    #[test]
+    fn test_clip_bound_normal_intersection() {
+        // Test case 1: Normal intersection
+        let mut dv = DecisionVariable::continuous(VariableID::from(1));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        let changed = dv
+            .clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(changed);
+        assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
+
+        // Test case 2: Intersection with infinite bounds
+        let mut dv = DecisionVariable::continuous(VariableID::from(2));
+        dv.set_bound(
+            Bound::new(f64::NEG_INFINITY, 10.0).unwrap(),
+            ATol::default(),
+        )
+        .unwrap();
+        let changed = dv
+            .clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default())
+            .unwrap();
+        assert!(changed);
+        assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
+
+        // Test case 3: Clip bound is completely contained
+        let mut dv = DecisionVariable::continuous(VariableID::from(3));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        let changed = dv
+            .clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(changed);
+        assert_eq!(dv.bound(), Bound::new(2.0, 8.0).unwrap());
+
+        // Test case 4: No change (clip with same bound)
+        let mut dv = DecisionVariable::continuous(VariableID::from(4));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        let changed = dv
+            .clip_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(!changed);
+        assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
+
+        // Test case 5: No change (clip with larger bound)
+        let changed = dv
+            .clip_bound(Bound::new(-5.0, 15.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(!changed);
+        assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
+    }
+
+    #[test]
+    fn test_clip_bound_empty_intersection() {
+        // Test case 1: Non-overlapping bounds [0, 5] and [10, 15]
+        let mut dv = DecisionVariable::continuous(VariableID::from(1));
+        dv.set_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default())
+            .unwrap();
+        let result = dv.clip_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+
+        // Test case 2: Reverse order
+        let mut dv = DecisionVariable::continuous(VariableID::from(2));
+        dv.set_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default())
+            .unwrap();
+        let result = dv.clip_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
+
+    #[test]
+    fn test_clip_bound_with_kinds() {
+        // Test with Integer kind
+        let mut dv = DecisionVariable::integer(VariableID::from(1));
+        dv.set_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default())
+            .unwrap();
+        assert_eq!(dv.bound(), Bound::new(2.0, 5.0).unwrap()); // Rounded to integer bounds
+        let changed = dv
+            .clip_bound(Bound::new(2.1, 4.9).unwrap(), ATol::default())
+            .unwrap();
+        assert!(changed);
+        assert_eq!(dv.bound(), Bound::new(3.0, 4.0).unwrap());
+
+        // Test with Binary kind - clip to [0, 0]
+        let mut dv = DecisionVariable::binary(VariableID::from(2));
+        assert_eq!(dv.bound(), Bound::new(0.0, 1.0).unwrap());
+        let changed = dv
+            .clip_bound(Bound::new(-1.0, 0.5).unwrap(), ATol::default())
+            .unwrap();
+        assert!(changed);
+        assert_eq!(dv.bound(), Bound::new(0.0, 0.0).unwrap());
+
+        // Test with Binary kind - empty intersection
+        let mut dv = DecisionVariable::binary(VariableID::from(3));
+        let result = dv.clip_bound(Bound::new(1.1, 2.0).unwrap(), ATol::default());
+        assert!(matches!(
+            result,
+            Err(DecisionVariableError::EmptyBoundIntersection { .. })
+        ));
+    }
 
     #[test]
     fn test_evaluated_decision_variable_try_from() {
