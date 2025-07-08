@@ -19,11 +19,11 @@ impl Instance {
                     .decision_variables
                     .get_mut(id)
                     .ok_or(InstanceError::UndefinedVariableID { id: *id })?;
-                
+
                 // Store original bound only if it actually changes
                 let original_bound = decision_variable.bound();
                 let changed = decision_variable.clip_bound(*new_bound, atol)?;
-                
+
                 if changed {
                     original_bounds.insert(*id, original_bound);
                 }
@@ -164,7 +164,7 @@ mod tests {
         dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let original_bound = dv.bound();
-        
+
         let decision_variables = btreemap! {
             VariableID::from(1) => dv,
         };
@@ -177,7 +177,7 @@ mod tests {
         // Apply empty bounds map (should succeed and change nothing)
         let new_bounds = btreemap! {};
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
-        
+
         // Assert that the bound remains unchanged
         assert_eq!(
             instance.decision_variables[&VariableID::from(1)].bound(),
