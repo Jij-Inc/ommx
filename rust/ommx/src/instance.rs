@@ -114,19 +114,19 @@ impl Instance {
     fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
-        
+
         // Check if all required IDs are defined
         if !required_ids.is_subset(&variable_ids) {
             let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
             return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
         }
-        
+
         // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
         let mut intersection = required_ids.intersection(&dependency_keys);
         if let Some(&id) = intersection.next() {
             return Err(InstanceError::DependentVariableUsed { id }.into());
         }
-        
+
         Ok(())
     }
 
@@ -185,8 +185,9 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{
-        assign, coeff, linear,
+        assign, coeff,
         constraint::{Constraint, ConstraintID, Equality},
+        linear,
         polynomial_base::{Linear, LinearMonomial},
         Coefficient, DecisionVariable, Function, VariableID,
     };
