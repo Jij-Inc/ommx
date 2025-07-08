@@ -243,6 +243,7 @@ impl DecisionVariable {
         Ok(())
     }
 
+    /// Set a bound on the decision variable by removing the previous bound.
     pub fn set_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
         let bound = self.kind.consistent_bound(bound, atol).ok_or(
             DecisionVariableError::BoundInconsistentToKind {
@@ -253,6 +254,19 @@ impl DecisionVariable {
         )?;
         self.bound = bound;
         Ok(())
+    }
+
+    /// Impose additional bound with current bound.
+    pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
+        let intersected = self.bound.intersection(&bound).ok_or(
+            DecisionVariableError::EmptyBoundIntersection {
+                id: self.id,
+                existing_bound: self.bound,
+                new_bound: bound,
+            },
+        )?;
+
+        self.set_bound(intersected, atol)
     }
 
     pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
@@ -297,6 +311,13 @@ pub enum DecisionVariableError {
         bound: Bound,
         substituted_value: f64,
         atol: ATol,
+    },
+
+    #[error("Empty bound intersection for ID={id}: existing bound={existing_bound}, new bound={new_bound}")]
+    EmptyBoundIntersection {
+        id: VariableID,
+        existing_bound: Bound,
+        new_bound: Bound,
     },
 }
 
