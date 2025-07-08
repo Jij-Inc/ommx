@@ -6,6 +6,7 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
+use approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
@@ -261,7 +262,10 @@ impl DecisionVariable {
     /// This method computes the intersection of the current bound and the new bound,
     /// then sets the result as the new bound. If the intersection is empty,
     /// an `EmptyBoundIntersection` error is returned.
-    pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<(), DecisionVariableError> {
+    /// 
+    /// Returns `Ok(true)` if the bound was actually changed, `Ok(false)` if the bound
+    /// remained the same.
+    pub fn clip_bound(&mut self, bound: Bound, atol: ATol) -> Result<bool, DecisionVariableError> {
         let intersected = self.bound.intersection(&bound).ok_or(
             DecisionVariableError::EmptyBoundIntersection {
                 id: self.id,
@@ -270,7 +274,13 @@ impl DecisionVariable {
             },
         )?;
 
-        self.set_bound(intersected, atol)
+        // Check if the bound actually changes
+        if self.bound.abs_diff_eq(&intersected, atol) {
+            Ok(false)
+        } else {
+            self.set_bound(intersected, atol)?;
+            Ok(true)
+        }
     }
 
     pub fn substitute(&mut self, new_value: f64, atol: ATol) -> Result<(), DecisionVariableError> {
@@ -568,8 +578,9 @@ mod tests {
         let mut dv = DecisionVariable::continuous(VariableID::from(1));
         dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
-        dv.clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default())
+        let changed = dv.clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default())
             .unwrap();
+        assert!(changed);
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 2: Intersection with infinite bounds
@@ -579,17 +590,34 @@ mod tests {
             ATol::default(),
         )
         .unwrap();
-        dv.clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default())
+        let changed = dv.clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default())
             .unwrap();
+        assert!(changed);
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 3: Clip bound is completely contained
         let mut dv = DecisionVariable::continuous(VariableID::from(3));
         dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
-        dv.clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default())
+        let changed = dv.clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default())
             .unwrap();
+        assert!(changed);
         assert_eq!(dv.bound(), Bound::new(2.0, 8.0).unwrap());
+        
+        // Test case 4: No change (clip with same bound)
+        let mut dv = DecisionVariable::continuous(VariableID::from(4));
+        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        let changed = dv.clip_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(!changed);
+        assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
+        
+        // Test case 5: No change (clip with larger bound)
+        let changed = dv.clip_bound(Bound::new(-5.0, 15.0).unwrap(), ATol::default())
+            .unwrap();
+        assert!(!changed);
+        assert_eq!(dv.bound(), Bound::new(0.0, 10.0).unwrap());
     }
 
     #[test]
@@ -622,15 +650,17 @@ mod tests {
         dv.set_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default())
             .unwrap();
         assert_eq!(dv.bound(), Bound::new(2.0, 5.0).unwrap()); // Rounded to integer bounds
-        dv.clip_bound(Bound::new(2.1, 4.9).unwrap(), ATol::default())
+        let changed = dv.clip_bound(Bound::new(2.1, 4.9).unwrap(), ATol::default())
             .unwrap();
+        assert!(changed);
         assert_eq!(dv.bound(), Bound::new(3.0, 4.0).unwrap());
 
         // Test with Binary kind - clip to [0, 0]
         let mut dv = DecisionVariable::binary(VariableID::from(2));
         assert_eq!(dv.bound(), Bound::new(0.0, 1.0).unwrap());
-        dv.clip_bound(Bound::new(-1.0, 0.5).unwrap(), ATol::default())
+        let changed = dv.clip_bound(Bound::new(-1.0, 0.5).unwrap(), ATol::default())
             .unwrap();
+        assert!(changed);
         assert_eq!(dv.bound(), Bound::new(0.0, 0.0).unwrap());
 
         // Test with Binary kind - empty intersection

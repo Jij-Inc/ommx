@@ -20,10 +20,13 @@ impl Instance {
                     .get_mut(id)
                     .ok_or(InstanceError::UndefinedVariableID { id: *id })?;
                 
-                // Store original bound before modification
-                original_bounds.insert(*id, decision_variable.bound());
+                // Store original bound only if it actually changes
+                let original_bound = decision_variable.bound();
+                let changed = decision_variable.clip_bound(*new_bound, atol)?;
                 
-                decision_variable.clip_bound(*new_bound, atol)?;
+                if changed {
+                    original_bounds.insert(*id, original_bound);
+                }
             }
             Ok(())
         })();
