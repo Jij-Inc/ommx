@@ -10,6 +10,7 @@ mod parse;
 mod pass;
 mod reduce_binary_power;
 mod serialize;
+mod setter;
 mod substitute;
 
 use std::{collections::BTreeMap, ops::Neg};
@@ -109,20 +110,6 @@ impl Instance {
         })
     }
 
-    /// Set the objective function
-    pub fn set_objective(&mut self, objective: Function) -> anyhow::Result<()> {
-        // Validate that all variables in the objective are defined
-        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-
-        self.objective = objective;
-        Ok(())
-    }
-
     /// Convert the instance to a minimization problem.
     ///
     /// If the instance is already a minimization problem, this does nothing.
@@ -161,46 +148,22 @@ mod tests {
     use super::*;
     use crate::{
         coeff,
-        constraint::{Constraint, ConstraintID, Equality},
-        polynomial_base::{Linear, LinearMonomial},
-        Coefficient, DecisionVariable, Function, VariableID,
+        constraint::{Constraint, ConstraintID},
+        linear, DecisionVariable, VariableID,
     };
-    use fnv::FnvHashMap;
+    use maplit::btreemap;
     use std::collections::BTreeSet;
-
-    /// Helper function to create a simple constraint
-    fn create_constraint(id: u64, variable_id: u64) -> Constraint {
-        let linear = Linear::single_term(LinearMonomial::Variable(variable_id.into()), coeff!(1.0));
-        Constraint {
-            id: ConstraintID::from(id),
-            function: Function::Linear(linear),
-            equality: Equality::EqualToZero,
-            name: None,
-            subscripts: Vec::new(),
-            parameters: FnvHashMap::default(),
-            description: None,
-        }
-    }
 
     #[test]
     fn test_instance_new_fails_with_undefined_variable_in_objective() {
         // Create decision variables that do not include variable ID 999
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
 
         // Create objective function that uses undefined variable ID 999
-        let linear = Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(999)),
-            Coefficient::try_from(1.0).unwrap(),
-        );
-        let objective = Function::Linear(linear);
+        let objective = (linear!(999) + coeff!(1.0)).into();
 
         let constraints = BTreeMap::new();
         let constraint_hints = ConstraintHints::default();
@@ -222,26 +185,18 @@ mod tests {
     #[test]
     fn test_instance_new_fails_with_undefined_variable_in_constraint() {
         // Create decision variables that do not include variable ID 999
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
 
         // Create simple objective function using defined variables
-        let linear = Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(1)),
-            Coefficient::try_from(1.0).unwrap(),
-        );
-        let objective = Function::Linear(linear);
+        let objective = (linear!(1) + coeff!(1.0)).into();
 
         // Create constraint that uses undefined variable ID 999
-        let mut constraints = BTreeMap::new();
-        constraints.insert(ConstraintID::from(1), create_constraint(1, 999));
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
+        };
 
         let constraint_hints = ConstraintHints::default();
 
@@ -262,26 +217,18 @@ mod tests {
     #[test]
     fn test_instance_new_fails_with_undefined_variable_in_constraint_hints() {
         // Create decision variables that do not include variable ID 999
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
 
         // Create simple objective function using defined variables
-        let linear = Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(1)),
-            Coefficient::try_from(1.0).unwrap(),
-        );
-        let objective = Function::Linear(linear);
+        let objective = (linear!(1) + coeff!(1.0)).into();
 
         // Create constraint using defined variables
-        let mut constraints = BTreeMap::new();
-        constraints.insert(ConstraintID::from(1), create_constraint(1, 1));
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+        };
 
         // Create constraint hints with OneHot that references undefined variable ID 999
         let mut variables = BTreeSet::new();
@@ -319,26 +266,18 @@ mod tests {
     #[test]
     fn test_instance_new_fails_with_undefined_constraint_in_constraint_hints() {
         // Create decision variables
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
 
         // Create simple objective function using defined variables
-        let linear = Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(1)),
-            Coefficient::try_from(1.0).unwrap(),
-        );
-        let objective = Function::Linear(linear);
+        let objective = (linear!(1) + coeff!(1.0)).into();
 
         // Create constraint with ID 1
-        let mut constraints = BTreeMap::new();
-        constraints.insert(ConstraintID::from(1), create_constraint(1, 1));
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+        };
 
         // Create constraint hints with OneHot that references undefined constraint ID 999
         let mut variables = BTreeSet::new();

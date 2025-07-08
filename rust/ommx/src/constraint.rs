@@ -51,6 +51,32 @@ pub struct Constraint {
     pub description: Option<String>,
 }
 
+impl Constraint {
+    pub fn equal_to_zero(id: ConstraintID, function: Function) -> Self {
+        Self {
+            id,
+            function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: FnvHashMap::default(),
+            description: None,
+        }
+    }
+
+    pub fn less_than_or_equal_to_zero(id: ConstraintID, function: Function) -> Self {
+        Self {
+            id,
+            function,
+            equality: Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: FnvHashMap::default(),
+            description: None,
+        }
+    }
+}
+
 impl std::fmt::Display for Constraint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let equality_symbol = match self.equality {
