@@ -192,6 +192,7 @@ mod tests {
         Coefficient, DecisionVariable, Function, VariableID,
     };
     use fnv::FnvHashMap;
+    use maplit::btreemap;
     use std::collections::BTreeSet;
 
     /// Helper function to create a simple constraint
@@ -589,28 +590,15 @@ mod tests {
     #[test]
     fn test_insert_constraint_with_dependency_key() {
         // Create instance with decision variables and dependency
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(3),
-            DecisionVariable::binary(VariableID::from(3)),
-        );
-
-        let objective = Function::Linear(Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(1)),
-            coeff!(1.0),
-        ));
-
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
             Sense::Minimize,
-            objective,
+            objective.into(),
             decision_variables,
             BTreeMap::new(),
             ConstraintHints::default(),
@@ -625,12 +613,8 @@ mod tests {
         // Try to insert constraint using variable 2 (which is in dependency keys)
         let constraint = create_constraint(10, 2);
         let result = instance.insert_constraint(constraint);
-
-        // Should fail with DependentVariableUsed error
-        assert!(result.is_err());
-        let err = result.unwrap_err();
         assert_eq!(
-            err.to_string(),
+            result.unwrap_err().to_string(),
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraint was added
@@ -640,24 +624,14 @@ mod tests {
     #[test]
     fn test_set_objective_with_dependency_key() {
         // Create instance with decision variables and dependency
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::binary(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::binary(VariableID::from(2)),
-        );
-
-        let objective = Function::Linear(Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(1)),
-            coeff!(1.0),
-        ));
-
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
         let mut instance = Instance::new(
             Sense::Minimize,
-            objective,
+            objective.into(),
             decision_variables,
             BTreeMap::new(),
             ConstraintHints::default(),
@@ -670,26 +644,15 @@ mod tests {
         };
 
         // Try to set objective using variable 2 (which is in dependency keys)
-        let new_objective = Function::Linear(Linear::single_term(
-            LinearMonomial::Variable(VariableID::from(2)),
-            coeff!(1.0),
-        ));
-        let result = instance.set_objective(new_objective);
+        let new_objective = linear!(2) + coeff!(1.0);
+        let result = instance.set_objective(new_objective.into());
 
         // Should fail with DependentVariableUsed error
-        assert!(result.is_err());
-        let err = result.unwrap_err();
         assert_eq!(
-            err.to_string(),
+            result.unwrap_err().to_string(),
             "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure objective was not changed
-        assert_eq!(
-            instance.objective,
-            Function::Linear(Linear::single_term(
-                LinearMonomial::Variable(VariableID::from(1)),
-                coeff!(1.0),
-            ))
-        );
+        assert_eq!(instance.objective, Function::from(linear!(1) + coeff!(1.0)));
     }
 }
