@@ -56,12 +56,12 @@ mod tests {
     use super::*;
     use crate::{
         assign, coeff,
-        constraint::{Constraint, ConstraintID, RemovedConstraint},
+        constraint::{Constraint, ConstraintID},
         linear,
         polynomial_base::{Linear, LinearMonomial},
         DecisionVariable, Function, VariableID,
     };
-    use fnv::FnvHashMap;
+
     use maplit::btreemap;
 
     #[test]
@@ -349,7 +349,9 @@ mod tests {
             ConstraintHints::default(),
         )
         .unwrap();
-        instance.relax_constraint(ConstraintID::from(2), "test".to_string(), []);
+        instance
+            .relax_constraint(ConstraintID::from(2), "test".to_string(), [])
+            .unwrap();
 
         // Verify initial state
         assert_eq!(instance.constraints.len(), 1);
