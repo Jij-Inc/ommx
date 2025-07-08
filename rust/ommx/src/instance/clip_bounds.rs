@@ -37,24 +37,16 @@ impl Instance {
 mod tests {
     use super::*;
     use crate::{Bound, DecisionVariable, VariableID};
-    use std::collections::BTreeMap;
+    use maplit::btreemap;
 
     #[test]
     fn test_clip_bounds_normal() {
         // Create instance with 3 variables
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-        decision_variables.insert(
-            VariableID::from(3),
-            DecisionVariable::continuous(VariableID::from(3)),
-        );
+        let mut decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3)),
+        };
 
         // Set initial bounds
         for dv in decision_variables.values_mut() {
@@ -68,9 +60,10 @@ mod tests {
         };
 
         // Apply new bounds to variables 1 and 2
-        let mut new_bounds = Bounds::new();
-        new_bounds.insert(VariableID::from(1), Bound::new(2.0, 8.0).unwrap());
-        new_bounds.insert(VariableID::from(2), Bound::new(5.0, 15.0).unwrap());
+        let new_bounds = btreemap! {
+            VariableID::from(1) => Bound::new(2.0, 8.0).unwrap(),
+            VariableID::from(2) => Bound::new(5.0, 15.0).unwrap(),
+        };
 
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
 
@@ -91,11 +84,9 @@ mod tests {
 
     #[test]
     fn test_clip_bounds_undefined_variable() {
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+        };
 
         let mut instance = Instance {
             decision_variables,
@@ -103,8 +94,9 @@ mod tests {
         };
 
         // Try to clip bounds for non-existent variable
-        let mut new_bounds = Bounds::new();
-        new_bounds.insert(VariableID::from(999), Bound::new(0.0, 1.0).unwrap());
+        let new_bounds = btreemap! {
+            VariableID::from(999) => Bound::new(0.0, 1.0).unwrap(),
+        };
 
         let result = instance.clip_bounds(&new_bounds, ATol::default());
         assert!(result.is_err());
@@ -115,7 +107,7 @@ mod tests {
     #[test]
     fn test_clip_bounds_rollback() {
         // Create instance with 3 variables
-        let mut decision_variables = BTreeMap::new();
+        let mut decision_variables = btreemap! {};
         for i in 1..=3 {
             let mut dv = DecisionVariable::continuous(VariableID::from(i));
             dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
@@ -136,10 +128,11 @@ mod tests {
             .collect();
 
         // Apply changes where the second one will cause an empty intersection error
-        let mut new_bounds = Bounds::new();
-        new_bounds.insert(VariableID::from(1), Bound::new(2.0, 8.0).unwrap());
-        new_bounds.insert(VariableID::from(2), Bound::new(15.0, 20.0).unwrap()); // No intersection with [0, 10]
-        new_bounds.insert(VariableID::from(3), Bound::new(3.0, 7.0).unwrap());
+        let new_bounds = btreemap! {
+            VariableID::from(1) => Bound::new(2.0, 8.0).unwrap(),
+            VariableID::from(2) => Bound::new(15.0, 20.0).unwrap(), // No intersection with [0, 10]
+            VariableID::from(3) => Bound::new(3.0, 7.0).unwrap(),
+        };
 
         let result = instance.clip_bounds(&new_bounds, ATol::default());
         assert!(result.is_err());
@@ -155,11 +148,9 @@ mod tests {
 
     #[test]
     fn test_clip_bounds_empty() {
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+        };
 
         let mut instance = Instance {
             decision_variables,
@@ -167,7 +158,7 @@ mod tests {
         };
 
         // Apply empty bounds map (should succeed and change nothing)
-        let new_bounds = Bounds::new();
+        let new_bounds = btreemap! {};
         instance.clip_bounds(&new_bounds, ATol::default()).unwrap();
     }
 }
