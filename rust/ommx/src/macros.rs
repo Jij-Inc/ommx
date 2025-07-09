@@ -43,10 +43,11 @@
 #[macro_export]
 macro_rules! coeff {
     ($expr:expr) => {
-        $crate::Coefficient::try_from($expr).expect(
-            concat!("Failed to create Coefficient from expression: ", stringify!($expr),
-                    ". The value must be non-zero, finite, and not NaN")
-        )
+        $crate::Coefficient::try_from($expr).expect(concat!(
+            "Failed to create Coefficient from expression: ",
+            stringify!($expr),
+            ". The value must be non-zero, finite, and not NaN"
+        ))
     };
 }
 
