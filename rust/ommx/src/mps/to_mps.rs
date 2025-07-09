@@ -13,8 +13,27 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 ///
 /// Only linear problems are supported.
 ///
+/// ## Information Loss and Filtering
+///
 /// Metadata like problem descriptions and variable/constraint names are not
 /// preserved.
+///
+/// **Removed Constraints**: All `removed_constraints` are completely ignored
+/// and not written to the MPS file. The MPS format cannot represent the
+/// concept of removed constraints, so this information is lost during export.
+///
+/// **Variable Filtering**: Only decision variables that are actually used in
+/// the objective function, active constraints, or removed constraints are
+/// written to the MPS file. Variables defined in `decision_variables` but
+/// not referenced anywhere are omitted from the output. This is determined
+/// by the `required_ids()` method which includes:
+/// - Variables used in the objective function
+/// - Variables used in active constraints
+/// - Variables used in removed constraints (even though the constraints
+///   themselves are not exported)
+///
+/// This ensures that variables from removed constraints are preserved in
+/// the MPS output even though the constraint information is lost.
 pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;

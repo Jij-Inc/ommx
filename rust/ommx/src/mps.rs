@@ -93,8 +93,8 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
 ///
 /// Only linear problems are supported.
 ///
-/// Metadata like problem descriptions and variable/constraint names are not
-/// preserved.
+/// See [`to_mps::write_mps`] for detailed information about information loss,
+/// removed constraints handling, and variable filtering behavior.
 pub fn write_file(
     instance: &crate::v1::Instance,
     out_path: impl AsRef<Path>,
