@@ -206,17 +206,22 @@ fn test_complex_mps_parsing() {
     assert_eq!(instance.constraints.len(), 3);
     
     // Variables and constraints might be in different order than expected
-    // Let's check by name instead of position since order is unstable
-    let var_by_name: std::collections::HashMap<String, &crate::v1::DecisionVariable> = 
+    // Use BTreeMap for stable iteration order
+    let var_by_name: std::collections::BTreeMap<String, &crate::v1::DecisionVariable> = 
         instance.decision_variables.iter().map(|v| (v.name().to_string(), v)).collect();
     
-    let constraint_by_name: std::collections::HashMap<String, &crate::v1::Constraint> = 
+    let constraint_by_name: std::collections::BTreeMap<String, &crate::v1::Constraint> = 
         instance.constraints.iter().map(|c| (c.name().to_string(), c)).collect();
     
     // Check all expected variables exist
     assert!(var_by_name.contains_key("X1"));
     assert!(var_by_name.contains_key("X2"));
     assert!(var_by_name.contains_key("X3"));
+    
+    // Also check all expected constraints exist
+    assert!(constraint_by_name.contains_key("C1"));
+    assert!(constraint_by_name.contains_key("C2"));
+    assert!(constraint_by_name.contains_key("C3"));
     
     // Check bounds by variable name
     let x1_bound = var_by_name["X1"].bound.as_ref().unwrap();
