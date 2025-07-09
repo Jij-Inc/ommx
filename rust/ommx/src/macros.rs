@@ -1,14 +1,13 @@
 //! Additional trait implementations for generated codes
 
-/// Creates a [`crate::Coefficient`] from a floating-point literal.
+/// Creates a [`crate::Coefficient`] from a floating-point expression.
 ///
-/// This macro is a convenience wrapper around `Coefficient::try_from().unwrap()`
-/// for use with compile-time known floating-point literals. It should only be used
-/// when the value is guaranteed to be valid (non-zero, finite, not NaN).
+/// This macro is a convenience wrapper around `Coefficient::try_from().expect()`
+/// for use with floating-point values. It accepts both literals and expressions.
 ///
 /// # Panics
 ///
-/// Panics if the literal value is zero, infinite, or NaN.
+/// Panics if the value is zero, infinite, or NaN.
 ///
 /// # Examples
 ///
@@ -19,6 +18,11 @@
 /// let c1 = coeff!(2.5);
 /// let c2 = coeff!(-1.0);
 /// let c3 = coeff!(0.5);
+///
+/// // Create coefficients from expressions
+/// let x = 2.0;
+/// let c4 = coeff!(x + 0.5);
+/// let c5 = coeff!(x * 3.0);
 ///
 /// // Use in expressions
 /// let expr = c1 * linear!(1)
@@ -38,14 +42,18 @@
 /// ```
 #[macro_export]
 macro_rules! coeff {
-    ($literal:literal) => {
-        $crate::Coefficient::try_from($literal).unwrap()
+    ($expr:expr) => {
+        $crate::Coefficient::try_from($expr).expect(concat!(
+            "Failed to create Coefficient from expression: ",
+            stringify!($expr),
+            ". The value must be non-zero, finite, and not NaN"
+        ))
     };
 }
 
-/// Creates a [`crate::LinearMonomial`] from a variable ID literal.
+/// Creates a [`crate::LinearMonomial`] from a variable ID expression.
 ///
-/// This macro is a convenience wrapper for creating linear monomials from integer literals
+/// This macro is a convenience wrapper for creating linear monomials from integer expressions
 /// representing variable IDs.
 ///
 /// # Examples
@@ -57,18 +65,19 @@ macro_rules! coeff {
 /// let x1 = linear!(1);
 /// assert_eq!(x1, LinearMonomial::Variable(VariableID::from(1)));
 ///
-/// // You can use this macro instead of constructing LinearMonomial::Variable directly
-/// let x2 = linear!(2);
-/// let x3 = linear!(3);
+/// // Create from expressions
+/// let i = 2;
+/// let x2 = linear!(i);
+/// let x3 = linear!(i + 1);
 /// ```
 #[macro_export]
 macro_rules! linear {
-    ($id:literal) => {
+    ($id:expr) => {
         $crate::LinearMonomial::Variable($crate::VariableID::from($id))
     };
 }
 
-/// Creates a [`crate::QuadraticMonomial`] from variable ID literals.
+/// Creates a [`crate::QuadraticMonomial`] from variable ID expressions.
 ///
 /// This macro supports creating quadratic monomials in multiple forms:
 /// - `quadratic!(id)` creates a linear term within the quadratic space
@@ -86,13 +95,18 @@ macro_rules! linear {
 /// // Create a quadratic pair term (x1 * x2)
 /// let x1_x2 = quadratic!(1, 2);
 /// assert_eq!(x1_x2, QuadraticMonomial::new_pair(VariableID::from(1), VariableID::from(2)));
+///
+/// // Create from expressions
+/// let i = 1;
+/// let j = 2;
+/// let xi_xj = quadratic!(i, j);
 /// ```
 #[macro_export]
 macro_rules! quadratic {
-    ($id:literal) => {
+    ($id:expr) => {
         $crate::QuadraticMonomial::Linear($crate::VariableID::from($id))
     };
-    ($id1:literal, $id2:literal) => {
+    ($id1:expr, $id2:expr) => {
         $crate::QuadraticMonomial::new_pair(
             $crate::VariableID::from($id1),
             $crate::VariableID::from($id2),
@@ -100,9 +114,9 @@ macro_rules! quadratic {
     };
 }
 
-/// Creates a [`crate::MonomialDyn`] from variable ID literals.
+/// Creates a [`crate::MonomialDyn`] from variable ID expressions.
 ///
-/// This macro creates a general monomial from one or more variable ID literals.
+/// This macro creates a general monomial from one or more variable ID expressions.
 /// The degree of the monomial depends on the number of variables provided.
 ///
 /// # Examples
@@ -118,17 +132,23 @@ macro_rules! quadratic {
 ///
 /// // Create a cubic monomial (x1 * x2 * x3)
 /// let x1_x2_x3 = monomial!(1, 2, 3);
+///
+/// // Create from expressions
+/// let i = 1;
+/// let j = 2;
+/// let k = 3;
+/// let xi_xj_xk = monomial!(i, j, k);
 /// ```
 #[macro_export]
 macro_rules! monomial {
-    ($($id:literal),+) => {
+    ($($id:expr),+) => {
         $crate::MonomialDyn::new(vec![$($crate::VariableID::from($id)),+])
     };
 }
 
-/// Creates a [`crate::VariableIDSet`] from variable ID literals.
+/// Creates a [`crate::VariableIDSet`] from variable ID expressions.
 ///
-/// This macro creates a `VariableIDSet` from one or more variable ID literals.
+/// This macro creates a `VariableIDSet` from one or more variable ID expressions.
 /// It's a convenience wrapper for creating binary variable sets for use with
 /// binary power reduction operations.
 ///
@@ -145,10 +165,15 @@ macro_rules! monomial {
 ///
 /// // Create a set containing variables x1, x2, and x5
 /// let binary_set = variable_ids!(1, 2, 5);
+///
+/// // Create from expressions
+/// let i = 1;
+/// let j = 3;
+/// let binary_set = variable_ids!(i, j, i + 4);
 /// ```
 #[macro_export]
 macro_rules! variable_ids {
-    ($($id:literal),+) => {
+    ($($id:expr),+) => {
         {
             let mut set = $crate::VariableIDSet::default();
             $(set.insert($crate::VariableID::from($id));)+
