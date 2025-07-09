@@ -1,26 +1,15 @@
+// MPS module tests are now organized by purpose in separate files
+
 use super::*;
-use crate::{random::InstanceParameters, v1::Instance, Evaluate};
-use approx::AbsDiffEq;
-use proptest::prelude::*;
-use std::io::Write;
+use crate::Evaluate;
 use tempdir::TempDir;
+use std::io::Write;
+use approx::AbsDiffEq;
 
-proptest! {
-    #[test]
-    fn test_write_mps(instance in Instance::arbitrary_with(InstanceParameters::default_lp())) {
-        let mut buffer = Vec::new();
-        prop_assert!(to_mps::write_mps(&instance, &mut buffer).is_ok())
-    }
-
-    #[test]
-    fn test_roundtrip(instance in Instance::arbitrary_with(InstanceParameters::default_lp())) {
-        let mut buffer = Vec::new();
-        prop_assert!(to_mps::write_mps(&instance, &mut buffer).is_ok());
-        let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
-        dbg!(&instance);
-        prop_assert!(instance.abs_diff_eq(&dbg!(loaded_instance), crate::ATol::default()));
-    }
-}
+mod read_tests;
+mod write_tests;
+mod roundtrip_tests;
+mod constraint_variable_tests;
 
 const MPS_CONTENT: &str = r#"NAME TestProblem
 ROWS
