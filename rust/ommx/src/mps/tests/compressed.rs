@@ -1,7 +1,31 @@
 use super::super::*;
 use approx::AbsDiffEq;
-use std::io::Write;
+use std::io::{Cursor, Write};
 use tempdir::TempDir;
+
+// Test is_gzipped function
+#[test]
+fn test_is_gzipped_function() {
+    // Test with gzip magic number
+    let gzip_data = vec![0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00];
+    let mut cursor = Cursor::new(&gzip_data);
+    assert_eq!(is_gzipped(&mut cursor).unwrap(), true);
+    
+    // Test with non-gzip data
+    let plain_data = b"NAME TestProblem";
+    let mut cursor = Cursor::new(&plain_data[..]);
+    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
+    
+    // Test with empty data
+    let empty_data: Vec<u8> = vec![];
+    let mut cursor = Cursor::new(&empty_data);
+    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
+    
+    // Test with single byte
+    let single_byte = vec![0x1f];
+    let mut cursor = Cursor::new(&single_byte);
+    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
+}
 
 // Test format detection (compressed vs uncompressed)
 #[test]
@@ -41,9 +65,9 @@ ENDATA
     assert_eq!(compressed, uncompressed);
 }
 
-// Test write and read with compression
+// Test that write_file actually respects the compress parameter
 #[test]
-fn test_write_file_compressed() {
+fn test_write_file_compress_parameter() {
     const MPS_CONTENT: &str = r#"NAME TestProblem
 ROWS
  N  OBJ
@@ -61,21 +85,32 @@ ENDATA
     let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
     
     let temp_dir = TempDir::new("test_mps_write").unwrap();
-    let compressed_path = temp_dir.path().join("test.mps.gz");
-    let uncompressed_path = temp_dir.path().join("test.mps");
+    let compressed_path = temp_dir.path().join("test_compressed.mps");
+    let uncompressed_path = temp_dir.path().join("test_uncompressed.mps");
     
-    // Write compressed
+    // Write with compress=true
     write_file(&instance, &compressed_path, true).unwrap();
-    assert!(compressed_path.exists());
     
-    // Write uncompressed
+    // Write with compress=false
     write_file(&instance, &uncompressed_path, false).unwrap();
-    assert!(uncompressed_path.exists());
     
-    // Both should load to same instance
+    // Check that compressed file starts with gzip magic number
+    let compressed_data = std::fs::read(&compressed_path).unwrap();
+    assert!(compressed_data.len() >= 2);
+    assert_eq!(&compressed_data[0..2], &[0x1f, 0x8b], "File should be gzip compressed");
+    
+    // Check that uncompressed file does NOT start with gzip magic number
+    let uncompressed_data = std::fs::read(&uncompressed_path).unwrap();
+    assert!(uncompressed_data.len() >= 2);
+    assert_ne!(&uncompressed_data[0..2], &[0x1f, 0x8b], "File should not be gzip compressed");
+    
+    // Check that uncompressed file starts with valid MPS content
+    let uncompressed_str = std::str::from_utf8(&uncompressed_data).unwrap();
+    assert!(uncompressed_str.starts_with("NAME TestProblem"), "Uncompressed file should start with NAME");
+    
+    // Verify both can be loaded and produce the same instance
     let from_compressed = load_file(&compressed_path).unwrap();
     let from_uncompressed = load_file(&uncompressed_path).unwrap();
-    
     assert_eq!(from_compressed, from_uncompressed);
 }
 

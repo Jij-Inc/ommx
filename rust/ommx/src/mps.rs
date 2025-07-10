@@ -57,6 +57,8 @@ mod convert;
 mod parser;
 mod to_mps;
 
+pub use parser::is_gzipped;
+
 #[cfg(test)]
 mod tests;
 
