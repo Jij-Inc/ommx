@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 use crate::{random::InstanceParameters, v1::Instance};
 use approx::AbsDiffEq;
 use proptest::prelude::*;

@@ -1,5 +1,7 @@
-use super::*;
+use super::super::*;
+use super::MPS_COMPLEX;
 use std::collections::BTreeMap;
+use std::io::Write;
 use tempdir::TempDir;
 
 // Test basic MPS parsing
