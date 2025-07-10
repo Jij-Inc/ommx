@@ -53,11 +53,12 @@
 use prost::Message;
 use std::{io::Read, path::Path};
 
+mod compressed;
 mod convert;
 mod parser;
 mod to_mps;
 
-pub use parser::is_gzipped;
+pub use compressed::is_gzipped;
 
 #[cfg(test)]
 mod tests;

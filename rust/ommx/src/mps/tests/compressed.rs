@@ -1,41 +1,7 @@
 use super::super::*;
 use approx::AbsDiffEq;
-use std::io::{Cursor, Write};
+use std::io::Write;
 use tempdir::TempDir;
-
-// Test is_gzipped function
-#[test]
-fn test_is_gzipped_function() {
-    use std::io::Read;
-    
-    // Test with gzip magic number
-    let gzip_data = vec![0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00];
-    let mut cursor = Cursor::new(gzip_data);
-    assert_eq!(is_gzipped(&mut cursor).unwrap(), true);
-    // Verify cursor was rewound
-    let mut buf = [0u8; 2];
-    cursor.read_exact(&mut buf).unwrap();
-    assert_eq!(buf, [0x1f, 0x8b], "Cursor should be rewound after is_gzipped");
-    
-    // Test with non-gzip data
-    let plain_data = b"NAME TestProblem";
-    let mut cursor = Cursor::new(plain_data.to_vec());
-    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
-    // Verify cursor was rewound
-    let mut buf = [0u8; 4];
-    cursor.read_exact(&mut buf).unwrap();
-    assert_eq!(&buf, b"NAME", "Cursor should be rewound after is_gzipped");
-    
-    // Test with empty data
-    let empty_data: Vec<u8> = vec![];
-    let mut cursor = Cursor::new(empty_data);
-    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
-    
-    // Test with single byte
-    let single_byte = vec![0x1f];
-    let mut cursor = Cursor::new(single_byte);
-    assert_eq!(is_gzipped(&mut cursor).unwrap(), false);
-}
 
 // Test format detection (compressed vs uncompressed)
 #[test]
@@ -93,31 +59,42 @@ ENDATA
 "#;
 
     let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
-    
+
     let temp_dir = TempDir::new("test_mps_write").unwrap();
     let compressed_path = temp_dir.path().join("test_compressed.mps");
     let uncompressed_path = temp_dir.path().join("test_uncompressed.mps");
-    
+
     // Write with compress=true
     write_file(&instance, &compressed_path, true).unwrap();
-    
+
     // Write with compress=false
     write_file(&instance, &uncompressed_path, false).unwrap();
-    
+
     // Check that compressed file starts with gzip magic number
     let compressed_data = std::fs::read(&compressed_path).unwrap();
     assert!(compressed_data.len() >= 2);
-    assert_eq!(&compressed_data[0..2], &[0x1f, 0x8b], "File should be gzip compressed");
-    
+    assert_eq!(
+        &compressed_data[0..2],
+        &[0x1f, 0x8b],
+        "File should be gzip compressed"
+    );
+
     // Check that uncompressed file does NOT start with gzip magic number
     let uncompressed_data = std::fs::read(&uncompressed_path).unwrap();
     assert!(uncompressed_data.len() >= 2);
-    assert_ne!(&uncompressed_data[0..2], &[0x1f, 0x8b], "File should not be gzip compressed");
-    
+    assert_ne!(
+        &uncompressed_data[0..2],
+        &[0x1f, 0x8b],
+        "File should not be gzip compressed"
+    );
+
     // Check that uncompressed file starts with valid MPS content
     let uncompressed_str = std::str::from_utf8(&uncompressed_data).unwrap();
-    assert!(uncompressed_str.starts_with("NAME TestProblem"), "Uncompressed file should start with NAME");
-    
+    assert!(
+        uncompressed_str.starts_with("NAME TestProblem"),
+        "Uncompressed file should start with NAME"
+    );
+
     // Verify both can be loaded and produce the same instance
     let from_compressed = load_file(&compressed_path).unwrap();
     let from_uncompressed = load_file(&uncompressed_path).unwrap();
@@ -141,29 +118,29 @@ ENDATA
 
     let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
     let temp_dir = TempDir::new("test_auto_detect").unwrap();
-    
+
     // Write compressed with .gz extension
     let gz_path = temp_dir.path().join("test.mps.gz");
     write_file(&instance, &gz_path, true).unwrap(); // compress=true
-    
+
     // Write uncompressed with .mps extension
     let mps_path = temp_dir.path().join("test.mps");
     write_file(&instance, &mps_path, false).unwrap(); // compress=false
-    
+
     // Write compressed with misleading .mps extension
     let compressed_with_mps_ext = temp_dir.path().join("compressed.mps");
     write_file(&instance, &compressed_with_mps_ext, true).unwrap(); // compress=true
-    
+
     // Write uncompressed with misleading .gz extension
     let uncompressed_with_gz_ext = temp_dir.path().join("uncompressed.gz");
     write_file(&instance, &uncompressed_with_gz_ext, false).unwrap(); // compress=false
-    
+
     // load_file should correctly detect format based on magic number, not extension
     let from_gz = load_file(&gz_path).unwrap();
     let from_mps = load_file(&mps_path).unwrap();
     let from_compressed_mps = load_file(&compressed_with_mps_ext).unwrap();
     let from_uncompressed_gz = load_file(&uncompressed_with_gz_ext).unwrap();
-    
+
     // All should be equivalent
     assert!(from_gz.abs_diff_eq(&from_mps, crate::ATol::default()));
     assert!(from_gz.abs_diff_eq(&from_compressed_mps, crate::ATol::default()));
@@ -190,32 +167,37 @@ ENDATA
     // Create compressed data in memory
     let mut compressed_buffer = Vec::new();
     {
-        let mut encoder = flate2::write::GzEncoder::new(&mut compressed_buffer, flate2::Compression::default());
+        let mut encoder =
+            flate2::write::GzEncoder::new(&mut compressed_buffer, flate2::Compression::default());
         encoder.write_all(MPS_CONTENT.as_bytes()).unwrap();
         encoder.finish().unwrap();
     }
-    
+
     // Load using zipped reader
     let instance_from_zipped = load_zipped_reader(&compressed_buffer[..]).unwrap();
-    
+
     // Basic structural checks
     assert_eq!(instance_from_zipped.decision_variables.len(), 2);
     assert_eq!(instance_from_zipped.constraints.len(), 1);
-    assert_eq!(instance_from_zipped.sense(), crate::v1::instance::Sense::Minimize);
-    
+    assert_eq!(
+        instance_from_zipped.sense(),
+        crate::v1::instance::Sense::Minimize
+    );
+
     // Check that variable names are preserved
-    let var_names: Vec<&str> = instance_from_zipped.decision_variables
+    let var_names: Vec<&str> = instance_from_zipped
+        .decision_variables
         .iter()
         .map(|v| v.name())
         .collect();
     assert!(var_names.contains(&"X1"));
     assert!(var_names.contains(&"X2"));
-    
+
     // Check constraint
     let constraint = &instance_from_zipped.constraints[0];
     assert_eq!(constraint.name(), "C1");
     assert_eq!(constraint.equality(), crate::v1::Equality::EqualToZero);
-    
+
     // Note: Variable IDs may be assigned differently between zipped and raw readers,
     // so we cannot directly compare instances. This is a known limitation of the
     // current MPS parser implementation.

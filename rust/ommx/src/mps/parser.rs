@@ -1,30 +1,14 @@
-use super::MpsParseError;
+use super::{is_gzipped, MpsParseError};
 use derive_more::Deref;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{self, BufRead, Read, Seek},
+    io::{self, BufRead, Read},
     path::Path,
     str::FromStr,
 };
 
 type Result<T> = std::result::Result<T, MpsParseError>;
-
-/// Check if a reader starts with gzip magic number (0x1f, 0x8b)
-///
-/// This rewinds the reader after reading the magic number.
-pub fn is_gzipped<R: Read + Seek>(mut reader: R) -> Result<bool> {
-    let mut magic = [0u8; 2];
-    match reader.read_exact(&mut magic) {
-        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
-            // File is too short to be gzipped
-            return Ok(false);
-        }
-        _ => {}
-    }
-    reader.rewind()?;
-    Ok(magic == [0x1f, 0x8b])
-}
 
 /// A linear optimization problem loaded from MPS format
 ///
