@@ -3,7 +3,7 @@ use derive_more::Deref;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{self, BufRead, Read},
+    io::{self, BufRead, Read, Seek},
     path::Path,
     str::FromStr,
 };
@@ -11,16 +11,19 @@ use std::{
 type Result<T> = std::result::Result<T, MpsParseError>;
 
 /// Check if a reader starts with gzip magic number (0x1f, 0x8b)
-pub fn is_gzipped(mut reader: impl Read) -> Result<bool> {
+///
+/// This rewinds the reader after reading the magic number.
+pub fn is_gzipped<R: Read + Seek>(mut reader: R) -> Result<bool> {
     let mut magic = [0u8; 2];
     match reader.read_exact(&mut magic) {
-        Ok(()) => Ok(magic == [0x1f, 0x8b]),
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
             // File is too short to be gzipped
-            Ok(false)
+            return Ok(false);
         }
-        Err(e) => Err(MpsParseError::from(e)),
+        _ => {}
     }
+    reader.rewind()?;
+    Ok(magic == [0x1f, 0x8b])
 }
 
 /// A linear optimization problem loaded from MPS format
@@ -424,16 +427,14 @@ impl State {
 }
 
 impl Mps {
+    /// Read a MPS file from the given path.
+    ///
+    /// This function automatically detects if the file is gzipped or not.
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let mut f = fs::File::open(&path)?;
-        
         if is_gzipped(&mut f)? {
-            // File is gzipped, reopen and use zipped reader
-            let f = fs::File::open(path)?;
             Self::from_zipped_reader(f)
         } else {
-            // File is not gzipped, reopen and use raw reader
-            let f = fs::File::open(path)?;
             Self::from_raw_reader(f)
         }
     }
