@@ -79,9 +79,9 @@ ENDATA
     assert_eq!(from_compressed, from_uncompressed);
 }
 
-// Test automatic format detection based on file extension
+// Test automatic format detection based on magic number (not file extension)
 #[test]
-fn test_auto_format_detection() {
+fn test_magic_number_format_detection() {
     const MPS_CONTENT: &str = r#"NAME AutoDetectProblem
 ROWS
  N  OBJ
@@ -97,24 +97,32 @@ ENDATA
     let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
     let temp_dir = TempDir::new("test_auto_detect").unwrap();
     
-    // Test .gz extension - should write compressed
+    // Write compressed with .gz extension
     let gz_path = temp_dir.path().join("test.mps.gz");
-    write_file(&instance, &gz_path, false).unwrap(); // false but .gz extension
+    write_file(&instance, &gz_path, true).unwrap(); // compress=true
     
-    // Test .mps extension - should write uncompressed
+    // Write uncompressed with .mps extension
     let mps_path = temp_dir.path().join("test.mps");
-    write_file(&instance, &mps_path, true).unwrap(); // true but .mps extension
+    write_file(&instance, &mps_path, false).unwrap(); // compress=false
     
-    // Both should load correctly
+    // Write compressed with misleading .mps extension
+    let compressed_with_mps_ext = temp_dir.path().join("compressed.mps");
+    write_file(&instance, &compressed_with_mps_ext, true).unwrap(); // compress=true
+    
+    // Write uncompressed with misleading .gz extension
+    let uncompressed_with_gz_ext = temp_dir.path().join("uncompressed.gz");
+    write_file(&instance, &uncompressed_with_gz_ext, false).unwrap(); // compress=false
+    
+    // load_file should correctly detect format based on magic number, not extension
     let from_gz = load_file(&gz_path).unwrap();
     let from_mps = load_file(&mps_path).unwrap();
+    let from_compressed_mps = load_file(&compressed_with_mps_ext).unwrap();
+    let from_uncompressed_gz = load_file(&uncompressed_with_gz_ext).unwrap();
     
-    // Check instances are equivalent (order may differ)
+    // All should be equivalent
     assert!(from_gz.abs_diff_eq(&from_mps, crate::ATol::default()));
-    
-    // Original instance doesn't have names, so can't compare directly
-    assert_eq!(from_gz.decision_variables.len(), instance.decision_variables.len());
-    assert_eq!(from_gz.constraints.len(), instance.constraints.len());
+    assert!(from_gz.abs_diff_eq(&from_compressed_mps, crate::ATol::default()));
+    assert!(from_gz.abs_diff_eq(&from_uncompressed_gz, crate::ATol::default()));
 }
 
 // Test zipped reader functionality
