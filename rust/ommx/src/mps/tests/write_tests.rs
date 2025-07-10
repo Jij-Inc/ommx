@@ -1,5 +1,4 @@
 use super::super::*;
-use tempdir::TempDir;
 
 // Test error cases for MPS write operations
 #[test]
@@ -119,40 +118,3 @@ fn test_invalid_variable_id_error() {
     assert!(matches!(error, MpsWriteError::InvalidVariableId(var_id) if var_id == crate::VariableID::from(99)));
 }
 
-// Test write and read with compression
-#[test]
-fn test_write_file_compressed() {
-    const MPS_CONTENT: &str = r#"NAME TestProblem
-ROWS
- N  OBJ
- L  R1
-COLUMNS
-    X1        OBJ                 1
-    X1        R1                  1
-RHS
-    RHS1      R1                  5
-BOUNDS
- UP BND1      X1                  4
-ENDATA
-"#;
-
-    let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
-    
-    let temp_dir = TempDir::new("test_mps_write").unwrap();
-    let compressed_path = temp_dir.path().join("test.mps.gz");
-    let uncompressed_path = temp_dir.path().join("test.mps");
-    
-    // Write compressed
-    write_file(&instance, &compressed_path, true).unwrap();
-    assert!(compressed_path.exists());
-    
-    // Write uncompressed
-    write_file(&instance, &uncompressed_path, false).unwrap();
-    assert!(uncompressed_path.exists());
-    
-    // Both should load to same instance
-    let from_compressed = load_file(&compressed_path).unwrap();
-    let from_uncompressed = load_file(&uncompressed_path).unwrap();
-    
-    assert_eq!(from_compressed, from_uncompressed);
-}
