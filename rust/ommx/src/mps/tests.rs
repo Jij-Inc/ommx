@@ -4,6 +4,7 @@ mod read_tests;
 mod write_tests;
 mod roundtrip_tests;
 mod constraint_variable_tests;
+mod compressed;
 
 
 // More complex MPS test case with multiple variables and constraints
