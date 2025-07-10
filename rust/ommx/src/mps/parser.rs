@@ -482,37 +482,6 @@ impl Mps {
         }
         Ok(state.finish())
     }
-
-    // /// Get statistics of the problem
-    // pub fn get_stat(&self) -> Stat {
-    //     let nb = self.binary.len();
-    //     let ni = self.integer.len();
-    //     let nr = self.real.len();
-    //     let me = self.eq.len();
-    //     let mg = self.ge.len();
-    //     let ml = self.le.len();
-    //     Stat {
-    //         variable: nb + ni + nr,
-    //         constraint: me + mg + ml,
-    //         binary: nb,
-    //         integer: ni,
-    //         continuous: nr,
-    //         non_zero: self.non_zero(),
-    //     }
-    // }
-}
-
-/// Statistics of the problem
-///
-/// Same definitions as MIPLIB definition <https://miplib.zib.de/statistics.html>
-#[derive(Debug, Clone, PartialEq)]
-pub struct Stat {
-    pub variable: usize,
-    pub constraint: usize,
-    pub binary: usize,
-    pub integer: usize,
-    pub continuous: usize,
-    pub non_zero: usize,
 }
 
 #[cfg(test)]
