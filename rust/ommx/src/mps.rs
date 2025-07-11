@@ -1,9 +1,8 @@
 //! Parse MPS format
 //!
 //! ```no_run
-//!
 //! # fn main() -> Result<(), ommx::mps::MpsParseError> {
-//! let mps = ommx::mps::load_file("data/directory/data.mps.gz")?;
+//! let instance: ommx::v1::Instance = ommx::mps::load("data/directory/data.mps.gz")?;
 //! # Ok(()) }
 //! ```
 //!
@@ -64,12 +63,13 @@ use crate::VariableID;
 use parser::*;
 use std::{io::Read, path::Path};
 
+/// Reads and parses the MPS file from the given [`Read`] source with automatic gzipped detection.
 pub fn parse(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::parse(reader)?;
     convert::convert(mps_data)
 }
 
-/// Reads and parses the file at the given path as a gzipped MPS file.
+/// Reads and parses the file at the given path. Gzipped files are automatically detected and decompressed.
 pub fn load(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::load(path)?;
     convert::convert(mps_data)
@@ -79,9 +79,9 @@ pub fn load(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError
 ///
 /// If `compress` is true, the output will be gzipped. If false, it will be written as plain text.
 ///
-/// Only linear problems are supported.
-///
-/// See [`to_mps::write_mps`] for detailed information about information loss,
+/// Limitation
+/// ----------
+/// Only linear problems are supported. See [`format()`] for detailed information about information loss,
 /// removed constraints handling, and variable filtering behavior.
 pub fn save(
     instance: &crate::v1::Instance,
