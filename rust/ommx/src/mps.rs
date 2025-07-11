@@ -55,11 +55,11 @@ use std::{io::Read, path::Path};
 
 mod compressed;
 mod convert;
+mod format;
 mod parser;
-mod write;
 
 pub use compressed::is_gzipped;
-pub use write::write;
+pub use format::format;
 
 #[cfg(test)]
 mod tests;
@@ -99,7 +99,7 @@ pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError>
 ///
 /// See [`to_mps::write_mps`] for detailed information about information loss,
 /// removed constraints handling, and variable filtering behavior.
-pub fn write_file(
+pub fn save(
     instance: &crate::v1::Instance,
     out_path: impl AsRef<Path>,
     compress: bool,
@@ -116,9 +116,9 @@ pub fn write_file(
 
     if compress {
         let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
-        write::write(instance, &mut writer)?;
+        format::format(instance, &mut writer)?;
     } else {
-        write::write(instance, &mut file)?;
+        format::format(instance, &mut file)?;
     }
     Ok(())
 }

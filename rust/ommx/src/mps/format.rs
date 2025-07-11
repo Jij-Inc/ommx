@@ -34,7 +34,7 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 ///
 /// This ensures that variables from removed constraints are preserved in
 /// the MPS output even though the constraint information is lost.
-pub fn write<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+pub fn format<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
     write_columns(instance, out)?;

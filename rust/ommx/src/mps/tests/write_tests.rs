@@ -32,7 +32,7 @@ fn test_nonlinear_objective_error() {
     instance.objective = Some(func);
 
     let mut buffer = Vec::new();
-    let result = write::write(&instance, &mut buffer);
+    let result = format::format(&instance, &mut buffer);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
@@ -77,7 +77,7 @@ fn test_nonlinear_constraint_error() {
     });
 
     let mut buffer = Vec::new();
-    let result = write::write(&instance, &mut buffer);
+    let result = format::format(&instance, &mut buffer);
     assert!(result.is_err());
     assert!(
         matches!(result.unwrap_err(), MpsWriteError::InvalidConstraintType { name, degree: 2 } if name == "OMMX_CONSTR_0")
@@ -115,7 +115,7 @@ fn test_cubic_polynomial_error() {
     instance.objective = Some(func);
 
     let mut buffer = Vec::new();
-    let result = write::write(&instance, &mut buffer);
+    let result = format::format(&instance, &mut buffer);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
@@ -141,7 +141,7 @@ fn test_invalid_variable_id_error() {
     instance.objective = Some(func);
 
     let mut buffer = Vec::new();
-    let result = write::write(&instance, &mut buffer);
+    let result = format::format(&instance, &mut buffer);
     assert!(result.is_err());
     let error = result.unwrap_err();
     assert!(

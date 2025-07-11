@@ -65,10 +65,10 @@ ENDATA
     let uncompressed_path = temp_dir.path().join("test_uncompressed.mps");
 
     // Write with compress=true
-    write_file(&instance, &compressed_path, true).unwrap();
+    save(&instance, &compressed_path, true).unwrap();
 
     // Write with compress=false
-    write_file(&instance, &uncompressed_path, false).unwrap();
+    save(&instance, &uncompressed_path, false).unwrap();
 
     // Check that compressed file starts with gzip magic number
     let compressed_data = std::fs::read(&compressed_path).unwrap();
@@ -121,19 +121,19 @@ ENDATA
 
     // Write compressed with .gz extension
     let gz_path = temp_dir.path().join("test.mps.gz");
-    write_file(&instance, &gz_path, true).unwrap(); // compress=true
+    save(&instance, &gz_path, true).unwrap(); // compress=true
 
     // Write uncompressed with .mps extension
     let mps_path = temp_dir.path().join("test.mps");
-    write_file(&instance, &mps_path, false).unwrap(); // compress=false
+    save(&instance, &mps_path, false).unwrap(); // compress=false
 
     // Write compressed with misleading .mps extension
     let compressed_with_mps_ext = temp_dir.path().join("compressed.mps");
-    write_file(&instance, &compressed_with_mps_ext, true).unwrap(); // compress=true
+    save(&instance, &compressed_with_mps_ext, true).unwrap(); // compress=true
 
     // Write uncompressed with misleading .gz extension
     let uncompressed_with_gz_ext = temp_dir.path().join("uncompressed.gz");
-    write_file(&instance, &uncompressed_with_gz_ext, false).unwrap(); // compress=false
+    save(&instance, &uncompressed_with_gz_ext, false).unwrap(); // compress=false
 
     // load_file should correctly detect format based on magic number, not extension
     let from_gz = load_file(&gz_path).unwrap();
