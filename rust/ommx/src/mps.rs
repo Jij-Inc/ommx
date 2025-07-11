@@ -50,45 +50,32 @@
 //! - [MPS (format) -- Wikipedia](https://en.wikipedia.org/wiki/MPS_(format))
 //!
 
-use prost::Message;
-use std::{io::Read, path::Path};
-
 mod compressed;
 mod convert;
 mod format;
 mod parser;
+#[cfg(test)]
+mod tests;
 
 pub use compressed::is_gzipped;
 pub use format::format;
 
-#[cfg(test)]
-mod tests;
-
-use parser::*;
-
 use crate::VariableID;
+use parser::*;
+use std::{
+    io::{Read, Seek},
+    path::Path,
+};
 
-/// Reads and parses the reader as a gzipped MPS file.
-pub fn load_zipped_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
-    let mps_data = Mps::from_zipped_reader(reader)?;
-    convert::convert(mps_data)
-}
-
-/// Reads and parses the reader as an _uncompressed_ MPS file.
-pub fn load_raw_reader(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
-    let mps_data = Mps::from_raw_reader(reader)?;
+pub fn parse<R: Read + Seek>(reader: R) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::parse(reader)?;
     convert::convert(mps_data)
 }
 
 /// Reads and parses the file at the given path as a gzipped MPS file.
-pub fn load_file(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
-    let mps_data = Mps::from_file(path)?;
+pub fn load(path: impl AsRef<Path>) -> Result<crate::v1::Instance, MpsParseError> {
+    let mps_data = Mps::load(path)?;
     convert::convert(mps_data)
-}
-
-pub fn load_file_bytes(path: impl AsRef<Path>) -> Result<Vec<u8>, MpsParseError> {
-    let instance = load_file(path)?;
-    Ok(instance.encode_to_vec())
 }
 
 /// Writes out the instance as an MPS file to the specified path with compression control.

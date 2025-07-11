@@ -3,7 +3,7 @@ use derive_more::Deref;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{self, BufRead, Read},
+    io::{self, BufRead, Read, Seek},
     path::Path,
     str::FromStr,
 };
@@ -414,24 +414,20 @@ impl Mps {
     /// Read a MPS file from the given path.
     ///
     /// This function automatically detects if the file is gzipped or not.
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let mut f = fs::File::open(&path)?;
-        if is_gzipped(&mut f)? {
-            Self::from_zipped_reader(f)
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let f = fs::File::open(&path)?;
+        Self::parse(f)
+    }
+
+    pub fn parse<R: Read + Seek>(mut reader: R) -> Result<Self> {
+        if is_gzipped(&mut reader)? {
+            let buf = flate2::read::GzDecoder::new(reader);
+            let buf = io::BufReader::new(buf);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
         } else {
-            Self::from_raw_reader(f)
+            let buf = io::BufReader::new(reader);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
         }
-    }
-
-    pub fn from_zipped_reader(reader: impl Read) -> Result<Self> {
-        let buf = flate2::read::GzDecoder::new(reader);
-        let buf = io::BufReader::new(buf);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
-    }
-
-    pub fn from_raw_reader(reader: impl Read) -> Result<Self> {
-        let buf = io::BufReader::new(reader);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
     }
 
     fn from_lines(lines: impl Iterator<Item = String>) -> Result<Self> {

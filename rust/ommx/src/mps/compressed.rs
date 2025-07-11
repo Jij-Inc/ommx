@@ -3,7 +3,7 @@ use std::io::{self, Read, Seek};
 /// Check if a reader starts with gzip magic number (0x1f, 0x8b)
 ///
 /// This rewinds the reader after reading the magic number.
-pub fn is_gzipped<R: Read + Seek>(mut reader: R) -> io::Result<bool> {
+pub fn is_gzipped<R: Read + Seek>(reader: &mut R) -> io::Result<bool> {
     let mut magic = [0u8; 2];
     match reader.read_exact(&mut magic) {
         Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {

@@ -36,8 +36,8 @@ ENDATA
         encoder.finish().unwrap();
     }
 
-    let uncompressed = load_file(&uncompressed_path).unwrap();
-    let compressed = load_file(&compressed_path).unwrap();
+    let uncompressed = load(&uncompressed_path).unwrap();
+    let compressed = load(&compressed_path).unwrap();
     assert_eq!(compressed, uncompressed);
 }
 
@@ -96,8 +96,8 @@ ENDATA
     );
 
     // Verify both can be loaded and produce the same instance
-    let from_compressed = load_file(&compressed_path).unwrap();
-    let from_uncompressed = load_file(&uncompressed_path).unwrap();
+    let from_compressed = load(&compressed_path).unwrap();
+    let from_uncompressed = load(&uncompressed_path).unwrap();
     assert_eq!(from_compressed, from_uncompressed);
 }
 
@@ -136,10 +136,10 @@ ENDATA
     save(&instance, &uncompressed_with_gz_ext, false).unwrap(); // compress=false
 
     // load_file should correctly detect format based on magic number, not extension
-    let from_gz = load_file(&gz_path).unwrap();
-    let from_mps = load_file(&mps_path).unwrap();
-    let from_compressed_mps = load_file(&compressed_with_mps_ext).unwrap();
-    let from_uncompressed_gz = load_file(&uncompressed_with_gz_ext).unwrap();
+    let from_gz = load(&gz_path).unwrap();
+    let from_mps = load(&mps_path).unwrap();
+    let from_compressed_mps = load(&compressed_with_mps_ext).unwrap();
+    let from_uncompressed_gz = load(&uncompressed_with_gz_ext).unwrap();
 
     // All should be equivalent
     assert!(from_gz.abs_diff_eq(&from_mps, crate::ATol::default()));
