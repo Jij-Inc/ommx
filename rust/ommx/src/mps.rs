@@ -62,12 +62,9 @@ pub use format::format;
 
 use crate::VariableID;
 use parser::*;
-use std::{
-    io::{Read, Seek},
-    path::Path,
-};
+use std::{io::Read, path::Path};
 
-pub fn parse<R: Read + Seek>(reader: R) -> Result<crate::v1::Instance, MpsParseError> {
+pub fn parse(reader: impl Read) -> Result<crate::v1::Instance, MpsParseError> {
     let mps_data = Mps::parse(reader)?;
     convert::convert(mps_data)
 }

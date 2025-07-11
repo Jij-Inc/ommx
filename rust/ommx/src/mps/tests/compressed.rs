@@ -58,7 +58,7 @@ BOUNDS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
+    let instance = parse(MPS_CONTENT.as_bytes()).unwrap();
 
     let temp_dir = TempDir::new("test_mps_write").unwrap();
     let compressed_path = temp_dir.path().join("test_compressed.mps");
@@ -116,7 +116,7 @@ RHS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
+    let instance = parse(MPS_CONTENT.as_bytes()).unwrap();
     let temp_dir = TempDir::new("test_auto_detect").unwrap();
 
     // Write compressed with .gz extension
@@ -174,7 +174,7 @@ ENDATA
     }
 
     // Load using zipped reader
-    let instance_from_zipped = load_zipped_reader(&compressed_buffer[..]).unwrap();
+    let instance_from_zipped = parse(&compressed_buffer[..]).unwrap();
 
     // Basic structural checks
     assert_eq!(instance_from_zipped.decision_variables.len(), 2);

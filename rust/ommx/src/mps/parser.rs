@@ -3,7 +3,7 @@ use derive_more::Deref;
 use std::{
     collections::{HashMap, HashSet},
     fs,
-    io::{self, BufRead, Read, Seek},
+    io::{self, BufRead, Read},
     path::Path,
     str::FromStr,
 };
@@ -419,8 +419,10 @@ impl Mps {
         Self::parse(f)
     }
 
-    pub fn parse<R: Read + Seek>(mut reader: R) -> Result<Self> {
-        if is_gzipped(&mut reader)? {
+    pub fn parse(reader: impl Read) -> Result<Self> {
+        let mut reader = io::BufReader::new(reader);
+        let head = reader.fill_buf()?;
+        if is_gzipped(head)? {
             let buf = flate2::read::GzDecoder::new(reader);
             let buf = io::BufReader::new(buf);
             Self::from_lines(buf.lines().map_while(|x| x.ok()))

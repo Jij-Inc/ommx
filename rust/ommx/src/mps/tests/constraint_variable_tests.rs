@@ -71,7 +71,7 @@ fn test_unused_variable_filtering() {
     // Write to MPS and read back
     let mut buffer = Vec::new();
     format::format(&instance, &mut buffer).unwrap();
-    let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
+    let loaded_instance = parse(&buffer[..]).unwrap();
 
     // Should only have 2 variables (x1, x2), not 3
     assert_eq!(loaded_instance.decision_variables.len(), 2);
@@ -155,7 +155,7 @@ fn test_removed_constraint_variable_preservation() {
     // Write to MPS and read back
     let mut buffer = Vec::new();
     format::format(&instance, &mut buffer).unwrap();
-    let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
+    let loaded_instance = parse(&buffer[..]).unwrap();
 
     // Check required_ids before writing
     let required_ids: Vec<u64> = instance
@@ -262,7 +262,7 @@ fn test_removed_constraint_information_loss() {
     // Write to MPS and read back
     let mut buffer = Vec::new();
     format::format(&instance, &mut buffer).unwrap();
-    let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
+    let loaded_instance = parse(&buffer[..]).unwrap();
 
     // Only active constraint should remain
     assert_eq!(loaded_instance.constraints.len(), 1);

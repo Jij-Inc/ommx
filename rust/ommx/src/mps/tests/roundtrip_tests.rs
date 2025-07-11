@@ -14,7 +14,7 @@ proptest! {
     fn test_roundtrip(instance in Instance::arbitrary_with(InstanceParameters::default_lp())) {
         let mut buffer = Vec::new();
         prop_assert!(format::format(&instance, &mut buffer).is_ok());
-        let loaded_instance = load_raw_reader(&buffer[..]).unwrap();
+        let loaded_instance = parse(&buffer[..]).unwrap();
         prop_assert!(instance.abs_diff_eq(&loaded_instance, crate::ATol::default()));
     }
 }
@@ -138,12 +138,12 @@ ENDATA
     ];
 
     for (name, mps_str) in test_cases {
-        let original = load_raw_reader(mps_str.as_bytes()).unwrap();
+        let original = parse(mps_str.as_bytes()).unwrap();
 
         let mut buffer = Vec::new();
         format::format(&original, &mut buffer).unwrap();
 
-        let roundtrip = load_raw_reader(&buffer[..]).unwrap();
+        let roundtrip = parse(&buffer[..]).unwrap();
 
         assert!(
             original.abs_diff_eq(&roundtrip, crate::ATol::default()),

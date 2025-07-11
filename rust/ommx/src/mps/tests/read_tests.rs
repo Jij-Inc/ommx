@@ -19,7 +19,7 @@ BOUNDS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_CONTENT.as_bytes()).unwrap();
+    let instance = parse(MPS_CONTENT.as_bytes()).unwrap();
 
     // Check instance properties
     assert_eq!(instance.sense(), crate::v1::instance::Sense::Minimize);
@@ -68,7 +68,7 @@ RANGES
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_WITH_RANGES.as_bytes()).unwrap();
+    let instance = parse(MPS_WITH_RANGES.as_bytes()).unwrap();
 
     // RANGES create additional constraints, so we expect more than 2
     assert!(instance.constraints.len() >= 2);
@@ -99,7 +99,7 @@ BOUNDS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_INTEGER.as_bytes()).unwrap();
+    let instance = parse(MPS_INTEGER.as_bytes()).unwrap();
 
     assert_eq!(instance.decision_variables.len(), 3);
 
@@ -132,7 +132,7 @@ BOUNDS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_BINARY.as_bytes()).unwrap();
+    let instance = parse(MPS_BINARY.as_bytes()).unwrap();
 
     assert_eq!(instance.decision_variables.len(), 2);
 
@@ -169,7 +169,7 @@ BOUNDS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_FREE_VAR.as_bytes()).unwrap();
+    let instance = parse(MPS_FREE_VAR.as_bytes()).unwrap();
 
     assert_eq!(instance.decision_variables.len(), 2);
 
@@ -195,7 +195,7 @@ RHS
 ENDATA
 "#;
 
-    let instance = load_raw_reader(MPS_MAXIMIZE.as_bytes()).unwrap();
+    let instance = parse(MPS_MAXIMIZE.as_bytes()).unwrap();
 
     assert_eq!(instance.sense(), crate::v1::instance::Sense::Maximize);
 }
@@ -203,7 +203,7 @@ ENDATA
 // Test complex MPS with all constraint types
 #[test]
 fn test_complex_mps_parsing() {
-    let instance = load_raw_reader(MPS_COMPLEX.as_bytes()).unwrap();
+    let instance = parse(MPS_COMPLEX.as_bytes()).unwrap();
 
     assert_eq!(instance.decision_variables.len(), 3);
     assert_eq!(instance.constraints.len(), 3);
