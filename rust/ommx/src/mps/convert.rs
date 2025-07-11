@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
+    format::{CONSTR_PREFIX, OBJ_NAME, VAR_PREFIX},
     parser::{ColumnName, ObjSense, RowName},
-    to_mps::{CONSTR_PREFIX, OBJ_NAME, VAR_PREFIX},
     Mps, MpsParseError,
 };
 use crate::v1;

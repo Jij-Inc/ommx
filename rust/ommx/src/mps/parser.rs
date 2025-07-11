@@ -1,4 +1,4 @@
-use super::MpsParseError;
+use super::{is_gzipped, MpsParseError};
 use derive_more::Deref;
 use std::{
     collections::{HashMap, HashSet},
@@ -411,41 +411,25 @@ impl State {
 }
 
 impl Mps {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        // Try to detect if the file is gzipped by reading the first 2 bytes
-        let mut file_start = [0u8; 2];
-        let mut f = fs::File::open(&path)?;
+    /// Read a MPS file from the given path.
+    ///
+    /// This function automatically detects if the file is gzipped or not.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let f = fs::File::open(&path)?;
+        Self::parse(f)
+    }
 
-        match f.read_exact(&mut file_start) {
-            Ok(()) => {
-                // Check for gzip magic number (0x1f, 0x8b)
-                if file_start == [0x1f, 0x8b] {
-                    // File is gzipped, reopen and use zipped reader
-                    let f = fs::File::open(path)?;
-                    Self::from_zipped_reader(f)
-                } else {
-                    // File is not gzipped, reopen and use raw reader
-                    let f = fs::File::open(path)?;
-                    Self::from_raw_reader(f)
-                }
-            }
-            Err(_) => {
-                // File is too short, assume it's not gzipped
-                let f = fs::File::open(path)?;
-                Self::from_raw_reader(f)
-            }
+    pub fn parse(reader: impl Read) -> Result<Self> {
+        let mut reader = io::BufReader::new(reader);
+        let head = reader.fill_buf()?;
+        if is_gzipped(head)? {
+            let buf = flate2::read::GzDecoder::new(reader);
+            let buf = io::BufReader::new(buf);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
+        } else {
+            let buf = io::BufReader::new(reader);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
         }
-    }
-
-    pub fn from_zipped_reader(reader: impl Read) -> Result<Self> {
-        let buf = flate2::read::GzDecoder::new(reader);
-        let buf = io::BufReader::new(buf);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
-    }
-
-    pub fn from_raw_reader(reader: impl Read) -> Result<Self> {
-        let buf = io::BufReader::new(reader);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
     }
 
     fn from_lines(lines: impl Iterator<Item = String>) -> Result<Self> {
@@ -496,37 +480,6 @@ impl Mps {
         }
         Ok(state.finish())
     }
-
-    // /// Get statistics of the problem
-    // pub fn get_stat(&self) -> Stat {
-    //     let nb = self.binary.len();
-    //     let ni = self.integer.len();
-    //     let nr = self.real.len();
-    //     let me = self.eq.len();
-    //     let mg = self.ge.len();
-    //     let ml = self.le.len();
-    //     Stat {
-    //         variable: nb + ni + nr,
-    //         constraint: me + mg + ml,
-    //         binary: nb,
-    //         integer: ni,
-    //         continuous: nr,
-    //         non_zero: self.non_zero(),
-    //     }
-    // }
-}
-
-/// Statistics of the problem
-///
-/// Same definitions as MIPLIB definition <https://miplib.zib.de/statistics.html>
-#[derive(Debug, Clone, PartialEq)]
-pub struct Stat {
-    pub variable: usize,
-    pub constraint: usize,
-    pub binary: usize,
-    pub integer: usize,
-    pub continuous: usize,
-    pub non_zero: usize,
 }
 
 #[cfg(test)]
