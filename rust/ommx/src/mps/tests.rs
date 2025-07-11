@@ -1,11 +1,10 @@
 // MPS module tests are now organized by purpose in separate files
 
-mod read_tests;
-mod write_tests;
-mod roundtrip_tests;
-mod constraint_variable_tests;
 mod compressed;
-
+mod constraint_variable_tests;
+mod read_tests;
+mod roundtrip_tests;
+mod write_tests;
 
 // More complex MPS test case with multiple variables and constraints
 pub const MPS_COMPLEX: &str = r#"NAME ComplexProblem
@@ -30,5 +29,3 @@ BOUNDS
  UP BND1      X2                  1
 ENDATA
 "#;
-
-
