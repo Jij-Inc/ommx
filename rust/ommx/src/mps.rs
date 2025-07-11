@@ -56,9 +56,10 @@ use std::{io::Read, path::Path};
 mod compressed;
 mod convert;
 mod parser;
-mod to_mps;
+mod write;
 
 pub use compressed::is_gzipped;
+pub use write::write;
 
 #[cfg(test)]
 mod tests;
@@ -115,9 +116,9 @@ pub fn write_file(
 
     if compress {
         let mut writer = flate2::write::GzEncoder::new(file, flate2::Compression::new(5));
-        to_mps::write_mps(instance, &mut writer)?;
+        write::write(instance, &mut writer)?;
     } else {
-        to_mps::write_mps(instance, &mut file)?;
+        write::write(instance, &mut file)?;
     }
     Ok(())
 }

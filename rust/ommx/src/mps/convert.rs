@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::{
     parser::{ColumnName, ObjSense, RowName},
-    to_mps::{CONSTR_PREFIX, OBJ_NAME, VAR_PREFIX},
+    write::{CONSTR_PREFIX, OBJ_NAME, VAR_PREFIX},
     Mps, MpsParseError,
 };
 use crate::v1;
