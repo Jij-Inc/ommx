@@ -112,6 +112,12 @@ from ommx.v1.solution_pb2 import Optimality
 - Always run `task format` before committing
 - Ensure `task python:test` passes completely
 
+### 📊 Performance Claims Policy
+- **NEVER claim performance improvements without benchmarks**
+- Only make performance claims backed by concrete measurements
+- Use terms like "improved type safety" or "better API design" for non-performance benefits
+- If making performance claims, include benchmark data and methodology
+
 ### 📝 Rust SDK Testing Guidelines
 - Use `assert_abs_diff_eq!` to compare entire polynomials instead of checking individual terms with `get`
 - Include clear comments in test cases explaining the intent and expected behavior
