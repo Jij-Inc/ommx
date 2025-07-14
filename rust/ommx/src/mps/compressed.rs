@@ -23,18 +23,18 @@ mod tests {
         let gzip_data: Vec<u8> = vec![
             /*  Gzip magic number*/ 0x1f, 0x8b, /* Dummy data */ 0x12, 0x34, 0x56, 0x78,
         ];
-        assert_eq!(is_gzipped(gzip_data.as_slice()).unwrap(), true);
+        assert!(is_gzipped(gzip_data.as_slice()).unwrap());
 
         // Test with non-gzip data
         let plain_data = b"NAME TestProblem";
-        assert_eq!(is_gzipped(plain_data.as_slice()).unwrap(), false);
+        assert!(!is_gzipped(plain_data.as_slice()).unwrap());
 
         // Test with empty data
         let empty_data: Vec<u8> = vec![];
-        assert_eq!(is_gzipped(empty_data.as_slice()).unwrap(), false);
+        assert!(!is_gzipped(empty_data.as_slice()).unwrap());
 
         // Test with single byte
         let single_byte = vec![0x1f];
-        assert_eq!(is_gzipped(single_byte.as_slice()).unwrap(), false);
+        assert!(!is_gzipped(single_byte.as_slice()).unwrap());
     }
 }

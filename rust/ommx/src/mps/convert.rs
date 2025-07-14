@@ -55,7 +55,6 @@ fn convert_dvars(
         l,
         integer,
         binary,
-        real,
         ..
     } = mps;
     let mut dvars = BTreeMap::new();
@@ -76,7 +75,7 @@ fn convert_dvars(
     if vars.iter().any(|name| !name.starts_with(VAR_PREFIX)) {
         // general case -- assign ids by order
         for (i, var_name) in vars.iter().enumerate() {
-            let kind = get_dvar_kind(var_name, integer, binary, real);
+            let kind = get_dvar_kind(var_name, integer, binary);
             let bound = get_dvar_bound(var_name, l, u);
             // our ID ends up being dependent on the order of vars hashset. This is
             // unstable across executions -- we might want to consider an indexset
@@ -95,7 +94,7 @@ fn convert_dvars(
             .iter()
             .filter_map(|name| parse_id_tag(VAR_PREFIX, name).map(|id| (id, name)))
         {
-            let kind = get_dvar_kind(var_name, integer, binary, real);
+            let kind = get_dvar_kind(var_name, integer, binary);
             let bound = get_dvar_bound(var_name, l, u);
             let id = VariableID::from(id_value);
             name_id_map.insert(var_name.clone(), id);
@@ -263,14 +262,11 @@ fn get_dvar_kind(
     name: &ColumnName,
     integer: &HashSet<ColumnName>,
     binary: &HashSet<ColumnName>,
-    real: &HashSet<ColumnName>,
 ) -> DecisionVariableKind {
     if integer.contains(name) {
         DecisionVariableKind::Integer
     } else if binary.contains(name) {
         DecisionVariableKind::Binary
-    } else if real.contains(name) {
-        DecisionVariableKind::Continuous
     } else {
         DecisionVariableKind::Continuous
     }

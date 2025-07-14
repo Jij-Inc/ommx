@@ -170,7 +170,7 @@ fn write_col_entry<W: Write>(
     } else {
         return Err(MpsWriteError::InvalidConstraintType {
             name: row_name.to_string(),
-            degree: (*func.degree()).into(),
+            degree: (*func.degree()),
         });
     }
     Ok(())
@@ -180,7 +180,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
     writeln!(out, "RHS")?;
     // write out a RHS entry for the objective function if a non-zero constant is present
     if let Some(linear) = instance.objective().as_linear() {
-        let constant: f64 = linear.constant_term().into();
+        let constant: f64 = linear.constant_term();
         if constant != 0.0 {
             let rhs = -constant;
             writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
@@ -189,7 +189,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
     for (constr_id, constr) in instance.constraints().iter() {
         let name = constr_name(*constr_id);
         if let Some(linear) = constr.function.as_linear() {
-            let constant: f64 = linear.constant_term().into();
+            let constant: f64 = linear.constant_term();
             if constant != 0.0 {
                 let rhs = -constant;
                 writeln!(out, "  RHS1    {name}   {rhs}")?;
@@ -197,7 +197,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
         } else {
             return Err(MpsWriteError::InvalidConstraintType {
                 name: name.to_string(),
-                degree: (*constr.function.degree()).into(),
+                degree: (*constr.function.degree()),
             });
         }
     }

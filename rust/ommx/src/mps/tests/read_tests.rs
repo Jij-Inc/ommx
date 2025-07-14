@@ -391,13 +391,13 @@ ENDATA
     assert_eq!(instance.constraints().len(), 3);
 
     // Check that all variables have valid bounds
-    for (_, var) in instance.decision_variables() {
+    for var in instance.decision_variables().values() {
         let bound = var.bound();
         assert!(bound.lower() <= bound.upper());
     }
 
     // Check that all constraints have valid equality types
-    for (_, constraint) in instance.constraints() {
+    for constraint in instance.constraints().values() {
         match constraint.equality {
             crate::Equality::EqualToZero | crate::Equality::LessThanOrEqualToZero => {
                 // These are expected
