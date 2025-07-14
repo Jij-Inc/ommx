@@ -1,5 +1,6 @@
 use super::{is_gzipped, MpsParseError};
 use derive_more::Deref;
+use indexmap::IndexSet;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -35,7 +36,7 @@ pub struct Mps {
     pub objective_name: RowName,
     /// The collection of all variables present -- useful for iterating over
     /// all variables in a problem.
-    pub vars: HashSet<ColumnName>,
+    pub vars: IndexSet<ColumnName>,
     /// The coefficients of objective function, $c$
     pub c: HashMap<ColumnName, f64>,
 

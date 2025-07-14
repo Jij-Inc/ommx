@@ -1531,6 +1531,7 @@ dependencies = [
  "flate2",
  "fnv",
  "getset",
+ "indexmap",
  "indoc",
  "insta",
  "itertools 0.13.0",
