@@ -100,7 +100,7 @@ impl From<u64> for LinearMonomial {
 
 impl std::ops::Neg for LinearMonomial {
     type Output = Linear;
-    
+
     fn neg(self) -> Self::Output {
         Linear::single_term(self, crate::coeff!(-1.0))
     }
