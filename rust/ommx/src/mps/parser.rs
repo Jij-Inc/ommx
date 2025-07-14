@@ -1,6 +1,6 @@
 use super::{is_gzipped, MpsParseError};
 use derive_more::Deref;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -41,7 +41,7 @@ pub struct Mps {
     pub c: HashMap<ColumnName, f64>,
 
     /// Constraint matrix, $A$
-    pub a: HashMap<RowName, HashMap<ColumnName, f64>>,
+    pub a: IndexMap<RowName, HashMap<ColumnName, f64>>,
     /// Right hand side of constraints, $b$
     pub b: HashMap<RowName, f64>,
 
@@ -367,8 +367,15 @@ impl State {
                 self.mps.real.remove(&column_name);
                 self.mps.binary.insert(column_name);
             }
-            //   FR    free variable
-            "FR" | "PL" => { /* do nothing */ }
+            //   FR    free variable   x \in (-inf, inf)
+            "FR" | "PL" => {
+                self.mps
+                    .l
+                    .insert(ColumnName(fields[2].to_string()), f64::NEG_INFINITY);
+                self.mps
+                    .u
+                    .insert(ColumnName(fields[2].to_string()), f64::INFINITY);
+            }
             //   UI    upper (positive) integer
             "UI" => {
                 let column_name = ColumnName(fields[2].to_string());

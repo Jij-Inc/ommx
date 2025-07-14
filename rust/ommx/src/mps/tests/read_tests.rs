@@ -1,9 +1,12 @@
-use crate::mps::*;
-use std::collections::BTreeMap;
+use crate::{coeff, linear, mps::*, Bound, DecisionVariableMetadata, Function};
+use approx::assert_abs_diff_eq;
 
 // Test basic MPS parsing
 #[test]
 fn test_basic_mps_parsing() {
+    // minimize x1
+    // s.t.     x1 <= 5
+    //          x1 \in [0, 4]
     const MPS_CONTENT: &str = r#"NAME TestProblem
 ROWS
  N  OBJ
@@ -20,36 +23,35 @@ ENDATA
 
     let instance = parse(MPS_CONTENT.as_bytes()).unwrap();
 
-    // Check instance properties
-    assert_eq!(instance.sense(), crate::v1::instance::Sense::Minimize);
-    assert_eq!(instance.decision_variables.len(), 1);
-    assert_eq!(instance.constraints.len(), 1);
+    // Default sense is Minimize
+    assert_eq!(*instance.sense(), crate::Sense::Minimize);
 
     // Check variable
-    let var = &instance.decision_variables[0];
-    assert_eq!(var.name(), "X1");
-    assert_eq!(var.kind(), crate::v1::decision_variable::Kind::Continuous);
-    assert!(var.bound.is_some());
+    assert_eq!(instance.decision_variables().len(), 1);
+    let (_, var) = instance.decision_variables().iter().next().unwrap();
+    assert_eq!(var.metadata, DecisionVariableMetadata::default());
+    assert_eq!(var.kind(), crate::decision_variable::Kind::Continuous);
+    assert_eq!(var.bound(), Bound::new(0.0, 4.0).unwrap());
 
-    let bound = var.bound.as_ref().unwrap();
-    assert_eq!(bound.lower, 0.0);
-    assert_eq!(bound.upper, 4.0);
+    // Check objective: x1
+    assert_abs_diff_eq!(instance.objective(), &Function::from(linear!(var.id())));
 
-    // Check constraint
-    let constraint = &instance.constraints[0];
-    assert_eq!(constraint.name(), "R1");
-    let linear = constraint.function().into_owned().as_linear().unwrap();
-    assert_eq!(linear.terms.len(), 1);
-    assert_eq!(
-        constraint.equality(),
-        crate::v1::Equality::LessThanOrEqualToZero
+    // Check constraint: x1 - 5 <= 0
+    assert_eq!(instance.constraints().len(), 1);
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_abs_diff_eq!(
+        &constraint.function,
+        &Function::from(linear!(var.id()) + coeff!(-5.0))
     );
-    assert_eq!(linear.constant, -5.0); // RHS is stored as negative constant
+    assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
 }
 
 // Test MPS with RANGES section
 #[test]
 fn test_mps_with_ranges() {
+    // minimize x1 + 2*x2
+    // s.t. R1: 10-2 <= x1 + 2*x2 <= 10
+    //      R2:    5 <= x1 + x2   <= 5+3
     const MPS_WITH_RANGES: &str = r#"NAME RangesProblem
 ROWS
  N  OBJ
@@ -69,16 +71,64 @@ ENDATA
 
     let instance = parse(MPS_WITH_RANGES.as_bytes()).unwrap();
 
-    // RANGES create additional constraints, so we expect more than 2
-    assert!(instance.constraints.len() >= 2);
+    // Check basic structure
+    assert_eq!(instance.decision_variables().len(), 2);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
+    // Default kind is Continuous
+    assert_eq!(x1.kind(), crate::decision_variable::Kind::Continuous);
+    assert_eq!(x2.kind(), crate::decision_variable::Kind::Continuous);
+    // Default bound is [0, ∞)
+    assert_eq!(x1.bound(), Bound::new(0.0, f64::INFINITY).unwrap());
+    assert_eq!(x2.bound(), Bound::new(0.0, f64::INFINITY).unwrap());
 
-    // The exact number depends on the RANGES implementation
-    // We just verify that RANGES are processed without error
+    // Check objective: x1 + 2*x2
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
+    );
+
+    // Check constraints
+    assert_eq!(instance.constraints().len(), 4);
+    let mut iter = instance.constraints().values();
+    let r1 = iter.next().unwrap();
+    let r2 = iter.next().unwrap();
+    let r1_range = iter.next().unwrap();
+    let r2_range = iter.next().unwrap();
+    // x1 + 2*x2 - 10 <= 0
+    assert_abs_diff_eq!(
+        &r1.function,
+        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()) + coeff!(-10.0))
+    );
+    assert_eq!(r1.equality, crate::Equality::LessThanOrEqualToZero);
+    // -x1 - x2 + 5 <= 0
+    assert_abs_diff_eq!(
+        &r2.function,
+        &Function::from(-linear!(x1.id()) - linear!(x2.id()) + coeff!(5.0))
+    );
+    assert_eq!(r2.equality, crate::Equality::LessThanOrEqualToZero);
+    // -x1 - 2*x2 + 8 <= 0
+    assert_abs_diff_eq!(
+        &r1_range.function,
+        &Function::from(-linear!(x1.id()) - coeff!(2.0) * linear!(x2.id()) + coeff!(8.0))
+    );
+    assert_eq!(r1_range.equality, crate::Equality::LessThanOrEqualToZero);
+    // x1 + x2 - 8 <= 0
+    assert_abs_diff_eq!(
+        &r2_range.function,
+        &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-8.0))
+    );
+    assert_eq!(r2_range.equality, crate::Equality::LessThanOrEqualToZero);
 }
 
 // Test integer variables
 #[test]
 fn test_integer_variables() {
+    // minimize x1 + 2*x2 + 3*x3
+    // s.t.     x1 + x2 + x3 <= 10
+    //          x1, x2, x3 \in [0, 5]
+    //          x1, x2 \in Z
     const MPS_INTEGER: &str = r#"NAME IntegerProblem
 ROWS
  N  OBJ
@@ -100,22 +150,44 @@ ENDATA
 
     let instance = parse(MPS_INTEGER.as_bytes()).unwrap();
 
-    assert_eq!(instance.decision_variables.len(), 3);
+    // The IDs of the decision variables are registered in the order they appear
+    assert_eq!(instance.decision_variables().len(), 3);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
+    let x3 = iter.next().unwrap();
 
-    // Current implementation might not detect integer variables correctly
-    // Let's document the actual behavior - order is unstable so we check by existence
+    assert_eq!(x1.kind(), crate::decision_variable::Kind::Integer);
+    assert_eq!(x2.kind(), crate::decision_variable::Kind::Integer);
+    assert_eq!(x3.kind(), crate::decision_variable::Kind::Continuous);
+    assert_eq!(x1.bound(), Bound::new(0.0, 5.0).unwrap());
+    assert_eq!(x2.bound(), Bound::new(0.0, 5.0).unwrap());
+    assert_eq!(x3.bound(), Bound::new(0.0, 5.0).unwrap());
 
-    // Check UI bounds
-    let x1_bound = instance.decision_variables[0].bound.as_ref().unwrap();
-    assert_eq!(x1_bound.upper, 5.0);
+    // Check objective: x1 + 2*x2 + 3*x3
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(
+            linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()) + coeff!(3.0) * linear!(x3.id())
+        )
+    );
 
-    let x2_bound = instance.decision_variables[1].bound.as_ref().unwrap();
-    assert_eq!(x2_bound.upper, 5.0);
+    // Check constraint: x1 + x2 + x3 - 10 <= 0
+    assert_eq!(instance.constraints().len(), 1);
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_abs_diff_eq!(
+        &constraint.function,
+        &Function::from(linear!(x1.id()) + linear!(x2.id()) + linear!(x3.id()) + coeff!(-10.0))
+    );
+    assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
 }
 
 // Test binary variables
 #[test]
 fn test_binary_variables() {
+    // minimize x1 + 2*x2
+    // s.t.     x1 + x2 <= 1
+    //          x1, x2 \in {0, 1}
     const MPS_BINARY: &str = r#"NAME BinaryProblem
 ROWS
  N  OBJ
@@ -133,26 +205,38 @@ ENDATA
 
     let instance = parse(MPS_BINARY.as_bytes()).unwrap();
 
-    assert_eq!(instance.decision_variables.len(), 2);
+    // Check variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
 
     // Both should be binary
-    assert_eq!(
-        instance.decision_variables[0].kind(),
-        crate::v1::decision_variable::Kind::Binary
-    );
-    assert_eq!(
-        instance.decision_variables[1].kind(),
-        crate::v1::decision_variable::Kind::Binary
+    assert_eq!(x1.kind(), crate::decision_variable::Kind::Binary);
+    assert_eq!(x2.kind(), crate::decision_variable::Kind::Binary);
+
+    // Check objective: x1 + 2*x2
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
     );
 
-    // Binary variables should have proper kinds and bounds
-    // Current implementation might not set upper bound to 1.0 for binary variables
-    // Just verify the variables are parsed correctly
+    // Check constraint: x1 + x2 - 1 <= 0
+    assert_eq!(instance.constraints().len(), 1);
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_abs_diff_eq!(
+        &constraint.function,
+        &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-1.0))
+    );
+    assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
 }
 
 // Test free variables
 #[test]
 fn test_free_variables() {
+    // minimize x1 - x2
+    // s.t.     x1 - x2 = 0
+    //          x1, x2 \in (-∞, ∞)
     const MPS_FREE_VAR: &str = r#"NAME FreeVarProblem
 ROWS
  N  OBJ
@@ -170,16 +254,43 @@ ENDATA
 
     let instance = parse(MPS_FREE_VAR.as_bytes()).unwrap();
 
-    assert_eq!(instance.decision_variables.len(), 2);
+    // Check variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
+    assert_eq!(x1.kind(), crate::decision_variable::Kind::Continuous);
+    assert_eq!(x2.kind(), crate::decision_variable::Kind::Continuous);
+    assert_eq!(
+        x1.bound(),
+        Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap()
+    );
+    assert_eq!(
+        x2.bound(),
+        Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap()
+    );
 
-    // Free variables in MPS might be handled differently than expected
-    // Current implementation might not set NEG_INFINITY for free variables
-    // Just verify the test can parse without asserting specific bounds
+    // Check objective: x1 - x2
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(linear!(x1.id()) + coeff!(-1.0) * linear!(x2.id()))
+    );
+
+    // Check constraint: x1 - x2 = 0
+    assert_eq!(instance.constraints().len(), 1);
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_abs_diff_eq!(
+        &constraint.function,
+        &Function::from(linear!(x1.id()) + coeff!(-1.0) * linear!(x2.id()))
+    );
+    assert_eq!(constraint.equality, crate::Equality::EqualToZero);
 }
 
 // Test OBJSENSE
 #[test]
 fn test_objsense_maximize() {
+    // maximize x1 + 2*x2
+    // s.t.     x1 + x2 <= 10
     const MPS_MAXIMIZE: &str = r#"NAME MaximizeProblem
 OBJSENSE
  MAX
@@ -196,13 +307,41 @@ ENDATA
 
     let instance = parse(MPS_MAXIMIZE.as_bytes()).unwrap();
 
-    assert_eq!(instance.sense(), crate::v1::instance::Sense::Maximize);
+    // Check sense
+    assert_eq!(*instance.sense(), crate::Sense::Maximize);
+
+    // Check variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
+
+    // Check objective: x1 + 2*x2
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(linear!(x1.id()) + coeff!(2.0) * linear!(x2.id()))
+    );
+
+    // Check constraint: x1 + x2 - 10 <= 0
+    assert_eq!(instance.constraints().len(), 1);
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_abs_diff_eq!(
+        &constraint.function,
+        &Function::from(linear!(x1.id()) + linear!(x2.id()) + coeff!(-10.0))
+    );
+    assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
 }
 
 // Test complex MPS with all constraint types
 #[test]
 fn test_complex_mps_parsing() {
-    // More complex MPS test case with multiple variables and constraints
+    // minimize x1 + 4*x2 + 9*x3
+    // s.t.     2*x1 + x2 <= 5        (C1)
+    //          x1 + x3 >= 10          (C2)
+    //          x1 - x2 + x3 = 7       (C3)
+    //          x1 \in [0, 4]
+    //          x2 \in [-1, 1]
+    //          x3 \in [0, ∞)
     const MPS_COMPLEX: &str = r#"NAME ComplexProblem
 ROWS
  N  OBJ
@@ -228,59 +367,41 @@ ENDATA
 
     let instance = parse(MPS_COMPLEX.as_bytes()).unwrap();
 
-    assert_eq!(instance.decision_variables.len(), 3);
-    assert_eq!(instance.constraints.len(), 3);
+    // Check variables
+    assert_eq!(instance.decision_variables().len(), 3);
+    let mut iter = instance.decision_variables().values();
+    let x1 = iter.next().unwrap();
+    let x2 = iter.next().unwrap();
+    let x3 = iter.next().unwrap();
 
-    // Variables and constraints might be in different order than expected
-    // Use BTreeMap for stable iteration order
-    let var_by_name: BTreeMap<String, &crate::v1::DecisionVariable> = instance
-        .decision_variables
-        .iter()
-        .map(|v| (v.name().to_string(), v))
-        .collect();
+    // Check bounds
+    assert_eq!(x1.bound(), Bound::new(0.0, 4.0).unwrap());
+    assert_eq!(x2.bound(), Bound::new(-1.0, 1.0).unwrap());
+    assert_eq!(x3.bound(), Bound::new(0.0, f64::INFINITY).unwrap());
 
-    let constraint_by_name: BTreeMap<String, &crate::v1::Constraint> = instance
-        .constraints
-        .iter()
-        .map(|c| (c.name().to_string(), c))
-        .collect();
+    // Check objective: x1 + 4*x2 + 9*x3
+    assert_abs_diff_eq!(
+        instance.objective(),
+        &Function::from(
+            linear!(x1.id()) + coeff!(4.0) * linear!(x2.id()) + coeff!(9.0) * linear!(x3.id())
+        )
+    );
 
-    // Check all expected variables exist
-    assert!(var_by_name.contains_key("X1"));
-    assert!(var_by_name.contains_key("X2"));
-    assert!(var_by_name.contains_key("X3"));
+    // Check constraints
+    assert_eq!(instance.constraints().len(), 3);
 
-    // Also check all expected constraints exist
-    assert!(constraint_by_name.contains_key("C1"));
-    assert!(constraint_by_name.contains_key("C2"));
-    assert!(constraint_by_name.contains_key("C3"));
+    // Check that all variables have valid bounds
+    for (_, var) in instance.decision_variables() {
+        let bound = var.bound();
+        assert!(bound.lower() <= bound.upper());
+    }
 
-    // Check bounds by variable name
-    let x1_bound = var_by_name["X1"].bound.as_ref().unwrap();
-    assert_eq!(x1_bound.lower, 0.0);
-    assert_eq!(x1_bound.upper, 4.0);
-
-    let x2_bound = var_by_name["X2"].bound.as_ref().unwrap();
-    assert_eq!(x2_bound.lower, -1.0);
-    assert_eq!(x2_bound.upper, 1.0);
-
-    let x3_bound = var_by_name["X3"].bound.as_ref().unwrap();
-    assert_eq!(x3_bound.lower, 0.0);
-    assert_eq!(x3_bound.upper, f64::INFINITY);
-
-    // Check constraints by name (order might be different)
-    let c1 = constraint_by_name["C1"];
-    assert_eq!(c1.equality(), crate::v1::Equality::LessThanOrEqualToZero);
-    let c1_linear = c1.function().into_owned().as_linear().unwrap();
-    assert_eq!(c1_linear.constant, -5.0); // RHS stored as negative constant
-
-    let c2 = constraint_by_name["C2"];
-    assert_eq!(c2.equality(), crate::v1::Equality::LessThanOrEqualToZero);
-    let c2_linear = c2.function().into_owned().as_linear().unwrap();
-    assert_eq!(c2_linear.constant, 10.0); // GE becomes LE with negated coefficients
-
-    let c3 = constraint_by_name["C3"];
-    assert_eq!(c3.equality(), crate::v1::Equality::EqualToZero);
-    let c3_linear = c3.function().into_owned().as_linear().unwrap();
-    assert_eq!(c3_linear.constant, -7.0); // RHS stored as negative constant
+    // Check that all constraints have valid equality types
+    for (_, constraint) in instance.constraints() {
+        match constraint.equality {
+            crate::Equality::EqualToZero | crate::Equality::LessThanOrEqualToZero => {
+                // These are expected
+            }
+        }
+    }
 }
