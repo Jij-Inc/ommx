@@ -121,6 +121,18 @@ pub struct InstanceParameters {
     pub max_irrelevant_ids: usize,
 }
 
+impl InstanceParameters {
+    pub fn default_lp() -> Self {
+        Self {
+            constraint_ids: ConstraintIDParameters::default(),
+            objective: PolynomialParameters::default_linear(),
+            constraint: PolynomialParameters::default_linear(),
+            kinds: KindParameters::default(),
+            max_irrelevant_ids: 5,
+        }
+    }
+}
+
 impl Default for InstanceParameters {
     fn default() -> Self {
         Self {
