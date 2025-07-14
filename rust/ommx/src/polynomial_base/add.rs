@@ -340,6 +340,37 @@ impl<M: Monomial> Sub<PolynomialBase<M>> for &PolynomialBase<M> {
     }
 }
 
+// Add support for PolynomialBase<M> - M operations
+impl<M: Monomial> Sub<M> for PolynomialBase<M> {
+    type Output = Self;
+    fn sub(mut self, rhs: M) -> Self::Output {
+        self.add_term(rhs, coeff!(-1.0));
+        self
+    }
+}
+
+impl<M: Monomial> Sub<&M> for PolynomialBase<M> {
+    type Output = Self;
+    fn sub(mut self, rhs: &M) -> Self::Output {
+        self.add_term(rhs.clone(), coeff!(-1.0));
+        self
+    }
+}
+
+impl<M: Monomial> Sub<M> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: M) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
+impl<M: Monomial> Sub<&M> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: &M) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
 impl<M: Monomial> Zero for PolynomialBase<M> {
     fn zero() -> Self {
         Self::default()
