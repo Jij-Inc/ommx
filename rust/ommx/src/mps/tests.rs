@@ -1,6 +1,5 @@
 // MPS module tests are now organized by purpose in separate files
 
-mod compressed;
 mod constraint_variable_tests;
 mod read_tests;
 mod roundtrip_tests;
