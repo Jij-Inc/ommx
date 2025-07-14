@@ -10,12 +10,8 @@ pub fn package(path: &Path) -> Result<()> {
     let mut ar = ZipArchive::new(f)?;
 
     for i in 0..ar.len() {
-        let Some(name) = ar
-            .name_for_index(i)
-            .unwrap() // Safe unwrap: we are iterating over a valid index range
-            .strip_suffix(".mps.gz")
-            .map(str::to_string)
-        else {
+        let file = ar.by_index(i)?;
+        let Some(name) = file.name().strip_suffix(".mps.gz").map(str::to_string) else {
             continue;
         };
         let Some(annotations) = annotation_dict.get(&name) else {
@@ -23,7 +19,6 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         log::info!("Loading: {name}");
-        let file = ar.by_index_seek(i)?;
         let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
