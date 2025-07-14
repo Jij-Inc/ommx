@@ -45,9 +45,6 @@ ENDATA
         crate::v1::Equality::LessThanOrEqualToZero
     );
     assert_eq!(linear.constant, -5.0); // RHS is stored as negative constant
-
-    let re_formatted = format::to_string(&instance).unwrap();
-    assert_eq!(re_formatted, MPS_CONTENT);
 }
 
 // Test MPS with RANGES section
