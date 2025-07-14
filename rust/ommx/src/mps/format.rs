@@ -44,6 +44,13 @@ pub fn format<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsW
     Ok(())
 }
 
+/// Converts the instance to a string in MPS format via [`format()`].
+pub fn to_string(instance: &v1::Instance) -> Result<String, MpsWriteError> {
+    let mut buffer = Vec::new();
+    format(instance, &mut buffer)?;
+    Ok(String::from_utf8(buffer).unwrap())
+}
+
 fn write_beginning<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
     let name = instance
         .description

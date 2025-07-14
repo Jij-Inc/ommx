@@ -57,7 +57,7 @@ mod parser;
 mod tests;
 
 pub use compressed::is_gzipped;
-pub use format::format;
+pub use format::{format, to_string};
 
 use crate::VariableID;
 use parser::*;

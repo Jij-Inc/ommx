@@ -1,5 +1,4 @@
-use super::super::*;
-use super::MPS_COMPLEX;
+use crate::mps::*;
 use std::collections::BTreeMap;
 
 // Test basic MPS parsing
@@ -46,6 +45,9 @@ ENDATA
         crate::v1::Equality::LessThanOrEqualToZero
     );
     assert_eq!(linear.constant, -5.0); // RHS is stored as negative constant
+
+    let re_formatted = format::to_string(&instance).unwrap();
+    assert_eq!(re_formatted, MPS_CONTENT);
 }
 
 // Test MPS with RANGES section
@@ -203,6 +205,30 @@ ENDATA
 // Test complex MPS with all constraint types
 #[test]
 fn test_complex_mps_parsing() {
+    // More complex MPS test case with multiple variables and constraints
+    const MPS_COMPLEX: &str = r#"NAME ComplexProblem
+ROWS
+ N  OBJ
+ L  C1
+ G  C2
+ E  C3
+COLUMNS
+    X1        OBJ                 1   C1                  2
+    X1        C2                  1   C3                  1
+    X2        OBJ                 4   C1                  1
+    X2        C3                 -1
+    X3        OBJ                 9   C2                  1
+    X3        C3                  1
+RHS
+    RHS1      C1                  5   C2                 10
+    RHS1      C3                  7
+BOUNDS
+ UP BND1      X1                  4
+ LO BND1      X2                 -1
+ UP BND1      X2                  1
+ENDATA
+"#;
+
     let instance = parse(MPS_COMPLEX.as_bytes()).unwrap();
 
     assert_eq!(instance.decision_variables.len(), 3);
