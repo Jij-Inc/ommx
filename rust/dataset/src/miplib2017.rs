@@ -27,7 +27,7 @@ pub fn package(path: &Path) -> Result<()> {
             }
         };
         let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
-        builder.add_instance(instance, annotations.clone())?;
+        builder.add_instance(instance.into(), annotations.clone())?;
         let mut artifact = builder.build()?;
         artifact.push()?;
     }
