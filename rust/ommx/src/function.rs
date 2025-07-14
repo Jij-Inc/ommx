@@ -30,6 +30,17 @@ pub enum Function {
     Polynomial(Polynomial),
 }
 
+impl TryFrom<f64> for Function {
+    type Error = crate::CoefficientError;
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        match Coefficient::try_from(value) {
+            Ok(c) => Ok(Function::Constant(c)),
+            Err(crate::CoefficientError::Zero) => Ok(Function::Zero),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 impl Function {
     pub fn constant_term(&self) -> f64 {
         match self {

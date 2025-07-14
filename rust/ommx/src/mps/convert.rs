@@ -1,3 +1,4 @@
+use num::Zero;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{
@@ -5,7 +6,7 @@ use super::{
     parser::{ColumnName, ObjSense, RowName},
     Mps,
 };
-use crate::decision_variable::Kind as DecisionVariableKind;
+use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient};
 use crate::{
     v1, Bound, Constraint, ConstraintHints, ConstraintID, DecisionVariable, Equality, Function,
     Instance, Sense, VariableID,
@@ -13,8 +14,8 @@ use crate::{
 
 pub fn convert(mps: Mps) -> anyhow::Result<Instance> {
     let (decision_variables, name_id_map) = convert_dvars(&mps);
-    let objective = convert_objective(&mps, &name_id_map);
-    let constraints = convert_constraints(&mps, &name_id_map);
+    let objective = convert_objective(&mps, &name_id_map)?;
+    let constraints = convert_constraints(&mps, &name_id_map)?;
     let sense = convert_sense(mps.obj_sense);
 
     let mut instance = Instance::new(
@@ -115,44 +116,37 @@ fn parse_id_tag(prefix: &str, name: &str) -> Option<u64> {
 
 // name_id_map helps us convert from column name to id.
 // See comment in `convert_dvars`
-fn convert_objective(mps: &Mps, name_id_map: &HashMap<ColumnName, VariableID>) -> Function {
+fn convert_objective(
+    mps: &Mps,
+    name_id_map: &HashMap<ColumnName, VariableID>,
+) -> anyhow::Result<Function> {
     let Mps { b, c, .. } = mps;
-
-    let mut constant = b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
-    if constant != 0.0 {
-        constant = -constant;
-    }
-
+    let constant = -b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
     if c.is_empty() {
-        if constant == 0.0 {
-            Function::Zero
-        } else {
-            Function::Constant(crate::coeff!(constant))
-        }
+        Ok(Function::try_from(constant)?)
     } else {
-        // Build linear function by adding terms one by one
-        let mut linear = if constant == 0.0 {
-            Function::Zero
-        } else {
-            Function::Constant(crate::coeff!(constant))
-        };
-
+        // Build linear function by adding terms
+        let mut linear = crate::Linear::try_from(constant)?;
         for (name, &coefficient) in c {
             if let Some(&id) = name_id_map.get(name) {
-                let monomial = crate::LinearMonomial::Variable(id);
-                let term = crate::Linear::single_term(monomial, crate::coeff!(coefficient));
-                linear = linear + Function::Linear(term);
+                linear.add_term(
+                    crate::LinearMonomial::Variable(id),
+                    Coefficient::try_from(coefficient)?,
+                );
             }
         }
-
-        linear
+        Ok(if linear.is_zero() {
+            Function::Zero
+        } else {
+            Function::Linear(linear)
+        })
     }
 }
 
 fn convert_constraints(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> BTreeMap<ConstraintID, Constraint> {
+) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
     let Mps {
         a, b, eq, ge, le, ..
     } = mps;
@@ -164,7 +158,7 @@ fn convert_constraints(
         for (i, (row_name, row)) in a.iter().enumerate() {
             let b_value = b.get(row_name).copied().unwrap_or(0.0);
             let (function, equality) =
-                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map);
+                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map)?;
             let id = ConstraintID::from(i as u64);
             let constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(id, function),
@@ -181,7 +175,7 @@ fn convert_constraints(
         }) {
             let b_value = b.get(row_name).copied().unwrap_or(0.0);
             let (function, equality) =
-                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map);
+                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map)?;
             let id = ConstraintID::from(id_value);
             let constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(id, function),
@@ -192,7 +186,7 @@ fn convert_constraints(
             constrs.insert(id, constraint);
         }
     }
-    constrs
+    Ok(constrs)
 }
 
 /// Handles passing the `b` constant part to the left-hand side, as we only
@@ -207,7 +201,7 @@ fn convert_inequality(
     ge: &HashSet<RowName>,
     le: &HashSet<RowName>,
     name_id_map: &HashMap<ColumnName, VariableID>,
-) -> (Function, Equality) {
+) -> anyhow::Result<(Function, Equality)> {
     let mut negate = false;
 
     let equality = if eq.contains(name) {
@@ -233,32 +227,29 @@ fn convert_inequality(
     };
 
     let function = if row.is_empty() {
-        if b == 0.0 {
-            Function::Zero
-        } else {
-            Function::Constant(crate::coeff!(b))
-        }
+        Function::try_from(b)?
     } else {
-        // Build linear function by adding terms one by one
-        let mut linear = if b == 0.0 {
-            Function::Zero
-        } else {
-            Function::Constant(crate::coeff!(b))
-        };
+        // Build linear function by adding terms
+        let mut linear = crate::Linear::try_from(b)?;
 
         for (col_name, &coefficient) in row {
             if let Some(&id) = name_id_map.get(col_name) {
                 let coeff = if negate { -coefficient } else { coefficient };
-                let monomial = crate::LinearMonomial::Variable(id);
-                let term = crate::Linear::single_term(monomial, crate::coeff!(coeff));
-                linear = linear + Function::Linear(term);
+                linear.add_term(
+                    crate::LinearMonomial::Variable(id),
+                    Coefficient::try_from(coeff)?,
+                );
             }
         }
 
-        linear
+        if linear.is_zero() {
+            Function::Zero
+        } else {
+            Function::Linear(linear)
+        }
     };
 
-    (function, equality)
+    Ok((function, equality))
 }
 
 fn convert_sense(sense: ObjSense) -> Sense {
