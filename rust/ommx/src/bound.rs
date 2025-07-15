@@ -293,8 +293,9 @@ impl AbsDiffEq for Bound {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        self.lower.abs_diff_eq(&other.lower, *epsilon)
-            && self.upper.abs_diff_eq(&other.upper, *epsilon)
+        // Since `abs_diff_eq` for f64::INFINITY returns false, check it first
+        (self.lower == other.lower || self.lower.abs_diff_eq(&other.lower, *epsilon))
+            && (self.upper == other.upper || self.upper.abs_diff_eq(&other.upper, *epsilon))
     }
 }
 
@@ -505,6 +506,8 @@ impl Arbitrary for Bound {
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_abs_diff_eq;
+
     use super::*;
 
     #[test]
@@ -513,6 +516,35 @@ mod tests {
         assert!(2.0 <= Bound::new(2.0, 3.0).unwrap());
         assert!(3.0 >= Bound::new(2.0, 3.0).unwrap());
         assert!(4.0 >= Bound::new(2.0, 3.0).unwrap());
+        assert!(f64::NEG_INFINITY <= Bound::new(2.0, 3.0).unwrap());
+        assert!(f64::INFINITY >= Bound::new(2.0, 3.0).unwrap());
+    }
+
+    #[test]
+    fn eq() {
+        assert_eq!(
+            Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
+            Bound::default()
+        );
+        assert_eq!(Bound::new(0.0, f64::INFINITY).unwrap(), Bound::positive());
+        assert_eq!(
+            Bound::new(f64::NEG_INFINITY, 0.0).unwrap(),
+            Bound::negative()
+        );
+
+        assert_abs_diff_eq!(
+            Bound::new(1.0, 2.0).unwrap(),
+            Bound::new(1.0, 2.00000001).unwrap(),
+        );
+        assert_abs_diff_eq!(
+            Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
+            Bound::default()
+        );
+        assert_abs_diff_eq!(Bound::new(0.0, f64::INFINITY).unwrap(), Bound::positive());
+        assert_abs_diff_eq!(
+            Bound::new(f64::NEG_INFINITY, 0.0).unwrap(),
+            Bound::negative()
+        );
     }
 
     #[test]
