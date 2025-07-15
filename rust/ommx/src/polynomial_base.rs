@@ -33,7 +33,7 @@ use std::{fmt::Debug, hash::Hash};
 /// Monomial, without coefficient
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
+pub trait Monomial: Into<MonomialDyn> + Debug + Clone + Hash + Eq + Default + 'static {
     type Parameters: Default;
 
     fn degree(&self) -> Degree;
@@ -58,7 +58,7 @@ pub trait Monomial: Debug + Clone + Hash + Eq + Default + 'static {
 }
 
 /// Base struct for [`Linear`] and other polynomials
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct PolynomialBase<M: Monomial> {
     terms: FnvHashMap<M, Coefficient>,
 }
@@ -232,33 +232,21 @@ mod tests {
         [
             (
                 Variable(
-                    VariableID(
-                        8,
-                    ),
+                    VariableID(8),
                 ),
-                Coefficient(
-                    -1.0,
-                ),
+                Coefficient(-1),
             ),
             (
                 Variable(
-                    VariableID(
-                        7,
-                    ),
+                    VariableID(7),
                 ),
-                Coefficient(
-                    -0.27550031881072173,
-                ),
+                Coefficient(-0.27550031881072173),
             ),
             (
                 Variable(
-                    VariableID(
-                        10,
-                    ),
+                    VariableID(10),
                 ),
-                Coefficient(
-                    4.520657493715473,
-                ),
+                Coefficient(4.520657493715473),
             ),
         ]
         "###);

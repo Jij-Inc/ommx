@@ -13,7 +13,7 @@ where
 {
     fn add_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone().into(), *c)
+            self.add_term(Into::<M2>::into(id.clone()), *c)
         }
     }
 }
@@ -285,7 +285,7 @@ impl<M: Monomial> Neg for PolynomialBase<M> {
 impl<M1: Monomial, M2: Monomial + From<M1>> SubAssign<&PolynomialBase<M1>> for PolynomialBase<M2> {
     fn sub_assign(&mut self, rhs: &PolynomialBase<M1>) {
         for (id, c) in &rhs.terms {
-            self.add_term(id.clone().into(), -(*c));
+            self.add_term(Into::<M2>::into(id.clone()), -(*c));
         }
     }
 }

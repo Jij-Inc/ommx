@@ -1,7 +1,10 @@
 use num::{traits::Inv, One};
 use ordered_float::NotNan;
 use proptest::prelude::*;
-use std::ops::{Add, Deref, Mul, MulAssign, Neg, Sub};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Add, Deref, Mul, MulAssign, Neg, Sub},
+};
 
 use crate::ATol;
 
@@ -20,9 +23,21 @@ pub enum CoefficientError {
 /// Invariants
 /// -----------
 /// - The value is not zero and finite.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Coefficient(NotNan<f64>);
+
+impl Debug for Coefficient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Coefficient({})", self.0)
+    }
+}
+
+impl Display for Coefficient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl Coefficient {
     pub fn into_inner(self) -> f64 {

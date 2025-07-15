@@ -67,15 +67,48 @@ pub type Bounds = BTreeMap<VariableID, Bound>;
 /// // Default is `(-inf, inf)`
 /// assert_eq!(Bound::default(), Bound::try_from([f64::NEG_INFINITY, f64::INFINITY]).unwrap());
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Bound {
     lower: f64,
     upper: f64,
 }
 
+impl std::fmt::Debug for Bound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Bound{}", self)
+    }
+}
+
 impl std::fmt::Display for Bound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}, {}]", self.lower, self.upper)
+        let lower_bracket = if self.lower == f64::NEG_INFINITY {
+            "("
+        } else {
+            "["
+        };
+        let upper_bracket = if self.upper == f64::INFINITY {
+            ")"
+        } else {
+            "]"
+        };
+
+        let lower_str = if self.lower == f64::NEG_INFINITY {
+            "-inf".to_string()
+        } else {
+            self.lower.to_string()
+        };
+
+        let upper_str = if self.upper == f64::INFINITY {
+            "inf".to_string()
+        } else {
+            self.upper.to_string()
+        };
+
+        write!(
+            f,
+            "{}{}, {}{}",
+            lower_bracket, lower_str, upper_str, upper_bracket
+        )
     }
 }
 
@@ -504,42 +537,12 @@ mod tests {
 
     #[test]
     fn bound_pow() {
-        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @r###"
-        Bound {
-            lower: 4.0,
-            upper: 9.0,
-        }
-        "###);
-        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(3), @r###"
-        Bound {
-            lower: 8.0,
-            upper: 27.0,
-        }
-        "###);
-        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(2), @r###"
-        Bound {
-            lower: 0.0,
-            upper: 9.0,
-        }
-        "###);
-        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(3), @r###"
-        Bound {
-            lower: -8.0,
-            upper: 27.0,
-        }
-        "###);
-        insta::assert_debug_snapshot!(Bound::default().pow(2), @r###"
-        Bound {
-            lower: 0.0,
-            upper: inf,
-        }
-        "###);
-        insta::assert_debug_snapshot!(Bound::default().pow(3), @r###"
-        Bound {
-            lower: -inf,
-            upper: inf,
-        }
-        "###);
+        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @"Bound[4, 9]");
+        insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(3), @"Bound[8, 27]");
+        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(2), @"Bound[0, 9]");
+        insta::assert_debug_snapshot!(Bound::new(-2.0, 3.0).unwrap().pow(3), @"Bound[-8, 27]");
+        insta::assert_debug_snapshot!(Bound::default().pow(2), @"Bound[0, inf)");
+        insta::assert_debug_snapshot!(Bound::default().pow(3), @"Bound(-inf, inf)");
     }
 
     fn bound_and_containing() -> BoxedStrategy<(Bound, f64)> {

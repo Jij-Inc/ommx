@@ -13,7 +13,7 @@ use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
 pub type VariableIDSet = BTreeSet<VariableID>;
 
@@ -26,6 +26,12 @@ impl VariableID {
 impl From<VariableID> for u64 {
     fn from(id: VariableID) -> Self {
         id.0
+    }
+}
+
+impl std::fmt::Debug for VariableID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VariableID({})", self.0)
     }
 }
 
