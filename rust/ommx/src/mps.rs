@@ -47,6 +47,8 @@
 //! ------
 //! - <https://plato.asu.edu/ftp/mps_format.txt>
 //! - [MPS (format) -- Wikipedia](https://en.wikipedia.org/wiki/MPS_(format))
+//! - [CPLEX](https://www.ibm.com/docs/en/icos/22.1.1?topic=extensions-integer-variables-in-mps-files)
+//! - [GUROBI](https://docs.gurobi.com/projects/optimizer/en/current/reference/fileformats/modelformats.html#formatmps)
 //!
 
 mod compressed;
