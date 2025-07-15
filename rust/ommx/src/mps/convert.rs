@@ -82,10 +82,9 @@ fn convert_dvars(
             // in the future
             let id = VariableID::from(i as u64);
             name_id_map.insert(var_name.clone(), id);
-            let dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
+            let mut dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
                 .expect("Failed to create decision variable");
-            // Set the name if available
-            // Note: The current DecisionVariable API doesn't have with_name method
+            dvar.metadata.name = Some(var_name.0.clone());
             dvars.insert(id, dvar);
         }
     } else {
@@ -100,6 +99,7 @@ fn convert_dvars(
             name_id_map.insert(var_name.clone(), id);
             let dvar = DecisionVariable::new(id, kind, bound, None, crate::ATol::default())
                 .expect("Failed to create decision variable");
+            // Do not add name here since it means OMMX ID, not user-defined name
             dvars.insert(id, dvar);
         }
     }
@@ -159,12 +159,13 @@ fn convert_constraints(
             let (function, equality) =
                 convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map)?;
             let id = ConstraintID::from(i as u64);
-            let constraint = match equality {
+            let mut constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(id, function),
                 Equality::LessThanOrEqualToZero => {
                     Constraint::less_than_or_equal_to_zero(id, function)
                 }
             };
+            constraint.name = Some(row_name.0.clone());
             constrs.insert(id, constraint);
         }
     } else {
@@ -182,6 +183,7 @@ fn convert_constraints(
                     Constraint::less_than_or_equal_to_zero(id, function)
                 }
             };
+            // Do not add name here since it means OMMX ID, not user-defined name
             constrs.insert(id, constraint);
         }
     }
