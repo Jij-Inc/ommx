@@ -15,6 +15,6 @@ proptest! {
         let mut buffer = Vec::new();
         prop_assert!(format::format(&instance, &mut buffer).is_ok());
         let loaded = parse(&buffer[..]).unwrap();
-        prop_assert!(instance.abs_diff_eq(&loaded, crate::ATol::default()));
+        prop_assert!(instance.abs_diff_eq(&loaded, crate::ATol::default()), "Loaded instance: {:#?}", loaded);
     }
 }
