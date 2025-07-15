@@ -362,6 +362,13 @@ impl Bound {
     /// // No integer value exists between 1.1 and 1.9
     /// let bound = Bound::new(1.1, 1.9).unwrap();
     /// assert!(bound.as_integer_bound(ATol::default()).is_none());
+    ///
+    /// // infinite bound are kept as is
+    /// let bound = Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap();
+    /// assert_eq!(bound.as_integer_bound(ATol::default()), Some(bound));
+    ///
+    /// let bound = Bound::new(1.1, f64::INFINITY).unwrap();
+    /// assert_eq!(bound.as_integer_bound(ATol::default()).unwrap(), Bound::new(2.0, f64::INFINITY).unwrap());
     /// ```
     pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {
