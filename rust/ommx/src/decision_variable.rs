@@ -1,3 +1,4 @@
+mod approx;
 mod arbitrary;
 mod parse;
 mod serialize;
@@ -6,7 +7,7 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
-use approx::AbsDiffEq;
+use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;

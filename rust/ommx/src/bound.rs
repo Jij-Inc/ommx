@@ -388,6 +388,15 @@ impl Bound {
         }
     }
 
+    /// Check if the bound is a point, i.e. `lower == upper`
+    pub fn is_point(&self, atol: ATol) -> Option<f64> {
+        if self.lower.abs_diff_eq(&self.upper, atol.into_inner()) {
+            Some(self.lower)
+        } else {
+            None
+        }
+    }
+
     /// `[lower, upper]` with finite `lower` and `upper`
     pub fn is_finite(&self) -> bool {
         self.lower.is_finite() && self.upper.is_finite()
