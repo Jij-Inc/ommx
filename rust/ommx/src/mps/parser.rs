@@ -360,6 +360,12 @@ impl State {
                     .l
                     .insert(ColumnName(fields[2].to_string()), f64::NEG_INFINITY);
             }
+            //   PL    plus infinity    x < inf
+            "PL" => {
+                self.mps
+                    .u
+                    .insert(ColumnName(fields[2].to_string()), f64::INFINITY);
+            }
             //   BV    binary variable    x = 0 or 1
             "BV" => {
                 let column_name = ColumnName(fields[2].to_string());
@@ -368,7 +374,7 @@ impl State {
                 self.mps.binary.insert(column_name);
             }
             //   FR    free variable   x \in (-inf, inf)
-            "FR" | "PL" => {
+            "FR" => {
                 self.mps
                     .l
                     .insert(ColumnName(fields[2].to_string()), f64::NEG_INFINITY);
@@ -402,17 +408,20 @@ impl State {
     fn finish(mut self) -> Mps {
         // If an integer variable `x` has a bound `0 <= x <= 1`,
         // regard it as a binary variable.
-        for (name, u) in &self.mps.u {
-            if *u == 1.0 {
-                if let Some(l) = self.mps.l.get(name) {
-                    if *l != 0.0 {
-                        continue;
-                    }
-                }
-                if let Some(name) = self.mps.integer.take(name) {
-                    self.mps.binary.insert(name);
-                }
+        let mut as_binary = HashSet::new();
+        for name in &self.mps.integer {
+            let Some(u) = self.mps.u.get(name) else {
+                continue;
+            };
+            // default lower bound is 0.0
+            let l = self.mps.l.get(name).unwrap_or(&0.0);
+            if *u <= 1.0 && *l >= 0.0 {
+                as_binary.insert(name.clone());
             }
+        }
+        for name in as_binary {
+            self.mps.integer.remove(&name);
+            self.mps.binary.insert(name);
         }
         self.mps
     }
