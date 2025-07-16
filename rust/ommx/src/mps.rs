@@ -117,6 +117,9 @@ pub enum MpsParseError {
     #[error("Invalid row type: {0}")]
     InvalidRowType(String),
 
+    #[error("Multiple objective names found. This means the MPS file is for a multi-objective problem, which is not supported.")]
+    MultipleObjectiveNames,
+
     #[error("Invalid bound type: {0}")]
     InvalidBoundType(String),
 
