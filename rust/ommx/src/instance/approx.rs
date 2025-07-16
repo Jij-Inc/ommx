@@ -13,11 +13,15 @@ impl AbsDiffEq for Instance {
 
     fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
         // Compare the used decision variables
-        if !self
-            .analyze_decision_variables()
-            .abs_diff_eq(&other.analyze_decision_variables(), epsilon)
-        {
+        let self_vars = self.used_decision_variables();
+        let other_vars = other.used_decision_variables();
+        if self_vars.len() != other_vars.len() {
             return false;
+        }
+        for ((id, var), (other_id, other_var)) in self_vars.iter().zip(other_vars.iter()) {
+            if id != other_id || !var.abs_diff_eq(other_var, epsilon) {
+                return false;
+            }
         }
 
         // Compare the objective function
