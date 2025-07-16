@@ -75,7 +75,7 @@ pub struct Bound {
 
 impl std::fmt::Debug for Bound {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Bound{}", self)
+        write!(f, "Bound{self}")
     }
 }
 
@@ -104,11 +104,7 @@ impl std::fmt::Display for Bound {
             self.upper.to_string()
         };
 
-        write!(
-            f,
-            "{}{}, {}{}",
-            lower_bracket, lower_str, upper_str, upper_bracket
-        )
+        write!(f, "{lower_bracket}{lower_str}, {upper_str}{upper_bracket}")
     }
 }
 

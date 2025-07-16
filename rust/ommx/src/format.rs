@@ -83,7 +83,7 @@ impl<M: Monomial> fmt::Display for crate::PolynomialBase<M> {
 
 impl<M: Monomial> fmt::Debug for crate::PolynomialBase<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

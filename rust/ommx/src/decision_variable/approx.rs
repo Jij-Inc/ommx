@@ -52,10 +52,10 @@ impl AbsDiffEq for DecisionVariable {
             )
         } else {
             // Only binary and integer are considered equal.
-            match (self.kind, other.kind) {
-                (Kind::Binary, Kind::Integer) | (Kind::Integer, Kind::Binary) => true,
-                _ => false,
-            }
+            matches!(
+                (self.kind, other.kind),
+                (Kind::Binary, Kind::Integer) | (Kind::Integer, Kind::Binary)
+            )
         }
     }
 }
@@ -348,7 +348,6 @@ mod tests {
         assert_abs_diff_eq!(binary, continuous);
         assert_abs_diff_eq!(integer, continuous);
     }
-
 
     #[test]
     fn test_tolerance_in_point_bound() {
