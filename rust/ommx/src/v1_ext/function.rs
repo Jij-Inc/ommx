@@ -485,28 +485,13 @@ mod tests {
             VariableID::from(2) => Bound::new(2.0, 3.0).unwrap(),
         };
         // [-1, 1] + 2*[2, 3] + 1 = [4, 8]
-        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
-        Bound {
-            lower: 4.0,
-            upper: 8.0,
-        }
-        "###);
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @"Bound[4, 8]");
 
         let f: Function = (x1.clone() * x1).into();
         // [-1, 1]^2 = [0, 1]
-        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @r###"
-        Bound {
-            lower: 0.0,
-            upper: 1.0,
-        }
-        "###);
+        insta::assert_debug_snapshot!(f.evaluate_bound(&bounds), @"Bound[0, 1]");
         // (-inf, inf)^2 = [0, inf)
-        insta::assert_debug_snapshot!(f.evaluate_bound(&Bounds::default()), @r###"
-        Bound {
-            lower: 0.0,
-            upper: inf,
-        }
-        "###);
+        insta::assert_debug_snapshot!(f.evaluate_bound(&Bounds::default()), @"Bound[0, inf)");
     }
 
     #[test]

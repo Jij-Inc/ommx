@@ -1,5 +1,6 @@
-use super::MpsParseError;
+use super::{is_gzipped, MpsParseError};
 use derive_more::Deref;
+use indexmap::{IndexMap, IndexSet};
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -35,12 +36,12 @@ pub struct Mps {
     pub objective_name: RowName,
     /// The collection of all variables present -- useful for iterating over
     /// all variables in a problem.
-    pub vars: HashSet<ColumnName>,
+    pub vars: IndexSet<ColumnName>,
     /// The coefficients of objective function, $c$
     pub c: HashMap<ColumnName, f64>,
 
     /// Constraint matrix, $A$
-    pub a: HashMap<RowName, HashMap<ColumnName, f64>>,
+    pub a: IndexMap<RowName, HashMap<ColumnName, f64>>,
     /// Right hand side of constraints, $b$
     pub b: HashMap<RowName, f64>,
 
@@ -359,6 +360,12 @@ impl State {
                     .l
                     .insert(ColumnName(fields[2].to_string()), f64::NEG_INFINITY);
             }
+            //   PL    plus infinity    x < inf
+            "PL" => {
+                self.mps
+                    .u
+                    .insert(ColumnName(fields[2].to_string()), f64::INFINITY);
+            }
             //   BV    binary variable    x = 0 or 1
             "BV" => {
                 let column_name = ColumnName(fields[2].to_string());
@@ -366,8 +373,15 @@ impl State {
                 self.mps.real.remove(&column_name);
                 self.mps.binary.insert(column_name);
             }
-            //   FR    free variable
-            "FR" | "PL" => { /* do nothing */ }
+            //   FR    free variable   x \in (-inf, inf)
+            "FR" => {
+                self.mps
+                    .l
+                    .insert(ColumnName(fields[2].to_string()), f64::NEG_INFINITY);
+                self.mps
+                    .u
+                    .insert(ColumnName(fields[2].to_string()), f64::INFINITY);
+            }
             //   UI    upper (positive) integer
             "UI" => {
                 let column_name = ColumnName(fields[2].to_string());
@@ -394,58 +408,45 @@ impl State {
     fn finish(mut self) -> Mps {
         // If an integer variable `x` has a bound `0 <= x <= 1`,
         // regard it as a binary variable.
-        for (name, u) in &self.mps.u {
-            if *u == 1.0 {
-                if let Some(l) = self.mps.l.get(name) {
-                    if *l != 0.0 {
-                        continue;
-                    }
-                }
-                if let Some(name) = self.mps.integer.take(name) {
-                    self.mps.binary.insert(name);
-                }
+        let mut as_binary = HashSet::new();
+        for name in &self.mps.integer {
+            let Some(u) = self.mps.u.get(name) else {
+                continue;
+            };
+            // default lower bound is 0.0
+            let l = self.mps.l.get(name).unwrap_or(&0.0);
+            if *u <= 1.0 && *l >= 0.0 {
+                as_binary.insert(name.clone());
             }
+        }
+        for name in as_binary {
+            self.mps.integer.remove(&name);
+            self.mps.binary.insert(name);
         }
         self.mps
     }
 }
 
 impl Mps {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
-        // Try to detect if the file is gzipped by reading the first 2 bytes
-        let mut file_start = [0u8; 2];
-        let mut f = fs::File::open(&path)?;
+    /// Read a MPS file from the given path.
+    ///
+    /// This function automatically detects if the file is gzipped or not.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let f = fs::File::open(&path)?;
+        Self::parse(f)
+    }
 
-        match f.read_exact(&mut file_start) {
-            Ok(()) => {
-                // Check for gzip magic number (0x1f, 0x8b)
-                if file_start == [0x1f, 0x8b] {
-                    // File is gzipped, reopen and use zipped reader
-                    let f = fs::File::open(path)?;
-                    Self::from_zipped_reader(f)
-                } else {
-                    // File is not gzipped, reopen and use raw reader
-                    let f = fs::File::open(path)?;
-                    Self::from_raw_reader(f)
-                }
-            }
-            Err(_) => {
-                // File is too short, assume it's not gzipped
-                let f = fs::File::open(path)?;
-                Self::from_raw_reader(f)
-            }
+    pub fn parse(reader: impl Read) -> Result<Self> {
+        let mut reader = io::BufReader::new(reader);
+        let head = reader.fill_buf()?;
+        if is_gzipped(head)? {
+            let buf = flate2::read::GzDecoder::new(reader);
+            let buf = io::BufReader::new(buf);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
+        } else {
+            let buf = io::BufReader::new(reader);
+            Self::from_lines(buf.lines().map_while(|x| x.ok()))
         }
-    }
-
-    pub fn from_zipped_reader(reader: impl Read) -> Result<Self> {
-        let buf = flate2::read::GzDecoder::new(reader);
-        let buf = io::BufReader::new(buf);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
-    }
-
-    pub fn from_raw_reader(reader: impl Read) -> Result<Self> {
-        let buf = io::BufReader::new(reader);
-        Self::from_lines(buf.lines().map_while(|x| x.ok()))
     }
 
     fn from_lines(lines: impl Iterator<Item = String>) -> Result<Self> {
@@ -496,37 +497,6 @@ impl Mps {
         }
         Ok(state.finish())
     }
-
-    // /// Get statistics of the problem
-    // pub fn get_stat(&self) -> Stat {
-    //     let nb = self.binary.len();
-    //     let ni = self.integer.len();
-    //     let nr = self.real.len();
-    //     let me = self.eq.len();
-    //     let mg = self.ge.len();
-    //     let ml = self.le.len();
-    //     Stat {
-    //         variable: nb + ni + nr,
-    //         constraint: me + mg + ml,
-    //         binary: nb,
-    //         integer: ni,
-    //         continuous: nr,
-    //         non_zero: self.non_zero(),
-    //     }
-    // }
-}
-
-/// Statistics of the problem
-///
-/// Same definitions as MIPLIB definition <https://miplib.zib.de/statistics.html>
-#[derive(Debug, Clone, PartialEq)]
-pub struct Stat {
-    pub variable: usize,
-    pub constraint: usize,
-    pub binary: usize,
-    pub integer: usize,
-    pub continuous: usize,
-    pub non_zero: usize,
 }
 
 #[cfg(test)]

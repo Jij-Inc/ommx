@@ -1,4 +1,4 @@
-use crate::MonomialDyn;
+use crate::{Monomial, MonomialDyn};
 use std::fmt;
 
 fn write_f64_with_precision(f: &mut fmt::Formatter, coefficient: f64) -> fmt::Result {
@@ -68,10 +68,7 @@ pub fn format_polynomial(
     Ok(())
 }
 
-impl<M> fmt::Display for crate::PolynomialBase<M>
-where
-    M: crate::Monomial + Into<MonomialDyn>,
-{
+impl<M: Monomial> fmt::Display for crate::PolynomialBase<M> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.num_terms() == 0 {
             return write!(f, "0");
@@ -84,6 +81,12 @@ where
     }
 }
 
+impl<M: Monomial> fmt::Debug for crate::PolynomialBase<M> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
 impl fmt::Display for crate::Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -92,6 +95,18 @@ impl fmt::Display for crate::Function {
             crate::Function::Linear(linear) => write!(f, "{linear}"),
             crate::Function::Quadratic(quadratic) => write!(f, "{quadratic}"),
             crate::Function::Polynomial(polynomial) => write!(f, "{polynomial}"),
+        }
+    }
+}
+
+impl fmt::Debug for crate::Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            crate::Function::Zero => write!(f, "Zero"),
+            crate::Function::Constant(c) => write!(f, "Constant({})", c.into_inner()),
+            crate::Function::Linear(linear) => write!(f, "Linear({linear})"),
+            crate::Function::Quadratic(quadratic) => write!(f, "Quadratic({quadratic})"),
+            crate::Function::Polynomial(polynomial) => write!(f, "Polynomial({polynomial})"),
         }
     }
 }

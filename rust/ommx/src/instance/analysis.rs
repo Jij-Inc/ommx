@@ -1,6 +1,5 @@
 use super::*;
 use crate::{v1::State, ATol, Bound, Bounds, Evaluate, Kind, VariableIDSet};
-use ::approx::AbsDiffEq;
 use std::collections::BTreeMap;
 
 /// The result of analyzing the decision variables in an instance.
@@ -283,58 +282,6 @@ pub enum StateValidationError {
     },
 }
 
-fn bounds_almost_equal(a: &Bounds, b: &Bounds, atol: ATol) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    for ((a_id, a_bound), (b_id, b_bound)) in a.iter().zip(b.iter()) {
-        if a_id != b_id {
-            return false;
-        }
-        if !a_bound.abs_diff_eq(b_bound, atol) {
-            return false;
-        }
-    }
-    true
-}
-
-/// Check if **used** decision variables has the same bounds
-///
-/// Other decision variables e.g. `fixed` are ignored.
-impl AbsDiffEq for DecisionVariableAnalysis {
-    type Epsilon = crate::ATol;
-
-    fn default_epsilon() -> Self::Epsilon {
-        Bound::default_epsilon()
-    }
-    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
-        if self.used_binary() != other.used_binary() {
-            return false;
-        }
-        if !bounds_almost_equal(&self.used_integer(), &other.used_integer(), epsilon) {
-            return false;
-        }
-        if !bounds_almost_equal(&self.used_continuous(), &other.used_continuous(), epsilon) {
-            return false;
-        }
-        if !bounds_almost_equal(
-            &self.used_semi_integer(),
-            &other.used_semi_integer(),
-            epsilon,
-        ) {
-            return false;
-        }
-        if !bounds_almost_equal(
-            &self.used_semi_continuous(),
-            &other.used_semi_continuous(),
-            epsilon,
-        ) {
-            return false;
-        }
-        true
-    }
-}
-
 impl Instance {
     pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
@@ -346,6 +293,23 @@ impl Instance {
                     None
                 }
             })
+            .collect()
+    }
+
+    pub fn used_decision_variable_ids(&self) -> VariableIDSet {
+        let mut used = self.objective.required_ids();
+        for constraint in self.constraints.values() {
+            used.extend(constraint.function.required_ids());
+        }
+        used
+    }
+
+    pub fn used_decision_variables(&self) -> BTreeMap<VariableID, &DecisionVariable> {
+        let used_ids = self.used_decision_variable_ids();
+        self.decision_variables
+            .iter()
+            .filter(|(id, _)| used_ids.contains(id))
+            .map(|(id, dv)| (*id, dv))
             .collect()
     }
 
@@ -472,6 +436,7 @@ mod tests {
             let fixed_len = analysis.fixed.len();
             let dependent_len = analysis.dependent.len();
             let irrelevant_len = analysis.irrelevant().len();
+            prop_assert_eq!(used, &instance.used_decision_variable_ids());
             prop_assert_eq!(
                 all_len,
                 used_len + fixed_len + dependent_len + irrelevant_len,

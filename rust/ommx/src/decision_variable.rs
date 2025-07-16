@@ -1,3 +1,4 @@
+mod approx;
 mod arbitrary;
 mod parse;
 mod serialize;
@@ -6,14 +7,14 @@ pub use arbitrary::*;
 use getset::CopyGetters;
 
 use crate::{sampled::UnknownSampleIDError, ATol, Bound, Parse, RawParseError, SampleID, Sampled};
-use approx::AbsDiffEq;
+use ::approx::AbsDiffEq;
 use derive_more::{Deref, From};
 use fnv::FnvHashMap;
 use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct VariableID(u64);
 pub type VariableIDSet = BTreeSet<VariableID>;
 
@@ -26,6 +27,12 @@ impl VariableID {
 impl From<VariableID> for u64 {
     fn from(id: VariableID) -> Self {
         id.0
+    }
+}
+
+impl std::fmt::Debug for VariableID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VariableID({})", self.0)
     }
 }
 
@@ -78,6 +85,21 @@ impl Kind {
     ///     Kind::Integer.consistent_bound(Bound::new(1.1, 1.9).unwrap(), ATol::default()),
     ///     None
     /// );
+    ///
+    /// // For Kind::Binary, there are only three acceptable bounds: [0, 0], [0, 1], [1, 1].
+    /// assert_eq!(
+    ///     Kind::Binary.consistent_bound(Bound::negative(), ATol::default()),
+    ///     Some(Bound::new(0.0, 0.0).unwrap())
+    /// );
+    /// assert_eq!(
+    ///     Kind::Binary.consistent_bound(Bound::new(0.5, f64::INFINITY).unwrap(), ATol::default()),
+    ///     Some(Bound::new(1.0, 1.0).unwrap())
+    /// );
+    /// assert_eq!(
+    ///    Kind::Binary.consistent_bound(Bound::default(), ATol::default()),
+    ///    Some(Bound::new(0.0, 1.0).unwrap())
+    /// );
+    ///
     /// ```
     pub fn consistent_bound(&self, bound: Bound, atol: ATol) -> Option<Bound> {
         match self {
@@ -89,11 +111,16 @@ impl Kind {
                     .unwrap_or_else(|| Bound::new(0.0, 0.0).unwrap()),
             ),
             Kind::Binary => {
-                let bound = bound.as_integer_bound(atol)?;
-                if bound.contains(0.0, atol) || bound.contains(1.0, atol) {
-                    Some(bound)
+                // Acceptable bounds are only [0, 0], [0, 1], [1, 1]
+                if bound.lower() > 1.0 + atol || bound.upper() < 0.0 - atol {
+                    return None;
+                }
+                if bound.lower() > 0.0 + atol {
+                    Some(Bound::new(1.0, 1.0).unwrap())
+                } else if bound.upper() < 1.0 - atol {
+                    Some(Bound::new(0.0, 0.0).unwrap())
                 } else {
-                    None
+                    Some(Bound::new(0.0, 1.0).unwrap())
                 }
             }
         }

@@ -68,7 +68,7 @@ where
     Function: From<PolynomialBase<M>>,
 {
     fn from(value: M) -> Self {
-        let p: PolynomialBase<M> = value.into();
+        let p = PolynomialBase::<M>::from(value);
         Function::from(p)
     }
 }

@@ -68,7 +68,7 @@ def test_convert_inequality_to_equality_with_integer_slack_infeasible():
         instance.convert_inequality_to_equality_with_integer_slack(0, 32)
     assert (
         str(e.value)
-        == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }"
+        == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound[1, 10]"
     )
 
 
@@ -112,7 +112,7 @@ def test_add_integer_slack_to_inequality_infeasible():
         instance.add_integer_slack_to_inequality(0, 4)
     assert (
         str(e.value)
-        == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound { lower: 1.0, upper: 10.0 }"
+        == "The bound of `f(x)` in inequality constraint(ConstraintID(0)) `f(x) <= 0` is positive: Bound[1, 10]"
     )
 
 

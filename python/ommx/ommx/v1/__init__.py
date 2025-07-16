@@ -502,16 +502,16 @@ class Instance(UserAnnotationBase):
         >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   Binary   -0.0    1.0         []    1.0
-        1   Binary   -0.0    1.0         []    0.0
-        2   Binary   -0.0    1.0         []    0.0
+        0   Binary    0.0    1.0         []    1.0
+        1   Binary    0.0    1.0         []    0.0
+        2   Binary    0.0    1.0         []    0.0
 
         If the value is out of the range, this raises an error:
 
         >>> instance.evaluate({0: 1, 1: 0, 2: 2})
         Traceback (most recent call last):
             ...
-        RuntimeError: Value for Binary variable VariableID(2) is out of bounds. Value: 2, Bound: Bound { lower: -0.0, upper: 1.0 }
+        RuntimeError: Value for Binary variable VariableID(2) is out of bounds. Value: 2, Bound: Bound[0, 1]
 
         If some of the decision variables are not set, this raises an error:
 
@@ -557,9 +557,9 @@ class Instance(UserAnnotationBase):
         >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts  value
         id                                        
-        0   Binary   -0.0    1.0         []    1.0
-        1   Binary   -0.0    1.0         []    0.0
-        2   Binary   -0.0    1.0         []   -0.0
+        0   Binary    0.0    1.0         []    1.0
+        1   Binary    0.0    1.0         []    0.0
+        2   Binary    0.0    1.0         []    0.0
         
         """
         out = self.raw.evaluate(State(state).to_bytes())
@@ -610,8 +610,8 @@ class Instance(UserAnnotationBase):
         >>> new_instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper subscripts substituted_value
         id
-        1   Binary   -0.0    1.0         []               1.0
-        2   Binary   -0.0    1.0         []              <NA>
+        1   Binary    0.0    1.0         []               1.0
+        2   Binary    0.0    1.0         []              <NA>
 
         """
         # Create a copy of the instance and call partial_evaluate on it
@@ -737,12 +737,12 @@ class Instance(UserAnnotationBase):
         0   Integer   -0.0    2.0                x        [0]
         1   Integer   -0.0    2.0                x        [1]
         2   Integer   -0.0    3.0       ommx.slack        [0]
-        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]
-        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]
-        5    Binary   -0.0    1.0  ommx.log_encode     [1, 0]
-        6    Binary   -0.0    1.0  ommx.log_encode     [1, 1]
-        7    Binary   -0.0    1.0  ommx.log_encode     [2, 0]
-        8    Binary   -0.0    1.0  ommx.log_encode     [2, 1]
+        3    Binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    Binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    Binary    0.0    1.0  ommx.log_encode     [1, 0]
+        6    Binary    0.0    1.0  ommx.log_encode     [1, 1]
+        7    Binary    0.0    1.0  ommx.log_encode     [2, 0]
+        8    Binary    0.0    1.0  ommx.log_encode     [2, 1]
 
         * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
 
@@ -771,12 +771,12 @@ class Instance(UserAnnotationBase):
         0   Integer   -0.0    2.0                x        [0]    2.0
         1   Integer   -0.0    2.0                x        [1]    0.0
         2   Integer   -0.0    3.0       ommx.slack        [0]    1.0
-        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]    1.0
-        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]    1.0
-        5    Binary   -0.0    1.0  ommx.log_encode     [1, 0]    0.0
-        6    Binary   -0.0    1.0  ommx.log_encode     [1, 1]    0.0
-        7    Binary   -0.0    1.0  ommx.log_encode     [2, 0]    1.0
-        8    Binary   -0.0    1.0  ommx.log_encode     [2, 1]    0.0
+        3    Binary    0.0    1.0  ommx.log_encode     [0, 0]    1.0
+        4    Binary    0.0    1.0  ommx.log_encode     [0, 1]    1.0
+        5    Binary    0.0    1.0  ommx.log_encode     [1, 0]    0.0
+        6    Binary    0.0    1.0  ommx.log_encode     [1, 1]    0.0
+        7    Binary    0.0    1.0  ommx.log_encode     [2, 0]    1.0
+        8    Binary    0.0    1.0  ommx.log_encode     [2, 1]    0.0
 
         >>> solution.objective
         2.0
@@ -1503,10 +1503,10 @@ class Instance(UserAnnotationBase):
         0   Integer   -0.0    3.0                x        [0]
         1   Integer   -0.0    3.0                x        [1]
         2   Integer   -0.0    3.0                x        [2]
-        3    Binary   -0.0    1.0  ommx.log_encode     [0, 0]
-        4    Binary   -0.0    1.0  ommx.log_encode     [0, 1]
-        5    Binary   -0.0    1.0  ommx.log_encode     [2, 0]
-        6    Binary   -0.0    1.0  ommx.log_encode     [2, 1]
+        3    Binary    0.0    1.0  ommx.log_encode     [0, 0]
+        4    Binary    0.0    1.0  ommx.log_encode     [0, 1]
+        5    Binary    0.0    1.0  ommx.log_encode     [2, 0]
+        6    Binary    0.0    1.0  ommx.log_encode     [2, 1]
 
         The `subscripts` of the new binary variables must be two elements in form of :math:`[i, j]` where
 
@@ -4105,9 +4105,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id
-        0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
-        1   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        0   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        1   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
 
     :meth:`best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
 
@@ -4119,9 +4119,9 @@ class SampleSet(UserAnnotationBase):
         >>> solution.decision_variables_df  # doctest: +NORMALIZE_WHITESPACE
               kind  lower  upper  name subscripts description substituted_value  value
         id                                                                            
-        0   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        1   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    0.0
-        2   Binary   -0.0    1.0  <NA>         []        <NA>              <NA>    1.0
+        0   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        1   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    0.0
+        2   Binary    0.0    1.0  <NA>         []        <NA>              <NA>    1.0
 
     Of course, the sample of smallest objective value is returned for minimization problems.
 

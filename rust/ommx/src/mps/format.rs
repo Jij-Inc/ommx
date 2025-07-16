@@ -1,6 +1,7 @@
 use super::MpsWriteError;
-use crate::{mps::ObjSense, v1, Evaluate};
-use std::{collections::HashMap, io::Write};
+use crate::decision_variable::Kind as DecisionVariableKind;
+use crate::{mps::ObjSense, ConstraintID, Equality, Function, Instance, Sense, VariableID};
+use std::io::Write;
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
 pub(crate) const CONSTR_PREFIX: &str = "OMMX_CONSTR_";
@@ -13,9 +14,28 @@ pub(crate) const VAR_PREFIX: &str = "OMMX_VAR_";
 ///
 /// Only linear problems are supported.
 ///
+/// ## Information Loss and Filtering
+///
 /// Metadata like problem descriptions and variable/constraint names are not
 /// preserved.
-pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+///
+/// **Removed Constraints**: All `removed_constraints` are completely ignored
+/// and not written to the MPS file. The MPS format cannot represent the
+/// concept of removed constraints, so this information is lost during export.
+///
+/// **Variable Filtering**: Only decision variables that are actually used in
+/// the objective function, active constraints, or removed constraints are
+/// written to the MPS file. Variables defined in `decision_variables` but
+/// not referenced anywhere are omitted from the output. This is determined
+/// by the `required_ids()` method which includes:
+/// - Variables used in the objective function
+/// - Variables used in active constraints
+/// - Variables used in removed constraints (even though the constraints
+///   themselves are not exported)
+///
+/// This ensures that variables from removed constraints are preserved in
+/// the MPS output even though the constraint information is lost.
+pub fn format<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     write_beginning(instance, out)?;
     write_rows(instance, out)?;
     write_columns(instance, out)?;
@@ -25,36 +45,40 @@ pub fn write_mps<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
     Ok(())
 }
 
-fn write_beginning<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+/// Converts the instance to a string in MPS format via [`format()`].
+pub fn to_string(instance: &Instance) -> Result<String, MpsWriteError> {
+    let mut buffer = Vec::new();
+    format(instance, &mut buffer)?;
+    Ok(String::from_utf8(buffer).unwrap())
+}
+
+fn write_beginning<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     let name = instance
         .description
         .clone()
         .and_then(|descr| descr.name)
         .unwrap_or(String::from("Converted OMMX problem"));
-    let obj_sense = match instance.sense {
-        // v1::instance::Sense::Maximize
-        // TODO more robust way to write this?
-        2 => ObjSense::Max,
-        _ => ObjSense::Min,
+    let obj_sense = match *instance.sense() {
+        Sense::Maximize => ObjSense::Max,
+        Sense::Minimize => ObjSense::Min,
     };
     writeln!(out, "NAME {name}")?;
     writeln!(out, "OBJSENSE {obj_sense}")?;
     Ok(())
 }
 
-fn write_rows<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_rows<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "ROWS")?;
     // each line must be ` Kind  constr_name`, and include objective
     writeln!(out, " N OBJ")?;
     // ommx instances are always <= 0 or = 0, so `Kind` will always be either N or L.
-    for constr in instance.constraints.iter() {
+    for (id, constr) in instance.constraints().iter() {
         let kind = match constr.equality {
-            // v1::Equality::LessThanEqualToZero
-            2 => "L",
+            Equality::LessThanOrEqualToZero => "L",
             // assuming EqualToZero when unspecified. Error instead?
             _ => "E",
         };
-        let name = constr_name(constr);
+        let name = constr_name(*id);
         writeln!(out, " {kind} {name}")?;
     }
     Ok(())
@@ -87,19 +111,20 @@ impl IntorgTracker {
     }
 }
 
-fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
     let mut marker_tracker = IntorgTracker::default();
-    for dvar in instance.decision_variables.iter() {
-        let id = dvar.id;
-        let var_name = dvar_name(dvar);
-        match dvar.kind {
+    for (var_id, dvar) in instance.decision_variables().iter() {
+        let var_name = dvar_name(*var_id);
+        match dvar.kind() {
             // binary or integer var
-            1 | 2 => marker_tracker.intorg(out)?,
+            DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                marker_tracker.intorg(out)?
+            }
             _ => marker_tracker.intend(out)?,
         }
         // write obj function entry
-        write_col_entry(id, &var_name, OBJ_NAME, instance.objective().as_ref(), out)
+        write_col_entry(*var_id, &var_name, OBJ_NAME, instance.objective(), out)
             // a bit of a workaround so that write_col_entry is easier to write.
             // It assumes we're dealing with constraints, but here we change the
             // error type so the message is clearer with the objective function
@@ -111,9 +136,9 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
                 }
             })?;
         // write entries of this var's column for each constraint
-        for constr in instance.constraints.iter() {
-            let row_name = constr_name(constr);
-            write_col_entry(id, &var_name, &row_name, constr.function().as_ref(), out)?;
+        for (constr_id, constr) in instance.constraints().iter() {
+            let row_name = constr_name(*constr_id);
+            write_col_entry(*var_id, &var_name, &row_name, &constr.function, out)?;
         }
     }
     // print final INTEND
@@ -127,41 +152,44 @@ fn write_columns<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), M
 /// Only writes if var_id is part of the terms in the function, and only if
 /// coefficient is not 0.
 fn write_col_entry<W: Write>(
-    var_id: u64,
+    var_id: VariableID,
     var_name: &str,
     row_name: &str,
-    func: &v1::Function,
+    func: &Function,
     out: &mut W,
 ) -> Result<(), MpsWriteError> {
-    if let Some(v1::Linear { terms, .. }) = func.clone().as_linear() {
-        // search for current id in terms. If present and coefficient not 0, write entry
-        for term in terms {
-            if term.id == var_id && term.coefficient != 0.0 {
-                let coeff = term.coefficient;
-                writeln!(out, "    {var_name}  {row_name}  {coeff}")?;
+    if let Some(linear) = func.as_linear() {
+        // get coefficient for the variable
+        let linear_monomial = crate::LinearMonomial::Variable(var_id);
+        if let Some(coeff) = linear.get(&linear_monomial) {
+            let coeff_value: f64 = coeff.into();
+            if coeff_value != 0.0 {
+                writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
             }
         }
     } else {
         return Err(MpsWriteError::InvalidConstraintType {
             name: row_name.to_string(),
-            degree: func.degree(),
+            degree: (*func.degree()),
         });
     }
     Ok(())
 }
 
-fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     // write out a RHS entry for the objective function if a non-zero constant is present
-    if let Some(v1::Linear { constant, .. }) = instance.objective().into_owned().as_linear() {
+    if let Some(linear) = instance.objective().as_linear() {
+        let constant: f64 = linear.constant_term();
         if constant != 0.0 {
             let rhs = -constant;
             writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
         }
     }
-    for constr in instance.constraints.iter() {
-        let name = constr_name(constr);
-        if let Some(v1::Linear { constant, .. }) = constr.function().into_owned().as_linear() {
+    for (constr_id, constr) in instance.constraints().iter() {
+        let name = constr_name(*constr_id);
+        if let Some(linear) = constr.function.as_linear() {
+            let constant: f64 = linear.constant_term();
             if constant != 0.0 {
                 let rhs = -constant;
                 writeln!(out, "  RHS1    {name}   {rhs}")?;
@@ -169,36 +197,27 @@ fn write_rhs<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWr
         } else {
             return Err(MpsWriteError::InvalidConstraintType {
                 name: name.to_string(),
-                degree: constr.function().degree(),
+                degree: (*constr.function.degree()),
             });
         }
     }
     Ok(())
 }
 
-fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), MpsWriteError> {
+fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
-    // build an id -> dvar map as the vec is not guaranteed to be in order
-    let var_by_id: HashMap<_, _> = instance
-        .decision_variables
-        .iter()
-        .map(|var| (var.id, var))
-        .collect();
-    for dvar_id in instance.required_ids().into_iter() {
-        let dvar = var_by_id
-            .get(&dvar_id)
-            .ok_or(MpsWriteError::InvalidVariableId(dvar_id))?;
-        let name = dvar_name(dvar);
-        if let Some(bound) = &dvar.bound {
-            let (low_kind, up_kind) = match dvar.kind {
-                // for now ignoring the BV specifier for binary variables
-                // due to uncertainty in how widely supported it is.
-                1 | 2 => ("LI", "UI"),
-                _ => ("LO", "UP"),
-            };
-            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper)?;
-            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower)?;
+
+    for (var_id, dvar) in instance.decision_variables().iter() {
+        let name = dvar_name(*var_id);
+        let bound = dvar.bound();
+        let (low_kind, up_kind) = match dvar.kind() {
+            // for now ignoring the BV specifier for binary variables
+            // due to uncertainty in how widely supported it is.
+            DecisionVariableKind::Binary | DecisionVariableKind::Integer => ("LI", "UI"),
+            _ => ("LO", "UP"),
         };
+        writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
+        writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
     }
     Ok(())
 }
@@ -206,13 +225,13 @@ fn write_bounds<W: Write>(instance: &v1::Instance, out: &mut W) -> Result<(), Mp
 /// Generates a name for the constraint based on its ID.
 ///
 /// The constraint's name is ignored, if present.
-fn constr_name(constr: &v1::Constraint) -> String {
-    format!("{CONSTR_PREFIX}{}", constr.id)
+fn constr_name(constr_id: ConstraintID) -> String {
+    format!("{CONSTR_PREFIX}{}", constr_id.into_inner())
 }
 
 /// Generates a name for the decision variable based on its ID.
 ///
 /// The decision variable's name is ignored, if present.
-fn dvar_name(dvar: &v1::DecisionVariable) -> String {
-    format!("{VAR_PREFIX}{}", dvar.id)
+fn dvar_name(var_id: VariableID) -> String {
+    format!("{VAR_PREFIX}{}", var_id.into_inner())
 }

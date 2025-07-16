@@ -19,7 +19,7 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
         log::info!("Loading: {name}");
-        let instance = match ommx::mps::load_zipped_reader(file) {
+        let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
                 log::warn!("Skip: Failed to load '{name}' with error: {err}");
@@ -27,7 +27,7 @@ pub fn package(path: &Path) -> Result<()> {
             }
         };
         let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
-        builder.add_instance(instance, annotations.clone())?;
+        builder.add_instance(instance.into(), annotations.clone())?;
         let mut artifact = builder.build()?;
         artifact.push()?;
     }

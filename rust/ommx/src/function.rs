@@ -3,7 +3,7 @@ use crate::{
 };
 use derive_more::From;
 use num::{traits::Inv, One, Zero};
-use std::{borrow::Cow, fmt::Debug};
+use std::borrow::Cow;
 
 mod add;
 mod approx;
@@ -19,7 +19,7 @@ mod substitute;
 /// A real-valued function of decision variables used for objective and constraint functions.
 ///
 /// This can be up to polynomial currently, but it will be extended to exponential and logarithm in the future.
-#[derive(Debug, Clone, PartialEq, From, Default)]
+#[derive(Clone, PartialEq, From, Default)]
 pub enum Function {
     #[default]
     Zero,
@@ -28,6 +28,17 @@ pub enum Function {
     Linear(Linear),
     Quadratic(Quadratic),
     Polynomial(Polynomial),
+}
+
+impl TryFrom<f64> for Function {
+    type Error = crate::CoefficientError;
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        match Coefficient::try_from(value) {
+            Ok(c) => Ok(Function::Constant(c)),
+            Err(crate::CoefficientError::Zero) => Ok(Function::Zero),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 impl Function {
