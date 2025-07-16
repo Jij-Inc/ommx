@@ -128,10 +128,11 @@ fn convert_objective(
         let mut linear = crate::Linear::try_from(constant)?;
         for (name, &coefficient) in c {
             if let Some(&id) = name_id_map.get(name) {
-                linear.add_term(
-                    crate::LinearMonomial::Variable(id),
-                    Coefficient::try_from(coefficient)?,
-                );
+                match Coefficient::try_from(coefficient) {
+                    Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                    Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                    Err(e) => return Err(e.into()),
+                }
             }
         }
         Ok(if linear.is_zero() {
@@ -236,10 +237,11 @@ fn convert_inequality(
         for (col_name, &coefficient) in row {
             if let Some(&id) = name_id_map.get(col_name) {
                 let coeff = if negate { -coefficient } else { coefficient };
-                linear.add_term(
-                    crate::LinearMonomial::Variable(id),
-                    Coefficient::try_from(coeff)?,
-                );
+                match Coefficient::try_from(coeff) {
+                    Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                    Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                    Err(e) => return Err(e.into()),
+                }
             }
         }
 
