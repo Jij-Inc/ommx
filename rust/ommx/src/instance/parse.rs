@@ -198,6 +198,20 @@ pub(super) fn as_variable_id(
     Ok(id)
 }
 
+impl Parse for v1::ParametricInstance {
+    type Output = ParametricInstance;
+    type Context = ();
+    fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
+        todo!()
+    }
+}
+
+impl From<ParametricInstance> for v1::ParametricInstance {
+    fn from(value: ParametricInstance) -> Self {
+        todo!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

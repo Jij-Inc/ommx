@@ -34,3 +34,37 @@ impl Instance {
         }
     }
 }
+
+impl From<Instance> for ParametricInstance {
+    fn from(
+        Instance {
+            sense,
+            objective,
+            decision_variables,
+            constraints,
+            removed_constraints,
+            decision_variable_dependency,
+            constraint_hints,
+            description,
+            ..
+        }: Instance,
+    ) -> Self {
+        ParametricInstance {
+            sense,
+            objective,
+            decision_variables,
+            parameters: BTreeMap::default(),
+            constraints,
+            removed_constraints,
+            decision_variable_dependency,
+            constraint_hints,
+            description,
+        }
+    }
+}
+
+impl ParametricInstance {
+    pub fn with_parameters(self, parameters: BTreeMap<VariableID, f64>) -> anyhow::Result<Self> {
+        todo!()
+    }
+}
