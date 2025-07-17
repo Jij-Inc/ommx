@@ -156,19 +156,13 @@ impl Instance {
     }
 
     pub fn penalty_method(&self) -> Result<ParametricInstance> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        let v1_parametric = inner.penalty_method()?;
-        // Parse the v1::ParametricInstance to new ParametricInstance
-        let parsed_parametric = ommx::Parse::parse(v1_parametric, &())?;
-        Ok(ParametricInstance(parsed_parametric))
+        let parametric_instance = self.0.clone().penalty_method()?;
+        Ok(ParametricInstance(parametric_instance))
     }
 
     pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        let v1_parametric = inner.uniform_penalty_method()?;
-        // Parse the v1::ParametricInstance to new ParametricInstance
-        let parsed_parametric = ommx::Parse::parse(v1_parametric, &())?;
-        Ok(ParametricInstance(parsed_parametric))
+        let parametric_instance = self.0.clone().uniform_penalty_method()?;
+        Ok(ParametricInstance(parametric_instance))
     }
 
     pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {

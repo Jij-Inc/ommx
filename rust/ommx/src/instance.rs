@@ -11,6 +11,7 @@ mod log_encode;
 mod new;
 mod parse;
 mod pass;
+mod penalty;
 mod reduce_binary_power;
 mod serialize;
 mod setter;
