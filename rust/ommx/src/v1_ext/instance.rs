@@ -1,8 +1,7 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Optimality, Relaxation, RemovedConstraint, SampleSet, SampledDecisionVariable,
-        Samples, Solution, State,
+        Linear, RemovedConstraint, State,
     },
     BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
     VariableIDSet,
@@ -12,7 +11,7 @@ use approx::AbsDiffEq;
 use num::Zero;
 use std::{
     borrow::Cow,
-    collections::{hash_map::Entry as HashMapEntry, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
 };
 
 impl Instance {
@@ -75,47 +74,6 @@ impl Instance {
             .iter()
             .filter_map(|c| c.constraint.as_ref().map(|c| c.id))
             .collect()
-    }
-
-    /// Execute all validations for this instance
-    pub fn validate(&self) -> Result<()> {
-        self.validate_decision_variable_ids()?;
-        self.validate_constraint_ids()?;
-        Ok(())
-    }
-
-    /// Validate that all decision variable IDs used in the instance are defined.
-    pub fn validate_decision_variable_ids(&self) -> Result<()> {
-        let used_ids = self.required_ids();
-        let mut defined_ids = VariableIDSet::default();
-        for dv in &self.decision_variables {
-            if !defined_ids.insert(dv.id.into()) {
-                bail!("Duplicated definition of decision variable ID: {}", dv.id);
-            }
-        }
-        if !used_ids.is_subset(&defined_ids) {
-            let undefined_ids = used_ids.difference(&defined_ids).collect::<Vec<_>>();
-            bail!("Undefined decision variable IDs: {:?}", undefined_ids);
-        }
-        Ok(())
-    }
-
-    /// Test all constraints and removed constraints have unique IDs.
-    pub fn validate_constraint_ids(&self) -> Result<()> {
-        let mut map = HashSet::new();
-        for c in &self.constraints {
-            if !map.insert(c.id) {
-                bail!("Duplicated constraint ID: {}", c.id);
-            }
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                if !map.insert(c.id) {
-                    bail!("Duplicated constraint ID: {}", c.id);
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn binary_ids(&self) -> VariableIDSet {
@@ -627,186 +585,6 @@ impl AbsDiffEq for Instance {
     }
 }
 
-impl Evaluate for Instance {
-    type Output = Solution;
-    type SampledOutput = SampleSet;
-
-    fn evaluate(&self, state: &State, atol: crate::ATol) -> Result<Self::Output> {
-        self.check_bound(state, atol)?;
-        let mut evaluated_constraints = Vec::new();
-        let mut feasible_relaxed = true;
-        for c in &self.constraints {
-            let c = c.evaluate(state, atol)?;
-            // Only check non-removed constraints for feasibility
-            if feasible_relaxed {
-                feasible_relaxed = c.is_feasible(atol)?;
-            }
-            evaluated_constraints.push(c);
-        }
-        let mut feasible = feasible_relaxed;
-        for c in &self.removed_constraints {
-            let c = c.evaluate(state, atol)?;
-            if feasible {
-                feasible = c.is_feasible(atol)?;
-            }
-            evaluated_constraints.push(c);
-        }
-
-        let objective = self.objective().evaluate(state, atol)?;
-
-        let mut state = state.clone();
-        for v in &self.decision_variables {
-            if let Some(value) = v.substituted_value {
-                state.entries.insert(v.id, value);
-            }
-        }
-        eval_dependencies(&self.decision_variable_dependency, &mut state, atol)?;
-        for v in &self.decision_variables {
-            if let HashMapEntry::Vacant(e) = state.entries.entry(v.id) {
-                let bound: crate::Bound = v.try_into()?;
-                e.insert(bound.nearest_to_zero());
-            }
-        }
-        Ok(Solution {
-            decision_variables: self.decision_variables.clone(),
-            state: Some(state),
-            evaluated_constraints,
-            feasible_relaxed: Some(feasible_relaxed),
-            feasible,
-            objective,
-            optimality: Optimality::Unspecified.into(),
-            relaxation: Relaxation::Unspecified.into(),
-            ..Default::default()
-        })
-    }
-
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> Result<()> {
-        for v in &mut self.decision_variables {
-            if let Some(value) = state.entries.get(&v.id) {
-                v.substituted_value = Some(*value);
-            }
-        }
-        if let Some(f) = self.objective.as_mut() {
-            f.partial_evaluate(state, atol)?
-        }
-        for constraints in &mut self.constraints {
-            constraints.partial_evaluate(state, atol)?;
-        }
-        for constraints in &mut self.removed_constraints {
-            constraints.partial_evaluate(state, atol)?;
-        }
-        for d in self.decision_variable_dependency.values_mut() {
-            d.partial_evaluate(state, atol)?;
-        }
-        Ok(())
-    }
-
-    fn evaluate_samples(
-        &self,
-        samples: &Samples,
-        atol: crate::ATol,
-    ) -> Result<Self::SampledOutput> {
-        let mut feasible_relaxed: HashMap<u64, bool> =
-            samples.ids().map(|id| (*id, true)).collect();
-
-        // Constraints
-        let mut constraints = Vec::new();
-        for c in &self.constraints {
-            let evaluated = c.evaluate_samples(samples, atol)?;
-            for (sample_id, feasible_) in evaluated.is_feasible(atol)? {
-                if !feasible_ {
-                    feasible_relaxed.insert(sample_id, false);
-                }
-            }
-            constraints.push(evaluated);
-        }
-        let mut feasible = feasible_relaxed.clone();
-        for c in &self.removed_constraints {
-            let v = c.evaluate_samples(samples, atol)?;
-            for (sample_id, feasible_) in v.is_feasible(atol)? {
-                if !feasible_ {
-                    feasible.insert(sample_id, false);
-                }
-            }
-            constraints.push(v);
-        }
-
-        // Objective
-        let objectives = self.objective().evaluate_samples(samples, atol)?;
-
-        // Reconstruct decision variable values
-        let mut samples = samples.clone();
-        for state in samples.states_mut() {
-            eval_dependencies(&self.decision_variable_dependency, state?, atol)?;
-        }
-        let mut transposed = samples.transpose();
-        let decision_variables: Vec<SampledDecisionVariable> = self
-            .decision_variables
-            .iter()
-            .map(|d| -> Result<_> {
-                Ok(SampledDecisionVariable {
-                    decision_variable: Some(d.clone()),
-                    samples: transposed.remove(&d.id),
-                })
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(SampleSet {
-            decision_variables,
-            objectives: Some(objectives),
-            constraints,
-            feasible_relaxed,
-            feasible,
-            sense: self.sense,
-            ..Default::default()
-        })
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        let mut used_ids = self.objective().required_ids();
-        for c in &self.constraints {
-            used_ids.extend(c.function().required_ids());
-        }
-        for c in &self.removed_constraints {
-            if let Some(c) = &c.constraint {
-                used_ids.extend(c.function().required_ids());
-            }
-        }
-        used_ids
-    }
-}
-
-// FIXME: This would be better by using a topological sort
-fn eval_dependencies(
-    dependencies: &HashMap<u64, Function>,
-    state: &mut State,
-    atol: crate::ATol,
-) -> Result<()> {
-    let mut bucket: Vec<_> = dependencies.iter().collect();
-    let mut last_size = bucket.len();
-    let mut not_evaluated = Vec::new();
-    loop {
-        while let Some((id, f)) = bucket.pop() {
-            match f.evaluate(state, atol) {
-                Ok(value) => {
-                    state.entries.insert(*id, value);
-                }
-                Err(_) => {
-                    not_evaluated.push((id, f));
-                }
-            }
-        }
-        if not_evaluated.is_empty() {
-            return Ok(());
-        }
-        if last_size == not_evaluated.len() {
-            bail!("Cannot evaluate any dependent variables.");
-        }
-        last_size = not_evaluated.len();
-        bucket.append(&mut not_evaluated);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -814,10 +592,6 @@ mod tests {
     use proptest::prelude::*;
 
     proptest! {
-        #[test]
-        fn test_instance_arbitrary_any(instance in Instance::arbitrary()) {
-            instance.validate().unwrap();
-        }
 
 
         #[test]
@@ -859,9 +633,6 @@ mod tests {
             });
             let encoded = instance.log_encode(0).unwrap();
 
-            // Test the ID of yielded decision variables are not duplicated
-            instance.validate().unwrap();
-
             // Get decision variables introduced for log-encoding
             let aux_bits = instance
                 .decision_variables
@@ -890,69 +661,5 @@ mod tests {
             let upper_evaluated = encoded.evaluate(&state, crate::ATol::default()).unwrap();
             prop_assert_eq!(upper_evaluated, upper.floor());
         }
-
-        /// Compare the result of partial_evaluate and substitute with `Function::Constant`.
-        #[test]
-        fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
-            for id in instance.defined_ids() {
-                let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: [(id, value)].into_iter().collect() }, crate::ATol::default()).unwrap();
-                let mut substituted = instance.clone();
-                substituted.substitute([(id, Function::from(value))].into_iter().collect()).unwrap();
-                prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
-            }
-        }
-    }
-
-    #[test]
-    fn test_eval_dependencies() {
-        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = [
-            (
-                4,
-                Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
-            ),
-            (
-                5,
-                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-            ),
-        ]
-        .into_iter()
-        .collect();
-        eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
-        assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
-        assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
-
-        // circular dependency
-        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = [
-            (
-                4,
-                Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
-            ),
-            (
-                5,
-                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-            ),
-        ]
-        .into_iter()
-        .collect();
-        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
-
-        // non-existing dependency
-        let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = [
-            (
-                4,
-                Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
-            ),
-            (
-                5,
-                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-            ),
-        ]
-        .into_iter()
-        .collect();
-        assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }
