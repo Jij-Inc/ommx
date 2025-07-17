@@ -230,21 +230,6 @@ class Artifact:
     def get_instance(self, descriptor: Descriptor) -> Instance:
         """
         Get an instance from the artifact
-
-        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-
-        We know that this artifact has only one layer of type `application/org.ommx.v1.instance`
-
-        >>> desc = artifact.layers[0]
-        >>> instance = artifact.get_instance(desc)
-
-        Annotations stored in the artifact is available as attributes
-
-        >>> print(instance.title)
-        random_lp
-        >>> print(instance.created)
-        2024-05-28 08:40:28.728169+00:00
-
         """
         assert descriptor.media_type == "application/org.ommx.v1.instance"
         blob = self.get_blob(descriptor)
