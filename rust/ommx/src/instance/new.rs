@@ -279,4 +279,143 @@ mod tests {
             "###
         );
     }
+
+    #[test]
+    fn test_parametric_instance_new_succeeds() {
+        // Test successful creation with decision variables and parameters in both objective and constraints
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+
+        let parameters = btreemap! {
+            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
+            VariableID::from(101) => v1::Parameter { id: 101, name: Some("p2".to_string()), ..Default::default() },
+        };
+
+        // Objective function uses both decision variables and parameters
+        let objective = (linear!(1) + linear!(100) + coeff!(1.0)).into();
+
+        // Constraints also use both decision variables and parameters
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + linear!(101) + coeff!(1.0)).into()),
+            ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(ConstraintID::from(2), (linear!(1) + linear!(100) + coeff!(2.0)).into()),
+        };
+
+        let constraint_hints = ConstraintHints::default();
+
+        let parametric_instance = ParametricInstance::new(
+            Sense::Maximize,
+            objective,
+            decision_variables,
+            parameters,
+            constraints,
+            constraint_hints,
+        )
+        .unwrap();
+
+        assert_eq!(parametric_instance.sense, Sense::Maximize);
+        assert_eq!(parametric_instance.decision_variables.len(), 2);
+        assert_eq!(parametric_instance.parameters.len(), 2);
+        assert_eq!(parametric_instance.constraints.len(), 2);
+    }
+
+    #[test]
+    fn test_parametric_instance_new_fails_with_duplicated_variable_id() {
+        // Test detection of ID collision between decision variables and parameters
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+
+        // Parameter with same ID as decision variable
+        let parameters = btreemap! {
+            VariableID::from(1) => v1::Parameter { id: 1, name: Some("p1".to_string()), ..Default::default() },
+            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p2".to_string()), ..Default::default() },
+        };
+
+        let objective = (linear!(1) + coeff!(1.0)).into();
+        let constraints = BTreeMap::new();
+        let constraint_hints = ConstraintHints::default();
+
+        insta::assert_snapshot!(
+            ParametricInstance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                parameters,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @"Duplicated variable ID is found in definition: VariableID(1)"
+        );
+    }
+
+    #[test]
+    fn test_parametric_instance_new_fails_with_undefined_variable_in_objective() {
+        // Test detection of undefined variable ID in objective function
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+
+        let parameters = btreemap! {
+            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
+        };
+
+        // Objective function uses undefined variable ID 999
+        let objective = (linear!(999) + coeff!(1.0)).into();
+
+        let constraints = BTreeMap::new();
+        let constraint_hints = ConstraintHints::default();
+
+        insta::assert_snapshot!(
+            ParametricInstance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                parameters,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r#"Undefined variable ID is used: VariableID(999)"#
+        );
+    }
+
+    #[test]
+    fn test_parametric_instance_new_fails_with_undefined_variable_in_constraint() {
+        // Test detection of undefined variable ID in constraint
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+
+        let parameters = btreemap! {
+            VariableID::from(100) => v1::Parameter { id: 100, name: Some("p1".to_string()), ..Default::default() },
+        };
+
+        let objective = (linear!(1) + coeff!(1.0)).into();
+
+        // Constraint uses undefined variable ID 999
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
+        };
+
+        let constraint_hints = ConstraintHints::default();
+
+        insta::assert_snapshot!(
+            ParametricInstance::new(
+                Sense::Minimize,
+                objective,
+                decision_variables,
+                parameters,
+                constraints,
+                constraint_hints,
+            )
+            .unwrap_err(),
+            @r#"Undefined variable ID is used: VariableID(999)"#
+        );
+    }
 }
