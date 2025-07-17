@@ -4,11 +4,12 @@ use anyhow::Result;
 use num::Zero;
 
 impl Instance {
+    #[cfg_attr(doc, katexit::katexit)]
     /// Convert constraints to penalty terms in the objective function.
     ///
     /// This method transforms a constrained optimization problem into an unconstrained one by
-    /// adding penalty terms to the objective function. Each constraint `f(x) = 0` or `f(x) <= 0`
-    /// is converted to a penalty term `a * f(x)^2` where `a` is a penalty parameter.
+    /// adding penalty terms to the objective function. Each constraint $f(x) = 0$ or $f(x) \leq 0$
+    /// is converted to a penalty term $\lambda \cdot f(x)^2$ where $\lambda$ is a penalty parameter.
     ///
     /// # Returns
     ///
@@ -21,18 +22,22 @@ impl Instance {
     /// # Example
     ///
     /// For a problem:
-    /// ```text
-    /// minimize: x + y
-    /// subject to: x + y <= 1
-    ///            x - y = 0
-    /// ```
+    ///
+    /// $$
+    /// \begin{align*}
+    ///   \min & \quad x + y \\
+    ///   \text{s.t.} & \quad x + y \leq 1 \\
+    ///   & \quad x - y = 0
+    /// \end{align*}
+    /// $$
     ///
     /// The penalty method transforms it to:
-    /// ```text
-    /// minimize: x + y + a * (x + y - 1)^2 + a * (x - y)^2
-    /// ```
     ///
-    /// where `��` and `��` are penalty parameters.
+    /// $$
+    /// \min \quad x + y + \lambda_1 \cdot (x + y - 1)^2 + \lambda_2 \cdot (x - y)^2
+    /// $$
+    ///
+    /// where $\lambda_1$ and $\lambda_2$ are penalty parameters.
     pub fn penalty_method(self) -> Result<ParametricInstance> {
         let mut max_id = 0;
 
@@ -63,7 +68,7 @@ impl Instance {
             };
 
             let f = constraint.function.clone();
-            // Add penalty term: � * f(x)^2
+            // Add penalty term: λ * f(x)^2
             let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
             objective = objective + penalty_term;
 
@@ -98,11 +103,12 @@ impl Instance {
         })
     }
 
+    #[cfg_attr(doc, katexit::katexit)]
     /// Convert constraints to penalty terms using a single penalty parameter.
     ///
-    /// This method is similar to `penalty_method` but uses a single penalty parameter `a`
+    /// This method is similar to `penalty_method` but uses a single penalty parameter $\lambda$
     /// for all constraints. The penalty term is the sum of squared constraint violations:
-    /// `a * f_i(x)^2` where `f_i(x)` represents each constraint.
+    /// $\lambda \cdot \sum_i f_i(x)^2$ where $f_i(x)$ represents each constraint.
     ///
     /// # Returns
     ///
@@ -115,18 +121,22 @@ impl Instance {
     /// # Example
     ///
     /// For a problem:
-    /// ```text
-    /// minimize: x + y
-    /// subject to: x + y <= 1
-    ///            x - y = 0
-    /// ```
+    ///
+    /// $$
+    /// \begin{align*}
+    ///   \min & \quad x + y \\
+    ///   \text{s.t.} & \quad x + y \leq 1 \\
+    ///   & \quad x - y = 0
+    /// \end{align*}
+    /// $$
     ///
     /// The uniform penalty method transforms it to:
-    /// ```text
-    /// minimize: x + y + a * [(x + y - 1)^2 + (x - y)^2]
-    /// ```
     ///
-    /// where `a` is the single penalty parameter.
+    /// $$
+    /// \min \quad x + y + \lambda \cdot [(x + y - 1)^2 + (x - y)^2]
+    /// $$
+    ///
+    /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
         let mut max_id = 0;
 
