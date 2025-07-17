@@ -102,6 +102,12 @@ pub struct ConstraintHints {
     pub sos1_constraints: Vec<Sos1>,
 }
 
+impl ConstraintHints {
+    pub fn is_empty(&self) -> bool {
+        self.one_hot_constraints.is_empty() && self.sos1_constraints.is_empty()
+    }
+}
+
 impl Parse for v1::ConstraintHints {
     type Output = ConstraintHints;
     type Context = (

@@ -64,7 +64,59 @@ impl From<Instance> for ParametricInstance {
 }
 
 impl ParametricInstance {
-    pub fn with_parameters(self, parameters: BTreeMap<VariableID, f64>) -> anyhow::Result<Self> {
-        todo!()
+    pub fn with_parameters(self, parameters: BTreeMap<VariableID, f64>) -> anyhow::Result<Instance> {
+        use crate::{v1, ATol};
+        use anyhow::bail;
+        use std::collections::BTreeSet;
+        
+        // Check that all required parameters are provided
+        let required_ids: BTreeSet<VariableID> = self.parameters.keys().cloned().collect();
+        let given_ids: BTreeSet<VariableID> = parameters.keys().cloned().collect();
+        
+        if !required_ids.is_subset(&given_ids) {
+            let missing_ids: Vec<_> = required_ids.difference(&given_ids).collect();
+            for id in &missing_ids {
+                if let Some(param) = self.parameters.get(id) {
+                    log::error!("Missing parameter: {:?}", param);
+                }
+            }
+            bail!(
+                "Missing parameters: Required IDs {:?}, got {:?}",
+                required_ids,
+                given_ids
+            );
+        }
+        
+        // Create state from parameters
+        let state = crate::v1::State {
+            entries: parameters.clone().into_iter().map(|(k, v)| (k.into_inner(), v)).collect(),
+        };
+        let atol = ATol::default();
+        
+        // Partially evaluate the objective and constraints
+        let mut objective = self.objective;
+        objective.partial_evaluate(&state, atol)?;
+        
+        let mut constraints = self.constraints;
+        for (_, constraint) in constraints.iter_mut() {
+            constraint.function.partial_evaluate(&state, atol)?;
+        }
+        
+        // Convert parameters to v1::Parameters
+        let v1_parameters = v1::Parameters {
+            entries: parameters.into_iter().map(|(k, v)| (k.into_inner(), v)).collect(),
+        };
+        
+        Ok(Instance {
+            sense: self.sense,
+            objective,
+            decision_variables: self.decision_variables,
+            constraints,
+            removed_constraints: self.removed_constraints,
+            decision_variable_dependency: self.decision_variable_dependency,
+            constraint_hints: self.constraint_hints,
+            parameters: Some(v1_parameters),
+            description: self.description,
+        })
     }
 }
