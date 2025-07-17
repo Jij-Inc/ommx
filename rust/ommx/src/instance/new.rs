@@ -53,7 +53,6 @@ impl ParametricInstance {
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         parameters: BTreeMap<VariableID, v1::Parameter>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-        constraint_hints: ConstraintHints,
     ) -> anyhow::Result<Self> {
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
@@ -92,20 +91,15 @@ impl ParametricInstance {
             }
         }
 
-        // Validate constraint_hints using Parse trait
-        let hints: v1::ConstraintHints = constraint_hints.into();
-        let context = (decision_variables, constraints, BTreeMap::new());
-        let constraint_hints = hints.parse(&context)?;
-
         Ok(ParametricInstance {
             sense,
             objective,
-            decision_variables: context.0,
+            decision_variables,
             parameters,
-            constraints: context.1,
+            constraints,
             removed_constraints: BTreeMap::new(),
             decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints,
+            constraint_hints: ConstraintHints::default(),
             description: None,
         })
     }
@@ -302,15 +296,12 @@ mod tests {
             ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(ConstraintID::from(2), (linear!(1) + linear!(100) + coeff!(2.0)).into()),
         };
 
-        let constraint_hints = ConstraintHints::default();
-
         let parametric_instance = ParametricInstance::new(
             Sense::Maximize,
             objective,
             decision_variables,
             parameters,
             constraints,
-            constraint_hints,
         )
         .unwrap();
 
@@ -336,7 +327,6 @@ mod tests {
 
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = BTreeMap::new();
-        let constraint_hints = ConstraintHints::default();
 
         insta::assert_snapshot!(
             ParametricInstance::new(
@@ -345,7 +335,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                constraint_hints,
             )
             .unwrap_err(),
             @"Duplicated variable ID is found in definition: VariableID(1)"
@@ -368,7 +357,6 @@ mod tests {
         let objective = (linear!(999) + coeff!(1.0)).into();
 
         let constraints = BTreeMap::new();
-        let constraint_hints = ConstraintHints::default();
 
         insta::assert_snapshot!(
             ParametricInstance::new(
@@ -377,7 +365,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                constraint_hints,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#
@@ -403,8 +390,6 @@ mod tests {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
         };
 
-        let constraint_hints = ConstraintHints::default();
-
         insta::assert_snapshot!(
             ParametricInstance::new(
                 Sense::Minimize,
@@ -412,7 +397,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                constraint_hints,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#
