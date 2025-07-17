@@ -1,6 +1,6 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, RemovedConstraint, Rng, SampleSet,
-    Samples, Sense, Solution, VariableBound,
+    Constraint, ConstraintHints, DecisionVariable, Function, ParametricInstance, RemovedConstraint,
+    Rng, SampleSet, Samples, Sense, Solution, VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[derive(Clone)]
-pub struct Instance(ommx::Instance);
+pub struct Instance(pub ommx::Instance);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -507,55 +507,5 @@ impl InstanceDescription {
 
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-pub struct ParametricInstance(ommx::v1::ParametricInstance);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl ParametricInstance {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::ParametricInstance::decode(bytes.as_bytes())?;
-        inner.validate()?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.encode_to_vec())
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        self.0.validate()
-    }
-
-    pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
-        let instance = self
-            .0
-            .clone()
-            .with_parameters(parameters.0.clone(), ommx::ATol::default())?;
-        let parsed = Parse::parse(instance, &())?;
-        Ok(Instance(parsed))
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-pub struct Parameters(ommx::v1::Parameters);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl Parameters {
-    #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let inner = ommx::v1::Parameters::decode(bytes.as_bytes())?;
-        Ok(Self(inner))
-    }
-
-    pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.encode_to_vec())
     }
 }
