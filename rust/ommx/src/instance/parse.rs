@@ -202,100 +202,63 @@ impl Parse for v1::ParametricInstance {
     type Output = ParametricInstance;
     type Context = ();
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
-        let v1_sense = v1::instance::Sense::try_from(self.sense).map_err(|_| {
-            RawParseError::UnknownEnumValue {
-                enum_name: "instance::Sense",
-                value: self.sense,
-            }
-        })?;
-        let sense = Sense::try_from(v1_sense)?;
+        let message = "ommx.v1.ParametricInstance";
+        let sense = self.sense().parse_as(&(), message, "sense")?;
+
+        let decision_variables =
+            self.decision_variables
+                .parse_as(&(), message, "decision_variables")?;
+
+        let parameters: BTreeMap<VariableID, v1::Parameter> = self
+            .parameters
+            .into_iter()
+            .map(|p| (VariableID::from(p.id), p))
+            .collect();
+
+        let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
+        let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
+        let intersection: VariableIDSet = decision_variable_ids
+            .intersection(&parameter_ids)
+            .cloned()
+            .collect();
+        if !intersection.is_empty() {
+            return Err(RawParseError::from(InstanceError::DuplicatedVariableID {
+                id: *intersection.iter().next().unwrap(),
+            })
+            .context(message, "parameters"));
+        }
+
         let objective = self
             .objective
-            .map(|f| Parse::parse(f, &()))
-            .transpose()?
-            .unwrap_or_default();
+            .ok_or(RawParseError::MissingField {
+                message,
+                field: "objective",
+            })?
+            .parse_as(&(), message, "objective")?;
 
-        // Parse decision variables
-        let mut decision_variables = BTreeMap::default();
-        for dv in self.decision_variables {
-            let id = VariableID::from(dv.id);
-            let decision_variable = Parse::parse(dv, &())?;
-            if decision_variables.insert(id, decision_variable).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedVariableID { id }).into(),
-                );
-            }
-        }
+        let constraints = self.constraints.parse_as(&(), message, "constraints")?;
+        let removed_constraints =
+            self.removed_constraints
+                .parse_as(&constraints, message, "removed_constraints")?;
 
-        // Convert parameters to BTreeMap
-        let mut parameters = BTreeMap::default();
-        for param in self.parameters {
-            let id = VariableID::from(param.id);
-            if parameters.insert(id, param).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedVariableID { id }).into(),
-                );
-            }
-        }
-
-        // Parse constraints
-        let mut constraints = BTreeMap::default();
-        let mut removed_constraints = BTreeMap::default();
-        for constraint in self.constraints {
-            let id = ConstraintID::from(constraint.id);
-            let constraint = Parse::parse(constraint, &())?;
-            if constraints.insert(id, constraint).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
-                        .into(),
-                );
-            }
-        }
-        for constraint in self.removed_constraints {
-            let id = ConstraintID::from(
-                constraint
-                    .constraint
-                    .as_ref()
-                    .ok_or(RawParseError::MissingField {
-                        message: "RemovedConstraint",
-                        field: "constraint",
-                    })?
-                    .id,
-            );
-            let constraint = Parse::parse(constraint, &())?;
-            if removed_constraints.insert(id, constraint).is_some() {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
-                        .into(),
-                );
-            }
-        }
-
-        // Parse decision variable dependency
-        let mut dependency_map = BTreeMap::default();
+        let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
-            dependency_map.insert(VariableID::from(id), Parse::parse(f, &())?);
-        }
-        let decision_variable_dependency =
-            AcyclicAssignments::new(dependency_map).map_err(|_e| {
-                ParseError::from(RawParseError::InstanceError(
-                    InstanceError::DependentVariableUsed {
-                        id: VariableID::from(0), // We don't have the specific ID here
-                    },
-                ))
-            })?;
-
-        // Parse constraint hints - need proper context
-        let constraint_hints = if let Some(ch) = self.constraint_hints {
-            let context = (
-                decision_variables.clone(),
-                constraints.clone(),
-                removed_constraints.clone(),
+            decision_variable_dependency.insert(
+                as_variable_id(&decision_variables, id)
+                    .map_err(|e| e.context(message, "decision_variable_dependency"))?,
+                f.parse_as(&(), message, "decision_variable_dependency")?,
             );
-            Parse::parse(ch, &context)?
+        }
+        let decision_variable_dependency = AcyclicAssignments::new(decision_variable_dependency)
+            .map_err(|e| RawParseError::from(e).context(message, "decision_variable_dependency"))?;
+
+        let context = (decision_variables, constraints, removed_constraints);
+        let constraint_hints = if let Some(hints) = self.constraint_hints {
+            hints.parse_as(&context, message, "constraint_hints")?
         } else {
-            ConstraintHints::default()
+            Default::default()
         };
+        let (decision_variables, constraints, removed_constraints) = context;
 
         Ok(ParametricInstance {
             sense,
