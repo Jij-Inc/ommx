@@ -112,16 +112,10 @@ mod tests {
             description: None,
         };
         constraints.insert(ConstraintID::from(1), constraint);
-        let constraint_hints = ConstraintHints::default();
+        let _constraint_hints = ConstraintHints::default();
 
-        let instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            constraint_hints,
-        )
-        .unwrap();
+        let instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Substitute x1 with x3 + 1
         let substitution = Function::from(linear!(3) + coeff!(1.0));
@@ -216,14 +210,10 @@ mod tests {
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
 
-        let instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            constraint_hints,
-        )
-        .unwrap();
+        let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
+            .unwrap()
+            .add_constraint_hints(constraint_hints)
+            .unwrap();
 
         // Before substitution, verify we have 2 OneHot constraints and 1 SOS1 constraint
         assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 2);
@@ -322,14 +312,8 @@ mod tests {
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
 
         // Create instance directly since new() only accepts active constraints
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            ConstraintHints::default(),
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Manually set removed constraints and constraint hints
         instance.removed_constraints = removed_constraints;
