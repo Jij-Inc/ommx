@@ -64,15 +64,18 @@ impl From<Instance> for ParametricInstance {
 }
 
 impl ParametricInstance {
-    pub fn with_parameters(self, parameters: BTreeMap<VariableID, f64>) -> anyhow::Result<Instance> {
+    pub fn with_parameters(
+        self,
+        parameters: BTreeMap<VariableID, f64>,
+    ) -> anyhow::Result<Instance> {
         use crate::{v1, ATol};
         use anyhow::bail;
         use std::collections::BTreeSet;
-        
+
         // Check that all required parameters are provided
         let required_ids: BTreeSet<VariableID> = self.parameters.keys().cloned().collect();
         let given_ids: BTreeSet<VariableID> = parameters.keys().cloned().collect();
-        
+
         if !required_ids.is_subset(&given_ids) {
             let missing_ids: Vec<_> = required_ids.difference(&given_ids).collect();
             for id in &missing_ids {
@@ -86,27 +89,34 @@ impl ParametricInstance {
                 given_ids
             );
         }
-        
+
         // Create state from parameters
         let state = crate::v1::State {
-            entries: parameters.clone().into_iter().map(|(k, v)| (k.into_inner(), v)).collect(),
+            entries: parameters
+                .clone()
+                .into_iter()
+                .map(|(k, v)| (k.into_inner(), v))
+                .collect(),
         };
         let atol = ATol::default();
-        
+
         // Partially evaluate the objective and constraints
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
-        
+
         let mut constraints = self.constraints;
         for (_, constraint) in constraints.iter_mut() {
             constraint.function.partial_evaluate(&state, atol)?;
         }
-        
+
         // Convert parameters to v1::Parameters
         let v1_parameters = v1::Parameters {
-            entries: parameters.into_iter().map(|(k, v)| (k.into_inner(), v)).collect(),
+            entries: parameters
+                .into_iter()
+                .map(|(k, v)| (k.into_inner(), v))
+                .collect(),
         };
-        
+
         Ok(Instance {
             sense: self.sense,
             objective,

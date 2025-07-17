@@ -202,43 +202,42 @@ impl Parse for v1::ParametricInstance {
     type Output = ParametricInstance;
     type Context = ();
     fn parse(self, _context: &Self::Context) -> Result<Self::Output, ParseError> {
-        let v1_sense = v1::instance::Sense::try_from(self.sense)
-            .map_err(|_| RawParseError::UnknownEnumValue {
+        let v1_sense = v1::instance::Sense::try_from(self.sense).map_err(|_| {
+            RawParseError::UnknownEnumValue {
                 enum_name: "instance::Sense",
                 value: self.sense,
-            })?;
+            }
+        })?;
         let sense = Sense::try_from(v1_sense)?;
         let objective = self
             .objective
             .map(|f| Parse::parse(f, &()))
             .transpose()?
             .unwrap_or_default();
-        
+
         // Parse decision variables
         let mut decision_variables = BTreeMap::default();
         for dv in self.decision_variables {
             let id = VariableID::from(dv.id);
             let decision_variable = Parse::parse(dv, &())?;
             if decision_variables.insert(id, decision_variable).is_some() {
-                return Err(RawParseError::InstanceError(
-                    InstanceError::DuplicatedVariableID { id },
-                )
-                .into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedVariableID { id }).into(),
+                );
             }
         }
-        
+
         // Convert parameters to BTreeMap
         let mut parameters = BTreeMap::default();
         for param in self.parameters {
             let id = VariableID::from(param.id);
             if parameters.insert(id, param).is_some() {
-                return Err(RawParseError::InstanceError(
-                    InstanceError::DuplicatedVariableID { id },
-                )
-                .into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedVariableID { id }).into(),
+                );
             }
         }
-        
+
         // Parse constraints
         let mut constraints = BTreeMap::default();
         let mut removed_constraints = BTreeMap::default();
@@ -246,10 +245,10 @@ impl Parse for v1::ParametricInstance {
             let id = ConstraintID::from(constraint.id);
             let constraint = Parse::parse(constraint, &())?;
             if constraints.insert(id, constraint).is_some() {
-                return Err(RawParseError::InstanceError(
-                    InstanceError::DuplicatedConstraintID { id },
-                )
-                .into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
+                        .into(),
+                );
             }
         }
         for constraint in self.removed_constraints {
@@ -265,34 +264,39 @@ impl Parse for v1::ParametricInstance {
             );
             let constraint = Parse::parse(constraint, &())?;
             if removed_constraints.insert(id, constraint).is_some() {
-                return Err(RawParseError::InstanceError(
-                    InstanceError::DuplicatedConstraintID { id },
-                )
-                .into());
+                return Err(
+                    RawParseError::InstanceError(InstanceError::DuplicatedConstraintID { id })
+                        .into(),
+                );
             }
         }
-        
+
         // Parse decision variable dependency
         let mut dependency_map = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
-            dependency_map.insert(
-                VariableID::from(id),
-                Parse::parse(f, &())?,
-            );
+            dependency_map.insert(VariableID::from(id), Parse::parse(f, &())?);
         }
-        let decision_variable_dependency = AcyclicAssignments::new(dependency_map)
-            .map_err(|_e| ParseError::from(RawParseError::InstanceError(InstanceError::DependentVariableUsed {
-                id: VariableID::from(0), // We don't have the specific ID here
-            })))?;
-        
+        let decision_variable_dependency =
+            AcyclicAssignments::new(dependency_map).map_err(|_e| {
+                ParseError::from(RawParseError::InstanceError(
+                    InstanceError::DependentVariableUsed {
+                        id: VariableID::from(0), // We don't have the specific ID here
+                    },
+                ))
+            })?;
+
         // Parse constraint hints - need proper context
         let constraint_hints = if let Some(ch) = self.constraint_hints {
-            let context = (decision_variables.clone(), constraints.clone(), removed_constraints.clone());
+            let context = (
+                decision_variables.clone(),
+                constraints.clone(),
+                removed_constraints.clone(),
+            );
             Parse::parse(ch, &context)?
         } else {
             ConstraintHints::default()
         };
-        
+
         Ok(ParametricInstance {
             sense,
             objective,
@@ -329,13 +333,8 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .into_values()
                 .map(|dv| dv.into())
                 .collect(),
-            parameters: parameters
-                .into_values()
-                .collect(),
-            constraints: constraints
-                .into_values()
-                .map(|c| c.into())
-                .collect(),
+            parameters: parameters.into_values().collect(),
+            constraints: constraints.into_values().map(|c| c.into()).collect(),
             removed_constraints: removed_constraints
                 .into_values()
                 .map(|rc| rc.into())

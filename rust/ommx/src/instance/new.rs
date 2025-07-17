@@ -58,24 +58,31 @@ impl ParametricInstance {
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
-        
-        let intersection: VariableIDSet = decision_variable_ids.intersection(&parameter_ids).cloned().collect();
+
+        let intersection: VariableIDSet = decision_variable_ids
+            .intersection(&parameter_ids)
+            .cloned()
+            .collect();
         if !intersection.is_empty() {
-            return Err(InstanceError::DuplicatedVariableID { 
-                id: *intersection.iter().next().unwrap() 
-            }.into());
+            return Err(InstanceError::DuplicatedVariableID {
+                id: *intersection.iter().next().unwrap(),
+            }
+            .into());
         }
 
         // Combine decision variables and parameters for validation
-        let all_variable_ids: VariableIDSet = decision_variable_ids.union(&parameter_ids).cloned().collect();
-        
+        let all_variable_ids: VariableIDSet = decision_variable_ids
+            .union(&parameter_ids)
+            .cloned()
+            .collect();
+
         // Check that all IDs used in objective are defined
         for id in objective.required_ids() {
             if !all_variable_ids.contains(&id) {
                 return Err(InstanceError::UndefinedVariableID { id }.into());
             }
         }
-        
+
         // Check that all IDs used in constraints are defined
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
