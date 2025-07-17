@@ -56,7 +56,7 @@ impl Instance {
             rust_decision_variables,
             rust_constraints,
         )?
-        .add_constraint_hints(rust_constraint_hints)?;
+        .with_constraint_hints(rust_constraint_hints)?;
 
         // Set description if provided
         if let Some(desc) = description {

@@ -172,9 +172,9 @@ impl From<ConstraintHints> for v1::ConstraintHints {
 
 impl Instance {
     pub fn add_constraint_hints(
-        mut self,
+        &mut self,
         constraint_hints: ConstraintHints,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<()> {
         // Validate constraint_hints using Parse trait
         let hints: v1::ConstraintHints = constraint_hints.into();
         let context = (
@@ -184,15 +184,23 @@ impl Instance {
         );
         let constraint_hints = hints.parse(&context)?;
         self.constraint_hints = constraint_hints;
+        Ok(())
+    }
+
+    pub fn with_constraint_hints(
+        mut self,
+        constraint_hints: ConstraintHints,
+    ) -> anyhow::Result<Self> {
+        self.add_constraint_hints(constraint_hints)?;
         Ok(self)
     }
 }
 
 impl ParametricInstance {
     pub fn add_constraint_hints(
-        mut self,
+        &mut self,
         constraint_hints: ConstraintHints,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<()> {
         // Validate constraint_hints using Parse trait
         let hints: v1::ConstraintHints = constraint_hints.into();
         let context = (
@@ -202,6 +210,14 @@ impl ParametricInstance {
         );
         let constraint_hints = hints.parse(&context)?;
         self.constraint_hints = constraint_hints;
+        Ok(())
+    }
+
+    pub fn with_constraint_hints(
+        mut self,
+        constraint_hints: ConstraintHints,
+    ) -> anyhow::Result<Self> {
+        self.add_constraint_hints(constraint_hints)?;
         Ok(self)
     }
 }
@@ -246,7 +262,7 @@ mod tests {
 
         let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
             .unwrap()
-            .add_constraint_hints(constraint_hints)
+            .with_constraint_hints(constraint_hints)
             .unwrap();
 
         assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
@@ -291,7 +307,7 @@ mod tests {
             constraints,
         )
         .unwrap()
-        .add_constraint_hints(constraint_hints)
+        .with_constraint_hints(constraint_hints)
         .unwrap();
 
         assert_eq!(

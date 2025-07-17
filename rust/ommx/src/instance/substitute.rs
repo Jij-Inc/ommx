@@ -212,7 +212,7 @@ mod tests {
 
         let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
             .unwrap()
-            .add_constraint_hints(constraint_hints)
+            .with_constraint_hints(constraint_hints)
             .unwrap();
 
         // Before substitution, verify we have 2 OneHot constraints and 1 SOS1 constraint
