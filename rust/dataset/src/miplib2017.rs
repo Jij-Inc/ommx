@@ -18,6 +18,7 @@ pub fn package(path: &Path) -> Result<()> {
             log::warn!("Skip: No metadata found for '{name}'");
             continue;
         };
+
         log::info!("Loading: {name}");
         let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
@@ -26,10 +27,15 @@ pub fn package(path: &Path) -> Result<()> {
                 continue;
             }
         };
-        let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
-        builder.add_instance(instance.into(), annotations.clone())?;
-        let mut artifact = builder.build()?;
-        artifact.push()?;
+        assert_eq!(
+            instance.decision_variables().len(),
+            annotations.variables()?,
+            "Variable count mismatch for {name}"
+        );
+        // let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
+        // builder.add_instance(instance.into(), annotations.clone())?;
+        // let mut _artifact = builder.build()?;
+        // artifact.push()?;
     }
     Ok(())
 }
