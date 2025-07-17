@@ -356,4 +356,153 @@ mod tests {
         // Check that objective is unchanged
         assert_eq!(parametric_instance.objective, objective);
     }
+
+    #[test]
+    fn test_penalty_method_properties() {
+        use crate::v1::Parameters;
+        
+        // Create a simple test case with constraints
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+
+        let objective = Function::from(linear!(1) + linear!(2));
+        
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                id: ConstraintID::from(1),
+                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                equality: Equality::LessThanOrEqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+        );
+        constraints.insert(
+            ConstraintID::from(2),
+            Constraint {
+                id: ConstraintID::from(2),
+                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
+                equality: Equality::EqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+        );
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            decision_variables,
+            constraints,
+        ).unwrap();
+
+        // Test penalty method
+        let parametric_instance = instance.clone().penalty_method().unwrap();
+        let dv_ids: std::collections::BTreeSet<_> = parametric_instance.decision_variables.keys().cloned().collect();
+        let p_ids: std::collections::BTreeSet<_> = parametric_instance.parameters.keys().cloned().collect();
+        
+        // Decision variable IDs and parameter IDs should be disjoint
+        assert!(dv_ids.is_disjoint(&p_ids));
+        
+        // Check that parameters are created
+        assert_eq!(parametric_instance.constraints.len(), 0);
+        assert_eq!(parametric_instance.removed_constraints.len(), 2);
+        assert_eq!(parametric_instance.parameters.len(), 2);
+
+        // Put every penalty weights to zero - objective should be unchanged
+        let parameters = Parameters {
+            entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
+        };
+        let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+        // Use AbsDiffEq for comparison since types may differ
+        use ::approx::AbsDiffEq;
+        assert!(substituted.objective.abs_diff_eq(&objective, crate::ATol::default()));
+        assert_eq!(substituted.constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_uniform_penalty_method_properties() {
+        use crate::v1::Parameters;
+        
+        // Create a simple test case with constraints
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+
+        let objective = Function::from(linear!(1) + linear!(2));
+        
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                id: ConstraintID::from(1),
+                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
+                equality: Equality::LessThanOrEqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+        );
+        constraints.insert(
+            ConstraintID::from(2),
+            Constraint {
+                id: ConstraintID::from(2),
+                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
+                equality: Equality::EqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+        );
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective.clone(),
+            decision_variables,
+            constraints,
+        ).unwrap();
+
+        // Test uniform penalty method
+        let parametric_instance = instance.uniform_penalty_method().unwrap();
+        let dv_ids: std::collections::BTreeSet<_> = parametric_instance.decision_variables.keys().cloned().collect();
+        let p_ids: std::collections::BTreeSet<_> = parametric_instance.parameters.keys().cloned().collect();
+        
+        // Decision variable IDs and parameter IDs should be disjoint
+        assert!(dv_ids.is_disjoint(&p_ids));
+        
+        // Check that only one parameter is created
+        assert_eq!(parametric_instance.constraints.len(), 0);
+        assert_eq!(parametric_instance.removed_constraints.len(), 2);
+        assert_eq!(parametric_instance.parameters.len(), 1);
+
+        // Put penalty weight to zero - objective should be unchanged
+        let parameters = Parameters {
+            entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
+        };
+        let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+        // Use AbsDiffEq for comparison since types may differ
+        use ::approx::AbsDiffEq;
+        assert!(substituted.objective.abs_diff_eq(&objective, crate::ATol::default()));
+        assert_eq!(substituted.constraints.len(), 0);
+    }
+
 }
