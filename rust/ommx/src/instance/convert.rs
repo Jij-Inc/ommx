@@ -64,17 +64,21 @@ impl From<Instance> for ParametricInstance {
 }
 
 impl ParametricInstance {
-    pub fn with_parameters(
-        self,
-        parameters: BTreeMap<VariableID, f64>,
-    ) -> anyhow::Result<Instance> {
-        use crate::{v1, ATol};
+    pub fn with_parameters(self, parameters: crate::v1::Parameters) -> anyhow::Result<Instance> {
+        use crate::ATol;
         use anyhow::bail;
         use std::collections::BTreeSet;
 
+        // Convert v1::Parameters to BTreeMap for validation and processing
+        let param_map: BTreeMap<VariableID, f64> = parameters
+            .entries
+            .iter()
+            .map(|(k, v)| (VariableID::from(*k), *v))
+            .collect();
+
         // Check that all required parameters are provided
         let required_ids: BTreeSet<VariableID> = self.parameters.keys().cloned().collect();
-        let given_ids: BTreeSet<VariableID> = parameters.keys().cloned().collect();
+        let given_ids: BTreeSet<VariableID> = param_map.keys().cloned().collect();
 
         if !required_ids.is_subset(&given_ids) {
             let missing_ids: Vec<_> = required_ids.difference(&given_ids).collect();
@@ -92,11 +96,7 @@ impl ParametricInstance {
 
         // Create state from parameters
         let state = crate::v1::State {
-            entries: parameters
-                .clone()
-                .into_iter()
-                .map(|(k, v)| (k.into_inner(), v))
-                .collect(),
+            entries: parameters.entries.clone(),
         };
         let atol = ATol::default();
 
@@ -109,14 +109,6 @@ impl ParametricInstance {
             constraint.function.partial_evaluate(&state, atol)?;
         }
 
-        // Convert parameters to v1::Parameters
-        let v1_parameters = v1::Parameters {
-            entries: parameters
-                .into_iter()
-                .map(|(k, v)| (k.into_inner(), v))
-                .collect(),
-        };
-
         Ok(Instance {
             sense: self.sense,
             objective,
@@ -125,7 +117,7 @@ impl ParametricInstance {
             removed_constraints: self.removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints: self.constraint_hints,
-            parameters: Some(v1_parameters),
+            parameters: Some(parameters),
             description: self.description,
         })
     }
