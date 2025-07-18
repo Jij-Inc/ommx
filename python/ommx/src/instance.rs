@@ -68,7 +68,7 @@ impl Instance {
 
     #[getter]
     pub fn sense(&self) -> Sense {
-        (*self.0.sense()).into()
+        self.0.sense().into()
     }
 
     #[getter]

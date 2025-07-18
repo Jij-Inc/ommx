@@ -42,7 +42,6 @@
 //! (continuous, binary, integer, etc.) and [`Bound`] (lower/upper limits).
 //!
 //! ```rust
-//! # fn main() -> anyhow::Result<()> {
 //! use ommx::{DecisionVariable, Kind, Bound, VariableID, ATol};
 //!
 //! // Binary decision variable with ID 1
@@ -60,7 +59,7 @@
 //! let continuous_var = DecisionVariable::continuous(VariableID::from(3));
 //! assert_eq!(continuous_var.kind(), Kind::Continuous);
 //! assert_eq!(continuous_var.bound(), Bound::unbounded()); // Default is unbounded (-inf, inf)
-//! # Ok(()) }
+//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## [`Constraint`]
@@ -127,7 +126,7 @@
 //!     constraints,
 //! )?;
 //!
-//! assert_eq!(*instance.sense(), Sense::Minimize);
+//! assert_eq!(instance.sense(), Sense::Minimize);
 //! assert_eq!(instance.decision_variables().len(), 2);
 //! assert_eq!(instance.constraints().len(), 2);
 //! # Ok::<(), Box<dyn std::error::Error>>(())
