@@ -229,7 +229,8 @@
 //! allowing for problem transformation and preprocessing.
 //!
 //! ```rust
-//! use ommx::{Substitute, Linear, linear, coeff, assign};
+//! use ommx::{Substitute, Function, Linear, linear, coeff, assign, ATol};
+//! use approx::assert_abs_diff_eq;
 //!
 //! // Original expression: 2*x1 + 1
 //! let expr = coeff!(2.0) * linear!(1) + Linear::one();
@@ -240,7 +241,10 @@
 //! };
 //!
 //! let substituted = expr.substitute_acyclic(&assignments)?;
-//! // Result: 2*(0.5*x2 + 1) + 1 = x2 + 3
+//! assert_abs_diff_eq!(
+//!   substituted,
+//!   Function::from(linear!(2) + coeff!(3.0))  // Result: 2*(0.5*x2 + 1) + 1 = x2 + 3
+//! );
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 
