@@ -194,8 +194,7 @@ impl Instance {
 
         objective += Function::from(linear!(parameter_id)) * quad_sum;
 
-        let mut parameters = BTreeMap::new();
-        parameters.insert(parameter_id, parameter);
+        let parameters = BTreeMap::from([(parameter_id, parameter)]);
 
         Ok(ParametricInstance {
             sense: self.sense,
@@ -283,7 +282,7 @@ mod tests {
             assert_eq!(parameter.name, Some(expected_param_name.to_string()));
         }
 
-        // Verify ID disjointness
+        // Verify ID separation
         let dv_ids: std::collections::BTreeSet<_> = parametric_instance
             .decision_variables
             .keys()
