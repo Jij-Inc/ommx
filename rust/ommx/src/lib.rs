@@ -5,21 +5,29 @@
 //!
 //! ## [`Linear`], [`Quadratic`], [`Polynomial`], and [`Function`]
 //!
-//! These types represent mathematical expressions in optimization problems. Use the convenience
-//! macros [`linear!`], [`quadratic!`], [`coeff!`], and [`monomial!`] for easy expression building.
+//! These types represent mathematical expressions in optimization problems with different degree characteristics:
+//!
+//! - **[`Linear`]**: Fixed degree 1 polynomials (linear terms + constant)
+//! - **[`Quadratic`]**: Up to degree 2 polynomials (may contain only linear terms, no quadratic terms required)
+//! - **[`Function`]**: Dynamic degree handling, can represent any polynomial degree at runtime
+//!
+//! Use the convenience macros [`linear!`], [`quadratic!`], [`coeff!`], and [`monomial!`] for easy expression building.
 //!
 //! ```rust
 //! use ommx::{Linear, Quadratic, Function, linear, quadratic, coeff};
 //!
-//! // Linear expressions: 2*x1 + 3*x2 + 5
+//! // Linear expressions: 2*x1 + 3*x2 + 5 (fixed degree 1)
 //! let linear_expr = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
 //!
-//! // Quadratic expressions: x1*x2 + 2*x1 + 1
+//! // Quadratic expressions: x1*x2 + 2*x1 + 1 (up to degree 2)
 //! let quad_expr = coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
 //!
-//! // Convert to functions for use in objectives and constraints
-//! let linear_func = Function::from(linear_expr);
-//! let quad_func = Function::from(quad_expr);
+//! // Quadratic with only linear terms (no quadratic terms): 3*x1 + 2
+//! let linear_only_quad = coeff!(3.0) * quadratic!(1) + coeff!(2.0);
+//!
+//! // Functions can dynamically handle any degree
+//! let linear_func = Function::from(linear_expr);  // Degree 1
+//! let quad_func = Function::from(quad_expr);      // Degree 2
 //! ```
 //!
 //! ## [`Bound`], [`Kind`], and [`DecisionVariable`]
