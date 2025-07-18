@@ -24,7 +24,7 @@ ENDATA
     let instance = parse(MPS_CONTENT.as_bytes()).unwrap();
 
     // Default sense is Minimize
-    assert_eq!(*instance.sense(), crate::Sense::Minimize);
+    assert_eq!(instance.sense(), crate::Sense::Minimize);
 
     // Check variable
     assert_eq!(instance.decision_variables().len(), 1);
@@ -329,7 +329,7 @@ ENDATA
     let instance = parse(MPS_MAXIMIZE.as_bytes()).unwrap();
 
     // Check sense
-    assert_eq!(*instance.sense(), crate::Sense::Maximize);
+    assert_eq!(instance.sense(), crate::Sense::Maximize);
 
     // Check variables
     assert_eq!(instance.decision_variables().len(), 2);

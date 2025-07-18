@@ -284,6 +284,12 @@ impl DecisionVariable {
         Ok(())
     }
 
+    /// Call [`Self::set_bound`] in a builder style.
+    pub fn with_bound(mut self, bound: Bound, atol: ATol) -> Result<Self, DecisionVariableError> {
+        self.set_bound(bound, atol)?;
+        Ok(self)
+    }
+
     /// Impose additional bound with current bound by computing their intersection.
     ///
     /// This method computes the intersection of the current bound and the new bound,
@@ -602,8 +608,8 @@ mod tests {
     #[test]
     fn test_clip_bound_normal_intersection() {
         // Test case 1: Normal intersection
-        let mut dv = DecisionVariable::continuous(VariableID::from(1));
-        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::continuous(VariableID::from(1))
+            .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
             .clip_bound(Bound::new(5.0, 15.0).unwrap(), ATol::default())
@@ -612,12 +618,12 @@ mod tests {
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 2: Intersection with infinite bounds
-        let mut dv = DecisionVariable::continuous(VariableID::from(2));
-        dv.set_bound(
-            Bound::new(f64::NEG_INFINITY, 10.0).unwrap(),
-            ATol::default(),
-        )
-        .unwrap();
+        let mut dv = DecisionVariable::continuous(VariableID::from(2))
+            .with_bound(
+                Bound::new(f64::NEG_INFINITY, 10.0).unwrap(),
+                ATol::default(),
+            )
+            .unwrap();
         let changed = dv
             .clip_bound(Bound::new(5.0, f64::INFINITY).unwrap(), ATol::default())
             .unwrap();
@@ -625,8 +631,8 @@ mod tests {
         assert_eq!(dv.bound(), Bound::new(5.0, 10.0).unwrap());
 
         // Test case 3: Clip bound is completely contained
-        let mut dv = DecisionVariable::continuous(VariableID::from(3));
-        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::continuous(VariableID::from(3))
+            .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
             .clip_bound(Bound::new(2.0, 8.0).unwrap(), ATol::default())
@@ -635,8 +641,8 @@ mod tests {
         assert_eq!(dv.bound(), Bound::new(2.0, 8.0).unwrap());
 
         // Test case 4: No change (clip with same bound)
-        let mut dv = DecisionVariable::continuous(VariableID::from(4));
-        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::continuous(VariableID::from(4))
+            .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let changed = dv
             .clip_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
@@ -655,8 +661,8 @@ mod tests {
     #[test]
     fn test_clip_bound_empty_intersection() {
         // Test case 1: Non-overlapping bounds [0, 5] and [10, 15]
-        let mut dv = DecisionVariable::continuous(VariableID::from(1));
-        dv.set_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::continuous(VariableID::from(1))
+            .with_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default())
             .unwrap();
         let result = dv.clip_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default());
         assert!(matches!(
@@ -665,8 +671,8 @@ mod tests {
         ));
 
         // Test case 2: Reverse order
-        let mut dv = DecisionVariable::continuous(VariableID::from(2));
-        dv.set_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::continuous(VariableID::from(2))
+            .with_bound(Bound::new(10.0, 15.0).unwrap(), ATol::default())
             .unwrap();
         let result = dv.clip_bound(Bound::new(0.0, 5.0).unwrap(), ATol::default());
         assert!(matches!(
@@ -678,8 +684,8 @@ mod tests {
     #[test]
     fn test_clip_bound_with_kinds() {
         // Test with Integer kind
-        let mut dv = DecisionVariable::integer(VariableID::from(1));
-        dv.set_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default())
+        let mut dv = DecisionVariable::integer(VariableID::from(1))
+            .with_bound(Bound::new(1.1, 5.9).unwrap(), ATol::default())
             .unwrap();
         assert_eq!(dv.bound(), Bound::new(2.0, 5.0).unwrap()); // Rounded to integer bounds
         let changed = dv
