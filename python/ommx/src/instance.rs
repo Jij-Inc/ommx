@@ -347,6 +347,24 @@ impl Instance {
     pub fn reduce_binary_power(&mut self) -> bool {
         self.0.reduce_binary_power()
     }
+
+    #[staticmethod]
+    pub fn load_mps(path: String) -> Result<Self> {
+        let instance = ommx::mps::load(path)?;
+        Ok(Self(instance))
+    }
+
+    #[pyo3(signature = (path, compress = true))]
+    pub fn save_mps(&self, path: String, compress: bool) -> Result<()> {
+        ommx::mps::save(&self.0, path, compress)?;
+        Ok(())
+    }
+
+    #[staticmethod]
+    pub fn load_qplib(path: String) -> Result<Self> {
+        let instance = ommx::qplib::load(path)?;
+        Ok(Self(instance))
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
