@@ -7,7 +7,7 @@
 //!
 //! These types represent mathematical expressions in optimization problems with different degree characteristics:
 //!
-//! - **[`Linear`]**: Fixed degree 1 polynomials (linear terms + constant)
+//! - **[`Linear`]**: Up to degree 1 polynomials (linear terms + constant)
 //! - **[`Quadratic`]**: Up to degree 2 polynomials (may contain only linear terms, no quadratic terms required)
 //! - **[`Function`]**: Dynamic degree handling, can represent any polynomial degree at runtime
 //!
@@ -21,14 +21,20 @@
 //!
 //! // Quadratic expressions: x1*x2 + 2*x1 + 1 (up to degree 2)
 //! let quad_expr = coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
+//! assert_eq!(quad_expr.degree(), 2);
 //!
 //! // Quadratic with only linear terms (no quadratic terms): 3*x1 + 2
 //! let linear_only_quad = coeff!(3.0) * quadratic!(1) + coeff!(2.0);
+//! assert_eq!(linear_only_quad.degree(), 1);
 //!
 //! // Functions can dynamically handle any degree
 //! let linear_func = Function::from(linear_expr);  // Degree 1
+//! assert_eq!(linear_func.degree(), 1);
 //! let quad_func = Function::from(quad_expr);      // Degree 2
+//! assert_eq!(quad_func.degree(), 2);
 //! ```
+//!
+//! See also [`PolynomialBase`] which is a base for [`Linear`], [`Quadratic`], and [`Polynomial`].
 //!
 //! ## [`Bound`], [`Kind`], and [`DecisionVariable`]
 //!
@@ -50,7 +56,6 @@
 //! // Create bounds
 //! let bounded = Bound::new(0.0, 100.0)?;
 //! let binary_bound = Bound::of_binary();
-//! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
 //!
 //! ## [`Constraint`] and [`RemovedConstraint`]
@@ -131,7 +136,7 @@
 //! // Access solution properties
 //! assert_eq!(*solution.objective(), 42.0);
 //! assert!(solution.feasible()); // Check constraint feasibility
-//! 
+//!
 //! // Solutions contain evaluated variables and constraints for verification
 //! ```
 //!
