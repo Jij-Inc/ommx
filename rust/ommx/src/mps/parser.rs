@@ -178,6 +178,9 @@ impl State {
             "N" => {
                 if self.mps.objective_name.is_empty() {
                     self.mps.objective_name = row_name
+                } else {
+                    // This means the MPS file has multiple objective names, which is not supported.
+                    return Err(MpsParseError::MultipleObjectiveNames);
                 }
                 // skip adding this row to `a` matrix
                 return Ok(());
