@@ -70,7 +70,7 @@ impl Instance {
             let f = constraint.function.clone();
             // Add penalty term: λ * f(x)^2
             let penalty_term = Function::from(linear!(parameter_id)) * f.clone() * f;
-            objective = objective + penalty_term;
+            objective += penalty_term;
 
             // Create removed constraint
             let removed_constraint = RemovedConstraint {
@@ -165,7 +165,7 @@ impl Instance {
 
         for (constraint_id, constraint) in self.constraints.into_iter() {
             let f = constraint.function.clone();
-            quad_sum = quad_sum + f.clone() * f;
+            quad_sum += f.clone() * f;
 
             // Create removed constraint
             let removed_constraint = RemovedConstraint {
@@ -177,7 +177,7 @@ impl Instance {
             removed_constraints.insert(constraint_id, removed_constraint);
         }
 
-        objective = objective + Function::from(linear!(parameter_id)) * quad_sum;
+        objective += Function::from(linear!(parameter_id)) * quad_sum;
 
         let mut parameters = BTreeMap::new();
         parameters.insert(parameter_id, parameter);
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn test_penalty_method_properties() {
         use crate::v1::Parameters;
-        
+
         // Create a simple test case with constraints
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
@@ -373,7 +373,7 @@ mod tests {
         );
 
         let objective = Function::from(linear!(1) + linear!(2));
-        
+
         let mut constraints = BTreeMap::new();
         constraints.insert(
             ConstraintID::from(1),
@@ -405,16 +405,22 @@ mod tests {
             objective.clone(),
             decision_variables,
             constraints,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Test penalty method
         let parametric_instance = instance.clone().penalty_method().unwrap();
-        let dv_ids: std::collections::BTreeSet<_> = parametric_instance.decision_variables.keys().cloned().collect();
-        let p_ids: std::collections::BTreeSet<_> = parametric_instance.parameters.keys().cloned().collect();
-        
+        let dv_ids: std::collections::BTreeSet<_> = parametric_instance
+            .decision_variables
+            .keys()
+            .cloned()
+            .collect();
+        let p_ids: std::collections::BTreeSet<_> =
+            parametric_instance.parameters.keys().cloned().collect();
+
         // Decision variable IDs and parameter IDs should be disjoint
         assert!(dv_ids.is_disjoint(&p_ids));
-        
+
         // Check that parameters are created
         assert_eq!(parametric_instance.constraints.len(), 0);
         assert_eq!(parametric_instance.removed_constraints.len(), 2);
@@ -424,17 +430,22 @@ mod tests {
         let parameters = Parameters {
             entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
         };
-        let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+        let substituted = parametric_instance
+            .clone()
+            .with_parameters(parameters)
+            .unwrap();
         // Use AbsDiffEq for comparison since types may differ
         use ::approx::AbsDiffEq;
-        assert!(substituted.objective.abs_diff_eq(&objective, crate::ATol::default()));
+        assert!(substituted
+            .objective
+            .abs_diff_eq(&objective, crate::ATol::default()));
         assert_eq!(substituted.constraints.len(), 0);
     }
 
     #[test]
     fn test_uniform_penalty_method_properties() {
         use crate::v1::Parameters;
-        
+
         // Create a simple test case with constraints
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
@@ -447,7 +458,7 @@ mod tests {
         );
 
         let objective = Function::from(linear!(1) + linear!(2));
-        
+
         let mut constraints = BTreeMap::new();
         constraints.insert(
             ConstraintID::from(1),
@@ -479,16 +490,22 @@ mod tests {
             objective.clone(),
             decision_variables,
             constraints,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Test uniform penalty method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
-        let dv_ids: std::collections::BTreeSet<_> = parametric_instance.decision_variables.keys().cloned().collect();
-        let p_ids: std::collections::BTreeSet<_> = parametric_instance.parameters.keys().cloned().collect();
-        
+        let dv_ids: std::collections::BTreeSet<_> = parametric_instance
+            .decision_variables
+            .keys()
+            .cloned()
+            .collect();
+        let p_ids: std::collections::BTreeSet<_> =
+            parametric_instance.parameters.keys().cloned().collect();
+
         // Decision variable IDs and parameter IDs should be disjoint
         assert!(dv_ids.is_disjoint(&p_ids));
-        
+
         // Check that only one parameter is created
         assert_eq!(parametric_instance.constraints.len(), 0);
         assert_eq!(parametric_instance.removed_constraints.len(), 2);
@@ -498,11 +515,15 @@ mod tests {
         let parameters = Parameters {
             entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
         };
-        let substituted = parametric_instance.clone().with_parameters(parameters).unwrap();
+        let substituted = parametric_instance
+            .clone()
+            .with_parameters(parameters)
+            .unwrap();
         // Use AbsDiffEq for comparison since types may differ
         use ::approx::AbsDiffEq;
-        assert!(substituted.objective.abs_diff_eq(&objective, crate::ATol::default()));
+        assert!(substituted
+            .objective
+            .abs_diff_eq(&objective, crate::ATol::default()));
         assert_eq!(substituted.constraints.len(), 0);
     }
-
 }

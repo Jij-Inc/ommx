@@ -1,8 +1,8 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Optimality, Relaxation, RemovedConstraint,
-        SampleSet, SampledDecisionVariable, Samples, Solution, State,
+        Linear, Optimality, Relaxation, RemovedConstraint, SampleSet, SampledDecisionVariable,
+        Samples, Solution, State,
     },
     BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
     VariableIDSet,
@@ -117,7 +117,6 @@ impl Instance {
         }
         Ok(())
     }
-
 
     pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
@@ -811,11 +810,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        random::InstanceParameters,
-        v1::State,
-        Evaluate,
-    };
+    use crate::{random::InstanceParameters, v1::State, Evaluate};
     use proptest::prelude::*;
 
     proptest! {
@@ -913,9 +908,17 @@ mod tests {
     fn test_eval_dependencies() {
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
         let dependencies = [
-            (4, Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0))),
-            (5, Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0))),
-        ].into_iter().collect();
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
@@ -923,17 +926,33 @@ mod tests {
         // circular dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
         let dependencies = [
-            (4, Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0))),
-            (5, Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0))),
-        ].into_iter().collect();
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
         let dependencies = [
-            (4, Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0))),
-            (5, Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0))),
-        ].into_iter().collect();
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }
