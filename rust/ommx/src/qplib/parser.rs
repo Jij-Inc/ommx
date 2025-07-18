@@ -48,20 +48,20 @@ pub struct QplibFile {
 }
 
 impl QplibFile {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         let f = fs::File::open(path)
             .with_context(|| format!("Failed to read file {}", path.display()))?;
-        Self::from_reader(f)
+        Self::parse(f)
     }
 
-    pub fn from_reader(reader: impl Read) -> Result<Self> {
+    pub fn parse(reader: impl Read) -> Result<Self> {
         // let buf = flate2::read::GzDecoder::new(reader);
         let buf = io::BufReader::new(reader);
         Self::from_lines(buf.lines().map_while(|x| x.ok()))
     }
 
-    pub fn from_lines(lines: impl Iterator<Item = String>) -> Result<Self> {
+    fn from_lines(lines: impl Iterator<Item = String>) -> Result<Self> {
         use ProbConstrKind as C;
         use ProbObjKind as O;
         use ProbVarKind as V;

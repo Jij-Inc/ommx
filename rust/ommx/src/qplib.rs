@@ -1,28 +1,24 @@
-use prost::Message;
-use std::path::Path;
+//! Parser for the QPLIB format
 
 mod convert;
 mod parser;
 
+use crate::Instance;
 pub use parser::QplibFile;
+use std::path::Path;
 
-/// Reads and parses the file at the given path as a gzipped MPS file.
-pub fn load_file(path: impl AsRef<Path>) -> anyhow::Result<crate::v1::Instance> {
-    let data = QplibFile::from_file(path)?;
+/// Reads and parses the file into a [`Instance`].
+pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Instance> {
+    let data = QplibFile::load(path)?;
     let converted = convert::convert(data)?;
-    Ok(converted)
-}
-
-pub fn load_file_bytes(path: impl AsRef<Path>) -> anyhow::Result<Vec<u8>> {
-    let instance = load_file(path)?;
-    Ok(instance.encode_to_vec())
+    Ok(converted.try_into()?)
 }
 
 #[derive(Debug, thiserror::Error)]
 #[error("{reason} (at line {line_num})")]
 pub struct QplibParseError {
-    line_num: usize,
-    reason: ParseErrorReason,
+    pub line_num: usize,
+    pub reason: ParseErrorReason,
 }
 
 impl QplibParseError {
