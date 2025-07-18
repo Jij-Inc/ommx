@@ -1,15 +1,14 @@
 use crate::{
     v1::{
         decision_variable::Kind, instance::Sense, DecisionVariable, Equality, Function, Instance,
-        Linear, Optimality, Parameter, ParametricInstance, Relaxation, RemovedConstraint,
-        SampleSet, SampledDecisionVariable, Samples, Solution, State,
+        Linear, Optimality, Relaxation, RemovedConstraint, SampleSet, SampledDecisionVariable,
+        Samples, Solution, State,
     },
     BinaryIdPair, BinaryIds, Bound, Bounds, ConstraintID, Evaluate, InfeasibleDetected, VariableID,
     VariableIDSet,
 };
 use anyhow::{bail, ensure, Context, Result};
 use approx::AbsDiffEq;
-use maplit::hashmap;
 use num::Zero;
 use std::{
     borrow::Cow,
@@ -119,73 +118,6 @@ impl Instance {
         Ok(())
     }
 
-    pub fn penalty_method(self) -> Result<ParametricInstance> {
-        let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
-        let mut objective = self.objective().into_owned();
-        let mut parameters = Vec::new();
-        let mut removed_constraints = Vec::new();
-        for (i, c) in self.constraints.into_iter().enumerate() {
-            let parameter = Parameter {
-                id: id_base + i as u64,
-                name: Some("penalty_weight".to_string()),
-                subscripts: vec![c.id as i64],
-                ..Default::default()
-            };
-            let f = c.function().into_owned();
-            objective = objective + &parameter * f.clone() * f;
-            removed_constraints.push(RemovedConstraint {
-                constraint: Some(c),
-                removed_reason: "penalty_method".to_string(),
-                removed_reason_parameters: hashmap! { "parameter_id".to_string() => parameter.id.to_string() },
-            });
-            parameters.push(parameter);
-        }
-        Ok(ParametricInstance {
-            description: self.description,
-            objective: Some(objective),
-            constraints: Vec::new(),
-            decision_variables: self.decision_variables.clone(),
-            sense: self.sense,
-            parameters,
-            constraint_hints: self.constraint_hints,
-            removed_constraints,
-            decision_variable_dependency: self.decision_variable_dependency,
-        })
-    }
-
-    pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
-        let id_base = self.defined_ids().last().map(|id| id + 1).unwrap_or(0);
-        let mut objective = self.objective().into_owned();
-        let parameter = Parameter {
-            id: id_base,
-            name: Some("uniform_penalty_weight".to_string()),
-            ..Default::default()
-        };
-        let mut removed_constraints = Vec::new();
-        let mut quad_sum = Function::zero();
-        for c in self.constraints.into_iter() {
-            let f = c.function().into_owned();
-            quad_sum = quad_sum + f.clone() * f;
-            removed_constraints.push(RemovedConstraint {
-                constraint: Some(c),
-                removed_reason: "uniform_penalty_method".to_string(),
-                removed_reason_parameters: Default::default(),
-            });
-        }
-        objective = objective + &parameter * quad_sum;
-        Ok(ParametricInstance {
-            description: self.description,
-            objective: Some(objective),
-            constraints: Vec::new(),
-            decision_variables: self.decision_variables.clone(),
-            sense: self.sense,
-            parameters: vec![parameter],
-            constraint_hints: self.constraint_hints,
-            removed_constraints,
-            decision_variable_dependency: self.decision_variable_dependency,
-        })
-    }
-
     pub fn binary_ids(&self) -> VariableIDSet {
         self.decision_variables
             .iter()
@@ -249,7 +181,7 @@ impl Instance {
     /// Before calling this method, you should check that this instance is suitable for QUBO:
     ///
     /// - This instance has no constraints
-    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     /// - The degree of the objective is at most 2.
@@ -292,7 +224,7 @@ impl Instance {
     /// Before calling this method, you should check that this instance is suitable for QUBO:
     ///
     /// - This instance has no constraints
-    ///   - See [`Instance::penalty_method`] (TODO: ALM will be added) to convert into an unconstrained problem.
+    ///   - Use penalty method (TODO: ALM will be added) to convert into an unconstrained problem.
     /// - The objective function uses only binary decision variables.
     ///   - TODO: Binary encoding will be added.
     ///
@@ -878,11 +810,7 @@ fn eval_dependencies(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        random::InstanceParameters,
-        v1::{Parameters, State},
-        Evaluate,
-    };
+    use crate::{random::InstanceParameters, v1::State, Evaluate};
     use proptest::prelude::*;
 
     proptest! {
@@ -891,70 +819,6 @@ mod tests {
             instance.validate().unwrap();
         }
 
-        #[test]
-        fn test_penalty_method(instance in Instance::arbitrary()) {
-            let Ok(parametric_instance) = instance.clone().penalty_method() else { return Ok(()); };
-            let dv_ids = parametric_instance.defined_decision_variable_ids();
-            let p_ids = parametric_instance.defined_parameter_ids();
-            prop_assert!(dv_ids.is_disjoint(&p_ids));
-
-            let used_ids = parametric_instance.used_ids().unwrap();
-            let all_ids = dv_ids.union(&p_ids).cloned().collect();
-            prop_assert!(used_ids.is_subset(&all_ids));
-
-            // Put every penalty weights to zero
-            let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
-            };
-            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
-            prop_assert_eq!(substituted.constraints.len(), 0);
-
-            // Put every penalty weights to two
-            let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
-            };
-            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
-            let mut objective = instance.objective().into_owned();
-            for c in &instance.constraints {
-                let f = c.function().into_owned();
-                objective = objective + 2.0 * f.clone() * f;
-            }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
-        }
-
-        #[test]
-        fn test_uniform_penalty_method(instance in Instance::arbitrary()) {
-            let Ok(parametric_instance) = instance.clone().uniform_penalty_method() else { return Ok(()); };
-            let dv_ids = parametric_instance.defined_decision_variable_ids();
-            let p_ids = parametric_instance.defined_parameter_ids();
-            prop_assert!(dv_ids.is_disjoint(&p_ids));
-            prop_assert_eq!(p_ids.len(), 1);
-
-            let used_ids = parametric_instance.used_ids().unwrap();
-            let all_ids = dv_ids.union(&p_ids).cloned().collect();
-            prop_assert!(used_ids.is_subset(&all_ids));
-
-            // Put every penalty weights to zero
-            let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id.into_inner(), 0.0)).collect(),
-            };
-            let substituted = parametric_instance.clone().with_parameters(parameters, crate::ATol::default()).unwrap();
-            prop_assert!(instance.objective().abs_diff_eq(&substituted.objective(), crate::ATol::default()));
-            prop_assert_eq!(substituted.constraints.len(), 0);
-
-            // Put every penalty weights to two
-            let parameters = Parameters {
-                entries: p_ids.iter().map(|&id| (id.into_inner(), 2.0)).collect(),
-            };
-            let substituted = parametric_instance.with_parameters(parameters, crate::ATol::default()).unwrap();
-            let mut objective = instance.objective().into_owned();
-            for c in &instance.constraints {
-                let f = c.function().into_owned();
-                objective = objective + 2.0 * f.clone() * f;
-            }
-            prop_assert!(objective.abs_diff_eq(&substituted.objective(), crate::ATol::default()));
-        }
 
         #[test]
         fn test_qubo(instance in Instance::arbitrary_with(InstanceParameters::default_qubo())) {
@@ -1032,9 +896,9 @@ mod tests {
         fn substitute_fixed_value(instance in Instance::arbitrary(), value in -3.0..3.0) {
             for id in instance.defined_ids() {
                 let mut partially_evaluated = instance.clone();
-                partially_evaluated.partial_evaluate(&State { entries: hashmap! { id => value } }, crate::ATol::default()).unwrap();
+                partially_evaluated.partial_evaluate(&State { entries: [(id, value)].into_iter().collect() }, crate::ATol::default()).unwrap();
                 let mut substituted = instance.clone();
-                substituted.substitute(hashmap! { id => Function::from(value) }).unwrap();
+                substituted.substitute([(id, Function::from(value))].into_iter().collect()).unwrap();
                 prop_assert!(partially_evaluated.abs_diff_eq(&substituted, crate::ATol::default()));
             }
         }
@@ -1043,28 +907,52 @@ mod tests {
     #[test]
     fn test_eval_dependencies() {
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = hashmap! {
-            4 => Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
-            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-        };
+        let dependencies = [
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (2, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         eval_dependencies(&dependencies, &mut state, crate::ATol::default()).unwrap();
         assert_eq!(state.entries[&4], 1.0 + 2.0 * 2.0);
         assert_eq!(state.entries[&5], 1.0 + 2.0 * 2.0 + 3.0 * 3.0);
 
         // circular dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = hashmap! {
-            4 => Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
-            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-        };
+        let dependencies = [
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (5, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
 
         // non-existing dependency
         let mut state = State::from_iter(vec![(1, 1.0), (2, 2.0), (3, 3.0)]);
-        let dependencies = hashmap! {
-            4 => Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
-            5 => Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
-        };
+        let dependencies = [
+            (
+                4,
+                Function::from(Linear::new([(1, 1.0), (6, 2.0)].into_iter(), 0.0)),
+            ),
+            (
+                5,
+                Function::from(Linear::new([(4, 1.0), (3, 3.0)].into_iter(), 0.0)),
+            ),
+        ]
+        .into_iter()
+        .collect();
         assert!(eval_dependencies(&dependencies, &mut state, crate::ATol::default()).is_err());
     }
 }
