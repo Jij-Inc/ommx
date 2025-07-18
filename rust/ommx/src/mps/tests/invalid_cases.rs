@@ -1,6 +1,5 @@
 use crate::{
-    coeff, mps::*, quadratic, Constraint, ConstraintHints, ConstraintID, DecisionVariable,
-    Function, Instance, Sense,
+    coeff, mps::*, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance, Sense,
 };
 use maplit::btreemap;
 use std::collections::BTreeMap;
@@ -19,7 +18,6 @@ fn test_nonlinear_objective_error() {
         objective,
         decision_variables,
         BTreeMap::new(),
-        ConstraintHints::default(),
     )
     .unwrap();
 
@@ -51,7 +49,6 @@ fn test_nonlinear_constraint_error() {
         Function::Zero, // Linear objective
         decision_variables,
         constraints,
-        ConstraintHints::default(),
     )
     .unwrap();
 

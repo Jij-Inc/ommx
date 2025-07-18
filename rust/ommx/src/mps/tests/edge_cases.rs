@@ -1,6 +1,6 @@
 use crate::{
-    coeff, linear, mps::*, Bound, Constraint, ConstraintHints, ConstraintID, DecisionVariable,
-    Function, Instance, Sense, VariableID,
+    coeff, linear, mps::*, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance,
+    Sense, VariableID,
 };
 use maplit::btreemap;
 
@@ -43,14 +43,8 @@ fn test_unused_variable_filtering() {
         ),
     };
 
-    let instance = Instance::new(
-        Sense::Minimize,
-        objective,
-        decision_variables,
-        constraints,
-        ConstraintHints::default(),
-    )
-    .unwrap();
+    let instance =
+        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
     // Write to MPS and read back
     let mut buffer = Vec::new();
@@ -102,14 +96,8 @@ fn test_removed_constraint_variable_preservation() {
         ),
     };
 
-    let mut instance = Instance::new(
-        Sense::Minimize,
-        objective,
-        decision_variables,
-        constraints,
-        ConstraintHints::default(),
-    )
-    .unwrap();
+    let mut instance =
+        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
     // Relax the constraint to create a removed constraint
     instance
@@ -170,14 +158,8 @@ fn test_removed_constraint_information_loss() {
         ),
     };
 
-    let mut instance = Instance::new(
-        Sense::Minimize,
-        objective,
-        decision_variables,
-        constraints,
-        ConstraintHints::default(),
-    )
-    .unwrap();
+    let mut instance =
+        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
     // Relax one constraint to create a removed constraint
     instance

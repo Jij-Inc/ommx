@@ -8,8 +8,8 @@ use super::{
 };
 use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient};
 use crate::{
-    v1, Bound, Constraint, ConstraintHints, ConstraintID, DecisionVariable, Equality, Function,
-    Instance, Sense, VariableID,
+    v1, Bound, Constraint, ConstraintID, DecisionVariable, Equality, Function, Instance, Sense,
+    VariableID,
 };
 
 pub fn convert(mps: Mps) -> anyhow::Result<Instance> {
@@ -18,13 +18,7 @@ pub fn convert(mps: Mps) -> anyhow::Result<Instance> {
     let constraints = convert_constraints(&mps, &name_id_map)?;
     let sense = convert_sense(mps.obj_sense);
 
-    let mut instance = Instance::new(
-        sense,
-        objective,
-        decision_variables,
-        constraints,
-        ConstraintHints::default(),
-    )?;
+    let mut instance = Instance::new(sense, objective, decision_variables, constraints)?;
 
     instance.description = convert_description(&mps);
 

@@ -13,3 +13,15 @@ impl Instance {
         Ok(Parse::parse(inner, &())?)
     }
 }
+
+impl ParametricInstance {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let v1_instance = v1::ParametricInstance::from(self.clone());
+        v1_instance.encode_to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        let inner = v1::ParametricInstance::decode(bytes)?;
+        Ok(Parse::parse(inner, &())?)
+    }
+}
