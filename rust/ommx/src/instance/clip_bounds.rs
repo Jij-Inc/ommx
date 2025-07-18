@@ -54,17 +54,17 @@ mod tests {
     #[test]
     fn test_clip_bounds_normal() {
         // Create instance with 3 variables
-        let mut decision_variables = btreemap! {
-            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
-            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
-            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3)),
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1))
+                .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+                .unwrap(),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2))
+                .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+                .unwrap(),
+            VariableID::from(3) => DecisionVariable::continuous(VariableID::from(3))
+                .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+                .unwrap(),
         };
-
-        // Set initial bounds
-        for dv in decision_variables.values_mut() {
-            dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
-                .unwrap();
-        }
 
         let mut instance = Instance {
             decision_variables,
@@ -121,8 +121,8 @@ mod tests {
         // Create instance with 3 variables
         let mut decision_variables = btreemap! {};
         for i in 1..=3 {
-            let mut dv = DecisionVariable::continuous(VariableID::from(i));
-            dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+            let dv = DecisionVariable::continuous(VariableID::from(i))
+                .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
                 .unwrap();
             decision_variables.insert(VariableID::from(i), dv);
         }
@@ -160,8 +160,8 @@ mod tests {
 
     #[test]
     fn test_clip_bounds_empty() {
-        let mut dv = DecisionVariable::continuous(VariableID::from(1));
-        dv.set_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
+        let dv = DecisionVariable::continuous(VariableID::from(1))
+            .with_bound(Bound::new(0.0, 10.0).unwrap(), ATol::default())
             .unwrap();
         let original_bound = dv.bound();
 
