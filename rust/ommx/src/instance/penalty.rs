@@ -296,7 +296,7 @@ mod tests {
         // Verify zero penalty weight behavior
         use crate::v1::Parameters;
         use ::approx::AbsDiffEq;
-        
+
         let parameters = Parameters {
             entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
         };
@@ -304,7 +304,7 @@ mod tests {
             .clone()
             .with_parameters(parameters)
             .unwrap();
-        
+
         assert!(substituted
             .objective
             .abs_diff_eq(&original_objective, crate::ATol::default()));
@@ -317,7 +317,7 @@ mod tests {
         let original_objective = instance.objective.clone();
         let original_constraint_count = instance.constraints.len();
         let parametric_instance = instance.penalty_method().unwrap();
-        
+
         verify_penalty_method_properties(
             original_objective,
             original_constraint_count,
@@ -333,7 +333,7 @@ mod tests {
         let original_objective = instance.objective.clone();
         let original_constraint_count = instance.constraints.len();
         let parametric_instance = instance.uniform_penalty_method().unwrap();
-        
+
         verify_penalty_method_properties(
             original_objective,
             original_constraint_count,
