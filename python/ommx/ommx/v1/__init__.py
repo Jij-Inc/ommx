@@ -269,10 +269,14 @@ class Instance(UserAnnotationBase):
 
     @staticmethod
     def load_mps(path: str) -> Instance:
-        bytes = _ommx_rust.load_mps_bytes(path)
-        return Instance.from_bytes(bytes)
+        raw = _ommx_rust.Instance.load_mps(path)
+        return Instance(raw)
 
+    @deprecated("Renamed to `save_mps`")
     def write_mps(self, path: str):
+        self.save_mps(path)
+
+    def save_mps(self, path: str):
         """
         Outputs the instance as an MPS file.
 
@@ -280,12 +284,12 @@ class Instance(UserAnnotationBase):
         - Only linear problems are supported.
         - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
         """
-        _ommx_rust.write_mps_file(self.to_bytes(), path)
+        self.raw.save_mps(path)
 
     @staticmethod
     def load_qplib(path: str) -> Instance:
-        bytes = _ommx_rust.load_qplib_bytes(path)
-        return Instance.from_bytes(bytes)
+        raw = _ommx_rust.Instance.load_qplib(path)
+        return Instance(raw)
 
     def add_user_annotation(
         self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
