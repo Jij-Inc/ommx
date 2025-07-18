@@ -138,6 +138,21 @@ impl Instance {
     ///
     /// where $\lambda$ is the single penalty parameter.
     pub fn uniform_penalty_method(self) -> Result<ParametricInstance> {
+        // Early return if no constraints
+        if self.constraints.is_empty() {
+            return Ok(ParametricInstance {
+                sense: self.sense,
+                objective: self.objective,
+                decision_variables: self.decision_variables,
+                parameters: BTreeMap::new(),
+                constraints: BTreeMap::new(),
+                removed_constraints: BTreeMap::new(),
+                decision_variable_dependency: self.decision_variable_dependency,
+                constraint_hints: self.constraint_hints,
+                description: self.description,
+            });
+        }
+
         let mut max_id = 0;
 
         // Find the maximum ID among decision variables
@@ -202,9 +217,8 @@ mod tests {
     use crate::{coeff, constraint::Equality, linear, DecisionVariable, Sense};
     use std::collections::BTreeMap;
 
-    #[test]
-    fn test_penalty_method() {
-        // Create decision variables
+    /// Helper function to create a test instance with two decision variables and two constraints
+    fn create_test_instance_with_constraints() -> Instance {
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
             VariableID::from(1),
@@ -215,10 +229,8 @@ mod tests {
             DecisionVariable::continuous(VariableID::from(2)),
         );
 
-        // Create objective: x + y
         let objective = Function::from(linear!(1) + linear!(2));
 
-        // Create constraints: x + y <= 1 and x - y = 0
         let mut constraints = BTreeMap::new();
         constraints.insert(
             ConstraintID::from(1),
@@ -245,97 +257,102 @@ mod tests {
             },
         );
 
-        let instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
+    }
 
-        let parametric_instance = instance.penalty_method().unwrap();
-
+    /// Helper function to verify penalty method properties
+    fn verify_penalty_method_properties(
+        original_objective: Function,
+        original_constraint_count: usize,
+        parametric_instance: &ParametricInstance,
+        expected_param_count: usize,
+        expected_param_name: &str,
+    ) {
         // Check that constraints are removed
         assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 2);
+        assert_eq!(
+            parametric_instance.removed_constraints.len(),
+            original_constraint_count
+        );
 
-        // Check that parameters are created
-        assert_eq!(parametric_instance.parameters.len(), 2);
+        // Check that correct number of parameters are created
+        assert_eq!(parametric_instance.parameters.len(), expected_param_count);
 
-        // Check that penalty parameters have correct names
+        // Check parameter names
         for parameter in parametric_instance.parameters.values() {
-            assert_eq!(parameter.name, Some("penalty_weight".to_string()));
+            assert_eq!(parameter.name, Some(expected_param_name.to_string()));
         }
+
+        // Verify ID disjointness
+        let dv_ids: std::collections::BTreeSet<_> = parametric_instance
+            .decision_variables
+            .keys()
+            .cloned()
+            .collect();
+        let p_ids: std::collections::BTreeSet<_> =
+            parametric_instance.parameters.keys().cloned().collect();
+        assert!(dv_ids.is_disjoint(&p_ids));
+
+        // Verify zero penalty weight behavior
+        use crate::v1::Parameters;
+        use ::approx::AbsDiffEq;
+        
+        let parameters = Parameters {
+            entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
+        };
+        let substituted = parametric_instance
+            .clone()
+            .with_parameters(parameters)
+            .unwrap();
+        
+        assert!(substituted
+            .objective
+            .abs_diff_eq(&original_objective, crate::ATol::default()));
+        assert_eq!(substituted.constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_penalty_method() {
+        let instance = create_test_instance_with_constraints();
+        let original_objective = instance.objective.clone();
+        let original_constraint_count = instance.constraints.len();
+        let parametric_instance = instance.penalty_method().unwrap();
+        
+        verify_penalty_method_properties(
+            original_objective,
+            original_constraint_count,
+            &parametric_instance,
+            2, // Two parameters expected (one per constraint)
+            "penalty_weight",
+        );
     }
 
     #[test]
     fn test_uniform_penalty_method() {
-        // Create decision variables
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-
-        // Create objective: x + y
-        let objective = Function::from(linear!(1) + linear!(2));
-
-        // Create constraints: x + y <= 1 and x - y = 0
-        let mut constraints = BTreeMap::new();
-        constraints.insert(
-            ConstraintID::from(1),
-            Constraint {
-                id: ConstraintID::from(1),
-                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
-                equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-        constraints.insert(
-            ConstraintID::from(2),
-            Constraint {
-                id: ConstraintID::from(2),
-                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
-                equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-
-        let instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
-
+        let instance = create_test_instance_with_constraints();
+        let original_objective = instance.objective.clone();
+        let original_constraint_count = instance.constraints.len();
         let parametric_instance = instance.uniform_penalty_method().unwrap();
-
-        // Check that constraints are removed
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 2);
-
-        // Check that only one parameter is created
-        assert_eq!(parametric_instance.parameters.len(), 1);
-
-        // Check that the penalty parameter has correct name
-        let parameter = parametric_instance.parameters.values().next().unwrap();
-        assert_eq!(parameter.name, Some("uniform_penalty_weight".to_string()));
+        
+        verify_penalty_method_properties(
+            original_objective,
+            original_constraint_count,
+            &parametric_instance,
+            1, // One parameter expected (shared for all constraints)
+            "uniform_penalty_weight",
+        );
     }
 
     #[test]
-    fn test_penalty_method_with_no_constraints() {
-        // Create decision variables
+    fn test_penalty_methods_with_no_constraints() {
+        // Create instance without constraints
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
             VariableID::from(1),
             DecisionVariable::continuous(VariableID::from(1)),
         );
 
-        // Create objective: x
         let objective = Function::from(linear!(1));
-
-        // No constraints
         let constraints = BTreeMap::new();
 
         let instance = Instance::new(
@@ -346,184 +363,18 @@ mod tests {
         )
         .unwrap();
 
-        let parametric_instance = instance.penalty_method().unwrap();
-
-        // Check that no parameters are created
+        // Test penalty_method
+        let parametric_instance = instance.clone().penalty_method().unwrap();
         assert_eq!(parametric_instance.parameters.len(), 0);
         assert_eq!(parametric_instance.constraints.len(), 0);
         assert_eq!(parametric_instance.removed_constraints.len(), 0);
-
-        // Check that objective is unchanged
         assert_eq!(parametric_instance.objective, objective);
-    }
 
-    #[test]
-    fn test_penalty_method_properties() {
-        use crate::v1::Parameters;
-
-        // Create a simple test case with constraints
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-
-        let objective = Function::from(linear!(1) + linear!(2));
-
-        let mut constraints = BTreeMap::new();
-        constraints.insert(
-            ConstraintID::from(1),
-            Constraint {
-                id: ConstraintID::from(1),
-                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
-                equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-        constraints.insert(
-            ConstraintID::from(2),
-            Constraint {
-                id: ConstraintID::from(2),
-                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
-                equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-
-        let instance = Instance::new(
-            Sense::Minimize,
-            objective.clone(),
-            decision_variables,
-            constraints,
-        )
-        .unwrap();
-
-        // Test penalty method
-        let parametric_instance = instance.clone().penalty_method().unwrap();
-        let dv_ids: std::collections::BTreeSet<_> = parametric_instance
-            .decision_variables
-            .keys()
-            .cloned()
-            .collect();
-        let p_ids: std::collections::BTreeSet<_> =
-            parametric_instance.parameters.keys().cloned().collect();
-
-        // Decision variable IDs and parameter IDs should be disjoint
-        assert!(dv_ids.is_disjoint(&p_ids));
-
-        // Check that parameters are created
-        assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 2);
-        assert_eq!(parametric_instance.parameters.len(), 2);
-
-        // Put every penalty weights to zero - objective should be unchanged
-        let parameters = Parameters {
-            entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
-        };
-        let substituted = parametric_instance
-            .clone()
-            .with_parameters(parameters)
-            .unwrap();
-        // Use AbsDiffEq for comparison since types may differ
-        use ::approx::AbsDiffEq;
-        assert!(substituted
-            .objective
-            .abs_diff_eq(&objective, crate::ATol::default()));
-        assert_eq!(substituted.constraints.len(), 0);
-    }
-
-    #[test]
-    fn test_uniform_penalty_method_properties() {
-        use crate::v1::Parameters;
-
-        // Create a simple test case with constraints
-        let mut decision_variables = BTreeMap::new();
-        decision_variables.insert(
-            VariableID::from(1),
-            DecisionVariable::continuous(VariableID::from(1)),
-        );
-        decision_variables.insert(
-            VariableID::from(2),
-            DecisionVariable::continuous(VariableID::from(2)),
-        );
-
-        let objective = Function::from(linear!(1) + linear!(2));
-
-        let mut constraints = BTreeMap::new();
-        constraints.insert(
-            ConstraintID::from(1),
-            Constraint {
-                id: ConstraintID::from(1),
-                function: Function::from(linear!(1) + linear!(2) + coeff!(-1.0)),
-                equality: Equality::LessThanOrEqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-        constraints.insert(
-            ConstraintID::from(2),
-            Constraint {
-                id: ConstraintID::from(2),
-                function: Function::from(linear!(1) + coeff!(-1.0) * linear!(2)),
-                equality: Equality::EqualToZero,
-                name: None,
-                subscripts: Vec::new(),
-                parameters: Default::default(),
-                description: None,
-            },
-        );
-
-        let instance = Instance::new(
-            Sense::Minimize,
-            objective.clone(),
-            decision_variables,
-            constraints,
-        )
-        .unwrap();
-
-        // Test uniform penalty method
+        // Test uniform_penalty_method
         let parametric_instance = instance.uniform_penalty_method().unwrap();
-        let dv_ids: std::collections::BTreeSet<_> = parametric_instance
-            .decision_variables
-            .keys()
-            .cloned()
-            .collect();
-        let p_ids: std::collections::BTreeSet<_> =
-            parametric_instance.parameters.keys().cloned().collect();
-
-        // Decision variable IDs and parameter IDs should be disjoint
-        assert!(dv_ids.is_disjoint(&p_ids));
-
-        // Check that only one parameter is created
+        assert_eq!(parametric_instance.parameters.len(), 0);
         assert_eq!(parametric_instance.constraints.len(), 0);
-        assert_eq!(parametric_instance.removed_constraints.len(), 2);
-        assert_eq!(parametric_instance.parameters.len(), 1);
-
-        // Put penalty weight to zero - objective should be unchanged
-        let parameters = Parameters {
-            entries: p_ids.iter().map(|id| (id.into_inner(), 0.0)).collect(),
-        };
-        let substituted = parametric_instance
-            .clone()
-            .with_parameters(parameters)
-            .unwrap();
-        // Use AbsDiffEq for comparison since types may differ
-        use ::approx::AbsDiffEq;
-        assert!(substituted
-            .objective
-            .abs_diff_eq(&objective, crate::ATol::default()));
-        assert_eq!(substituted.constraints.len(), 0);
+        assert_eq!(parametric_instance.removed_constraints.len(), 0);
+        assert_eq!(parametric_instance.objective, objective);
     }
 }
