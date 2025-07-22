@@ -28,11 +28,15 @@ pub fn package(path: &Path) -> Result<()> {
                 continue;
             }
         };
-        assert_eq!(
-            instance.decision_variables().len(),
-            annotations.variables()?,
-            "Variable count mismatch for {name}"
-        );
+        let expected_count = annotations.variables()?;
+        let actual_count = instance.decision_variables().len();
+        if actual_count != expected_count {
+            anyhow::bail!(
+                "Variable count mismatch for {name}: expected {}, found {}",
+                expected_count,
+                actual_count
+            );
+        }
 
         let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
         builder.add_instance(instance.into(), annotations.clone())?;
