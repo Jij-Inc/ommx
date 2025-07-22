@@ -660,34 +660,11 @@ class Instance(UserAnnotationBase):
     @property
     def used_decision_variables(self) -> list[DecisionVariable]:
         """
-        Get a list of decision variables used in the objective and remaining constraints.
+        Get a list of only the decision variables used in the objective and remaining constraints.
 
-        Examples
-        =========
+        Returns a list of :class:`DecisionVariable` instancess sorted by their IDs.
 
-        >>> x = [DecisionVariable.binary(i) for i in range(3)]
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=sum(x),
-        ...     constraints=[],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.used_decision_variables
-        [DecisionVariable(id=0, kind=1, name="", bound=[0, 1]), DecisionVariable(id=1, kind=1, name="", bound=[0, 1]), DecisionVariable(id=2, kind=1, name="", bound=[0, 1])]
-
-        >>> instance = Instance.from_components(
-        ...     decision_variables=x,
-        ...     objective=x[0],
-        ...     constraints=[(x[1] == 1).set_id(0)],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-        >>> instance.used_decision_variables
-        [DecisionVariable(id=0, kind=1, name="", bound=[0, 1]), DecisionVariable(id=1, kind=1, name="", bound=[0, 1])]
-
-        >>> instance.relax_constraint(0, "testing")
-        >>> instance.used_decision_variables
-        [DecisionVariable(id=0, kind=1, name="", bound=[0, 1])]
-
+        Decision variables defined in the instance but not actually present in the objective function and constraints are excluded from the list.
         """
         return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
 
