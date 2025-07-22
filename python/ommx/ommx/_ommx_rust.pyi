@@ -508,6 +508,7 @@ class Instance:
     """
     description: typing.Optional[InstanceDescription]
     constraint_hints: ConstraintHints
+    used_decision_variables: builtins.list[DecisionVariable]
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
@@ -1174,6 +1175,6 @@ class Sense(Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-def miplib2017_instance_annotations() -> builtins.dict[
-    builtins.str, builtins.dict[builtins.str, builtins.str]
-]: ...
+def miplib2017_instance_annotations() -> (
+    builtins.dict[builtins.str, builtins.dict[builtins.str, builtins.str]]
+): ...
