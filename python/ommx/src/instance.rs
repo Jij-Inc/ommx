@@ -126,6 +126,15 @@ impl Instance {
         ConstraintHints(self.0.constraint_hints().clone())
     }
 
+    #[getter]
+    pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
+        self.0
+            .used_decision_variables()
+            .values()
+            .map(|&var| DecisionVariable(var.clone()))
+            .collect()
+    }
+
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let buf = self.0.to_bytes();
         PyBytes::new(py, &buf)
