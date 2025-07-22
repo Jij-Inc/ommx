@@ -689,7 +689,7 @@ class Instance(UserAnnotationBase):
         [DecisionVariable(id=0, kind=1, name="", bound=[0, 1])]
 
         """
-        return self.raw.used_decision_variables
+        return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
 
     def to_qubo(
         self,
