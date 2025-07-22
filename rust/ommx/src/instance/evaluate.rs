@@ -31,7 +31,7 @@ impl Evaluate for Instance {
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
 
-        let sense = *self.sense();
+        let sense = self.sense();
 
         let solution =
             crate::Solution::new(objective, evaluated_constraints, decision_variables, sense);

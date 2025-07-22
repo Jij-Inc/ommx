@@ -63,12 +63,23 @@ impl<M: Monomial> From<Coefficient> for PolynomialBase<M> {
     }
 }
 
-impl<M: Monomial> From<M> for Function
-where
-    Function: From<PolynomialBase<M>>,
-{
-    fn from(value: M) -> Self {
-        let p = PolynomialBase::<M>::from(value);
+impl From<LinearMonomial> for Function {
+    fn from(value: LinearMonomial) -> Self {
+        let p = PolynomialBase::<LinearMonomial>::from(value);
+        Function::from(p)
+    }
+}
+
+impl From<QuadraticMonomial> for Function {
+    fn from(value: QuadraticMonomial) -> Self {
+        let p = PolynomialBase::<QuadraticMonomial>::from(value);
+        Function::from(p)
+    }
+}
+
+impl From<MonomialDyn> for Function {
+    fn from(value: MonomialDyn) -> Self {
+        let p = PolynomialBase::<MonomialDyn>::from(value);
         Function::from(p)
     }
 }

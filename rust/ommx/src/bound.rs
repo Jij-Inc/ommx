@@ -306,6 +306,11 @@ impl Bound {
         Self::new(f64::NEG_INFINITY, 0.0).unwrap()
     }
 
+    /// Unbounded, `(-inf, inf)`, which equals to `Bound::default()`
+    pub fn unbounded() -> Self {
+        Self::default()
+    }
+
     pub fn of_binary() -> Self {
         Self::new(0.0, 1.0).unwrap()
     }

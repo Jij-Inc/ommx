@@ -30,6 +30,7 @@ fnv.workspace = true
 getset.workspace = true
 indexmap.workspace = true
 itertools.workspace = true
+katexit.workspace = true
 log.workspace = true
 maplit.workspace = true
 num.workspace = true

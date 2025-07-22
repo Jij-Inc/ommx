@@ -58,7 +58,7 @@ fn write_beginning<W: Write>(instance: &Instance, out: &mut W) -> Result<(), Mps
         .clone()
         .and_then(|descr| descr.name)
         .unwrap_or(String::from("Converted OMMX problem"));
-    let obj_sense = match *instance.sense() {
+    let obj_sense = match instance.sense() {
         Sense::Maximize => ObjSense::Max,
         Sense::Minimize => ObjSense::Min,
     };
