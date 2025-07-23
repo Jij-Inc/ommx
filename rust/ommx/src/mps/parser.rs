@@ -186,7 +186,9 @@ impl State {
     //           ROWS
     //            type     name
     fn read_row_field(&mut self, fields: Vec<&str>) -> Result<()> {
-        ensure_field_size("ROWS", &fields, |len| len == 2)?;
+        // Some MPS files (e.g. ivu59) contains additional fields in ROWS section.
+        // We only require the first two fields.
+        ensure_field_size("ROWS", &fields, |len| len >= 2)?;
         let row_name = RowName(fields[1].to_string());
         match fields[0] {
             "N" => {
