@@ -149,6 +149,20 @@ struct State {
     mps: Mps,
 }
 
+fn ensure_field_size(
+    section: &'static str,
+    fields: &[&str],
+    pred: impl Fn(usize) -> bool,
+) -> Result<()> {
+    if !pred(fields.len()) {
+        return Err(MpsParseError::InvalidFieldSize {
+            section,
+            size: fields.len(),
+        });
+    }
+    Ok(())
+}
+
 impl State {
     fn read_header(&mut self, line: String) -> Result<()> {
         if let Some(name) = line.strip_prefix("NAME") {
@@ -172,7 +186,7 @@ impl State {
     //           ROWS
     //            type     name
     fn read_row_field(&mut self, fields: Vec<&str>) -> Result<()> {
-        assert_eq!(fields.len(), 2);
+        ensure_field_size("ROWS", &fields, |len| len == 2)?;
         let row_name = RowName(fields[1].to_string());
         match fields[0] {
             "N" => {
@@ -210,7 +224,7 @@ impl State {
     //                    column       row       value     row      value
     //                     name        name                name
     fn read_column_field(&mut self, fields: Vec<&str>) -> Result<()> {
-        assert!(fields.len() == 3 || fields.len() == 5);
+        ensure_field_size("COLUMNS", &fields, |len| len >= 3 && len % 2 == 1)?;
 
         // G. A mixed integer program requires the specification of which variables
         //    are required to be integer.  Markers are used to indicate the start
@@ -259,7 +273,7 @@ impl State {
     //                     rhs         row       value     row      value
     //                     name        name                name
     fn read_rhs_field(&mut self, fields: Vec<&str>) -> Result<()> {
-        assert!(fields.len() == 3 || fields.len() == 5);
+        ensure_field_size("RHS", &fields, |len| len >= 3 && len % 2 == 1)?;
         for chunk in fields[1..].chunks(2) {
             let row_name = RowName(chunk[0].to_string());
             let coefficient = chunk[1].parse()?;
@@ -277,11 +291,13 @@ impl State {
     //                     name        name                name
     //
     fn read_range_field(&mut self, fields: Vec<&str>) -> Result<()> {
-        assert!(fields.len() == 3 || fields.len() == 5);
+        ensure_field_size("RANGES", &fields, |len| len >= 3 && len % 2 == 1)?;
         for chunk in fields[1..].chunks(2) {
             let row_name = RowName(chunk[0].to_string());
             let range: f64 = chunk[1].parse()?;
-            assert_ne!(range, 0.0, "RANGES with 0.0 is not supported");
+            if range == 0.0 {
+                return Err(MpsParseError::ZeroRange);
+            }
             let mut new_row_name_candidate = RowName(format!("{}_", row_name.0));
             let new_row_name = loop {
                 if !self.mps.a.contains_key(&new_row_name_candidate) {

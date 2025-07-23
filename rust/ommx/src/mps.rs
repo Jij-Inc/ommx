@@ -137,6 +137,12 @@ pub enum MpsParseError {
 
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
+
+    #[error("Invalid size ({size}) of field in section '{section}'")]
+    InvalidFieldSize { section: &'static str, size: usize },
+
+    #[error("RANGES with 0 is not supported")]
+    ZeroRange,
 }
 
 #[derive(Debug, thiserror::Error)]
