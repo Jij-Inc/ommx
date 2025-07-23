@@ -376,3 +376,5 @@ def test_used_decision_variables_relax_constraint():
     instance.relax_constraint(1, "relax")
     # x[2] is no longer present in the problem
     assert instance.used_decision_variables == x[:-1]
+    # id for x[2] is listed as irrelevant
+    assert instance.decision_variable_analysis().irrelevant() == {x[2].id}
