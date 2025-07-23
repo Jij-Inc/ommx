@@ -20,6 +20,11 @@ pub fn package(path: &Path) -> Result<()> {
             continue;
         };
 
+        let Ok(mut builder) = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name) else {
+            log::warn!("Skip: container already exists for '{name}'");
+            continue;
+        };
+
         log::info!("Loading: {name}");
         let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
@@ -38,7 +43,6 @@ pub fn package(path: &Path) -> Result<()> {
             );
         }
 
-        let mut builder = Builder::for_github("Jij-Inc", "ommx", "miplib2017", &name)?;
         builder.add_instance(instance.into(), annotations.clone())?;
         let mut artifact = builder.build()?;
         artifact.push()?;
