@@ -109,6 +109,7 @@ pub fn save(
     Ok(())
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsParseError {
     #[error("Unknown row name: {0}")]
