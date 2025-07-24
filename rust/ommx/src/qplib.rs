@@ -38,6 +38,7 @@ impl QplibParseError {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum ParseErrorReason {
     #[error("Invalid problem type: {0}")]

@@ -1,6 +1,7 @@
 use crate::decision_variable::VariableID;
 
 /// Error types that can occur during substitution operations.
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SubstitutionError {
     /// Error indicating that a recursive assignment was attempted.
