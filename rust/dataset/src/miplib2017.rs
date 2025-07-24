@@ -37,9 +37,7 @@ pub fn package(path: &Path) -> Result<()> {
         let actual_count = instance.decision_variables().len();
         if actual_count != expected_count {
             log::error!(
-                "Skip: Variable count mismatch for '{name}': expected {}, found {}",
-                expected_count,
-                actual_count
+                "Skip: Variable count mismatch for '{name}': expected {expected_count}, found {actual_count}"
             );
             continue;
         }
