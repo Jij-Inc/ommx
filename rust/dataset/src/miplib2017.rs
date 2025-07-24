@@ -44,8 +44,8 @@ pub fn package(path: &Path) -> Result<()> {
         }
 
         builder.add_instance(instance.into(), annotations.clone())?;
-        let mut artifact = builder.build()?;
-        artifact.push()?;
+        let _artifact = builder.build()?;
+        // Do not push here. Use `ommx push` command to upload the artifacts.
     }
     Ok(())
 }
