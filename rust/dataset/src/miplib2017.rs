@@ -29,18 +29,19 @@ pub fn package(path: &Path) -> Result<()> {
         let instance = match ommx::mps::parse(file) {
             Ok(instance) => instance,
             Err(err) => {
-                log::warn!("Skip: Failed to load '{name}' with error: {err}");
+                log::error!("Skip: Failed to load '{name}' with error: {err}");
                 continue;
             }
         };
         let expected_count = annotations.variables()?;
         let actual_count = instance.decision_variables().len();
         if actual_count != expected_count {
-            anyhow::bail!(
-                "Variable count mismatch for {name}: expected {}, found {}",
+            log::error!(
+                "Skip: Variable count mismatch for '{name}': expected {}, found {}",
                 expected_count,
                 actual_count
             );
+            continue;
         }
 
         builder.add_instance(instance.into(), annotations.clone())?;
