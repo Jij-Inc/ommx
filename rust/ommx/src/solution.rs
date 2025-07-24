@@ -6,6 +6,7 @@ use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Error occurred during Solution validation
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum SolutionError {
     #[error("Inconsistent feasibility for solution: provided={provided_feasible}, computed={computed_feasible}")]

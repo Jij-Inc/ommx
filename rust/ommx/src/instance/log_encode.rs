@@ -1,6 +1,7 @@
 use super::Instance;
 use crate::{substitute_one, Bound, Coefficient, Linear, VariableID};
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum LogEncodingError {
     #[error("Unknown variable with ID: {0}")]

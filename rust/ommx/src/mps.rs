@@ -146,6 +146,7 @@ pub enum MpsParseError {
     ZeroRange,
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
     #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]
