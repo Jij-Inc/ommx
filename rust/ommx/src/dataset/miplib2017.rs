@@ -170,7 +170,7 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
 /// Instances which OMMX cannot load correctly
 fn check_unsupported(name: &str) -> Result<()> {
     ensure!(
-        [
+        ![
             "neos-933638",
             "neos-935769",
             "neos-983171",
@@ -186,7 +186,7 @@ fn check_unsupported(name: &str) -> Result<()> {
         "Instance {name} is a multi-objective problem, which is not supported by OMMX."
     );
     ensure!(
-        [
+        ![
             "supportcase27i",
             "supportcase21i",
             "supportcase28i",
