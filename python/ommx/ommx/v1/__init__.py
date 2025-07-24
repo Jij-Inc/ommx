@@ -276,7 +276,7 @@ class Instance(UserAnnotationBase):
     def write_mps(self, path: str):
         self.save_mps(path)
 
-    def save_mps(self, path: str):
+    def save_mps(self, path: str, *, compress=True):
         """
         Outputs the instance as an MPS file.
 
@@ -284,7 +284,7 @@ class Instance(UserAnnotationBase):
         - Only linear problems are supported.
         - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
         """
-        self.raw.save_mps(path)
+        self.raw.save_mps(path, compress=compress)
 
     @staticmethod
     def load_qplib(path: str) -> Instance:
