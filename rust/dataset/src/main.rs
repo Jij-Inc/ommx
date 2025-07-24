@@ -5,12 +5,15 @@ use clap::Parser;
 use env_logger::{Builder, Env};
 use std::path::PathBuf;
 
+/// OMMX Artifact generator for well-known datasets.
+///
+/// This only support packaging into OMMX Artifact, please use `ommx push` command to upload the artifacts.
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
 enum Command {
-    /// Convert MIPLIB collections into OMMX Artifact, and Push to GitHub
+    /// MIPLIB 2017 collections
     Miplib2017 {
-        /// Path to downloaded MIPLIB collection.zip file
+        /// Path to downloaded MIPLIB's `collection.zip` or `benchmark.zip` file
         path: PathBuf,
     },
 }
