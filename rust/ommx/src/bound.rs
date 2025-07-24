@@ -9,6 +9,7 @@ use proptest::prelude::*;
 use std::{collections::BTreeMap, ops::*};
 use thiserror::Error;
 
+#[non_exhaustive]
 #[derive(Debug, Error)]
 pub enum BoundError {
     #[error("lower({lower}) or upper({upper}) never be NAN")]

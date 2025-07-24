@@ -109,6 +109,7 @@ pub fn save(
     Ok(())
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsParseError {
     #[error("Unknown row name: {0}")]
@@ -136,6 +137,7 @@ pub enum MpsParseError {
     ParseFloat(#[from] std::num::ParseFloatError),
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
     #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]

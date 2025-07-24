@@ -334,6 +334,7 @@ impl DecisionVariable {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum DecisionVariableError {
     #[error("Bound for ID={id} is inconsistent to kind: kind={kind:?}, bound={bound}")]

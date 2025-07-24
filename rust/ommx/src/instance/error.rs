@@ -1,6 +1,7 @@
 use super::*;
 
 /// Violation of the [`Instance`] invariants.
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum InstanceError {
     #[error("Duplicated variable ID is found in definition: {id:?}")]

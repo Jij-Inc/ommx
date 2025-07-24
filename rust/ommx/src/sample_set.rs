@@ -10,6 +10,7 @@ use getset::Getters;
 use std::collections::BTreeMap;
 
 /// Error occurred during SampleSet validation
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum SampleSetError {
     #[error("Inconsistent feasibility for sample {sample_id}: provided={provided_feasible}, computed={computed_feasible}")]
