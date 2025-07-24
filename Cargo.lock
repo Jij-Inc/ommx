@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "_ommx_rust"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -599,7 +599,7 @@ dependencies = [
 
 [[package]]
 name = "dataset"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1525,7 +1525,7 @@ dependencies = [
 
 [[package]]
 name = "ommx"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "approx",
@@ -1824,7 +1824,7 @@ dependencies = [
 
 [[package]]
 name = "protogen"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "anyhow",
  "colored",
