@@ -591,6 +591,12 @@ mod tests {
     }
 
     #[test]
+    fn minus_zero() {
+        let bound = Bound::new(-0.1, 1.1).unwrap();
+        insta::assert_snapshot!(bound.as_integer_bound(ATol::default()).unwrap(), @"[0, 1]");
+    }
+
+    #[test]
     fn bound_pow() {
         insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(2), @"Bound[4, 9]");
         insta::assert_debug_snapshot!(Bound::new(2.0, 3.0).unwrap().pow(3), @"Bound[8, 27]");
