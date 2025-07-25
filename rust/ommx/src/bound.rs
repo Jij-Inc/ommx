@@ -374,7 +374,12 @@ impl Bound {
     /// ```
     pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {
-            (self.lower - atol).ceil()
+            let out = (self.lower - atol).ceil();
+            if out == 0.0 {
+                0.0 // Avoid negative zero
+            } else {
+                out
+            }
         } else {
             self.lower
         };
@@ -583,6 +588,12 @@ mod tests {
             Bound::positive().intersection(&Bound::negative()).unwrap(),
             0.0
         );
+    }
+
+    #[test]
+    fn minus_zero() {
+        let bound = Bound::new(-0.1, 1.1).unwrap();
+        insta::assert_snapshot!(bound.as_integer_bound(ATol::default()).unwrap(), @"[0, 1]");
     }
 
     #[test]
