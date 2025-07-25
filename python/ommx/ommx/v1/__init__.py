@@ -657,6 +657,17 @@ class Instance(UserAnnotationBase):
         """
         return self.raw.required_ids()
 
+    @property
+    def used_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get a list of only the decision variables used in the objective and remaining constraints.
+
+        Returns a list of :class:`DecisionVariable` instancess sorted by their IDs.
+
+        Decision variables defined in the instance but not actually present in the objective function and constraints are excluded from the list.
+        """
+        return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
+
     def to_qubo(
         self,
         *,

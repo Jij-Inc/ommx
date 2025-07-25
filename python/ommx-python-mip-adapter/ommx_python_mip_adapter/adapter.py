@@ -296,12 +296,12 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: data.var_by_name(str(var.id)).x  # type: ignore
-                for var in self.instance.decision_variables
+                for var in self.instance.used_decision_variables
             }
         )
 
     def _set_decision_variables(self):
-        for var in self.instance.decision_variables:
+        for var in self.instance.used_decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.add_var(
                     name=str(var.id),

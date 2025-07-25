@@ -74,3 +74,48 @@ def test_solution_optimality():
 
     solution = OMMXPythonMIPAdapter.solve(ommx_instance)
     assert solution.optimality == Solution.OPTIMAL
+
+
+def test_partial_evaluate():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1] + x[2],
+        constraints=[(x[0] + x[1] + x[2] <= 1).set_id(0)],  # one-hot constraint
+        sense=Instance.MINIMIZE,
+    )
+    assert instance.used_decision_variables == x
+    partial = instance.partial_evaluate({0: 1})
+    # x[0] is no longer present in the problem
+    assert partial.used_decision_variables == x[1:]
+
+    solution = OMMXPythonMIPAdapter.solve(partial)
+    assert [var.value for var in solution.decision_variables] == [1, 0, 0]
+    assert solution.optimality == Solution.OPTIMAL
+
+    partial = instance.partial_evaluate({1: 1})
+    solution = OMMXPythonMIPAdapter.solve(partial)
+    assert [var.value for var in solution.decision_variables] == [0, 1, 0]
+
+    partial = instance.partial_evaluate({2: 1})
+    solution = OMMXPythonMIPAdapter.solve(partial)
+    assert [var.value for var in solution.decision_variables] == [0, 0, 1]
+
+
+def test_relax_constraint():
+    x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints=[(x[0] + 2 * x[1] <= 1).set_id(0), (x[1] + x[2] <= 1).set_id(1)],
+        sense=Instance.MINIMIZE,
+    )
+
+    assert instance.used_decision_variables == x
+    instance.relax_constraint(1, "relax")
+    # id for x[2] is listed as irrelevant
+    assert instance.decision_variable_analysis().irrelevant() == {x[2].id}
+
+    solution = OMMXPythonMIPAdapter.solve(instance)
+    # x[2] is still present as part of the evaluate/decoding process but has a value of 0
+    assert [var.value for var in solution.decision_variables] == [0, 0, 0]

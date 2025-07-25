@@ -414,18 +414,18 @@ class OMMXHighsAdapter(SolverAdapter):
         return State(
             entries={
                 var.id: solution.col_value[i]
-                for i, var in enumerate(self.instance.decision_variables)
+                for i, var in enumerate(self.instance.used_decision_variables)
             }
         )
 
     def _set_decision_variables(self):
-        num_cols = len(self.instance.decision_variables)
+        num_cols = len(self.instance.used_decision_variables)
         lower = np.zeros(num_cols)
         upper = np.zeros(num_cols)
         types = []
         var_ids = []
 
-        for i, var in enumerate(self.instance.decision_variables):
+        for i, var in enumerate(self.instance.used_decision_variables):
             var_ids.append(var.id)
             if var.kind == DecisionVariable.BINARY:
                 lower[i] = 0
