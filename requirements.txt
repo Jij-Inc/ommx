@@ -8,7 +8,7 @@ appnope==0.1.4
     # via ipykernel
 asttokens==3.0.0
     # via stack-data
-attrs==25.1.0
+attrs==25.3.0
     # via
     #   jsonschema
     #   jupyter-cache
