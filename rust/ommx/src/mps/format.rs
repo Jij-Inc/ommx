@@ -235,3 +235,192 @@ fn constr_name(constr_id: ConstraintID) -> String {
 fn dvar_name(var_id: VariableID) -> String {
     format!("{VAR_PREFIX}{}", var_id.into_inner())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{decision_variable::Kind, Bound, DecisionVariable};
+    use maplit::btreemap;
+
+    #[test]
+    fn test_write_bounds_unbounded() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::unbounded(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UP BND1    OMMX_VAR_0  inf
+          LO BND1    OMMX_VAR_0  -inf
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_positive() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::positive(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UP BND1    OMMX_VAR_0  inf
+          LO BND1    OMMX_VAR_0  0
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_negative() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::negative(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UP BND1    OMMX_VAR_0  0
+          LO BND1    OMMX_VAR_0  -inf
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_integer_types() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Binary,
+                Bound::of_binary(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1),
+                Kind::Integer,
+                Bound::new(-10.0, 20.0).unwrap(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0) + crate::linear!(1)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UI BND1    OMMX_VAR_0  1
+          LI BND1    OMMX_VAR_0  0
+          UI BND1    OMMX_VAR_1  20
+          LI BND1    OMMX_VAR_1  -10
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_mixed_types() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::unbounded(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1),
+                Kind::Continuous,
+                Bound::positive(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(2) => DecisionVariable::new(
+                VariableID::from(2),
+                Kind::Integer,
+                Bound::negative(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0) + crate::linear!(1) + crate::linear!(2)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UP BND1    OMMX_VAR_0  inf
+          LO BND1    OMMX_VAR_0  -inf
+          UP BND1    OMMX_VAR_1  inf
+          LO BND1    OMMX_VAR_1  0
+          UI BND1    OMMX_VAR_2  0
+          LI BND1    OMMX_VAR_2  -inf
+        "###);
+    }
+}
