@@ -210,14 +210,38 @@ fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWri
     for (var_id, dvar) in instance.decision_variables().iter() {
         let name = dvar_name(*var_id);
         let bound = dvar.bound();
-        let (low_kind, up_kind) = match dvar.kind() {
-            // for now ignoring the BV specifier for binary variables
-            // due to uncertainty in how widely supported it is.
-            DecisionVariableKind::Binary | DecisionVariableKind::Integer => ("LI", "UI"),
-            _ => ("LO", "UP"),
-        };
-        writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
-        writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
+
+        // Check special cases for infinity bounds
+        if bound.lower() == f64::NEG_INFINITY && bound.upper() == f64::INFINITY {
+            // Unbounded variable (-inf, inf)
+            writeln!(out, "  FR BND1    {name}")?;
+        } else if bound.lower() == f64::NEG_INFINITY {
+            // Lower bound is -inf, upper bound is finite
+            writeln!(out, "  MI BND1    {name}")?;
+            let up_kind = match dvar.kind() {
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => "UI",
+                _ => "UP",
+            };
+            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
+        } else if bound.upper() == f64::INFINITY {
+            // Upper bound is +inf, lower bound is finite
+            writeln!(out, "  PL BND1    {name}")?;
+            let low_kind = match dvar.kind() {
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => "LI",
+                _ => "LO",
+            };
+            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
+        } else {
+            // Both bounds are finite
+            let (low_kind, up_kind) = match dvar.kind() {
+                // for now ignoring the BV specifier for binary variables
+                // due to uncertainty in how widely supported it is.
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => ("LI", "UI"),
+                _ => ("LO", "UP"),
+            };
+            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
+            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
+        }
     }
     Ok(())
 }
@@ -234,4 +258,191 @@ fn constr_name(constr_id: ConstraintID) -> String {
 /// The decision variable's name is ignored, if present.
 fn dvar_name(var_id: VariableID) -> String {
     format!("{VAR_PREFIX}{}", var_id.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{decision_variable::Kind, Bound, DecisionVariable};
+    use maplit::btreemap;
+
+    #[test]
+    fn test_write_bounds_unbounded() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::unbounded(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          FR BND1    OMMX_VAR_0
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_positive() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::positive(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          PL BND1    OMMX_VAR_0
+          LO BND1    OMMX_VAR_0  0
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_negative() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::negative(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          MI BND1    OMMX_VAR_0
+          UP BND1    OMMX_VAR_0  0
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_integer_types() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Binary,
+                Bound::of_binary(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1),
+                Kind::Integer,
+                Bound::new(-10.0, 20.0).unwrap(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0) + crate::linear!(1)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          UI BND1    OMMX_VAR_0  1
+          LI BND1    OMMX_VAR_0  0
+          UI BND1    OMMX_VAR_1  20
+          LI BND1    OMMX_VAR_1  -10
+        "###);
+    }
+
+    #[test]
+    fn test_write_bounds_mixed_types() {
+        let decision_variables = btreemap! {
+            VariableID::from(0) => DecisionVariable::new(
+                VariableID::from(0),
+                Kind::Continuous,
+                Bound::unbounded(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(1) => DecisionVariable::new(
+                VariableID::from(1),
+                Kind::Continuous,
+                Bound::positive(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+            VariableID::from(2) => DecisionVariable::new(
+                VariableID::from(2),
+                Kind::Integer,
+                Bound::negative(),
+                None,
+                crate::ATol::default()
+            ).unwrap(),
+        };
+
+        let instance = Instance::new(
+            Sense::Minimize,
+            Function::from(crate::linear!(0) + crate::linear!(1) + crate::linear!(2)),
+            decision_variables,
+            btreemap! {},
+        )
+        .unwrap();
+
+        let mut buffer = Vec::new();
+        write_bounds(&instance, &mut buffer).unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+
+        insta::assert_snapshot!(output, @r###"
+        BOUNDS
+          FR BND1    OMMX_VAR_0
+          PL BND1    OMMX_VAR_1
+          LO BND1    OMMX_VAR_1  0
+          MI BND1    OMMX_VAR_2
+          UI BND1    OMMX_VAR_2  0
+        "###);
+    }
 }
