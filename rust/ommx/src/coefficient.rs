@@ -8,6 +8,7 @@ use std::{
 
 use crate::ATol;
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum CoefficientError {
     #[error("Coefficient must be non-zero")]

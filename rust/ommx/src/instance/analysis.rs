@@ -250,6 +250,7 @@ fn check_bound(
     Ok(())
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum StateValidationError {
     #[error("The state contains some unknown IDs: {unknown_ids:?}")]

@@ -65,6 +65,7 @@ pub struct ParseContext {
 }
 
 /// Error occurred during parsing OMMX Message
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum RawParseError {
     /// Incompatibility due to `oneof` in protobuf. See [`crate::Function`] for more information.

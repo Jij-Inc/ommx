@@ -109,6 +109,7 @@ pub fn save(
     Ok(())
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsParseError {
     #[error("Unknown row name: {0}")]
@@ -116,6 +117,9 @@ pub enum MpsParseError {
 
     #[error("Invalid row type: {0}")]
     InvalidRowType(String),
+
+    #[error("Multiple objective names found. This means the MPS file is for a multi-objective problem, which is not supported.")]
+    MultipleObjectiveNames,
 
     #[error("Invalid bound type: {0}")]
     InvalidBoundType(String),
@@ -134,8 +138,15 @@ pub enum MpsParseError {
 
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
+
+    #[error("Invalid size ({size}) of field in section '{section}'")]
+    InvalidFieldSize { section: &'static str, size: usize },
+
+    #[error("RANGES with 0 is not supported")]
+    ZeroRange,
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum MpsWriteError {
     #[error("MPS format does not support nonlinear constraint: Constraint ({name}) has {degree}-degree term")]

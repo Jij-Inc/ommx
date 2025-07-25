@@ -167,8 +167,90 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
     entries
 }
 
+/// Instances which OMMX cannot load correctly
+fn check_unsupported(name: &str) -> Result<()> {
+    ensure!(
+        ![
+            "neos-933638",
+            "neos-935769",
+            "neos-983171",
+            "neos-932721",
+            "dsbmip",
+            "neos-935234",
+            "lrn",
+            "neos-933966",
+            "ivu52",
+            "mad",
+        ]
+        .contains(&name),
+        "Instance {name} is a multi-objective problem, which is not supported by OMMX."
+    );
+    ensure!(
+        ![
+            "supportcase27i",
+            "supportcase21i",
+            "supportcase28i",
+            "mrcpspj30-17-10i",
+            "gfd-schedulen25f5d20m10k3i",
+            "fjspeasy01i",
+            "splice1k1i",
+            "elitserienhandball11i",
+            "elitserienhandball13i",
+            "mappingmesh3x3mpeg2i",
+            "amaze22012-07-04i",
+            "cvrpp-n16k8vrpi",
+            "l2p2i",
+            "mrcpspj30-15-5i",
+            "mario-t-hard5i",
+            "shipschedule6shipsmixi",
+            "mrcpspj30-53-3i",
+            "mspsphard01i",
+            "gfd-schedulen55f2d50m30k3i",
+            "amaze22012-03-15i",
+            "elitserienhandball3i",
+            "cvrpb-n45k5vrpi",
+            "gfd-schedulen180f7d50m30k18-16i",
+            "elitserienhandball14i",
+            "cvrpa-n64k9vrpi",
+            "k1mushroomi",
+            "shipschedule8shipsmixuci",
+            "amaze22012-06-28i",
+            "pizza78i",
+            "pizza27i",
+            "rpp22falsei",
+            "oocsp-racks030f7cci",
+            "fillomino7x7-0i",
+            "l2p1i",
+            "stoch-vrpvrp-s5v2c8vrp-v2c8i",
+            "shipschedule3shipsi",
+            "cvrpsimple2i",
+            "mspsphard03i",
+            "oocsp-racks030e6cci",
+            "ghoulomb4-9-10i",
+        ]
+        .contains(&name),
+        "Instance {name} contains 'INDICATORS', which is not supported by OMMX."
+    );
+    ensure!(
+        !["diameterc-msts-v40a100d5i", "diameterc-mstc-v20a190d5i"].contains(&name),
+        "Instance {name} contains 'LAZYCONS', which is not supported by OMMX."
+    );
+    ensure!(
+        name != "neos-5044663-wairoa",
+        "Instance {name} looks broken MPS file."
+    );
+    Ok(())
+}
+
 /// Load an instance from the MIPLIB 2017 dataset
 pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    let annotations = instance_annotations();
+    ensure!(
+        annotations.contains_key(name),
+        "Given name '{name}' does not exist in MIPLIB 2017"
+    );
+    check_unsupported(name)?;
+
     let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
     let mut artifact = Artifact::from_remote(image_name)?.pull()?;
     let mut instances = artifact.get_instances()?;

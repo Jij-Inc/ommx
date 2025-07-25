@@ -77,6 +77,7 @@ impl From<Linear> for v1::Linear {
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
 pub enum QuadraticParseError {
     #[error("Row length ({row}) does not match value length ({value})")]
