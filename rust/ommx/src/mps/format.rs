@@ -211,10 +211,28 @@ fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWri
         let name = dvar_name(*var_id);
         let bound = dvar.bound();
 
-        // Check if the variable is unbounded (-inf, inf)
+        // Check special cases for infinity bounds
         if bound.lower() == f64::NEG_INFINITY && bound.upper() == f64::INFINITY {
+            // Unbounded variable (-inf, inf)
             writeln!(out, "  FR BND1    {name}")?;
+        } else if bound.lower() == f64::NEG_INFINITY {
+            // Lower bound is -inf, upper bound is finite
+            writeln!(out, "  MI BND1    {name}")?;
+            let up_kind = match dvar.kind() {
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => "UI",
+                _ => "UP",
+            };
+            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
+        } else if bound.upper() == f64::INFINITY {
+            // Upper bound is +inf, lower bound is finite
+            writeln!(out, "  PL BND1    {name}")?;
+            let low_kind = match dvar.kind() {
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => "LI",
+                _ => "LO",
+            };
+            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
         } else {
+            // Both bounds are finite
             let (low_kind, up_kind) = match dvar.kind() {
                 // for now ignoring the BV specifier for binary variables
                 // due to uncertainty in how widely supported it is.
@@ -304,7 +322,7 @@ mod tests {
 
         insta::assert_snapshot!(output, @r###"
         BOUNDS
-          UP BND1    OMMX_VAR_0  inf
+          PL BND1    OMMX_VAR_0
           LO BND1    OMMX_VAR_0  0
         "###);
     }
@@ -335,8 +353,8 @@ mod tests {
 
         insta::assert_snapshot!(output, @r###"
         BOUNDS
+          MI BND1    OMMX_VAR_0
           UP BND1    OMMX_VAR_0  0
-          LO BND1    OMMX_VAR_0  -inf
         "###);
     }
 
@@ -421,10 +439,10 @@ mod tests {
         insta::assert_snapshot!(output, @r###"
         BOUNDS
           FR BND1    OMMX_VAR_0
-          UP BND1    OMMX_VAR_1  inf
+          PL BND1    OMMX_VAR_1
           LO BND1    OMMX_VAR_1  0
+          MI BND1    OMMX_VAR_2
           UI BND1    OMMX_VAR_2  0
-          LI BND1    OMMX_VAR_2  -inf
         "###);
     }
 }
