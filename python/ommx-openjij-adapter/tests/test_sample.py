@@ -173,6 +173,9 @@ def hubo_binary_inequality():
     ],
 )
 def test_sample(instance, ans):
+    # The uniform_penalty_weight of 3.1 was chosen to resolve multiple optimal solutions
+    # effectively. This value was determined based on prior experimentation and ensures
+    # that constraints are sufficiently penalized without overwhelming the objective.
     sample_set = OMMXOpenJijSAAdapter.sample(
         instance, num_reads=1, uniform_penalty_weight=3.1, seed=999
     )
