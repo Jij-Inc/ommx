@@ -40,7 +40,7 @@ debugpy==1.8.12
     # via ipykernel
 decorator==5.1.1
     # via ipython
-dimod==0.12.18
+dimod==0.12.20
     # via
     #   jij-cimod
     #   openjij
