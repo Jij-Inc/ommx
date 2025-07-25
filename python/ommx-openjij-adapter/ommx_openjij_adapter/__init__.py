@@ -252,7 +252,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
 
         continuous_variables = [
             var.id
-            for var in self.ommx_instance.decision_variables
+            for var in self.ommx_instance.used_decision_variables
             if var.kind == DecisionVariable.CONTINUOUS
         ]
         if len(continuous_variables) > 0:

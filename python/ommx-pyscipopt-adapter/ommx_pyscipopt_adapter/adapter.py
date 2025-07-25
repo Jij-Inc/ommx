@@ -272,7 +272,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             return State(
                 entries={
                     var.id: sol[varname_map[str(var.id)]]
-                    for var in self.instance.decision_variables
+                    for var in self.instance.used_decision_variables
                 }
             )
         except Exception:
@@ -281,7 +281,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             )
 
     def _set_decision_variables(self):
-        for var in self.instance.decision_variables:
+        for var in self.instance.used_decision_variables:
             if var.kind == DecisionVariable.BINARY:
                 self.model.addVar(name=str(var.id), vtype="B")
             elif var.kind == DecisionVariable.INTEGER:

@@ -276,15 +276,15 @@ class Instance(UserAnnotationBase):
     def write_mps(self, path: str):
         self.save_mps(path)
 
-    def save_mps(self, path: str):
+    def save_mps(self, path: str, *, compress=True):
         """
         Outputs the instance as an MPS file.
 
-        - The outputted file is compressed by gzip.
+        - The outputted file is optionally compressed by gzip, depending on the value of the `compress` parameter (default: True).
         - Only linear problems are supported.
         - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
         """
-        self.raw.save_mps(path)
+        self.raw.save_mps(path, compress=compress)
 
     @staticmethod
     def load_qplib(path: str) -> Instance:
@@ -656,6 +656,17 @@ class Instance(UserAnnotationBase):
 
         """
         return self.raw.required_ids()
+
+    @property
+    def used_decision_variables(self) -> list[DecisionVariable]:
+        """
+        Get a list of only the decision variables used in the objective and remaining constraints.
+
+        Returns a list of :class:`DecisionVariable` instancess sorted by their IDs.
+
+        Decision variables defined in the instance but not actually present in the objective function and constraints are excluded from the list.
+        """
+        return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
 
     def to_qubo(
         self,
