@@ -90,7 +90,7 @@ jinja2==3.1.5
     #   jupyter-book
     #   myst-parser
     #   sphinx
-jsonschema==4.23.0
+jsonschema==4.25.0
     # via
     #   jupyter-book
     #   nbformat
