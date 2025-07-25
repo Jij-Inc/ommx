@@ -280,7 +280,7 @@ class Instance(UserAnnotationBase):
         """
         Outputs the instance as an MPS file.
 
-        - The outputted file is compressed by gzip.
+        - The outputted file is optionally compressed by gzip, depending on the value of the `compress` parameter (default: True).
         - Only linear problems are supported.
         - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
         """
