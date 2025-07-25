@@ -374,7 +374,12 @@ impl Bound {
     /// ```
     pub fn as_integer_bound(&self, atol: crate::ATol) -> Option<Self> {
         let lower = if self.lower.is_finite() {
-            (self.lower - atol).ceil()
+            let out = (self.lower - atol).ceil();
+            if out == 0.0 {
+                0.0 // Avoid negative zero
+            } else {
+                out
+            }
         } else {
             self.lower
         };
