@@ -41,3 +41,8 @@ updates:
       dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
