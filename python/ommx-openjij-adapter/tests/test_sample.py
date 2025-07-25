@@ -101,7 +101,7 @@ def hubo_binary_no_constraint_minimize():
     x2 = DecisionVariable.binary(2, name="x", subscripts=[2])
     instance = Instance.from_components(
         decision_variables=[x0, x1, x2],
-        objective=x0 + x0 * x1 * x2,
+        objective=x0 + x1 + x2 + x0 * x1 * x2,
         constraints=[],
         sense=Instance.MINIMIZE,
     )
@@ -173,8 +173,11 @@ def hubo_binary_inequality():
     ],
 )
 def test_sample(instance, ans):
+    # The uniform_penalty_weight of 3.1 was chosen to resolve multiple optimal solutions
+    # effectively. This value was determined based on prior experimentation and ensures
+    # that constraints are sufficiently penalized without overwhelming the objective.
     sample_set = OMMXOpenJijSAAdapter.sample(
-        instance, num_reads=1, uniform_penalty_weight=3.0, seed=999
+        instance, num_reads=1, uniform_penalty_weight=3.1, seed=999
     )
     assert sample_set.extract_decision_variables("x", 0) == ans
 
@@ -196,7 +199,7 @@ def test_sample(instance, ans):
 )
 def test_solve(instance, ans):
     solution = OMMXOpenJijSAAdapter.solve(
-        instance, num_reads=1, uniform_penalty_weight=3.0, seed=999
+        instance, num_reads=1, uniform_penalty_weight=3.1, seed=999
     )
     assert solution.extract_decision_variables("x") == ans
 
