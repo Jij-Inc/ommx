@@ -1,0 +1,2 @@
+class OMMXPyomoAdapterError(Exception):
+    pass
