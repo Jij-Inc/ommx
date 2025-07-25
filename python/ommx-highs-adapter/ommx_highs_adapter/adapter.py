@@ -400,7 +400,7 @@ class OMMXHighsAdapter(SolverAdapter):
         <...>
         >>> state = adapter.decode_to_state(model)
         >>> state.entries
-        {1: -0.0}
+        {1: 0.0}
         """
         status = data.getModelStatus()
         if status == highspy.HighsModelStatus.kNotset:

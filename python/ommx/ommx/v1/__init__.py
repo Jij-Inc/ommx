@@ -749,9 +749,9 @@ class Instance(UserAnnotationBase):
         >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   Integer   -0.0    2.0                x        [0]
-        1   Integer   -0.0    2.0                x        [1]
-        2   Integer   -0.0    3.0       ommx.slack        [0]
+        0   Integer    0.0    2.0                x        [0]
+        1   Integer    0.0    2.0                x        [1]
+        2   Integer    0.0    3.0       ommx.slack        [0]
         3    Binary    0.0    1.0  ommx.log_encode     [0, 0]
         4    Binary    0.0    1.0  ommx.log_encode     [0, 1]
         5    Binary    0.0    1.0  ommx.log_encode     [1, 0]
@@ -783,9 +783,9 @@ class Instance(UserAnnotationBase):
         >>> solution.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts  value
         id                                                          
-        0   Integer   -0.0    2.0                x        [0]    2.0
-        1   Integer   -0.0    2.0                x        [1]    0.0
-        2   Integer   -0.0    3.0       ommx.slack        [0]    1.0
+        0   Integer    0.0    2.0                x        [0]    2.0
+        1   Integer    0.0    2.0                x        [1]    0.0
+        2   Integer    0.0    3.0       ommx.slack        [0]    1.0
         3    Binary    0.0    1.0  ommx.log_encode     [0, 0]    1.0
         4    Binary    0.0    1.0  ommx.log_encode     [0, 1]    1.0
         5    Binary    0.0    1.0  ommx.log_encode     [1, 0]    0.0
@@ -1515,9 +1515,9 @@ class Instance(UserAnnotationBase):
         >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper             name subscripts
         id
-        0   Integer   -0.0    3.0                x        [0]
-        1   Integer   -0.0    3.0                x        [1]
-        2   Integer   -0.0    3.0                x        [2]
+        0   Integer    0.0    3.0                x        [0]
+        1   Integer    0.0    3.0                x        [1]
+        2   Integer    0.0    3.0                x        [2]
         3    Binary    0.0    1.0  ommx.log_encode     [0, 0]
         4    Binary    0.0    1.0  ommx.log_encode     [0, 1]
         5    Binary    0.0    1.0  ommx.log_encode     [2, 0]
@@ -1657,10 +1657,10 @@ class Instance(UserAnnotationBase):
         >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   Integer   -0.0    3.0           x        [0]
-        1   Integer   -0.0    3.0           x        [1]
-        2   Integer   -0.0    3.0           x        [2]
-        3   Integer   -0.0    5.0  ommx.slack        [0]
+        0   Integer    0.0    3.0           x        [0]
+        1   Integer    0.0    3.0           x        [1]
+        2   Integer    0.0    3.0           x        [2]
+        3   Integer    0.0    5.0  ommx.slack        [0]
 
         """
         self.raw.convert_inequality_to_equality_with_integer_slack(
@@ -1731,10 +1731,10 @@ class Instance(UserAnnotationBase):
         >>> instance.decision_variables_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
                kind  lower  upper        name subscripts
         id
-        0   Integer   -0.0    3.0           x        [0]
-        1   Integer   -0.0    3.0           x        [1]
-        2   Integer   -0.0    3.0           x        [2]
-        3   Integer   -0.0    2.0  ommx.slack        [0]
+        0   Integer    0.0    3.0           x        [0]
+        1   Integer    0.0    3.0           x        [1]
+        2   Integer    0.0    3.0           x        [2]
+        3   Integer    0.0    2.0  ommx.slack        [0]
 
         In this case, the slack variable only take :math:`s = \{ 0, 1, 2 \}`,
         and thus the residual error is not disappear for :math:`x_0 = x_1 = 1` case :math:`f(x) + b \cdot x = 1 + 2 \cdot 1 + 2 \cdot s - 4 = 2s - 1`.
