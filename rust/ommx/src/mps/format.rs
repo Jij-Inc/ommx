@@ -210,14 +210,20 @@ fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWri
     for (var_id, dvar) in instance.decision_variables().iter() {
         let name = dvar_name(*var_id);
         let bound = dvar.bound();
-        let (low_kind, up_kind) = match dvar.kind() {
-            // for now ignoring the BV specifier for binary variables
-            // due to uncertainty in how widely supported it is.
-            DecisionVariableKind::Binary | DecisionVariableKind::Integer => ("LI", "UI"),
-            _ => ("LO", "UP"),
-        };
-        writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
-        writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
+
+        // Check if the variable is unbounded (-inf, inf)
+        if bound.lower() == f64::NEG_INFINITY && bound.upper() == f64::INFINITY {
+            writeln!(out, "  FR BND1    {name}")?;
+        } else {
+            let (low_kind, up_kind) = match dvar.kind() {
+                // for now ignoring the BV specifier for binary variables
+                // due to uncertainty in how widely supported it is.
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => ("LI", "UI"),
+                _ => ("LO", "UP"),
+            };
+            writeln!(out, "  {up_kind} BND1    {name}  {}", bound.upper())?;
+            writeln!(out, "  {low_kind} BND1    {name}  {}", bound.lower())?;
+        }
     }
     Ok(())
 }
@@ -268,8 +274,7 @@ mod tests {
 
         insta::assert_snapshot!(output, @r###"
         BOUNDS
-          UP BND1    OMMX_VAR_0  inf
-          LO BND1    OMMX_VAR_0  -inf
+          FR BND1    OMMX_VAR_0
         "###);
     }
 
@@ -415,8 +420,7 @@ mod tests {
 
         insta::assert_snapshot!(output, @r###"
         BOUNDS
-          UP BND1    OMMX_VAR_0  inf
-          LO BND1    OMMX_VAR_0  -inf
+          FR BND1    OMMX_VAR_0
           UP BND1    OMMX_VAR_1  inf
           LO BND1    OMMX_VAR_1  0
           UI BND1    OMMX_VAR_2  0
