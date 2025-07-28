@@ -1,5 +1,6 @@
-use crate::{coeff, linear, mps::*, Bound, Function};
+use crate::{coeff, linear, quadratic, mps::*, Bound, Function, DecisionVariable, Constraint, VariableID, ConstraintID, Sense, Instance};
 use approx::assert_abs_diff_eq;
+use maplit::btreemap;
 
 // Test basic MPS parsing
 #[test]
@@ -433,4 +434,182 @@ ENDATA
             }
         }
     }
+}
+
+// Test MPS parsing with QUADOBJ section
+#[test]
+fn test_parse_quadobj() {
+    let mps_content = r#"NAME QUADTEST
+ROWS
+ N  OBJ
+ L  CON1
+COLUMNS
+    X1        OBJ                              1
+    X1        CON1                             2
+    X2        OBJ                              3
+    X2        CON1                             4
+RHS
+    RHS1      CON1                            10
+QUADOBJ
+    X1        X1                             0.5
+    X1        X2                             1.0
+    X2        X2                             2.0
+ENDATA
+"#;
+
+    let instance = parse(mps_content.as_bytes()).unwrap();
+    
+    // Check that we have 2 variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    
+    // Check that we have 1 constraint
+    assert_eq!(instance.constraints().len(), 1);
+    
+    // The objective should be quadratic
+    assert_eq!(instance.objective().degree(), 2);
+    
+    // Verify the objective is a quadratic function
+    if let Some(quadratic) = instance.objective().as_quadratic() {
+        // Check that we have the expected terms
+        // Note: The exact structure depends on the internal representation
+        // This is a basic check that it's recognized as quadratic
+        assert!(quadratic.degree() == 2);
+    } else {
+        panic!("Expected quadratic objective function");
+    }
+}
+
+// Test MPS parsing with QCMATRIX section
+#[test] 
+fn test_parse_qcmatrix() {
+    let mps_content = r#"NAME QUADTEST
+ROWS
+ N  OBJ
+ L  CON1
+COLUMNS
+    X1        OBJ                              1
+    X1        CON1                             2
+    X2        OBJ                              3
+    X2        CON1                             4
+RHS
+    RHS1      CON1                            10
+QCMATRIX CON1
+    X1        X1                             0.5
+    X1        X2                             1.0
+ENDATA
+"#;
+
+    let instance = parse(mps_content.as_bytes()).unwrap();
+    
+    // Check that we have 2 variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    
+    // Check that we have 1 constraint
+    assert_eq!(instance.constraints().len(), 1);
+    
+    // The constraint should be quadratic
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(constraint.function.degree(), 2);
+    
+    // Verify the constraint is a quadratic function
+    if let Some(quadratic) = constraint.function.as_quadratic() {
+        // Check that we have the expected degree
+        assert!(quadratic.degree() == 2);
+    } else {
+        panic!("Expected quadratic constraint function");
+    }
+}
+
+// Test combined QUADOBJ and QCMATRIX
+#[test]
+fn test_parse_combined_quadratic() {
+    let mps_content = r#"NAME QUADTEST
+ROWS
+ N  OBJ
+ L  CON1
+COLUMNS
+    X1        OBJ                              1
+    X1        CON1                             2
+    X2        OBJ                              3
+    X2        CON1                             4
+RHS
+    RHS1      CON1                            10
+QUADOBJ
+    X1        X1                             0.5
+    X2        X2                             1.5
+QCMATRIX CON1
+    X1        X2                             1.0
+ENDATA
+"#;
+
+    let instance = parse(mps_content.as_bytes()).unwrap();
+    
+    // Check that we have 2 variables
+    assert_eq!(instance.decision_variables().len(), 2);
+    
+    // Check that we have 1 constraint
+    assert_eq!(instance.constraints().len(), 1);
+    
+    // Both objective and constraint should be quadratic
+    assert_eq!(instance.objective().degree(), 2);
+    
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(constraint.function.degree(), 2);
+}
+
+// Test quadratic MPS roundtrip (parse -> write -> parse)
+#[test]
+fn test_quadratic_mps_roundtrip() {
+    // Create an instance with quadratic objective and constraint
+    let decision_variables = btreemap! {
+        VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+        VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+    };
+    
+    // Quadratic objective: x1 + 2*x2 + 0.5*x1^2 + x1*x2 + 1.5*x2^2 + 3.0
+    let objective = (quadratic!(1) + coeff!(2.0) * quadratic!(2) 
+                    + coeff!(0.5) * quadratic!(1, 1) 
+                    + quadratic!(1, 2) 
+                    + coeff!(1.5) * quadratic!(2, 2) 
+                    + coeff!(3.0)).into();
+    
+    // Quadratic constraint: 2*x1 + 4*x2 + x1*x2 - 10 <= 0
+    let constraint_function = (coeff!(2.0) * quadratic!(1) 
+                              + coeff!(4.0) * quadratic!(2) 
+                              + quadratic!(1, 2) 
+                              + coeff!(-10.0)).into();
+    
+    let constraints = btreemap! {
+        ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(0),
+            constraint_function
+        ),
+    };
+    
+    let original_instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+    ).unwrap();
+    
+    // Write to MPS format
+    let mps_string = to_string(&original_instance).unwrap();
+    
+    // Verify the output contains QUADOBJ and QCMATRIX sections
+    assert!(mps_string.contains("QUADOBJ"));
+    assert!(mps_string.contains("QCMATRIX"));
+    
+    // Parse it back
+    let parsed_instance = parse(mps_string.as_bytes()).unwrap();
+    
+    // Verify basic properties are preserved
+    assert_eq!(parsed_instance.sense(), original_instance.sense());
+    assert_eq!(parsed_instance.decision_variables().len(), original_instance.decision_variables().len());
+    assert_eq!(parsed_instance.constraints().len(), original_instance.constraints().len());
+    
+    // Verify functions are quadratic
+    assert_eq!(parsed_instance.objective().degree(), 2);
+    let (_, constraint) = parsed_instance.constraints().iter().next().unwrap();
+    assert_eq!(constraint.function.degree(), 2);
 }

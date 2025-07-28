@@ -63,6 +63,14 @@ pub struct Mps {
     pub ge: HashSet<RowName>,
     /// The row names of the constraints with inequality ($\le$)
     pub le: HashSet<RowName>,
+
+    /// Quadratic terms in the objective function: (var1, var2) -> coefficient
+    /// Represents terms of the form coefficient * var1 * var2
+    pub quad_obj: HashMap<(ColumnName, ColumnName), f64>,
+    
+    /// Quadratic terms in constraints: constraint_name -> (var1, var2) -> coefficient
+    /// Represents terms of the form coefficient * var1 * var2 in each constraint
+    pub quad_constraints: HashMap<RowName, HashMap<(ColumnName, ColumnName), f64>>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -122,6 +130,8 @@ enum Cursor {
     Rhs,
     Ranges,
     Bounds,
+    QuadObj,
+    QcMatrix,
     End,
 }
 
@@ -134,6 +144,8 @@ impl FromStr for Cursor {
             "RHS" => Ok(Self::Rhs),
             "RANGES" => Ok(Self::Ranges),
             "BOUNDS" => Ok(Self::Bounds),
+            "QUADOBJ" => Ok(Self::QuadObj),
+            "QCMATRIX" => Ok(Self::QcMatrix),
             "ENDATA" => Ok(Self::End),
             _ => Err(MpsParseError::InvalidHeader(s.to_string())),
         }
@@ -146,6 +158,8 @@ struct State {
     cursor: Cursor,
     is_integer_variable: bool,
     is_waiting_objsense_line: bool,
+    /// Current constraint name for QCMATRIX section
+    current_qcmatrix_constraint: Option<RowName>,
     mps: Mps,
 }
 
@@ -173,6 +187,19 @@ impl State {
                 return Ok(());
             }
             self.mps.obj_sense = sense.trim().parse()?;
+        } else if let Some(constraint_part) = line.strip_prefix("QCMATRIX") {
+            // Handle "QCMATRIX constraint_name" format
+            self.cursor = Cursor::QcMatrix;
+            let constraint_name = constraint_part.trim();
+            if !constraint_name.is_empty() {
+                let constraint_name = RowName(constraint_name.to_string());
+                self.current_qcmatrix_constraint = Some(constraint_name.clone());
+                
+                // Initialize the quadratic terms map for this constraint if it doesn't exist
+                if !self.mps.quad_constraints.contains_key(&constraint_name) {
+                    self.mps.quad_constraints.insert(constraint_name, HashMap::new());
+                }
+            }
         } else {
             self.cursor = line.trim().parse()?;
         }
@@ -426,6 +453,58 @@ impl State {
         Ok(())
     }
 
+    // ---------------------------------------------------------------------
+    // QUADOBJ section parsing
+    // Format: var1  var2  coefficient
+    // Represents quadratic terms in the objective function
+    // ---------------------------------------------------------------------
+    fn read_quadobj_field(&mut self, fields: Vec<&str>) -> Result<()> {
+        ensure_field_size("QUADOBJ", &fields, |len| len == 3)?;
+        
+        let var1 = ColumnName(fields[0].to_string());
+        let var2 = ColumnName(fields[1].to_string()); 
+        let coeff: f64 = fields[2].parse()?;
+        
+        // Add variables to the variable set if not already present
+        self.mps.vars.insert(var1.clone());
+        self.mps.vars.insert(var2.clone());
+        
+        // Store the quadratic term
+        self.mps.quad_obj.insert((var1, var2), coeff);
+        
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------------
+    // QCMATRIX section parsing  
+    // Header line: QCMATRIX constraint_name (handled in read_header)
+    // Following lines: var1  var2  coefficient
+    // Represents quadratic terms in the specified constraint
+    // ---------------------------------------------------------------------
+    fn read_qcmatrix_field(&mut self, fields: Vec<&str>) -> Result<()> {
+        // This should only be quadratic term lines: var1  var2  coefficient
+        ensure_field_size("QCMATRIX", &fields, |len| len == 3)?;
+        
+        let Some(ref constraint_name) = self.current_qcmatrix_constraint else {
+            return Err(MpsParseError::InvalidHeader("QCMATRIX quadratic term without constraint name".to_string()));
+        };
+        
+        let var1 = ColumnName(fields[0].to_string());
+        let var2 = ColumnName(fields[1].to_string());
+        let coeff: f64 = fields[2].parse()?;
+        
+        // Add variables to the variable set if not already present
+        self.mps.vars.insert(var1.clone());
+        self.mps.vars.insert(var2.clone());
+        
+        // Store the quadratic term for this constraint
+        if let Some(quad_terms) = self.mps.quad_constraints.get_mut(constraint_name) {
+            quad_terms.insert((var1, var2), coeff);
+        }
+        
+        Ok(())
+    }
+
     fn finish(mut self) -> Mps {
         // If an integer variable `x` has a bound `0 <= x <= 1`,
         // regard it as a binary variable.
@@ -512,6 +591,8 @@ impl Mps {
                 Cursor::Rhs => state.read_rhs_field(fields)?,
                 Cursor::Ranges => state.read_range_field(fields)?,
                 Cursor::Bounds => state.read_bound_field(fields)?,
+                Cursor::QuadObj => state.read_quadobj_field(fields)?,
+                Cursor::QcMatrix => state.read_qcmatrix_field(fields)?,
                 Cursor::Name => return Err(MpsParseError::InvalidHeader(line)),
                 Cursor::End => break,
             }

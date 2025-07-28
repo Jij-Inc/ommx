@@ -6,7 +6,7 @@ use super::{
     parser::{ColumnName, ObjSense, RowName},
     Mps,
 };
-use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient};
+use crate::{decision_variable::Kind as DecisionVariableKind, Coefficient, Quadratic};
 use crate::{
     v1, Bound, Constraint, ConstraintID, DecisionVariable, Equality, Function, Instance, Sense,
     VariableID,
@@ -113,27 +113,59 @@ fn convert_objective(
     mps: &Mps,
     name_id_map: &HashMap<ColumnName, VariableID>,
 ) -> anyhow::Result<Function> {
-    let Mps { b, c, .. } = mps;
+    let Mps { b, c, quad_obj, .. } = mps;
     let constant = -b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
-    if c.is_empty() {
-        Ok(Function::try_from(constant)?)
+    
+    // Check if we have any quadratic terms
+    if quad_obj.is_empty() {
+        // Linear objective only
+        if c.is_empty() {
+            Ok(Function::try_from(constant)?)
+        } else {
+            // Build linear function by adding terms
+            let mut linear = crate::Linear::try_from(constant)?;
+            for (name, &coefficient) in c {
+                if let Some(&id) = name_id_map.get(name) {
+                    match Coefficient::try_from(coefficient) {
+                        Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                        Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+            }
+            Ok(if linear.is_zero() {
+                Function::Zero
+            } else {
+                Function::Linear(linear)
+            })
+        }
     } else {
-        // Build linear function by adding terms
-        let mut linear = crate::Linear::try_from(constant)?;
+        // Quadratic objective - need to build a quadratic function
+        let mut quadratic = Quadratic::try_from(constant)?;
+        
+        // Add linear terms
         for (name, &coefficient) in c {
             if let Some(&id) = name_id_map.get(name) {
                 match Coefficient::try_from(coefficient) {
-                    Ok(coef) => linear.add_term(crate::LinearMonomial::Variable(id), coef),
+                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef),
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
                 }
             }
         }
-        Ok(if linear.is_zero() {
-            Function::Zero
-        } else {
-            Function::Linear(linear)
-        })
+        
+        // Add quadratic terms
+        for ((var1_name, var2_name), &coefficient) in quad_obj {
+            if let (Some(&id1), Some(&id2)) = (name_id_map.get(var1_name), name_id_map.get(var2_name)) {
+                match Coefficient::try_from(coefficient) {
+                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef),
+                    Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
+        
+        Ok(Function::Quadratic(quadratic))
     }
 }
 
@@ -142,7 +174,7 @@ fn convert_constraints(
     name_id_map: &HashMap<ColumnName, VariableID>,
 ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
     let Mps {
-        a, b, eq, ge, le, ..
+        a, b, eq, ge, le, quad_constraints, ..
     } = mps;
     let mut constrs = BTreeMap::new();
 
@@ -151,8 +183,9 @@ fn convert_constraints(
         // general case -- assign ids by order
         for (i, (row_name, row)) in a.iter().enumerate() {
             let b_value = b.get(row_name).copied().unwrap_or(0.0);
+            let quad_terms = quad_constraints.get(row_name);
             let (function, equality) =
-                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map)?;
+                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map, quad_terms)?;
             let id = ConstraintID::from(i as u64);
             let mut constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(id, function),
@@ -169,8 +202,9 @@ fn convert_constraints(
             parse_id_tag(CONSTR_PREFIX, row_name).map(|id| (id, row_name, row))
         }) {
             let b_value = b.get(row_name).copied().unwrap_or(0.0);
+            let quad_terms = quad_constraints.get(row_name);
             let (function, equality) =
-                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map)?;
+                convert_inequality(row, b_value, row_name, eq, ge, le, name_id_map, quad_terms)?;
             let id = ConstraintID::from(id_value);
             let constraint = match equality {
                 Equality::EqualToZero => Constraint::equal_to_zero(id, function),
@@ -197,6 +231,7 @@ fn convert_inequality(
     ge: &HashSet<RowName>,
     le: &HashSet<RowName>,
     name_id_map: &HashMap<ColumnName, VariableID>,
+    quad_terms: Option<&HashMap<(ColumnName, ColumnName), f64>>,
 ) -> anyhow::Result<(Function, Equality)> {
     let mut negate = false;
 
@@ -222,9 +257,10 @@ fn convert_inequality(
         Equality::EqualToZero
     };
 
-    let function = if row.is_empty() {
+    let function = if row.is_empty() && quad_terms.map_or(true, |q| q.is_empty()) {
         Function::try_from(b)?
-    } else {
+    } else if quad_terms.map_or(true, |q| q.is_empty()) {
+        // Linear constraint only
         // Build linear function by adding terms
         let mut linear = crate::Linear::try_from(b)?;
 
@@ -244,6 +280,37 @@ fn convert_inequality(
         } else {
             Function::Linear(linear)
         }
+    } else {
+        // Quadratic constraint - need to build a quadratic function
+        let mut quadratic = Quadratic::try_from(b)?;
+        
+        // Add linear terms
+        for (col_name, &coefficient) in row {
+            if let Some(&id) = name_id_map.get(col_name) {
+                let coeff = if negate { -coefficient } else { coefficient };
+                match Coefficient::try_from(coeff) {
+                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::Linear(id), coef),
+                    Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                    Err(e) => return Err(e.into()),
+                }
+            }
+        }
+        
+        // Add quadratic terms
+        if let Some(quad_terms) = quad_terms {
+            for ((var1_name, var2_name), &coefficient) in quad_terms {
+                if let (Some(&id1), Some(&id2)) = (name_id_map.get(var1_name), name_id_map.get(var2_name)) {
+                    let coeff = if negate { -coefficient } else { coefficient };
+                    match Coefficient::try_from(coeff) {
+                        Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef),
+                        Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
+                        Err(e) => return Err(e.into()),
+                    }
+                }
+            }
+        }
+        
+        Function::Quadratic(quadratic)
     };
 
     Ok((function, equality))
