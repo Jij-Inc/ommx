@@ -1,8 +1,9 @@
 use super::MpsWriteError;
 use crate::decision_variable::Kind as DecisionVariableKind;
 use crate::{
-    mps::ObjSense, ConstraintID, Equality, Function, Instance, Sense, VariableID, VariableIDSet,
+    mps::ObjSense, Coefficient, ConstraintID, Equality, Instance, Sense, VariableID, VariableIDSet,
 };
+use std::collections::BTreeMap;
 use std::io::Write;
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
@@ -118,71 +119,53 @@ impl IntorgTracker {
 fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
     let mut marker_tracker = IntorgTracker::default();
+
+    // Collect all linear terms from objective and constraints
+    // Structure: VariableID -> Vec<(row_name, coefficient)>
+    let mut variable_entries: BTreeMap<VariableID, Vec<(String, Coefficient)>> = BTreeMap::new();
+
+    // Collect linear terms from objective function
+    for (var_id, coeff) in instance.objective().linear_terms() {
+        variable_entries
+            .entry(var_id)
+            .or_default()
+            .push((OBJ_NAME.to_string(), coeff));
+    }
+
+    // Collect linear terms from constraints
+    for (constr_id, constr) in instance.constraints().iter() {
+        let row_name = constr_name(*constr_id);
+        for (var_id, coeff) in constr.function.linear_terms() {
+            variable_entries
+                .entry(var_id)
+                .or_default()
+                .push((row_name.clone(), coeff));
+        }
+    }
+
+    // Write columns for variables with linear terms
     let mut written_variables = VariableIDSet::new();
+    for (var_id, entries) in variable_entries {
+        let dvar = instance
+            .decision_variables()
+            .get(&var_id)
+            .expect("Variable ID from linear_terms() must exist in decision_variables");
+        written_variables.insert(var_id);
+        let var_name = dvar_name(var_id);
 
-    // First pass: write variables that appear in linear terms
-    for (var_id, dvar) in instance.decision_variables().iter() {
-        let var_name = dvar_name(*var_id);
-        let mut has_linear_entry = false;
-
-        // Check if variable appears in linear terms of objective
-        if let Some(linear) = instance.objective().as_linear() {
-            let linear_monomial = crate::LinearMonomial::Variable(*var_id);
-            if linear.get(&linear_monomial).is_some() {
-                has_linear_entry = true;
+        match dvar.kind() {
+            // binary or integer var
+            DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                marker_tracker.intorg(out)?
             }
-        } else if let Some(quadratic) = instance.objective().as_quadratic() {
-            let quadratic_monomial = crate::QuadraticMonomial::Linear(*var_id);
-            if quadratic.get(&quadratic_monomial).is_some() {
-                has_linear_entry = true;
-            }
+            _ => marker_tracker.intend(out)?,
         }
 
-        // Check if variable appears in linear terms of any constraint
-        if !has_linear_entry {
-            for (_, constr) in instance.constraints().iter() {
-                if let Some(linear) = constr.function.as_linear() {
-                    let linear_monomial = crate::LinearMonomial::Variable(*var_id);
-                    if linear.get(&linear_monomial).is_some() {
-                        has_linear_entry = true;
-                        break;
-                    }
-                } else if let Some(quadratic) = constr.function.as_quadratic() {
-                    let quadratic_monomial = crate::QuadraticMonomial::Linear(*var_id);
-                    if quadratic.get(&quadratic_monomial).is_some() {
-                        has_linear_entry = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if has_linear_entry {
-            written_variables.insert(*var_id);
-
-            match dvar.kind() {
-                // binary or integer var
-                DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
-                    marker_tracker.intorg(out)?
-                }
-                _ => marker_tracker.intend(out)?,
-            }
-            // write obj function entry
-            write_col_entry(*var_id, &var_name, OBJ_NAME, instance.objective(), out)
-                // a bit of a workaround so that write_col_entry is easier to write.
-                // It assumes we're dealing with constraints, but here we change the
-                // error type so the message is clearer with the objective function
-                .map_err(|err| {
-                    if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
-                        MpsWriteError::InvalidObjectiveType { degree }
-                    } else {
-                        panic!() // we know this can't happen
-                    }
-                })?;
-            // write entries of this var's column for each constraint
-            for (constr_id, constr) in instance.constraints().iter() {
-                let row_name = constr_name(*constr_id);
-                write_col_entry(*var_id, &var_name, &row_name, &constr.function, out)?;
+        // Write all entries for this variable
+        for (row_name, coeff) in entries {
+            let coeff_value: f64 = coeff.into();
+            if coeff_value != 0.0 {
+                writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
             }
         }
     }
@@ -190,62 +173,23 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
     // Second pass: write variables that only appear in quadratic terms (with zero coefficient)
     let used_ids = instance.used_decision_variable_ids();
     for var_id in used_ids.difference(&written_variables) {
-        if let Some(dvar) = instance.decision_variables().get(var_id) {
-            let var_name = dvar_name(*var_id);
-            match dvar.kind() {
-                // binary or integer var
-                DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
-                    marker_tracker.intorg(out)?
-                }
-                _ => marker_tracker.intend(out)?,
+        let dvar = instance.decision_variables().get(var_id).expect(
+            "Variable ID from used_decision_variable_ids() must exist in decision_variables",
+        );
+        let var_name = dvar_name(*var_id);
+        match dvar.kind() {
+            // binary or integer var
+            DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                marker_tracker.intorg(out)?
             }
-            // Write dummy entry with coefficient 0 for OBJ
-            writeln!(out, "    {var_name}  {OBJ_NAME}  0")?;
+            _ => marker_tracker.intend(out)?,
         }
+        // Write dummy entry with coefficient 0 for OBJ
+        writeln!(out, "    {var_name}  {OBJ_NAME}  0")?;
     }
 
     // print final INTEND
     marker_tracker.intend(out)?;
-    Ok(())
-}
-
-/// Writes the entry in the COLUMNS sections of the given id and name, for the
-/// corresponding row (constraint/obj function).
-///
-/// Only writes linear coefficients. Quadratic terms will be written separately
-/// in QUADOBJ/QCMATRIX sections.
-/// Only writes if var_id is part of the terms in the function, and only if
-/// coefficient is not 0.
-fn write_col_entry<W: Write>(
-    var_id: VariableID,
-    var_name: &str,
-    row_name: &str,
-    func: &Function,
-    out: &mut W,
-) -> Result<(), MpsWriteError> {
-    let linear_coeff = if let Some(linear) = func.as_linear() {
-        // Pure linear function
-        let linear_monomial = crate::LinearMonomial::Variable(var_id);
-        linear.get(&linear_monomial)
-    } else if let Some(quadratic) = func.as_quadratic() {
-        // Quadratic function - extract only the linear part
-        let quadratic_monomial = crate::QuadraticMonomial::Linear(var_id);
-        quadratic.get(&quadratic_monomial)
-    } else {
-        // Higher degree functions not supported
-        return Err(MpsWriteError::InvalidConstraintType {
-            name: row_name.to_string(),
-            degree: (*func.degree()),
-        });
-    };
-
-    if let Some(coeff) = linear_coeff {
-        let coeff_value: f64 = coeff.into();
-        if coeff_value != 0.0 {
-            writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
-        }
-    }
-
     Ok(())
 }
 
@@ -426,7 +370,7 @@ fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsW
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{decision_variable::Kind, Bound, DecisionVariable};
+    use crate::{decision_variable::Kind, Bound, DecisionVariable, Function};
     use maplit::btreemap;
 
     #[test]
