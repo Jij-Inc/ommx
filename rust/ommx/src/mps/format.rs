@@ -232,8 +232,8 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
 fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
 
-    for (var_id, dvar) in instance.decision_variables().iter() {
-        let name = dvar_name(*var_id);
+    for (var_id, dvar) in instance.used_decision_variables() {
+        let name = dvar_name(var_id);
         let bound = dvar.bound();
 
         // Check special cases for infinity bounds
