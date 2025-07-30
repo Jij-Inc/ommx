@@ -1,6 +1,9 @@
 use super::MpsWriteError;
 use crate::decision_variable::Kind as DecisionVariableKind;
-use crate::{mps::ObjSense, ConstraintID, Equality, Function, Instance, Sense, VariableID};
+use crate::{
+    mps::ObjSense, Coefficient, ConstraintID, Equality, Instance, Sense, VariableID, VariableIDSet,
+};
+use std::collections::BTreeMap;
 use std::io::Write;
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
@@ -41,6 +44,8 @@ pub fn format<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWrite
     write_columns(instance, out)?;
     write_rhs(instance, out)?;
     write_bounds(instance, out)?;
+    write_quadobj(instance, out)?;
+    write_qcmatrix(instance, out)?;
     writeln!(out, "ENDATA\n")?;
     Ok(())
 }
@@ -114,7 +119,63 @@ impl IntorgTracker {
 fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
     let mut marker_tracker = IntorgTracker::default();
-    for (var_id, dvar) in instance.decision_variables().iter() {
+
+    // Collect all linear terms from objective and constraints
+    // Structure: VariableID -> Vec<(row_name, coefficient)>
+    let mut variable_entries: BTreeMap<VariableID, Vec<(String, Coefficient)>> = BTreeMap::new();
+
+    // Collect linear terms from objective function
+    for (var_id, coeff) in instance.objective().linear_terms() {
+        variable_entries
+            .entry(var_id)
+            .or_default()
+            .push((OBJ_NAME.to_string(), coeff));
+    }
+
+    // Collect linear terms from constraints
+    for (constr_id, constr) in instance.constraints().iter() {
+        let row_name = constr_name(*constr_id);
+        for (var_id, coeff) in constr.function.linear_terms() {
+            variable_entries
+                .entry(var_id)
+                .or_default()
+                .push((row_name.clone(), coeff));
+        }
+    }
+
+    // Write columns for variables with linear terms
+    let mut written_variables = VariableIDSet::new();
+    for (var_id, entries) in variable_entries {
+        let dvar = instance
+            .decision_variables()
+            .get(&var_id)
+            .expect("Variable ID from linear_terms() must exist in decision_variables");
+        written_variables.insert(var_id);
+        let var_name = dvar_name(var_id);
+
+        match dvar.kind() {
+            // binary or integer var
+            DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                marker_tracker.intorg(out)?
+            }
+            _ => marker_tracker.intend(out)?,
+        }
+
+        // Write all entries for this variable
+        for (row_name, coeff) in entries {
+            let coeff_value: f64 = coeff.into();
+            if coeff_value != 0.0 {
+                writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
+            }
+        }
+    }
+
+    // Second pass: write variables that only appear in quadratic terms (with zero coefficient)
+    let used_ids = instance.used_decision_variable_ids();
+    for var_id in used_ids.difference(&written_variables) {
+        let dvar = instance.decision_variables().get(var_id).expect(
+            "Variable ID from used_decision_variable_ids() must exist in decision_variables",
+        );
         let var_name = dvar_name(*var_id);
         match dvar.kind() {
             // binary or integer var
@@ -123,82 +184,51 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
             }
             _ => marker_tracker.intend(out)?,
         }
-        // write obj function entry
-        write_col_entry(*var_id, &var_name, OBJ_NAME, instance.objective(), out)
-            // a bit of a workaround so that write_col_entry is easier to write.
-            // It assumes we're dealing with constraints, but here we change the
-            // error type so the message is clearer with the objective function
-            .map_err(|err| {
-                if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
-                    MpsWriteError::InvalidObjectiveType { degree }
-                } else {
-                    panic!() // we know this can't happen
-                }
-            })?;
-        // write entries of this var's column for each constraint
-        for (constr_id, constr) in instance.constraints().iter() {
-            let row_name = constr_name(*constr_id);
-            write_col_entry(*var_id, &var_name, &row_name, &constr.function, out)?;
-        }
+        // Write dummy entry with coefficient 0 for OBJ
+        writeln!(out, "    {var_name}  {OBJ_NAME}  0")?;
     }
+
     // print final INTEND
     marker_tracker.intend(out)?;
-    Ok(())
-}
-
-/// Writes the entry in the COLUMNS sections of the given id and name, for the
-/// corresponding row (constraint/obj function).
-///
-/// Only writes if var_id is part of the terms in the function, and only if
-/// coefficient is not 0.
-fn write_col_entry<W: Write>(
-    var_id: VariableID,
-    var_name: &str,
-    row_name: &str,
-    func: &Function,
-    out: &mut W,
-) -> Result<(), MpsWriteError> {
-    if let Some(linear) = func.as_linear() {
-        // get coefficient for the variable
-        let linear_monomial = crate::LinearMonomial::Variable(var_id);
-        if let Some(coeff) = linear.get(&linear_monomial) {
-            let coeff_value: f64 = coeff.into();
-            if coeff_value != 0.0 {
-                writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
-            }
-        }
-    } else {
-        return Err(MpsWriteError::InvalidConstraintType {
-            name: row_name.to_string(),
-            degree: (*func.degree()),
-        });
-    }
     Ok(())
 }
 
 fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "RHS")?;
     // write out a RHS entry for the objective function if a non-zero constant is present
-    if let Some(linear) = instance.objective().as_linear() {
-        let constant: f64 = linear.constant_term();
-        if constant != 0.0 {
-            let rhs = -constant;
-            writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
-        }
+    let constant = if let Some(linear) = instance.objective().as_linear() {
+        linear.constant_term()
+    } else if let Some(quadratic) = instance.objective().as_quadratic() {
+        quadratic.constant_term()
+    } else {
+        // Higher degree functions not supported
+        return Err(MpsWriteError::InvalidObjectiveType {
+            degree: (*instance.objective().degree()),
+        });
+    };
+
+    if constant != 0.0 {
+        let rhs = -constant;
+        writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
     }
+
     for (constr_id, constr) in instance.constraints().iter() {
         let name = constr_name(*constr_id);
-        if let Some(linear) = constr.function.as_linear() {
-            let constant: f64 = linear.constant_term();
-            if constant != 0.0 {
-                let rhs = -constant;
-                writeln!(out, "  RHS1    {name}   {rhs}")?;
-            }
+        let constant = if let Some(linear) = constr.function.as_linear() {
+            linear.constant_term()
+        } else if let Some(quadratic) = constr.function.as_quadratic() {
+            quadratic.constant_term()
         } else {
+            // Higher degree functions not supported
             return Err(MpsWriteError::InvalidConstraintType {
                 name: name.to_string(),
                 degree: (*constr.function.degree()),
             });
+        };
+
+        if constant != 0.0 {
+            let rhs = -constant;
+            writeln!(out, "  RHS1    {name}   {rhs}")?;
         }
     }
     Ok(())
@@ -207,8 +237,8 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
 fn write_bounds<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "BOUNDS")?;
 
-    for (var_id, dvar) in instance.decision_variables().iter() {
-        let name = dvar_name(*var_id);
+    for (var_id, dvar) in instance.used_decision_variables() {
+        let name = dvar_name(var_id);
         let bound = dvar.bound();
 
         // Check special cases for infinity bounds
@@ -260,10 +290,87 @@ fn dvar_name(var_id: VariableID) -> String {
     format!("{VAR_PREFIX}{}", var_id.into_inner())
 }
 
+fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+    // Only write QUADOBJ section if the objective has quadratic terms
+    if let Some(quadratic) = instance.objective().as_quadratic() {
+        let has_quadratic_terms = quadratic
+            .iter()
+            .any(|(monomial, _)| matches!(monomial, crate::QuadraticMonomial::Pair(_)));
+
+        if has_quadratic_terms {
+            writeln!(out, "QUADOBJ")?;
+
+            // Write quadratic terms in sorted order for deterministic output
+            let mut quadratic_terms: Vec<_> = quadratic
+                .iter()
+                .filter_map(|(monomial, coeff)| {
+                    if let crate::QuadraticMonomial::Pair(pair) = monomial {
+                        Some((pair, coeff))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            quadratic_terms.sort_by_key(|(pair, _)| (pair.lower(), pair.upper()));
+
+            for (pair, coeff) in quadratic_terms {
+                let var1_name = dvar_name(pair.lower());
+                let var2_name = dvar_name(pair.upper());
+                let coeff_value: f64 = (*coeff).into();
+                if coeff_value != 0.0 {
+                    writeln!(out, "    {var1_name}  {var2_name}  {coeff_value}")?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
+    // Write QCMATRIX sections for each constraint that has quadratic terms
+    for (constr_id, constr) in instance.constraints().iter() {
+        if let Some(quadratic) = constr.function.as_quadratic() {
+            let has_quadratic_terms = quadratic
+                .iter()
+                .any(|(monomial, _)| matches!(monomial, crate::QuadraticMonomial::Pair(_)));
+
+            if has_quadratic_terms {
+                let constraint_name = constr_name(*constr_id);
+                writeln!(out, "QCMATRIX {constraint_name}")?;
+
+                // Write quadratic terms in sorted order for deterministic output
+                let mut quadratic_terms: Vec<_> = quadratic
+                    .iter()
+                    .filter_map(|(monomial, coeff)| {
+                        if let crate::QuadraticMonomial::Pair(pair) = monomial {
+                            Some((pair, coeff))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                quadratic_terms.sort_by_key(|(pair, _)| (pair.lower(), pair.upper()));
+
+                for (pair, coeff) in quadratic_terms {
+                    let var1_name = dvar_name(pair.lower());
+                    let var2_name = dvar_name(pair.upper());
+                    let coeff_value: f64 = (*coeff).into();
+                    if coeff_value != 0.0 {
+                        writeln!(out, "    {var1_name}  {var2_name}  {coeff_value}")?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{decision_variable::Kind, Bound, DecisionVariable};
+    use crate::{decision_variable::Kind, Bound, DecisionVariable, Function};
     use maplit::btreemap;
 
     #[test]

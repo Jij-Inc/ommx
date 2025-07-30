@@ -1,4 +1,4 @@
-use crate::{coeff, linear, mps::*, Bound, Function};
+use crate::{coeff, linear, mps::*, quadratic, Bound, Function};
 use approx::assert_abs_diff_eq;
 
 // Test basic MPS parsing
@@ -433,4 +433,114 @@ ENDATA
             }
         }
     }
+}
+
+// Test MPS parsing with QUADOBJ section
+#[test]
+fn test_parse_quadobj() {
+    let mps_content = r#"NAME QUADTEST
+ROWS
+ N  OBJ
+ L  CON1
+COLUMNS
+    X1        OBJ                              1
+    X1        CON1                             2
+    X2        OBJ                              3
+    X2        CON1                             4
+RHS
+    RHS1      CON1                            10
+QUADOBJ
+    X1        X1                             0.5
+    X1        X2                             1.0
+    X2        X2                             2.0
+ENDATA
+"#;
+
+    let instance = parse(mps_content.as_bytes()).unwrap();
+
+    // Check that we have 2 variables
+    assert_eq!(instance.decision_variables().len(), 2);
+
+    // Check that we have 1 constraint
+    assert_eq!(instance.constraints().len(), 1);
+
+    // The objective should be quadratic
+    assert_eq!(instance.objective().degree(), 2);
+
+    // Get variables using the new helper method
+    let x1 = instance
+        .get_decision_variable_by_name("X1", vec![])
+        .unwrap();
+    let x2 = instance
+        .get_decision_variable_by_name("X2", vec![])
+        .unwrap();
+    let x1_id = x1.id();
+    let x2_id = x2.id();
+
+    // Build expected objective function: x1 + 3*x2 + 0.5*x1^2 + x1*x2 + 2*x2^2
+    let expected_objective = quadratic!(x1_id)
+        + coeff!(3.0) * quadratic!(x2_id)
+        + coeff!(0.5) * quadratic!(x1_id, x1_id)
+        + quadratic!(x1_id, x2_id)
+        + coeff!(2.0) * quadratic!(x2_id, x2_id);
+
+    // Compare the actual and expected objective functions
+    assert_abs_diff_eq!(instance.objective(), &expected_objective.into());
+}
+
+// Test MPS parsing with QCMATRIX section
+#[test]
+fn test_parse_qcmatrix() {
+    let mps_content = r#"NAME QUADTEST
+ROWS
+ N  OBJ
+ L  CON1
+COLUMNS
+    X1        OBJ                              1
+    X1        CON1                             2
+    X2        OBJ                              3
+    X2        CON1                             4
+RHS
+    RHS1      CON1                            10
+QCMATRIX CON1
+    X1        X1                             0.5
+    X1        X2                             1.0
+ENDATA
+"#;
+
+    let instance = parse(mps_content.as_bytes()).unwrap();
+
+    // Check that we have 2 variables
+    assert_eq!(instance.decision_variables().len(), 2);
+
+    // Check that we have 1 constraint
+    assert_eq!(instance.constraints().len(), 1);
+
+    // Get variables using the helper method
+    let x1 = instance
+        .get_decision_variable_by_name("X1", vec![])
+        .unwrap();
+    let x2 = instance
+        .get_decision_variable_by_name("X2", vec![])
+        .unwrap();
+    let x1_id = x1.id();
+    let x2_id = x2.id();
+
+    // The constraint should be quadratic
+    let (_, constraint) = instance.constraints().iter().next().unwrap();
+    assert_eq!(constraint.function.degree(), 2);
+
+    // Build expected constraint function: 2*x1 + 4*x2 + 0.5*x1^2 + x1*x2 - 10 <= 0
+    // Note: RHS is moved to LHS, so the constant term is -10
+    let expected_function = coeff!(2.0) * quadratic!(x1_id)
+        + coeff!(4.0) * quadratic!(x2_id)
+        + coeff!(0.5) * quadratic!(x1_id, x1_id)
+        + quadratic!(x1_id, x2_id)
+        + coeff!(-10.0);
+
+    // Compare the actual and expected constraint functions
+    assert_abs_diff_eq!(&constraint.function, &expected_function.into());
+
+    // Verify it's a less-than-or-equal constraint
+    assert_eq!(constraint.equality, crate::Equality::LessThanOrEqualToZero);
 }

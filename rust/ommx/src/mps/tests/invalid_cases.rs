@@ -1,21 +1,21 @@
 use crate::{
-    coeff, mps::*, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance, Sense,
+    mps::*, quadratic, Constraint, ConstraintID, DecisionVariable, Function, Instance, Sense,
 };
 use maplit::btreemap;
 use std::collections::BTreeMap;
 
-// Test error cases for MPS write operations
+// Test error cases for MPS write operations with higher-degree polynomials
 #[test]
 fn test_nonlinear_objective_error() {
     let decision_variables = btreemap! {
         VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
         VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
     };
-    // x1 * x2 + 1
-    let objective = (quadratic!(1, 2) + coeff!(1.0)).into();
+    // Create a cubic function: x1 * x2 * x1 (degree 3, not supported)
+    let cubic_function = (quadratic!(1, 2) * quadratic!(1)).into();
     let instance = Instance::new(
         Sense::Minimize,
-        objective,
+        cubic_function,
         decision_variables,
         BTreeMap::new(),
     )
@@ -25,7 +25,7 @@ fn test_nonlinear_objective_error() {
     let result = format::format(&instance, &mut buffer);
     assert!(matches!(
         result.unwrap_err(),
-        MpsWriteError::InvalidObjectiveType { degree: 2 }
+        MpsWriteError::InvalidObjectiveType { degree: 3 }
     ));
 }
 
@@ -35,12 +35,12 @@ fn test_nonlinear_constraint_error() {
         VariableID::from(0) => DecisionVariable::continuous(VariableID::from(0))
     };
 
-    // Create constraint with quadratic function: x^2 <= 0
-    let quadratic_function = quadratic!(0, 0).into();
+    // Create constraint with cubic function: x^3 <= 0 (degree 3, not supported)
+    let cubic_function = (quadratic!(0, 0) * quadratic!(0)).into();
     let constraints = btreemap! {
         ConstraintID::from(0) => Constraint::less_than_or_equal_to_zero(
             ConstraintID::from(0),
-            quadratic_function
+            cubic_function
         ),
     };
 
@@ -56,6 +56,6 @@ fn test_nonlinear_constraint_error() {
     let result = format::format(&instance, &mut buffer);
     assert!(matches!(
         result.unwrap_err(),
-        MpsWriteError::InvalidConstraintType { name, degree: 2 } if name == "OMMX_CONSTR_0"
+        MpsWriteError::InvalidConstraintType { name, degree: 3 } if name == "OMMX_CONSTR_0"
     ));
 }
