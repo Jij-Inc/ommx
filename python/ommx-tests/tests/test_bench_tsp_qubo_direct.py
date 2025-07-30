@@ -24,14 +24,14 @@ def tsp_distance_matrix(request):
 def make_tsp_qubo_by_ommx(distance: np.ndarray):
     """
     Generate TSP QUBO using OMMX directly.
-    
+
     This creates a QUBO formulation for the Traveling Salesman Problem where:
     - x[i][j] = 1 if city i is visited at time j
     - Objective: minimize total distance
     - Constraints: each city visited exactly once, each time slot has exactly one city
     """
     num_city = distance.shape[0]
-    
+
     # Create binary decision variables x[i][j]
     x = [
         [
@@ -42,19 +42,28 @@ def make_tsp_qubo_by_ommx(distance: np.ndarray):
     ]
 
     # Objective: sum of distances between consecutive cities in the tour
-    objective = sum(sum(sum(
-        distance[i, j] * x[i][k] * x[j][(k + 1) % num_city]
-        for k in range(num_city)) for j in range(num_city)) for i in range(num_city))
+    objective = sum(
+        sum(
+            sum(
+                distance[i, j] * x[i][k] * x[j][(k + 1) % num_city]
+                for k in range(num_city)
+            )
+            for j in range(num_city)
+        )
+        for i in range(num_city)
+    )
 
     # Constraint: each city must be visited exactly once
     one_city_const = sum(
-        (sum(x[i][j] for j in range(num_city)) - 1) * (sum(x[i][j] for j in range(num_city)) - 1)
+        (sum(x[i][j] for j in range(num_city)) - 1)
+        * (sum(x[i][j] for j in range(num_city)) - 1)
         for i in range(num_city)
     )
 
     # Constraint: each time slot must have exactly one city
     one_time_const = sum(
-        (sum(x[i][j] for i in range(num_city)) - 1) * (sum(x[i][j] for i in range(num_city)) - 1)
+        (sum(x[i][j] for i in range(num_city)) - 1)
+        * (sum(x[i][j] for i in range(num_city)) - 1)
         for j in range(num_city)
     )
 
