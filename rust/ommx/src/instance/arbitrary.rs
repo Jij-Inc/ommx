@@ -122,11 +122,34 @@ pub struct InstanceParameters {
 }
 
 impl InstanceParameters {
+    /// Default parameter for Linear Programming (LP), i.e. linear objective and linear constraints.
     pub fn default_lp() -> Self {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
             objective: PolynomialParameters::default_linear(),
             constraint: PolynomialParameters::default_linear(),
+            kinds: KindParameters::default(),
+            max_irrelevant_ids: 5,
+        }
+    }
+
+    /// Default parameter for Quadratic Programming (QP), i.e. quadratic objective and linear constraints.
+    pub fn default_qp() -> Self {
+        Self {
+            constraint_ids: ConstraintIDParameters::default(),
+            objective: PolynomialParameters::default_quadratic(),
+            constraint: PolynomialParameters::default_linear(),
+            kinds: KindParameters::default(),
+            max_irrelevant_ids: 5,
+        }
+    }
+
+    /// Default parameter for Quadratically Constrained Quadratic Programming (QCQP), i.e. quadratic objective and quadratic constraints.
+    pub fn default_qcqp() -> Self {
+        Self {
+            constraint_ids: ConstraintIDParameters::default(),
+            objective: PolynomialParameters::default_quadratic(),
+            constraint: PolynomialParameters::default_quadratic(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }

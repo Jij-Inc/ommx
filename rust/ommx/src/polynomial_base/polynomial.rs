@@ -255,6 +255,14 @@ impl PolynomialParameters {
         }
     }
 
+    pub fn default_quadratic() -> Self {
+        PolynomialParameters {
+            num_terms: 5,
+            max_degree: 2.into(),
+            max_id: 10.into(),
+        }
+    }
+
     /// Possible largest number of terms in the max degree terms.
     ///
     /// For example, when `max_degree=1`, we can create only `max_id+1` linear terms.
