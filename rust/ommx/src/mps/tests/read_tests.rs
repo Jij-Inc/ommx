@@ -1,9 +1,7 @@
 use crate::{
-    coeff, linear, mps::*, quadratic, Bound, Constraint, ConstraintID, DecisionVariable, Function,
-    Instance, Sense, VariableID,
+    coeff, linear, mps::*, quadratic, Bound, Function,
 };
 use approx::assert_abs_diff_eq;
-use maplit::btreemap;
 
 // Test basic MPS parsing
 #[test]

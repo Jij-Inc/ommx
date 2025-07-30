@@ -196,11 +196,10 @@ impl State {
                 self.current_qcmatrix_constraint = Some(constraint_name.clone());
 
                 // Initialize the quadratic terms map for this constraint if it doesn't exist
-                if !self.mps.quad_constraints.contains_key(&constraint_name) {
-                    self.mps
-                        .quad_constraints
-                        .insert(constraint_name, HashMap::new());
-                }
+                self.mps
+                    .quad_constraints
+                    .entry(constraint_name)
+                    .or_default();
             }
         } else {
             self.cursor = line.trim().parse()?;

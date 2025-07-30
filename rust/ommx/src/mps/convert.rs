@@ -233,6 +233,7 @@ fn convert_constraints(
 /// accept the right-hand side being 0.0.
 ///
 /// Returns the full function plus what the OMMX equality should be.
+#[allow(clippy::too_many_arguments)]
 fn convert_inequality(
     row: &HashMap<ColumnName, f64>,
     mut b: f64,
@@ -267,9 +268,9 @@ fn convert_inequality(
         Equality::EqualToZero
     };
 
-    let function = if row.is_empty() && quad_terms.map_or(true, |q| q.is_empty()) {
+    let function = if row.is_empty() && quad_terms.is_none_or(|q| q.is_empty()) {
         Function::try_from(b)?
-    } else if quad_terms.map_or(true, |q| q.is_empty()) {
+    } else if quad_terms.is_none_or(|q| q.is_empty()) {
         // Linear constraint only
         // Build linear function by adding terms
         let mut linear = crate::Linear::try_from(b)?;
