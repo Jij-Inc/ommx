@@ -1,6 +1,4 @@
-use crate::{
-    coeff, linear, mps::*, quadratic, Bound, Function,
-};
+use crate::{coeff, linear, mps::*, quadratic, Bound, Function};
 use approx::assert_abs_diff_eq;
 
 // Test basic MPS parsing
