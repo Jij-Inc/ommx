@@ -1557,6 +1557,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "similar",
  "smallvec",
  "tempdir",
  "thiserror 2.0.12",
