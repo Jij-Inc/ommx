@@ -5,8 +5,8 @@ use proptest::prelude::*;
 use similar::{ChangeTag, TextDiff};
 
 fn take_diff(expected: &Instance, actual: &Instance) -> String {
-    let expected = format!("{:#?}", expected);
-    let actual = format!("{:#?}", actual);
+    let expected = format!("{expected:#?}");
+    let actual = format!("{actual:#?}");
     let diff = TextDiff::from_lines(&expected, &actual);
     let mut diff_string = String::new();
     for change in diff.iter_all_changes() {
@@ -15,7 +15,7 @@ fn take_diff(expected: &Instance, actual: &Instance) -> String {
             ChangeTag::Insert => "+",
             ChangeTag::Equal => " ",
         };
-        diff_string += &format!("{}{}", sign, change);
+        diff_string += &format!("{sign}{change}");
     }
     diff_string
 }

@@ -1,6 +1,8 @@
 use super::MpsWriteError;
 use crate::decision_variable::Kind as DecisionVariableKind;
-use crate::{mps::ObjSense, ConstraintID, Equality, Function, Instance, Sense, VariableID};
+use crate::{
+    mps::ObjSense, ConstraintID, Equality, Function, Instance, Sense, VariableID, VariableIDSet,
+};
 use std::io::Write;
 
 pub(crate) const OBJ_NAME: &str = "OBJ";
@@ -116,33 +118,92 @@ impl IntorgTracker {
 fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     writeln!(out, "COLUMNS")?;
     let mut marker_tracker = IntorgTracker::default();
+    let mut written_variables = VariableIDSet::new();
+
+    // First pass: write variables that appear in linear terms
     for (var_id, dvar) in instance.decision_variables().iter() {
         let var_name = dvar_name(*var_id);
-        match dvar.kind() {
-            // binary or integer var
-            DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
-                marker_tracker.intorg(out)?
+        let mut has_linear_entry = false;
+
+        // Check if variable appears in linear terms of objective
+        if let Some(linear) = instance.objective().as_linear() {
+            let linear_monomial = crate::LinearMonomial::Variable(*var_id);
+            if linear.get(&linear_monomial).is_some() {
+                has_linear_entry = true;
             }
-            _ => marker_tracker.intend(out)?,
+        } else if let Some(quadratic) = instance.objective().as_quadratic() {
+            let quadratic_monomial = crate::QuadraticMonomial::Linear(*var_id);
+            if quadratic.get(&quadratic_monomial).is_some() {
+                has_linear_entry = true;
+            }
         }
-        // write obj function entry
-        write_col_entry(*var_id, &var_name, OBJ_NAME, instance.objective(), out)
-            // a bit of a workaround so that write_col_entry is easier to write.
-            // It assumes we're dealing with constraints, but here we change the
-            // error type so the message is clearer with the objective function
-            .map_err(|err| {
-                if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
-                    MpsWriteError::InvalidObjectiveType { degree }
-                } else {
-                    panic!() // we know this can't happen
+
+        // Check if variable appears in linear terms of any constraint
+        if !has_linear_entry {
+            for (_, constr) in instance.constraints().iter() {
+                if let Some(linear) = constr.function.as_linear() {
+                    let linear_monomial = crate::LinearMonomial::Variable(*var_id);
+                    if linear.get(&linear_monomial).is_some() {
+                        has_linear_entry = true;
+                        break;
+                    }
+                } else if let Some(quadratic) = constr.function.as_quadratic() {
+                    let quadratic_monomial = crate::QuadraticMonomial::Linear(*var_id);
+                    if quadratic.get(&quadratic_monomial).is_some() {
+                        has_linear_entry = true;
+                        break;
+                    }
                 }
-            })?;
-        // write entries of this var's column for each constraint
-        for (constr_id, constr) in instance.constraints().iter() {
-            let row_name = constr_name(*constr_id);
-            write_col_entry(*var_id, &var_name, &row_name, &constr.function, out)?;
+            }
+        }
+
+        if has_linear_entry {
+            written_variables.insert(*var_id);
+
+            match dvar.kind() {
+                // binary or integer var
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                    marker_tracker.intorg(out)?
+                }
+                _ => marker_tracker.intend(out)?,
+            }
+            // write obj function entry
+            write_col_entry(*var_id, &var_name, OBJ_NAME, instance.objective(), out)
+                // a bit of a workaround so that write_col_entry is easier to write.
+                // It assumes we're dealing with constraints, but here we change the
+                // error type so the message is clearer with the objective function
+                .map_err(|err| {
+                    if let MpsWriteError::InvalidConstraintType { degree, .. } = err {
+                        MpsWriteError::InvalidObjectiveType { degree }
+                    } else {
+                        panic!() // we know this can't happen
+                    }
+                })?;
+            // write entries of this var's column for each constraint
+            for (constr_id, constr) in instance.constraints().iter() {
+                let row_name = constr_name(*constr_id);
+                write_col_entry(*var_id, &var_name, &row_name, &constr.function, out)?;
+            }
         }
     }
+
+    // Second pass: write variables that only appear in quadratic terms (with zero coefficient)
+    let used_ids = instance.used_decision_variable_ids();
+    for var_id in used_ids.difference(&written_variables) {
+        if let Some(dvar) = instance.decision_variables().get(var_id) {
+            let var_name = dvar_name(*var_id);
+            match dvar.kind() {
+                // binary or integer var
+                DecisionVariableKind::Binary | DecisionVariableKind::Integer => {
+                    marker_tracker.intorg(out)?
+                }
+                _ => marker_tracker.intend(out)?,
+            }
+            // Write dummy entry with coefficient 0 for OBJ
+            writeln!(out, "    {var_name}  {OBJ_NAME}  0")?;
+        }
+    }
+
     // print final INTEND
     marker_tracker.intend(out)?;
     Ok(())
