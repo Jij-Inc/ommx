@@ -34,8 +34,9 @@ proptest! {
         let loaded = parse(&buffer[..]).unwrap();
         prop_assert!(
             instance.abs_diff_eq(&loaded, crate::ATol::default()),
-            "Instance not matching after roundtrip:\n{}",
-            take_diff(&instance, &loaded)
+            "Instance not matching after roundtrip:\n{}\nMPS:\n{}",
+            take_diff(&instance, &loaded),
+            String::from_utf8(buffer).unwrap()
         );
     }
 }
