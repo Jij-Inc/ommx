@@ -151,7 +151,7 @@ fn write_columns<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
 /// Writes the entry in the COLUMNS sections of the given id and name, for the
 /// corresponding row (constraint/obj function).
 ///
-/// Only writes linear coefficients. Quadratic terms will be written separately 
+/// Only writes linear coefficients. Quadratic terms will be written separately
 /// in QUADOBJ/QCMATRIX sections.
 /// Only writes if var_id is part of the terms in the function, and only if
 /// coefficient is not 0.
@@ -177,14 +177,14 @@ fn write_col_entry<W: Write>(
             degree: (*func.degree()),
         });
     };
-    
+
     if let Some(coeff) = linear_coeff {
         let coeff_value: f64 = coeff.into();
         if coeff_value != 0.0 {
             writeln!(out, "    {var_name}  {row_name}  {coeff_value}")?;
         }
     }
-    
+
     Ok(())
 }
 
@@ -197,16 +197,16 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
         quadratic.constant_term()
     } else {
         // Higher degree functions not supported
-        return Err(MpsWriteError::InvalidObjectiveType { 
-            degree: (*instance.objective().degree())
+        return Err(MpsWriteError::InvalidObjectiveType {
+            degree: (*instance.objective().degree()),
         });
     };
-    
+
     if constant != 0.0 {
         let rhs = -constant;
         writeln!(out, "  RHS1    {OBJ_NAME}   {rhs}")?;
     }
-    
+
     for (constr_id, constr) in instance.constraints().iter() {
         let name = constr_name(*constr_id);
         let constant = if let Some(linear) = constr.function.as_linear() {
@@ -220,7 +220,7 @@ fn write_rhs<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteE
                 degree: (*constr.function.degree()),
             });
         };
-        
+
         if constant != 0.0 {
             let rhs = -constant;
             writeln!(out, "  RHS1    {name}   {rhs}")?;
@@ -288,15 +288,16 @@ fn dvar_name(var_id: VariableID) -> String {
 fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWriteError> {
     // Only write QUADOBJ section if the objective has quadratic terms
     if let Some(quadratic) = instance.objective().as_quadratic() {
-        let has_quadratic_terms = quadratic.iter().any(|(monomial, _)| {
-            matches!(monomial, crate::QuadraticMonomial::Pair(_))
-        });
-        
+        let has_quadratic_terms = quadratic
+            .iter()
+            .any(|(monomial, _)| matches!(monomial, crate::QuadraticMonomial::Pair(_)));
+
         if has_quadratic_terms {
             writeln!(out, "QUADOBJ")?;
-            
+
             // Write quadratic terms in sorted order for deterministic output
-            let mut quadratic_terms: Vec<_> = quadratic.iter()
+            let mut quadratic_terms: Vec<_> = quadratic
+                .iter()
                 .filter_map(|(monomial, coeff)| {
                     if let crate::QuadraticMonomial::Pair(pair) = monomial {
                         Some((pair, coeff))
@@ -305,9 +306,9 @@ fn write_quadobj<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsWr
                     }
                 })
                 .collect();
-            
+
             quadratic_terms.sort_by_key(|(pair, _)| (pair.lower(), pair.upper()));
-            
+
             for (pair, coeff) in quadratic_terms {
                 let var1_name = dvar_name(pair.lower());
                 let var2_name = dvar_name(pair.upper());
@@ -325,16 +326,17 @@ fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsW
     // Write QCMATRIX sections for each constraint that has quadratic terms
     for (constr_id, constr) in instance.constraints().iter() {
         if let Some(quadratic) = constr.function.as_quadratic() {
-            let has_quadratic_terms = quadratic.iter().any(|(monomial, _)| {
-                matches!(monomial, crate::QuadraticMonomial::Pair(_))
-            });
-            
+            let has_quadratic_terms = quadratic
+                .iter()
+                .any(|(monomial, _)| matches!(monomial, crate::QuadraticMonomial::Pair(_)));
+
             if has_quadratic_terms {
                 let constraint_name = constr_name(*constr_id);
                 writeln!(out, "QCMATRIX {constraint_name}")?;
-                
+
                 // Write quadratic terms in sorted order for deterministic output
-                let mut quadratic_terms: Vec<_> = quadratic.iter()
+                let mut quadratic_terms: Vec<_> = quadratic
+                    .iter()
                     .filter_map(|(monomial, coeff)| {
                         if let crate::QuadraticMonomial::Pair(pair) = monomial {
                             Some((pair, coeff))
@@ -343,9 +345,9 @@ fn write_qcmatrix<W: Write>(instance: &Instance, out: &mut W) -> Result<(), MpsW
                         }
                     })
                     .collect();
-                
+
                 quadratic_terms.sort_by_key(|(pair, _)| (pair.lower(), pair.upper()));
-                
+
                 for (pair, coeff) in quadratic_terms {
                     let var1_name = dvar_name(pair.lower());
                     let var2_name = dvar_name(pair.upper());

@@ -115,7 +115,7 @@ fn convert_objective(
 ) -> anyhow::Result<Function> {
     let Mps { b, c, quad_obj, .. } = mps;
     let constant = -b.get(&OBJ_NAME.into()).copied().unwrap_or_default();
-    
+
     // Check if we have any quadratic terms
     if quad_obj.is_empty() {
         // Linear objective only
@@ -142,7 +142,7 @@ fn convert_objective(
     } else {
         // Quadratic objective - need to build a quadratic function
         let mut quadratic = Quadratic::try_from(constant)?;
-        
+
         // Add linear terms
         for (name, &coefficient) in c {
             if let Some(&id) = name_id_map.get(name) {
@@ -153,18 +153,22 @@ fn convert_objective(
                 }
             }
         }
-        
+
         // Add quadratic terms
         for ((var1_name, var2_name), &coefficient) in quad_obj {
-            if let (Some(&id1), Some(&id2)) = (name_id_map.get(var1_name), name_id_map.get(var2_name)) {
+            if let (Some(&id1), Some(&id2)) =
+                (name_id_map.get(var1_name), name_id_map.get(var2_name))
+            {
                 match Coefficient::try_from(coefficient) {
-                    Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef),
+                    Ok(coef) => {
+                        quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)
+                    }
                     Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                     Err(e) => return Err(e.into()),
                 }
             }
         }
-        
+
         Ok(Function::Quadratic(quadratic))
     }
 }
@@ -174,7 +178,13 @@ fn convert_constraints(
     name_id_map: &HashMap<ColumnName, VariableID>,
 ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
     let Mps {
-        a, b, eq, ge, le, quad_constraints, ..
+        a,
+        b,
+        eq,
+        ge,
+        le,
+        quad_constraints,
+        ..
     } = mps;
     let mut constrs = BTreeMap::new();
 
@@ -283,7 +293,7 @@ fn convert_inequality(
     } else {
         // Quadratic constraint - need to build a quadratic function
         let mut quadratic = Quadratic::try_from(b)?;
-        
+
         // Add linear terms
         for (col_name, &coefficient) in row {
             if let Some(&id) = name_id_map.get(col_name) {
@@ -295,21 +305,25 @@ fn convert_inequality(
                 }
             }
         }
-        
+
         // Add quadratic terms
         if let Some(quad_terms) = quad_terms {
             for ((var1_name, var2_name), &coefficient) in quad_terms {
-                if let (Some(&id1), Some(&id2)) = (name_id_map.get(var1_name), name_id_map.get(var2_name)) {
+                if let (Some(&id1), Some(&id2)) =
+                    (name_id_map.get(var1_name), name_id_map.get(var2_name))
+                {
                     let coeff = if negate { -coefficient } else { coefficient };
                     match Coefficient::try_from(coeff) {
-                        Ok(coef) => quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef),
+                        Ok(coef) => {
+                            quadratic.add_term(crate::QuadraticMonomial::new_pair(id1, id2), coef)
+                        }
                         Err(crate::CoefficientError::Zero) => {} // Skip zero coefficients
                         Err(e) => return Err(e.into()),
                     }
                 }
             }
         }
-        
+
         Function::Quadratic(quadratic)
     };
 

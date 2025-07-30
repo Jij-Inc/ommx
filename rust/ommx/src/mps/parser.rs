@@ -67,7 +67,7 @@ pub struct Mps {
     /// Quadratic terms in the objective function: (var1, var2) -> coefficient
     /// Represents terms of the form coefficient * var1 * var2
     pub quad_obj: HashMap<(ColumnName, ColumnName), f64>,
-    
+
     /// Quadratic terms in constraints: constraint_name -> (var1, var2) -> coefficient
     /// Represents terms of the form coefficient * var1 * var2 in each constraint
     pub quad_constraints: HashMap<RowName, HashMap<(ColumnName, ColumnName), f64>>,
@@ -194,10 +194,12 @@ impl State {
             if !constraint_name.is_empty() {
                 let constraint_name = RowName(constraint_name.to_string());
                 self.current_qcmatrix_constraint = Some(constraint_name.clone());
-                
+
                 // Initialize the quadratic terms map for this constraint if it doesn't exist
                 if !self.mps.quad_constraints.contains_key(&constraint_name) {
-                    self.mps.quad_constraints.insert(constraint_name, HashMap::new());
+                    self.mps
+                        .quad_constraints
+                        .insert(constraint_name, HashMap::new());
                 }
             }
         } else {
@@ -460,23 +462,23 @@ impl State {
     // ---------------------------------------------------------------------
     fn read_quadobj_field(&mut self, fields: Vec<&str>) -> Result<()> {
         ensure_field_size("QUADOBJ", &fields, |len| len == 3)?;
-        
+
         let var1 = ColumnName(fields[0].to_string());
-        let var2 = ColumnName(fields[1].to_string()); 
+        let var2 = ColumnName(fields[1].to_string());
         let coeff: f64 = fields[2].parse()?;
-        
+
         // Add variables to the variable set if not already present
         self.mps.vars.insert(var1.clone());
         self.mps.vars.insert(var2.clone());
-        
+
         // Store the quadratic term
         self.mps.quad_obj.insert((var1, var2), coeff);
-        
+
         Ok(())
     }
 
     // ---------------------------------------------------------------------
-    // QCMATRIX section parsing  
+    // QCMATRIX section parsing
     // Header line: QCMATRIX constraint_name (handled in read_header)
     // Following lines: var1  var2  coefficient
     // Represents quadratic terms in the specified constraint
@@ -484,24 +486,26 @@ impl State {
     fn read_qcmatrix_field(&mut self, fields: Vec<&str>) -> Result<()> {
         // This should only be quadratic term lines: var1  var2  coefficient
         ensure_field_size("QCMATRIX", &fields, |len| len == 3)?;
-        
+
         let Some(ref constraint_name) = self.current_qcmatrix_constraint else {
-            return Err(MpsParseError::InvalidHeader("QCMATRIX quadratic term without constraint name".to_string()));
+            return Err(MpsParseError::InvalidHeader(
+                "QCMATRIX quadratic term without constraint name".to_string(),
+            ));
         };
-        
+
         let var1 = ColumnName(fields[0].to_string());
         let var2 = ColumnName(fields[1].to_string());
         let coeff: f64 = fields[2].parse()?;
-        
+
         // Add variables to the variable set if not already present
         self.mps.vars.insert(var1.clone());
         self.mps.vars.insert(var2.clone());
-        
+
         // Store the quadratic term for this constraint
         if let Some(quad_terms) = self.mps.quad_constraints.get_mut(constraint_name) {
             quad_terms.insert((var1, var2), coeff);
         }
-        
+
         Ok(())
     }
 
