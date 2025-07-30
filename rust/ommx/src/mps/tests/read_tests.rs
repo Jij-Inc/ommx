@@ -468,15 +468,21 @@ ENDATA
     // The objective should be quadratic
     assert_eq!(instance.objective().degree(), 2);
     
-    // Verify the objective is a quadratic function
-    if let Some(quadratic) = instance.objective().as_quadratic() {
-        // Check that we have the expected terms
-        // Note: The exact structure depends on the internal representation
-        // This is a basic check that it's recognized as quadratic
-        assert!(quadratic.degree() == 2);
-    } else {
-        panic!("Expected quadratic objective function");
-    }
+    // Get variables using the new helper method
+    let x1 = instance.get_decision_variable_by_name("X1", vec![]).unwrap();
+    let x2 = instance.get_decision_variable_by_name("X2", vec![]).unwrap();
+    let x1_id = x1.id();
+    let x2_id = x2.id();
+    
+    // Build expected objective function: x1 + 3*x2 + 0.5*x1^2 + x1*x2 + 2*x2^2
+    let expected_objective = quadratic!(x1_id) 
+        + coeff!(3.0) * quadratic!(x2_id)
+        + coeff!(0.5) * quadratic!(x1_id, x1_id)
+        + quadratic!(x1_id, x2_id)
+        + coeff!(2.0) * quadratic!(x2_id, x2_id);
+    
+    // Compare the actual and expected objective functions
+    assert_abs_diff_eq!(instance.objective(), &expected_objective.into());
 }
 
 // Test MPS parsing with QCMATRIX section
