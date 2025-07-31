@@ -21,7 +21,9 @@ def tsp_distance_matrix(request):
     return generate_distance_matrix(num_city)
 
 
-def make_tsp_qubo_by_ommx(distance: np.ndarray):
+def make_tsp_qubo_by_ommx(
+    distance: np.ndarray, lambda1: float = 1.0, lambda2: float = 1.0
+):
     """
     Generate TSP QUBO using OMMX directly.
 
@@ -29,6 +31,11 @@ def make_tsp_qubo_by_ommx(distance: np.ndarray):
     - x[i][j] = 1 if city i is visited at time j
     - Objective: minimize total distance
     - Constraints: each city visited exactly once, each time slot has exactly one city
+
+    Args:
+        distance: Distance matrix between cities
+        lambda1: Penalty weight for one-city-per-time constraint
+        lambda2: Penalty weight for one-time-per-city constraint
     """
     num_city = distance.shape[0]
 
@@ -42,15 +49,12 @@ def make_tsp_qubo_by_ommx(distance: np.ndarray):
     ]
 
     # Objective: sum of distances between consecutive cities in the tour
+    # Fixed logic: x[i][t] * x[j][t+1] means city i at time t followed by city j at time t+1
     objective = sum(
-        sum(
-            sum(
-                distance[i, j] * x[i][k] * x[j][(k + 1) % num_city]
-                for k in range(num_city)
-            )
-            for j in range(num_city)
-        )
+        distance[i, j] * x[i][t] * x[j][(t + 1) % num_city]
         for i in range(num_city)
+        for j in range(num_city)
+        for t in range(num_city)
     )
 
     # Constraint: each city must be visited exactly once
@@ -67,11 +71,12 @@ def make_tsp_qubo_by_ommx(distance: np.ndarray):
         for j in range(num_city)
     )
 
-    # Total Hamiltonian
-    return objective + one_city_const + one_time_const
+    # Total Hamiltonian with configurable penalty weights
+    return objective + lambda1 * one_city_const + lambda2 * one_time_const
 
 
 @pytest.mark.benchmark
 def test_tsp_qubo_direct_generation(tsp_distance_matrix: np.ndarray):
     """Benchmark the direct TSP QUBO generation using OMMX."""
-    make_tsp_qubo_by_ommx(tsp_distance_matrix)
+    # Generate QUBO with custom penalty weights
+    make_tsp_qubo_by_ommx(tsp_distance_matrix, lambda1=10.0, lambda2=10.0)
