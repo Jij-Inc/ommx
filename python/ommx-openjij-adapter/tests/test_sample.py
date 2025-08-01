@@ -180,6 +180,10 @@ def test_sample(instance, ans):
         instance, num_reads=1, uniform_penalty_weight=3.1, seed=999
     )
     assert sample_set.extract_decision_variables("x", 0) == ans
+    # at least for our test cases the maximization problems should all be getting results >= 0
+    # -- this is to avoid a bug where objective function values were coming back with the sign inverted
+    if instance.sense == Instance.MAXIMIZE:
+        assert sample_set.objectives[0] > 0
 
 
 @pytest.mark.parametrize(
@@ -202,6 +206,10 @@ def test_solve(instance, ans):
         instance, num_reads=1, uniform_penalty_weight=3.1, seed=999
     )
     assert solution.extract_decision_variables("x") == ans
+    # at least for our test cases the maximization problems should all be getting results >= 0
+    # -- this is to avoid a bug where objective function values were coming back with the sign inverted
+    if instance.sense == Instance.MAXIMIZE:
+        assert solution.objective > 0
 
 
 @pytest.mark.parametrize(

@@ -248,7 +248,7 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
         if self._instance_prepared:
             return
 
-        self.ommx_instance.as_minimization_problem()
+        is_converted = self.ommx_instance.as_minimization_problem()
 
         continuous_variables = [
             var.id
@@ -311,6 +311,9 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
             self._qubo = qubo
 
         self._instance_prepared = True
+
+        if is_converted:
+            self.ommx_instance.as_maximization_problem()
 
 
 @deprecated("Renamed to `decode_to_samples`")
