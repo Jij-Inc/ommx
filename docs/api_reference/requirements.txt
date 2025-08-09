@@ -44,7 +44,7 @@ pyyaml==6.0.2
     # via
     #   myst-parser
     #   sphinx-autoapi
-requests==2.32.3
+requests==2.32.4
     # via sphinx
 snowballstemmer==2.2.0
     # via sphinx
@@ -78,5 +78,5 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 tomlkit==0.13.2
     # via ommx-api-reference (pyproject.toml)
-urllib3==2.3.0
+urllib3==2.5.0
     # via requests
