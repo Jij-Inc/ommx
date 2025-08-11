@@ -101,7 +101,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Download wheel
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: wheels
           path: wheels
