@@ -133,31 +133,31 @@ jobs:
           mv docs/redirect/* doc/
 
       - name: Download HTML of JupyterBook (ja)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc-jupyter-book-ja
           path: ./doc/ja
 
       - name: Download HTML of JupyterBook (en)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc-jupyter-book-en
           path: ./doc/en
 
       - name: Download HTML of protobuf
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc-protobuf
           path: ./doc
 
       - name: Download HTML of rust
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc-rust
           path: ./doc/rust
 
       - name: Download HTML of python
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc-python
           path: ./doc/python/ommx
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download HTML
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: doc
           path: .
