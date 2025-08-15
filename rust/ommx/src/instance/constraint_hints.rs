@@ -1,4 +1,338 @@
-use super::*;
+use super::{parse::*, Instance, ParametricInstance};
+use crate::{
+    parse::{Parse, ParseError, RawParseError},
+    v1::{self, Samples, State},
+    Constraint, ConstraintID, DecisionVariable, Evaluate, InstanceError, RemovedConstraint,
+    VariableID, VariableIDSet,
+};
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OneHot {
+    pub id: ConstraintID,
+    pub variables: BTreeSet<VariableID>,
+}
+
+impl Parse for v1::OneHot {
+    type Output = OneHot;
+    type Context = (
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
+    );
+    fn parse(
+        self,
+        (decision_variable, constraints, removed_constraints): &Self::Context,
+    ) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.OneHot";
+        let constraint_id = as_constraint_id(constraints, removed_constraints, self.constraint_id)
+            .map_err(|e| e.context(message, "constraint_id"))?;
+        let mut variables = BTreeSet::new();
+        for v in &self.decision_variables {
+            let id = as_variable_id(decision_variable, *v)
+                .map_err(|e| e.context(message, "decision_variables"))?;
+            if !variables.insert(id) {
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
+            }
+        }
+        Ok(OneHot {
+            id: constraint_id,
+            variables,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sos1 {
+    pub binary_constraint_id: ConstraintID,
+    pub big_m_constraint_ids: BTreeSet<ConstraintID>,
+    pub variables: BTreeSet<VariableID>,
+}
+
+impl Parse for v1::Sos1 {
+    type Output = Sos1;
+    type Context = (
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
+    );
+    fn parse(
+        self,
+        (decision_variable, constraints, removed_constraints): &Self::Context,
+    ) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.Sos1";
+        let binary_constraint_id =
+            as_constraint_id(constraints, removed_constraints, self.binary_constraint_id)
+                .map_err(|e| e.context(message, "binary_constraint_id"))?;
+        let mut big_m_constraint_ids = BTreeSet::new();
+        for id in &self.big_m_constraint_ids {
+            let id = as_constraint_id(constraints, removed_constraints, *id)
+                .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
+            if !big_m_constraint_ids.insert(id) {
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueConstraintID { id })
+                        .context(message, "big_m_constraint_ids"),
+                );
+            }
+        }
+        let mut variables = BTreeSet::new();
+        for id in &self.decision_variables {
+            let id = as_variable_id(decision_variable, *id)
+                .map_err(|e| e.context(message, "decision_variables"))?;
+            if !variables.insert(id) {
+                return Err(
+                    RawParseError::InstanceError(InstanceError::NonUniqueVariableID { id })
+                        .context(message, "decision_variables"),
+                );
+            }
+        }
+        Ok(Sos1 {
+            binary_constraint_id,
+            big_m_constraint_ids,
+            variables,
+        })
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct ConstraintHints {
+    pub one_hot_constraints: Vec<OneHot>,
+    pub sos1_constraints: Vec<Sos1>,
+}
+
+impl ConstraintHints {
+    pub fn is_empty(&self) -> bool {
+        self.one_hot_constraints.is_empty() && self.sos1_constraints.is_empty()
+    }
+}
+
+impl Parse for v1::ConstraintHints {
+    type Output = ConstraintHints;
+    type Context = (
+        BTreeMap<VariableID, DecisionVariable>,
+        BTreeMap<ConstraintID, Constraint>,
+        BTreeMap<ConstraintID, RemovedConstraint>,
+    );
+    fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
+        let message = "ommx.v1.ConstraintHints";
+        let one_hot_constraints = self
+            .one_hot_constraints
+            .into_iter()
+            .map(|c| c.parse_as(context, message, "one_hot_constraints"))
+            .collect::<Result<Vec<_>, ParseError>>()?;
+        let sos1_constraints = self
+            .sos1_constraints
+            .into_iter()
+            .map(|c| c.parse_as(context, message, "sos1_constraints"))
+            .collect::<Result<_, ParseError>>()?;
+        Ok(ConstraintHints {
+            one_hot_constraints,
+            sos1_constraints,
+        })
+    }
+}
+
+impl From<OneHot> for v1::OneHot {
+    fn from(value: OneHot) -> Self {
+        Self {
+            constraint_id: *value.id,
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<Sos1> for v1::Sos1 {
+    fn from(value: Sos1) -> Self {
+        Self {
+            binary_constraint_id: *value.binary_constraint_id,
+            big_m_constraint_ids: value.big_m_constraint_ids.into_iter().map(|c| *c).collect(),
+            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+        }
+    }
+}
+
+impl From<ConstraintHints> for v1::ConstraintHints {
+    fn from(value: ConstraintHints) -> Self {
+        Self {
+            one_hot_constraints: value
+                .one_hot_constraints
+                .into_iter()
+                .map(|oh| oh.into())
+                .collect(),
+            sos1_constraints: value
+                .sos1_constraints
+                .into_iter()
+                .map(|s| s.into())
+                .collect(),
+        }
+    }
+}
+
+impl Evaluate for OneHot {
+    type Output = ();
+    type SampledOutput = ();
+
+    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        _samples: &Samples,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        Ok(())
+    }
+
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+        let mut variables_to_remove = Vec::new();
+        let mut should_discard = false;
+
+        for &var_id in &self.variables {
+            if let Some(&value) = state.entries.get(&var_id.into_inner()) {
+                if value.abs() < *atol {
+                    // If the value is 0 (within tolerance), remove the variable
+                    variables_to_remove.push(var_id);
+                } else {
+                    // If the value is non-zero, warn and discard the hint
+                    log::warn!(
+                        "OneHot constraint hint {} has variable {} with non-zero value {}. Discarding the hint.",
+                        self.id,
+                        var_id,
+                        value
+                    );
+                    should_discard = true;
+                    break;
+                }
+            }
+        }
+
+        if should_discard {
+            self.variables.clear();
+        } else {
+            for var in variables_to_remove {
+                self.variables.remove(&var);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.variables.clone()
+    }
+}
+
+impl Evaluate for Sos1 {
+    type Output = ();
+    type SampledOutput = ();
+
+    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        _samples: &Samples,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        Ok(())
+    }
+
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+        let mut variables_to_remove = Vec::new();
+        let mut should_discard = false;
+
+        for &var_id in &self.variables {
+            if let Some(&value) = state.entries.get(&var_id.into_inner()) {
+                if value.abs() < *atol {
+                    // If the value is 0 (within tolerance), remove the variable
+                    variables_to_remove.push(var_id);
+                } else {
+                    // If the value is non-zero, warn and discard the hint
+                    log::warn!(
+                        "Sos1 constraint hint with binary_constraint_id {} has variable {} with non-zero value {}. Discarding the hint.",
+                        self.binary_constraint_id,
+                        var_id,
+                        value
+                    );
+                    should_discard = true;
+                    break;
+                }
+            }
+        }
+
+        if should_discard {
+            self.variables.clear();
+            self.big_m_constraint_ids.clear();
+        } else {
+            for var in variables_to_remove {
+                self.variables.remove(&var);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        self.variables.clone()
+    }
+}
+
+impl Evaluate for ConstraintHints {
+    type Output = ();
+    type SampledOutput = ();
+
+    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
+        Ok(())
+    }
+
+    fn evaluate_samples(
+        &self,
+        _samples: &Samples,
+        _atol: crate::ATol,
+    ) -> anyhow::Result<Self::SampledOutput> {
+        Ok(())
+    }
+
+    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+        // Partially evaluate each OneHot constraint
+        for one_hot in &mut self.one_hot_constraints {
+            one_hot.partial_evaluate(state, atol)?;
+        }
+
+        // Remove empty OneHot constraints
+        self.one_hot_constraints
+            .retain(|oh| !oh.variables.is_empty());
+
+        // Partially evaluate each Sos1 constraint
+        for sos1 in &mut self.sos1_constraints {
+            sos1.partial_evaluate(state, atol)?;
+        }
+
+        // Remove empty Sos1 constraints
+        self.sos1_constraints.retain(|s| !s.variables.is_empty());
+
+        Ok(())
+    }
+
+    fn required_ids(&self) -> VariableIDSet {
+        let mut ids = VariableIDSet::new();
+
+        for one_hot in &self.one_hot_constraints {
+            ids.extend(one_hot.required_ids());
+        }
+
+        for sos1 in &self.sos1_constraints {
+            ids.extend(sos1.required_ids());
+        }
+
+        ids
+    }
+}
 
 impl Instance {
     pub fn add_constraint_hints(
@@ -61,7 +395,7 @@ mod tests {
         constraint_hints::{ConstraintHints, OneHot},
         linear, DecisionVariable, Sense, VariableID,
     };
-    use maplit::btreemap;
+    use maplit::{btreemap, btreeset, hashmap};
     use std::collections::BTreeSet;
 
     #[test]
@@ -148,5 +482,215 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[test]
+    fn test_one_hot_partial_evaluate_remove_zero() {
+        // Test that OneHot removes variables with value 0
+        let mut one_hot = OneHot {
+            id: ConstraintID::from(1),
+            variables: btreeset! {
+                VariableID::from(1),
+                VariableID::from(2),
+                VariableID::from(3),
+            },
+        };
+
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,  // Should be removed
+                2 => 0.0,  // Should be removed
+            },
+        };
+
+        one_hot
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // Only variable 3 should remain
+        assert_eq!(one_hot.variables.len(), 1);
+        assert!(one_hot.variables.contains(&VariableID::from(3)));
+    }
+
+    #[test]
+    fn test_one_hot_partial_evaluate_discard_nonzero() {
+        // Test that OneHot is discarded when a variable has non-zero value
+        let mut one_hot = OneHot {
+            id: ConstraintID::from(1),
+            variables: btreeset! {
+                VariableID::from(1),
+                VariableID::from(2),
+                VariableID::from(3),
+            },
+        };
+
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,
+                2 => 1.0,  // Non-zero value should cause discard
+            },
+        };
+
+        one_hot
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // All variables should be cleared
+        assert!(one_hot.variables.is_empty());
+    }
+
+    #[test]
+    fn test_sos1_partial_evaluate_remove_zero() {
+        // Test that Sos1 removes variables with value 0
+        let mut sos1 = Sos1 {
+            binary_constraint_id: ConstraintID::from(1),
+            big_m_constraint_ids: btreeset! {
+                ConstraintID::from(2),
+                ConstraintID::from(3),
+            },
+            variables: btreeset! {
+                VariableID::from(1),
+                VariableID::from(2),
+                VariableID::from(3),
+            },
+        };
+
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,  // Should be removed
+                2 => 0.0,  // Should be removed
+            },
+        };
+
+        sos1.partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // Only variable 3 should remain
+        assert_eq!(sos1.variables.len(), 1);
+        assert!(sos1.variables.contains(&VariableID::from(3)));
+        // big_m_constraint_ids should remain
+        assert_eq!(sos1.big_m_constraint_ids.len(), 2);
+    }
+
+    #[test]
+    fn test_sos1_partial_evaluate_discard_nonzero() {
+        // Test that Sos1 is discarded when a variable has non-zero value
+        let mut sos1 = Sos1 {
+            binary_constraint_id: ConstraintID::from(1),
+            big_m_constraint_ids: btreeset! {
+                ConstraintID::from(2),
+                ConstraintID::from(3),
+            },
+            variables: btreeset! {
+                VariableID::from(1),
+                VariableID::from(2),
+                VariableID::from(3),
+            },
+        };
+
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,
+                2 => 0.5,  // Non-zero value should cause discard
+            },
+        };
+
+        sos1.partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // All fields should be cleared
+        assert!(sos1.variables.is_empty());
+        assert!(sos1.big_m_constraint_ids.is_empty());
+    }
+
+    #[test]
+    fn test_constraint_hints_partial_evaluate() {
+        // Test ConstraintHints partial evaluation
+        let mut constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![
+                OneHot {
+                    id: ConstraintID::from(1),
+                    variables: btreeset! {
+                        VariableID::from(1),
+                        VariableID::from(2),
+                    },
+                },
+                OneHot {
+                    id: ConstraintID::from(2),
+                    variables: btreeset! {
+                        VariableID::from(3),
+                        VariableID::from(4),
+                    },
+                },
+            ],
+            sos1_constraints: vec![Sos1 {
+                binary_constraint_id: ConstraintID::from(3),
+                big_m_constraint_ids: btreeset! { ConstraintID::from(4) },
+                variables: btreeset! {
+                    VariableID::from(5),
+                    VariableID::from(6),
+                    VariableID::from(7),
+                },
+            }],
+        };
+
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,  // Remove from first OneHot
+                3 => 1.0,  // Discard second OneHot
+                5 => 0.0,  // Remove from Sos1
+            },
+        };
+
+        constraint_hints
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // First OneHot should have one variable, second should be removed
+        assert_eq!(constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(constraint_hints.one_hot_constraints[0].variables.len(), 1);
+        assert!(constraint_hints.one_hot_constraints[0]
+            .variables
+            .contains(&VariableID::from(2)));
+
+        // Sos1 should have two variables remaining
+        assert_eq!(constraint_hints.sos1_constraints.len(), 1);
+        assert_eq!(constraint_hints.sos1_constraints[0].variables.len(), 2);
+        assert!(constraint_hints.sos1_constraints[0]
+            .variables
+            .contains(&VariableID::from(6)));
+        assert!(constraint_hints.sos1_constraints[0]
+            .variables
+            .contains(&VariableID::from(7)));
+    }
+
+    #[test]
+    fn test_constraint_hints_required_ids() {
+        // Test that required_ids returns all variable IDs
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![OneHot {
+                id: ConstraintID::from(1),
+                variables: btreeset! {
+                    VariableID::from(1),
+                    VariableID::from(2),
+                },
+            }],
+            sos1_constraints: vec![Sos1 {
+                binary_constraint_id: ConstraintID::from(2),
+                big_m_constraint_ids: btreeset! { ConstraintID::from(3) },
+                variables: btreeset! {
+                    VariableID::from(3),
+                    VariableID::from(4),
+                },
+            }],
+        };
+
+        let required = constraint_hints.required_ids();
+
+        assert_eq!(required.len(), 4);
+        assert!(required.contains(&VariableID::from(1)));
+        assert!(required.contains(&VariableID::from(2)));
+        assert!(required.contains(&VariableID::from(3)));
+        assert!(required.contains(&VariableID::from(4)));
     }
 }
