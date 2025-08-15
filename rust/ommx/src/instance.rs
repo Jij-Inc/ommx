@@ -18,13 +18,13 @@ mod setter;
 mod substitute;
 
 pub use analysis::*;
-pub use constraint_hints::*;
 pub use error::*;
 pub use log_encode::*;
 
 use crate::{
-    parse::Parse, v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate,
-    Function, RemovedConstraint, VariableID, VariableIDSet,
+    constraint_hints::ConstraintHints, parse::Parse, v1, AcyclicAssignments, Constraint,
+    ConstraintID, DecisionVariable, Evaluate, Function, RemovedConstraint, VariableID,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 

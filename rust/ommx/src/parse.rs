@@ -1,9 +1,10 @@
 use crate::{
-    polynomial_base::QuadraticParseError, BoundError, CoefficientError, DecisionVariableError,
-    InstanceError, SampleID, SampleSetError, SolutionError, SubstitutionError,
+    polynomial_base::QuadraticParseError, BoundError, CoefficientError, Constraint, ConstraintID,
+    DecisionVariable, DecisionVariableError, InstanceError, RemovedConstraint, SampleID,
+    SampleSetError, SolutionError, SubstitutionError, VariableID,
 };
 use prost::DecodeError;
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 /// Parse [`crate::v1`] messages into validated Rust types.
 pub trait Parse: Sized {
@@ -126,4 +127,29 @@ impl RawParseError {
             error: self,
         }
     }
+}
+
+pub(crate) fn as_constraint_id(
+    constraints: &BTreeMap<ConstraintID, Constraint>,
+    removed_constraints: &BTreeMap<ConstraintID, RemovedConstraint>,
+    id: u64,
+) -> Result<ConstraintID, ParseError> {
+    let id = ConstraintID::from(id);
+    if !constraints.contains_key(&id) && !removed_constraints.contains_key(&id) {
+        return Err(
+            RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
+        );
+    }
+    Ok(id)
+}
+
+pub(crate) fn as_variable_id(
+    decision_variables: &BTreeMap<VariableID, DecisionVariable>,
+    id: u64,
+) -> Result<VariableID, ParseError> {
+    let id = VariableID::from(id);
+    if !decision_variables.contains_key(&id) {
+        return Err(RawParseError::InstanceError(InstanceError::UndefinedVariableID { id }).into());
+    }
+    Ok(id)
 }
