@@ -62,17 +62,26 @@ impl Sos1 {
         variables: Vec<u64>,
     ) -> Self {
         let binary_constraint_id = ConstraintID::from(binary_constraint_id);
-        let big_m_constraint_ids: BTreeSet<ConstraintID> = big_m_constraint_ids
-            .into_iter()
-            .map(ConstraintID::from)
+
+        // Create variable_to_big_m_constraint mapping by pairing variables with big_m_constraint_ids
+        let variable_to_big_m_constraint = variables
+            .iter()
+            .zip(big_m_constraint_ids.iter())
+            .map(|(var_id, constraint_id)| {
+                (
+                    VariableID::from(*var_id),
+                    ConstraintID::from(*constraint_id),
+                )
+            })
             .collect();
+
         let variable_set: BTreeSet<VariableID> =
             variables.into_iter().map(VariableID::from).collect();
 
         Self(ommx::Sos1 {
             binary_constraint_id,
-            big_m_constraint_ids,
             variables: variable_set,
+            variable_to_big_m_constraint,
         })
     }
 
@@ -84,7 +93,7 @@ impl Sos1 {
     #[getter]
     pub fn big_m_constraint_ids(&self) -> Vec<u64> {
         self.0
-            .big_m_constraint_ids
+            .big_m_constraint_ids()
             .iter()
             .map(|c| c.into_inner())
             .collect()

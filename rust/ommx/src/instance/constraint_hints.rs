@@ -787,14 +787,20 @@ mod tests {
             sos1_constraints: vec![],
         };
 
-        let mut instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
-            .unwrap()
-            .with_constraint_hints(constraint_hints)
-            .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints)
+                .unwrap()
+                .with_constraint_hints(constraint_hints)
+                .unwrap();
 
         // Verify initial state
         assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
-        assert_eq!(instance.constraint_hints.one_hot_constraints[0].variables.len(), 3);
+        assert_eq!(
+            instance.constraint_hints.one_hot_constraints[0]
+                .variables
+                .len(),
+            3
+        );
 
         // Apply partial evaluation: set variable 1 to 0, variable 2 to 1
         let state = State {
@@ -804,7 +810,9 @@ mod tests {
             },
         };
 
-        instance.partial_evaluate(&state, crate::ATol::default()).unwrap();
+        instance
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
 
         // The OneHot constraint hint should be discarded due to non-zero value
         assert!(instance.constraint_hints.one_hot_constraints.is_empty());
