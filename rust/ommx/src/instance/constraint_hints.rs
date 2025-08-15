@@ -60,8 +60,9 @@ mod tests {
         coeff,
         constraint::{Constraint, ConstraintID},
         constraint_hints::{ConstraintHints, OneHot},
-        linear, DecisionVariable, Evaluate, Sense, VariableID,
+        linear,
         v1::State,
+        DecisionVariable, Evaluate, Sense, VariableID,
     };
     use maplit::{btreemap, btreeset, hashmap};
     use std::collections::{BTreeMap, BTreeSet};
@@ -151,7 +152,6 @@ mod tests {
             1
         );
     }
-
 
     #[test]
     fn test_instance_partial_evaluate_constraint_hints() {
