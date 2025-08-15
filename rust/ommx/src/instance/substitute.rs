@@ -227,16 +227,9 @@ mod tests {
         let sos1 = Sos1::new(
             ConstraintID::from(1),
             [
-                VariableID::from(1),
-                VariableID::from(2),
-                VariableID::from(3),
-            ]
-            .into_iter()
-            .collect(),
-            [
-                (VariableID::from(1), ConstraintID::from(3)),
-                (VariableID::from(2), ConstraintID::from(4)),
-                (VariableID::from(3), ConstraintID::from(5)), // Add missing big-M constraint for variable 3
+                (VariableID::from(1), Some(ConstraintID::from(3))),
+                (VariableID::from(2), Some(ConstraintID::from(4))),
+                (VariableID::from(3), Some(ConstraintID::from(5))), // Add missing big-M constraint for variable 3
             ]
             .into_iter()
             .collect(),

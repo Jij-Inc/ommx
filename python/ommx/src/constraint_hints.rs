@@ -1,6 +1,6 @@
 use ommx::{ConstraintID, VariableID};
 use pyo3::{prelude::*, Bound, PyAny};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// OneHot constraint hint wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -58,39 +58,23 @@ impl Sos1 {
         big_m_constraint_ids: Vec<u64>,
         variables: Vec<u64>,
     ) -> PyResult<Self> {
-        // Validate that variables and big_m_constraint_ids have the same length
-        if variables.len() != big_m_constraint_ids.len() {
-            return Err(pyo3::exceptions::PyValueError::new_err(format!(
-                "Sos1 constraint requires 1:1 correspondence between variables and big_m_constraint_ids. \
-                 Got {} variables: {:?} and {} big_m_constraint_ids: {:?}. \
-                 Each variable must have exactly one corresponding big-M constraint.",
-                variables.len(),
-                variables,
-                big_m_constraint_ids.len(),
-                big_m_constraint_ids
-            )));
-        }
-
         let binary_constraint_id = ConstraintID::from(binary_constraint_id);
 
-        // Create variable_to_big_m_constraint mapping by pairing variables with big_m_constraint_ids
-        let variable_to_big_m_constraint = variables
-            .iter()
-            .zip(big_m_constraint_ids.iter())
-            .map(|(var_id, constraint_id)| {
-                (
-                    VariableID::from(*var_id),
-                    ConstraintID::from(*constraint_id),
-                )
-            })
-            .collect();
+        // Create variable_to_big_m_constraint mapping
+        let mut variable_to_big_m_constraint = BTreeMap::new();
 
-        let variable_set: BTreeSet<VariableID> =
-            variables.into_iter().map(VariableID::from).collect();
+        for (i, var_id) in variables.into_iter().enumerate() {
+            let variable_id = VariableID::from(var_id);
+            let big_m_constraint = if i < big_m_constraint_ids.len() {
+                Some(ConstraintID::from(big_m_constraint_ids[i]))
+            } else {
+                None
+            };
+            variable_to_big_m_constraint.insert(variable_id, big_m_constraint);
+        }
 
         Ok(Self(ommx::Sos1::new(
             binary_constraint_id,
-            variable_set,
             variable_to_big_m_constraint,
         )))
     }

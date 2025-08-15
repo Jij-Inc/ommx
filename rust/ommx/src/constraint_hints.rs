@@ -167,15 +167,10 @@ mod tests {
             ],
             vec![Sos1::new(
                 ConstraintID::from(3),
-                btreeset! {
-                    VariableID::from(5),
-                    VariableID::from(6),
-                    VariableID::from(7),
-                },
                 btreemap! {
-                    VariableID::from(5) => ConstraintID::from(50),
-                    VariableID::from(6) => ConstraintID::from(60),
-                    VariableID::from(7) => ConstraintID::from(70),
+                    VariableID::from(5) => Some(ConstraintID::from(50)),
+                    VariableID::from(6) => Some(ConstraintID::from(60)),
+                    VariableID::from(7) => Some(ConstraintID::from(70)),
                 },
             )],
         );
@@ -224,13 +219,9 @@ mod tests {
             )],
             vec![Sos1::new(
                 ConstraintID::from(2),
-                btreeset! {
-                    VariableID::from(3),
-                    VariableID::from(4),
-                },
                 btreemap! {
-                    VariableID::from(3) => ConstraintID::from(30),
-                    VariableID::from(4) => ConstraintID::from(40),
+                    VariableID::from(3) => Some(ConstraintID::from(30)),
+                    VariableID::from(4) => Some(ConstraintID::from(40)),
                 },
             )],
         );
