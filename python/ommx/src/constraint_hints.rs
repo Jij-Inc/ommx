@@ -17,20 +17,17 @@ impl OneHot {
         let variable_set: BTreeSet<VariableID> =
             variables.into_iter().map(VariableID::from).collect();
 
-        Self(ommx::OneHot {
-            id: constraint_id,
-            variables: variable_set,
-        })
+        Self(ommx::OneHot::new(constraint_id, variable_set))
     }
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        self.0.id().into_inner()
     }
 
     #[getter]
     pub fn variables(&self) -> Vec<u64> {
-        self.0.variables.iter().map(|v| v.into_inner()).collect()
+        self.0.variables().iter().map(|v| v.into_inner()).collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -78,16 +75,16 @@ impl Sos1 {
         let variable_set: BTreeSet<VariableID> =
             variables.into_iter().map(VariableID::from).collect();
 
-        Self(ommx::Sos1 {
+        Self(ommx::Sos1::new(
             binary_constraint_id,
-            variables: variable_set,
+            variable_set,
             variable_to_big_m_constraint,
-        })
+        ))
     }
 
     #[getter]
     pub fn binary_constraint_id(&self) -> u64 {
-        self.0.binary_constraint_id.into_inner()
+        self.0.binary_constraint_id().into_inner()
     }
 
     #[getter]
@@ -101,7 +98,7 @@ impl Sos1 {
 
     #[getter]
     pub fn variables(&self) -> Vec<u64> {
-        self.0.variables.iter().map(|v| v.into_inner()).collect()
+        self.0.variables().iter().map(|v| v.into_inner()).collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -134,16 +131,16 @@ impl ConstraintHints {
     #[new]
     #[pyo3(signature = (one_hot_constraints=Vec::new(), sos1_constraints=Vec::new()))]
     pub fn new(one_hot_constraints: Vec<OneHot>, sos1_constraints: Vec<Sos1>) -> Self {
-        Self(ommx::ConstraintHints {
-            one_hot_constraints: one_hot_constraints.into_iter().map(|oh| oh.0).collect(),
-            sos1_constraints: sos1_constraints.into_iter().map(|s| s.0).collect(),
-        })
+        Self(ommx::ConstraintHints::new(
+            one_hot_constraints.into_iter().map(|oh| oh.0).collect(),
+            sos1_constraints.into_iter().map(|s| s.0).collect(),
+        ))
     }
 
     #[getter]
     pub fn one_hot_constraints(&self) -> Vec<OneHot> {
         self.0
-            .one_hot_constraints
+            .one_hot_constraints()
             .iter()
             .cloned()
             .map(OneHot)
@@ -152,7 +149,12 @@ impl ConstraintHints {
 
     #[getter]
     pub fn sos1_constraints(&self) -> Vec<Sos1> {
-        self.0.sos1_constraints.iter().cloned().map(Sos1).collect()
+        self.0
+            .sos1_constraints()
+            .iter()
+            .cloned()
+            .map(Sos1)
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {

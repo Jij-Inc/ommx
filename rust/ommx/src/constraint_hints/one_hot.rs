@@ -4,12 +4,15 @@ use crate::{
     Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, InstanceError, RemovedConstraint,
     VariableID, VariableIDSet,
 };
+use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Getters)]
 pub struct OneHot {
-    pub id: ConstraintID,
-    pub variables: BTreeSet<VariableID>,
+    #[getset(get = "pub")]
+    id: ConstraintID,
+    #[getset(get = "pub")]
+    variables: BTreeSet<VariableID>,
 }
 
 impl Parse for v1::OneHot {
@@ -54,6 +57,11 @@ impl From<OneHot> for v1::OneHot {
 }
 
 impl OneHot {
+    /// Create new OneHot constraint hint
+    pub fn new(id: ConstraintID, variables: BTreeSet<VariableID>) -> Self {
+        Self { id, variables }
+    }
+
     /// Apply partial evaluation to this OneHot constraint hint.
     /// Returns Some(updated_hint) if the hint should be kept, None if it should be discarded.
     pub fn partial_evaluate(mut self, state: &State, atol: crate::ATol) -> Option<Self> {
@@ -105,14 +113,14 @@ mod tests {
     #[test]
     fn test_one_hot_partial_evaluate_remove_zero() {
         // Test that OneHot removes variables with value 0
-        let one_hot = OneHot {
-            id: ConstraintID::from(1),
-            variables: btreeset! {
+        let one_hot = OneHot::new(
+            ConstraintID::from(1),
+            btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             },
-        };
+        );
 
         let state = State {
             entries: hashmap! {
@@ -126,21 +134,21 @@ mod tests {
         // Should keep the hint and only variable 3 should remain
         assert!(result.is_some());
         let updated_hint = result.unwrap();
-        assert_eq!(updated_hint.variables.len(), 1);
-        assert!(updated_hint.variables.contains(&VariableID::from(3)));
+        assert_eq!(updated_hint.variables().len(), 1);
+        assert!(updated_hint.variables().contains(&VariableID::from(3)));
     }
 
     #[test]
     fn test_one_hot_partial_evaluate_discard_nonzero() {
         // Test that OneHot is discarded when a variable has non-zero value
-        let one_hot = OneHot {
-            id: ConstraintID::from(1),
-            variables: btreeset! {
+        let one_hot = OneHot::new(
+            ConstraintID::from(1),
+            btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             },
-        };
+        );
 
         let state = State {
             entries: hashmap! {

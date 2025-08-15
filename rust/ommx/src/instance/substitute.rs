@@ -57,14 +57,7 @@ impl Substitute for Instance {
         // - Currently, we remove all affected constraint hints, but some can still be valid.
         //   - e.g. an one-hot constraint x1 + x2 = 1 is still one-hot after substituting x1 = x3 + x4.
         self.constraint_hints
-            .one_hot_constraints
-            .retain(|hint| !affected_constraint_ids.contains(&hint.id));
-        self.constraint_hints.sos1_constraints.retain(|hint| {
-            !affected_constraint_ids.contains(&hint.binary_constraint_id)
-                && hint
-                    .big_m_constraint_ids()
-                    .is_disjoint(&affected_constraint_ids)
-        });
+            .remove_hints_for_constraints(&affected_constraint_ids);
 
         Ok(self)
     }
@@ -206,39 +199,39 @@ mod tests {
         constraints.insert(ConstraintID::from(4), constraint4);
 
         // Create constraint hints
-        let one_hot_for_constraint1 = OneHot {
-            id: ConstraintID::from(1),
-            variables: [VariableID::from(1), VariableID::from(2)]
+        let one_hot_for_constraint1 = OneHot::new(
+            ConstraintID::from(1),
+            [VariableID::from(1), VariableID::from(2)]
                 .into_iter()
                 .collect(),
-        };
-        let one_hot_for_constraint2 = OneHot {
-            id: ConstraintID::from(2),
-            variables: [VariableID::from(2), VariableID::from(3)]
+        );
+        let one_hot_for_constraint2 = OneHot::new(
+            ConstraintID::from(2),
+            [VariableID::from(2), VariableID::from(3)]
                 .into_iter()
                 .collect(),
-        };
-        let sos1 = Sos1 {
-            binary_constraint_id: ConstraintID::from(1),
-            variables: [
+        );
+        let sos1 = Sos1::new(
+            ConstraintID::from(1),
+            [
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             ]
             .into_iter()
             .collect(),
-            variable_to_big_m_constraint: [
+            [
                 (VariableID::from(1), ConstraintID::from(3)),
                 (VariableID::from(2), ConstraintID::from(4)),
             ]
             .into_iter()
             .collect(),
-        };
+        );
 
-        let constraint_hints = ConstraintHints {
-            one_hot_constraints: vec![one_hot_for_constraint1, one_hot_for_constraint2],
-            sos1_constraints: vec![sos1],
-        };
+        let constraint_hints = ConstraintHints::new(
+            vec![one_hot_for_constraint1, one_hot_for_constraint2],
+            vec![sos1],
+        );
 
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
@@ -249,8 +242,8 @@ mod tests {
             .unwrap();
 
         // Before substitution, verify we have 2 OneHot constraints and 1 SOS1 constraint
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 2);
-        assert_eq!(instance.constraint_hints.sos1_constraints.len(), 1);
+        assert_eq!(instance.constraint_hints.one_hot_constraints().len(), 2);
+        assert_eq!(instance.constraint_hints.sos1_constraints().len(), 1);
 
         // Substitute x1 with a constant: x1 = 1
         let substitution = Function::from(coeff!(1.0));
@@ -262,12 +255,12 @@ mod tests {
         // - OneHot for constraint1 should be removed (constraint1 depends on x1)
         // - OneHot for constraint2 should remain (constraint2 doesn't depend on x1)
         // - SOS1 should be removed (it references constraint1 which depends on x1)
-        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(result.constraint_hints.one_hot_constraints().len(), 1);
         assert_eq!(
-            result.constraint_hints.one_hot_constraints[0].id,
-            ConstraintID::from(2)
+            result.constraint_hints.one_hot_constraints()[0].id(),
+            &ConstraintID::from(2)
         );
-        assert_eq!(result.constraint_hints.sos1_constraints.len(), 0);
+        assert_eq!(result.constraint_hints.sos1_constraints().len(), 0);
     }
 
     #[test]
@@ -321,23 +314,21 @@ mod tests {
         removed_constraints.insert(ConstraintID::from(2), removed_constraint);
 
         // Create constraint hints - OneHot for removed constraint should also be removed
-        let one_hot_for_active = OneHot {
-            id: ConstraintID::from(1),
-            variables: [VariableID::from(1), VariableID::from(2)]
+        let one_hot_for_active = OneHot::new(
+            ConstraintID::from(1),
+            [VariableID::from(1), VariableID::from(2)]
                 .into_iter()
                 .collect(),
-        };
-        let one_hot_for_removed = OneHot {
-            id: ConstraintID::from(2),
-            variables: [VariableID::from(1), VariableID::from(3)]
+        );
+        let one_hot_for_removed = OneHot::new(
+            ConstraintID::from(2),
+            [VariableID::from(1), VariableID::from(3)]
                 .into_iter()
                 .collect(),
-        };
+        );
 
-        let constraint_hints = ConstraintHints {
-            one_hot_constraints: vec![one_hot_for_active, one_hot_for_removed],
-            sos1_constraints: vec![],
-        };
+        let constraint_hints =
+            ConstraintHints::new(vec![one_hot_for_active, one_hot_for_removed], vec![]);
 
         // Create objective
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
@@ -351,7 +342,7 @@ mod tests {
         instance.constraint_hints = constraint_hints;
 
         // Before substitution, verify we have 2 OneHot constraints
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 2);
+        assert_eq!(instance.constraint_hints.one_hot_constraints().len(), 2);
 
         // Substitute x1 with a constant: x1 = 1
         let substitution = Function::from(coeff!(1.0));
@@ -363,6 +354,6 @@ mod tests {
         // Both OneHot constraints should be removed because:
         // - constraint1 (active) depends on x1
         // - constraint2 (removed) also depends on x1
-        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 0);
+        assert_eq!(result.constraint_hints.one_hot_constraints().len(), 0);
     }
 }

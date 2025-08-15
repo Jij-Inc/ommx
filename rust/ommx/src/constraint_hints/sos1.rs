@@ -4,17 +4,34 @@ use crate::{
     Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, InstanceError, RemovedConstraint,
     VariableID, VariableIDSet,
 };
+use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Getters)]
 pub struct Sos1 {
-    pub binary_constraint_id: ConstraintID,
-    pub variables: BTreeSet<VariableID>,
+    #[getset(get = "pub")]
+    binary_constraint_id: ConstraintID,
+    #[getset(get = "pub")]
+    variables: BTreeSet<VariableID>,
     /// Map from variable ID to corresponding big-M constraint ID
-    pub variable_to_big_m_constraint: BTreeMap<VariableID, ConstraintID>,
+    #[getset(get = "pub")]
+    variable_to_big_m_constraint: BTreeMap<VariableID, ConstraintID>,
 }
 
 impl Sos1 {
+    /// Create new Sos1 constraint hint
+    pub fn new(
+        binary_constraint_id: ConstraintID,
+        variables: BTreeSet<VariableID>,
+        variable_to_big_m_constraint: BTreeMap<VariableID, ConstraintID>,
+    ) -> Self {
+        Self {
+            binary_constraint_id,
+            variables,
+            variable_to_big_m_constraint,
+        }
+    }
+
     /// Get all big-M constraint IDs
     pub fn big_m_constraint_ids(&self) -> BTreeSet<ConstraintID> {
         self.variable_to_big_m_constraint
@@ -162,19 +179,19 @@ mod tests {
     #[test]
     fn test_sos1_partial_evaluate_remove_zero() {
         // Test that Sos1 removes variables with value 0 and their corresponding big-M constraints
-        let sos1 = Sos1 {
-            binary_constraint_id: ConstraintID::from(1),
-            variables: btreeset! {
+        let sos1 = Sos1::new(
+            ConstraintID::from(1),
+            btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             },
-            variable_to_big_m_constraint: btreemap! {
+            btreemap! {
                 VariableID::from(1) => ConstraintID::from(10),
                 VariableID::from(2) => ConstraintID::from(20),
                 VariableID::from(3) => ConstraintID::from(30),
             },
-        };
+        );
 
         let state = State {
             entries: hashmap! {
@@ -188,14 +205,14 @@ mod tests {
         // Should keep the hint and only variable 3 should remain
         assert!(result.is_some());
         let updated_hint = result.unwrap();
-        assert_eq!(updated_hint.variables.len(), 1);
-        assert!(updated_hint.variables.contains(&VariableID::from(3)));
+        assert_eq!(updated_hint.variables().len(), 1);
+        assert!(updated_hint.variables().contains(&VariableID::from(3)));
 
         // Only constraint 30 should remain in the map
-        assert_eq!(updated_hint.variable_to_big_m_constraint.len(), 1);
+        assert_eq!(updated_hint.variable_to_big_m_constraint().len(), 1);
         assert_eq!(
             updated_hint
-                .variable_to_big_m_constraint
+                .variable_to_big_m_constraint()
                 .get(&VariableID::from(3)),
             Some(&ConstraintID::from(30))
         );
@@ -209,19 +226,19 @@ mod tests {
     #[test]
     fn test_sos1_partial_evaluate_discard_nonzero() {
         // Test that Sos1 is discarded when a variable has non-zero value
-        let sos1 = Sos1 {
-            binary_constraint_id: ConstraintID::from(1),
-            variables: btreeset! {
+        let sos1 = Sos1::new(
+            ConstraintID::from(1),
+            btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             },
-            variable_to_big_m_constraint: btreemap! {
+            btreemap! {
                 VariableID::from(1) => ConstraintID::from(10),
                 VariableID::from(2) => ConstraintID::from(20),
                 VariableID::from(3) => ConstraintID::from(30),
             },
-        };
+        );
 
         let state = State {
             entries: hashmap! {

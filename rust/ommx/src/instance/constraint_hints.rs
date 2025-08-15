@@ -84,22 +84,15 @@ mod tests {
         variables.insert(VariableID::from(1));
         variables.insert(VariableID::from(2));
 
-        let one_hot = OneHot {
-            id: ConstraintID::from(1),
-            variables,
-        };
-
-        let constraint_hints = ConstraintHints {
-            one_hot_constraints: vec![one_hot],
-            sos1_constraints: vec![],
-        };
+        let one_hot = OneHot::new(ConstraintID::from(1), variables);
+        let constraint_hints = ConstraintHints::new(vec![one_hot], vec![]);
 
         let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
             .unwrap()
             .with_constraint_hints(constraint_hints)
             .unwrap();
 
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(instance.constraint_hints.one_hot_constraints().len(), 1);
     }
 
     #[test]
@@ -123,15 +116,8 @@ mod tests {
         variables.insert(VariableID::from(1));
         variables.insert(VariableID::from(2));
 
-        let one_hot = OneHot {
-            id: ConstraintID::from(1),
-            variables,
-        };
-
-        let constraint_hints = ConstraintHints {
-            one_hot_constraints: vec![one_hot],
-            sos1_constraints: vec![],
-        };
+        let one_hot = OneHot::new(ConstraintID::from(1), variables);
+        let constraint_hints = ConstraintHints::new(vec![one_hot], vec![]);
 
         let parametric_instance = ParametricInstance::new(
             Sense::Minimize,
@@ -147,7 +133,7 @@ mod tests {
         assert_eq!(
             parametric_instance
                 .constraint_hints
-                .one_hot_constraints
+                .one_hot_constraints()
                 .len(),
             1
         );
@@ -175,17 +161,17 @@ mod tests {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
         };
 
-        let constraint_hints = ConstraintHints {
-            one_hot_constraints: vec![OneHot {
-                id: ConstraintID::from(1),
-                variables: btreeset! {
+        let constraint_hints = ConstraintHints::new(
+            vec![OneHot::new(
+                ConstraintID::from(1),
+                btreeset! {
                     VariableID::from(1),
                     VariableID::from(2),
                     VariableID::from(3),
                 },
-            }],
-            sos1_constraints: vec![],
-        };
+            )],
+            vec![],
+        );
 
         let mut instance =
             Instance::new(Sense::Minimize, objective, decision_variables, constraints)
@@ -194,10 +180,10 @@ mod tests {
                 .unwrap();
 
         // Verify initial state
-        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(instance.constraint_hints.one_hot_constraints().len(), 1);
         assert_eq!(
-            instance.constraint_hints.one_hot_constraints[0]
-                .variables
+            instance.constraint_hints.one_hot_constraints()[0]
+                .variables()
                 .len(),
             3
         );
@@ -215,6 +201,6 @@ mod tests {
             .unwrap();
 
         // The OneHot constraint hint should be discarded due to non-zero value
-        assert!(instance.constraint_hints.one_hot_constraints.is_empty());
+        assert!(instance.constraint_hints.one_hot_constraints().is_empty());
     }
 }
