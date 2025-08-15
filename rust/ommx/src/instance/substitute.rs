@@ -62,7 +62,7 @@ impl Substitute for Instance {
         self.constraint_hints.sos1_constraints.retain(|hint| {
             !affected_constraint_ids.contains(&hint.binary_constraint_id)
                 && hint
-                    .big_m_constraint_ids
+                    .big_m_constraint_ids()
                     .is_disjoint(&affected_constraint_ids)
         });
 
@@ -180,6 +180,31 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(2), constraint2);
 
+        // Create additional constraints for Sos1 big-M constraints
+        let constraint3_function = Function::from(linear!(1) + coeff!(-1.0));
+        let constraint3 = Constraint {
+            id: ConstraintID::from(3),
+            function: constraint3_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(3), constraint3);
+
+        let constraint4_function = Function::from(linear!(2) + coeff!(-1.0));
+        let constraint4 = Constraint {
+            id: ConstraintID::from(4),
+            function: constraint4_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(4), constraint4);
+
         // Create constraint hints
         let one_hot_for_constraint1 = OneHot {
             id: ConstraintID::from(1),
@@ -195,11 +220,16 @@ mod tests {
         };
         let sos1 = Sos1 {
             binary_constraint_id: ConstraintID::from(1),
-            big_m_constraint_ids: [ConstraintID::from(2)].into_iter().collect(),
             variables: [
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
+            ]
+            .into_iter()
+            .collect(),
+            variable_to_big_m_constraint: [
+                (VariableID::from(1), ConstraintID::from(3)),
+                (VariableID::from(2), ConstraintID::from(4)),
             ]
             .into_iter()
             .collect(),

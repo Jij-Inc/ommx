@@ -48,8 +48,19 @@ impl Parse for v1::OneHot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sos1 {
     pub binary_constraint_id: ConstraintID,
-    pub big_m_constraint_ids: BTreeSet<ConstraintID>,
     pub variables: BTreeSet<VariableID>,
+    /// Map from variable ID to corresponding big-M constraint ID
+    pub variable_to_big_m_constraint: BTreeMap<VariableID, ConstraintID>,
+}
+
+impl Sos1 {
+    /// Get all big-M constraint IDs
+    pub fn big_m_constraint_ids(&self) -> BTreeSet<ConstraintID> {
+        self.variable_to_big_m_constraint
+            .values()
+            .cloned()
+            .collect()
+    }
 }
 
 impl Parse for v1::Sos1 {
@@ -67,18 +78,18 @@ impl Parse for v1::Sos1 {
         let binary_constraint_id =
             as_constraint_id(constraints, removed_constraints, self.binary_constraint_id)
                 .map_err(|e| e.context(message, "binary_constraint_id"))?;
-        let mut big_m_constraint_ids = BTreeSet::new();
+
+        // Parse big_m_constraint_ids
+        let mut parsed_big_m_ids = Vec::new();
         for id in &self.big_m_constraint_ids {
             let id = as_constraint_id(constraints, removed_constraints, *id)
                 .map_err(|e| e.context(message, "big_m_constraint_ids"))?;
-            if !big_m_constraint_ids.insert(id) {
-                return Err(
-                    RawParseError::InstanceError(InstanceError::NonUniqueConstraintID { id })
-                        .context(message, "big_m_constraint_ids"),
-                );
-            }
+            parsed_big_m_ids.push(id);
         }
+
+        // Parse variables
         let mut variables = BTreeSet::new();
+        let mut parsed_var_ids = Vec::new();
         for id in &self.decision_variables {
             let id = as_variable_id(decision_variable, *id)
                 .map_err(|e| e.context(message, "decision_variables"))?;
@@ -88,11 +99,25 @@ impl Parse for v1::Sos1 {
                         .context(message, "decision_variables"),
                 );
             }
+            parsed_var_ids.push(id);
         }
+
+        // Build variable to big-M constraint map
+        // Assumes variables and big_m_constraint_ids have 1:1 correspondence
+        let mut variable_to_big_m_constraint = BTreeMap::new();
+        if parsed_var_ids.len() == parsed_big_m_ids.len() {
+            for (var_id, constraint_id) in
+                parsed_var_ids.into_iter().zip(parsed_big_m_ids.into_iter())
+            {
+                variable_to_big_m_constraint.insert(var_id, constraint_id);
+            }
+        }
+        // If lengths don't match, leave the map empty (backward compatibility)
+
         Ok(Sos1 {
             binary_constraint_id,
-            big_m_constraint_ids,
             variables,
+            variable_to_big_m_constraint,
         })
     }
 }
@@ -146,10 +171,22 @@ impl From<OneHot> for v1::OneHot {
 
 impl From<Sos1> for v1::Sos1 {
     fn from(value: Sos1) -> Self {
+        // Reconstruct the original ordering of big_m_constraint_ids and decision_variables
+        let mut big_m_constraint_ids = Vec::new();
+        let mut decision_variables = Vec::new();
+
+        // We need to maintain the same order, so iterate through variables
+        for var_id in &value.variables {
+            decision_variables.push(**var_id);
+            if let Some(constraint_id) = value.variable_to_big_m_constraint.get(var_id) {
+                big_m_constraint_ids.push(**constraint_id);
+            }
+        }
+
         Self {
             binary_constraint_id: *value.binary_constraint_id,
-            big_m_constraint_ids: value.big_m_constraint_ids.into_iter().map(|c| *c).collect(),
-            decision_variables: value.variables.into_iter().map(|v| *v).collect(),
+            big_m_constraint_ids,
+            decision_variables,
         }
     }
 }
@@ -267,10 +304,12 @@ impl Evaluate for Sos1 {
 
         if should_discard {
             self.variables.clear();
-            self.big_m_constraint_ids.clear();
+            self.variable_to_big_m_constraint.clear();
         } else {
             for var in variables_to_remove {
                 self.variables.remove(&var);
+                // Remove corresponding big-M constraint from the map
+                self.variable_to_big_m_constraint.remove(&var);
             }
         }
 
@@ -541,24 +580,25 @@ mod tests {
 
     #[test]
     fn test_sos1_partial_evaluate_remove_zero() {
-        // Test that Sos1 removes variables with value 0
+        // Test that Sos1 removes variables with value 0 and their corresponding big-M constraints
         let mut sos1 = Sos1 {
             binary_constraint_id: ConstraintID::from(1),
-            big_m_constraint_ids: btreeset! {
-                ConstraintID::from(2),
-                ConstraintID::from(3),
-            },
             variables: btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
             },
+            variable_to_big_m_constraint: btreemap! {
+                VariableID::from(1) => ConstraintID::from(10),
+                VariableID::from(2) => ConstraintID::from(20),
+                VariableID::from(3) => ConstraintID::from(30),
+            },
         };
 
         let state = State {
             entries: hashmap! {
-                1 => 0.0,  // Should be removed
-                2 => 0.0,  // Should be removed
+                1 => 0.0,  // Should be removed with constraint 10
+                2 => 0.0,  // Should be removed with constraint 20
             },
         };
 
@@ -568,8 +608,18 @@ mod tests {
         // Only variable 3 should remain
         assert_eq!(sos1.variables.len(), 1);
         assert!(sos1.variables.contains(&VariableID::from(3)));
-        // big_m_constraint_ids should remain
-        assert_eq!(sos1.big_m_constraint_ids.len(), 2);
+
+        // Only constraint 30 should remain in the map
+        assert_eq!(sos1.variable_to_big_m_constraint.len(), 1);
+        assert_eq!(
+            sos1.variable_to_big_m_constraint.get(&VariableID::from(3)),
+            Some(&ConstraintID::from(30))
+        );
+
+        // Check big_m_constraint_ids() method
+        let big_m_ids = sos1.big_m_constraint_ids();
+        assert_eq!(big_m_ids.len(), 1);
+        assert!(big_m_ids.contains(&ConstraintID::from(30)));
     }
 
     #[test]
@@ -577,14 +627,15 @@ mod tests {
         // Test that Sos1 is discarded when a variable has non-zero value
         let mut sos1 = Sos1 {
             binary_constraint_id: ConstraintID::from(1),
-            big_m_constraint_ids: btreeset! {
-                ConstraintID::from(2),
-                ConstraintID::from(3),
-            },
             variables: btreeset! {
                 VariableID::from(1),
                 VariableID::from(2),
                 VariableID::from(3),
+            },
+            variable_to_big_m_constraint: btreemap! {
+                VariableID::from(1) => ConstraintID::from(10),
+                VariableID::from(2) => ConstraintID::from(20),
+                VariableID::from(3) => ConstraintID::from(30),
             },
         };
 
@@ -600,7 +651,8 @@ mod tests {
 
         // All fields should be cleared
         assert!(sos1.variables.is_empty());
-        assert!(sos1.big_m_constraint_ids.is_empty());
+        assert!(sos1.variable_to_big_m_constraint.is_empty());
+        assert!(sos1.big_m_constraint_ids().is_empty());
     }
 
     #[test]
@@ -625,11 +677,15 @@ mod tests {
             ],
             sos1_constraints: vec![Sos1 {
                 binary_constraint_id: ConstraintID::from(3),
-                big_m_constraint_ids: btreeset! { ConstraintID::from(4) },
                 variables: btreeset! {
                     VariableID::from(5),
                     VariableID::from(6),
                     VariableID::from(7),
+                },
+                variable_to_big_m_constraint: btreemap! {
+                    VariableID::from(5) => ConstraintID::from(50),
+                    VariableID::from(6) => ConstraintID::from(60),
+                    VariableID::from(7) => ConstraintID::from(70),
                 },
             }],
         };
@@ -677,10 +733,13 @@ mod tests {
             }],
             sos1_constraints: vec![Sos1 {
                 binary_constraint_id: ConstraintID::from(2),
-                big_m_constraint_ids: btreeset! { ConstraintID::from(3) },
                 variables: btreeset! {
                     VariableID::from(3),
                     VariableID::from(4),
+                },
+                variable_to_big_m_constraint: btreemap! {
+                    VariableID::from(3) => ConstraintID::from(30),
+                    VariableID::from(4) => ConstraintID::from(40),
                 },
             }],
         };
