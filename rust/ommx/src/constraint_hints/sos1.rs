@@ -1,8 +1,8 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
-    v1::{self, Samples, State},
-    Constraint, ConstraintID, DecisionVariable, Evaluate, InstanceError, RemovedConstraint,
-    VariableID, VariableIDSet,
+    v1::{self, State},
+    Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint,
+    VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -105,25 +105,11 @@ impl From<Sos1> for v1::Sos1 {
     }
 }
 
-impl Evaluate for Sos1 {
-    type Output = ();
-    type SampledOutput = ();
-
-    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
-        Ok(())
-    }
-
-    fn evaluate_samples(
-        &self,
-        _samples: &Samples,
-        _atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
-        Ok(())
-    }
-
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+impl Sos1 {
+    /// Apply partial evaluation to this Sos1 constraint hint.
+    /// Returns Some(updated_hint) if the hint should be kept, None if it should be discarded.
+    pub fn partial_evaluate(mut self, state: &State, atol: crate::ATol) -> Option<Self> {
         let mut variables_to_remove = Vec::new();
-        let mut should_discard = false;
 
         for &var_id in &self.variables {
             if let Some(&value) = state.entries.get(&var_id.into_inner()) {
@@ -138,28 +124,19 @@ impl Evaluate for Sos1 {
                         var_id,
                         value
                     );
-                    should_discard = true;
-                    break;
+                    return None; // Discard the hint
                 }
             }
         }
 
-        if should_discard {
-            self.variables.clear();
-            self.variable_to_big_m_constraint.clear();
-        } else {
-            for var in variables_to_remove {
-                self.variables.remove(&var);
-                // Remove corresponding big-M constraint from the map
-                self.variable_to_big_m_constraint.remove(&var);
-            }
+        // Remove variables with zero values
+        for var in variables_to_remove {
+            self.variables.remove(&var);
+            // Remove corresponding big-M constraint from the map
+            self.variable_to_big_m_constraint.remove(&var);
         }
 
-        Ok(())
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        self.variables.clone()
+        Some(self) // Keep the updated hint
     }
 }
 
@@ -172,7 +149,7 @@ mod tests {
     #[test]
     fn test_sos1_partial_evaluate_remove_zero() {
         // Test that Sos1 removes variables with value 0 and their corresponding big-M constraints
-        let mut sos1 = Sos1 {
+        let sos1 = Sos1 {
             binary_constraint_id: ConstraintID::from(1),
             variables: btreeset! {
                 VariableID::from(1),
@@ -193,22 +170,23 @@ mod tests {
             },
         };
 
-        sos1.partial_evaluate(&state, crate::ATol::default())
-            .unwrap();
+        let result = sos1.partial_evaluate(&state, crate::ATol::default());
 
-        // Only variable 3 should remain
-        assert_eq!(sos1.variables.len(), 1);
-        assert!(sos1.variables.contains(&VariableID::from(3)));
+        // Should keep the hint and only variable 3 should remain
+        assert!(result.is_some());
+        let updated_hint = result.unwrap();
+        assert_eq!(updated_hint.variables.len(), 1);
+        assert!(updated_hint.variables.contains(&VariableID::from(3)));
 
         // Only constraint 30 should remain in the map
-        assert_eq!(sos1.variable_to_big_m_constraint.len(), 1);
+        assert_eq!(updated_hint.variable_to_big_m_constraint.len(), 1);
         assert_eq!(
-            sos1.variable_to_big_m_constraint.get(&VariableID::from(3)),
+            updated_hint.variable_to_big_m_constraint.get(&VariableID::from(3)),
             Some(&ConstraintID::from(30))
         );
 
         // Check big_m_constraint_ids() method
-        let big_m_ids = sos1.big_m_constraint_ids();
+        let big_m_ids = updated_hint.big_m_constraint_ids();
         assert_eq!(big_m_ids.len(), 1);
         assert!(big_m_ids.contains(&ConstraintID::from(30)));
     }
@@ -216,7 +194,7 @@ mod tests {
     #[test]
     fn test_sos1_partial_evaluate_discard_nonzero() {
         // Test that Sos1 is discarded when a variable has non-zero value
-        let mut sos1 = Sos1 {
+        let sos1 = Sos1 {
             binary_constraint_id: ConstraintID::from(1),
             variables: btreeset! {
                 VariableID::from(1),
@@ -237,12 +215,9 @@ mod tests {
             },
         };
 
-        sos1.partial_evaluate(&state, crate::ATol::default())
-            .unwrap();
+        let result = sos1.partial_evaluate(&state, crate::ATol::default());
 
-        // All fields should be cleared
-        assert!(sos1.variables.is_empty());
-        assert!(sos1.variable_to_big_m_constraint.is_empty());
-        assert!(sos1.big_m_constraint_ids().is_empty());
+        // Should discard the hint
+        assert!(result.is_none());
     }
 }

@@ -1,8 +1,8 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
-    v1::{self, Samples, State},
-    Constraint, ConstraintID, DecisionVariable, Evaluate, InstanceError, RemovedConstraint,
-    VariableID, VariableIDSet,
+    v1::{self, State},
+    Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint,
+    VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -53,25 +53,11 @@ impl From<OneHot> for v1::OneHot {
     }
 }
 
-impl Evaluate for OneHot {
-    type Output = ();
-    type SampledOutput = ();
-
-    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
-        Ok(())
-    }
-
-    fn evaluate_samples(
-        &self,
-        _samples: &Samples,
-        _atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
-        Ok(())
-    }
-
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+impl OneHot {
+    /// Apply partial evaluation to this OneHot constraint hint.
+    /// Returns Some(updated_hint) if the hint should be kept, None if it should be discarded.
+    pub fn partial_evaluate(mut self, state: &State, atol: crate::ATol) -> Option<Self> {
         let mut variables_to_remove = Vec::new();
-        let mut should_discard = false;
 
         for &var_id in &self.variables {
             if let Some(&value) = state.entries.get(&var_id.into_inner()) {
@@ -86,25 +72,17 @@ impl Evaluate for OneHot {
                         var_id,
                         value
                     );
-                    should_discard = true;
-                    break;
+                    return None; // Discard the hint
                 }
             }
         }
 
-        if should_discard {
-            self.variables.clear();
-        } else {
-            for var in variables_to_remove {
-                self.variables.remove(&var);
-            }
+        // Remove variables with zero values
+        for var in variables_to_remove {
+            self.variables.remove(&var);
         }
 
-        Ok(())
-    }
-
-    fn required_ids(&self) -> VariableIDSet {
-        self.variables.clone()
+        Some(self) // Keep the updated hint
     }
 }
 
@@ -117,7 +95,7 @@ mod tests {
     #[test]
     fn test_one_hot_partial_evaluate_remove_zero() {
         // Test that OneHot removes variables with value 0
-        let mut one_hot = OneHot {
+        let one_hot = OneHot {
             id: ConstraintID::from(1),
             variables: btreeset! {
                 VariableID::from(1),
@@ -133,19 +111,19 @@ mod tests {
             },
         };
 
-        one_hot
-            .partial_evaluate(&state, crate::ATol::default())
-            .unwrap();
+        let result = one_hot.partial_evaluate(&state, crate::ATol::default());
 
-        // Only variable 3 should remain
-        assert_eq!(one_hot.variables.len(), 1);
-        assert!(one_hot.variables.contains(&VariableID::from(3)));
+        // Should keep the hint and only variable 3 should remain
+        assert!(result.is_some());
+        let updated_hint = result.unwrap();
+        assert_eq!(updated_hint.variables.len(), 1);
+        assert!(updated_hint.variables.contains(&VariableID::from(3)));
     }
 
     #[test]
     fn test_one_hot_partial_evaluate_discard_nonzero() {
         // Test that OneHot is discarded when a variable has non-zero value
-        let mut one_hot = OneHot {
+        let one_hot = OneHot {
             id: ConstraintID::from(1),
             variables: btreeset! {
                 VariableID::from(1),
@@ -161,11 +139,9 @@ mod tests {
             },
         };
 
-        one_hot
-            .partial_evaluate(&state, crate::ATol::default())
-            .unwrap();
+        let result = one_hot.partial_evaluate(&state, crate::ATol::default());
 
-        // All variables should be cleared
-        assert!(one_hot.variables.is_empty());
+        // Should discard the hint
+        assert!(result.is_none());
     }
 }

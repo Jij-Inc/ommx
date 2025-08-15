@@ -84,22 +84,19 @@ impl Evaluate for ConstraintHints {
     }
 
     fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
-        // Partially evaluate each OneHot constraint
-        for one_hot in &mut self.one_hot_constraints {
-            one_hot.partial_evaluate(state, atol)?;
-        }
+        // Apply partial evaluation to each OneHot constraint and keep only the valid ones
+        self.one_hot_constraints = self
+            .one_hot_constraints
+            .drain(..)
+            .filter_map(|one_hot| one_hot.partial_evaluate(state, atol))
+            .collect();
 
-        // Remove empty OneHot constraints
-        self.one_hot_constraints
-            .retain(|oh| !oh.variables.is_empty());
-
-        // Partially evaluate each Sos1 constraint
-        for sos1 in &mut self.sos1_constraints {
-            sos1.partial_evaluate(state, atol)?;
-        }
-
-        // Remove empty Sos1 constraints
-        self.sos1_constraints.retain(|s| !s.variables.is_empty());
+        // Apply partial evaluation to each Sos1 constraint and keep only the valid ones
+        self.sos1_constraints = self
+            .sos1_constraints
+            .drain(..)
+            .filter_map(|sos1| sos1.partial_evaluate(state, atol))
+            .collect();
 
         Ok(())
     }
@@ -108,11 +105,11 @@ impl Evaluate for ConstraintHints {
         let mut ids = VariableIDSet::new();
 
         for one_hot in &self.one_hot_constraints {
-            ids.extend(one_hot.required_ids());
+            ids.extend(one_hot.variables.clone());
         }
 
         for sos1 in &self.sos1_constraints {
-            ids.extend(sos1.required_ids());
+            ids.extend(sos1.variables.clone());
         }
 
         ids
