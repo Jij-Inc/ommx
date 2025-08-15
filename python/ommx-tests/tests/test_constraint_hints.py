@@ -169,3 +169,36 @@ def test_valid_constraint_hints():
     retrieved_one_hot = retrieved_hints.one_hot_constraints[0]
     assert retrieved_one_hot.id == 1
     assert retrieved_one_hot.variables == [1, 2, 3]
+
+
+def test_sos1_variable_constraint_mapping():
+    """Test that Sos1 handles variable-constraint mapping correctly."""
+    # Test case 1: More variables than big-M constraints (excess variables get None)
+    sos1 = _ommx_rust.Sos1(
+        binary_constraint_id=1,
+        big_m_constraint_ids=[2, 3],  # 2 constraints
+        variables=[1, 2, 3],  # 3 variables - third one gets None
+    )
+    assert sos1.binary_constraint_id == 1
+    assert len(sos1.variables) == 3
+    assert len(sos1.big_m_constraint_ids) == 2  # Only 2 non-None constraints
+
+    # Test case 2: Fewer big-M constraints than variables (some variables get None)
+    sos1 = _ommx_rust.Sos1(
+        binary_constraint_id=1,
+        big_m_constraint_ids=[],  # 0 constraints
+        variables=[1, 2],  # 2 variables - both get None constraint
+    )
+    assert sos1.binary_constraint_id == 1
+    assert len(sos1.variables) == 2
+    assert len(sos1.big_m_constraint_ids) == 0
+
+    # Test case 3: Empty case
+    sos1_empty = _ommx_rust.Sos1(
+        binary_constraint_id=1,
+        big_m_constraint_ids=[],  # 0 constraints
+        variables=[],  # 0 variables
+    )
+    assert sos1_empty.binary_constraint_id == 1
+    assert sos1_empty.variables == []
+    assert sos1_empty.big_m_constraint_ids == []

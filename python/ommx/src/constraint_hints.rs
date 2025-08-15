@@ -1,6 +1,6 @@
 use ommx::{ConstraintID, VariableID};
 use pyo3::{prelude::*, Bound, PyAny};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// OneHot constraint hint wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -17,20 +17,17 @@ impl OneHot {
         let variable_set: BTreeSet<VariableID> =
             variables.into_iter().map(VariableID::from).collect();
 
-        Self(ommx::OneHot {
-            id: constraint_id,
-            variables: variable_set,
-        })
+        Self(ommx::OneHot::new(constraint_id, variable_set))
     }
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id.into_inner()
+        self.0.id().into_inner()
     }
 
     #[getter]
     pub fn variables(&self) -> Vec<u64> {
-        self.0.variables.iter().map(|v| v.into_inner()).collect()
+        self.0.variables().iter().map(|v| v.into_inner()).collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -60,31 +57,37 @@ impl Sos1 {
         binary_constraint_id: u64,
         big_m_constraint_ids: Vec<u64>,
         variables: Vec<u64>,
-    ) -> Self {
+    ) -> PyResult<Self> {
         let binary_constraint_id = ConstraintID::from(binary_constraint_id);
-        let big_m_constraint_ids: BTreeSet<ConstraintID> = big_m_constraint_ids
-            .into_iter()
-            .map(ConstraintID::from)
-            .collect();
-        let variable_set: BTreeSet<VariableID> =
-            variables.into_iter().map(VariableID::from).collect();
 
-        Self(ommx::Sos1 {
+        // Create variable_to_big_m_constraint mapping
+        let mut variable_to_big_m_constraint = BTreeMap::new();
+
+        for (i, var_id) in variables.into_iter().enumerate() {
+            let variable_id = VariableID::from(var_id);
+            let big_m_constraint = if i < big_m_constraint_ids.len() {
+                Some(ConstraintID::from(big_m_constraint_ids[i]))
+            } else {
+                None
+            };
+            variable_to_big_m_constraint.insert(variable_id, big_m_constraint);
+        }
+
+        Ok(Self(ommx::Sos1::new(
             binary_constraint_id,
-            big_m_constraint_ids,
-            variables: variable_set,
-        })
+            variable_to_big_m_constraint,
+        )))
     }
 
     #[getter]
     pub fn binary_constraint_id(&self) -> u64 {
-        self.0.binary_constraint_id.into_inner()
+        self.0.binary_constraint_id().into_inner()
     }
 
     #[getter]
     pub fn big_m_constraint_ids(&self) -> Vec<u64> {
         self.0
-            .big_m_constraint_ids
+            .big_m_constraint_ids()
             .iter()
             .map(|c| c.into_inner())
             .collect()
@@ -92,7 +95,7 @@ impl Sos1 {
 
     #[getter]
     pub fn variables(&self) -> Vec<u64> {
-        self.0.variables.iter().map(|v| v.into_inner()).collect()
+        self.0.variables().iter().map(|v| v.into_inner()).collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -125,16 +128,16 @@ impl ConstraintHints {
     #[new]
     #[pyo3(signature = (one_hot_constraints=Vec::new(), sos1_constraints=Vec::new()))]
     pub fn new(one_hot_constraints: Vec<OneHot>, sos1_constraints: Vec<Sos1>) -> Self {
-        Self(ommx::ConstraintHints {
-            one_hot_constraints: one_hot_constraints.into_iter().map(|oh| oh.0).collect(),
-            sos1_constraints: sos1_constraints.into_iter().map(|s| s.0).collect(),
-        })
+        Self(ommx::ConstraintHints::new(
+            one_hot_constraints.into_iter().map(|oh| oh.0).collect(),
+            sos1_constraints.into_iter().map(|s| s.0).collect(),
+        ))
     }
 
     #[getter]
     pub fn one_hot_constraints(&self) -> Vec<OneHot> {
         self.0
-            .one_hot_constraints
+            .one_hot_constraints()
             .iter()
             .cloned()
             .map(OneHot)
@@ -143,7 +146,12 @@ impl ConstraintHints {
 
     #[getter]
     pub fn sos1_constraints(&self) -> Vec<Sos1> {
-        self.0.sos1_constraints.iter().cloned().map(Sos1).collect()
+        self.0
+            .sos1_constraints()
+            .iter()
+            .cloned()
+            .map(Sos1)
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
