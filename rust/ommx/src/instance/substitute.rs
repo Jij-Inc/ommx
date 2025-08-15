@@ -81,7 +81,12 @@ impl Substitute for Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, constraint::Equality, linear, DecisionVariable, Sense};
+    use crate::{
+        coeff,
+        constraint::Equality,
+        constraint_hints::{OneHot, Sos1},
+        linear, DecisionVariable, Sense,
+    };
     use std::collections::BTreeMap;
 
     #[test]
@@ -133,8 +138,6 @@ mod tests {
 
     #[test]
     fn test_constraint_hints_removal_on_substitute() {
-        use crate::instance::constraint_hints::{OneHot, Sos1};
-
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(
@@ -239,8 +242,6 @@ mod tests {
 
     #[test]
     fn test_constraint_hints_removal_with_removed_constraints() {
-        use crate::instance::constraint_hints::OneHot;
-
         // Create decision variables
         let mut decision_variables = BTreeMap::new();
         decision_variables.insert(

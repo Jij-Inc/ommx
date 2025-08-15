@@ -1,8 +1,8 @@
 use super::*;
 use crate::{
-    parse::{Parse, ParseError, RawParseError},
+    parse::{as_variable_id, Parse, ParseError, RawParseError},
     v1::{self},
-    Constraint, ConstraintID, DecisionVariable, InstanceError, VariableID,
+    Constraint, InstanceError, VariableID,
 };
 
 impl Parse for v1::instance::Sense {
@@ -194,31 +194,6 @@ impl From<Instance> for v1::Instance {
             constraint_hints: Some(value.constraint_hints.into()),
         }
     }
-}
-
-pub(super) fn as_constraint_id(
-    constraints: &BTreeMap<ConstraintID, Constraint>,
-    removed_constraints: &BTreeMap<ConstraintID, RemovedConstraint>,
-    id: u64,
-) -> Result<ConstraintID, ParseError> {
-    let id = ConstraintID::from(id);
-    if !constraints.contains_key(&id) && !removed_constraints.contains_key(&id) {
-        return Err(
-            RawParseError::InstanceError(InstanceError::UndefinedConstraintID { id }).into(),
-        );
-    }
-    Ok(id)
-}
-
-pub(super) fn as_variable_id(
-    decision_variables: &BTreeMap<VariableID, DecisionVariable>,
-    id: u64,
-) -> Result<VariableID, ParseError> {
-    let id = VariableID::from(id);
-    if !decision_variables.contains_key(&id) {
-        return Err(RawParseError::InstanceError(InstanceError::UndefinedVariableID { id }).into());
-    }
-    Ok(id)
 }
 
 impl Parse for v1::ParametricInstance {
