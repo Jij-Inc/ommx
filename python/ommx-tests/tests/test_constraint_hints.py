@@ -183,27 +183,17 @@ def test_sos1_variable_constraint_mapping():
     assert len(sos1.variables) == 3
     assert len(sos1.big_m_constraint_ids) == 2  # Only 2 non-None constraints
 
-    # Test case 2: More big-M constraints than variables (excess constraints ignored)
-    sos1 = _ommx_rust.Sos1(
-        binary_constraint_id=1,
-        big_m_constraint_ids=[2, 3, 4],  # 3 constraints
-        variables=[1, 2],  # 2 variables - third constraint ignored
-    )
-    assert sos1.binary_constraint_id == 1
-    assert len(sos1.variables) == 2
-    assert len(sos1.big_m_constraint_ids) == 2
-
-    # Test case 3: Fewer big-M constraints than variables
+    # Test case 2: Fewer big-M constraints than variables (some variables get None)
     sos1 = _ommx_rust.Sos1(
         binary_constraint_id=1,
         big_m_constraint_ids=[],  # 0 constraints
-        variables=[1],  # 1 variable - variable gets None constraint
+        variables=[1, 2],  # 2 variables - both get None constraint
     )
     assert sos1.binary_constraint_id == 1
-    assert len(sos1.variables) == 1
+    assert len(sos1.variables) == 2
     assert len(sos1.big_m_constraint_ids) == 0
 
-    # Test case 4: Both empty should be valid
+    # Test case 3: Empty case
     sos1_empty = _ommx_rust.Sos1(
         binary_constraint_id=1,
         big_m_constraint_ids=[],  # 0 constraints

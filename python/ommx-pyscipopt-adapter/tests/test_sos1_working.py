@@ -22,7 +22,6 @@ def test_sos1_constraint_functionality():
     bigm3 = (x[2] <= 1).set_id(4)  # type: ignore
 
     # Create SOS1 hint with valid constraint references
-    # Note: variables and big_m_constraint_ids must have 1:1 correspondence
     sos1_hint = Sos1(
         binary_constraint_id=1, big_m_constraint_ids=[2, 3, 4], variables=[1, 2, 3]
     )
