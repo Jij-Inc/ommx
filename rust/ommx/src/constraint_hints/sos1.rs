@@ -194,7 +194,9 @@ mod tests {
         // Only constraint 30 should remain in the map
         assert_eq!(updated_hint.variable_to_big_m_constraint.len(), 1);
         assert_eq!(
-            updated_hint.variable_to_big_m_constraint.get(&VariableID::from(3)),
+            updated_hint
+                .variable_to_big_m_constraint
+                .get(&VariableID::from(3)),
             Some(&ConstraintID::from(30))
         );
 

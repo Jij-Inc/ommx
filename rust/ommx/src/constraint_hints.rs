@@ -7,7 +7,8 @@ pub use sos1::Sos1;
 use crate::{
     parse::{Parse, ParseError},
     v1::{self, State},
-    Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, RemovedConstraint, VariableID, VariableIDSet,
+    Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, RemovedConstraint, VariableID,
+    VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -164,8 +165,7 @@ mod tests {
             },
         };
 
-        constraint_hints
-            .partial_evaluate(&state, crate::ATol::default());
+        constraint_hints.partial_evaluate(&state, crate::ATol::default());
 
         // First OneHot should have one variable, second should be removed
         assert_eq!(constraint_hints.one_hot_constraints.len(), 1);
