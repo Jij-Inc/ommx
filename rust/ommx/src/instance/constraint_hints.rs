@@ -752,4 +752,61 @@ mod tests {
         assert!(required.contains(&VariableID::from(3)));
         assert!(required.contains(&VariableID::from(4)));
     }
+
+    #[test]
+    fn test_instance_partial_evaluate_constraint_hints() {
+        // Test that Instance.partial_evaluate applies to constraint hints
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::binary(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::binary(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::binary(VariableID::from(3)),
+        );
+
+        let objective = (linear!(1) + coeff!(1.0)).into();
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+        };
+
+        let constraint_hints = ConstraintHints {
+            one_hot_constraints: vec![OneHot {
+                id: ConstraintID::from(1),
+                variables: btreeset! {
+                    VariableID::from(1),
+                    VariableID::from(2),
+                    VariableID::from(3),
+                },
+            }],
+            sos1_constraints: vec![],
+        };
+
+        let mut instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
+            .unwrap()
+            .with_constraint_hints(constraint_hints)
+            .unwrap();
+
+        // Verify initial state
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(instance.constraint_hints.one_hot_constraints[0].variables.len(), 3);
+
+        // Apply partial evaluation: set variable 1 to 0, variable 2 to 1
+        let state = State {
+            entries: hashmap! {
+                1 => 0.0,  // Should be removed
+                2 => 1.0,  // Should cause hint discard
+            },
+        };
+
+        instance.partial_evaluate(&state, crate::ATol::default()).unwrap();
+
+        // The OneHot constraint hint should be discarded due to non-zero value
+        assert!(instance.constraint_hints.one_hot_constraints.is_empty());
+    }
 }
