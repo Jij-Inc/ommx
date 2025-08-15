@@ -198,6 +198,19 @@ mod tests {
         };
         constraints.insert(ConstraintID::from(4), constraint4);
 
+        // Create additional constraint for Sos1 big-M constraint for variable 3
+        let constraint5_function = Function::from(linear!(3) + coeff!(-1.0));
+        let constraint5 = Constraint {
+            id: ConstraintID::from(5),
+            function: constraint5_function,
+            equality: Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(5), constraint5);
+
         // Create constraint hints
         let one_hot_for_constraint1 = OneHot::new(
             ConstraintID::from(1),
@@ -223,6 +236,7 @@ mod tests {
             [
                 (VariableID::from(1), ConstraintID::from(3)),
                 (VariableID::from(2), ConstraintID::from(4)),
+                (VariableID::from(3), ConstraintID::from(5)), // Add missing big-M constraint for variable 3
             ]
             .into_iter()
             .collect(),

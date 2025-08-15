@@ -169,3 +169,40 @@ def test_valid_constraint_hints():
     retrieved_one_hot = retrieved_hints.one_hot_constraints[0]
     assert retrieved_one_hot.id == 1
     assert retrieved_one_hot.variables == [1, 2, 3]
+
+
+def test_sos1_variable_constraint_mismatch():
+    """Test that Sos1 validates variable-constraint correspondence."""
+    # Test case 1: More variables than big-M constraints
+    with pytest.raises(ValueError, match="Sos1 constraint requires 1:1 correspondence"):
+        _ommx_rust.Sos1(
+            binary_constraint_id=1, 
+            big_m_constraint_ids=[2, 3],  # 2 constraints
+            variables=[1, 2, 3]           # 3 variables - mismatch!
+        )
+
+    # Test case 2: More big-M constraints than variables
+    with pytest.raises(ValueError, match="Sos1 constraint requires 1:1 correspondence"):
+        _ommx_rust.Sos1(
+            binary_constraint_id=1, 
+            big_m_constraint_ids=[2, 3, 4],  # 3 constraints
+            variables=[1, 2]                 # 2 variables - mismatch!
+        )
+
+    # Test case 3: Empty lists should also fail
+    with pytest.raises(ValueError, match="Sos1 constraint requires 1:1 correspondence"):
+        _ommx_rust.Sos1(
+            binary_constraint_id=1, 
+            big_m_constraint_ids=[],  # 0 constraints
+            variables=[1]             # 1 variable - mismatch!
+        )
+
+    # Test case 4: Both empty should be valid (edge case)
+    sos1_empty = _ommx_rust.Sos1(
+        binary_constraint_id=1,
+        big_m_constraint_ids=[],  # 0 constraints
+        variables=[]              # 0 variables - should match!
+    )
+    assert sos1_empty.binary_constraint_id == 1
+    assert sos1_empty.variables == []
+    assert sos1_empty.big_m_constraint_ids == []

@@ -25,6 +25,35 @@ impl Sos1 {
         variables: BTreeSet<VariableID>,
         variable_to_big_m_constraint: BTreeMap<VariableID, ConstraintID>,
     ) -> Self {
+        // Validate that all variables have corresponding big-M constraints
+        for variable_id in &variables {
+            if !variable_to_big_m_constraint.contains_key(variable_id) {
+                panic!(
+                    "Sos1 constraint requires 1:1 correspondence between variables and big-M constraints. \
+                     Variable {} has no corresponding big-M constraint. \
+                     Variables: {:?}, Big-M constraints: {:?}",
+                    variable_id,
+                    variables,
+                    variable_to_big_m_constraint
+                );
+            }
+        }
+
+        // Validate that all big-M constraints correspond to variables
+        for (variable_id, constraint_id) in &variable_to_big_m_constraint {
+            if !variables.contains(variable_id) {
+                panic!(
+                    "Sos1 constraint requires 1:1 correspondence between variables and big-M constraints. \
+                     Big-M constraint {} is mapped to variable {} which is not in the variables set. \
+                     Variables: {:?}, Big-M constraints: {:?}",
+                    constraint_id,
+                    variable_id,
+                    variables,
+                    variable_to_big_m_constraint
+                );
+            }
+        }
+
         Self {
             binary_constraint_id,
             variables,
@@ -251,5 +280,42 @@ mod tests {
 
         // Should discard the hint
         assert!(result.is_none());
+    }
+
+    #[test]
+    #[should_panic(expected = "Sos1 constraint requires 1:1 correspondence between variables and big-M constraints")]
+    fn test_sos1_validation_missing_big_m_constraint() {
+        // Test that Sos1 panics when a variable has no corresponding big-M constraint
+        Sos1::new(
+            ConstraintID::from(1),
+            btreeset! {
+                VariableID::from(1),
+                VariableID::from(2),  // Variable 2 is missing from big-M constraints
+                VariableID::from(3),
+            },
+            btreemap! {
+                VariableID::from(1) => ConstraintID::from(10),
+                // Missing: VariableID::from(2) => ConstraintID::from(20),
+                VariableID::from(3) => ConstraintID::from(30),
+            },
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Sos1 constraint requires 1:1 correspondence between variables and big-M constraints")]
+    fn test_sos1_validation_extra_big_m_constraint() {
+        // Test that Sos1 panics when a big-M constraint has no corresponding variable
+        Sos1::new(
+            ConstraintID::from(1),
+            btreeset! {
+                VariableID::from(1),
+                VariableID::from(3),  // Variable 2 is missing from variables
+            },
+            btreemap! {
+                VariableID::from(1) => ConstraintID::from(10),
+                VariableID::from(2) => ConstraintID::from(20), // Extra constraint for missing variable
+                VariableID::from(3) => ConstraintID::from(30),
+            },
+        );
     }
 }

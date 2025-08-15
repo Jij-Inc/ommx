@@ -57,7 +57,20 @@ impl Sos1 {
         binary_constraint_id: u64,
         big_m_constraint_ids: Vec<u64>,
         variables: Vec<u64>,
-    ) -> Self {
+    ) -> PyResult<Self> {
+        // Validate that variables and big_m_constraint_ids have the same length
+        if variables.len() != big_m_constraint_ids.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Sos1 constraint requires 1:1 correspondence between variables and big_m_constraint_ids. \
+                 Got {} variables: {:?} and {} big_m_constraint_ids: {:?}. \
+                 Each variable must have exactly one corresponding big-M constraint.",
+                variables.len(),
+                variables,
+                big_m_constraint_ids.len(),
+                big_m_constraint_ids
+            )));
+        }
+
         let binary_constraint_id = ConstraintID::from(binary_constraint_id);
 
         // Create variable_to_big_m_constraint mapping by pairing variables with big_m_constraint_ids
@@ -75,11 +88,11 @@ impl Sos1 {
         let variable_set: BTreeSet<VariableID> =
             variables.into_iter().map(VariableID::from).collect();
 
-        Self(ommx::Sos1::new(
+        Ok(Self(ommx::Sos1::new(
             binary_constraint_id,
             variable_set,
             variable_to_big_m_constraint,
-        ))
+        )))
     }
 
     #[getter]
