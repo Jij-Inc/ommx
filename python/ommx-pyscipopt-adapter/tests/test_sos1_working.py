@@ -19,17 +19,19 @@ def test_sos1_constraint_functionality():
     # Create additional constraints for the SOS1 big-M
     bigm1 = (x[0] <= 1).set_id(2)  # type: ignore
     bigm2 = (x[1] <= 1).set_id(3)  # type: ignore
+    bigm3 = (x[2] <= 1).set_id(4)  # type: ignore
 
     # Create SOS1 hint with valid constraint references
+    # Note: variables and big_m_constraint_ids must have 1:1 correspondence
     sos1_hint = Sos1(
-        binary_constraint_id=1, big_m_constraint_ids=[2, 3], variables=[1, 2, 3]
+        binary_constraint_id=1, big_m_constraint_ids=[2, 3, 4], variables=[1, 2, 3]
     )
     constraint_hints = ConstraintHints(sos1_constraints=[sos1_hint])
 
     instance = Instance.from_components(
         decision_variables=x,
         objective=objective,
-        constraints=[dummy_constraint, bigm1, bigm2],
+        constraints=[dummy_constraint, bigm1, bigm2, bigm3],
         sense=Instance.MINIMIZE,
         constraint_hints=constraint_hints,
     )
@@ -48,6 +50,7 @@ def test_sos1_constraint_functionality():
     assert "1" not in constraint_names, "Referenced constraint should be excluded"
     assert "2" not in constraint_names, "Referenced Big-M constraint should be excluded"
     assert "3" not in constraint_names, "Referenced Big-M constraint should be excluded"
+    assert "4" not in constraint_names, "Referenced Big-M constraint should be excluded"
 
     # Solve and get a solution (may be infeasible due to constraint exclusion, which is expected)
     model.optimize()
