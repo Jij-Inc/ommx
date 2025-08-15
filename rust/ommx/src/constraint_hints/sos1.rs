@@ -1,8 +1,8 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
     v1::{self, State},
-    Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint,
-    VariableID,
+    Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, InstanceError, RemovedConstraint,
+    VariableID, VariableIDSet,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -137,6 +137,19 @@ impl Sos1 {
         }
 
         Some(self) // Keep the updated hint
+    }
+
+    /// Get all decision variable IDs used by this constraint hint
+    pub fn used_decision_variable_ids(&self) -> VariableIDSet {
+        self.variables.clone()
+    }
+
+    /// Get all constraint IDs used by this constraint hint
+    pub fn used_constraint_ids(&self) -> ConstraintIDSet {
+        let mut constraint_ids = ConstraintIDSet::new();
+        constraint_ids.insert(self.binary_constraint_id);
+        constraint_ids.extend(self.big_m_constraint_ids());
+        constraint_ids
     }
 }
 

@@ -12,7 +12,7 @@ pub use arbitrary::*;
 use derive_more::{Deref, From};
 use fnv::{FnvHashMap, FnvHashSet};
 use getset::Getters;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Constraint equality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -26,6 +26,7 @@ pub enum Equality {
 /// ID for constraint
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
 pub struct ConstraintID(u64);
+pub type ConstraintIDSet = BTreeSet<ConstraintID>;
 
 impl std::fmt::Debug for ConstraintID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

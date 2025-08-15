@@ -114,7 +114,7 @@ impl Evaluate for Instance {
         }
         self.decision_variable_dependency
             .partial_evaluate(state, atol)?;
-        self.constraint_hints.partial_evaluate(state, atol)?;
+        self.constraint_hints.partial_evaluate(state, atol);
         Ok(())
     }
 

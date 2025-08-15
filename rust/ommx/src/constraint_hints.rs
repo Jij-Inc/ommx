@@ -6,9 +6,8 @@ pub use sos1::Sos1;
 
 use crate::{
     parse::{Parse, ParseError},
-    v1::{self, Samples, State},
-    Constraint, ConstraintID, DecisionVariable, Evaluate, RemovedConstraint, VariableID,
-    VariableIDSet,
+    v1::{self, State},
+    Constraint, ConstraintID, ConstraintIDSet, DecisionVariable, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -67,23 +66,9 @@ impl From<ConstraintHints> for v1::ConstraintHints {
     }
 }
 
-impl Evaluate for ConstraintHints {
-    type Output = ();
-    type SampledOutput = ();
-
-    fn evaluate(&self, _state: &State, _atol: crate::ATol) -> anyhow::Result<Self::Output> {
-        Ok(())
-    }
-
-    fn evaluate_samples(
-        &self,
-        _samples: &Samples,
-        _atol: crate::ATol,
-    ) -> anyhow::Result<Self::SampledOutput> {
-        Ok(())
-    }
-
-    fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) -> anyhow::Result<()> {
+impl ConstraintHints {
+    /// Apply partial evaluation to all constraint hints
+    pub fn partial_evaluate(&mut self, state: &State, atol: crate::ATol) {
         // Apply partial evaluation to each OneHot constraint and keep only the valid ones
         self.one_hot_constraints = self
             .one_hot_constraints
@@ -97,19 +82,33 @@ impl Evaluate for ConstraintHints {
             .drain(..)
             .filter_map(|sos1| sos1.partial_evaluate(state, atol))
             .collect();
-
-        Ok(())
     }
 
-    fn required_ids(&self) -> VariableIDSet {
+    /// Get all decision variable IDs used by constraint hints
+    pub fn used_decision_variable_ids(&self) -> VariableIDSet {
         let mut ids = VariableIDSet::new();
 
         for one_hot in &self.one_hot_constraints {
-            ids.extend(one_hot.variables.clone());
+            ids.extend(one_hot.used_decision_variable_ids());
         }
 
         for sos1 in &self.sos1_constraints {
-            ids.extend(sos1.variables.clone());
+            ids.extend(sos1.used_decision_variable_ids());
+        }
+
+        ids
+    }
+
+    /// Get all constraint IDs used by constraint hints
+    pub fn used_constraint_ids(&self) -> ConstraintIDSet {
+        let mut ids = ConstraintIDSet::new();
+
+        for one_hot in &self.one_hot_constraints {
+            ids.extend(one_hot.used_constraint_ids());
+        }
+
+        for sos1 in &self.sos1_constraints {
+            ids.extend(sos1.used_constraint_ids());
         }
 
         ids
@@ -166,8 +165,7 @@ mod tests {
         };
 
         constraint_hints
-            .partial_evaluate(&state, crate::ATol::default())
-            .unwrap();
+            .partial_evaluate(&state, crate::ATol::default());
 
         // First OneHot should have one variable, second should be removed
         assert_eq!(constraint_hints.one_hot_constraints.len(), 1);
@@ -188,8 +186,8 @@ mod tests {
     }
 
     #[test]
-    fn test_constraint_hints_required_ids() {
-        // Test that required_ids returns all variable IDs
+    fn test_constraint_hints_used_ids() {
+        // Test that used_decision_variable_ids and used_constraint_ids return correct IDs
         let constraint_hints = ConstraintHints {
             one_hot_constraints: vec![OneHot {
                 id: ConstraintID::from(1),
@@ -211,12 +209,20 @@ mod tests {
             }],
         };
 
-        let required = constraint_hints.required_ids();
+        // Test decision variable IDs
+        let decision_var_ids = constraint_hints.used_decision_variable_ids();
+        assert_eq!(decision_var_ids.len(), 4);
+        assert!(decision_var_ids.contains(&VariableID::from(1)));
+        assert!(decision_var_ids.contains(&VariableID::from(2)));
+        assert!(decision_var_ids.contains(&VariableID::from(3)));
+        assert!(decision_var_ids.contains(&VariableID::from(4)));
 
-        assert_eq!(required.len(), 4);
-        assert!(required.contains(&VariableID::from(1)));
-        assert!(required.contains(&VariableID::from(2)));
-        assert!(required.contains(&VariableID::from(3)));
-        assert!(required.contains(&VariableID::from(4)));
+        // Test constraint IDs
+        let constraint_ids = constraint_hints.used_constraint_ids();
+        assert_eq!(constraint_ids.len(), 4);
+        assert!(constraint_ids.contains(&ConstraintID::from(1))); // OneHot
+        assert!(constraint_ids.contains(&ConstraintID::from(2))); // Sos1 binary
+        assert!(constraint_ids.contains(&ConstraintID::from(30))); // Sos1 big-M
+        assert!(constraint_ids.contains(&ConstraintID::from(40))); // Sos1 big-M
     }
 }
