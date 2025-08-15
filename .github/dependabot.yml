@@ -18,26 +18,3 @@ updates:
       dependencies:
         patterns:
           - "*"
-
-  - package-ecosystem: "pip"
-    directories:
-      - "doc/"
-      - "python/ommx/"
-      - "python/ommx-pyscipopt-adapter/"
-      - "python/ommx-python-mip-adapter/"
-      - "python/ommx-openjij-adapter/"
-    schedule:
-      interval: "weekly"
-    groups:
-      dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "uv"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      dependencies:
-        patterns:
-          - "*"
