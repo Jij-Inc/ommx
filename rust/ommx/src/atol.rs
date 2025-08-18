@@ -11,23 +11,28 @@ pub struct ATol(NotNan<f64>);
 
 static DEFAULT_ATOL: LazyLock<RwLock<f64>> = LazyLock::new(|| {
     let default_value = match std::env::var("OMMX_DEFAULT_ATOL") {
-        Ok(s) => match s.parse::<f64>() {
-            Ok(v) if v > 0.0 => {
-                log::info!("Using OMMX_DEFAULT_ATOL environment variable: {}", v);
-                v
+        Ok(s) => {
+            match s.parse::<f64>() {
+                Ok(v) if v > 0.0 => {
+                    log::info!("Using OMMX_DEFAULT_ATOL environment variable: {}", v);
+                    v
+                }
+                Ok(v) => {
+                    log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {}. Using default 1e-6", v);
+                    1e-6
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Invalid OMMX_DEFAULT_ATOL value (not a number): '{}'. Using default 1e-6",
+                        s
+                    );
+                    1e-6
+                }
             }
-            Ok(v) => {
-                log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {}. Using default 1e-6", v);
-                1e-6
-            }
-            Err(_) => {
-                log::warn!("Invalid OMMX_DEFAULT_ATOL value (not a number): '{}'. Using default 1e-6", s);
-                1e-6
-            }
-        },
+        }
         Err(_) => 1e-6,
     };
-    
+
     RwLock::new(default_value)
 });
 
@@ -54,6 +59,7 @@ impl ATol {
         let atol = Self::new(value)?;
         let mut default = DEFAULT_ATOL.write().unwrap();
         *default = atol.into_inner();
+        log::info!("ATol default value changed to: {}", value);
         Ok(())
     }
 }

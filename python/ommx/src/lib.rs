@@ -52,6 +52,18 @@ pub use state::*;
 
 use pyo3::prelude::*;
 
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
+    ommx::ATol::set_default(value)
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_default_atol() -> f64 {
+    ommx::ATol::default().into_inner()
+}
+
 /// We need `gil_used = false` to allow Python 3.13t
 /// See <https://pyo3.rs/main/free-threading#supporting-free-threaded-python-with-pyo3>.
 #[pymodule(gil_used = false)]
@@ -103,6 +115,11 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
 
     // Dataset
     m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
+
+    // ATol functions
+    m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
+    m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
+
     Ok(())
 }
 
