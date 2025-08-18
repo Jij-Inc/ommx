@@ -42,7 +42,7 @@ impl OneHot {
         // Check each variable in the OneHot constraint
         for &var_id in &self.variables {
             // Skip if variable is not in state
-            let Some(&value) = state.entries.get(&(*var_id)) else {
+            let Some(&value) = state.entries.get(&var_id) else {
                 continue;
             };
 

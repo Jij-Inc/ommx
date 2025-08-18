@@ -37,13 +37,13 @@ impl Sos1 {
         state: &State,
         atol: ATol,
     ) -> Result<Sos1PartialEvaluateResult, ConstraintHintsError> {
-        let mut fixed_to_nonzero: Option<VariableID> = None;
+        let mut fixed_to_nonzero: Option<(VariableID, f64)> = None;
         let mut variables_to_remove = Vec::new();
 
         // Check each variable in the SOS1 constraint
         for &var_id in &self.variables {
             // Skip if variable is not in state
-            let Some(&value) = state.entries.get(&(*var_id)) else {
+            let Some(&value) = state.entries.get(&var_id) else {
                 continue;
             };
 
@@ -54,14 +54,14 @@ impl Sos1 {
             }
 
             // Variable is non-zero
-            if let Some(first_var) = fixed_to_nonzero {
+            if let Some((first_var, first_value)) = fixed_to_nonzero {
                 // Multiple variables fixed to non-zero - this violates SOS1
                 return Err(ConstraintHintsError::Sos1MultipleNonZeroFixed {
                     binary_constraint_id: self.binary_constraint_id,
-                    variables: vec![(first_var, 0.0), (var_id, value)], // We don't store the first value, use 0.0 placeholder
+                    variables: vec![(first_var, first_value), (var_id, value)],
                 });
             }
-            fixed_to_nonzero = Some(var_id);
+            fixed_to_nonzero = Some((var_id, value));
             variables_to_remove.push(var_id);
         }
 
