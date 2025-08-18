@@ -1,12 +1,39 @@
 use anyhow::bail;
 use ordered_float::NotNan;
 use std::ops::{Add, Deref, Neg, Sub};
+use std::sync::{LazyLock, RwLock};
 
 use crate::Coefficient;
 
 /// Absolute tolerance
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ATol(NotNan<f64>);
+
+static DEFAULT_ATOL: LazyLock<RwLock<f64>> = LazyLock::new(|| {
+    let default_value = match std::env::var("OMMX_DEFAULT_ATOL") {
+        Ok(s) => {
+            match s.parse::<f64>() {
+                Ok(v) if v > 0.0 => {
+                    log::info!("Using OMMX_DEFAULT_ATOL environment variable: {v}");
+                    v
+                }
+                Ok(v) => {
+                    log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {v}. Using default 1e-6");
+                    1e-6
+                }
+                Err(_) => {
+                    log::warn!(
+                        "Invalid OMMX_DEFAULT_ATOL value (not a number): '{s}'. Using default 1e-6"
+                    );
+                    1e-6
+                }
+            }
+        }
+        Err(_) => 1e-6,
+    };
+
+    RwLock::new(default_value)
+});
 
 impl Deref for ATol {
     type Target = f64;
@@ -25,6 +52,19 @@ impl ATol {
 
     pub fn into_inner(&self) -> f64 {
         self.0.into_inner()
+    }
+
+    pub fn set_default(value: f64) -> anyhow::Result<()> {
+        let atol = Self::new(value)?;
+        let mut default = DEFAULT_ATOL.write().map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {}",
+                e
+            )
+        })?;
+        *default = atol.into_inner();
+        log::info!("ATol default value changed to: {value}");
+        Ok(())
     }
 }
 
@@ -66,7 +106,11 @@ impl PartialOrd<Coefficient> for ATol {
 
 impl Default for ATol {
     fn default() -> Self {
-        ATol(NotNan::new(1e-6).unwrap())
+        let default_value = match DEFAULT_ATOL.read() {
+            Ok(guard) => *guard,
+            Err(_) => 1e-6,
+        };
+        ATol(NotNan::new(default_value).unwrap())
     }
 }
 
