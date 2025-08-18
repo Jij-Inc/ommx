@@ -1,8 +1,4 @@
-"""Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints.
-
-These tests focus specifically on adapter behavior, not on the correctness of partial_evaluate itself.
-The key adapter responsibility: handle partial_evaluated instances without internal errors.
-"""
+"""Test PySCIPOpt adapter behavior with partial_evaluate and SOS1 constraints."""
 
 import pytest
 from ommx.v1 import Instance, DecisionVariable, Sos1, ConstraintHints, State
@@ -22,14 +18,14 @@ def sos1_instance_setup():
     objective = sum(x) + 0.5 * z
 
     # SOS1 constraint setup: y0 + y1 + y2 <= 1 (binary constraint)
-    binary_constraint = (y[0] + y[1] + y[2] <= 1).set_id(1)  # type: ignore
+    binary_constraint = (y[0] + y[1] + y[2] <= 1).set_id(1)
     # Big-M constraints: x0 <= 10*y0, x1 <= 10*y1, x2 <= 10*y2
-    big_m1 = (x[0] <= 10 * y[0]).set_id(2)  # type: ignore
-    big_m2 = (x[1] <= 10 * y[1]).set_id(3)  # type: ignore
-    big_m3 = (x[2] <= 10 * y[2]).set_id(4)  # type: ignore
+    big_m1 = (x[0] <= 10 * y[0]).set_id(2)
+    big_m2 = (x[1] <= 10 * y[1]).set_id(3)
+    big_m3 = (x[2] <= 10 * y[2]).set_id(4)
 
     # Independent constraint not related to SOS1
-    independent_constraint = (z >= 1).set_id(5)  # type: ignore
+    independent_constraint = (z >= 1).set_id(5)
 
     sos1_hint = Sos1(
         binary_constraint_id=1,
