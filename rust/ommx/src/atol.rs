@@ -57,7 +57,9 @@ impl ATol {
 
     pub fn set_default(value: f64) -> anyhow::Result<()> {
         let atol = Self::new(value)?;
-        let mut default = DEFAULT_ATOL.write().unwrap();
+        let mut default = DEFAULT_ATOL
+            .write()
+            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {}", e))?;
         *default = atol.into_inner();
         log::info!("ATol default value changed to: {}", value);
         Ok(())
@@ -102,7 +104,10 @@ impl PartialOrd<Coefficient> for ATol {
 
 impl Default for ATol {
     fn default() -> Self {
-        let default_value = *DEFAULT_ATOL.read().unwrap();
+        let default_value = match DEFAULT_ATOL.read() {
+            Ok(guard) => *guard,
+            Err(_) => 1e-6,
+        };
         ATol(NotNan::new(default_value).unwrap())
     }
 }
