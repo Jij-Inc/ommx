@@ -31,9 +31,7 @@ pub enum ConstraintHintsError {
         value: f64,
     },
     #[error("All variables in OneHot constraint {constraint_id:?} are fixed to 0, constraint cannot be satisfied")]
-    OneHotAllVariablesFixedToZero { 
-        constraint_id: ConstraintID 
-    },
+    OneHotAllVariablesFixedToZero { constraint_id: ConstraintID },
     #[error("Multiple variables are fixed to non-zero values in SOS1 constraint (binary: {binary_constraint_id:?}): {variables:?}")]
     Sos1MultipleNonZeroFixed {
         binary_constraint_id: ConstraintID,
@@ -185,7 +183,9 @@ mod tests {
         initial_state.entries.insert(2, 1.0);
 
         // Apply partial evaluation
-        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
+        let final_state = hints
+            .partial_evaluate(initial_state, ATol::default())
+            .unwrap();
 
         // Check that variables 1 and 3 were fixed to 0 due to OneHot propagation
         assert_eq!(final_state.entries.get(&1), Some(&0.0));
@@ -227,7 +227,9 @@ mod tests {
         initial_state.entries.insert(1, 1.0);
 
         // Apply partial evaluation
-        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
+        let final_state = hints
+            .partial_evaluate(initial_state, ATol::default())
+            .unwrap();
 
         // Check propagation: 1=1 -> 2=0 (OneHot)
         assert_eq!(final_state.entries.get(&1), Some(&1.0)); // Original
@@ -290,7 +292,9 @@ mod tests {
         let initial_state = State::default();
 
         // Apply partial evaluation
-        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
+        let final_state = hints
+            .partial_evaluate(initial_state, ATol::default())
+            .unwrap();
 
         // Check that state remains empty
         assert_eq!(final_state.entries.len(), 0);

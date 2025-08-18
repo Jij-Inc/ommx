@@ -1,7 +1,8 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
     v1::{self, State},
-    ATol, Constraint, ConstraintID, ConstraintHintsError, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
+    ATol, Constraint, ConstraintHintsError, ConstraintID, DecisionVariable, InstanceError,
+    RemovedConstraint, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
