@@ -1,37 +1,18 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
     v1::{self, State},
-    ATol, Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
+    ATol, Constraint, ConstraintID, ConstraintHintsError, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error;
 
 /// Result of partial evaluation for OneHot constraint
 #[derive(Debug, Clone, PartialEq)]
-pub enum OneHotPartialEvaluateResult {
+pub(super) enum OneHotPartialEvaluateResult {
     /// Constraint was updated by removing zero variables
     Updated(OneHot),
     /// A variable was fixed to 1, so the constraint is satisfied
     /// Returns a State with variables to be fixed to 0
     AdditionalFix(State),
-}
-
-/// Error that can occur during partial evaluation of OneHot constraint
-#[derive(Debug, Clone, Error)]
-pub enum OneHotPartialEvaluateError {
-    #[error("Multiple variables are fixed to non-zero values in OneHot constraint {constraint_id:?}: {variables:?}")]
-    MultipleNonZeroFixed {
-        constraint_id: ConstraintID,
-        variables: Vec<(VariableID, f64)>,
-    },
-    #[error("Variable {variable_id:?} in OneHot constraint {constraint_id:?} is fixed to invalid value {value} (must be 0 or 1)")]
-    InvalidFixedValue {
-        constraint_id: ConstraintID,
-        variable_id: VariableID,
-        value: f64,
-    },
-    #[error("All variables in OneHot constraint {constraint_id:?} are fixed to 0, constraint cannot be satisfied")]
-    AllVariablesFixedToZero { constraint_id: ConstraintID },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,11 +30,11 @@ impl OneHot {
     /// - If multiple variables are fixed to non-zero values, returns an error
     ///
     /// Returns a result indicating whether the constraint was updated, requires additional fixes, or should be removed.
-    pub fn partial_evaluate(
+    pub(super) fn partial_evaluate(
         mut self,
         state: &State,
         atol: ATol,
-    ) -> Result<OneHotPartialEvaluateResult, OneHotPartialEvaluateError> {
+    ) -> Result<OneHotPartialEvaluateResult, ConstraintHintsError> {
         let mut fixed_to_one: Option<VariableID> = None;
         let mut variables_to_remove = Vec::new();
 
@@ -74,7 +55,7 @@ impl OneHot {
             if (value - 1.0).abs() < atol {
                 // Check if another variable was already fixed to one
                 if let Some(first_var) = fixed_to_one {
-                    return Err(OneHotPartialEvaluateError::MultipleNonZeroFixed {
+                    return Err(ConstraintHintsError::OneHotMultipleNonZeroFixed {
                         constraint_id: self.id,
                         variables: vec![(first_var, 1.0), (var_id, value)],
                     });
@@ -85,7 +66,7 @@ impl OneHot {
             }
 
             // Variable is fixed to an invalid value (not 0 or 1)
-            return Err(OneHotPartialEvaluateError::InvalidFixedValue {
+            return Err(ConstraintHintsError::OneHotInvalidFixedValue {
                 constraint_id: self.id,
                 variable_id: var_id,
                 value,
@@ -107,7 +88,7 @@ impl OneHot {
             Ok(OneHotPartialEvaluateResult::AdditionalFix(additional_fixes))
         } else if self.variables.is_empty() {
             // All variables were fixed to 0, constraint cannot be satisfied
-            Err(OneHotPartialEvaluateError::AllVariablesFixedToZero {
+            Err(ConstraintHintsError::OneHotAllVariablesFixedToZero {
                 constraint_id: self.id,
             })
         } else {
@@ -250,7 +231,7 @@ mod tests {
 
         // Check that we get an error
         match result {
-            Err(OneHotPartialEvaluateError::InvalidFixedValue {
+            Err(ConstraintHintsError::OneHotInvalidFixedValue {
                 variable_id, value, ..
             }) => {
                 assert_eq!(variable_id, VariableID::from(2));
@@ -284,7 +265,7 @@ mod tests {
 
         // Check that we get an error
         match result {
-            Err(OneHotPartialEvaluateError::MultipleNonZeroFixed { variables, .. }) => {
+            Err(ConstraintHintsError::OneHotMultipleNonZeroFixed { variables, .. }) => {
                 assert_eq!(variables.len(), 2);
             }
             _ => panic!("Expected MultipleNonZeroFixed error"),
@@ -316,7 +297,7 @@ mod tests {
 
         // Check that we get an error
         match result {
-            Err(OneHotPartialEvaluateError::AllVariablesFixedToZero { constraint_id }) => {
+            Err(ConstraintHintsError::OneHotAllVariablesFixedToZero { constraint_id }) => {
                 assert_eq!(constraint_id, ConstraintID::from(100));
             }
             _ => panic!("Expected AllVariablesFixedToZero error when all variables are 0"),

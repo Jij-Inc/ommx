@@ -1,8 +1,11 @@
 mod one_hot;
 mod sos1;
 
-pub use one_hot::{OneHot, OneHotPartialEvaluateError, OneHotPartialEvaluateResult};
-pub use sos1::{Sos1, Sos1PartialEvaluateError, Sos1PartialEvaluateResult};
+pub use one_hot::OneHot;
+pub use sos1::Sos1;
+
+use one_hot::OneHotPartialEvaluateResult;
+use sos1::Sos1PartialEvaluateResult;
 
 use crate::{
     parse::{Parse, ParseError},
@@ -12,13 +15,30 @@ use crate::{
 use std::collections::BTreeMap;
 use thiserror::Error;
 
-/// Error that can occur during partial evaluation of ConstraintHints
+/// Error that can occur when working with ConstraintHints
 #[derive(Debug, Clone, Error)]
-pub enum ConstraintHintsPartialEvaluateError {
-    #[error("OneHot constraint error: {0}")]
-    OneHot(#[from] OneHotPartialEvaluateError),
-    #[error("SOS1 constraint error: {0}")]
-    Sos1(#[from] Sos1PartialEvaluateError),
+#[non_exhaustive]
+pub enum ConstraintHintsError {
+    #[error("Multiple variables are fixed to non-zero values in OneHot constraint {constraint_id:?}: {variables:?}")]
+    OneHotMultipleNonZeroFixed {
+        constraint_id: ConstraintID,
+        variables: Vec<(VariableID, f64)>,
+    },
+    #[error("Variable {variable_id:?} in OneHot constraint {constraint_id:?} is fixed to invalid value {value} (must be 0 or 1)")]
+    OneHotInvalidFixedValue {
+        constraint_id: ConstraintID,
+        variable_id: VariableID,
+        value: f64,
+    },
+    #[error("All variables in OneHot constraint {constraint_id:?} are fixed to 0, constraint cannot be satisfied")]
+    OneHotAllVariablesFixedToZero { 
+        constraint_id: ConstraintID 
+    },
+    #[error("Multiple variables are fixed to non-zero values in SOS1 constraint (binary: {binary_constraint_id:?}): {variables:?}")]
+    Sos1MultipleNonZeroFixed {
+        binary_constraint_id: ConstraintID,
+        variables: Vec<(VariableID, f64)>,
+    },
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -47,7 +67,7 @@ impl ConstraintHints {
         &mut self,
         mut state: State,
         atol: ATol,
-    ) -> Result<State, ConstraintHintsPartialEvaluateError> {
+    ) -> Result<State, ConstraintHintsError> {
         let mut changed = true;
         while changed {
             changed = false;
@@ -248,9 +268,7 @@ mod tests {
 
         // Check that we get an error
         match result {
-            Err(ConstraintHintsPartialEvaluateError::OneHot(
-                OneHotPartialEvaluateError::MultipleNonZeroFixed { .. },
-            )) => {}
+            Err(ConstraintHintsError::OneHotMultipleNonZeroFixed { .. }) => {}
             _ => panic!("Expected OneHot MultipleNonZeroFixed error"),
         }
     }

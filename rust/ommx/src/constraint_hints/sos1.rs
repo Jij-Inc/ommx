@@ -1,29 +1,18 @@
 use crate::{
     parse::{as_constraint_id, as_variable_id, Parse, ParseError, RawParseError},
     v1::{self, State},
-    ATol, Constraint, ConstraintID, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
+    ATol, Constraint, ConstraintID, ConstraintHintsError, DecisionVariable, InstanceError, RemovedConstraint, VariableID,
 };
 use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error;
 
 /// Result of partial evaluation for SOS1 constraint
 #[derive(Debug, Clone, PartialEq)]
-pub enum Sos1PartialEvaluateResult {
+pub(super) enum Sos1PartialEvaluateResult {
     /// Constraint was updated by removing zero variables
     Updated(Sos1),
     /// A variable was fixed to non-zero, so the constraint is satisfied
     /// Returns a State with variables to be fixed to 0
     AdditionalFix(State),
-}
-
-/// Error that can occur during partial evaluation of SOS1 constraint
-#[derive(Debug, Clone, Error)]
-pub enum Sos1PartialEvaluateError {
-    #[error("Multiple variables are fixed to non-zero values in SOS1 constraint (binary: {binary_constraint_id:?}): {variables:?}")]
-    MultipleNonZeroFixed {
-        binary_constraint_id: ConstraintID,
-        variables: Vec<(VariableID, f64)>,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,11 +31,11 @@ impl Sos1 {
     /// - SOS1 allows all variables to be 0 (unlike OneHot)
     ///
     /// Returns a result indicating whether the constraint was updated, requires additional fixes, or has an error.
-    pub fn partial_evaluate(
+    pub(super) fn partial_evaluate(
         mut self,
         state: &State,
         atol: ATol,
-    ) -> Result<Sos1PartialEvaluateResult, Sos1PartialEvaluateError> {
+    ) -> Result<Sos1PartialEvaluateResult, ConstraintHintsError> {
         let mut fixed_to_nonzero: Option<VariableID> = None;
         let mut variables_to_remove = Vec::new();
 
@@ -66,7 +55,7 @@ impl Sos1 {
             // Variable is non-zero
             if let Some(first_var) = fixed_to_nonzero {
                 // Multiple variables fixed to non-zero - this violates SOS1
-                return Err(Sos1PartialEvaluateError::MultipleNonZeroFixed {
+                return Err(ConstraintHintsError::Sos1MultipleNonZeroFixed {
                     binary_constraint_id: self.binary_constraint_id,
                     variables: vec![(first_var, 0.0), (var_id, value)], // We don't store the first value, use 0.0 placeholder
                 });
@@ -256,7 +245,7 @@ mod tests {
 
         // Check that we get an error
         match result {
-            Err(Sos1PartialEvaluateError::MultipleNonZeroFixed { variables, .. }) => {
+            Err(ConstraintHintsError::Sos1MultipleNonZeroFixed { variables, .. }) => {
                 assert_eq!(variables.len(), 2);
             }
             _ => panic!("Expected MultipleNonZeroFixed error"),
