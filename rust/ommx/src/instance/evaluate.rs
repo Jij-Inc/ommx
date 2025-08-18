@@ -100,8 +100,10 @@ impl Evaluate for Instance {
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {
         // First, apply constraint hints to potentially update the state
-        let updated_state = self.constraint_hints.partial_evaluate(state.clone(), atol)?;
-        
+        let updated_state = self
+            .constraint_hints
+            .partial_evaluate(state.clone(), atol)?;
+
         // Then proceed with the regular partial evaluation using the updated state
         for (id, value) in updated_state.entries.iter() {
             let Some(dv) = self.decision_variables.get_mut(&VariableID::from(*id)) else {
@@ -210,21 +212,23 @@ mod tests {
         let initial_state = v1::State::from(HashMap::from([(2, 1.0)]));
 
         // Apply partial evaluate
-        instance.partial_evaluate(&initial_state, ATol::default()).unwrap();
+        instance
+            .partial_evaluate(&initial_state, ATol::default())
+            .unwrap();
 
         // After partial evaluation, due to OneHot constraint propagation:
         // - Variable 2 remains fixed to 1
         // - Variables 1 and 3 should be fixed to 0
-        
+
         // Verify by evaluating with empty state (all fixed variables should be substituted)
         let empty_state = v1::State::default();
         let solution = instance.evaluate(&empty_state, ATol::default()).unwrap();
-        
+
         // Check that the state contains all three variables with correct values
         assert_eq!(solution.state().entries.get(&1), Some(&0.0));
         assert_eq!(solution.state().entries.get(&2), Some(&1.0));
         assert_eq!(solution.state().entries.get(&3), Some(&0.0));
-        
+
         // The objective value should be 1 (only x2 = 1)
         assert_eq!(*solution.objective(), 1.0);
     }
