@@ -11,11 +11,9 @@ use thiserror::Error;
 pub enum OneHotPartialEvaluateResult {
     /// Constraint was updated by removing zero variables
     Updated(OneHot),
-    /// A variable was fixed to 1, so other variables should be fixed to 0
-    /// Returns the updated constraint and a State with variables to be fixed to 0
-    AdditionalFix(OneHot, State),
-    /// Constraint should be removed entirely
-    Remove,
+    /// A variable was fixed to 1, so the constraint is satisfied
+    /// Returns a State with variables to be fixed to 0
+    AdditionalFix(State),
 }
 
 /// Error that can occur during partial evaluation of OneHot constraint
@@ -32,6 +30,8 @@ pub enum OneHotPartialEvaluateError {
         variable_id: VariableID,
         value: f64,
     },
+    #[error("All variables in OneHot constraint {constraint_id:?} are fixed to 0, constraint cannot be satisfied")]
+    AllVariablesFixedToZero { constraint_id: ConstraintID },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,37 +98,21 @@ impl OneHot {
         }
 
         // Handle the different cases
-        match fixed_to_one {
-            Some(_) if self.variables.is_empty() => {
-                // One variable is fixed to 1, all others already fixed to 0
-                Ok(OneHotPartialEvaluateResult::Remove)
+        if fixed_to_one.is_some() {
+            // One variable is fixed to 1, need to fix remaining variables to 0
+            let mut additional_fixes = State::default();
+            for &var_id in &self.variables {
+                additional_fixes.entries.insert(*var_id, 0.0);
             }
-            Some(_) => {
-                // One variable is fixed to 1, need to fix remaining variables to 0
-                let mut additional_fixes = State::default();
-                for &var_id in &self.variables {
-                    additional_fixes.entries.insert(*var_id, 0.0);
-                }
-                Ok(OneHotPartialEvaluateResult::AdditionalFix(
-                    OneHot {
-                        id: self.id,
-                        variables: BTreeSet::new(), // Constraint is satisfied
-                    },
-                    additional_fixes,
-                ))
-            }
-            None if self.variables.is_empty() => {
-                // All variables were fixed to 0, constraint cannot be satisfied
-                log::warn!(
-                    "OneHot constraint {:?}: all variables fixed to 0, constraint cannot be satisfied",
-                    self.id
-                );
-                Ok(OneHotPartialEvaluateResult::Remove)
-            }
-            None => {
-                // Some variables remain unfixed
-                Ok(OneHotPartialEvaluateResult::Updated(self))
-            }
+            Ok(OneHotPartialEvaluateResult::AdditionalFix(additional_fixes))
+        } else if self.variables.is_empty() {
+            // All variables were fixed to 0, constraint cannot be satisfied
+            Err(OneHotPartialEvaluateError::AllVariablesFixedToZero {
+                constraint_id: self.id,
+            })
+        } else {
+            // Some variables remain unfixed
+            Ok(OneHotPartialEvaluateResult::Updated(self))
         }
     }
 }
@@ -236,8 +220,7 @@ mod tests {
 
         // Check that we get additional fixes for other variables
         match result {
-            OneHotPartialEvaluateResult::AdditionalFix(updated, fixes) => {
-                assert_eq!(updated.variables.len(), 0); // Constraint is satisfied
+            OneHotPartialEvaluateResult::AdditionalFix(fixes) => {
                 assert_eq!(fixes.entries.len(), 2); // Two variables to fix
                 assert_eq!(fixes.entries.get(&1), Some(&0.0));
                 assert_eq!(fixes.entries.get(&3), Some(&0.0));
@@ -379,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_evaluate_all_zeros_removes_constraint() {
+    fn test_partial_evaluate_all_zeros_error() {
         // Create a OneHot constraint with variables 1, 2, 3
         let one_hot = OneHot {
             id: ConstraintID::from(100),
@@ -400,12 +383,14 @@ mod tests {
 
         // Apply partial evaluation
         let atol = ATol::new(1e-10).unwrap();
-        let result = one_hot.partial_evaluate(&state, atol).unwrap();
+        let result = one_hot.partial_evaluate(&state, atol);
 
-        // Check that the constraint should be removed
+        // Check that we get an error
         match result {
-            OneHotPartialEvaluateResult::Remove => {}
-            _ => panic!("Expected Remove result when all variables are 0"),
+            Err(OneHotPartialEvaluateError::AllVariablesFixedToZero { constraint_id }) => {
+                assert_eq!(constraint_id, ConstraintID::from(100));
+            }
+            _ => panic!("Expected AllVariablesFixedToZero error when all variables are 0"),
         }
     }
 }
