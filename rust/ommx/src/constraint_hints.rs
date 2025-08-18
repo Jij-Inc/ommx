@@ -165,8 +165,7 @@ mod tests {
         initial_state.entries.insert(2, 1.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let final_state = hints.partial_evaluate(initial_state, atol).unwrap();
+        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
 
         // Check that variables 1 and 3 were fixed to 0 due to OneHot propagation
         assert_eq!(final_state.entries.get(&1), Some(&0.0));
@@ -208,8 +207,7 @@ mod tests {
         initial_state.entries.insert(1, 1.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let final_state = hints.partial_evaluate(initial_state, atol).unwrap();
+        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
 
         // Check propagation: 1=1 -> 2=0 (OneHot)
         assert_eq!(final_state.entries.get(&1), Some(&1.0)); // Original
@@ -246,8 +244,7 @@ mod tests {
         initial_state.entries.insert(2, 1.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let result = hints.partial_evaluate(initial_state, atol);
+        let result = hints.partial_evaluate(initial_state, ATol::default());
 
         // Check that we get an error
         match result {
@@ -275,8 +272,7 @@ mod tests {
         let initial_state = State::default();
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let final_state = hints.partial_evaluate(initial_state, atol).unwrap();
+        let final_state = hints.partial_evaluate(initial_state, ATol::default()).unwrap();
 
         // Check that state remains empty
         assert_eq!(final_state.entries.len(), 0);

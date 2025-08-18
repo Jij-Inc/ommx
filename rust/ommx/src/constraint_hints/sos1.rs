@@ -181,8 +181,7 @@ mod tests {
         state.entries.insert(2, 0.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let result = sos1.partial_evaluate(&state, atol).unwrap();
+        let result = sos1.partial_evaluate(&state, ATol::default()).unwrap();
 
         // Check that variable 2 was removed
         match result {
@@ -219,8 +218,7 @@ mod tests {
         state.entries.insert(2, 1.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let result = sos1.partial_evaluate(&state, atol).unwrap();
+        let result = sos1.partial_evaluate(&state, ATol::default()).unwrap();
 
         // Check that we get additional fixes for other variables
         match result {
@@ -254,8 +252,7 @@ mod tests {
         state.entries.insert(2, 2.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let result = sos1.partial_evaluate(&state, atol);
+        let result = sos1.partial_evaluate(&state, ATol::default());
 
         // Check that we get an error
         match result {
@@ -288,8 +285,7 @@ mod tests {
         state.entries.insert(3, 0.0);
 
         // Apply partial evaluation
-        let atol = ATol::new(1e-10).unwrap();
-        let result = sos1.partial_evaluate(&state, atol).unwrap();
+        let result = sos1.partial_evaluate(&state, ATol::default()).unwrap();
 
         // Check that we get an updated constraint with no variables (all removed)
         // This is valid for SOS1 (unlike OneHot)
