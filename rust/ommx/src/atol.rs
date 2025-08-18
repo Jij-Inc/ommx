@@ -14,17 +14,16 @@ static DEFAULT_ATOL: LazyLock<RwLock<f64>> = LazyLock::new(|| {
         Ok(s) => {
             match s.parse::<f64>() {
                 Ok(v) if v > 0.0 => {
-                    log::info!("Using OMMX_DEFAULT_ATOL environment variable: {}", v);
+                    log::info!("Using OMMX_DEFAULT_ATOL environment variable: {v}");
                     v
                 }
                 Ok(v) => {
-                    log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {}. Using default 1e-6", v);
+                    log::warn!("Invalid OMMX_DEFAULT_ATOL value (must be positive): {v}. Using default 1e-6");
                     1e-6
                 }
                 Err(_) => {
                     log::warn!(
-                        "Invalid OMMX_DEFAULT_ATOL value (not a number): '{}'. Using default 1e-6",
-                        s
+                        "Invalid OMMX_DEFAULT_ATOL value (not a number): '{s}'. Using default 1e-6"
                     );
                     1e-6
                 }
@@ -57,11 +56,14 @@ impl ATol {
 
     pub fn set_default(value: f64) -> anyhow::Result<()> {
         let atol = Self::new(value)?;
-        let mut default = DEFAULT_ATOL
-            .write()
-            .map_err(|e| anyhow::anyhow!("Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {}", e))?;
+        let mut default = DEFAULT_ATOL.write().map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to acquire write lock for DEFAULT_ATOL: poisoned lock: {}",
+                e
+            )
+        })?;
         *default = atol.into_inner();
-        log::info!("ATol default value changed to: {}", value);
+        log::info!("ATol default value changed to: {value}");
         Ok(())
     }
 }
