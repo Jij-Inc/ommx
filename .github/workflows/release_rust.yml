@@ -16,7 +16,7 @@ jobs:
       contents: read
       id-token: write # Required for OIDC token exchange
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
       - run: cargo publish -p ommx
@@ -31,7 +31,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install cargo-edit
         run: cargo install cargo-edit
