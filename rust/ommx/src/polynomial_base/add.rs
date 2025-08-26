@@ -96,6 +96,38 @@ impl<M: Monomial> Add<&M> for &PolynomialBase<M> {
     }
 }
 
+// Add missing Sub<Coefficient> operations
+impl<M: Monomial> Sub<Coefficient> for PolynomialBase<M> {
+    type Output = Self;
+    fn sub(mut self, rhs: Coefficient) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<M: Monomial> Sub<PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn sub(self, mut rhs: PolynomialBase<M>) -> Self::Output {
+        rhs = -rhs;
+        rhs += self;
+        rhs
+    }
+}
+
+impl<M: Monomial> Sub<Coefficient> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: Coefficient) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
+impl<M: Monomial> Sub<&PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: &PolynomialBase<M>) -> Self::Output {
+        self - rhs.clone()
+    }
+}
+
 // Add support for Monomial + Monomial operations for specific monomial types
 macro_rules! impl_monomial_add {
     ($monomial:ty) => {
@@ -188,6 +220,103 @@ macro_rules! impl_monomial_add {
         }
     };
 }
+
+// Add support for Monomial - Monomial operations for specific monomial types
+macro_rules! impl_monomial_sub {
+    ($monomial:ty) => {
+        impl Sub for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self) - PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Sub<&$monomial> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: &Self) -> Self::Output {
+                PolynomialBase::from(self) - PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        impl Sub<$monomial> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: $monomial) -> Self::Output {
+                PolynomialBase::from(self.clone()) - PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Sub for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self.clone()) - PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        // Add support for Monomial - Coefficient operations
+        impl Sub<Coefficient> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self) - rhs
+            }
+        }
+
+        impl Sub<$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: $monomial) -> Self::Output {
+                self - PolynomialBase::from(rhs)
+            }
+        }
+
+        impl Sub<Coefficient> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self.clone()) - rhs
+            }
+        }
+
+        impl Sub<&$monomial> for Coefficient {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: &$monomial) -> Self::Output {
+                self - PolynomialBase::from(rhs.clone())
+            }
+        }
+
+        // Add support for Monomial - PolynomialBase operations
+        impl Sub<PolynomialBase<$monomial>> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
+                let mut result = PolynomialBase::from(self);
+                result -= rhs;
+                result
+            }
+        }
+
+        impl Sub<&PolynomialBase<$monomial>> for $monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self - rhs.clone()
+            }
+        }
+
+        impl Sub<PolynomialBase<$monomial>> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
+                self.clone() - rhs
+            }
+        }
+
+        impl Sub<&PolynomialBase<$monomial>> for &$monomial {
+            type Output = PolynomialBase<$monomial>;
+            fn sub(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self.clone() - rhs.clone()
+            }
+        }
+    };
+}
+
+impl_monomial_sub!(LinearMonomial);
+impl_monomial_sub!(QuadraticMonomial);
+impl_monomial_sub!(MonomialDyn);
 
 impl_monomial_add!(LinearMonomial);
 impl_monomial_add!(QuadraticMonomial);
