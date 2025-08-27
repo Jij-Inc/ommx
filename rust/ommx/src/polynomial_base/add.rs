@@ -130,7 +130,7 @@ impl<M: Monomial> Sub<&PolynomialBase<M>> for Coefficient {
 
 // Generic macro for implementing binary operations for monomial types
 macro_rules! impl_monomial_op {
-    ($op_trait:ident, $op_method:ident, $op_assign_trait:ident, $op_assign_method:ident, $monomial:ty) => {
+    ($op_trait:ident, $op_method:ident, $monomial:ty) => {
         impl $op_trait for $monomial {
             type Output = PolynomialBase<$monomial>;
             fn $op_method(self, rhs: Self) -> Self::Output {
@@ -159,7 +159,7 @@ macro_rules! impl_monomial_op {
             }
         }
 
-        // Add operations with Coefficient
+        // Operations with Coefficient
         impl $op_trait<Coefficient> for $monomial {
             type Output = PolynomialBase<$monomial>;
             fn $op_method(self, rhs: Coefficient) -> Self::Output {
@@ -188,12 +188,12 @@ macro_rules! impl_monomial_op {
             }
         }
 
-        // Add operations with PolynomialBase
+        // Operations with PolynomialBase
         impl $op_trait<PolynomialBase<$monomial>> for $monomial {
             type Output = PolynomialBase<$monomial>;
             fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
-                // Special handling for Add to enable optimization
-                impl_monomial_op!(@internal $op_trait, $op_method, $op_assign_trait, $op_assign_method, self, rhs)
+                // Special handling for different operation types
+                impl_monomial_op!(@internal $op_trait, $op_method, self, rhs)
             }
         }
 
@@ -207,8 +207,8 @@ macro_rules! impl_monomial_op {
         impl $op_trait<PolynomialBase<$monomial>> for &$monomial {
             type Output = PolynomialBase<$monomial>;
             fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
-                // Special handling for Add to enable optimization
-                impl_monomial_op!(@internal $op_trait, $op_method, $op_assign_trait, $op_assign_method, self.clone(), rhs)
+                // Special handling for different operation types
+                impl_monomial_op!(@internal $op_trait, $op_method, self.clone(), rhs)
             }
         }
 
@@ -221,14 +221,14 @@ macro_rules! impl_monomial_op {
     };
 
     // Internal helper for optimized Add implementation
-    (@internal Add, add, AddAssign, add_assign, $self:expr, $rhs:expr) => {{
+    (@internal Add, add, $self:expr, $rhs:expr) => {{
         let mut rhs = $rhs;
         rhs.add_term($self, coeff!(1.0));
         rhs
     }};
 
     // Internal helper for Sub implementation
-    (@internal Sub, sub, SubAssign, sub_assign, $self:expr, $rhs:expr) => {{
+    (@internal Sub, sub, $self:expr, $rhs:expr) => {{
         let mut result = PolynomialBase::from($self);
         result -= $rhs;
         result
@@ -238,14 +238,14 @@ macro_rules! impl_monomial_op {
 // Legacy macro for backward compatibility - delegates to generic macro
 macro_rules! impl_monomial_add {
     ($monomial:ty) => {
-        impl_monomial_op!(Add, add, AddAssign, add_assign, $monomial);
+        impl_monomial_op!(Add, add, $monomial);
     };
 }
 
 // Legacy macro for backward compatibility - delegates to generic macro
 macro_rules! impl_monomial_sub {
     ($monomial:ty) => {
-        impl_monomial_op!(Sub, sub, SubAssign, sub_assign, $monomial);
+        impl_monomial_op!(Sub, sub, $monomial);
     };
 }
 
