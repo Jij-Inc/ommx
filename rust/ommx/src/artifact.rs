@@ -138,11 +138,11 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
-    let dirs = gather_oci_dirs(&root)?;
+    let dirs = gather_oci_dirs(root)?;
     dirs.into_iter()
         .map(|dir| {
             let relative = dir
-                .strip_prefix(&root)
+                .strip_prefix(root)
                 .context("Failed to get relative path")?;
             ImageName::from_path(relative)
         })
