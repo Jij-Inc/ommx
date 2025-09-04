@@ -11,7 +11,7 @@ use num::Zero;
 use std::{borrow::Cow, collections::HashMap};
 
 impl Constraint {
-    pub fn function(&self) -> Cow<Function> {
+    pub fn function(&self) -> Cow<'_, Function> {
         match &self.function {
             Some(f) => Cow::Borrowed(f),
             // Empty function is regarded as zero function

@@ -87,7 +87,7 @@ impl ParametricInstance {
         })
     }
 
-    pub fn objective(&self) -> Cow<Function> {
+    pub fn objective(&self) -> Cow<'_, Function> {
         match &self.objective {
             Some(f) => Cow::Borrowed(f),
             None => Cow::Owned(Function::default()),
