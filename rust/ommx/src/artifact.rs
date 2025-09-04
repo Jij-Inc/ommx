@@ -66,6 +66,8 @@ pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
 /// OMMX_LOCAL_REGISTRY_ROOT environment variable. If that's not set either,
 /// it will use the default project data directory.
 pub fn data_dir() -> Result<PathBuf> {
+    // TODO: Once get_or_try_init is stabilized, use it instead of get_or_init with panic
+    // This would allow proper error propagation instead of panicking on directory creation failure
     Ok(LOCAL_REGISTRY_ROOT
         .get_or_init(|| {
             // Try environment variable first
@@ -74,13 +76,14 @@ pub fn data_dir() -> Result<PathBuf> {
                 
                 // Create directory if it doesn't exist
                 if !path.exists() {
-                    if let Err(e) = std::fs::create_dir_all(&path) {
-                        log::error!("Failed to create local registry directory from env var: {}", e);
-                        // Fall back to default
-                        let default_path = default_local_registry_path();
-                        log::info!("Local registry root initialized to default: {}", default_path.display());
-                        return default_path;
-                    }
+                    std::fs::create_dir_all(&path)
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "Failed to create local registry directory '{}' from OMMX_LOCAL_REGISTRY_ROOT: {}",
+                                path.display(),
+                                e
+                            )
+                        });
                 }
                 
                 log::info!("Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}", path.display());
