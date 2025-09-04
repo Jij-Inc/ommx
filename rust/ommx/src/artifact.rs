@@ -138,6 +138,9 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
     let dirs = gather_oci_dirs(root)?;
     dirs.into_iter()
         .map(|dir| {
