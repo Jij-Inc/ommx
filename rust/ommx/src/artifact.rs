@@ -90,8 +90,15 @@ pub fn data_dir() -> Result<PathBuf> {
     Ok(path)
 }
 
+/// Get the directory for the given image name in the local registry
+pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
+    get_local_registry_root().join(image_name.as_path())
+}
+
+#[deprecated(note = "Use get_image_dir instead")]
 pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
-    Ok(get_local_registry_root().join(image_name.as_path()))
+    #[allow(deprecated)]
+    Ok(data_dir()?.join(image_name.as_path()))
 }
 
 pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
@@ -138,9 +145,6 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
-    if !root.exists() {
-        return Ok(Vec::new());
-    }
     let dirs = gather_oci_dirs(root)?;
     dirs.into_iter()
         .map(|dir| {
@@ -187,7 +191,7 @@ impl Artifact<OciArchive> {
 
     pub fn load(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
-        let path = image_dir(&image_name)?;
+        let path = get_image_dir(&image_name);
         if path.exists() {
             log::trace!("Already exists in local registry: {}", path.display());
             return Ok(());
@@ -237,7 +241,7 @@ impl Artifact<Remote> {
 
     pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
-        let path = image_dir(&image_name)?;
+        let path = get_image_dir(&image_name);
         if path.exists() {
             log::trace!("Already exists in local registry: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
