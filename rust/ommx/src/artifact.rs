@@ -21,30 +21,78 @@ use ocipkg::{
     Digest, ImageName,
 };
 use prost::Message;
-use std::{env, path::PathBuf};
+use std::{env, path::PathBuf, sync::OnceLock};
 use std::{
     ops::{Deref, DerefMut},
     path::Path,
 };
 
-/// Root directory for OMMX local registry
+/// Global storage for the local registry root path
+static LOCAL_REGISTRY_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Get the default local registry path using the system's project directories
+fn default_local_registry_path() -> PathBuf {
+    directories::ProjectDirs::from("org", "ommx", "ommx")
+        .expect("Failed to get project directories")
+        .data_dir()
+        .to_path_buf()
+}
+
+/// Set the root directory for OMMX local registry
 /// 
-/// Uses `OMMX_LOCAL_REGISTRY_ROOT` environment variable if set,
-/// otherwise uses the default project data directory
-pub fn data_dir() -> Result<PathBuf> {
-    if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
-        let path = PathBuf::from(custom_dir);
-        if !path.exists() {
-            std::fs::create_dir_all(&path)
-                .with_context(|| format!("Failed to create local registry directory: {}", path.display()))?;
-        }
-        return Ok(path);
+/// This function can only be called once. Subsequent calls will return an error.
+/// If not called, the registry will use either the OMMX_LOCAL_REGISTRY_ROOT
+/// environment variable or the default project directory.
+pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
+    let path = path.into();
+    
+    // Create directory if it doesn't exist
+    if !path.exists() {
+        std::fs::create_dir_all(&path)
+            .with_context(|| format!("Failed to create local registry directory: {}", path.display()))?;
     }
     
-    Ok(directories::ProjectDirs::from("org", "ommx", "ommx")
-        .context("Failed to get project directories")?
-        .data_dir()
-        .to_path_buf())
+    LOCAL_REGISTRY_ROOT
+        .set(path.clone())
+        .map_err(|_| anyhow::anyhow!("Local registry root has already been set"))?;
+    
+    log::info!("Local registry root set via API: {}", path.display());
+    Ok(())
+}
+
+/// Get the root directory for OMMX local registry
+/// 
+/// If not previously set via `set_local_registry_root`, this will check the
+/// OMMX_LOCAL_REGISTRY_ROOT environment variable. If that's not set either,
+/// it will use the default project data directory.
+pub fn data_dir() -> Result<PathBuf> {
+    Ok(LOCAL_REGISTRY_ROOT
+        .get_or_init(|| {
+            // Try environment variable first
+            if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
+                let path = PathBuf::from(custom_dir);
+                
+                // Create directory if it doesn't exist
+                if !path.exists() {
+                    if let Err(e) = std::fs::create_dir_all(&path) {
+                        log::error!("Failed to create local registry directory from env var: {}", e);
+                        // Fall back to default
+                        let default_path = default_local_registry_path();
+                        log::info!("Local registry root initialized to default: {}", default_path.display());
+                        return default_path;
+                    }
+                }
+                
+                log::info!("Local registry root initialized from OMMX_LOCAL_REGISTRY_ROOT: {}", path.display());
+                return path;
+            }
+            
+            // Fall back to default project directory
+            let default_path = default_local_registry_path();
+            log::info!("Local registry root initialized to default: {}", default_path.display());
+            default_path
+        })
+        .clone())
 }
 
 pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
