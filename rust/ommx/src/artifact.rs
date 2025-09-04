@@ -60,12 +60,17 @@ pub fn set_local_registry_root(path: impl Into<PathBuf>) -> Result<()> {
     Ok(())
 }
 
+#[deprecated(note = "Use get_local_registry_root instead")]
+pub fn data_dir() -> Result<PathBuf> {
+    get_local_registry_root()
+}
+
 /// Get the root directory for OMMX local registry
 /// 
 /// If not previously set via `set_local_registry_root`, this will check the
 /// OMMX_LOCAL_REGISTRY_ROOT environment variable. If that's not set either,
 /// it will use the default project data directory.
-pub fn data_dir() -> Result<PathBuf> {
+pub fn get_local_registry_root() -> Result<PathBuf> {
     // TODO: Once get_or_try_init is stabilized, use it instead of get_or_init with panic
     // This would allow proper error propagation instead of panicking on directory creation failure
     Ok(LOCAL_REGISTRY_ROOT
@@ -99,7 +104,7 @@ pub fn data_dir() -> Result<PathBuf> {
 }
 
 pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
-    Ok(data_dir()?.join(image_name.as_path()))
+    Ok(get_local_registry_root()?.join(image_name.as_path()))
 }
 
 pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
@@ -145,7 +150,7 @@ fn auth_from_env() -> Result<(String, String, String)> {
 
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
-    let root = data_dir()?;
+    let root = get_local_registry_root()?;
     let dirs = gather_oci_dirs(&root)?;
     dirs.into_iter()
         .map(|dir| {
