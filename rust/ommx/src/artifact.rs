@@ -27,8 +27,20 @@ use std::{
     path::Path,
 };
 
-/// Root directory for OMMX artifacts
+/// Root directory for OMMX local registry
+/// 
+/// Uses `OMMX_LOCAL_REGISTRY_ROOT` environment variable if set,
+/// otherwise uses the default project data directory
 pub fn data_dir() -> Result<PathBuf> {
+    if let Ok(custom_dir) = env::var("OMMX_LOCAL_REGISTRY_ROOT") {
+        let path = PathBuf::from(custom_dir);
+        if !path.exists() {
+            std::fs::create_dir_all(&path)
+                .with_context(|| format!("Failed to create local registry directory: {}", path.display()))?;
+        }
+        return Ok(path);
+    }
+    
     Ok(directories::ProjectDirs::from("org", "ommx", "ommx")
         .context("Failed to get project directories")?
         .data_dir()
@@ -80,6 +92,7 @@ fn auth_from_env() -> Result<(String, String, String)> {
     bail!("No authentication information found in environment variables");
 }
 
+/// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = data_dir()?;
     let dirs = gather_oci_dirs(&root)?;
@@ -130,10 +143,10 @@ impl Artifact<OciArchive> {
         let image_name = self.get_name()?;
         let path = image_dir(&image_name)?;
         if path.exists() {
-            log::trace!("Already exists in locally: {}", path.display());
+            log::trace!("Already exists in local registry: {}", path.display());
             return Ok(());
         }
-        log::info!("Loading: {image_name}");
+        log::info!("Loading to local registry: {image_name}");
         ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
         Ok(())
     }
@@ -180,10 +193,10 @@ impl Artifact<Remote> {
         let image_name = self.get_name()?;
         let path = image_dir(&image_name)?;
         if path.exists() {
-            log::trace!("Already exists in locally: {}", path.display());
+            log::trace!("Already exists in local registry: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
         }
-        log::info!("Pulling: {image_name}");
+        log::info!("Pulling to local registry: {image_name}");
         if let Ok((domain, username, password)) = auth_from_env() {
             self.0.add_basic_auth(&domain, &username, &password);
         }
