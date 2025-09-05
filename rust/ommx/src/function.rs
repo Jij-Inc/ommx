@@ -72,7 +72,7 @@ impl Function {
         }
     }
 
-    pub fn as_linear(&self) -> Option<Cow<Linear>> {
+    pub fn as_linear(&self) -> Option<Cow<'_, Linear>> {
         match self {
             Function::Zero => Some(Cow::Owned(Linear::zero())),
             Function::Constant(c) => Some(Cow::Owned((*c).into())),
@@ -82,7 +82,7 @@ impl Function {
         }
     }
 
-    pub fn as_quadratic(&self) -> Option<Cow<Quadratic>> {
+    pub fn as_quadratic(&self) -> Option<Cow<'_, Quadratic>> {
         match self {
             Function::Zero => Some(Cow::Owned(Quadratic::zero())),
             Function::Constant(c) => Some(Cow::Owned((*c).into())),

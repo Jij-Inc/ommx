@@ -5,7 +5,7 @@ use ocipkg::{
     image::{Image, OciArchive, OciDir},
     Digest, ImageName,
 };
-use ommx::artifact::{image_dir, Artifact};
+use ommx::artifact::{get_image_dir, Artifact};
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
@@ -83,7 +83,7 @@ impl ArtifactDir {
     #[staticmethod]
     pub fn from_image_name(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let local_path = image_dir(&image_name)?;
+        let local_path = get_image_dir(&image_name);
         if local_path.exists() {
             return Ok(Self(Artifact::from_oci_dir(&local_path)?));
         }
