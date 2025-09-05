@@ -5,7 +5,7 @@ use ocipkg::{
     image::{Image, OciArchive, OciDir},
     Digest, ImageName,
 };
-use ommx::artifact::{get_image_dir, Artifact};
+use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
@@ -83,7 +83,7 @@ impl ArtifactDir {
     #[staticmethod]
     pub fn from_image_name(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let local_path = get_image_dir(&image_name);
+        let local_path = ommx::artifact::get_image_dir(&image_name);
         if local_path.exists() {
             return Ok(Self(Artifact::from_oci_dir(&local_path)?));
         }
@@ -156,4 +156,11 @@ pub fn get_local_registry_root() -> PathBuf {
 pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
     ommx::artifact::set_local_registry_root(path)?;
     Ok(())
+}
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
+    let image_name = ImageName::parse(image_name)?;
+    Ok(ommx::artifact::get_image_dir(&image_name))
 }
