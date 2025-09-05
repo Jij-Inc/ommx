@@ -76,6 +76,8 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<ArtifactArchiveBuilder>()?;
     m.add_class::<ArtifactDirBuilder>()?;
     m.add_class::<PyDescriptor>()?;
+    m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
+    m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
 
     // OMMX Message
     m.add_class::<Linear>()?;
