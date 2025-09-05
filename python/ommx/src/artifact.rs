@@ -132,3 +132,28 @@ impl ArtifactDir {
         Ok(())
     }
 }
+
+/// Get the current OMMX Local Registry root path.
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_local_registry_root() -> PathBuf {
+    ommx::artifact::get_local_registry_root().to_path_buf()
+}
+
+/// Set the OMMX Local Registry root path.
+///
+/// - The local registry root can be set only once per process,
+///   and this function will return an error if it is already set.
+/// - The root path is automatically set when used for creating artifacts without calling this function.
+/// - Default path is following:
+///   - If `OMMX_LOCAL_REGISTRY_ROOT` environment variable is set, its value is used.
+///   - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:
+///     - `$XDG_DATA_HOME/ommx/` on Linux
+///     - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS
+///
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
+    ommx::artifact::set_local_registry_root(path)?;
+    Ok(())
+}
