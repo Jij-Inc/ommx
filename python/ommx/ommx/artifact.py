@@ -14,8 +14,26 @@ from ._ommx_rust import (
     Descriptor,
     ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
     ArtifactDirBuilder as _ArtifactDirBuilder,
+    get_local_registry_root,
+    set_local_registry_root,
+    get_image_dir,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
+
+
+__all__ = [
+    "Artifact",
+    "ArtifactBuilder",
+    "ArtifactBase",
+    "ArtifactDir",
+    "ArtifactDirBuilder",
+    "ArtifactArchive",
+    "ArtifactArchiveBuilder",
+    "Descriptor",
+    "get_local_registry_root",
+    "set_local_registry_root",
+    "get_image_dir",
+]
 
 
 class ArtifactBase(ABC):
