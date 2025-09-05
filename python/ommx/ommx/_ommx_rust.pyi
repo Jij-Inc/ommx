@@ -1176,7 +1176,25 @@ class Sense(Enum):
     def __str__(self) -> builtins.str: ...
 
 def get_default_atol() -> builtins.float: ...
+def get_local_registry_root() -> builtins.str:
+    r"""
+    Get the current OMMX Local Registry root path.
+    """
+
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
 def set_default_atol(value: builtins.float) -> None: ...
+def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
+    r"""
+    Set the OMMX Local Registry root path.
+
+    - The local registry root can be set only once per process,
+      and this function will return an error if it is already set.
+    - The root path is automatically set when used for creating artifacts without calling this function.
+    - Default path is following:
+      - If `OMMX_LOCAL_REGISTRY_ROOT` environment variable is set, its value is used.
+      - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:
+        - `$XDG_DATA_HOME/ommx/` on Linux
+        - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS
+    """
