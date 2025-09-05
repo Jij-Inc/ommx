@@ -158,6 +158,10 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
+/// Get the path where given image is stored in the local registry.
+///
+/// - The directory may not exist if the image is not in the local registry.
+///
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
 #[pyfunction]
 pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
