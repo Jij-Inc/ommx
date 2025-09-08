@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v5
       # Windows requires local Python
       - name: Setup Python
-        uses: actions/setup-python@v5.6.0
+        uses: actions/setup-python@v6
         with:
           python-version: 3.13t
           cache: "pip"
