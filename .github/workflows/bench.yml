@@ -24,7 +24,7 @@ jobs:
       - name: Build CodSpeed Benchmark Target(s)
         run: cargo codspeed build
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           run: cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           # CodSpeed looks working with `sys.monitoring`, which has been introduced in 3.12,
           # but updates in 3.13 seems to be required for generating trace information.
@@ -49,7 +49,7 @@ jobs:
           pip install pytest-codspeed
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
           run: pytest python/ommx-tests/ --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
