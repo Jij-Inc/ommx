@@ -873,18 +873,18 @@ class Instance(UserAnnotationBase):
 
         1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
         2. Check continuous variables and raise error if exists.
-        3. Log-encode integer variables by :py:meth:`log_encode`.
-        4. Convert inequality constraints
+        3. Convert inequality constraints
 
             * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
             * If failed, :py:meth:`add_integer_slack_to_inequality`
 
-        5. Convert to HUBO with (uniform) penalty method
+        4. Convert to HUBO with (uniform) penalty method
 
             * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
             * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
             * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
 
+        5. Log-encode integer variables by :py:meth:`log_encode`.
         6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
 
         Please see the documentation for `to_qubo` for more information, or the
