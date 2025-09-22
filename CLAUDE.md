@@ -1,133 +1,222 @@
-# CLAUDE.md
+# OMMX GitHub Copilot Instructions
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**FOLLOW THESE INSTRUCTIONS FIRST.** Only fallback to additional search and context gathering if the information in these instructions is incomplete or found to be in error.
 
-## Project Overview
+OMMX (Open Mathematical prograMming eXchange) is a multi-language optimization ecosystem with Rust core, Python bindings, and solver adapters. It uses Protocol Buffers for data interchange and maturin for Python-Rust integration.
 
-OMMX (Open Mathematical prograMming eXchange) is an open ecosystem for mathematical programming and optimization. It consists of:
+## Working Effectively
 
-- **Protocol Buffers Schema**: Message definitions in `proto/` for optimization problems, solutions, and metadata
-- **Rust SDK**: Core library and tools in `rust/ommx/` with PyO3 bindings for Python
-- **Python SDK**: Main package `ommx` and multiple solver adapters in `python/`
-- **Documentation**: Jupyter Books in English/Japanese and API references
+### Prerequisites Installation
+Install these tools in order:
+```bash
+# Install Taskfile (required for all operations)
+sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
 
-## Architecture
+# Install Protocol Buffers tools
+sudo apt-get update && sudo apt-get install -y protobuf-compiler
+curl -sSL https://github.com/bufbuild/buf/releases/latest/download/buf-Linux-x86_64 -o /usr/local/bin/buf
+sudo chmod +x /usr/local/bin/buf
 
-### Multi-Language Design
-- **Rust**: Core implementation with performance-critical operations
-- **Python**: High-level API and solver integrations via PyO3 bindings
-- **Protocol Buffers**: Language-agnostic message schema for interoperability
+# Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+source "$HOME/.cargo/env"
 
-### Key Components
-1. **Message Schema** (`proto/`): Core data structures for optimization problems, constraints, solutions
-2. **Rust SDK** (`rust/ommx/`): Core algorithms, parsing, evaluation, artifact management
-3. **Python SDK** (`python/ommx/`): PyO3 bindings to Rust + Python-specific utilities
-4. **Solver Adapters** (`python/ommx-*-adapter/`): Integrations with OSS optimization solvers
+# Install uv for Python management
+pip install uv
+```
 
-## Current Implementation Status
+### Bootstrap Development Environment
+**NEVER CANCEL THESE COMMANDS** - Initial setup can take 15-45 minutes:
+```bash
+# Set Python version (required)
+echo "cpython@3.9" > .python-version
 
-### Rust SDK v2 Migration Completed ✅
+# Generate Protocol Buffer code - takes 5-10 minutes
+task proto
 
-The project has completed its migration from Protocol Buffers auto-generated Python classes to high-performance Rust implementations with PyO3 bindings.
+# Setup Python environment - takes 10-30 minutes, NEVER CANCEL
+task python:sync
 
-**Design Philosophy**:
-- Replace `ommx::v1::*` (protobuf auto-generated) with `ommx::*` (Rust native types)
-- Improve type safety and reduce runtime errors
-- Enable efficient data structures for deduplication
+# Verify setup works
+task -l
+```
 
-**IMPORTANT: Feasibility Semantics**:
-- **`feasible`**: Considers ALL constraints (including removed ones with `removed_reason.is_some()`)
-- **`feasible_relaxed`**: Only considers active constraints where `removed_reason.is_none()`
-- **`feasible_unrelaxed`**: Always identical to `feasible` (deprecated field maintained for backward compatibility)
-- This distinction is critical for constraint relaxation scenarios where removed constraints should not affect relaxed feasibility
-
-**Implementation Details**: See actual code in `rust/ommx/src/` for current type definitions and API.
-
-## Development Commands
-
-This project uses [Taskfile](https://taskfile.dev/) for task management. **⚠️ All commands must be run from the project root directory.**
+### Build and Test Commands
+**TIMING EXPECTATIONS - NEVER CANCEL:**
+- `task proto` - 30 seconds: Generate all protobuf code (Rust=12s, Python may fail offline)
+- `task python:sync` - 3-10 minutes: Install dependencies and build Rust extensions (measured: 2m41s)
+- `task python:test` - 15-45 minutes: Run all Python tests including adapters
+- `task rust:test` - 2-5 minutes: Run all Rust tests (measured: 1m7s, 294 tests)
+- `task rust:check` - 1-2 minutes: Check Rust compilation (measured: 52s)
+- `task format` - 2-5 minutes: Format all code
 
 **Essential Commands:**
 ```bash
-# Setup
-task python:sync               # Setup Python development environment
-task python:upgrade           # Install/upgrade dependencies
+# Build everything from scratch - 5-15 minutes total, NEVER CANCEL
+task proto && task python:sync
 
-# Testing
-task python:test              # Run all Python tests (linting, type checking, pytest)
-task rust:test               # Run Rust tests only
-task format                  # Format all code (Python and Rust)
+# Run all tests - 20-50 minutes, NEVER CANCEL
+task python:test
+task rust:test
 
-# Development
-task proto                   # Generate all protobuf code
-task rust:check             # Run cargo check
-task rust:clippy            # Run Rust linting
-task python:lint            # Run Python linting
-
-# Documentation
-task api_reference          # Build and open Python API docs
-task book_en                # Build and open English Jupyter Book
+# Quick validation (after making changes) - 3-7 minutes
+task format && task python:lint && task rust:clippy
 ```
 
-**Package-Specific Testing:**
-- `task python:ommx:test` - Test main Python package
-- `task python:ommx-*-adapter:test` - Test specific adapter
+## Project Structure
 
-Run `task -l` to see all available commands.
+### Key Directories
+- `proto/` - Protocol Buffer message definitions (core data structures)
+- `rust/ommx/` - Core Rust SDK implementation
+- `python/ommx/` - Main Python package with Rust bindings
+- `python/ommx-*-adapter/` - Solver-specific adapters
+- `python/ommx-tests/` - All Python tests
+- `docs/` - Jupyter Books documentation (English/Japanese)
 
-## Development Guidelines
+### Critical Files
+- `Taskfile.yml` - Main task runner configuration
+- `CLAUDE.md` - Detailed development guidelines (READ THIS)
+- `DEVELOPMENT.md` - Developer documentation
+- `.github/workflows/` - CI/CD pipelines
+- `python/ommx/pyproject.toml` - Python package configuration with maturin
 
-### Core Development Principles
-1. **API Philosophy**: Always use `ommx.v1` unified API, avoid direct `_ommx_rust` imports
-2. **Incremental Development**: Make small changes → test → commit
-3. **Always run `task python:test` after making changes**
-4. **Prefer extending Python SDK over using raw APIs**
+## Validation Scenarios
 
-### Adapter Development
-When developing solver adapters:
-- Use only `ommx.v1` imports, avoid Protocol Buffer direct imports
-- Let Python SDK handle type conversions
-- Add missing functionality to Python SDK classes, not raw API usage
+**ALWAYS test these scenarios after making changes:**
 
-**Good Pattern:**
-```python
+### 1. Basic SDK Functionality
+```bash
+# Test core Python SDK - must work after python:sync
+cd python/ommx-tests
+uv run python -c "
+from ommx.v1 import DecisionVariable, Instance, Solution
+x = DecisionVariable.binary(0)
+constraint = x == 1
+print('Basic SDK import and usage: OK')
+"
+```
+
+### 2. Rust Core Validation
+```bash
+# Test Rust SDK (fast validation) - 1-2 minutes
+task rust:test
+# Expected: 294+ tests pass, compilation succeeds in ~1-2 minutes
+```
+
+### 3. Adapter Functionality
+```bash
+# Test a solver adapter works
+task python:ommx-highs-adapter:test
+# Expected: All tests pass, including integration tests with actual solving
+```
+
+### 3. Documentation Build
+```bash
+# Test documentation builds - takes 10-20 minutes, NEVER CANCEL
+task book_en
+# Expected: Jupyter Book builds successfully, opens in browser
+```
+
+### 4. Full Integration Test
+```bash
+# Run comprehensive test suite - 45-90 minutes, NEVER CANCEL
+task python:test
+# Expected: All packages pass linting, type checking, and unit tests
+```
+
+## Development Rules
+
+### Critical Prohibitions
+- **NEVER use `cd` command** - Always work from repository root
+- **NEVER import from `_ommx_rust`** - Use `ommx.v1` unified API only
+- **NEVER modify v1_ext directory** - Contains deprecated implementations
+- **NEVER claim performance improvements without benchmarks**
+
+### Quality Requirements
+- **ALWAYS run `task format` before committing**
+- **ALWAYS ensure `task python:test` passes completely**
+- Add tests only to `python/ommx-tests/tests/`
+- Use `ommx.v1` imports in all new code
+
+### Timing and Cancellation Rules
+- **NEVER CANCEL build or test commands**
+- Set timeouts to at least 60 minutes for builds, 90 minutes for full test suites
+- Initial setup can take 45+ minutes - this is normal
+- If a command appears stuck, wait at least 60 minutes before investigating
+
+## Common Tasks
+
+### Working with Adapters
+```bash
+# Create/modify solver adapters
+# Good pattern:
 from ommx.v1 import Instance, DecisionVariable, Function, Solution
-```
 
-**Bad Pattern:**
-```python
+# Bad pattern (DO NOT USE):
 from ommx._ommx_rust import Function
 from ommx.v1.solution_pb2 import Optimality
 ```
 
-## Critical Development Rules
+### Testing Changes
+```bash
+# Test specific components
+task python:ommx:test              # Core Python SDK only
+task python:ommx-highs-adapter:test # Specific adapter
+task rust:test                     # Rust SDK only
 
-### 🚫 Prohibitions
-- **NEVER use `cd` command** - Work from repository root only
-- **NEVER import from `_ommx_rust` in adapters** - Use `ommx.v1` unified API
-- **NEVER modify v1_ext directory** - Contains deprecated implementations
+# Pre-commit validation
+task format && task python:lint && task rust:clippy
+```
 
-### 🧪 Testing & Quality
-- Add tests to `python/ommx-tests/tests` only
-- Always run `task format` before committing
-- Ensure `task python:test` passes completely
+### Protocol Buffer Changes
+```bash
+# After modifying .proto files
+task proto                         # Regenerate all bindings
+task python:sync                   # Rebuild Python extensions
+```
 
-### 📊 Performance Claims Policy
-- **NEVER claim performance improvements without benchmarks**
-- Only make performance claims backed by concrete measurements
-- Use terms like "improved type safety" or "better API design" for non-performance benefits
-- If making performance claims, include benchmark data and methodology
+### Documentation
+```bash
+# Build API reference - 10-15 minutes
+task api_reference
 
-### 📝 Rust SDK Testing Guidelines
-- Use `assert_abs_diff_eq!` to compare entire polynomials instead of checking individual terms with `get`
-- Include clear comments in test cases explaining the intent and expected behavior
-- **Test Design Requirements**:
-  - Document what each test is checking with clear test names and comments
-  - Avoid redundant tests - check for overlapping test coverage
-  - Consider using helper functions to reduce duplication
-  - Group related assertions together
-- **Test Redundancy Prevention**:
-  - Before adding a new test, review existing tests to ensure it provides unique value
-  - If multiple tests share similar setup code, extract it into helper functions
-  - Consolidate tests that verify the same behavior with different inputs into parameterized tests where appropriate
-  - Each test should have a single clear purpose
+# Build books - 15-25 minutes each
+task book_en    # English
+task book_ja    # Japanese
+```
+
+## Troubleshooting
+
+### Build Failures
+1. **Network connectivity issues**: Most common cause of build failures
+   - Check internet access: `ping crates.io`
+   - Corporate firewalls may block crates.io, pypi.org, buf.build
+   - Retry commands - network issues often resolve themselves
+2. Ensure all prerequisites are installed in correct order
+3. Clean and retry: `rm -rf target/ python/ommx/.venv/` then restart setup
+
+### Test Failures
+1. Run `task python:sync` to ensure latest build
+2. Check specific test with `task python:ommx:pytest` for detailed output
+3. Verify solver adapters have required external solvers installed
+
+### Performance Issues
+- Large compile times are normal for Rust-Python integration
+- Initial Python sync rebuilds Rust extensions completely
+- Subsequent builds use cargo caching (much faster)
+
+### Network Environment Issues
+- Sandboxed environments may have limited network access
+- `task proto` may fail on `buf generate` but `cargo run --bin protogen` often works
+- Download failures from crates.io or PyPI indicate network restrictions
+
+## Expected Timings Summary
+- Prerequisites installation: 5-10 minutes
+- Initial setup (proto + python:sync): 3-12 minutes (measured: ~3.5 min total)
+- Rust tests only: 2-5 minutes (measured: 1m7s, 294 tests)
+- Python tests (all adapters): 15-45 minutes
+- Documentation builds: 15-25 minutes per book
+- Format/lint checks: 2-5 minutes
+- Incremental builds after changes: 1-5 minutes
+
+**REMEMBER: NEVER CANCEL long-running operations. Even quick operations can take longer in CI environments.**
