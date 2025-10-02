@@ -73,15 +73,17 @@ impl RawEntry {
     fn as_annotation(&self) -> InstanceAnnotations {
         let mut annotation = InstanceAnnotations::default();
         annotation.set_title(self.name.clone());
-        annotation.set_created_now();
         if !self.donor.is_empty() {
             annotation.set_authors(vec![self.donor.clone()]);
         }
         // QPLIB is licensed under CC-BY 4.0 as of August 30, 2021
         annotation.set_license("CC-BY-4.0".to_string());
         annotation.set_dataset("QPLIB".to_string());
-        annotation.set_variables(self.nvars);
-        annotation.set_constraints(self.ncons);
+
+        // Store QPLIB's original counts in qplib namespace
+        // Note: QPLIB and OMMX may count constraints differently (e.g., l <= f(x) <= u)
+        annotation.set_other("org.ommx.qplib.nvars".to_string(), self.nvars.to_string());
+        annotation.set_other("org.ommx.qplib.ncons".to_string(), self.ncons.to_string());
 
         // QPLIB specific annotations - variable counts
         for (key, value) in [
@@ -233,10 +235,10 @@ impl RawEntry {
 /// // Common annotations
 /// assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
 /// assert_eq!(annotation.dataset().unwrap(), "QPLIB");
-/// assert_eq!(annotation.variables().unwrap(), 50);
-/// assert_eq!(annotation.constraints().unwrap(), 1);
 ///
-/// // QPLIB specific annotations
+/// // QPLIB specific annotations (QPLIB's original counts)
+/// assert_eq!(annotation.get("org.ommx.qplib.nvars").unwrap(), "50");
+/// assert_eq!(annotation.get("org.ommx.qplib.ncons").unwrap(), "1");
 /// assert_eq!(annotation.get("org.ommx.qplib.objtype").unwrap(), "quadratic");
 /// assert_eq!(annotation.get("org.ommx.qplib.objcurvature").unwrap(), "indefinite");
 /// assert_eq!(annotation.get("org.ommx.qplib.probtype").unwrap(), "QCL");
@@ -253,14 +255,28 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
 }
 
 /// Load an instance from the QPLIB dataset
-pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+///
+/// # Arguments
+///
+/// * `tag` - The numeric tag of the QPLIB instance (e.g., "3856" for QPLIB_3856)
+///
+/// # Example
+///
+/// ```no_run
+/// use ommx::dataset::qplib;
+///
+/// let (instance, annotation) = qplib::load("3856").unwrap();
+/// assert_eq!(annotation.title().unwrap(), "QPLIB_3856");
+/// ```
+pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
+    let full_name = format!("QPLIB_{}", tag);
     let annotations = instance_annotations();
     ensure!(
-        annotations.contains_key(name),
-        "Given name '{name}' does not exist in QPLIB"
+        annotations.contains_key(&full_name),
+        "Given tag '{tag}' (QPLIB_{tag}) does not exist in QPLIB"
     );
 
-    let image_name = ghcr("Jij-Inc", "ommx", "qplib", name)?;
+    let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
     let mut artifact = Artifact::from_remote(image_name)?.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(

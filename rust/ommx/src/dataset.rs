@@ -21,11 +21,11 @@
 //!
 //! QPLIB is a collection of quadratic programming (QP) instances.
 //!
-//! ```rust
+//! ```no_run
 //! use ommx::dataset::qplib;
 //!
-//! // Get an instance and its annotations
-//! let (instance, annotation) = qplib::load("QPLIB_0018").unwrap();
+//! // Get an instance and its annotations (use numeric tag)
+//! let (instance, annotation) = qplib::load("0018").unwrap();
 //!
 //! // Metadata of the QPLIB instance is stored in the annotation
 //! assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
