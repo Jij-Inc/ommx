@@ -167,9 +167,9 @@ fn is_oci_archive(path: &Path) -> bool {
         }
     }
     
-    // Try to parse as OCI archive to determine if it's a valid archive
-    // This is a more robust check but potentially expensive
-    OciArtifact::from_oci_archive(path).is_ok()
+    // For files without recognized extensions, don't try to parse them
+    // as this could be expensive and most files won't be OCI archives
+    false
 }
 
 fn auth_from_env() -> Result<(String, String, String)> {
@@ -199,7 +199,7 @@ pub fn get_images() -> Result<Vec<ImageName>> {
             // For archive files, we need to extract the image name differently
             if artifact_path.is_file() {
                 // Try to extract image name from the archive metadata
-                if let Ok(artifact) = Artifact::from_oci_archive(&artifact_path) {
+                if let Ok(mut artifact) = Artifact::from_oci_archive(&artifact_path) {
                     if let Ok(name) = artifact.get_name() {
                         return Ok(name);
                     }
@@ -442,5 +442,107 @@ impl<Base: Image> Artifact<Base> {
             out.push((desc, instance));
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_is_oci_archive_extension() {
+        // Create temporary files to test extension-based detection
+        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let temp_ommx = temp_dir.join("test.ommx");
+        let temp_txt = temp_dir.join("test.txt");
+        
+        fs::write(&temp_ommx, b"").unwrap();
+        fs::write(&temp_txt, b"").unwrap();
+        
+        // Should return true for .ommx extension even if content is invalid
+        assert!(is_oci_archive(&temp_ommx));
+        // Should return false for .txt extension
+        assert!(!is_oci_archive(&temp_txt));
+        
+        fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_get_artifact_path_none_when_not_exists() {
+        // Test with a non-existent image name
+        let image_name = ImageName::parse("test.local/nonexistent:v1").unwrap();
+        let result = get_artifact_path(&image_name);
+        
+        // Should return None for non-existent artifacts
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_gather_artifacts_empty_dir() {
+        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        let result = gather_artifacts(&temp_dir).unwrap();
+        assert!(result.is_empty());
+        fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test] 
+    fn test_gather_artifacts_with_mock_oci_dir() {
+        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        
+        // Create a mock OCI directory structure
+        let oci_dir = temp_dir.join("test-image");
+        fs::create_dir_all(&oci_dir).unwrap();
+        fs::write(oci_dir.join("oci-layout"), r#"{"imageLayoutVersion": "1.0.0"}"#).unwrap();
+        
+        let result = gather_artifacts(&temp_dir).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], oci_dir);
+        
+        fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_gather_artifacts_with_mock_oci_archive() {
+        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        
+        // Create a mock OCI archive file (just an empty .ommx file)
+        let archive_file = temp_dir.join("test-artifact.ommx");
+        fs::write(&archive_file, b"").unwrap();
+        
+        let result = gather_artifacts(&temp_dir).unwrap();
+        // Should find the .ommx file, even though it's not a valid OCI archive
+        // because it has the right extension
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], archive_file);
+        
+        fs::remove_dir_all(&temp_dir).unwrap();
+    }
+
+    #[test]
+    fn test_gather_artifacts_mixed_formats() {
+        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&temp_dir).unwrap();
+        
+        // Create both OCI directory and archive
+        let oci_dir = temp_dir.join("test-dir");
+        fs::create_dir_all(&oci_dir).unwrap();
+        fs::write(oci_dir.join("oci-layout"), r#"{"imageLayoutVersion": "1.0.0"}"#).unwrap();
+        
+        let archive_file = temp_dir.join("test-archive.ommx");
+        fs::write(&archive_file, b"").unwrap();
+        
+        let result = gather_artifacts(&temp_dir).unwrap();
+        assert_eq!(result.len(), 2);
+        
+        // Should find both formats
+        assert!(result.contains(&oci_dir));
+        assert!(result.contains(&archive_file));
+        
+        fs::remove_dir_all(&temp_dir).unwrap();
     }
 }
