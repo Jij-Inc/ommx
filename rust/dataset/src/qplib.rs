@@ -50,27 +50,18 @@ pub fn package(path: &Path) -> Result<()> {
             }
         };
 
-        // Get CSV metadata for this instance
-        let csv_annotation = match csv_annotations.get(&name) {
-            Some(ann) => ann,
-            None => {
+        // Get CSV metadata for this instance, or create basic annotations
+        let mut annotations = csv_annotations
+            .get(&name)
+            .cloned()
+            .unwrap_or_else(|| {
                 log::warn!("No CSV metadata found for instance '{name}', using basic annotations");
-                // Create basic annotations if CSV metadata is missing
-                let mut annotations = ommx::artifact::InstanceAnnotations::default();
-                annotations.set_title(name.clone());
-                annotations.set_created_now();
-                annotations.set_dataset("QPLIB".to_string());
-                annotations.set_variables(instance.decision_variables().len());
-                annotations.set_constraints(instance.constraints().len());
+                let mut ann = ommx::artifact::InstanceAnnotations::default();
+                ann.set_title(name.clone());
+                ann.set_dataset("QPLIB".to_string());
+                ann
+            });
 
-                builder.add_instance(instance.into(), annotations)?;
-                let _artifact = builder.build()?;
-                continue;
-            }
-        };
-
-        // Use CSV annotations enriched with all metadata
-        let mut annotations = csv_annotation.clone();
         annotations.set_created_now();
 
         // Override variables and constraints with actual parsed values

@@ -80,7 +80,6 @@ impl RawEntry {
     fn as_annotation(&self) -> InstanceAnnotations {
         let mut annotation = InstanceAnnotations::default();
         annotation.set_title(self.instance.clone());
-        annotation.set_created_now();
         annotation.set_authors(
             self.submitter
                 .split(',')
