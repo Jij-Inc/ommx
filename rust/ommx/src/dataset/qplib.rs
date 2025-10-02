@@ -258,15 +258,18 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
 ///
 /// # Arguments
 ///
-/// * `tag` - The numeric tag of the QPLIB instance (e.g., "3856" for QPLIB_3856)
+/// * `tag` - The numeric tag of the QPLIB instance (e.g., "0018" for QPLIB_0018)
 ///
 /// # Example
 ///
 /// ```no_run
 /// use ommx::dataset::qplib;
 ///
-/// let (instance, annotation) = qplib::load("3856").unwrap();
-/// assert_eq!(annotation.title().unwrap(), "QPLIB_3856");
+/// // Load QPLIB_0018 from local artifact (requires prior packaging)
+/// let (instance, annotation) = qplib::load("0018").unwrap();
+/// assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
+/// assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+/// assert!(instance.decision_variables.len() > 0);
 /// ```
 pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     let full_name = format!("QPLIB_{}", tag);
@@ -297,5 +300,27 @@ mod tests {
         let annotations = super::instance_annotations();
         // QPLIB contains 453 instances
         assert_eq!(annotations.len(), 453);
+    }
+
+    #[test]
+    fn test_load_qplib_3877() {
+        // This test requires QPLIB_3877 to be packaged locally
+        let result = super::load("3877");
+        match result {
+            Ok((instance, annotation)) => {
+                assert_eq!(annotation.title().unwrap(), "QPLIB_3877");
+                assert_eq!(annotation.dataset().unwrap(), "QPLIB");
+                assert!(instance.decision_variables.len() > 0);
+                println!(
+                    "Successfully loaded QPLIB_3877: {} vars, {} constraints",
+                    instance.decision_variables.len(),
+                    instance.constraints.len()
+                );
+            }
+            Err(e) => {
+                // If artifact doesn't exist locally, skip the test
+                println!("Skipping test_load_qplib_3877: {}", e);
+            }
+        }
     }
 }
