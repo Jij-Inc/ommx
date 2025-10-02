@@ -51,3 +51,53 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
 
 Note that other annotations listed above are also allowed.
 The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name as specified by OCI specification.
+
+Storage Formats
+---------------
+
+OMMX Local Registry supports two storage formats for artifacts:
+
+### OCI Directory Format (oci-dir)
+
+The traditional format where artifacts are stored as directory structures following the OCI Image Layout specification. Each artifact is stored as a directory containing:
+- `oci-layout` file indicating OCI compliance
+- `blobs/` directory containing content-addressable blobs
+- `index.json` file with manifest references
+
+This format is suitable for:
+- Local development and testing
+- File system-based storage
+- Cases where individual blobs need direct access
+
+### OCI Archive Format (oci-archive)
+
+A single-file format where the entire artifact is packaged as a tar archive with `.ommx` extension. This format contains the same OCI structure but packaged for easier distribution.
+
+This format is suitable for:
+- Cloud object storage systems (AWS S3, Google Cloud Storage, etc.)
+- Artifact distribution and sharing
+- Backup and archiving scenarios
+- Network transfer optimization
+
+### Format Selection and Compatibility
+
+- **New artifacts default to oci-archive format** for better cloud storage compatibility
+- **Both formats are fully supported** for loading and manipulation
+- **Backward compatibility is maintained** - existing oci-dir artifacts continue to work
+- **Format detection is automatic** - the system transparently handles both formats
+- **Cross-format operations are supported** - you can load from one format and save to another
+
+### Migration Between Formats
+
+Artifacts can be converted between formats using the standard API:
+
+```python
+# Load from either format
+artifact = Artifact.load("image-name:tag")
+
+# Convert oci-dir to oci-archive
+dir_artifact = ArtifactDir.from_oci_dir("/path/to/oci-dir")
+archive_artifact = dir_artifact.save("/path/to/output.ommx")
+
+# The system automatically detects and uses the appropriate format
+```
