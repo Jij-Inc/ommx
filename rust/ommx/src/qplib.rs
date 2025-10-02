@@ -5,11 +5,18 @@ mod parser;
 
 use crate::Instance;
 pub use parser::QplibFile;
-use std::path::Path;
+use std::{io::Read, path::Path};
 
 /// Reads and parses the file into a [`Instance`].
 pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Instance> {
     let data = QplibFile::load(path)?;
+    let converted = convert::convert(data)?;
+    Ok(converted.try_into()?)
+}
+
+/// Parses QPLIB data from a reader into a [`Instance`].
+pub fn parse(reader: impl Read) -> anyhow::Result<Instance> {
+    let data = QplibFile::parse(reader)?;
     let converted = convert::convert(data)?;
     Ok(converted.try_into()?)
 }

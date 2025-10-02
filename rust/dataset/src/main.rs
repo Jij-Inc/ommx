@@ -1,4 +1,5 @@
 mod miplib2017;
+mod qplib;
 
 use anyhow::Result;
 use clap::Parser;
@@ -16,6 +17,11 @@ enum Command {
         /// Path to downloaded MIPLIB's `collection.zip` or `benchmark.zip` file
         path: PathBuf,
     },
+    /// QPLIB collections
+    Qplib {
+        /// Path to downloaded QPLIB's zip file containing `*.qplib` files
+        path: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -25,6 +31,9 @@ fn main() -> Result<()> {
     match command {
         Command::Miplib2017 { path } => {
             miplib2017::package(&path)?;
+        }
+        Command::Qplib { path } => {
+            qplib::package(&path)?;
         }
     }
     Ok(())
