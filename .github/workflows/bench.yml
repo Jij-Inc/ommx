@@ -28,6 +28,7 @@ jobs:
         with:
           run: cargo codspeed run
           token: ${{ secrets.CODSPEED_TOKEN }}
+          mode: instrumentation
 
   python:
     name: Benchmarks for Python SDK
@@ -53,3 +54,4 @@ jobs:
         with:
           run: pytest python/ommx-tests/ --codspeed
           token: ${{ secrets.CODSPEED_TOKEN }}
+          mode: instrumentation
