@@ -17,6 +17,7 @@ from ._ommx_rust import (
     get_local_registry_root,
     set_local_registry_root,
     get_image_dir,
+    get_artifact_path,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
@@ -33,6 +34,7 @@ __all__ = [
     "get_local_registry_root",
     "set_local_registry_root",
     "get_image_dir",
+    "get_artifact_path",
 ]
 
 
@@ -157,6 +159,7 @@ class Artifact:
         Load an artifact stored as container image in local or remote registry
 
         If the image is not found in local registry, it will try to pull from remote registry.
+        Supports both oci-dir and oci-archive formats in local registry.
 
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
         >>> print(artifact.image_name)
@@ -166,6 +169,18 @@ class Artifact:
         sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
 
         """
+        # Check if artifact exists locally in either format
+        artifact_path = get_artifact_path(image_name)
+        if artifact_path:
+            if artifact_path.is_file():
+                # Load from oci-archive format
+                base = ArtifactArchive.from_oci_archive(str(artifact_path))
+            else:
+                # Load from oci-dir format
+                base = ArtifactDir.from_oci_dir(str(artifact_path))
+            return Artifact(base)
+        
+        # Not found locally, use the original logic to pull from remote
         base = ArtifactDir.from_image_name(image_name)
         return Artifact(base)
 
@@ -381,6 +396,10 @@ class ArtifactArchiveBuilder(ArtifactBuilderBase):
     def temp() -> ArtifactArchiveBuilder:
         return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.temp())
 
+    @staticmethod
+    def new_for_local_registry(image_name: str) -> ArtifactArchiveBuilder:
+        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new_for_local_registry(image_name))
+
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
     ) -> Descriptor:
@@ -526,7 +545,7 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
-        return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
+        return ArtifactBuilder(ArtifactArchiveBuilder.new_for_local_registry(image_name))
 
     @staticmethod
     def temp() -> ArtifactBuilder:

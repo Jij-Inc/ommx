@@ -95,6 +95,26 @@ pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
     get_local_registry_root().join(image_name.as_path())
 }
 
+/// Get the artifact path (directory or archive file) for the given image name in the local registry
+/// Returns the path to either an oci-dir directory or an oci-archive file
+pub fn get_artifact_path(image_name: &ImageName) -> Option<PathBuf> {
+    let root = get_local_registry_root();
+    
+    // First check for oci-archive format (new default)
+    let archive_path = root.join(format!("{}.ommx", image_name.as_path().display()));
+    if archive_path.exists() && archive_path.is_file() {
+        return Some(archive_path);
+    }
+    
+    // Fallback to oci-dir format (backward compatibility)
+    let dir_path = get_image_dir(image_name);
+    if dir_path.exists() && dir_path.is_dir() && dir_path.join("oci-layout").exists() {
+        return Some(dir_path);
+    }
+    
+    None
+}
+
 #[deprecated(note = "Use get_image_dir instead")]
 pub fn image_dir(image_name: &ImageName) -> Result<PathBuf> {
     #[allow(deprecated)]
@@ -112,20 +132,44 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
 }
 
 fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut images = Vec::new();
+    gather_artifacts(dir)
+}
+
+fn gather_artifacts(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut artifacts = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
             if path.join("oci-layout").exists() {
-                images.push(path);
+                // OCI directory format
+                artifacts.push(path);
             } else {
-                let mut sub_images = gather_oci_dirs(&path)?;
-                images.append(&mut sub_images)
+                let mut sub_artifacts = gather_artifacts(&path)?;
+                artifacts.append(&mut sub_artifacts)
+            }
+        } else if path.is_file() {
+            // Check if it's an OCI archive by trying to parse it
+            // OCI archives typically have .ommx extension or can be detected by content
+            if is_oci_archive(&path) {
+                artifacts.push(path);
             }
         }
     }
-    Ok(images)
+    Ok(artifacts)
+}
+
+fn is_oci_archive(path: &Path) -> bool {
+    // Check file extension first (most common case)
+    if let Some(ext) = path.extension() {
+        if ext == "ommx" || ext == "tar" {
+            return true;
+        }
+    }
+    
+    // Try to parse as OCI archive to determine if it's a valid archive
+    // This is a more robust check but potentially expensive
+    OciArtifact::from_oci_archive(path).is_ok()
 }
 
 fn auth_from_env() -> Result<(String, String, String)> {
@@ -145,13 +189,32 @@ fn auth_from_env() -> Result<(String, String, String)> {
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
     let root = get_local_registry_root();
-    let dirs = gather_oci_dirs(root)?;
-    dirs.into_iter()
-        .map(|dir| {
-            let relative = dir
+    let artifacts = gather_oci_dirs(root)?;
+    artifacts.into_iter()
+        .map(|artifact_path| {
+            let relative = artifact_path
                 .strip_prefix(root)
                 .context("Failed to get relative path")?;
-            ImageName::from_path(relative)
+            
+            // For archive files, we need to extract the image name differently
+            if artifact_path.is_file() {
+                // Try to extract image name from the archive metadata
+                if let Ok(artifact) = Artifact::from_oci_archive(&artifact_path) {
+                    if let Ok(name) = artifact.get_name() {
+                        return Ok(name);
+                    }
+                }
+                // Fallback: use the file path without extension as image name
+                let path_without_ext = if let Some(stem) = relative.file_stem() {
+                    relative.with_file_name(stem)
+                } else {
+                    relative.to_path_buf()
+                };
+                ImageName::from_path(&path_without_ext)
+            } else {
+                // Directory format - use path as before
+                ImageName::from_path(relative)
+            }
         })
         .collect()
 }
