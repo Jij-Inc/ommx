@@ -415,7 +415,7 @@ impl Bound {
     }
 
     pub fn pow(&self, exp: u8) -> Self {
-        if exp % 2 == 0 {
+        if exp.is_multiple_of(2) {
             if self.lower >= 0.0 {
                 // 0 <= lower <= upper
                 Bound::new(self.lower.powi(exp as i32), self.upper.powi(exp as i32)).unwrap()
