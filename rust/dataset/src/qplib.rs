@@ -26,7 +26,7 @@ pub fn package(path: &Path) -> Result<()> {
         // Extract just the filename (e.g., "QPLIB_3877" from "qplib/html/qplib/QPLIB_3877")
         let name = name_with_suffix
             .split('/')
-            .last()
+            .next_back()
             .ok_or_else(|| anyhow!("Invalid file path: {}", file_name))?
             .to_string();
 
