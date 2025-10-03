@@ -11,12 +11,15 @@ fn main() -> Result<()> {
     let image_name = ImageName::parse("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")?;
 
     // Pull the artifact from remote registry
-    let mut remote = Artifact::from_remote(image_name)?;
-    let mut local = remote.pull()?;
+    let mut artifact = Artifact::from_remote(image_name)?;
+    artifact.pull()?;
 
     // Load the instance message from the artifact
-    for desc in local.get_layer_descriptors(&media_types::v1_instance())? {
-        println!("{}", desc.digest());
+    let layers = artifact.layers()?;
+    for desc in layers.iter() {
+        if desc.media_type() == &media_types::v1_instance() {
+            println!("{}", desc.digest());
+        }
     }
     Ok(())
 }

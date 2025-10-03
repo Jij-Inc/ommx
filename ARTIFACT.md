@@ -51,3 +51,71 @@ OMMX Artifact is a collection of `config`, `layers`, and annotations.
 
 Note that other annotations listed above are also allowed.
 The key may not start with `org.ommx.v1.`, but must be a valid reverse domain name as specified by OCI specification.
+
+Storage Formats
+---------------
+
+OMMX Local Registry supports two storage formats for artifacts:
+
+### OCI Directory Format (oci-dir)
+
+The traditional format where artifacts are stored as directory structures following the OCI Image Layout specification. Each artifact is stored as a directory containing:
+- `oci-layout` file indicating OCI compliance
+- `blobs/` directory containing content-addressable blobs
+- `index.json` file with manifest references
+
+This format is suitable for:
+- Local development and testing
+- File system-based storage
+- Cases where individual blobs need direct access
+
+### OCI Archive Format (oci-archive)
+
+A single-file format where the entire artifact is packaged as a tar archive with `.ommx` extension. This format contains the same OCI structure but packaged for easier distribution.
+
+This format is suitable for:
+- Cloud object storage systems (AWS S3, Google Cloud Storage, etc.)
+- Artifact distribution and sharing
+- Backup and archiving scenarios
+- Network transfer optimization
+
+### Format Selection and Compatibility
+
+- **New artifacts default to oci-archive format** for better cloud storage compatibility
+- **Both formats are fully supported** for loading and manipulation
+- **Backward compatibility is maintained** - existing oci-dir artifacts continue to work
+- **Format detection is automatic** - the system transparently handles both formats
+- **Cross-format operations are supported** - you can load from one format and save to another
+
+### Local Registry Directory Structure
+
+Artifacts are stored in the local registry with the following path structure. Image names are converted to file system paths with `:` (colon) in tags escaped to `__` (double underscore):
+
+**Example: `ghcr.io/jij-inc/ommx/qplib:3734`**
+
+```
+<LOCAL_REGISTRY_ROOT>/
+└── ghcr.io/
+    └── jij-inc/
+        └── ommx/
+            └── qplib/
+                ├── __3734/              # oci-dir format (: converted to __)
+                │   ├── oci-layout
+                │   ├── index.json
+                │   └── blobs/
+                │       └── sha256/...
+                │
+                └── __3734.ommx         # oci-archive format (: converted to __)
+```
+
+**Path Conversion Rules:**
+- Tags with `:` are escaped to `__` (e.g., `my-app:v1.0` → `my-app/__v1.0`)
+- oci-dir format: `<escaped-path>/`
+- oci-archive format: `<escaped-path>.ommx`
+
+**Format Priority:**
+When both formats exist for the same image name, **oci-archive format takes precedence**. The system checks for the `.ommx` file first, then falls back to the directory format.
+
+### Migration Between Formats
+
+The OMMX artifact system provides transparent format conversion. Artifacts can be loaded from either format and saved to either format without manual intervention. The system automatically detects the source format based on file system structure (directory vs. archive file) and handles the conversion internally.
