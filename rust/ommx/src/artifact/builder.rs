@@ -202,6 +202,22 @@ impl Builder {
         }
     }
 
+    /// Add source URL annotation (convenience method)
+    pub fn add_source(&mut self, source: &url::Url) {
+        self.add_annotation(
+            "org.opencontainers.image.source".to_string(),
+            source.to_string(),
+        );
+    }
+
+    /// Add description annotation (convenience method)
+    pub fn add_description(&mut self, description: String) {
+        self.add_annotation(
+            "org.opencontainers.image.description".to_string(),
+            description,
+        );
+    }
+
     /// Finalise the builder and produce an [`Artifact`] with the same backend variant.
     pub fn build(self) -> Result<Artifact> {
         match self {

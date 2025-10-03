@@ -16,13 +16,10 @@ fn main() -> Result<()> {
 
     // Load the instance message from the artifact
     let layers = artifact.layers()?;
-    for desc in layers.iter().filter(|d| {
-        d.media_type()
-            .as_ref()
-            .map(|m| m == &media_types::v1_instance().to_string())
-            .unwrap_or(false)
-    }) {
-        println!("{}", desc.digest());
+    for desc in layers.iter() {
+        if desc.media_type() == &media_types::v1_instance() {
+            println!("{}", desc.digest());
+        }
     }
     Ok(())
 }
