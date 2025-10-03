@@ -177,3 +177,14 @@ pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
     Ok(ommx::artifact::get_image_dir(&image_name))
 }
+
+/// Get the archive path for the given image name in the local registry
+///
+/// This returns the expected path for oci-archive format (.ommx file), not checking if it exists
+///
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_local_registry_archive_path(image_name: &str) -> Result<PathBuf> {
+    let image_name = ImageName::parse(image_name)?;
+    Ok(ommx::artifact::get_local_registry_archive_path(&image_name))
+}

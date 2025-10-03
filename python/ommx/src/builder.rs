@@ -36,13 +36,6 @@ impl ArtifactArchiveBuilder {
         Ok(Self(Some(builder)))
     }
 
-    #[staticmethod]
-    pub fn new_for_local_registry(image_name: &str) -> Result<Self> {
-        let image_name = ImageName::parse(image_name)?;
-        let builder = Builder::new_for_local_registry(image_name)?;
-        Ok(Self(Some(builder)))
-    }
-
     pub fn add_layer(
         &mut self,
         media_type: &str,

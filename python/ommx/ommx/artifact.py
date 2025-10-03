@@ -17,6 +17,7 @@ from ._ommx_rust import (
     get_local_registry_root,
     set_local_registry_root,
     get_image_dir,
+    get_local_registry_archive_path as _get_local_registry_archive_path,
     get_artifact_path as _get_artifact_path,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
@@ -405,12 +406,6 @@ class ArtifactArchiveBuilder(ArtifactBuilderBase):
     def temp() -> ArtifactArchiveBuilder:
         return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.temp())
 
-    @staticmethod
-    def new_for_local_registry(image_name: str) -> ArtifactArchiveBuilder:
-        return ArtifactArchiveBuilder(
-            _ArtifactArchiveBuilder.new_for_local_registry(image_name)
-        )
-
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
     ) -> Descriptor:
@@ -556,8 +551,12 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
+        # Generate path for oci-archive format in local registry
+        archive_path = Path(_get_local_registry_archive_path(image_name))
+        # Ensure parent directory exists
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
         return ArtifactBuilder(
-            ArtifactArchiveBuilder.new_for_local_registry(image_name)
+            ArtifactArchiveBuilder.new(str(archive_path), image_name)
         )
 
     @staticmethod

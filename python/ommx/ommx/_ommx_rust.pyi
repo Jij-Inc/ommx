@@ -29,8 +29,6 @@ class ArtifactArchiveBuilder:
     ) -> ArtifactArchiveBuilder: ...
     @staticmethod
     def temp() -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def new_for_local_registry(image_name: builtins.str) -> ArtifactArchiveBuilder: ...
     def add_layer(
         self,
         media_type: builtins.str,
@@ -1189,6 +1187,13 @@ def get_image_dir(image_name: builtins.str) -> builtins.str:
     Get the path where given image is stored in the local registry.
 
     - The directory may not exist if the image is not in the local registry.
+    """
+
+def get_local_registry_archive_path(image_name: builtins.str) -> builtins.str:
+    r"""
+    Get the archive path for the given image name in the local registry
+
+    This returns the expected path for oci-archive format (.ommx file), not checking if it exists
     """
 
 def get_local_registry_root() -> builtins.str:
