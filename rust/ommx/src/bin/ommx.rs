@@ -2,7 +2,8 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::{get_local_registry_path, Artifact};
+use ommx::artifact::get_local_registry_path;
+use ommx::experimental::artifact::Artifact;
 use std::path::{Path, PathBuf};
 
 mod built_info {
@@ -110,9 +111,13 @@ impl ImageNameOrPath {
 
     fn get_manifest(&self) -> Result<ImageManifest> {
         let manifest = match self {
-            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(path)?.get_manifest()?,
+            ImageNameOrPath::OciDir(path) => {
+                let mut artifact = Artifact::from_oci_dir(path)?;
+                artifact.get_manifest()?
+            }
             ImageNameOrPath::OciArchive(path) => {
-                Artifact::from_oci_archive(path)?.get_manifest()?
+                let mut artifact = Artifact::from_oci_archive(path)?;
+                artifact.get_manifest()?
             }
             ImageNameOrPath::Local(name) => {
                 // Check for both formats, prioritizing oci-archive
@@ -120,14 +125,19 @@ impl ImageNameOrPath {
                 let archive_path = base_path.with_extension("ommx");
 
                 if archive_path.exists() && archive_path.is_file() {
-                    Artifact::from_oci_archive(&archive_path)?.get_manifest()?
+                    let mut artifact = Artifact::from_oci_archive(&archive_path)?;
+                    artifact.get_manifest()?
                 } else if base_path.exists() && base_path.is_dir() {
-                    Artifact::from_oci_dir(&base_path)?.get_manifest()?
+                    let mut artifact = Artifact::from_oci_dir(&base_path)?;
+                    artifact.get_manifest()?
                 } else {
                     bail!("Artifact not found in local registry: {}", name)
                 }
             }
-            ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
+            ImageNameOrPath::Remote(name) => {
+                let mut artifact = Artifact::from_remote(name.clone())?;
+                artifact.get_manifest()?
+            }
         };
         Ok(manifest)
     }
@@ -211,7 +221,7 @@ fn main() -> Result<()> {
         Command::Pull { image_name } => {
             let name = ImageName::parse(image_name)?;
             let mut artifact = Artifact::from_remote(name)?;
-            artifact.pull()?;
+            artifact.pull()?; // pull() saves to local registry automatically
         }
 
         Command::Save { image_name, output } => {
@@ -225,7 +235,7 @@ fn main() -> Result<()> {
                 std::fs::copy(&archive_path, output)?;
             } else if base_path.exists() && base_path.is_dir() {
                 let mut artifact = Artifact::from_oci_dir(&base_path)?;
-                artifact.save(output)?;
+                artifact.save_as_archive(output)?;
             } else {
                 bail!("Artifact not found in local registry: {}", name)
             }
@@ -233,7 +243,7 @@ fn main() -> Result<()> {
 
         Command::Load { path } => {
             let mut artifact = Artifact::from_oci_archive(path)?;
-            artifact.load()?;
+            artifact.save()?; // save() saves to local registry
         }
 
         Command::LocalRegistryPath { image_name } => {
