@@ -252,7 +252,7 @@ impl Artifact<OciArchive> {
 
     pub fn load(&mut self) -> Result<()> {
         let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
+        let path = get_local_registry_path(&image_name);
         if path.exists() {
             log::trace!("Already exists in local registry: {}", path.display());
             return Ok(());
@@ -302,7 +302,7 @@ impl Artifact<Remote> {
 
     pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
         let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
+        let path = get_local_registry_path(&image_name);
         if path.exists() {
             log::trace!("Already exists in local registry: {}", path.display());
             return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
