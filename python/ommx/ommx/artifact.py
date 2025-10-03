@@ -188,7 +188,7 @@ class Artifact:
                 # Load from oci-dir format
                 base = ArtifactDir.from_oci_dir(str(artifact_path))
             return Artifact(base)
-        
+
         # Not found locally, use the original logic to pull from remote
         base = ArtifactDir.from_image_name(image_name)
         return Artifact(base)
@@ -407,7 +407,9 @@ class ArtifactArchiveBuilder(ArtifactBuilderBase):
 
     @staticmethod
     def new_for_local_registry(image_name: str) -> ArtifactArchiveBuilder:
-        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new_for_local_registry(image_name))
+        return ArtifactArchiveBuilder(
+            _ArtifactArchiveBuilder.new_for_local_registry(image_name)
+        )
 
     def add_layer(
         self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
@@ -554,7 +556,9 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
-        return ArtifactBuilder(ArtifactArchiveBuilder.new_for_local_registry(image_name))
+        return ArtifactBuilder(
+            ArtifactArchiveBuilder.new_for_local_registry(image_name)
+        )
 
     @staticmethod
     def temp() -> ArtifactBuilder:

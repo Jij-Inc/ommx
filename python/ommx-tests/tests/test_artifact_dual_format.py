@@ -7,6 +7,7 @@ This test validates that:
 3. Backward compatibility is maintained
 4. get_artifact_path correctly identifies both formats
 """
+
 import tempfile
 import shutil
 import uuid
@@ -40,24 +41,24 @@ def test_new_artifacts_default_to_archive_format(temp_registry):
     # Create a test instance
     generator = SingleFeasibleLPGenerator(3, DataType.INT)
     instance = generator.get_v1_instance()
-    
+
     # Create a unique image name
     image_name = f"test.local/dual-format-test:{uuid.uuid4()}"
-    
+
     # Build artifact using the default new() method
     builder = ArtifactBuilder.new(image_name)
     builder.add_instance(instance)
     artifact = builder.build()
-    
+
     # Verify artifact was created
     assert artifact.image_name == image_name
-    
+
     # Check that the artifact is stored as a file (.ommx extension)
     artifact_path = get_artifact_path(image_name)
     assert artifact_path is not None
     assert artifact_path.is_file()
     assert artifact_path.suffix == ".ommx" or artifact_path.name.endswith(".ommx")
-    
+
     # Verify we can load it back
     loaded_artifact = Artifact.load(image_name)
     assert loaded_artifact.image_name == image_name
@@ -78,16 +79,16 @@ def test_legacy_oci_dir_format_still_works(temp_registry):
     builder = ArtifactBuilder(dir_builder_base)
     builder.add_instance(instance)
     artifact = builder.build()
-    
+
     # Verify artifact was created
     assert artifact.image_name == image_name
-    
+
     # Check that the artifact is stored as a directory
     artifact_path = get_artifact_path(image_name)
     assert artifact_path is not None
     assert artifact_path.is_dir()
     assert (artifact_path / "oci-layout").exists()
-    
+
     # Verify we can load it back
     loaded_artifact = Artifact.load(image_name)
     assert loaded_artifact.image_name == image_name
@@ -114,14 +115,14 @@ def test_artifact_load_handles_both_formats(temp_registry):
     dir_builder = ArtifactBuilder(dir_builder_base)
     dir_builder.add_instance(instance)
     dir_builder.build()
-    
+
     # Verify both can be loaded with the same API
     loaded_archive = Artifact.load(archive_image)
     loaded_dir = Artifact.load(dir_image)
-    
+
     assert loaded_archive.image_name == archive_image
     assert loaded_dir.image_name == dir_image
-    
+
     # Both should have the same structure
     assert len(loaded_archive.layers) == len(loaded_dir.layers)
     assert len(loaded_archive.layers) > 0
@@ -146,51 +147,51 @@ def test_get_artifact_path_finds_both_formats(temp_registry):
     dir_builder = ArtifactBuilder(dir_builder_base)
     dir_builder.add_instance(instance)
     dir_builder.build()
-    
+
     # Test get_artifact_path finds both
     archive_path = get_artifact_path(archive_image)
     dir_path = get_artifact_path(dir_image)
-    
+
     assert archive_path is not None
     assert dir_path is not None
-    
+
     assert archive_path.is_file()
     assert dir_path.is_dir()
-    
+
     # Test with non-existent artifact
     nonexistent_path = get_artifact_path(f"test.local/nonexistent:{uuid.uuid4()}")
     assert nonexistent_path is None
 
 
 def test_backward_compatibility_with_existing_api(temp_registry):
-    """Test that existing code continues to work without changes.""" 
+    """Test that existing code continues to work without changes."""
     # Create a test instance
     generator = SingleFeasibleLPGenerator(3, DataType.INT)
     instance = generator.get_v1_instance()
-    
+
     # Create artifacts using both approaches
     image_name = f"test.local/compat-test:{uuid.uuid4()}"
-    
+
     # Original API - should now default to archive format
     builder = ArtifactBuilder.new(image_name)
     builder.add_instance(instance)
     builder.build()
-    
+
     # Loading should work transparently
     loaded = Artifact.load(image_name)
-    
+
     # All the existing properties should work
     assert loaded.image_name == image_name
     assert loaded.annotations is not None
     assert len(loaded.layers) > 0
-    
+
     # Should be able to get the instance back
     instance_layer = None
     for layer in loaded.layers:
-        if layer.media_type == "application/org.ommx.v1.instance": 
+        if layer.media_type == "application/org.ommx.v1.instance":
             instance_layer = layer
             break
-    
+
     assert instance_layer is not None
     retrieved_instance = loaded.get_instance(instance_layer)
     assert retrieved_instance is not None
