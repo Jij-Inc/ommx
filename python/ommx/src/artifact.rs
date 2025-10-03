@@ -83,6 +83,7 @@ impl ArtifactDir {
     #[staticmethod]
     pub fn from_image_name(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
+        #[allow(deprecated)]
         let local_path = ommx::artifact::get_image_dir(&image_name);
         if local_path.exists() {
             return Ok(Self(Artifact::from_oci_dir(&local_path)?));
@@ -166,6 +167,7 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 #[pyfunction]
 pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
+    #[allow(deprecated)]
     Ok(ommx::artifact::get_image_dir(&image_name))
 }
 
