@@ -243,7 +243,7 @@ fn check_unsupported(name: &str) -> Result<()> {
 
 /// Load an instance from the MIPLIB 2017 dataset
 pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
-    use crate::experimental::artifact::Artifact;
+    use crate::artifact::Artifact;
 
     let annotations = instance_annotations();
     ensure!(

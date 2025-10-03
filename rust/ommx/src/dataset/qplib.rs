@@ -283,7 +283,7 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     );
 
     let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
-    let mut artifact = crate::experimental::artifact::Artifact::from_remote(image_name)?;
+    let mut artifact = crate::artifact::Artifact::from_remote(image_name)?;
     artifact.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(

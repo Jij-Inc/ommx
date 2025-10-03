@@ -1,7 +1,6 @@
 use anyhow::Result;
 use ocipkg::ImageName;
-use ommx::artifact::media_types;
-use ommx::experimental::artifact::Artifact;
+use ommx::artifact::{media_types, Artifact};
 
 fn main() -> Result<()> {
     env_logger::Builder::new()

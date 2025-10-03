@@ -2,8 +2,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::get_local_registry_path;
-use ommx::experimental::artifact::Artifact;
+use ommx::artifact::{get_local_registry_path, Artifact};
 use std::path::{Path, PathBuf};
 
 mod built_info {

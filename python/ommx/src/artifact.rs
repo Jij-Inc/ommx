@@ -4,8 +4,8 @@ use ocipkg::{Digest, ImageName};
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
-// Import experimental artifact
-use ommx::experimental::artifact::Artifact as ExperimentalArtifact;
+// Import artifact
+use ommx::artifact::Artifact as RustArtifact;
 
 /// Get the current OMMX Local Registry root path.
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
@@ -59,40 +59,40 @@ pub fn get_local_registry_path(image_name: &str) -> Result<PathBuf> {
 }
 
 // ============================================================================
-// Experimental Artifact API - Using ommx::experimental::artifact
+// Artifact API - Using ommx::artifact
 // ============================================================================
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
-pub struct PyArtifact(Mutex<ExperimentalArtifact>);
+pub struct PyArtifact(Mutex<RustArtifact>);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl PyArtifact {
     #[staticmethod]
     pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
-        let artifact = ExperimentalArtifact::from_oci_archive(&path)?;
+        let artifact = RustArtifact::from_oci_archive(&path)?;
         Ok(Self(Mutex::new(artifact)))
     }
 
     #[staticmethod]
     pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
-        let artifact = ExperimentalArtifact::from_oci_dir(&path)?;
+        let artifact = RustArtifact::from_oci_dir(&path)?;
         Ok(Self(Mutex::new(artifact)))
     }
 
     #[staticmethod]
     pub fn from_remote(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let artifact = ExperimentalArtifact::from_remote(image_name)?;
+        let artifact = RustArtifact::from_remote(image_name)?;
         Ok(Self(Mutex::new(artifact)))
     }
 
     #[staticmethod]
     pub fn load(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let artifact = ExperimentalArtifact::load(&image_name)?;
+        let artifact = RustArtifact::load(&image_name)?;
         Ok(Self(Mutex::new(artifact)))
     }
 
@@ -140,15 +140,15 @@ impl PyArtifact {
 }
 
 // ============================================================================
-// Experimental Builder API
+// Builder API
 // ============================================================================
 
-use ommx::experimental::artifact::Builder as ExperimentalBuilder;
+use ommx::artifact::Builder as RustBuilder;
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
-pub struct PyArtifactBuilder(Option<ExperimentalBuilder>);
+pub struct PyArtifactBuilder(Option<RustBuilder>);
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
@@ -156,26 +156,26 @@ impl PyArtifactBuilder {
     #[staticmethod]
     pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let builder = ExperimentalBuilder::new_archive(path, image_name)?;
+        let builder = RustBuilder::new_archive(path, image_name)?;
         Ok(Self(Some(builder)))
     }
 
     #[staticmethod]
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
-        let builder = ExperimentalBuilder::new_archive_unnamed(path)?;
+        let builder = RustBuilder::new_archive_unnamed(path)?;
         Ok(Self(Some(builder)))
     }
 
     #[staticmethod]
     pub fn temp_archive() -> Result<Self> {
-        let builder = ExperimentalBuilder::temp_archive()?;
+        let builder = RustBuilder::temp_archive()?;
         Ok(Self(Some(builder)))
     }
 
     #[staticmethod]
     pub fn new_dir(path: PathBuf, image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
-        let builder = ExperimentalBuilder::new_dir(path, image_name)?;
+        let builder = RustBuilder::new_dir(path, image_name)?;
         Ok(Self(Some(builder)))
     }
 
@@ -203,8 +203,8 @@ impl PyArtifactBuilder {
         let blob_bytes = blob.as_bytes();
 
         let desc = match builder {
-            ExperimentalBuilder::Archive(b) => b.add_layer(media_type, blob_bytes, annotations)?,
-            ExperimentalBuilder::Dir(b) => b.add_layer(media_type, blob_bytes, annotations)?,
+            RustBuilder::Archive(b) => b.add_layer(media_type, blob_bytes, annotations)?,
+            RustBuilder::Dir(b) => b.add_layer(media_type, blob_bytes, annotations)?,
         };
         Ok(PyDescriptor::from(desc))
     }

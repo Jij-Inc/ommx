@@ -1,14 +1,29 @@
 //! Manage messages as container
 //!
+//! This module provides a unified Artifact API that dynamically manages different storage formats:
+//! - OCI Archive format (`.ommx` files, default for new artifacts)
+//! - OCI Directory format (legacy support)
+//! - Remote registry references
 
 mod annotations;
+mod builder;
 mod config;
+mod io;
+mod layers;
 pub mod media_types;
+#[cfg(test)]
+mod tests;
+
 pub use annotations::*;
+pub use builder::Builder;
 pub use config::*;
 
-use anyhow::{bail, Context, Result};
-use ocipkg::ImageName;
+use anyhow::{bail, ensure, Context, Result};
+use ocipkg::{
+    image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    oci_spec::image::Descriptor,
+    ImageName,
+};
 use std::path::Path;
 use std::{env, path::PathBuf, sync::OnceLock};
 
@@ -168,10 +183,82 @@ fn auth_from_env() -> Result<(String, String, String)> {
     bail!("No authentication information found in environment variables");
 }
 
+/// OMMX Artifact with dynamic format handling
+///
+/// This enum replaces the parametric `Artifact<T: Image>` with a simpler API that
+/// automatically manages different storage formats.
+///
+/// # Variants
+///
+/// - `Archive`: OCI archive format (`.ommx` file, default for new artifacts)
+/// - `Dir`: OCI directory format (legacy support)
+/// - `Remote`: Remote registry reference (transitions to Archive/Dir after pull)
+pub enum Artifact {
+    Archive(OciArtifact<OciArchive>),
+    Dir(OciArtifact<OciDir>),
+    Remote(OciArtifact<Remote>),
+}
+
+impl Artifact {
+    /// Create an Artifact from an OCI archive file (`.ommx`)
+    pub fn from_oci_archive(path: &Path) -> Result<Self> {
+        let mut artifact = OciArtifact::from_oci_archive(path)?;
+        Self::validate_artifact_type(&mut artifact)?;
+        Ok(Self::Archive(artifact))
+    }
+
+    /// Create an Artifact from an OCI directory
+    pub fn from_oci_dir(path: &Path) -> Result<Self> {
+        let mut artifact = OciArtifact::from_oci_dir(path)?;
+        Self::validate_artifact_type(&mut artifact)?;
+        Ok(Self::Dir(artifact))
+    }
+
+    /// Create an Artifact from a remote registry
+    pub fn from_remote(image_name: ImageName) -> Result<Self> {
+        let artifact = OciArtifact::from_remote(image_name)?;
+        Ok(Self::Remote(artifact))
+    }
+
+    /// Get the image name if available
+    pub fn image_name(&mut self) -> Option<String> {
+        match self {
+            Self::Archive(a) => a.get_name().ok().map(|n| n.to_string()),
+            Self::Dir(a) => a.get_name().ok().map(|n| n.to_string()),
+            Self::Remote(a) => a.get_name().ok().map(|n| n.to_string()),
+        }
+    }
+
+    /// Get manifest annotations
+    pub fn annotations(&mut self) -> Result<std::collections::HashMap<String, String>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.annotations().clone().unwrap_or_default())
+    }
+
+    /// Get layer descriptors
+    pub fn layers(&mut self) -> Result<Vec<Descriptor>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.layers().to_vec())
+    }
+
+    /// Validate that the artifact has the correct OMMX artifact type
+    pub(crate) fn validate_artifact_type<T: Image>(artifact: &mut OciArtifact<T>) -> Result<()> {
+        let manifest = artifact.get_manifest()?;
+        let ty = manifest
+            .artifact_type()
+            .as_ref()
+            .context("Not an OMMX Artifact")?;
+        ensure!(
+            *ty == media_types::v1_artifact(),
+            "Not an OMMX Artifact: {}",
+            ty
+        );
+        Ok(())
+    }
+}
+
 /// Get all images stored in the local registry
 pub fn get_images() -> Result<Vec<ImageName>> {
-    use crate::experimental::artifact::Artifact;
-
     let root = get_local_registry_root();
     let artifacts = gather_oci_dirs(root)?;
     artifacts
@@ -202,95 +289,4 @@ pub fn get_images() -> Result<Vec<ImageName>> {
             }
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn test_is_oci_archive_extension() {
-        // Create temporary files to test extension-based detection
-        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&temp_dir).unwrap();
-        let temp_ommx = temp_dir.join("test.ommx");
-        let temp_txt = temp_dir.join("test.txt");
-
-        fs::write(&temp_ommx, b"").unwrap();
-        fs::write(&temp_txt, b"").unwrap();
-
-        // Should return true for .ommx extension even if content is invalid
-        assert!(is_oci_archive(&temp_ommx));
-        // Should return false for .txt extension
-        assert!(!is_oci_archive(&temp_txt));
-
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-
-    #[test]
-    fn test_gather_artifacts_with_mock_oci_dir() {
-        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&temp_dir).unwrap();
-
-        // Create a mock OCI directory structure
-        let oci_dir = temp_dir.join("test-image");
-        fs::create_dir_all(&oci_dir).unwrap();
-        fs::write(
-            oci_dir.join("oci-layout"),
-            r#"{"imageLayoutVersion": "1.0.0"}"#,
-        )
-        .unwrap();
-
-        let result = gather_artifacts(&temp_dir).unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], oci_dir);
-
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-
-    #[test]
-    fn test_gather_artifacts_with_mock_oci_archive() {
-        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&temp_dir).unwrap();
-
-        // Create a mock OCI archive file (just an empty .ommx file)
-        let archive_file = temp_dir.join("test-artifact.ommx");
-        fs::write(&archive_file, b"").unwrap();
-
-        let result = gather_artifacts(&temp_dir).unwrap();
-        // Should find the .ommx file, even though it's not a valid OCI archive
-        // because it has the right extension
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], archive_file);
-
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-
-    #[test]
-    fn test_gather_artifacts_mixed_formats() {
-        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&temp_dir).unwrap();
-
-        // Create both OCI directory and archive
-        let oci_dir = temp_dir.join("test-dir");
-        fs::create_dir_all(&oci_dir).unwrap();
-        fs::write(
-            oci_dir.join("oci-layout"),
-            r#"{"imageLayoutVersion": "1.0.0"}"#,
-        )
-        .unwrap();
-
-        let archive_file = temp_dir.join("test-archive.ommx");
-        fs::write(&archive_file, b"").unwrap();
-
-        let result = gather_artifacts(&temp_dir).unwrap();
-        assert_eq!(result.len(), 2);
-
-        // Should find both formats
-        assert!(result.contains(&oci_dir));
-        assert!(result.contains(&archive_file));
-
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
 }

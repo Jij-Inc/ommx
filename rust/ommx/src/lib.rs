@@ -261,7 +261,8 @@ pub mod qplib;
 pub mod random;
 
 // Experimental modules - API subject to change
-pub mod experimental;
+// Experimental module has been promoted to stable
+// pub mod experimental;
 
 // Internal modules
 mod atol;
