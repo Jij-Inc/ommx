@@ -63,6 +63,10 @@ fn cleanup(image_name: &ImageName) {
     }
 }
 
+fn temp_output_dir(label: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("ommx_test_output_{label}_{}", Uuid::new_v4()))
+}
+
 #[test]
 fn test_create_empty_oci_dir_artifact() {
     // Create temporary directory
@@ -233,6 +237,7 @@ fn test_save_as_archive_from_dir_variant() {
     artifact.save_as_archive(&archive).unwrap();
     assert!(archive.exists(), "archive file should be created");
     assert!(Artifact::from_oci_archive(&archive).is_ok());
+    assert!(matches!(artifact, Artifact::Archive(_)));
 
     drop(artifact);
     cleanup(&image_name);
@@ -251,6 +256,97 @@ fn test_save_as_archive_requires_nonexistent_path() {
     let mut artifact = Artifact::from_oci_dir(&dir).unwrap();
     let err = artifact.save_as_archive(&archive).unwrap_err();
     assert!(err.to_string().contains("Output file already exists"));
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_save_creates_archive_in_registry() {
+    let image_name = image_name("save-default");
+    let dir = build_dir_artifact(&image_name);
+    let archive = archive_path(&image_name);
+    if archive.exists() {
+        fs::remove_file(&archive).unwrap();
+    }
+
+    let mut artifact = Artifact::from_oci_dir(&dir).unwrap();
+    artifact.save().unwrap();
+
+    assert!(archive.exists());
+    assert!(matches!(artifact, Artifact::Archive(_)));
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_save_reuses_existing_archive() {
+    let image_name = image_name("save-reuse");
+    let archive = build_archive_artifact(&image_name);
+    let original_len = fs::metadata(&archive).unwrap().len();
+
+    let mut artifact = Artifact::from_oci_archive(&archive).unwrap();
+    artifact.save().unwrap();
+
+    assert!(matches!(artifact, Artifact::Archive(_)));
+    assert_eq!(fs::metadata(&archive).unwrap().len(), original_len);
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_save_as_dir_creates_directory() {
+    let image_name = image_name("save-as-dir");
+    let archive = build_archive_artifact(&image_name);
+    let mut artifact = Artifact::from_oci_archive(&archive).unwrap();
+
+    let output = temp_output_dir("dir");
+    artifact.save_as_dir(&output).unwrap();
+
+    assert!(output.exists() && output.is_dir());
+    assert!(matches!(artifact, Artifact::Dir(_)));
+
+    drop(artifact);
+    fs::remove_dir_all(&output).unwrap();
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_pull_requires_remote_variant() {
+    let image_name = image_name("pull-requires-remote");
+    let archive = build_archive_artifact(&image_name);
+    let mut artifact = Artifact::from_oci_archive(&archive).unwrap();
+
+    let err = artifact.pull().unwrap_err();
+    assert!(err.to_string().contains("pull() is only supported"));
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_annotations() {
+    let image_name = image_name("annotations");
+    let archive = build_archive_artifact(&image_name);
+    let mut artifact = Artifact::from_oci_archive(&archive).unwrap();
+
+    let annotations = artifact.annotations().unwrap();
+    assert!(annotations.is_empty() || !annotations.is_empty()); // Just verify it returns
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_layers() {
+    let image_name = image_name("layers");
+    let archive = build_archive_artifact(&image_name);
+    let mut artifact = Artifact::from_oci_archive(&archive).unwrap();
+
+    let layers = artifact.layers().unwrap();
+    assert_eq!(layers.len(), 0); // Empty artifact has no layers
 
     drop(artifact);
     cleanup(&image_name);

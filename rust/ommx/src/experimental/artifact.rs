@@ -16,15 +16,19 @@
 //! This API is experimental and subject to change. It will eventually replace
 //! the current `ommx::artifact::Artifact<T>` implementation.
 
+mod builder;
 mod io;
 mod layers;
 #[cfg(test)]
 mod tests;
 
+pub use builder::Builder;
+
 use crate::artifact::media_types;
 use anyhow::{ensure, Context, Result};
 use ocipkg::{
     image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    oci_spec::image::Descriptor,
     ImageName,
 };
 use std::path::Path;
@@ -73,6 +77,18 @@ impl Artifact {
             Self::Dir(a) => a.get_name().ok().map(|n| n.to_string()),
             Self::Remote(a) => a.get_name().ok().map(|n| n.to_string()),
         }
+    }
+
+    /// Get manifest annotations
+    pub fn annotations(&mut self) -> Result<std::collections::HashMap<String, String>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.annotations().clone().unwrap_or_default())
+    }
+
+    /// Get layer descriptors
+    pub fn layers(&mut self) -> Result<Vec<Descriptor>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.layers().to_vec())
     }
 
     /// Validate that the artifact has the correct OMMX artifact type
