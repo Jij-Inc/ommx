@@ -118,15 +118,4 @@ When both formats exist for the same image name, **oci-archive format takes prec
 
 ### Migration Between Formats
 
-Artifacts can be converted between formats using the standard API:
-
-```python
-# Load from either format
-artifact = Artifact.load("image-name:tag")
-
-# Convert oci-dir to oci-archive
-dir_artifact = ArtifactDir.from_oci_dir("/path/to/oci-dir")
-archive_artifact = dir_artifact.save("/path/to/output.ommx")
-
-# The system automatically detects and uses the appropriate format
-```
+The OMMX artifact system provides transparent format conversion. Artifacts can be loaded from either format and saved to either format without manual intervention. The system automatically detects the source format based on file system structure (directory vs. archive file) and handles the conversion internally.
