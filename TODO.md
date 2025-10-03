@@ -179,123 +179,71 @@
   - [x] 13個のテストケース (全てパス)
   - [x] load/save/format変換/annotation設定のテスト
 
-### Phase 4: 古いArtifact<T>の削除と移行
+### Phase 4: experimental::artifact への段階的移行
 
-- [ ] 既存の`Artifact<T>`実装を削除
-  - [ ] `impl Artifact<OciArchive>`
-  - [ ] `impl Artifact<OciDir>`
-  - [ ] `impl Artifact<Remote>`
-  - [ ] `impl Artifact<Base>`（汎用実装）
+**方針変更**: `ommx::artifact::Artifact<T>`は当面削除せず、使用箇所を段階的に`ommx::experimental::artifact::Artifact`に置き換える。
 
-- [ ] 新しい`Artifact`に移行
-  - [ ] 既存のメソッドを新しいenumベース実装に移植
-  - [ ] ローカルレジストリ関連のutil関数を一箇所に整理し、公開APIの命名・役割を明確化
+- [ ] Rust内部コードの移行
+  - [ ] CLIツール (`rust/ommx/src/bin/ommx.rs`) を experimental::artifact に移行
+  - [ ] 既存のテストコードを確認し、必要に応じて experimental 版を使用
+  - [ ] 他のRustコードで `ommx::artifact::Artifact<T>` を使用している箇所を調査
 
-### Phase 5: Python側のAPI整理
+- [ ] 移行が完了した段階で評価
+  - [ ] experimental APIの安定性を確認
+  - [ ] パフォーマンスやエラーハンドリングに問題がないか検証
+  - [ ] 必要に応じて experimental から正式版に昇格 (`ommx::artifact` として公開)
+
+### Phase 5: Python側のAPI整理（experimental API使用）
 
 - [ ] `python/ommx/src/artifact.rs`の更新
-  - [ ] 新しい`Artifact`のPyO3バインディングを追加
-  - [ ] `ArtifactArchive`、`ArtifactDir`のPython公開を削除
-  - [ ] 既存の`load_archive`/`load_dir`の`#[pyfunction]`を現状維持（内部実装差し替えのみ、警告は発しない）
+  - [ ] experimental::artifact のPyO3バインディングを追加
+  - [ ] 既存のPython APIは内部実装のみ experimental 版に差し替え
+  - [ ] 外部APIは互換性を維持（`ArtifactArchive`、`ArtifactDir`も当面維持）
 
-- [ ] `python/ommx/ommx/artifact.py`の更新
-  - [ ] `ArtifactArchive`、`ArtifactDir`クラスを削除
-  - [ ] `Artifact`クラスを新しいRust `Artifact`の薄いラッパーに変更
-  - [ ] `Artifact.load_archive`/`load_dir`は現行どおり提供（挙動は維持、警告は発しない）
-  - [ ] `__all__`から`ArtifactArchive`、`ArtifactDir`を削除
+- [ ] Pythonテストの確認
+  - [ ] 既存のテストが全てパスすることを確認
+  - [ ] experimental 版への移行による動作変更がないことを検証
 
-- [ ] `python/ommx/ommx/__init__.py`の更新
-  - [ ] エクスポートリストを確認・更新
+### Phase 6: ドキュメントとテストの更新
 
-### Phase 6: CLIツールの更新
+- [ ] Rustdocの更新
+  - [ ] experimental::artifact のドキュメントを充実
+  - [ ] 使用例とマイグレーションガイドを追加
 
-- [ ] `rust/ommx/src/bin/ommx.rs`の更新
-  - [ ] `ImageNameOrPath`の実装を簡略化
-  - [ ] 新しい`Artifact` APIを使用
-  - [ ] `load`コマンドをoci-archive形式デフォルトに変更（必要に応じて`--format dir`オプションを追加し警告メッセージで通知）
-  - [ ] 既存の`load --dir`など旧オプションがある場合は非推奨警告を表示
+- [ ] 統合テストの追加
+  - [ ] CLI経由での動作確認テスト
+  - [ ] Python API経由での動作確認テスト
 
-### Phase 7: テストとドキュメントの更新
+### Phase 7: 正式版への昇格（将来）
 
-- [ ] Rustのテストを更新
-  - [ ] 新しい`Artifact`のテストを追加
-  - [ ] 既存のテストを新しいAPIに合わせて修正
-  - [ ] `artifact.rs`内のテストを確認
-  - [ ] ローカルレジストリ内にarchive/dir両方が存在するケース、片方のみ存在するケース、破損アーカイブにフォールバックするケースを網羅
-  - [ ] `Remote` variantが`pull()`後に`Archive`へ遷移することを検証
+experimental APIが十分に安定したら以下を実施:
 
-- [ ] Pythonのテストを更新
-  - [ ] `test_artifact_dual_format.py`を新しいAPIに合わせて修正
-  - [ ] `ArtifactArchive`/`ArtifactDir`への直接参照を削除
-  - [ ] 他のテストファイルで影響を受けるものを修正
-  - [ ] `Artifact.load_archive`/`load_dir`が現行の期待どおりに動作することを検証
+- [ ] `ommx::artifact` を `ommx::artifact_legacy` に移動
+- [ ] `ommx::experimental::artifact` を `ommx::artifact` として公開
+- [ ] 非推奨警告の追加
+- [ ] CHANGELOGの更新
 
-- [ ] ドキュメントの更新
-  - [ ] `ARTIFACT.md`に新しいAPI設計を記載
-  - [ ] 移行ガイドを追加（破壊的変更のため）
-  - [ ] Rustdocを更新
-  - [ ] CLIヘルプとユーザーガイドに`--format`オプションおよびデフォルト変更を明記
-  - [ ] Python API互換性ポリシー（現行関数の継続提供）をドキュメント化し、サンプルコードを更新
+## 移行のリスクと対策
 
-### Phase 8: 最終確認
+**方針変更により破壊的変更は最小化**:
 
-- [ ] 非推奨化の記録
-  - [ ] `get_image_dir()`は既に非推奨（2.1.0）
-  - [ ] 古い`Artifact<T>`型は削除（破壊的変更）
+1. **リスク**: experimental APIの安定性が不十分
+   - **対策**: 段階的移行により十分な検証期間を確保
+   - **対策**: 既存APIは残すので、問題があれば切り戻し可能
 
-- [ ] 破壊的変更の記録
-  - [ ] CHANGELOG.mdに記載
-  - [ ] Python側の`ArtifactArchive`、`ArtifactDir`削除
-  - [ ] Rust側の`Artifact<T>`削除
+2. **リスク**: Python側の既存コードへの影響
+   - **対策**: 内部実装のみ差し替え、外部APIは完全互換を維持
+   - **対策**: 既存テストが全てパスすることを確認
 
-## 破壊的変更のチェックリスト
+3. **リスク**: CLIツールの動作変更
+   - **対策**: experimental版への移行は慎重に実施
+   - **対策**: 既存の動作を保持しつつ、新しい機能を追加
 
-### Rust API（破壊的変更）
-- [ ] `Artifact<T: Image>`型が削除され、新しい`Artifact`型に置き換え
-  - 型パラメータがなくなる
-  - メソッドシグネチャが変更される
-  - `Artifact::from_oci_archive()` / `from_oci_dir()` / `from_remote()` が新しいAPI
+## Phase 4の完了基準
 
-- [ ] メソッドの変更
-  - `pull()` → `Result<Artifact<OciDir>>` から `Result<()>` に変更（自身を変更）
-  - `load()` → 既存の挙動（ローカル探索→未発見ならPull）を維持
-  - `save()` → 存続（ローカルレジストリへ既定: oci-archiveで保存）。必要に応じて`save_as_archive(path)`/`save_as_dir(path)`の補助メソッドを提供
-  - ローカルレジストリ探索とPullの一貫ロジックは`Artifact::load()`内部で完結させる（追加のutilは作らない）
-
-### Python API（部分的に破壊的）
-- [ ] `ArtifactArchive`、`ArtifactDir`が削除される
-  - ただし`__all__`に含まれていないので外部への影響は限定的
-  - もし使っているコードがあれば`Artifact`に移行が必要
-
-- [ ] `Artifact`の内部実装が変わる
-  - 公開APIは可能な限り互換性を保つ
-  - `load_archive()`/`load_dir()`は現行仕様で継続提供（非推奨化しない）
-
-### CLI（ユーザー影響あり）
-- [ ] `load`コマンドがデフォルトでoci-archive形式で保存
-  - 既存のoci-dir形式のアーティファクトは引き続き読み込み可能
-  - 新しく保存する場合は`.ommx`ファイルになる
-  - CLIヘルプと`--format dir`などの明示オプションで変更点を通知し、実行時にも警告メッセージを表示
-
-## リスクと対策
-
-1. **リスク**: 既存のoci-dir形式のアーティファクトが読み込めなくなる
-   - **対策**: `get_local_registry_path()`の結果に基づきarchive/dir双方を検知し、フォールバックロジックと整合性チェックを実装
-
-2. **リスク**: Python側の既存コードが動かなくなる
-   - **対策**: 互換レイヤーではなく現行APIの継続提供により互換性を維持
-
-3. **リスク**: 大規模な変更でバグが混入する
-   - **対策**: 段階的に実装し、各Phaseでテストを実行
-
-4. **リスク**: 段階的移行期間中に互換レイヤーの挙動が二重実装になり管理コストが増加
-   - **対策**: フィーチャーフラグや環境変数で旧API経路を有効化できるようにし、移行完了後に削除する計画をドキュメント化
-
-## 完了基準
-
-- [ ] すべてのRustテストがパス
-- [ ] すべてのPythonテストがパス
-- [ ] CLIツールで両フォーマットの読み書きが正常に動作
-- [ ] ドキュメントが更新されている
-- [ ] CLIヘルプと実行時警告でデフォルト変更が通知されている
+- [ ] CLIツールが experimental::artifact を使用
+- [ ] 全てのRustテストがパス
+- [ ] 全てのPythonテストがパス
+- [ ] 既存の機能に変更がないことを確認
+- [ ] experimental APIの動作が安定していることを確認
   
