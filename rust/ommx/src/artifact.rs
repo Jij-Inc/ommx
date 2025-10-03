@@ -95,30 +95,14 @@ pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
     get_local_registry_root().join(image_name.as_path())
 }
 
-/// Get the archive path for the given image name in the local registry
-/// This returns the expected path for oci-archive format (.ommx file), not checking if it exists
-pub fn get_local_registry_archive_path(image_name: &ImageName) -> PathBuf {
-    get_local_registry_root().join(format!("{}.ommx", image_name.as_path().display()))
-}
-
-/// Get the artifact path (directory or archive file) for the given image name in the local registry
-/// Returns the path to either an oci-dir directory or an oci-archive file
-pub fn get_artifact_path(image_name: &ImageName) -> Option<PathBuf> {
-    let root = get_local_registry_root();
-
-    // First check for oci-archive format (new default)
-    let archive_path = root.join(format!("{}.ommx", image_name.as_path().display()));
-    if archive_path.exists() && archive_path.is_file() {
-        return Some(archive_path);
-    }
-
-    // Fallback to oci-dir format (backward compatibility)
-    let dir_path = get_image_dir(image_name);
-    if dir_path.exists() && dir_path.is_dir() && dir_path.join("oci-layout").exists() {
-        return Some(dir_path);
-    }
-
-    None
+/// Get the base path for the given image name in the local registry
+///
+/// This returns the path where the artifact should be stored, without format-specific extensions.
+/// The caller should check:
+/// - If this path is a directory with oci-layout -> oci-dir format
+/// - If "{path}.ommx" exists as a file -> oci-archive format
+pub fn get_local_registry_path(image_name: &ImageName) -> PathBuf {
+    get_local_registry_root().join(image_name.as_path())
 }
 
 #[deprecated(note = "Use get_image_dir instead")]

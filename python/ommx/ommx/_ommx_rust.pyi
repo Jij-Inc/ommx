@@ -1175,12 +1175,6 @@ class Sense(Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-def get_artifact_path(image_name: builtins.str) -> typing.Optional[builtins.str]:
-    r"""
-    Get the artifact path (directory or archive file) for the given image name in the local registry
-    Returns the path to either an oci-dir directory or an oci-archive file, or None if not found
-    """
-
 def get_default_atol() -> builtins.float: ...
 def get_image_dir(image_name: builtins.str) -> builtins.str:
     r"""
@@ -1189,11 +1183,14 @@ def get_image_dir(image_name: builtins.str) -> builtins.str:
     - The directory may not exist if the image is not in the local registry.
     """
 
-def get_local_registry_archive_path(image_name: builtins.str) -> builtins.str:
+def get_local_registry_path(image_name: builtins.str) -> builtins.str:
     r"""
-    Get the archive path for the given image name in the local registry
+    Get the base path for the given image name in the local registry
 
-    This returns the expected path for oci-archive format (.ommx file), not checking if it exists
+    This returns the path where the artifact should be stored, without format-specific extensions.
+    The caller should check:
+    - If this path is a directory with oci-layout -> oci-dir format
+    - If "{path}.ommx" exists as a file -> oci-archive format
     """
 
 def get_local_registry_root() -> builtins.str:

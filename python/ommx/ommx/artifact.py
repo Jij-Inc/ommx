@@ -17,19 +17,20 @@ from ._ommx_rust import (
     get_local_registry_root,
     set_local_registry_root,
     get_image_dir,
-    get_local_registry_archive_path as _get_local_registry_archive_path,
-    get_artifact_path as _get_artifact_path,
+    get_local_registry_path as _get_local_registry_path,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
 
-def get_artifact_path(image_name: str) -> Path | None:
-    """Get the artifact path (directory or archive file) for the given image name in the local registry.
+def get_local_registry_path(image_name: str) -> Path:
+    """Get the base path for the given image name in the local registry.
 
-    Returns the path to either an oci-dir directory or an oci-archive file, or None if not found.
+    This returns the path where the artifact should be stored, without format-specific extensions.
+    The caller should check:
+    - If this path is a directory with oci-layout -> oci-dir format
+    - If "{path}.ommx" exists as a file -> oci-archive format
     """
-    path_str = _get_artifact_path(image_name)
-    return Path(path_str) if path_str is not None else None
+    return Path(_get_local_registry_path(image_name))
 
 
 __all__ = [
@@ -44,7 +45,7 @@ __all__ = [
     "get_local_registry_root",
     "set_local_registry_root",
     "get_image_dir",
-    "get_artifact_path",
+    "get_local_registry_path",
 ]
 
 
@@ -179,18 +180,21 @@ class Artifact:
         sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
 
         """
-        # Check if artifact exists locally in either format
-        artifact_path = get_artifact_path(image_name)
-        if artifact_path:
-            if artifact_path.is_file():
-                # Load from oci-archive format
-                base = ArtifactArchive.from_oci_archive(str(artifact_path))
-            else:
-                # Load from oci-dir format
-                base = ArtifactDir.from_oci_dir(str(artifact_path))
+        # Get the base path for the image in local registry
+        base_path = get_local_registry_path(image_name)
+
+        # Check for oci-archive format (priority)
+        archive_path = base_path.with_suffix(".ommx")
+        if archive_path.exists() and archive_path.is_file():
+            base = ArtifactArchive.from_oci_archive(str(archive_path))
             return Artifact(base)
 
-        # Not found locally, use the original logic to pull from remote
+        # Check for oci-dir format (backward compatibility)
+        if base_path.exists() and base_path.is_dir():
+            base = ArtifactDir.from_oci_dir(str(base_path))
+            return Artifact(base)
+
+        # Not found locally, pull from remote
         base = ArtifactDir.from_image_name(image_name)
         return Artifact(base)
 
@@ -551,8 +555,9 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
-        # Generate path for oci-archive format in local registry
-        archive_path = Path(_get_local_registry_archive_path(image_name))
+        # Get base path and create oci-archive format path
+        base_path = get_local_registry_path(image_name)
+        archive_path = base_path.with_suffix(".ommx")
         # Ensure parent directory exists
         archive_path.parent.mkdir(parents=True, exist_ok=True)
         return ArtifactBuilder(

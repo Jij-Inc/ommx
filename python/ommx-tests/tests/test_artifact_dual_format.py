@@ -16,7 +16,7 @@ from ommx.artifact import (
     Artifact,
     ArtifactBuilder,
     ArtifactDirBuilder,
-    get_artifact_path,
+    get_local_registry_path,
 )
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
@@ -38,10 +38,11 @@ def test_new_artifacts_default_to_archive_format(test_instance):
     artifact = builder.build()
 
     # Verify artifact is stored as oci-archive format (.ommx file)
-    artifact_path = get_artifact_path(image_name)
-    assert artifact_path is not None
-    assert artifact_path.is_file()
-    assert artifact_path.suffix == ".ommx"
+    base_path = get_local_registry_path(image_name)
+    archive_path = base_path.with_suffix(".ommx")
+    assert archive_path.exists()
+    assert archive_path.is_file()
+    assert archive_path.suffix == ".ommx"
 
     # Verify we can load it back
     loaded = Artifact.load(image_name)
@@ -60,10 +61,10 @@ def test_legacy_oci_dir_format_still_works(test_instance):
     artifact = builder.build()
 
     # Verify artifact is stored as oci-dir format (directory)
-    artifact_path = get_artifact_path(image_name)
-    assert artifact_path is not None
-    assert artifact_path.is_dir()
-    assert (artifact_path / "oci-layout").exists()
+    dir_path = get_local_registry_path(image_name)
+    assert dir_path.exists()
+    assert dir_path.is_dir()
+    assert (dir_path / "oci-layout").exists()
 
     # Verify we can load it back
     loaded = Artifact.load(image_name)
@@ -91,11 +92,15 @@ def test_dual_format_interoperability(test_instance):
     assert loaded_archive.image_name == archive_image
     assert loaded_dir.image_name == dir_image
 
-    # get_artifact_path correctly identifies both formats
-    archive_path = get_artifact_path(archive_image)
-    dir_path = get_artifact_path(dir_image)
-    assert archive_path is not None and archive_path.is_file()
-    assert dir_path is not None and dir_path.is_dir()
+    # get_local_registry_path returns base path, format checked via path suffix/directory
+    archive_base_path = get_local_registry_path(archive_image)
+    archive_file = archive_base_path.with_suffix(".ommx")
+    assert archive_file.exists() and archive_file.is_file()
 
-    # Returns None for non-existent artifacts
-    assert get_artifact_path(f"test.local/nonexistent:{uuid.uuid4()}") is None
+    dir_base_path = get_local_registry_path(dir_image)
+    assert dir_base_path.exists() and dir_base_path.is_dir()
+
+    # Non-existent artifacts don't have files/directories
+    nonexistent_base = get_local_registry_path(f"test.local/nonexistent:{uuid.uuid4()}")
+    assert not nonexistent_base.exists()
+    assert not nonexistent_base.with_suffix(".ommx").exists()
