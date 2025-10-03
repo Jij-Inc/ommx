@@ -18,6 +18,7 @@ from ._ommx_rust import (
     set_local_registry_root,
     get_image_dir,
     get_local_registry_path as _get_local_registry_path,
+    PyArtifact as _PyArtifact,  # Experimental Artifact API
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
@@ -131,13 +132,16 @@ class ArtifactDir(ArtifactBase):
         self._base.push()
 
 
-@dataclass
 class Artifact:
     """
     Reader for OMMX Artifacts.
+
+    Now uses experimental::artifact internally for improved performance and format handling.
     """
 
-    _base: ArtifactBase
+    def __init__(self, rust_artifact: _PyArtifact):
+        """Internal constructor - use static methods instead"""
+        self._rust = rust_artifact
 
     @staticmethod
     def load_archive(path: str | Path) -> Artifact:
@@ -156,13 +160,13 @@ class Artifact:
             path = Path(path)
 
         if path.is_file():
-            base = ArtifactArchive.from_oci_archive(str(path))
+            rust_artifact = _PyArtifact.from_oci_archive(str(path))
         elif path.is_dir():
-            base = ArtifactDir.from_oci_dir(str(path))
+            rust_artifact = _PyArtifact.from_oci_dir(str(path))
         else:
             raise ValueError("Path must be a file or a directory")
 
-        return Artifact(base)
+        return Artifact(rust_artifact)
 
     @staticmethod
     def load(image_name: str) -> Artifact:
@@ -180,33 +184,19 @@ class Artifact:
         sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
 
         """
-        # Get the base path for the image in local registry
-        base_path = get_local_registry_path(image_name)
-
-        # Check for oci-archive format (priority)
-        archive_path = base_path.with_suffix(".ommx")
-        if archive_path.exists() and archive_path.is_file():
-            base = ArtifactArchive.from_oci_archive(str(archive_path))
-            return Artifact(base)
-
-        # Check for oci-dir format (backward compatibility)
-        if base_path.exists() and base_path.is_dir():
-            base = ArtifactDir.from_oci_dir(str(base_path))
-            return Artifact(base)
-
-        # Not found locally, pull from remote
-        base = ArtifactDir.from_image_name(image_name)
-        return Artifact(base)
+        # Use experimental Artifact.load which handles format detection and remote pull
+        rust_artifact = _PyArtifact.load(image_name)
+        return Artifact(rust_artifact)
 
     def push(self):
         """
         Push the artifact to remote registry
         """
-        self._base.push()
+        self._rust.push()
 
     @property
     def image_name(self) -> str | None:
-        return self._base.image_name
+        return self._rust.image_name
 
     @property
     def annotations(self) -> dict[str, str]:
@@ -220,11 +210,11 @@ class Artifact:
         Test artifact created by examples/artifact_archive.rs
 
         """
-        return self._base.annotations
+        return self._rust.annotations
 
     @property
     def layers(self) -> list[Descriptor]:
-        return self._base.layers
+        return self._rust.layers
 
     def get_layer_descriptor(self, digest: str) -> Descriptor:
         """
@@ -244,7 +234,7 @@ class Artifact:
     def get_blob(self, digest: str | Descriptor) -> bytes:
         if isinstance(digest, Descriptor):
             digest = digest.digest
-        return self._base.get_blob(digest)
+        return self._rust.get_blob(digest)
 
     def get_layer(self, descriptor: Descriptor) -> Instance | Solution | numpy.ndarray:
         """

@@ -9,6 +9,9 @@ use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
+// Import experimental artifact
+use ommx::experimental::artifact::Artifact as ExperimentalArtifact;
+
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
@@ -183,4 +186,86 @@ pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
 pub fn get_local_registry_path(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
     Ok(ommx::artifact::get_local_registry_path(&image_name))
+}
+
+
+// ============================================================================
+// Experimental Artifact API - Using ommx::experimental::artifact
+// ============================================================================
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct PyArtifact(Mutex<ExperimentalArtifact>);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl PyArtifact {
+    #[staticmethod]
+    pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
+        let artifact = ExperimentalArtifact::from_oci_archive(&path)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
+        let artifact = ExperimentalArtifact::from_oci_dir(&path)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn from_remote(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let artifact = ExperimentalArtifact::from_remote(image_name)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn load(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let artifact = ExperimentalArtifact::load(&image_name)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[getter]
+    pub fn image_name(&mut self) -> Option<String> {
+        self.0.lock().unwrap().image_name()
+    }
+
+    #[getter]
+    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
+        self.0.lock().unwrap().annotations()
+    }
+
+    #[getter]
+    pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
+        let layers = self.0.lock().unwrap().layers()?;
+        Ok(layers.into_iter().map(PyDescriptor::from).collect())
+    }
+
+    pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
+        let digest = Digest::new(digest)?;
+        let blob = self.0.lock().unwrap().get_blob(&digest)?;
+        Ok(PyBytes::new(py, blob.as_ref()))
+    }
+
+    pub fn save(&mut self) -> Result<()> {
+        self.0.lock().unwrap().save()
+    }
+
+    pub fn save_as_archive(&mut self, path: PathBuf) -> Result<()> {
+        self.0.lock().unwrap().save_as_archive(&path)
+    }
+
+    pub fn save_as_dir(&mut self, path: PathBuf) -> Result<()> {
+        self.0.lock().unwrap().save_as_dir(&path)
+    }
+
+    pub fn pull(&mut self) -> Result<()> {
+        self.0.lock().unwrap().pull()
+    }
+
+    pub fn push(&mut self) -> Result<()> {
+        self.0.lock().unwrap().push()
+    }
 }
