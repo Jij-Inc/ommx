@@ -106,7 +106,7 @@
 
 ### Phase 1: 新しいArtifact型の実装
 
-- [ ] 新しい`Artifact` enumを実装
+- [x] 新しい`Artifact` enumを実装
   ```rust
   pub enum Artifact {
       Archive(OciArtifact<OciArchive>),
@@ -115,55 +115,69 @@
   }
   ```
 
-- [ ] 基本メソッドの実装
-  - [ ] `image_name() -> Option<&str>`
-  - [ ] `annotations() -> &HashMap<String, String>`
-  - [ ] `layers() -> &[Descriptor]`
-  - [ ] `get_blob(digest: &str) -> Result<Vec<u8>>`
-  - [ ] `get_manifest() -> Result<ImageManifest>`
+- [x] 基本メソッドの実装
+  - [x] `image_name() -> Option<String>`
+  - [x] `annotations() -> Result<HashMap<String, String>>`
+  - [x] `layers() -> Result<Vec<Descriptor>>`
+  - [x] `get_blob(digest: &Digest) -> Result<Vec<u8>>`
+  - [x] `get_manifest() -> Result<ImageManifest>`
+  - [x] 追加実装: `get_layer()`, `get_config()`, `get_solution()`, `get_instance()`, `get_parametric_instance()`, `get_sample_set()`, `get_solutions()`, `get_instances()`
 
 ### Phase 2: 読み込みメソッドの実装
 
-- [ ] `Artifact::from_oci_archive(path: &Path) -> Result<Self>`
-  - [ ] `OciArtifact::from_oci_archive()`を呼んで`Archive`variantに格納
+- [x] `Artifact::from_oci_archive(path: &Path) -> Result<Self>`
+  - [x] `OciArtifact::from_oci_archive()`を呼んで`Archive`variantに格納
 
-- [ ] `Artifact::from_oci_dir(path: &Path) -> Result<Self>`
-  - [ ] `OciArtifact::from_oci_dir()`を呼んで`Dir`variantに格納
+- [x] `Artifact::from_oci_dir(path: &Path) -> Result<Self>`
+  - [x] `OciArtifact::from_oci_dir()`を呼んで`Dir`variantに格納
 
-- [ ] `Artifact::from_remote(image_name: ImageName) -> Result<Self>`
-  - [ ] `OciArtifact::from_remote()`を呼んで`Remote`variantに格納
+- [x] `Artifact::from_remote(image_name: ImageName) -> Result<Self>`
+  - [x] `OciArtifact::from_remote()`を呼んで`Remote`variantに格納
 
-- [ ] `Artifact::load(image_name: &ImageName) -> Result<Self>`
-  - [ ] `get_local_registry_path()`でベースパスを取得し、`.ommx`（archive）/ディレクトリ（dir）の存在を判定
-  - [ ] `.ommx`とディレクトリが両方ある場合はArchiveを優先、破損検知時はDirへフォールバック
-  - [ ] どちらも存在しない → `from_remote()`で取得してローカルレジストリへoci-archiveで保存し、`Archive` variantで返す
+- [x] `Artifact::load(image_name: &ImageName) -> Result<Self>`
+  - [x] `get_local_registry_path()`でベースパスを取得し、`.ommx`（archive）/ディレクトリ（dir）の存在を判定
+  - [x] `.ommx`とディレクトリが両方ある場合はArchiveを優先、破損検知時はDirへフォールバック
+  - [x] どちらも存在しない → `from_remote()`で取得してローカルレジストリへoci-archiveで保存し、`Archive` variantで返す
 
 - （任意）[ ] `Artifact::from_path(path: &Path) -> Result<Self>`（将来的な追加候補）
   - [ ] パスがファイル → `from_oci_archive()`
   - [ ] パスがディレクトリ → `from_oci_dir()`
   - [ ] `.ommx`とディレクトリが同居する場合の選択ロジックを共通化
 
-- [ ] 既存のローカルレジストリ関連ユーティリティは`get_local_registry_path()`を中核としてそのまま再利用し、名称変更や新設は行わない
+- [x] 既存のローカルレジストリ関連ユーティリティは`get_local_registry_path()`を中核としてそのまま再利用し、名称変更や新設は行わない
 
 ### Phase 3: 保存メソッドの実装
 
-- [ ] `save_as_archive(&mut self, path: &Path) -> Result<()>`
-  - [ ] 内部のvariantに関わらず、oci-archive形式で保存
+- [x] `save_as_archive(&mut self, path: &Path) -> Result<()>`
+  - [x] 内部のvariantに関わらず、oci-archive形式で保存
+  - [x] 保存後に`Archive` variantへ自身を更新
 
-- [ ] `save_as_dir(&mut self, path: &Path) -> Result<()>`
-  - [ ] 内部のvariantに関わらず、oci-dir形式で保存
+- [x] `save_as_dir(&mut self, path: &Path) -> Result<()>`
+  - [x] 内部のvariantに関わらず、oci-dir形式で保存
+  - [x] 保存後に`Dir` variantへ自身を更新
 
-- [ ] `save(&mut self) -> Result<()>`
-  - [ ] イメージ名を取得
-  - [ ] デフォルトでoci-archive形式でローカルレジストリに保存
-  - [ ] 既に存在する場合はスキップ
+- [x] `save(&mut self) -> Result<()>`
+  - [x] イメージ名を取得
+  - [x] デフォルトでoci-archive形式でローカルレジストリに保存
+  - [x] 既に存在する場合はスキップ
 
-- [ ] `pull(&mut self) -> Result<()>`
-  - [ ] `Remote`の場合のみ動作
-  - [ ] デフォルトでoci-archive形式でローカルレジストリに保存し、`Remote` variantを`Archive`variantへ更新
+- [x] `pull(&mut self) -> Result<()>`
+  - [x] `Remote`の場合のみ動作
+  - [x] デフォルトでoci-archive形式でローカルレジストリに保存し、`Remote` variantを`Archive`variantへ更新
 
-- [ ] `push(&mut self) -> Result<()>`
-  - [ ] リモートにpush
+- [x] `push(&mut self) -> Result<()>`
+  - [x] リモートにpush
+  - [x] Basic認証のサポート
+
+- [x] `Builder` enumの実装
+  - [x] Archive/Dir variantsをサポート
+  - [x] `add_instance()`, `add_solution()`, `add_parametric_instance()`, `add_sample_set()`, `add_config()`
+  - [x] `add_annotation()` - manifest annotationsを設定
+  - [x] `build()` - `Artifact`を生成
+
+- [x] テストの実装
+  - [x] 13個のテストケース (全てパス)
+  - [x] load/save/format変換/annotation設定のテスト
 
 ### Phase 4: 古いArtifact<T>の削除と移行
 
