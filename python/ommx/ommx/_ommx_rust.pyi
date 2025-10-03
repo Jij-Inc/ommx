@@ -1191,6 +1191,9 @@ def get_local_registry_root() -> builtins.str:
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def qplib_instance_annotations() -> builtins.dict[
+    builtins.str, builtins.dict[builtins.str, builtins.str]
+]: ...
 def set_default_atol(value: builtins.float) -> None: ...
 def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
     r"""

@@ -62,3 +62,58 @@ def miplib2017_instance_annotations() -> dict[str, dict[str, str]]:
 
     """
     return _ommx_rust.miplib2017_instance_annotations()
+
+
+def qplib(tag: str) -> v1.Instance:
+    """
+    Load a QPLIB instance as OMMX Artifact.
+
+    >>> from ommx.dataset import qplib
+    >>> instance = qplib("0018")
+
+    Common annotations
+
+    >>> instance.title
+    'QPLIB_0018'
+    >>> instance.authors
+    ['Andrea Scozzari']
+    >>> instance.license
+    'CC-BY-4.0'
+    >>> instance.num_variables
+    50
+    >>> instance.num_constraints  # QPLIB counts l <= f(x) <= u as 1, OMMX counts as 2
+    2
+
+    QPLIB-specific annotations are stored with `org.ommx.qplib.*` keys.
+
+    >>> instance.annotations["org.ommx.qplib.nvars"]
+    '50'
+    >>> instance.annotations["org.ommx.qplib.ncons"]
+    '1'
+    >>> instance.annotations["org.ommx.qplib.objtype"]
+    'quadratic'
+    >>> instance.annotations["org.ommx.qplib.objcurvature"]
+    'indefinite'
+    >>> instance.annotations["org.ommx.qplib.probtype"]
+    'QCL'
+    >>> instance.annotations["org.ommx.qplib.url"]
+    'http://qplib.zib.de/QPLIB_0018.html'
+
+    """
+    artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/qplib:{tag}")
+    return artifact.instance
+
+
+def qplib_instance_annotations() -> dict[str, dict[str, str]]:
+    """
+    Return QPLIB instance annotations.
+
+    >>> from ommx.dataset import qplib_instance_annotations
+    >>> annotations = qplib_instance_annotations()
+    >>> len(annotations)
+    453
+    >>> annotations["QPLIB_0018"]["org.ommx.qplib.probtype"]
+    'QCL'
+
+    """
+    return _ommx_rust.qplib_instance_annotations()
