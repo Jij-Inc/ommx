@@ -18,7 +18,7 @@ pub use annotations::*;
 pub use builder::Builder;
 pub use config::*;
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use ocipkg::{
     image::{Image, OciArchive, OciArtifact, OciDir, Remote},
     oci_spec::image::Descriptor,
@@ -169,20 +169,6 @@ fn is_oci_archive(path: &Path) -> bool {
     false
 }
 
-fn auth_from_env() -> Result<(String, String, String)> {
-    if let (Ok(domain), Ok(username), Ok(password)) = (
-        env::var("OMMX_BASIC_AUTH_DOMAIN"),
-        env::var("OMMX_BASIC_AUTH_USERNAME"),
-        env::var("OMMX_BASIC_AUTH_PASSWORD"),
-    ) {
-        log::info!(
-            "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
-        );
-        return Ok((domain, username, password));
-    }
-    bail!("No authentication information found in environment variables");
-}
-
 /// OMMX Artifact with dynamic format handling
 ///
 /// This enum replaces the parametric `Artifact<T: Image>` with a simpler API that
@@ -196,7 +182,7 @@ fn auth_from_env() -> Result<(String, String, String)> {
 pub enum Artifact {
     Archive(OciArtifact<OciArchive>),
     Dir(OciArtifact<OciDir>),
-    Remote(OciArtifact<Remote>),
+    Remote(Box<OciArtifact<Remote>>),
 }
 
 impl Artifact {
@@ -217,7 +203,7 @@ impl Artifact {
     /// Create an Artifact from a remote registry
     pub fn from_remote(image_name: ImageName) -> Result<Self> {
         let artifact = OciArtifact::from_remote(image_name)?;
-        Ok(Self::Remote(artifact))
+        Ok(Self::Remote(Box::new(artifact)))
     }
 
     /// Get the image name if available
@@ -225,7 +211,7 @@ impl Artifact {
         match self {
             Self::Archive(a) => a.get_name().ok().map(|n| n.to_string()),
             Self::Dir(a) => a.get_name().ok().map(|n| n.to_string()),
-            Self::Remote(a) => a.get_name().ok().map(|n| n.to_string()),
+            Self::Remote(a) => a.as_mut().get_name().ok().map(|n| n.to_string()),
         }
     }
 
