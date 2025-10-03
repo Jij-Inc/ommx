@@ -87,6 +87,35 @@ This format is suitable for:
 - **Format detection is automatic** - the system transparently handles both formats
 - **Cross-format operations are supported** - you can load from one format and save to another
 
+### Local Registry Directory Structure
+
+Artifacts are stored in the local registry with the following path structure. Image names are converted to file system paths with `:` (colon) in tags escaped to `__` (double underscore):
+
+**Example: `ghcr.io/jij-inc/ommx/qplib:3734`**
+
+```
+<LOCAL_REGISTRY_ROOT>/
+└── ghcr.io/
+    └── jij-inc/
+        └── ommx/
+            └── qplib/
+                ├── __3734/              # oci-dir format (: converted to __)
+                │   ├── oci-layout
+                │   ├── index.json
+                │   └── blobs/
+                │       └── sha256/...
+                │
+                └── __3734.ommx         # oci-archive format (: converted to __)
+```
+
+**Path Conversion Rules:**
+- Tags with `:` are escaped to `__` (e.g., `my-app:v1.0` → `my-app/__v1.0`)
+- oci-dir format: `<escaped-path>/`
+- oci-archive format: `<escaped-path>.ommx`
+
+**Format Priority:**
+When both formats exist for the same image name, **oci-archive format takes precedence**. The system checks for the `.ommx` file first, then falls back to the directory format.
+
 ### Migration Between Formats
 
 Artifacts can be converted between formats using the standard API:
