@@ -183,8 +183,9 @@
 
 **方針変更**: `ommx::artifact::Artifact<T>`は当面削除せず、使用箇所を段階的に`ommx::experimental::artifact::Artifact`に置き換える。
 
-- [ ] Rust内部コードの移行
-  - [ ] CLIツール (`rust/ommx/src/bin/ommx.rs`) を experimental::artifact に移行
+- [x] Rust内部コードの移行
+  - [x] CLIツール (`rust/ommx/src/bin/ommx.rs`) を experimental::artifact に移行
+  - [x] 全てのRustテストがパス（313テスト）
   - [ ] 既存のテストコードを確認し、必要に応じて experimental 版を使用
   - [ ] 他のRustコードで `ommx::artifact::Artifact<T>` を使用している箇所を調査
 
@@ -244,11 +245,11 @@ experimental APIが十分に安定したら以下を実施:
    - **対策**: experimental版への移行は慎重に実施
    - **対策**: 既存の動作を保持しつつ、新しい機能を追加
 
-## Phase 4の完了基準
+## Phase 4 & 5の完了基準
 
-- [ ] CLIツールが experimental::artifact を使用
-- [ ] 全てのRustテストがパス
-- [ ] 全てのPythonテストがパス
-- [ ] 既存の機能に変更がないことを確認
-- [ ] experimental APIの動作が安定していることを確認
+- [x] CLIツールが experimental::artifact を使用
+- [x] 全てのRustテストがパス（313テスト）
+- [x] 全てのPythonテストがパス（93 unit + 1 doctest + 37 benchmark + 全アダプター）
+- [x] 既存の機能に変更がないことを確認
+- [x] experimental APIの動作が安定していることを確認
   
