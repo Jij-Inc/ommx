@@ -162,9 +162,9 @@ fn test_create_empty_oci_archive_artifact() {
     let image_name = ocipkg::ImageName::parse("example.com/test/empty-archive:v1").unwrap();
     let archive_path = temp_dir.join("empty_artifact.ommx");
 
-    // Build empty artifact in OCI archive format
-    let builder =
-        crate::artifact::Builder::new_archive(archive_path.clone(), image_name.clone()).unwrap();
+    // Build empty artifact in OCI archive format using experimental Builder
+    let mut builder = Builder::new_archive(archive_path.clone(), image_name.clone()).unwrap();
+    builder.add_config(Config {}).unwrap();
     let _artifact = builder.build().unwrap();
 
     // Verify archive file exists

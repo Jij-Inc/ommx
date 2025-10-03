@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use ommx::artifact::Builder;
+use ommx::experimental::artifact::Builder;
 use std::{fs, path::Path};
 use zip::ZipArchive;
 

@@ -73,6 +73,34 @@ impl Builder {
         Self::new_dir(path, image_name)
     }
 
+    /// Create a new artifact builder for a GitHub container registry image.
+    ///
+    /// This creates an oci-archive artifact in the local registry.
+    pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        use crate::artifact::ghcr;
+        use url::Url;
+
+        let image_name = ghcr(org, repo, name, tag)?;
+        let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
+
+        let base_path = get_local_registry_root().join(image_name.as_path());
+        let archive_path = base_path.with_extension("ommx");
+
+        if archive_path.exists() {
+            bail!("Artifact already exists: {}", archive_path.display());
+        }
+
+        let mut builder = Self::new_archive(archive_path, image_name)?;
+        match &mut builder {
+            Self::Archive(b) => {
+                b.add_source(&source);
+            }
+            Self::Dir(_) => unreachable!("new_archive always returns Archive variant"),
+        }
+
+        Ok(builder)
+    }
+
     pub fn add_instance(
         &mut self,
         instance: v1::Instance,

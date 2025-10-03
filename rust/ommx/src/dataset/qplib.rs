@@ -1,5 +1,5 @@
 use crate::{
-    artifact::{ghcr, Artifact, InstanceAnnotations},
+    artifact::{ghcr, InstanceAnnotations},
     v1::Instance,
 };
 
@@ -283,7 +283,8 @@ pub fn load(tag: &str) -> Result<(Instance, InstanceAnnotations)> {
     );
 
     let image_name = ghcr("Jij-Inc", "ommx", "qplib", tag)?;
-    let mut artifact = Artifact::from_remote(image_name)?.pull()?;
+    let mut artifact = crate::experimental::artifact::Artifact::from_remote(image_name)?;
+    artifact.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(
         instances.len() == 1,
