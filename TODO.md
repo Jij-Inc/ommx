@@ -195,14 +195,19 @@
 
 ### Phase 5: Python側のAPI整理（experimental API使用）
 
-- [ ] `python/ommx/src/artifact.rs`の更新
-  - [ ] experimental::artifact のPyO3バインディングを追加
-  - [ ] 既存のPython APIは内部実装のみ experimental 版に差し替え
-  - [ ] 外部APIは互換性を維持（`ArtifactArchive`、`ArtifactDir`も当面維持）
+- [x] `python/ommx/src/artifact.rs`の更新
+  - [x] experimental::artifact のPyO3バインディングを追加（`PyArtifact`, `PyArtifactBuilder`）
+  - [x] 既存のPython APIは内部実装のみ experimental 版に差し替え
+  - [x] 古い`ArtifactArchive`、`ArtifactDir`、`ArtifactArchiveBuilder`、`ArtifactDirBuilder`を削除
+  - [x] `builder.rs`ファイルを削除
+  - [x] `PyArtifactBuilder`を`Option<Builder>`で実装（所有権管理）
+  - [x] `PyArtifact`は`Mutex<ExperimentalArtifact>`（Syncトレイト要件のため）
+  - [x] `ArtifactBuilder.new_dir()`メソッドを追加してoci-dir形式をサポート
 
-- [ ] Pythonテストの確認
-  - [ ] 既存のテストが全てパスすることを確認
-  - [ ] experimental 版への移行による動作変更がないことを検証
+- [x] Pythonテストの確認
+  - [x] 既存のテストが全てパスすることを確認（93 unit + 1 doctest + 37 benchmark + 全アダプター）
+  - [x] experimental 版への移行による動作変更がないことを検証
+  - [x] stubgen実行とtype stub更新
 
 ### Phase 6: ドキュメントとテストの更新
 
