@@ -269,3 +269,78 @@ impl PyArtifact {
         self.0.lock().unwrap().push()
     }
 }
+
+
+// ============================================================================
+// Experimental Builder API
+// ============================================================================
+
+use ommx::experimental::artifact::Builder as ExperimentalBuilder;
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct PyArtifactBuilder(Option<ExperimentalBuilder>);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl PyArtifactBuilder {
+    #[staticmethod]
+    pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let builder = ExperimentalBuilder::new_archive(path, image_name)?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
+        let builder = ExperimentalBuilder::new_archive_unnamed(path)?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn temp_archive() -> Result<Self> {
+        let builder = ExperimentalBuilder::temp_archive()?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn new_dir(path: PathBuf, image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let builder = ExperimentalBuilder::new_dir(path, image_name)?;
+        Ok(Self(Some(builder)))
+    }
+
+    pub fn add_annotation(&mut self, key: String, value: String) {
+        if let Some(builder) = &mut self.0 {
+            builder.add_annotation(key, value);
+        }
+    }
+
+
+    pub fn add_layer(&mut self, media_type: &str, blob: &Bound<PyBytes>, annotations: HashMap<String, String>) -> Result<PyDescriptor> {
+        use ocipkg::distribution::MediaType;
+
+        let media_type = MediaType::Other(media_type.to_string());
+
+        let builder = self.0.as_mut().ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+
+        let blob_bytes = blob.as_bytes();
+
+        let desc = match builder {
+            ExperimentalBuilder::Archive(b) => {
+                b.add_layer(media_type, blob_bytes, annotations)?
+            }
+            ExperimentalBuilder::Dir(b) => {
+                b.add_layer(media_type, blob_bytes, annotations)?
+            }
+        };
+        Ok(PyDescriptor::from(desc))
+    }
+
+    pub fn build(&mut self) -> Result<PyArtifact> {
+        let builder = self.0.take().ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+        let artifact = builder.build()?;
+        Ok(PyArtifact(Mutex::new(artifact)))
+    }
+}

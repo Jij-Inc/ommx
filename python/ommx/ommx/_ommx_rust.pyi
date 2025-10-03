@@ -723,6 +723,30 @@ class PyArtifact:
     def pull(self) -> None: ...
     def push(self) -> None: ...
 
+class PyArtifactBuilder:
+    @staticmethod
+    def new_archive(
+        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
+    ) -> PyArtifactBuilder: ...
+    @staticmethod
+    def new_archive_unnamed(
+        path: builtins.str | os.PathLike | pathlib.Path,
+    ) -> PyArtifactBuilder: ...
+    @staticmethod
+    def temp_archive() -> PyArtifactBuilder: ...
+    @staticmethod
+    def new_dir(
+        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
+    ) -> PyArtifactBuilder: ...
+    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
+    def add_layer(
+        self,
+        media_type: builtins.str,
+        blob: bytes,
+        annotations: typing.Mapping[builtins.str, builtins.str],
+    ) -> Descriptor: ...
+    def build(self) -> PyArtifact: ...
+
 class Quadratic:
     linear_terms: builtins.dict[builtins.int, builtins.float]
     constant_term: builtins.float

@@ -15,7 +15,6 @@ import pytest
 from ommx.artifact import (
     Artifact,
     ArtifactBuilder,
-    ArtifactDirBuilder,
     get_local_registry_path,
 )
 from ommx.testing import SingleFeasibleLPGenerator, DataType
@@ -54,14 +53,13 @@ def test_legacy_oci_dir_format_still_works(test_instance):
     """Test that the legacy oci-dir format can still be created and loaded."""
     image_name = f"test.local/dir-legacy:{uuid.uuid4()}"
 
-    # Build artifact using the legacy dir format
-    dir_builder_base = ArtifactDirBuilder.new(image_name)
-    builder = ArtifactBuilder(dir_builder_base)
+    # Build artifact using the dir format via new_dir()
+    dir_path = get_local_registry_path(image_name)
+    builder = ArtifactBuilder.new_dir(dir_path, image_name)
     builder.add_instance(test_instance)
     artifact = builder.build()
 
     # Verify artifact is stored as oci-dir format (directory)
-    dir_path = get_local_registry_path(image_name)
     assert dir_path.exists()
     assert dir_path.is_dir()
     assert (dir_path / "oci-layout").exists()
@@ -82,7 +80,8 @@ def test_dual_format_interoperability(test_instance):
     archive_builder.add_instance(test_instance)
     archive_builder.build()
 
-    dir_builder = ArtifactBuilder(ArtifactDirBuilder.new(dir_image))
+    dir_path = get_local_registry_path(dir_image)
+    dir_builder = ArtifactBuilder.new_dir(dir_path, dir_image)
     dir_builder.add_instance(test_instance)
     dir_builder.build()
 

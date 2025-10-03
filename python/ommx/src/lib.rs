@@ -78,6 +78,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<PyDescriptor>()?;
     // Experimental Artifact API
     m.add_class::<PyArtifact>()?;
+    m.add_class::<PyArtifactBuilder>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_image_dir, m)?)?;
