@@ -58,7 +58,6 @@ pub fn get_local_registry_path(image_name: &str) -> Result<PathBuf> {
     Ok(ommx::artifact::get_local_registry_path(&image_name))
 }
 
-
 // ============================================================================
 // Experimental Artifact API - Using ommx::experimental::artifact
 // ============================================================================
@@ -140,7 +139,6 @@ impl PyArtifact {
     }
 }
 
-
 // ============================================================================
 // Experimental Builder API
 // ============================================================================
@@ -187,29 +185,35 @@ impl PyArtifactBuilder {
         }
     }
 
-
-    pub fn add_layer(&mut self, media_type: &str, blob: &Bound<PyBytes>, annotations: HashMap<String, String>) -> Result<PyDescriptor> {
+    pub fn add_layer(
+        &mut self,
+        media_type: &str,
+        blob: &Bound<PyBytes>,
+        annotations: HashMap<String, String>,
+    ) -> Result<PyDescriptor> {
         use ocipkg::distribution::MediaType;
 
         let media_type = MediaType::Other(media_type.to_string());
 
-        let builder = self.0.as_mut().ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+        let builder = self
+            .0
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
 
         let blob_bytes = blob.as_bytes();
 
         let desc = match builder {
-            ExperimentalBuilder::Archive(b) => {
-                b.add_layer(media_type, blob_bytes, annotations)?
-            }
-            ExperimentalBuilder::Dir(b) => {
-                b.add_layer(media_type, blob_bytes, annotations)?
-            }
+            ExperimentalBuilder::Archive(b) => b.add_layer(media_type, blob_bytes, annotations)?,
+            ExperimentalBuilder::Dir(b) => b.add_layer(media_type, blob_bytes, annotations)?,
         };
         Ok(PyDescriptor::from(desc))
     }
 
     pub fn build(&mut self) -> Result<PyArtifact> {
-        let builder = self.0.take().ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+        let builder = self
+            .0
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
         let artifact = builder.build()?;
         Ok(PyArtifact(Mutex::new(artifact)))
     }

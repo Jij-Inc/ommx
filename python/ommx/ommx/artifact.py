@@ -43,6 +43,7 @@ __all__ = [
 # Legacy classes removed - now using experimental::artifact internally
 # ArtifactBase, ArtifactArchive, ArtifactDir are no longer needed
 
+
 class Artifact:
     """
     Reader for OMMX Artifacts.
@@ -283,6 +284,7 @@ class Artifact:
 # Legacy builder classes removed - now using experimental::artifact::Builder internally
 # ArtifactBuilderBase, ArtifactArchiveBuilder, ArtifactDirBuilder are no longer needed
 
+
 class ArtifactBuilder:
     """
     Builder for OMMX Artifacts.
@@ -465,7 +467,9 @@ class ArtifactBuilder:
         """
         image_name = f"ghcr.io/{org.lower()}/{repo.lower()}/{name}:{tag}"
         builder = ArtifactBuilder.new(image_name)
-        builder.add_annotation("org.opencontainers.image.source", f"https://github.com/{org}/{repo}")
+        builder.add_annotation(
+            "org.opencontainers.image.source", f"https://github.com/{org}/{repo}"
+        )
         return builder
 
     def add_instance(self, instance: Instance) -> Descriptor:
