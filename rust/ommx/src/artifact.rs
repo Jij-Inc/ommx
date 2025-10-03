@@ -91,6 +91,13 @@ pub fn data_dir() -> Result<PathBuf> {
 }
 
 /// Get the directory for the given image name in the local registry
+///
+/// # Deprecated
+/// Use [`get_local_registry_path`] instead, which is format-agnostic and works with both oci-dir and oci-archive formats.
+#[deprecated(
+    since = "2.1.0",
+    note = "Use get_local_registry_path instead for dual format support"
+)]
 pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
     get_local_registry_root().join(image_name.as_path())
 }
