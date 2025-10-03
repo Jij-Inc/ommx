@@ -5,9 +5,6 @@ use ocipkg::{oci_spec::image::ImageManifest, ImageName};
 use ommx::artifact::{get_local_registry_path, Artifact};
 use std::path::{Path, PathBuf};
 
-#[allow(deprecated)]
-use ommx::artifact::get_image_dir;
-
 mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
@@ -65,7 +62,13 @@ enum Command {
     /// List the images in the local registry
     List,
 
-    /// Get the directory where the image is stored
+    /// Get the base path for an image in the local registry
+    LocalRegistryPath {
+        /// Container image name
+        image_name: String,
+    },
+
+    /// Get the directory where the image is stored (deprecated: use local-registry-path instead)
     ImageDirectory {
         /// Container image name
         image_name: String,
@@ -233,10 +236,20 @@ fn main() -> Result<()> {
             artifact.load()?;
         }
 
+        Command::LocalRegistryPath { image_name } => {
+            let name = ImageName::parse(image_name)?;
+            let path = get_local_registry_path(&name);
+            println!("{}", path.display());
+        }
+
         Command::ImageDirectory { image_name } => {
+            log::warn!(
+                "The 'image-directory' command is deprecated since 2.1.0. \
+                 Use 'local-registry-path' instead for dual format support."
+            );
             let name = ImageName::parse(image_name)?;
             #[allow(deprecated)]
-            let path = get_image_dir(&name);
+            let path = ommx::artifact::get_image_dir(&name);
             println!("{}", path.display());
         }
 
