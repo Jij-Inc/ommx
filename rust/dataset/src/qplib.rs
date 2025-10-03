@@ -51,16 +51,13 @@ pub fn package(path: &Path) -> Result<()> {
         };
 
         // Get CSV metadata for this instance, or create basic annotations
-        let mut annotations = csv_annotations
-            .get(&name)
-            .cloned()
-            .unwrap_or_else(|| {
-                log::warn!("No CSV metadata found for instance '{name}', using basic annotations");
-                let mut ann = ommx::artifact::InstanceAnnotations::default();
-                ann.set_title(name.clone());
-                ann.set_dataset("QPLIB".to_string());
-                ann
-            });
+        let mut annotations = csv_annotations.get(&name).cloned().unwrap_or_else(|| {
+            log::warn!("No CSV metadata found for instance '{name}', using basic annotations");
+            let mut ann = ommx::artifact::InstanceAnnotations::default();
+            ann.set_title(name.clone());
+            ann.set_dataset("QPLIB".to_string());
+            ann
+        });
 
         annotations.set_created_now();
 
