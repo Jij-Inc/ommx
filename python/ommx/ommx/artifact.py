@@ -17,9 +17,18 @@ from ._ommx_rust import (
     get_local_registry_root,
     set_local_registry_root,
     get_image_dir,
-    get_artifact_path,
+    get_artifact_path as _get_artifact_path,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
+
+
+def get_artifact_path(image_name: str) -> Path | None:
+    """Get the artifact path (directory or archive file) for the given image name in the local registry.
+
+    Returns the path to either an oci-dir directory or an oci-archive file, or None if not found.
+    """
+    path_str = _get_artifact_path(image_name)
+    return Path(path_str) if path_str is not None else None
 
 
 __all__ = [

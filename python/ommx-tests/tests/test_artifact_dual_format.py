@@ -15,18 +15,16 @@ from pathlib import Path
 import pytest
 
 from ommx.artifact import (
-    Artifact, 
-    ArtifactBuilder, 
+    Artifact,
+    ArtifactBuilder,
     ArtifactDirBuilder,
-    ArtifactArchive,
-    ArtifactDir,
     get_artifact_path,
     set_local_registry_root,
 )
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def temp_registry():
     """Create a temporary directory for local registry testing."""
     temp_dir = tempfile.mkdtemp()
@@ -48,7 +46,7 @@ def test_new_artifacts_default_to_archive_format(temp_registry):
     
     # Build artifact using the default new() method
     builder = ArtifactBuilder.new(image_name)
-    desc = builder.add_instance(instance)
+    builder.add_instance(instance)
     artifact = builder.build()
     
     # Verify artifact was created
@@ -71,13 +69,14 @@ def test_legacy_oci_dir_format_still_works(temp_registry):
     # Create a test instance
     generator = SingleFeasibleLPGenerator(3, DataType.INT)
     instance = generator.get_v1_instance()
-    
+
     # Create a unique image name
     image_name = f"test.local/legacy-format-test:{uuid.uuid4()}"
-    
-    # Build artifact using the legacy dir format
-    builder = ArtifactDirBuilder.new(image_name)
-    desc = builder.add_instance(instance)
+
+    # Build artifact using the legacy dir format via the wrapper
+    dir_builder_base = ArtifactDirBuilder.new(image_name)
+    builder = ArtifactBuilder(dir_builder_base)
+    builder.add_instance(instance)
     artifact = builder.build()
     
     # Verify artifact was created
@@ -100,20 +99,21 @@ def test_artifact_load_handles_both_formats(temp_registry):
     # Create test instances
     generator = SingleFeasibleLPGenerator(3, DataType.INT)
     instance = generator.get_v1_instance()
-    
+
     # Create artifacts in both formats
     archive_image = f"test.local/archive-test:{uuid.uuid4()}"
     dir_image = f"test.local/dir-test:{uuid.uuid4()}"
-    
+
     # Create archive format artifact
     archive_builder = ArtifactBuilder.new(archive_image)
     archive_builder.add_instance(instance)
-    archive_artifact = archive_builder.build()
-    
-    # Create dir format artifact  
-    dir_builder = ArtifactDirBuilder.new(dir_image)
+    archive_builder.build()
+
+    # Create dir format artifact
+    dir_builder_base = ArtifactDirBuilder.new(dir_image)
+    dir_builder = ArtifactBuilder(dir_builder_base)
     dir_builder.add_instance(instance)
-    dir_artifact = dir_builder.build()
+    dir_builder.build()
     
     # Verify both can be loaded with the same API
     loaded_archive = Artifact.load(archive_image)
@@ -132,17 +132,18 @@ def test_get_artifact_path_finds_both_formats(temp_registry):
     # Create test instances
     generator = SingleFeasibleLPGenerator(3, DataType.INT)
     instance = generator.get_v1_instance()
-    
+
     # Create artifacts in both formats
     archive_image = f"test.local/path-test-archive:{uuid.uuid4()}"
     dir_image = f"test.local/path-test-dir:{uuid.uuid4()}"
-    
+
     # Create and build artifacts
     archive_builder = ArtifactBuilder.new(archive_image)
     archive_builder.add_instance(instance)
     archive_builder.build()
-    
-    dir_builder = ArtifactDirBuilder.new(dir_image)  
+
+    dir_builder_base = ArtifactDirBuilder.new(dir_image)
+    dir_builder = ArtifactBuilder(dir_builder_base)
     dir_builder.add_instance(instance)
     dir_builder.build()
     
@@ -173,7 +174,7 @@ def test_backward_compatibility_with_existing_api(temp_registry):
     # Original API - should now default to archive format
     builder = ArtifactBuilder.new(image_name)
     builder.add_instance(instance)
-    artifact = builder.build()
+    builder.build()
     
     # Loading should work transparently
     loaded = Artifact.load(image_name)

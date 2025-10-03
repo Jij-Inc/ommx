@@ -90,6 +90,10 @@ impl Builder<OciArchiveBuilder> {
     /// Create a new artifact builder that stores in oci-archive format in the local registry
     pub fn new_for_local_registry(image_name: ImageName) -> Result<Self> {
         let archive_path = get_local_registry_root().join(format!("{}.ommx", image_name.as_path().display()));
+        // Ensure parent directory exists
+        if let Some(parent) = archive_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
         Self::new_archive(archive_path, image_name)
     }
 }

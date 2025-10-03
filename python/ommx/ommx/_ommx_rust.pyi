@@ -29,6 +29,8 @@ class ArtifactArchiveBuilder:
     ) -> ArtifactArchiveBuilder: ...
     @staticmethod
     def temp() -> ArtifactArchiveBuilder: ...
+    @staticmethod
+    def new_for_local_registry(image_name: builtins.str) -> ArtifactArchiveBuilder: ...
     def add_layer(
         self,
         media_type: builtins.str,
@@ -1174,6 +1176,12 @@ class Sense(Enum):
 
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
+
+def get_artifact_path(image_name: builtins.str) -> typing.Optional[builtins.str]:
+    r"""
+    Get the artifact path (directory or archive file) for the given image name in the local registry
+    Returns the path to either an oci-dir directory or an oci-archive file, or None if not found
+    """
 
 def get_default_atol() -> builtins.float: ...
 def get_image_dir(image_name: builtins.str) -> builtins.str:

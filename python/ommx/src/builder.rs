@@ -96,7 +96,6 @@ impl ArtifactDirBuilder {
         let builder = Builder::for_github(org, repo, name, tag)?;
         Ok(Self(Some(builder)))
     }
-}
 
     pub fn add_layer(
         &mut self,
