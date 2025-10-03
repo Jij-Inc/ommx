@@ -215,7 +215,10 @@ impl RawEntry {
 
         annotation.set_other(
             "org.ommx.qplib.url".to_string(),
-            format!("http://qplib.zib.de/QPLIB_{}.html", &self.name[6..]),
+            format!(
+                "http://qplib.zib.de/QPLIB_{}.html",
+                self.name.strip_prefix("QPLIB_").unwrap_or(&self.name)
+            ),
         );
         annotation
     }
