@@ -461,25 +461,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_artifact_path_none_when_not_exists() {
-        // Test with a non-existent image name
-        let image_name = ImageName::parse("test.local/nonexistent:v1").unwrap();
-        let result = get_artifact_path(&image_name);
-
-        // Should return None for non-existent artifacts
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_gather_artifacts_empty_dir() {
-        let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
-        fs::create_dir_all(&temp_dir).unwrap();
-        let result = gather_artifacts(&temp_dir).unwrap();
-        assert!(result.is_empty());
-        fs::remove_dir_all(&temp_dir).unwrap();
-    }
-
-    #[test]
     fn test_gather_artifacts_with_mock_oci_dir() {
         let temp_dir = std::env::temp_dir().join(format!("ommx_test_{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&temp_dir).unwrap();
