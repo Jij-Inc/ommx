@@ -1,6 +1,5 @@
 mod artifact;
 mod bound;
-mod builder;
 mod constraint;
 mod constraint_hints;
 mod dataset;
@@ -26,7 +25,6 @@ mod state;
 
 pub use artifact::*;
 pub use bound::*;
-pub use builder::*;
 pub use constraint::*;
 pub use constraint_hints::*;
 pub use dataset::*;
@@ -70,15 +68,10 @@ pub fn get_default_atol() -> f64 {
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
-    // OMMX Artifact
-    m.add_class::<ArtifactArchive>()?;
-    m.add_class::<ArtifactDir>()?;
-    m.add_class::<ArtifactArchiveBuilder>()?;
-    m.add_class::<ArtifactDirBuilder>()?;
-    m.add_class::<PyDescriptor>()?;
-    // Experimental Artifact API
+    // OMMX Artifact (Experimental API)
     m.add_class::<PyArtifact>()?;
     m.add_class::<PyArtifactBuilder>()?;
+    m.add_class::<PyDescriptor>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_image_dir, m)?)?;

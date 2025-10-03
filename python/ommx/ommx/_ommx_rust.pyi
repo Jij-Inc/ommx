@@ -7,66 +7,6 @@ import pathlib
 import typing
 from enum import Enum
 
-class ArtifactArchive:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
-    @staticmethod
-    def from_oci_archive(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchive: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-class ArtifactArchiveBuilder:
-    @staticmethod
-    def new_unnamed(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def new(
-        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def temp() -> ArtifactArchiveBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactArchive: ...
-
-class ArtifactDir:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
-    @staticmethod
-    def from_image_name(image_name: builtins.str) -> ArtifactDir: ...
-    @staticmethod
-    def from_oci_dir(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactDir: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-class ArtifactDirBuilder:
-    @staticmethod
-    def new(image_name: builtins.str) -> ArtifactDirBuilder: ...
-    @staticmethod
-    def for_github(
-        org: builtins.str, repo: builtins.str, name: builtins.str, tag: builtins.str
-    ) -> ArtifactDirBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactDir: ...
-
 class Bound:
     r"""
     Variable bound wrapper for Python
