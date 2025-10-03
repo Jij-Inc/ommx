@@ -260,6 +260,9 @@ pub mod parse;
 pub mod qplib;
 pub mod random;
 
+// Experimental modules - API subject to change
+pub mod experimental;
+
 // Internal modules
 mod atol;
 mod bound;

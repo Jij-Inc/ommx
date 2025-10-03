@@ -1,5 +1,17 @@
 # Artifact API Refactoring Plan
 
+## 実装方針の変更
+
+新しいArtifact実装は**experimental API**として`ommx::experimental::artifact`モジュールに作成します。
+既存の`ommx::artifact`モジュールは当面そのまま維持し、experimental APIが安定したら移行します。
+
+### 現在の実装状況
+
+- ✅ `ommx::experimental`モジュールを作成
+- ✅ `ommx::experimental::artifact::Artifact` enumを実装
+- ✅ 基本メソッド（`image_name`, `get_manifest`, `get_blob`, `get_layer`, `get_config`など）を実装
+- ⏳ Phase 2以降の実装（読み込み・保存メソッド）
+
 ## PR #639の背景
 
 このPRは、OMMX Local Registryに**oci-dir**（ディレクトリ）と**oci-archive**（単一ファイル）の両フォーマットのサポートを追加しました。新しいアーティファクトはデフォルトでoci-archive形式を使用し、AWS S3やGoogle Cloud Storageなどのクラウドオブジェクトストレージとの互換性を向上させます。
