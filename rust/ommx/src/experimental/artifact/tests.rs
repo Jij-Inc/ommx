@@ -1,7 +1,7 @@
 //! Tests for experimental Artifact API
 
-use super::Artifact;
-use crate::artifact::{self, Builder, Config};
+use super::{Artifact, Builder};
+use crate::artifact::{self, Config};
 use ocipkg::ImageName;
 use std::{fs, path::PathBuf, sync::OnceLock};
 use uuid::Uuid;
@@ -35,10 +35,11 @@ fn archive_path(image_name: &ImageName) -> PathBuf {
 }
 
 fn build_dir_artifact(image_name: &ImageName) -> PathBuf {
-    let mut builder = Builder::new(image_name.clone()).unwrap();
+    let dir = image_dir(image_name);
+    let mut builder = Builder::new_dir(dir.clone(), image_name.clone()).unwrap();
     builder.add_config(Config {}).unwrap();
     builder.build().unwrap();
-    image_dir(image_name)
+    dir
 }
 
 fn build_archive_artifact(image_name: &ImageName) -> PathBuf {
@@ -347,6 +348,31 @@ fn test_layers() {
 
     let layers = artifact.layers().unwrap();
     assert_eq!(layers.len(), 0); // Empty artifact has no layers
+
+    drop(artifact);
+    cleanup(&image_name);
+}
+
+#[test]
+fn test_builder_add_annotation() {
+    let image_name = image_name("builder-annotation");
+    let archive = archive_path(&image_name);
+    if let Some(parent) = archive.parent() {
+        fs::create_dir_all(parent).unwrap();
+    }
+
+    let mut builder = Builder::new_archive(archive.clone(), image_name.clone()).unwrap();
+    builder.add_config(Config {}).unwrap();
+    builder.add_annotation("test.key".to_string(), "test.value".to_string());
+    builder.add_annotation("another.key".to_string(), "another.value".to_string());
+    let mut artifact = builder.build().unwrap();
+
+    let annotations = artifact.annotations().unwrap();
+    assert_eq!(annotations.get("test.key"), Some(&"test.value".to_string()));
+    assert_eq!(
+        annotations.get("another.key"),
+        Some(&"another.value".to_string())
+    );
 
     drop(artifact);
     cleanup(&image_name);

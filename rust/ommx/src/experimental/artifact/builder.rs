@@ -10,10 +10,7 @@ use ocipkg::{
     ImageName,
 };
 use prost::Message;
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
 /// Builder for experimental [`Artifact`] values with runtime-selected backend.
@@ -118,10 +115,18 @@ impl Builder {
         let blob = instance.encode_to_vec();
         match self {
             Self::Archive(builder) => {
-                builder.add_layer(media_types::v1_parametric_instance(), &blob, annotations.into())?;
+                builder.add_layer(
+                    media_types::v1_parametric_instance(),
+                    &blob,
+                    annotations.into(),
+                )?;
             }
             Self::Dir(builder) => {
-                builder.add_layer(media_types::v1_parametric_instance(), &blob, annotations.into())?;
+                builder.add_layer(
+                    media_types::v1_parametric_instance(),
+                    &blob,
+                    annotations.into(),
+                )?;
             }
         }
         Ok(())
@@ -155,6 +160,18 @@ impl Builder {
             }
         }
         Ok(())
+    }
+
+    /// Add an annotation to the manifest
+    pub fn add_annotation(&mut self, key: String, value: String) {
+        match self {
+            Self::Archive(builder) => {
+                builder.add_annotation(key, value);
+            }
+            Self::Dir(builder) => {
+                builder.add_annotation(key, value);
+            }
+        }
     }
 
     /// Finalise the builder and produce an [`Artifact`] with the same backend variant.
