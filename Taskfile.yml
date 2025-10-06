@@ -24,7 +24,9 @@ includes:
 
 tasks:
   pip_compile:
+    desc: Compile docs/requirements.txt from docs/pyproject.toml
     cmds:
+      - uv sync --upgrade
       - uv pip compile pyproject.toml -o ../requirements.txt
     dir: docs/
 

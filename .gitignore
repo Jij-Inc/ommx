@@ -36,3 +36,6 @@ proto/protobuf.html
 
 # CodSpeed
 .codspeed/
+
+# Downloaded binaries (e.g., task)
+bin/
