@@ -90,6 +90,11 @@ tasks:
       - uv run set-version.py {{.CLI_ARGS}}
       - task: sync
 
+  update-docs-deps:
+    desc: Update OMMX versions in the dependencies of docs/pyproject.toml
+    cmds:
+      - uv run --script update-docs-deps.py {{.CLI_ARGS}}
+
   stubgen:
     desc: Generate stubs files for Rust extension
     cmds:

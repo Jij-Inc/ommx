@@ -24,7 +24,10 @@ includes:
 
 tasks:
   pip_compile:
+    deps:
+      - task: python:update-docs-deps
     cmds:
+      - uv sync --upgrade
       - uv pip compile pyproject.toml -o ../requirements.txt
     dir: docs/
 
