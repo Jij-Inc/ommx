@@ -3,7 +3,7 @@
 
 title: OMMX
 author: Jij Inc.
-# logo: logo.png  # TODO: ロゴが出来たら設定すること
+logo: ../logo.png
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
