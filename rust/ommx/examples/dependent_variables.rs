@@ -72,8 +72,8 @@ fn main() -> Result<()> {
     let instance = instance.substitute_one(VariableID::from(1), &substitution)?;
 
     println!("\nAfter substitution:");
-    println!("  Objective becomes: (x3 + x4) + x2 = x2 + x3 + x4");
-    println!("  Constraint becomes: (x3 + x4) + x2 <= 10");
+    println!("  Objective: x1 + x2 -> (x3 + x4) + x2 = x2 + x3 + x4 (after substituting x1 with (x3 + x4))");
+    println!("  Constraint: x1 + x2 <= 10 -> (x3 + x4) + x2 <= 10");
     println!(
         "  Dependent variables: {}",
         instance.decision_variable_dependency().len()
@@ -97,7 +97,7 @@ fn main() -> Result<()> {
     let instance = instance.substitute_acyclic(&substitutions)?;
 
     println!("\nAfter multiple substitutions:");
-    println!("  Objective becomes: (x3 + 1.0) + x3 + (2.0 * x3) = 4x3 + 1.0");
+    println!("  Objective becomes: (x3 + 1.0) + x3 + (2.0 * x3) = 4.0 * x3 + 1.0");
     println!("  Constraint becomes: (x3 + (2.0 * x3)) + (x3 + 1.0) <= 10");
     println!(
         "  Dependent variables: {}",
