@@ -51,7 +51,7 @@ pub fn package(path: &Path) -> Result<()> {
         };
 
         // Get CSV metadata for this instance, or create basic annotations
-        let mut annotations = csv_annotations.get(&name).cloned().unwrap_or_else(|| {
+        let mut annotations = csv_annotations.get(tag).cloned().unwrap_or_else(|| {
             log::warn!("No CSV metadata found for instance '{name}', using basic annotations");
             let mut ann = ommx::artifact::InstanceAnnotations::default();
             ann.set_title(name.clone());
