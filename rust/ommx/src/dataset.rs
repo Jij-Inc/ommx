@@ -26,7 +26,7 @@
 //!
 //! // Get metadata for all QPLIB instances
 //! let annotations = qplib::instance_annotations();
-//! let annotation = annotations.get("QPLIB_0018").unwrap();
+//! let annotation = annotations.get("0018").unwrap();
 //!
 //! // Metadata is stored in the annotation
 //! assert_eq!(annotation.title().unwrap(), "QPLIB_0018");

@@ -112,7 +112,7 @@ def qplib_instance_annotations() -> dict[str, dict[str, str]]:
     >>> annotations = qplib_instance_annotations()
     >>> len(annotations)
     453
-    >>> annotations["QPLIB_0018"]["org.ommx.qplib.probtype"]
+    >>> annotations["0018"]["org.ommx.qplib.probtype"]
     'QCL'
 
     """
