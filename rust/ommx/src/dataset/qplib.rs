@@ -252,7 +252,11 @@ pub fn instance_annotations() -> HashMap<String, InstanceAnnotations> {
     let mut entries = HashMap::new();
     for result in rdr.deserialize() {
         let entry: RawEntry = result.expect("Invalid CSV for QPLIB");
-        let key = entry.name.strip_prefix("QPLIB_").unwrap_or(&entry.name).to_string();
+        let key = entry
+            .name
+            .strip_prefix("QPLIB_")
+            .unwrap_or(&entry.name)
+            .to_string();
         entries.insert(key, entry.as_annotation());
     }
     entries
@@ -308,23 +312,30 @@ mod tests {
     #[test]
     fn test_instance_annotations_key_format() {
         let annotations = super::instance_annotations();
-        
+
         // Test that keys are in numeric format (not "QPLIB_XXXX")
         // We know "0018" should exist from the CSV data
-        let annotation = annotations.get("0018").expect("Should find annotation with key '0018'");
-        
+        let annotation = annotations
+            .get("0018")
+            .expect("Should find annotation with key '0018'");
+
         // Verify that the title still contains the full QPLIB_XXXX format
         assert_eq!(annotation.title().unwrap(), "QPLIB_0018");
         assert_eq!(annotation.dataset().unwrap(), "QPLIB");
-        
+
         // Verify that old format "QPLIB_0018" does NOT work as a key
-        assert!(annotations.get("QPLIB_0018").is_none(), 
-                "Old format key 'QPLIB_0018' should not exist in HashMap");
-        
+        assert!(
+            annotations.get("QPLIB_0018").is_none(),
+            "Old format key 'QPLIB_0018' should not exist in HashMap"
+        );
+
         // Test a few more instances to ensure consistency
         for key in ["0031", "0032", "0067"] {
-            assert!(annotations.contains_key(key), 
-                   "Should find annotation with numeric key '{}'", key);
+            assert!(
+                annotations.contains_key(key),
+                "Should find annotation with numeric key '{}'",
+                key
+            );
         }
     }
 
