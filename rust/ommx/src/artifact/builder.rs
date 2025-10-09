@@ -1,60 +1,49 @@
-use crate::{
-    artifact::{
-        get_local_registry_root, ghcr, media_types, Artifact, Config, InstanceAnnotations,
-        SolutionAnnotations,
-    },
-    v1,
+use super::Artifact;
+use crate::artifact::{
+    get_local_registry_root, media_types, Config, InstanceAnnotations,
+    ParametricInstanceAnnotations, SampleSetAnnotations, SolutionAnnotations,
 };
-use anyhow::Result;
+use crate::v1;
+use anyhow::{bail, Context, Result};
 use ocipkg::{
-    image::{ImageBuilder, OciArchiveBuilder, OciArtifactBuilder, OciDirBuilder},
+    image::{OciArchiveBuilder, OciArtifactBuilder, OciDirBuilder},
     ImageName,
 };
 use prost::Message;
-use std::{
-    collections::HashMap,
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-};
-use url::Url;
+use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
-use super::{ParametricInstanceAnnotations, SampleSetAnnotations};
-
-/// Build [Artifact]
-pub struct Builder<Base: ImageBuilder>(OciArtifactBuilder<Base>);
-
-impl<Base: ImageBuilder> Deref for Builder<Base> {
-    type Target = OciArtifactBuilder<Base>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+/// Builder for experimental [`Artifact`] values with runtime-selected backend.
+///
+/// The builder mirrors the legacy generic builders but stores the backend choice
+/// inside the enum variants, allowing callers to construct archives or
+/// directories without specifying the type parameter in the signature.
+pub enum Builder {
+    Archive(OciArtifactBuilder<OciArchiveBuilder>),
+    Dir(OciArtifactBuilder<OciDirBuilder>),
 }
 
-impl<Base: ImageBuilder> DerefMut for Builder<Base> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl Builder {
+    /// Create a builder that writes into an OCI archive file at `path`.
+    pub fn new_archive(path: PathBuf, image_name: ImageName) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
+        }
+        let archive = OciArchiveBuilder::new(path, image_name)?;
+        let builder = OciArtifactBuilder::new(archive, media_types::v1_artifact())?;
+        Ok(Self::Archive(builder))
     }
-}
 
-impl Builder<OciArchiveBuilder> {
+    /// Create an unnamed archive builder (primarily for tests).
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
         let archive = OciArchiveBuilder::new_unnamed(path)?;
-        Ok(Self(OciArtifactBuilder::new(
-            archive,
-            media_types::v1_artifact(),
-        )?))
+        let builder = OciArtifactBuilder::new(archive, media_types::v1_artifact())?;
+        Ok(Self::Archive(builder))
     }
 
-    pub fn new_archive(path: PathBuf, image_name: ImageName) -> Result<Self> {
-        let archive = OciArchiveBuilder::new(path, image_name)?;
-        Ok(Self(OciArtifactBuilder::new(
-            archive,
-            media_types::v1_artifact(),
-        )?))
-    }
-
-    /// Create a new artifact builder for a temporary file. This is insecure and should only be used in tests.
+    /// Convenience helper that stores the archive in a temporary location.
     pub fn temp_archive() -> Result<Self> {
         let id = Uuid::new_v4();
         Self::new_archive(
@@ -62,39 +51,70 @@ impl Builder<OciArchiveBuilder> {
             ImageName::parse(&format!("ttl.sh/{id}:1h"))?,
         )
     }
-}
 
-impl Builder<OciDirBuilder> {
-    pub fn new(image_name: ImageName) -> Result<Self> {
-        let dir = get_local_registry_root().join(image_name.as_path());
-        let layout = OciDirBuilder::new(dir, image_name)?;
-        Ok(Self(OciArtifactBuilder::new(
-            layout,
-            media_types::v1_artifact(),
-        )?))
+    /// Create a builder that writes to an OCI directory at the provided path.
+    pub fn new_dir(path: PathBuf, image_name: ImageName) -> Result<Self> {
+        if path.exists() {
+            bail!("Output directory already exists: {}", path.display());
+        }
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create parent directory: {}", parent.display())
+            })?;
+        }
+        let layout = OciDirBuilder::new(path, image_name)?;
+        let builder = OciArtifactBuilder::new(layout, media_types::v1_artifact())?;
+        Ok(Self::Dir(builder))
     }
 
-    /// Create a new artifact builder for a GitHub container registry image
+    /// Create a builder targeting the local registry directory for the image name.
+    pub fn new_registry_dir(image_name: ImageName) -> Result<Self> {
+        let path = get_local_registry_root().join(image_name.as_path());
+        Self::new_dir(path, image_name)
+    }
+
+    /// Create a new artifact builder for a GitHub container registry image.
+    ///
+    /// This creates an oci-archive artifact in the local registry.
     pub fn for_github(org: &str, repo: &str, name: &str, tag: &str) -> Result<Self> {
+        use crate::artifact::ghcr;
+        use url::Url;
+
         let image_name = ghcr(org, repo, name, tag)?;
         let source = Url::parse(&format!("https://github.com/{org}/{repo}"))?;
 
-        let mut builder = Self::new(image_name)?;
-        builder.add_source(&source);
+        let base_path = get_local_registry_root().join(image_name.as_path());
+        let archive_path = base_path.with_extension("ommx");
+
+        if archive_path.exists() {
+            bail!("Artifact already exists: {}", archive_path.display());
+        }
+
+        let mut builder = Self::new_archive(archive_path, image_name)?;
+        match &mut builder {
+            Self::Archive(b) => {
+                b.add_source(&source);
+            }
+            Self::Dir(_) => unreachable!("new_archive always returns Archive variant"),
+        }
 
         Ok(builder)
     }
-}
 
-impl<Base: ImageBuilder> Builder<Base> {
     pub fn add_instance(
         &mut self,
         instance: v1::Instance,
         annotations: InstanceAnnotations,
     ) -> Result<()> {
         let blob = instance.encode_to_vec();
-        self.0
-            .add_layer(media_types::v1_instance(), &blob, annotations.into())?;
+        match self {
+            Self::Archive(builder) => {
+                builder.add_layer(media_types::v1_instance(), &blob, annotations.into())?;
+            }
+            Self::Dir(builder) => {
+                builder.add_layer(media_types::v1_instance(), &blob, annotations.into())?;
+            }
+        }
         Ok(())
     }
 
@@ -104,8 +124,14 @@ impl<Base: ImageBuilder> Builder<Base> {
         annotations: SolutionAnnotations,
     ) -> Result<()> {
         let blob = solution.encode_to_vec();
-        self.0
-            .add_layer(media_types::v1_solution(), &blob, annotations.into())?;
+        match self {
+            Self::Archive(builder) => {
+                builder.add_layer(media_types::v1_solution(), &blob, annotations.into())?;
+            }
+            Self::Dir(builder) => {
+                builder.add_layer(media_types::v1_solution(), &blob, annotations.into())?;
+            }
+        }
         Ok(())
     }
 
@@ -115,11 +141,22 @@ impl<Base: ImageBuilder> Builder<Base> {
         annotations: ParametricInstanceAnnotations,
     ) -> Result<()> {
         let blob = instance.encode_to_vec();
-        self.0.add_layer(
-            media_types::v1_parametric_instance(),
-            &blob,
-            annotations.into(),
-        )?;
+        match self {
+            Self::Archive(builder) => {
+                builder.add_layer(
+                    media_types::v1_parametric_instance(),
+                    &blob,
+                    annotations.into(),
+                )?;
+            }
+            Self::Dir(builder) => {
+                builder.add_layer(
+                    media_types::v1_parametric_instance(),
+                    &blob,
+                    annotations.into(),
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -129,19 +166,69 @@ impl<Base: ImageBuilder> Builder<Base> {
         annotations: SampleSetAnnotations,
     ) -> Result<()> {
         let blob = sample_set.encode_to_vec();
-        self.0
-            .add_layer(media_types::v1_sample_set(), &blob, annotations.into())?;
+        match self {
+            Self::Archive(builder) => {
+                builder.add_layer(media_types::v1_sample_set(), &blob, annotations.into())?;
+            }
+            Self::Dir(builder) => {
+                builder.add_layer(media_types::v1_sample_set(), &blob, annotations.into())?;
+            }
+        }
         Ok(())
     }
 
     pub fn add_config(&mut self, config: Config) -> Result<()> {
         let blob = serde_json::to_string_pretty(&config)?;
-        self.0
-            .add_config(media_types::v1_config(), blob.as_bytes(), HashMap::new())?;
+        match self {
+            Self::Archive(builder) => {
+                builder.add_config(media_types::v1_config(), blob.as_bytes(), HashMap::new())?;
+            }
+            Self::Dir(builder) => {
+                builder.add_config(media_types::v1_config(), blob.as_bytes(), HashMap::new())?;
+            }
+        }
         Ok(())
     }
 
-    pub fn build(self) -> Result<Artifact<Base::Image>> {
-        Artifact::new(self.0.build()?)
+    /// Add an annotation to the manifest
+    pub fn add_annotation(&mut self, key: String, value: String) {
+        match self {
+            Self::Archive(builder) => {
+                builder.add_annotation(key, value);
+            }
+            Self::Dir(builder) => {
+                builder.add_annotation(key, value);
+            }
+        }
+    }
+
+    /// Add source URL annotation (convenience method)
+    pub fn add_source(&mut self, source: &url::Url) {
+        self.add_annotation(
+            "org.opencontainers.image.source".to_string(),
+            source.to_string(),
+        );
+    }
+
+    /// Add description annotation (convenience method)
+    pub fn add_description(&mut self, description: String) {
+        self.add_annotation(
+            "org.opencontainers.image.description".to_string(),
+            description,
+        );
+    }
+
+    /// Finalise the builder and produce an [`Artifact`] with the same backend variant.
+    pub fn build(self) -> Result<Artifact> {
+        match self {
+            Self::Archive(builder) => {
+                let artifact = builder.build()?;
+                Ok(Artifact::Archive(artifact))
+            }
+            Self::Dir(builder) => {
+                let artifact = builder.build()?;
+                Ok(Artifact::Dir(artifact))
+            }
+        }
     }
 }

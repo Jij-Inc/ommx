@@ -4,127 +4,56 @@ import io
 import json
 import pandas
 import numpy
-from dataclasses import dataclass
 from pathlib import Path
-from abc import ABC, abstractmethod
 
 from ._ommx_rust import (
-    ArtifactArchive as _ArtifactArchive,
-    ArtifactDir as _ArtifactDir,
     Descriptor,
-    ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
-    ArtifactDirBuilder as _ArtifactDirBuilder,
     get_local_registry_root,
     set_local_registry_root,
     get_image_dir,
+    get_local_registry_path as _get_local_registry_path,
+    PyArtifact as _PyArtifact,  # Experimental Artifact API
+    PyArtifactBuilder as _PyArtifactBuilder,  # Experimental Builder API
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
+
+
+def get_local_registry_path(image_name: str) -> Path:
+    """Get the base path for the given image name in the local registry.
+
+    This returns the path where the artifact should be stored, without format-specific extensions.
+    The caller should check:
+    - If this path is a directory with oci-layout -> oci-dir format
+    - If "{path}.ommx" exists as a file -> oci-archive format
+    """
+    return Path(_get_local_registry_path(image_name))
 
 
 __all__ = [
     "Artifact",
     "ArtifactBuilder",
-    "ArtifactBase",
-    "ArtifactDir",
-    "ArtifactDirBuilder",
-    "ArtifactArchive",
-    "ArtifactArchiveBuilder",
     "Descriptor",
     "get_local_registry_root",
     "set_local_registry_root",
     "get_image_dir",
+    "get_local_registry_path",
 ]
 
 
-class ArtifactBase(ABC):
-    @property
-    @abstractmethod
-    def image_name(self) -> str | None: ...
-
-    @property
-    @abstractmethod
-    def annotations(self) -> dict[str, str]: ...
-
-    @property
-    @abstractmethod
-    def layers(self) -> list[Descriptor]: ...
-
-    @abstractmethod
-    def get_blob(self, digest: str) -> bytes: ...
-
-    @abstractmethod
-    def push(self): ...
+# Legacy classes removed - now using experimental::artifact internally
+# ArtifactBase, ArtifactArchive, ArtifactDir are no longer needed
 
 
-# FIXME: This wrapper class should be defined in Rust binding directly,
-#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
-@dataclass
-class ArtifactArchive(ArtifactBase):
-    _base: _ArtifactArchive
-
-    @staticmethod
-    def from_oci_archive(path: str) -> ArtifactArchive:
-        return ArtifactArchive(_ArtifactArchive.from_oci_archive(path))
-
-    @property
-    def image_name(self) -> str | None:
-        return self._base.image_name
-
-    @property
-    def annotations(self) -> dict[str, str]:
-        return self._base.annotations
-
-    @property
-    def layers(self) -> list[Descriptor]:
-        return self._base.layers
-
-    def get_blob(self, digest: str) -> bytes:
-        return self._base.get_blob(digest)
-
-    def push(self):
-        self._base.push()
-
-
-# FIXME: This wrapper class should be defined in Rust binding directly,
-#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
-@dataclass
-class ArtifactDir(ArtifactBase):
-    _base: _ArtifactDir
-
-    @staticmethod
-    def from_oci_dir(path: str) -> ArtifactDir:
-        return ArtifactDir(_ArtifactDir.from_oci_dir(path))
-
-    @staticmethod
-    def from_image_name(image_name: str) -> ArtifactDir:
-        return ArtifactDir(_ArtifactDir.from_image_name(image_name))
-
-    @property
-    def image_name(self) -> str | None:
-        return self._base.image_name
-
-    @property
-    def annotations(self) -> dict[str, str]:
-        return self._base.annotations
-
-    @property
-    def layers(self) -> list[Descriptor]:
-        return self._base.layers
-
-    def get_blob(self, digest: str) -> bytes:
-        return self._base.get_blob(digest)
-
-    def push(self):
-        self._base.push()
-
-
-@dataclass
 class Artifact:
     """
     Reader for OMMX Artifacts.
+
+    Now uses experimental::artifact internally for improved performance and format handling.
     """
 
-    _base: ArtifactBase
+    def __init__(self, rust_artifact: _PyArtifact):
+        """Internal constructor - use static methods instead"""
+        self._rust = rust_artifact
 
     @staticmethod
     def load_archive(path: str | Path) -> Artifact:
@@ -143,13 +72,13 @@ class Artifact:
             path = Path(path)
 
         if path.is_file():
-            base = ArtifactArchive.from_oci_archive(str(path))
+            rust_artifact = _PyArtifact.from_oci_archive(str(path))
         elif path.is_dir():
-            base = ArtifactDir.from_oci_dir(str(path))
+            rust_artifact = _PyArtifact.from_oci_dir(str(path))
         else:
             raise ValueError("Path must be a file or a directory")
 
-        return Artifact(base)
+        return Artifact(rust_artifact)
 
     @staticmethod
     def load(image_name: str) -> Artifact:
@@ -157,6 +86,7 @@ class Artifact:
         Load an artifact stored as container image in local or remote registry
 
         If the image is not found in local registry, it will try to pull from remote registry.
+        Supports both oci-dir and oci-archive formats in local registry.
 
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
         >>> print(artifact.image_name)
@@ -166,18 +96,19 @@ class Artifact:
         sha256:93fdc9fcb8e21b34e3517809a348938d9455e9b9e579548bbf018a514c082df2
 
         """
-        base = ArtifactDir.from_image_name(image_name)
-        return Artifact(base)
+        # Use experimental Artifact.load which handles format detection and remote pull
+        rust_artifact = _PyArtifact.load(image_name)
+        return Artifact(rust_artifact)
 
     def push(self):
         """
         Push the artifact to remote registry
         """
-        self._base.push()
+        self._rust.push()
 
     @property
     def image_name(self) -> str | None:
-        return self._base.image_name
+        return self._rust.image_name
 
     @property
     def annotations(self) -> dict[str, str]:
@@ -191,11 +122,11 @@ class Artifact:
         Test artifact created by examples/artifact_archive.rs
 
         """
-        return self._base.annotations
+        return self._rust.annotations
 
     @property
     def layers(self) -> list[Descriptor]:
-        return self._base.layers
+        return self._rust.layers
 
     def get_layer_descriptor(self, digest: str) -> Descriptor:
         """
@@ -215,7 +146,7 @@ class Artifact:
     def get_blob(self, digest: str | Descriptor) -> bytes:
         if isinstance(digest, Descriptor):
             digest = digest.digest
-        return self._base.get_blob(digest)
+        return self._rust.get_blob(digest)
 
     def get_layer(self, descriptor: Descriptor) -> Instance | Solution | numpy.ndarray:
         """
@@ -350,82 +281,20 @@ class Artifact:
         return json.loads(blob)
 
 
-class ArtifactBuilderBase(ABC):
-    @abstractmethod
-    def add_layer(
-        self, media_type: str, blob: bytes, annotations: dict[str, str]
-    ) -> Descriptor: ...
-
-    @abstractmethod
-    def add_annotation(self, key: str, value: str): ...
-
-    @abstractmethod
-    def build(self) -> ArtifactBase: ...
+# Legacy builder classes removed - now using experimental::artifact::Builder internally
+# ArtifactBuilderBase, ArtifactArchiveBuilder, ArtifactDirBuilder are no longer needed
 
 
-# FIXME: This wrapper class should be defined in Rust binding directly,
-#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
-@dataclass
-class ArtifactArchiveBuilder(ArtifactBuilderBase):
-    _base: _ArtifactArchiveBuilder
-
-    @staticmethod
-    def new(path: str, image_name: str) -> ArtifactArchiveBuilder:
-        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new(path, image_name))
-
-    @staticmethod
-    def new_unnamed(path: str) -> ArtifactArchiveBuilder:
-        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.new_unnamed(path))
-
-    @staticmethod
-    def temp() -> ArtifactArchiveBuilder:
-        return ArtifactArchiveBuilder(_ArtifactArchiveBuilder.temp())
-
-    def add_layer(
-        self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
-    ) -> Descriptor:
-        return self._base.add_layer(media_type, blob, annotations)
-
-    def add_annotation(self, key: str, value: str):
-        self._base.add_annotation(key, value)
-
-    def build(self) -> ArtifactArchive:
-        return ArtifactArchive(self._base.build())
-
-
-# FIXME: This wrapper class should be defined in Rust binding directly,
-#        but PyO3 does not support inheriting Python class https://github.com/PyO3/pyo3/issues/991
-@dataclass
-class ArtifactDirBuilder(ArtifactBuilderBase):
-    _base: _ArtifactDirBuilder
-
-    @staticmethod
-    def new(image_name: str) -> ArtifactDirBuilder:
-        return ArtifactDirBuilder(_ArtifactDirBuilder.new(image_name))
-
-    @staticmethod
-    def for_github(org: str, repo: str, name: str, tag: str) -> ArtifactDirBuilder:
-        return ArtifactDirBuilder(_ArtifactDirBuilder.for_github(org, repo, name, tag))
-
-    def add_layer(
-        self, media_type: str, blob: bytes, annotations: dict[str, str] = {}
-    ) -> Descriptor:
-        return self._base.add_layer(media_type, blob, annotations)
-
-    def add_annotation(self, key: str, value: str):
-        self._base.add_annotation(key, value)
-
-    def build(self) -> ArtifactDir:
-        return ArtifactDir(self._base.build())
-
-
-@dataclass(frozen=True)
 class ArtifactBuilder:
     """
     Builder for OMMX Artifacts.
+
+    Now uses experimental::artifact::Builder internally.
     """
 
-    _base: ArtifactBuilderBase
+    def __init__(self, rust_builder: _PyArtifactBuilder):
+        """Internal constructor - use static methods instead"""
+        self._rust = rust_builder
 
     @staticmethod
     def new_archive_unnamed(path: str | Path) -> ArtifactBuilder:
@@ -460,7 +329,8 @@ class ArtifactBuilder:
         """
         if isinstance(path, str):
             path = Path(path)
-        return ArtifactBuilder(ArtifactArchiveBuilder.new_unnamed(str(path)))
+        rust_builder = _PyArtifactBuilder.new_archive_unnamed(path)
+        return ArtifactBuilder(rust_builder)
 
     @staticmethod
     def new_archive(path: str | Path, image_name: str) -> ArtifactBuilder:
@@ -495,7 +365,8 @@ class ArtifactBuilder:
         """
         if isinstance(path, str):
             path = Path(path)
-        return ArtifactBuilder(ArtifactArchiveBuilder.new(str(path), image_name))
+        rust_builder = _PyArtifactBuilder.new_archive(path, image_name)
+        return ArtifactBuilder(rust_builder)
 
     @staticmethod
     def new(image_name: str) -> ArtifactBuilder:
@@ -526,7 +397,26 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
-        return ArtifactBuilder(ArtifactDirBuilder.new(image_name))
+        # Get base path and create oci-archive format path
+        base_path = get_local_registry_path(image_name)
+        archive_path = base_path.with_suffix(".ommx")
+        # Ensure parent directory exists
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        rust_builder = _PyArtifactBuilder.new_archive(archive_path, image_name)
+        return ArtifactBuilder(rust_builder)
+
+    @staticmethod
+    def new_dir(path: str | Path, image_name: str) -> ArtifactBuilder:
+        """
+        Create a new artifact in oci-dir format at the specified path.
+
+        This is mainly for backward compatibility with the old dir-based format.
+        For new code, prefer using new() which creates oci-archive format.
+        """
+        if isinstance(path, str):
+            path = Path(path)
+        rust_builder = _PyArtifactBuilder.new_dir(path, image_name)
+        return ArtifactBuilder(rust_builder)
 
     @staticmethod
     def temp() -> ArtifactBuilder:
@@ -543,7 +433,8 @@ class ArtifactBuilder:
         >>> artifact.push()
 
         """
-        return ArtifactBuilder(ArtifactArchiveBuilder.temp())
+        rust_builder = _PyArtifactBuilder.temp_archive()
+        return ArtifactBuilder(rust_builder)
 
     @staticmethod
     def for_github(org: str, repo: str, name: str, tag: str) -> ArtifactBuilder:
@@ -574,7 +465,12 @@ class ArtifactBuilder:
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
         """
-        return ArtifactBuilder(ArtifactDirBuilder.for_github(org, repo, name, tag))
+        image_name = f"ghcr.io/{org.lower()}/{repo.lower()}/{name}:{tag}"
+        builder = ArtifactBuilder.new(image_name)
+        builder.add_annotation(
+            "org.opencontainers.image.source", f"https://github.com/{org}/{repo}"
+        )
+        return builder
 
     def add_instance(self, instance: Instance) -> Descriptor:
         """
@@ -809,16 +705,17 @@ class ArtifactBuilder:
         """
         Low-level API to add any type of layer to the artifact with annotations. Use :meth:`add_instance` or other high-level methods if possible.
         """
-        return self._base.add_layer(media_type, blob, annotations)
+        return self._rust.add_layer(media_type, blob, annotations)
 
     def add_annotation(self, key: str, value: str):
         """
         Add annotation to the artifact itself.
         """
-        self._base.add_annotation(key, value)
+        self._rust.add_annotation(key, value)
 
     def build(self) -> Artifact:
         """
         Build the artifact.
         """
-        return Artifact(self._base.build())
+        rust_artifact = self._rust.build()
+        return Artifact(rust_artifact)

@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use colored::Colorize;
 use ocipkg::{oci_spec::image::ImageManifest, ImageName};
-use ommx::artifact::{get_image_dir, Artifact};
+use ommx::artifact::{get_local_registry_path, Artifact};
 use std::path::{Path, PathBuf};
 
 mod built_info {
@@ -62,7 +62,13 @@ enum Command {
     /// List the images in the local registry
     List,
 
-    /// Get the directory where the image is stored
+    /// Get the base path for an image in the local registry
+    LocalRegistryPath {
+        /// Container image name
+        image_name: String,
+    },
+
+    /// Get the directory where the image is stored (deprecated: use local-registry-path instead)
     ImageDirectory {
         /// Container image name
         image_name: String,
@@ -86,27 +92,51 @@ impl ImageNameOrPath {
             return Ok(Self::OciArchive(path.to_path_buf()));
         }
         if let Ok(name) = ImageName::parse(input) {
-            let path = get_image_dir(&name);
-            if path.exists() {
+            // Check for both oci-archive and oci-dir formats
+            let base_path = get_local_registry_path(&name);
+            let archive_path = base_path.with_extension("ommx");
+
+            // Priority: oci-archive > oci-dir
+            if archive_path.exists() && archive_path.is_file() {
                 return Ok(Self::Local(name));
-            } else {
-                return Ok(Self::Remote(name));
             }
+            if base_path.exists() && base_path.is_dir() {
+                return Ok(Self::Local(name));
+            }
+            return Ok(Self::Remote(name));
         }
         bail!("Invalid input: {}", input)
     }
 
     fn get_manifest(&self) -> Result<ImageManifest> {
         let manifest = match self {
-            ImageNameOrPath::OciDir(path) => Artifact::from_oci_dir(path)?.get_manifest()?,
+            ImageNameOrPath::OciDir(path) => {
+                let mut artifact = Artifact::from_oci_dir(path)?;
+                artifact.get_manifest()?
+            }
             ImageNameOrPath::OciArchive(path) => {
-                Artifact::from_oci_archive(path)?.get_manifest()?
+                let mut artifact = Artifact::from_oci_archive(path)?;
+                artifact.get_manifest()?
             }
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(name);
-                Artifact::from_oci_dir(&image_dir)?.get_manifest()?
+                // Check for both formats, prioritizing oci-archive
+                let base_path = get_local_registry_path(name);
+                let archive_path = base_path.with_extension("ommx");
+
+                if archive_path.exists() && archive_path.is_file() {
+                    let mut artifact = Artifact::from_oci_archive(&archive_path)?;
+                    artifact.get_manifest()?
+                } else if base_path.exists() && base_path.is_dir() {
+                    let mut artifact = Artifact::from_oci_dir(&base_path)?;
+                    artifact.get_manifest()?
+                } else {
+                    bail!("Artifact not found in local registry: {}", name)
+                }
             }
-            ImageNameOrPath::Remote(name) => Artifact::from_remote(name.clone())?.get_manifest()?,
+            ImageNameOrPath::Remote(name) => {
+                let mut artifact = Artifact::from_remote(name.clone())?;
+                artifact.get_manifest()?
+            }
         };
         Ok(manifest)
     }
@@ -168,9 +198,19 @@ fn main() -> Result<()> {
                 artifact.push()?;
             }
             ImageNameOrPath::Local(name) => {
-                let image_dir = get_image_dir(&name);
-                let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-                artifact.push()?;
+                // Check for both formats, prioritizing oci-archive
+                let base_path = get_local_registry_path(&name);
+                let archive_path = base_path.with_extension("ommx");
+
+                if archive_path.exists() && archive_path.is_file() {
+                    let mut artifact = Artifact::from_oci_archive(&archive_path)?;
+                    artifact.push()?;
+                } else if base_path.exists() && base_path.is_dir() {
+                    let mut artifact = Artifact::from_oci_dir(&base_path)?;
+                    artifact.push()?;
+                } else {
+                    bail!("Artifact not found in local registry: {}", name)
+                }
             }
             ImageNameOrPath::Remote(name) => {
                 bail!("Image not found in local: {}", name)
@@ -180,24 +220,45 @@ fn main() -> Result<()> {
         Command::Pull { image_name } => {
             let name = ImageName::parse(image_name)?;
             let mut artifact = Artifact::from_remote(name)?;
-            artifact.pull()?;
+            artifact.pull()?; // pull() saves to local registry automatically
         }
 
         Command::Save { image_name, output } => {
             let name = ImageName::parse(image_name)?;
-            let image_dir = get_image_dir(&name);
-            let mut artifact = Artifact::from_oci_dir(&image_dir)?;
-            artifact.save(output)?;
+            // Check for both formats, prioritizing oci-archive
+            let base_path = get_local_registry_path(&name);
+            let archive_path = base_path.with_extension("ommx");
+
+            if archive_path.exists() && archive_path.is_file() {
+                // Convert oci-archive to oci-archive (copy)
+                std::fs::copy(&archive_path, output)?;
+            } else if base_path.exists() && base_path.is_dir() {
+                let mut artifact = Artifact::from_oci_dir(&base_path)?;
+                artifact.save_as_archive(output)?;
+            } else {
+                bail!("Artifact not found in local registry: {}", name)
+            }
         }
 
         Command::Load { path } => {
             let mut artifact = Artifact::from_oci_archive(path)?;
-            artifact.load()?;
+            artifact.save()?; // save() saves to local registry
+        }
+
+        Command::LocalRegistryPath { image_name } => {
+            let name = ImageName::parse(image_name)?;
+            let path = get_local_registry_path(&name);
+            println!("{}", path.display());
         }
 
         Command::ImageDirectory { image_name } => {
+            log::warn!(
+                "The 'image-directory' command is deprecated since 2.1.0. \
+                 Use 'local-registry-path' instead for dual format support."
+            );
             let name = ImageName::parse(image_name)?;
-            let path = get_image_dir(&name);
+            #[allow(deprecated)]
+            let path = ommx::artifact::get_image_dir(&name);
             println!("{}", path.display());
         }
 
