@@ -42,8 +42,10 @@ fn main() -> Result<()> {
     );
 
     let objective = Function::from(linear!(1) + linear!(2));
-    let constraint =
-        Constraint::less_than_or_equal_to_zero(ConstraintID::from(1), (linear!(1) + linear!(2) + coeff!(-10.0)).into());
+    let constraint = Constraint::less_than_or_equal_to_zero(
+        ConstraintID::from(1),
+        (linear!(1) + linear!(2) + coeff!(-10.0)).into(),
+    );
 
     let mut constraints = BTreeMap::new();
     constraints.insert(ConstraintID::from(1), constraint);
@@ -53,7 +55,10 @@ fn main() -> Result<()> {
     println!("Initial instance:");
     println!("  Objective: x1 + x2");
     println!("  Constraint: x1 + x2 <= 10");
-    println!("  Decision variables: {}", instance.decision_variables().len());
+    println!(
+        "  Decision variables: {}",
+        instance.decision_variables().len()
+    );
     println!(
         "  Dependent variables: {}\n",
         instance.decision_variable_dependency().len()
@@ -107,7 +112,9 @@ fn main() -> Result<()> {
     println!("1. Dependent variables are stored in decision_variable_dependency");
     println!("2. They are automatically removed from objective and constraints");
     println!("3. substitute_acyclic is more efficient for multiple variables");
-    println!("4. The invariant is maintained: dependent variables never appear in objective/constraints");
+    println!(
+        "4. The invariant is maintained: dependent variables never appear in objective/constraints"
+    );
 
     Ok(())
 }
