@@ -8,6 +8,9 @@
 # Rust
 target/
 
+# Insta snapshots (pending review)
+*.snap.new
+
 # Proptest
 rust/ommx/proptest-regressions/
 

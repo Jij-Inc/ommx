@@ -293,6 +293,11 @@ impl Instance {
         DecisionVariableAnalysis(self.0.analyze_decision_variables())
     }
 
+    pub fn stats<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let stats = self.0.stats();
+        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
+    }
+
     fn __copy__(&self) -> Self {
         self.clone()
     }
