@@ -15,11 +15,13 @@ mod penalty;
 mod reduce_binary_power;
 mod serialize;
 mod setter;
+mod stats;
 mod substitute;
 
 pub use analysis::*;
 pub use error::*;
 pub use log_encode::*;
+pub use stats::*;
 
 use crate::{
     constraint_hints::ConstraintHints, parse::Parse, v1, AcyclicAssignments, Constraint,
