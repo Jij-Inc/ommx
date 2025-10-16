@@ -668,6 +668,55 @@ class Instance(UserAnnotationBase):
         """
         return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
 
+    def stats(self) -> dict:
+        """
+        Get statistics about the instance.
+
+        Returns a dictionary containing counts of decision variables and constraints
+        categorized by kind, usage, and status.
+
+        Returns
+        -------
+        dict
+            A dictionary with the following structure::
+
+                {
+                    "decision_variables": {
+                        "total": int,
+                        "by_kind": {
+                            "binary": int,
+                            "integer": int,
+                            "continuous": int,
+                            "semi_integer": int,
+                            "semi_continuous": int
+                        },
+                        "by_usage": {
+                            "used_in_objective": int,
+                            "used_in_constraints": int,
+                            "used": int,
+                            "fixed": int,
+                            "dependent": int,
+                            "irrelevant": int
+                        }
+                    },
+                    "constraints": {
+                        "total": int,
+                        "active": int,
+                        "removed": int
+                    }
+                }
+
+        Examples
+        --------
+        >>> instance = Instance.empty()
+        >>> stats = instance.stats()
+        >>> stats["decision_variables"]["total"]
+        0
+        >>> stats["constraints"]["total"]
+        0
+        """
+        return self.raw.stats()
+
     def to_qubo(
         self,
         *,

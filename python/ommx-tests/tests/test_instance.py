@@ -347,3 +347,78 @@ def test_restore_constraint_hint_relaxed():
     assert parsed_instance.constraint_hints.one_hot_constraints == [
         OneHot(id=0, variables=[0, 1, 2])
     ]
+
+
+def test_stats_empty_instance():
+    instance = Instance.from_components(
+        decision_variables=[],
+        objective=Function(0),
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    stats = instance.stats()
+
+    assert stats["decision_variables"]["total"] == 0
+    assert stats["decision_variables"]["by_kind"]["binary"] == 0
+    assert stats["decision_variables"]["by_kind"]["integer"] == 0
+    assert stats["decision_variables"]["by_kind"]["continuous"] == 0
+    assert stats["decision_variables"]["by_usage"]["used"] == 0
+    assert stats["decision_variables"]["by_usage"]["fixed"] == 0
+    assert stats["decision_variables"]["by_usage"]["dependent"] == 0
+    assert stats["decision_variables"]["by_usage"]["irrelevant"] == 0
+
+    assert stats["constraints"]["total"] == 0
+    assert stats["constraints"]["active"] == 0
+    assert stats["constraints"]["removed"] == 0
+
+
+def test_stats_with_variables():
+    x = [
+        DecisionVariable.binary(0, name="x", subscripts=[0]),
+        DecisionVariable.binary(1, name="x", subscripts=[1]),
+        DecisionVariable.integer(2, lower=0, upper=10, name="x", subscripts=[2]),
+        DecisionVariable.continuous(3, lower=0.0, upper=1.0, name="x", subscripts=[3]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],  # Use only binary variables in objective
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    stats = instance.stats()
+
+    assert stats["decision_variables"]["total"] == 4
+    assert stats["decision_variables"]["by_kind"]["binary"] == 2
+    assert stats["decision_variables"]["by_kind"]["integer"] == 1
+    assert stats["decision_variables"]["by_kind"]["continuous"] == 1
+    assert stats["decision_variables"]["by_usage"]["used_in_objective"] == 2
+    assert stats["decision_variables"]["by_usage"]["used"] == 2
+    assert stats["decision_variables"]["by_usage"]["irrelevant"] == 2  # x[2] and x[3]
+
+
+def test_stats_with_constraints():
+    x = [
+        DecisionVariable.binary(0, name="x", subscripts=[0]),
+        DecisionVariable.binary(1, name="x", subscripts=[1]),
+        DecisionVariable.binary(2, name="x", subscripts=[2]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[
+            (x[0] + x[1] == 1).set_id(0),
+            (x[1] + x[2] == 1).set_id(1),
+        ],
+        sense=Instance.MINIMIZE,
+    )
+
+    # Remove one constraint
+    instance.relax_constraint(1, reason="test removal")
+
+    stats = instance.stats()
+
+    assert stats["constraints"]["total"] == 2
+    assert stats["constraints"]["active"] == 1
+    assert stats["constraints"]["removed"] == 1
+    # x[0] is used in objective, x[0] and x[1] are used in active constraint
+    assert stats["decision_variables"]["by_usage"]["used_in_constraints"] == 2
