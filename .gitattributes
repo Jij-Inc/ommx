@@ -3,3 +3,6 @@ python/ommx/**/*_pb2.py* linguist-generated=true
 requirements.txt linguist-generated=true
 
 **/*.ipynb linguist-vendored
+
+# Insta snapshot files
+**/*.snap linguist-generated=true
