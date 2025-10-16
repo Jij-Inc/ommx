@@ -136,7 +136,9 @@ impl super::Instance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{coeff, linear, Constraint, ConstraintID, DecisionVariable, Instance, Sense, VariableID};
+    use crate::{
+        coeff, linear, Constraint, ConstraintID, DecisionVariable, Instance, Sense, VariableID,
+    };
     use maplit::btreemap;
     use std::collections::BTreeMap;
 
@@ -211,16 +213,13 @@ mod tests {
             ),
         };
 
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Remove one constraint
-        instance.relax_constraint(ConstraintID::from(2), "Test removal".to_string(), []).unwrap();
+        instance
+            .relax_constraint(ConstraintID::from(2), "Test removal".to_string(), [])
+            .unwrap();
 
         let stats = instance.stats();
 
@@ -315,16 +314,13 @@ mod tests {
             ),
         };
 
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Remove one constraint
-        instance.relax_constraint(ConstraintID::from(3), "Not needed".to_string(), []).unwrap();
+        instance
+            .relax_constraint(ConstraintID::from(3), "Not needed".to_string(), [])
+            .unwrap();
 
         let stats = instance.stats();
         insta::assert_yaml_snapshot!(stats);
