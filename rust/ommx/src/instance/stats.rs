@@ -37,6 +37,14 @@ pub struct VariableStatsByUsage {
 /// This struct provides counts of decision variables categorized by:
 /// - Kind: binary, integer, continuous, semi-integer, semi-continuous
 /// - Usage: used (in objective or constraints), fixed, dependent, irrelevant
+///
+/// Note on usage categories:
+/// The usage-based categories (used, fixed, dependent, irrelevant) are mutually exclusive.
+/// A variable belongs to exactly one category, determined by this priority:
+/// 1. `fixed`: Variables with substituted values
+/// 2. `dependent`: Variables defined by assignments in decision_variable_dependency
+/// 3. `used`: Variables appearing in objective or active constraints (not in categories 1-2)
+/// 4. `irrelevant`: All other variables (not in categories 1-3)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecisionVariableStats {
     /// Total number of decision variables
@@ -106,7 +114,7 @@ impl super::Instance {
                 .used_in_constraints()
                 .values()
                 .flat_map(|vars| vars.iter())
-                .collect::<std::collections::BTreeSet<_>>()
+                .collect::<std::collections::HashSet<_>>()
                 .len(),
             used: analysis.used().len(),
             fixed: analysis.fixed().len(),
