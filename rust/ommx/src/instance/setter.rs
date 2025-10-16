@@ -50,20 +50,25 @@ impl Instance {
         Ok(self.constraints.insert(constraint.id, constraint))
     }
 
-    /// Generate a new unique ConstraintID.
+    /// Returns the next available ConstraintID.
     ///
-    /// Returns the next available constraint ID by finding the maximum ID
-    /// from both active constraints and removed constraints, then adding 1.
-    /// If there are no constraints, returns ConstraintID(0).
+    /// Finds the maximum ID from both active constraints and removed constraints,
+    /// then adds 1. If there are no constraints, returns ConstraintID(0).
     ///
     /// Note: This method does not track which IDs have been allocated.
     /// Consecutive calls will return the same ID until a constraint is actually added.
     pub fn next_constraint_id(&self) -> ConstraintID {
-        self.constraints()
-            .keys()
-            .chain(self.removed_constraints().keys())
-            .map(|id| id.into_inner())
-            .max()
+        let max_in_constraints = self
+            .constraints()
+            .last_key_value()
+            .map(|(id, _)| id.into_inner());
+        let max_in_removed = self
+            .removed_constraints()
+            .last_key_value()
+            .map(|(id, _)| id.into_inner());
+
+        max_in_constraints
+            .max(max_in_removed)
             .map(|max| ConstraintID::from(max + 1))
             .unwrap_or(ConstraintID::from(0))
     }

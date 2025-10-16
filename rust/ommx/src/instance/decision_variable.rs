@@ -30,10 +30,9 @@ impl Instance {
             var.metadata.name.as_deref() == Some(name) && var.metadata.subscripts == subscripts
         })
     }
-    /// Generate a new unique VariableID.
+    /// Returns the next available VariableID.
     ///
-    /// Returns the next available variable ID by finding the maximum ID
-    /// from decision variables, then adding 1.
+    /// Finds the maximum ID from decision variables, then adds 1.
     /// If there are no variables, returns VariableID(0).
     ///
     /// Note: This method does not track which IDs have been allocated.
