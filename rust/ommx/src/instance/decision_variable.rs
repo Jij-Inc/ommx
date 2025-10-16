@@ -30,11 +30,19 @@ impl Instance {
             var.metadata.name.as_deref() == Some(name) && var.metadata.subscripts == subscripts
         })
     }
-    fn next_variable_id(&mut self) -> VariableID {
+    /// Generate a new unique VariableID.
+    ///
+    /// Returns the next available variable ID by finding the maximum ID
+    /// from decision variables, then adding 1.
+    /// If there are no variables, returns VariableID(1).
+    ///
+    /// Note: This method does not track which IDs have been allocated.
+    /// Consecutive calls will return the same ID until a variable is actually added.
+    pub fn next_variable_id(&self) -> VariableID {
         self.decision_variables
             .last_key_value()
             .map(|(id, _)| VariableID::from(id.into_inner() + 1))
-            .unwrap_or(VariableID::from(0))
+            .unwrap_or(VariableID::from(1))
     }
 
     pub fn new_decision_variable(
@@ -78,5 +86,67 @@ impl Instance {
             ATol::default(),
         )
         .unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{coeff, linear, Sense};
+    use maplit::btreemap;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_next_variable_id() {
+        // Empty instance should return 1
+        let decision_variables = BTreeMap::new();
+        let objective = coeff!(1.0).into();
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert_eq!(instance.next_variable_id(), VariableID::from(1));
+
+        // Instance with variables should return max_id + 1
+        let decision_variables = btreemap! {
+            VariableID::from(5) => DecisionVariable::binary(VariableID::from(5)),
+            VariableID::from(8) => DecisionVariable::binary(VariableID::from(8)),
+            VariableID::from(100) => DecisionVariable::binary(VariableID::from(100)),
+        };
+        let objective = (linear!(5) + coeff!(1.0)).into();
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(instance.next_variable_id(), VariableID::from(101));
+    }
+
+    #[test]
+    fn test_next_variable_id_with_new_binary() {
+        // Test integration with new_binary
+        let decision_variables = BTreeMap::new();
+        let objective = coeff!(1.0).into();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        let var1 = instance.new_binary();
+        assert_eq!(var1.id(), VariableID::from(1));
+
+        let var2 = instance.new_binary();
+        assert_eq!(var2.id(), VariableID::from(2));
+
+        assert_eq!(instance.next_variable_id(), VariableID::from(3));
     }
 }
