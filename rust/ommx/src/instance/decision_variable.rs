@@ -34,7 +34,7 @@ impl Instance {
     ///
     /// Returns the next available variable ID by finding the maximum ID
     /// from decision variables, then adding 1.
-    /// If there are no variables, returns VariableID(1).
+    /// If there are no variables, returns VariableID(0).
     ///
     /// Note: This method does not track which IDs have been allocated.
     /// Consecutive calls will return the same ID until a variable is actually added.
@@ -42,7 +42,7 @@ impl Instance {
         self.decision_variables
             .last_key_value()
             .map(|(id, _)| VariableID::from(id.into_inner() + 1))
-            .unwrap_or(VariableID::from(1))
+            .unwrap_or(VariableID::from(0))
     }
 
     pub fn new_decision_variable(
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_next_variable_id() {
-        // Empty instance should return 1
+        // Empty instance should return 0
         let decision_variables = BTreeMap::new();
         let objective = coeff!(1.0).into();
         let instance = Instance::new(
@@ -108,7 +108,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(instance.next_variable_id(), VariableID::from(1));
+        assert_eq!(instance.next_variable_id(), VariableID::from(0));
 
         // Instance with variables should return max_id + 1
         let decision_variables = btreemap! {
@@ -142,11 +142,11 @@ mod tests {
         .unwrap();
 
         let var1 = instance.new_binary();
-        assert_eq!(var1.id(), VariableID::from(1));
+        assert_eq!(var1.id(), VariableID::from(0));
 
         let var2 = instance.new_binary();
-        assert_eq!(var2.id(), VariableID::from(2));
+        assert_eq!(var2.id(), VariableID::from(1));
 
-        assert_eq!(instance.next_variable_id(), VariableID::from(3));
+        assert_eq!(instance.next_variable_id(), VariableID::from(2));
     }
 }

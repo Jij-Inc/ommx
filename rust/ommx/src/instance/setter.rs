@@ -54,20 +54,18 @@ impl Instance {
     ///
     /// Returns the next available constraint ID by finding the maximum ID
     /// from both active constraints and removed constraints, then adding 1.
-    /// If there are no constraints, returns ConstraintID(1).
+    /// If there are no constraints, returns ConstraintID(0).
     ///
     /// Note: This method does not track which IDs have been allocated.
     /// Consecutive calls will return the same ID until a constraint is actually added.
     pub fn next_constraint_id(&self) -> ConstraintID {
-        let max_id = self
-            .constraints()
+        self.constraints()
             .keys()
             .chain(self.removed_constraints().keys())
             .map(|id| id.into_inner())
             .max()
-            .unwrap_or(0);
-
-        ConstraintID::from(max_id + 1)
+            .map(|max| ConstraintID::from(max + 1))
+            .unwrap_or(ConstraintID::from(0))
     }
 }
 
@@ -402,7 +400,7 @@ mod tests {
             BTreeMap::new(),
         )
         .unwrap();
-        assert_eq!(instance.next_constraint_id(), ConstraintID::from(1));
+        assert_eq!(instance.next_constraint_id(), ConstraintID::from(0));
 
         // Test considering both active and removed constraints
         let decision_variables = btreemap! {
