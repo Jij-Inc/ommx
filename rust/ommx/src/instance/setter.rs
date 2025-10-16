@@ -49,6 +49,29 @@ impl Instance {
         }
         Ok(self.constraints.insert(constraint.id, constraint))
     }
+
+    /// Returns the next available ConstraintID.
+    ///
+    /// Finds the maximum ID from both active constraints and removed constraints,
+    /// then adds 1. If there are no constraints, returns ConstraintID(0).
+    ///
+    /// Note: This method does not track which IDs have been allocated.
+    /// Consecutive calls will return the same ID until a constraint is actually added.
+    pub fn next_constraint_id(&self) -> ConstraintID {
+        let max_in_constraints = self
+            .constraints()
+            .last_key_value()
+            .map(|(id, _)| id.into_inner());
+        let max_in_removed = self
+            .removed_constraints()
+            .last_key_value()
+            .map(|(id, _)| id.into_inner());
+
+        max_in_constraints
+            .max(max_in_removed)
+            .map(|max| ConstraintID::from(max + 1))
+            .unwrap_or(ConstraintID::from(0))
+    }
 }
 
 #[cfg(test)]
@@ -366,5 +389,46 @@ mod tests {
                 .constraint,
             new_constraint
         );
+    }
+
+    #[test]
+    fn test_next_constraint_id() {
+        // Test basic case: empty instance
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+        };
+        let objective = (linear!(1) + coeff!(1.0)).into();
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+        assert_eq!(instance.next_constraint_id(), ConstraintID::from(0));
+
+        // Test considering both active and removed constraints
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+        };
+        let objective = (linear!(1) + coeff!(1.0)).into();
+        let constraints = btreemap! {
+            ConstraintID::from(3) => Constraint::equal_to_zero(
+                ConstraintID::from(3),
+                (linear!(1) + coeff!(1.0)).into(),
+            ),
+            ConstraintID::from(15) => Constraint::equal_to_zero(
+                ConstraintID::from(15),
+                (linear!(1) + coeff!(2.0)).into(),
+            ),
+        };
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        instance
+            .relax_constraint(ConstraintID::from(15), "test".to_string(), [])
+            .unwrap();
+
+        // Should return 16 (max(3, 15) + 1)
+        assert_eq!(instance.next_constraint_id(), ConstraintID::from(16));
     }
 }
