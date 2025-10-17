@@ -4,8 +4,6 @@ accessible-pygments==0.0.5
     # via pydata-sphinx-theme
 alabaster==0.7.16
     # via sphinx
-appnope==0.1.4
-    # via ipykernel
 asttokens==3.0.0
     # via stack-data
 attrs==25.1.0
@@ -58,12 +56,16 @@ docutils==0.20.1
     #   sphinx
     #   sphinx-togglebutton
     #   sphinxcontrib-bibtex
+exceptiongroup==1.3.0
+    # via ipython
 executing==2.2.0
     # via stack-data
 fastjsonschema==2.21.1
     # via nbformat
 fonttools==4.55.8
     # via matplotlib
+greenlet==3.2.4
+    # via sqlalchemy
 highspy==1.9.0
     # via ommx-highs-adapter
 idna==3.10
@@ -73,7 +75,13 @@ imagesize==1.4.1
 importlib-metadata==8.6.1
     # via
     #   jupyter-cache
+    #   jupyter-client
     #   myst-nb
+    #   nbconvert
+    #   sphinx
+    #   sphinxcontrib-bibtex
+importlib-resources==6.5.2
+    # via matplotlib
 ipykernel==6.29.5
     # via myst-nb
 ipython==8.18.1
@@ -177,20 +185,20 @@ numpy==1.26.4
     #   pandas
     #   pyscipopt
     #   scipy
-ommx==2.0.9
+ommx==2.0.11
     # via
     #   ommx-book (pyproject.toml)
     #   ommx-highs-adapter
     #   ommx-openjij-adapter
     #   ommx-pyscipopt-adapter
     #   ommx-python-mip-adapter
-ommx-highs-adapter==2.0.9
+ommx-highs-adapter==2.0.11
     # via ommx-book (pyproject.toml)
-ommx-openjij-adapter==2.0.9
+ommx-openjij-adapter==2.0.11
     # via ommx-book (pyproject.toml)
-ommx-pyscipopt-adapter==2.0.9
+ommx-pyscipopt-adapter==2.0.11
     # via ommx-book (pyproject.toml)
-ommx-python-mip-adapter==2.0.9
+ommx-python-mip-adapter==2.0.11
     # via ommx-book (pyproject.toml)
 openjij==0.9.2
     # via ommx-openjij-adapter
@@ -283,9 +291,7 @@ scipy==1.11.4
     #   jij-cimod
     #   openjij
 setuptools==75.8.0
-    # via
-    #   sphinx-togglebutton
-    #   sphinxcontrib-bibtex
+    # via sphinx-togglebutton
 six==1.17.0
     # via
     #   pybtex
@@ -350,6 +356,8 @@ tabulate==0.9.0
     # via jupyter-cache
 tinycss2==1.4.0
     # via bleach
+tomli==2.3.0
+    # via sphinx
 tornado==6.4.2
     # via
     #   ipykernel
@@ -368,10 +376,14 @@ traitlets==5.14.3
 typing-extensions==4.12.2
     # via
     #   beautifulsoup4
+    #   exceptiongroup
+    #   ipython
+    #   mistune
     #   myst-nb
     #   ommx
     #   openjij
     #   pydata-sphinx-theme
+    #   referencing
     #   sqlalchemy
 tzdata==2025.1
     # via pandas
@@ -388,4 +400,6 @@ webencodings==0.5.1
 wheel==0.45.1
     # via sphinx-togglebutton
 zipp==3.21.0
-    # via importlib-metadata
+    # via
+    #   importlib-metadata
+    #   importlib-resources
