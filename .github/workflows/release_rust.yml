@@ -41,9 +41,16 @@ jobs:
           cargo set-version --bump patch
           echo "NEW_VERSION=$(cargo metadata --no-deps --format-version=1 | jq -r '.packages[0].version')" >> $GITHUB_ENV
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TOKEN_PROVIDER_OMMX_APP_ID }}
+          private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ steps.app-token.outputs.token }}
           title: "Start developing ${{ env.NEW_VERSION }}"
           branch: "rust-version-update/${{ env.NEW_VERSION }}"
           base: "main"

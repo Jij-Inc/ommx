@@ -36,10 +36,17 @@ jobs:
             echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
           fi
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TOKEN_PROVIDER_OMMX_APP_ID }}
+          private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
+
       - name: Create Pull Request if changes detected
         if: env.CHANGES_DETECTED == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ steps.app-token.outputs.token }}
           title: "Update LLMs.md"
           body: "Automatically generated update for LLMs.md based on notebook changes."
           branch: "auto-update/llms-md"
