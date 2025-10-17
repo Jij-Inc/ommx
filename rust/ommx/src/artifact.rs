@@ -1,31 +1,31 @@
 //! Manage messages as container
 //!
+//! This module provides a unified Artifact API that dynamically manages different storage formats:
+//! - OCI Archive format (`.ommx` files, default for new artifacts)
+//! - OCI Directory format (legacy support)
+//! - Remote registry references
 
 mod annotations;
 mod builder;
 mod config;
+mod io;
+mod layers;
 pub mod media_types;
+#[cfg(test)]
+mod tests;
+
 pub use annotations::*;
-pub use builder::*;
+pub use builder::Builder;
 pub use config::*;
 
-use crate::v1;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use ocipkg::{
-    distribution::MediaType,
-    image::{
-        Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
-        RemoteBuilder,
-    },
-    oci_spec::image::{Descriptor, ImageManifest},
-    Digest, ImageName,
+    image::{Image, OciArchive, OciArtifact, OciDir, Remote},
+    oci_spec::image::Descriptor,
+    ImageName,
 };
-use prost::Message;
+use std::path::Path;
 use std::{env, path::PathBuf, sync::OnceLock};
-use std::{
-    ops::{Deref, DerefMut},
-    path::Path,
-};
 
 /// Global storage for the local registry root path
 static LOCAL_REGISTRY_ROOT: OnceLock<PathBuf> = OnceLock::new();
@@ -91,7 +91,24 @@ pub fn data_dir() -> Result<PathBuf> {
 }
 
 /// Get the directory for the given image name in the local registry
+///
+/// # Deprecated
+/// Use [`get_local_registry_path`] instead, which is format-agnostic and works with both oci-dir and oci-archive formats.
+#[deprecated(
+    since = "2.1.0",
+    note = "Use get_local_registry_path instead for dual format support"
+)]
 pub fn get_image_dir(image_name: &ImageName) -> PathBuf {
+    get_local_registry_root().join(image_name.as_path())
+}
+
+/// Get the base path for the given image name in the local registry
+///
+/// This returns the path where the artifact should be stored, without format-specific extensions.
+/// The caller should check:
+/// - If this path is a directory with oci-layout -> oci-dir format
+/// - If "{path}.ommx" exists as a file -> oci-archive format
+pub fn get_local_registry_path(image_name: &ImageName) -> PathBuf {
     get_local_registry_root().join(image_name.as_path())
 }
 
@@ -112,156 +129,107 @@ pub fn ghcr(org: &str, repo: &str, name: &str, tag: &str) -> Result<ImageName> {
 }
 
 fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
-    let mut images = Vec::new();
+    gather_artifacts(dir)
+}
+
+fn gather_artifacts(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut artifacts = Vec::new();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
             if path.join("oci-layout").exists() {
-                images.push(path);
+                // OCI directory format
+                artifacts.push(path);
             } else {
-                let mut sub_images = gather_oci_dirs(&path)?;
-                images.append(&mut sub_images)
+                let mut sub_artifacts = gather_artifacts(&path)?;
+                artifacts.append(&mut sub_artifacts)
+            }
+        } else if path.is_file() {
+            // Check if it's an OCI archive by trying to parse it
+            // OCI archives typically have .ommx extension or can be detected by content
+            if is_oci_archive(&path) {
+                artifacts.push(path);
             }
         }
     }
-    Ok(images)
+    Ok(artifacts)
 }
 
-fn auth_from_env() -> Result<(String, String, String)> {
-    if let (Ok(domain), Ok(username), Ok(password)) = (
-        env::var("OMMX_BASIC_AUTH_DOMAIN"),
-        env::var("OMMX_BASIC_AUTH_USERNAME"),
-        env::var("OMMX_BASIC_AUTH_PASSWORD"),
-    ) {
-        log::info!(
-            "Detect OMMX_BASIC_AUTH_DOMAIN, OMMX_BASIC_AUTH_USERNAME, OMMX_BASIC_AUTH_PASSWORD for authentication."
-        );
-        return Ok((domain, username, password));
+fn is_oci_archive(path: &Path) -> bool {
+    // Check file extension first (most common case)
+    if let Some(ext) = path.extension() {
+        if ext == "ommx" || ext == "tar" {
+            return true;
+        }
     }
-    bail!("No authentication information found in environment variables");
+
+    // For files without recognized extensions, don't try to parse them
+    // as this could be expensive and most files won't be OCI archives
+    false
 }
 
-/// Get all images stored in the local registry
-pub fn get_images() -> Result<Vec<ImageName>> {
-    let root = get_local_registry_root();
-    let dirs = gather_oci_dirs(root)?;
-    dirs.into_iter()
-        .map(|dir| {
-            let relative = dir
-                .strip_prefix(root)
-                .context("Failed to get relative path")?;
-            ImageName::from_path(relative)
-        })
-        .collect()
+/// OMMX Artifact with dynamic format handling
+///
+/// This enum replaces the parametric `Artifact<T: Image>` with a simpler API that
+/// automatically manages different storage formats.
+///
+/// # Variants
+///
+/// - `Archive`: OCI archive format (`.ommx` file, default for new artifacts)
+/// - `Dir`: OCI directory format (legacy support)
+/// - `Remote`: Remote registry reference (transitions to Archive/Dir after pull)
+pub enum Artifact {
+    Archive(OciArtifact<OciArchive>),
+    Dir(OciArtifact<OciDir>),
+    Remote(Box<OciArtifact<Remote>>),
 }
 
-/// OMMX Artifact, an OCI Artifact of type [`application/org.ommx.v1.artifact`][media_types::v1_artifact]
-pub struct Artifact<Base: Image>(OciArtifact<Base>);
-
-impl<Base: Image> Deref for Artifact<Base> {
-    type Target = OciArtifact<Base>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<Base: Image> DerefMut for Artifact<Base> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl Artifact<OciArchive> {
+impl Artifact {
+    /// Create an Artifact from an OCI archive file (`.ommx`)
     pub fn from_oci_archive(path: &Path) -> Result<Self> {
-        let artifact = OciArtifact::from_oci_archive(path)?;
-        Self::new(artifact)
+        let mut artifact = OciArtifact::from_oci_archive(path)?;
+        Self::validate_artifact_type(&mut artifact)?;
+        Ok(Self::Archive(artifact))
     }
 
-    pub fn push(&mut self) -> Result<Artifact<Remote>> {
-        let name = self.get_name()?;
-        log::info!("Pushing: {name}");
-        let mut remote = RemoteBuilder::new(name)?;
-        if let Ok((domain, username, password)) = auth_from_env() {
-            remote.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
-        Ok(Artifact(OciArtifact::new(out)))
-    }
-
-    pub fn load(&mut self) -> Result<()> {
-        let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
-        if path.exists() {
-            log::trace!("Already exists in local registry: {}", path.display());
-            return Ok(());
-        }
-        log::info!("Loading to local registry: {image_name}");
-        ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
-        Ok(())
-    }
-}
-
-impl Artifact<OciDir> {
+    /// Create an Artifact from an OCI directory
     pub fn from_oci_dir(path: &Path) -> Result<Self> {
-        let artifact = OciArtifact::from_oci_dir(path)?;
-        Self::new(artifact)
+        let mut artifact = OciArtifact::from_oci_dir(path)?;
+        Self::validate_artifact_type(&mut artifact)?;
+        Ok(Self::Dir(artifact))
     }
 
-    pub fn push(&mut self) -> Result<Artifact<Remote>> {
-        let name = self.get_name()?;
-        log::info!("Pushing: {name}");
-        let mut remote = RemoteBuilder::new(name)?;
-        if let Ok((domain, username, password)) = auth_from_env() {
-            remote.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(self.0.deref_mut(), remote)?;
-        Ok(Artifact(OciArtifact::new(out)))
-    }
-
-    pub fn save(&mut self, output: &Path) -> Result<()> {
-        if output.exists() {
-            bail!("Output file already exists: {}", output.display());
-        }
-        let builder = if let Ok(name) = self.get_name() {
-            OciArchiveBuilder::new(output.to_path_buf(), name)?
-        } else {
-            OciArchiveBuilder::new_unnamed(output.to_path_buf())?
-        };
-        ocipkg::image::copy(self.0.deref_mut(), builder)?;
-        Ok(())
-    }
-}
-
-impl Artifact<Remote> {
+    /// Create an Artifact from a remote registry
     pub fn from_remote(image_name: ImageName) -> Result<Self> {
         let artifact = OciArtifact::from_remote(image_name)?;
-        Self::new(artifact)
+        Ok(Self::Remote(Box::new(artifact)))
     }
 
-    pub fn pull(&mut self) -> Result<Artifact<OciDir>> {
-        let image_name = self.get_name()?;
-        let path = get_image_dir(&image_name);
-        if path.exists() {
-            log::trace!("Already exists in local registry: {}", path.display());
-            return Ok(Artifact(OciArtifact::from_oci_dir(&path)?));
+    /// Get the image name if available
+    pub fn image_name(&mut self) -> Option<String> {
+        match self {
+            Self::Archive(a) => a.get_name().ok().map(|n| n.to_string()),
+            Self::Dir(a) => a.get_name().ok().map(|n| n.to_string()),
+            Self::Remote(a) => a.as_mut().get_name().ok().map(|n| n.to_string()),
         }
-        log::info!("Pulling to local registry: {image_name}");
-        if let Ok((domain, username, password)) = auth_from_env() {
-            self.0.add_basic_auth(&domain, &username, &password);
-        }
-        let out = ocipkg::image::copy(self.0.deref_mut(), OciDirBuilder::new(path, image_name)?)?;
-        Ok(Artifact(OciArtifact::new(out)))
-    }
-}
-
-impl<Base: Image> Artifact<Base> {
-    pub fn new(artifact: OciArtifact<Base>) -> Result<Self> {
-        Ok(Self(artifact))
     }
 
-    pub fn get_manifest(&mut self) -> Result<ImageManifest> {
-        let manifest = self.0.get_manifest()?;
+    /// Get manifest annotations
+    pub fn annotations(&mut self) -> Result<std::collections::HashMap<String, String>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.annotations().clone().unwrap_or_default())
+    }
+
+    /// Get layer descriptors
+    pub fn layers(&mut self) -> Result<Vec<Descriptor>> {
+        let manifest = self.get_manifest()?;
+        Ok(manifest.layers().to_vec())
+    }
+
+    /// Validate that the artifact has the correct OMMX artifact type
+    pub(crate) fn validate_artifact_type<T: Image>(artifact: &mut OciArtifact<T>) -> Result<()> {
+        let manifest = artifact.get_manifest()?;
         let ty = manifest
             .artifact_type()
             .as_ref()
@@ -271,113 +239,40 @@ impl<Base: Image> Artifact<Base> {
             "Not an OMMX Artifact: {}",
             ty
         );
-        Ok(manifest)
+        Ok(())
     }
+}
 
-    pub fn get_config(&mut self) -> Result<Config> {
-        let (_desc, blob) = self.0.get_config()?;
-        let config = serde_json::from_slice(&blob)?;
-        Ok(config)
-    }
+/// Get all images stored in the local registry
+pub fn get_images() -> Result<Vec<ImageName>> {
+    let root = get_local_registry_root();
+    let artifacts = gather_oci_dirs(root)?;
+    artifacts
+        .into_iter()
+        .map(|artifact_path| {
+            let relative = artifact_path
+                .strip_prefix(root)
+                .context("Failed to get relative path")?;
 
-    pub fn get_layer_descriptors(&mut self, media_type: &MediaType) -> Result<Vec<Descriptor>> {
-        let manifest = self.get_manifest()?;
-        Ok(manifest
-            .layers()
-            .iter()
-            .filter(|desc| desc.media_type() == media_type)
-            .cloned()
-            .collect())
-    }
-
-    pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
-        for (desc, blob) in self.0.get_layers()? {
-            if desc.digest() == &digest.to_string() {
-                return Ok((desc, blob));
+            // For archive files, we need to extract the image name differently
+            if artifact_path.is_file() {
+                // Try to extract image name from the archive metadata
+                if let Ok(mut artifact) = Artifact::from_oci_archive(&artifact_path) {
+                    if let Some(name) = artifact.image_name() {
+                        return ImageName::parse(&name);
+                    }
+                }
+                // Fallback: use the file path without extension as image name
+                let path_without_ext = if let Some(stem) = relative.file_stem() {
+                    relative.with_file_name(stem)
+                } else {
+                    relative.to_path_buf()
+                };
+                ImageName::from_path(&path_without_ext)
+            } else {
+                // Directory format - use path as before
+                ImageName::from_path(relative)
             }
-        }
-        bail!("Layer of digest {} not found", digest)
-    }
-
-    pub fn get_solution(&mut self, digest: &Digest) -> Result<(v1::State, SolutionAnnotations)> {
-        let (desc, blob) = self.get_layer(digest)?;
-        ensure!(
-            desc.media_type() == &media_types::v1_solution(),
-            "Layer {digest} is not an ommx.v1.Solution: {}",
-            desc.media_type()
-        );
-        Ok((
-            v1::State::decode(blob.as_slice())?,
-            SolutionAnnotations::from_descriptor(&desc),
-        ))
-    }
-
-    pub fn get_sample_set(
-        &mut self,
-        digest: &Digest,
-    ) -> Result<(v1::SampleSet, SampleSetAnnotations)> {
-        let (desc, blob) = self.get_layer(digest)?;
-        ensure!(
-            desc.media_type() == &media_types::v1_sample_set(),
-            "Layer {digest} is not an ommx.v1.SampleSet: {}",
-            desc.media_type()
-        );
-        Ok((
-            v1::SampleSet::decode(blob.as_slice())?,
-            SampleSetAnnotations::from_descriptor(&desc),
-        ))
-    }
-
-    pub fn get_instance(&mut self, digest: &Digest) -> Result<(v1::Instance, InstanceAnnotations)> {
-        let (desc, blob) = self.get_layer(digest)?;
-        ensure!(
-            desc.media_type() == &media_types::v1_instance(),
-            "Layer {digest} is not an ommx.v1.Instance: {}",
-            desc.media_type()
-        );
-        Ok((
-            v1::Instance::decode(blob.as_slice())?,
-            InstanceAnnotations::from_descriptor(&desc),
-        ))
-    }
-
-    pub fn get_parametric_instance(
-        &mut self,
-        digest: &Digest,
-    ) -> Result<(v1::ParametricInstance, ParametricInstanceAnnotations)> {
-        let (desc, blob) = self.get_layer(digest)?;
-        ensure!(
-            desc.media_type() == &media_types::v1_parametric_instance(),
-            "Layer {digest} is not an ommx.v1.ParametricInstance: {}",
-            desc.media_type()
-        );
-        Ok((
-            v1::ParametricInstance::decode(blob.as_slice())?,
-            ParametricInstanceAnnotations::from_descriptor(&desc),
-        ))
-    }
-
-    pub fn get_solutions(&mut self) -> Result<Vec<(Descriptor, v1::State)>> {
-        let mut out = Vec::new();
-        for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_types::v1_solution() {
-                continue;
-            }
-            let solution = v1::State::decode(blob.as_slice())?;
-            out.push((desc, solution));
-        }
-        Ok(out)
-    }
-
-    pub fn get_instances(&mut self) -> Result<Vec<(Descriptor, v1::Instance)>> {
-        let mut out = Vec::new();
-        for (desc, blob) in self.0.get_layers()? {
-            if desc.media_type() != &media_types::v1_instance() {
-                continue;
-            }
-            let instance = v1::Instance::decode(blob.as_slice())?;
-            out.push((desc, instance));
-        }
-        Ok(out)
-    }
+        })
+        .collect()
 }

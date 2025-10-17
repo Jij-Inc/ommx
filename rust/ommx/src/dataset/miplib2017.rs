@@ -1,5 +1,5 @@
 use crate::{
-    artifact::{ghcr, Artifact, InstanceAnnotations},
+    artifact::{ghcr, InstanceAnnotations},
     v1::Instance,
 };
 
@@ -243,6 +243,8 @@ fn check_unsupported(name: &str) -> Result<()> {
 
 /// Load an instance from the MIPLIB 2017 dataset
 pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
+    use crate::artifact::Artifact;
+
     let annotations = instance_annotations();
     ensure!(
         annotations.contains_key(name),
@@ -251,7 +253,8 @@ pub fn load(name: &str) -> Result<(Instance, InstanceAnnotations)> {
     check_unsupported(name)?;
 
     let image_name = ghcr("Jij-Inc", "ommx", "miplib2017", name)?;
-    let mut artifact = Artifact::from_remote(image_name)?.pull()?;
+    let mut artifact = Artifact::from_remote(image_name)?;
+    artifact.pull()?;
     let mut instances = artifact.get_instances()?;
     ensure!(
         instances.len() == 1,

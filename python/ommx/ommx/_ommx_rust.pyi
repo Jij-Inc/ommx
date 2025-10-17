@@ -7,66 +7,6 @@ import pathlib
 import typing
 from enum import Enum
 
-class ArtifactArchive:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
-    @staticmethod
-    def from_oci_archive(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchive: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-class ArtifactArchiveBuilder:
-    @staticmethod
-    def new_unnamed(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def new(
-        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def temp() -> ArtifactArchiveBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactArchive: ...
-
-class ArtifactDir:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
-    @staticmethod
-    def from_image_name(image_name: builtins.str) -> ArtifactDir: ...
-    @staticmethod
-    def from_oci_dir(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactDir: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-class ArtifactDirBuilder:
-    @staticmethod
-    def new(image_name: builtins.str) -> ArtifactDirBuilder: ...
-    @staticmethod
-    def for_github(
-        org: builtins.str, repo: builtins.str, name: builtins.str, tag: builtins.str
-    ) -> ArtifactDirBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactDir: ...
-
 class Bound:
     r"""
     Variable bound wrapper for Python
@@ -701,6 +641,53 @@ class Polynomial:
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
 
+class PyArtifact:
+    image_name: typing.Optional[builtins.str]
+    annotations: builtins.dict[builtins.str, builtins.str]
+    layers: builtins.list[Descriptor]
+    @staticmethod
+    def from_oci_archive(
+        path: builtins.str | os.PathLike | pathlib.Path,
+    ) -> PyArtifact: ...
+    @staticmethod
+    def from_oci_dir(path: builtins.str | os.PathLike | pathlib.Path) -> PyArtifact: ...
+    @staticmethod
+    def from_remote(image_name: builtins.str) -> PyArtifact: ...
+    @staticmethod
+    def load(image_name: builtins.str) -> PyArtifact: ...
+    def get_blob(self, digest: builtins.str) -> bytes: ...
+    def save(self) -> None: ...
+    def save_as_archive(
+        self, path: builtins.str | os.PathLike | pathlib.Path
+    ) -> None: ...
+    def save_as_dir(self, path: builtins.str | os.PathLike | pathlib.Path) -> None: ...
+    def pull(self) -> None: ...
+    def push(self) -> None: ...
+
+class PyArtifactBuilder:
+    @staticmethod
+    def new_archive(
+        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
+    ) -> PyArtifactBuilder: ...
+    @staticmethod
+    def new_archive_unnamed(
+        path: builtins.str | os.PathLike | pathlib.Path,
+    ) -> PyArtifactBuilder: ...
+    @staticmethod
+    def temp_archive() -> PyArtifactBuilder: ...
+    @staticmethod
+    def new_dir(
+        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
+    ) -> PyArtifactBuilder: ...
+    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
+    def add_layer(
+        self,
+        media_type: builtins.str,
+        blob: bytes,
+        annotations: typing.Mapping[builtins.str, builtins.str],
+    ) -> Descriptor: ...
+    def build(self) -> PyArtifact: ...
+
 class Quadratic:
     linear_terms: builtins.dict[builtins.int, builtins.float]
     constant_term: builtins.float
@@ -1182,6 +1169,16 @@ def get_image_dir(image_name: builtins.str) -> builtins.str:
     Get the path where given image is stored in the local registry.
 
     - The directory may not exist if the image is not in the local registry.
+    """
+
+def get_local_registry_path(image_name: builtins.str) -> builtins.str:
+    r"""
+    Get the base path for the given image name in the local registry
+
+    This returns the path where the artifact should be stored, without format-specific extensions.
+    The caller should check:
+    - If this path is a directory with oci-layout -> oci-dir format
+    - If "{path}.ommx" exists as a file -> oci-archive format
     """
 
 def get_local_registry_root() -> builtins.str:
