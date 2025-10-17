@@ -164,9 +164,16 @@ jobs:
           echo "NEW_VERSION=$(uv run python/set-version.py)" >> $GITHUB_ENV
           task python:sync
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TOKEN_PROVIDER_OMMX_APP_ID }}
+          private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ steps.app-token.outputs.token }}
           title: "Start developing OMMX Python SDK ${{ env.NEW_VERSION }}"
           branch: "python-version-update/${{ env.NEW_VERSION }}"
           base: "main"
@@ -197,9 +204,16 @@ jobs:
           task python:update-docs-deps -- ${RELEASED_VERSION}
           task pip_compile
 
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TOKEN_PROVIDER_OMMX_APP_ID }}
+          private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
+
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v7
         with:
+          token: ${{ steps.app-token.outputs.token }}
           title: "Update docs dependencies to OMMX ${{ env.RELEASED_VERSION }}"
           branch: "docs-deps-update/${{ env.RELEASED_VERSION }}"
           base: "main"
