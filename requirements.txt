@@ -215,7 +215,7 @@ platformdirs==4.3.6
     # via jupyter-core
 prompt-toolkit==3.0.50
     # via ipython
-protobuf==5.29.3
+protobuf==5.29.5
     # via ommx
 psutil==6.1.1
     # via ipykernel
@@ -270,7 +270,7 @@ referencing==0.36.2
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.31.0
+requests==2.32.4
     # via
     #   openjij
     #   sphinx
@@ -282,7 +282,7 @@ scipy==1.11.4
     # via
     #   jij-cimod
     #   openjij
-setuptools==75.8.0
+setuptools==78.1.1
     # via
     #   sphinx-togglebutton
     #   sphinxcontrib-bibtex
@@ -350,7 +350,7 @@ tabulate==0.9.0
     # via jupyter-cache
 tinycss2==1.4.0
     # via bleach
-tornado==6.4.2
+tornado==6.5
     # via
     #   ipykernel
     #   jupyter-client
@@ -377,7 +377,7 @@ tzdata==2025.1
     # via pandas
 uc-micro-py==1.0.3
     # via linkify-it-py
-urllib3==2.3.0
+urllib3==2.5.0
     # via requests
 wcwidth==0.2.13
     # via prompt-toolkit
