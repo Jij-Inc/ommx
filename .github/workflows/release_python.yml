@@ -31,7 +31,7 @@ jobs:
           manylinux: manylinux_2_28
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: linux-${{ matrix.target }}
           path: ./python/ommx/dist
@@ -51,7 +51,7 @@ jobs:
           working-directory: ./python/ommx
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: macos
           path: ./python/ommx/dist
@@ -76,7 +76,7 @@ jobs:
           working-directory: ./python/ommx
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: windows
           path: ./python/ommx/dist
@@ -98,7 +98,7 @@ jobs:
         run: uv build --out-dir ./dist --sdist ./python/ommx-${{ matrix.name }}-adapter
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.name }}-adapter
           path: ./dist/
@@ -115,7 +115,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Download artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: dist
           pattern: "*"
@@ -133,7 +133,7 @@ jobs:
     needs: [linux, macos, windows, adapters, check-wheel]
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           path: dist
           pattern: "*"
