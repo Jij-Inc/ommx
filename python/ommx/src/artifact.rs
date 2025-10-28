@@ -1,137 +1,11 @@
 use crate::PyDescriptor;
 use anyhow::Result;
-use derive_more::{Deref, From};
-use ocipkg::{
-    image::{Image, OciArchive, OciDir},
-    Digest, ImageName,
-};
-use ommx::artifact::Artifact;
+use ocipkg::{Digest, ImageName};
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-#[pyo3(module = "ommx._ommx_rust")]
-#[derive(From, Deref)]
-pub struct ArtifactArchive(Mutex<Artifact<OciArchive>>);
-
-impl From<Artifact<OciArchive>> for ArtifactArchive {
-    fn from(artifact: Artifact<OciArchive>) -> Self {
-        Self(Mutex::new(artifact))
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl ArtifactArchive {
-    #[staticmethod]
-    pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
-        let artifact = Artifact::from_oci_archive(&path)?;
-        Ok(Self(artifact.into()))
-    }
-
-    #[getter]
-    pub fn image_name(&mut self) -> Option<String> {
-        self.0
-            .lock()
-            .unwrap()
-            .get_name()
-            .map(|name| name.to_string())
-            .ok()
-    }
-
-    #[getter]
-    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
-        let manifest = self.0.lock().unwrap().get_manifest()?;
-        Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
-    }
-
-    #[getter]
-    pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
-        let manifest = self.0.lock().unwrap().get_manifest()?;
-        Ok(manifest
-            .layers()
-            .iter()
-            .cloned()
-            .map(PyDescriptor::from)
-            .collect())
-    }
-
-    pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
-        let digest = Digest::new(digest)?;
-        let blob = self.0.lock().unwrap().get_blob(&digest)?;
-        Ok(PyBytes::new(py, blob.as_ref()))
-    }
-
-    pub fn push(&mut self) -> Result<()> {
-        // Do not expose Artifact<Remote> to Python API for simplicity.
-        // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
-        let _remote = self.0.lock().unwrap().push()?;
-        Ok(())
-    }
-}
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
-#[pyclass]
-#[pyo3(module = "ommx._ommx_rust")]
-#[derive(From, Deref)]
-pub struct ArtifactDir(Artifact<OciDir>);
-
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
-#[pymethods]
-impl ArtifactDir {
-    #[staticmethod]
-    pub fn from_image_name(image_name: &str) -> Result<Self> {
-        let image_name = ImageName::parse(image_name)?;
-        let local_path = ommx::artifact::get_image_dir(&image_name);
-        if local_path.exists() {
-            return Ok(Self(Artifact::from_oci_dir(&local_path)?));
-        }
-        let mut remote = Artifact::from_remote(image_name)?;
-        Ok(Self(remote.pull()?))
-    }
-
-    #[staticmethod]
-    pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
-        let artifact = Artifact::from_oci_dir(&path)?;
-        Ok(Self(artifact))
-    }
-
-    #[getter]
-    pub fn image_name(&mut self) -> Option<String> {
-        self.0.get_name().map(|name| name.to_string()).ok()
-    }
-
-    #[getter]
-    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
-        let manifest = self.0.get_manifest()?;
-        Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
-    }
-
-    #[getter]
-    pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
-        let manifest = self.0.get_manifest()?;
-        Ok(manifest
-            .layers()
-            .iter()
-            .cloned()
-            .map(PyDescriptor::from)
-            .collect())
-    }
-
-    pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
-        let digest = Digest::new(digest)?;
-        let blob = self.0.get_blob(&digest)?;
-        Ok(PyBytes::new(py, blob.as_ref()))
-    }
-
-    pub fn push(&mut self) -> Result<()> {
-        // Do not expose Artifact<Remote> to Python API for simplicity.
-        // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
-        let _remote = self.0.push()?;
-        Ok(())
-    }
-}
+// Import artifact
+use ommx::artifact::Artifact as RustArtifact;
 
 /// Get the current OMMX Local Registry root path.
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
@@ -166,5 +40,181 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 #[pyfunction]
 pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
+    #[allow(deprecated)]
     Ok(ommx::artifact::get_image_dir(&image_name))
+}
+
+/// Get the base path for the given image name in the local registry
+///
+/// This returns the path where the artifact should be stored, without format-specific extensions.
+/// The caller should check:
+/// - If this path is a directory with oci-layout -> oci-dir format
+/// - If "{path}.ommx" exists as a file -> oci-archive format
+///
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_local_registry_path(image_name: &str) -> Result<PathBuf> {
+    let image_name = ImageName::parse(image_name)?;
+    Ok(ommx::artifact::get_local_registry_path(&image_name))
+}
+
+// ============================================================================
+// Artifact API - Using ommx::artifact
+// ============================================================================
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct PyArtifact(Mutex<RustArtifact>);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl PyArtifact {
+    #[staticmethod]
+    pub fn from_oci_archive(path: PathBuf) -> Result<Self> {
+        let artifact = RustArtifact::from_oci_archive(&path)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn from_oci_dir(path: PathBuf) -> Result<Self> {
+        let artifact = RustArtifact::from_oci_dir(&path)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn from_remote(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let artifact = RustArtifact::from_remote(image_name)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[staticmethod]
+    pub fn load(image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let artifact = RustArtifact::load(&image_name)?;
+        Ok(Self(Mutex::new(artifact)))
+    }
+
+    #[getter]
+    pub fn image_name(&mut self) -> Option<String> {
+        self.0.lock().unwrap().image_name()
+    }
+
+    #[getter]
+    pub fn annotations(&mut self) -> Result<HashMap<String, String>> {
+        self.0.lock().unwrap().annotations()
+    }
+
+    #[getter]
+    pub fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
+        let layers = self.0.lock().unwrap().layers()?;
+        Ok(layers.into_iter().map(PyDescriptor::from).collect())
+    }
+
+    pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
+        let digest = Digest::new(digest)?;
+        let blob = self.0.lock().unwrap().get_blob(&digest)?;
+        Ok(PyBytes::new(py, blob.as_ref()))
+    }
+
+    pub fn save(&mut self) -> Result<()> {
+        self.0.lock().unwrap().save()
+    }
+
+    pub fn save_as_archive(&mut self, path: PathBuf) -> Result<()> {
+        self.0.lock().unwrap().save_as_archive(&path)
+    }
+
+    pub fn save_as_dir(&mut self, path: PathBuf) -> Result<()> {
+        self.0.lock().unwrap().save_as_dir(&path)
+    }
+
+    pub fn pull(&mut self) -> Result<()> {
+        self.0.lock().unwrap().pull()
+    }
+
+    pub fn push(&mut self) -> Result<()> {
+        self.0.lock().unwrap().push()
+    }
+}
+
+// ============================================================================
+// Builder API
+// ============================================================================
+
+use ommx::artifact::Builder as RustBuilder;
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyclass]
+#[pyo3(module = "ommx._ommx_rust")]
+pub struct PyArtifactBuilder(Option<RustBuilder>);
+
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pymethods]
+impl PyArtifactBuilder {
+    #[staticmethod]
+    pub fn new_archive(path: PathBuf, image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let builder = RustBuilder::new_archive(path, image_name)?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
+        let builder = RustBuilder::new_archive_unnamed(path)?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn temp_archive() -> Result<Self> {
+        let builder = RustBuilder::temp_archive()?;
+        Ok(Self(Some(builder)))
+    }
+
+    #[staticmethod]
+    pub fn new_dir(path: PathBuf, image_name: &str) -> Result<Self> {
+        let image_name = ImageName::parse(image_name)?;
+        let builder = RustBuilder::new_dir(path, image_name)?;
+        Ok(Self(Some(builder)))
+    }
+
+    pub fn add_annotation(&mut self, key: String, value: String) {
+        if let Some(builder) = &mut self.0 {
+            builder.add_annotation(key, value);
+        }
+    }
+
+    pub fn add_layer(
+        &mut self,
+        media_type: &str,
+        blob: &Bound<PyBytes>,
+        annotations: HashMap<String, String>,
+    ) -> Result<PyDescriptor> {
+        use ocipkg::distribution::MediaType;
+
+        let media_type = MediaType::Other(media_type.to_string());
+
+        let builder = self
+            .0
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+
+        let blob_bytes = blob.as_bytes();
+
+        let desc = match builder {
+            RustBuilder::Archive(b) => b.add_layer(media_type, blob_bytes, annotations)?,
+            RustBuilder::Dir(b) => b.add_layer(media_type, blob_bytes, annotations)?,
+        };
+        Ok(PyDescriptor::from(desc))
+    }
+
+    pub fn build(&mut self) -> Result<PyArtifact> {
+        let builder = self
+            .0
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Builder already consumed"))?;
+        let artifact = builder.build()?;
+        Ok(PyArtifact(Mutex::new(artifact)))
+    }
 }

@@ -43,6 +43,61 @@ The project has completed its migration from Protocol Buffers auto-generated Pyt
 
 **Implementation Details**: See actual code in `rust/ommx/src/` for current type definitions and API.
 
+### Artifact API (Unified Format Handling) ✅
+
+The project uses a unified `Artifact` enum API that handles both oci-dir and oci-archive formats transparently.
+
+**Rust API:**
+```rust
+use ommx::artifact::{Artifact, Builder};
+
+// Load from either format (automatic detection)
+let mut artifact = Artifact::from_oci_archive(path)?;
+let mut artifact = Artifact::from_oci_dir(path)?;
+let mut artifact = Artifact::from_remote(image_name)?;
+let artifact = Artifact::load(&image_name)?;  // Auto-detect local or pull from remote
+
+// Save to specific format
+artifact.save()?;  // Default: oci-archive to local registry
+artifact.save_as_archive(path)?;
+artifact.save_as_dir(path)?;
+
+// Pull from remote
+artifact.pull()?;  // Saves as oci-archive to local registry
+
+// Build new artifacts
+let mut builder = Builder::new_archive(path, image_name)?;
+let mut builder = Builder::for_github("org", "repo", "name", "tag")?;
+builder.add_instance(instance, annotations)?;
+builder.add_annotation("key".to_string(), "value".to_string());
+let artifact = builder.build()?;
+```
+
+**Python API:**
+```python
+from ommx.artifact import Artifact, ArtifactBuilder
+
+# Load from either format (automatic detection)
+artifact = Artifact.load("image-name:tag")
+artifact = Artifact.load_archive("path.ommx")
+artifact = Artifact.load_dir("path/to/dir")
+
+# Build new artifacts (defaults to oci-archive)
+builder = ArtifactBuilder.new("image-name:tag")
+builder.add_instance(instance)
+builder.add_annotation("key", "value")
+artifact = builder.build()
+
+# For legacy oci-dir format
+builder = ArtifactBuilder.new_dir(path, "image-name:tag")
+```
+
+**Key Points:**
+- The API automatically detects and handles both oci-dir and oci-archive formats
+- New artifacts default to oci-archive format for better cloud storage compatibility
+- Format conversion happens transparently during load/save operations
+- Python API maintains backward compatibility - no changes needed in user code
+
 ## Development Commands
 
 This project uses [Taskfile](https://taskfile.dev/) for task management. **⚠️ All commands must be run from the project root directory.**
