@@ -18,3 +18,12 @@ updates:
       dependencies:
         patterns:
           - "*"
+    ignore:
+      # Do not upgrade PyO3 related dependencies
+      - dependency-name: "pyo3"
+      - dependency-name: "pyo3-*"
+      - dependency-name: "numpy"
+      - dependency-name: "serde-pyobject"
+      # Do not upgrade prost related dependencies
+      - dependency-name: "prost"
+      - dependency-name: "prost-build"
