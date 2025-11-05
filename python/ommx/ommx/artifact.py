@@ -14,9 +14,9 @@ from ._ommx_rust import (
     Descriptor,
     ArtifactArchiveBuilder as _ArtifactArchiveBuilder,
     ArtifactDirBuilder as _ArtifactDirBuilder,
-    get_local_registry_root,
-    set_local_registry_root,
-    get_image_dir,
+    get_local_registry_root as _get_local_registry_root,
+    set_local_registry_root as _set_local_registry_root,
+    get_image_dir as _get_image_dir,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
@@ -34,6 +34,78 @@ __all__ = [
     "set_local_registry_root",
     "get_image_dir",
 ]
+
+
+def get_local_registry_root() -> Path:
+    """
+    Get the path to the local OMMX registry root directory.
+
+    The local registry is used to store OMMX artifacts locally. By default, it uses
+    the XDG Base Directory specification, but can be overridden using
+    :py:func:`set_local_registry_root` or the ``OMMX_LOCAL_REGISTRY_ROOT`` environment variable.
+
+    Returns:
+        Path: Path to the local registry root directory
+
+    Example:
+        >>> root = get_local_registry_root()
+        >>> print(root)
+        /home/user/.local/share/ommx
+
+    See Also:
+        :py:func:`set_local_registry_root`: Set a custom registry root path
+        :py:func:`get_image_dir`: Get the directory for a specific image
+    """
+    return Path(_get_local_registry_root())
+
+
+def set_local_registry_root(path: str | Path) -> None:
+    """
+    Set the path to the local OMMX registry root directory.
+
+    This function allows you to override the default registry location. The change
+    affects all subsequent artifact operations in the current process.
+
+    Args:
+        path: Path to the local registry root directory
+
+    Example:
+        >>> from pathlib import Path
+        >>> set_local_registry_root("/custom/path/to/registry")
+        >>> root = get_local_registry_root()
+        >>> print(root)
+        /custom/path/to/registry
+
+    See Also:
+        :py:func:`get_local_registry_root`: Get the current registry root path
+    """
+    _set_local_registry_root(path)
+
+
+def get_image_dir(image_name: str) -> Path:
+    """
+    Get the directory path for a specific image in the local registry.
+
+    This function returns the filesystem path where the artifact with the given
+    image name is stored in the local registry.
+
+    Args:
+        image_name: The OMMX image name in the format ``registry/repository:tag``
+            (e.g., ``ghcr.io/jij-inc/ommx/example:v1``)
+
+    Returns:
+        Path: Directory path for the image in the local registry
+
+    Example:
+        >>> image_dir = get_image_dir("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+        >>> print(image_dir)
+        /home/user/.local/share/ommx/ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+
+    See Also:
+        :py:func:`get_local_registry_root`: Get the registry root directory
+        :py:class:`Artifact`: Load artifacts from the registry
+    """
+    return Path(_get_image_dir(image_name))
 
 
 class ArtifactBase(ABC):
