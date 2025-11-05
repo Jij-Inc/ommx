@@ -168,3 +168,14 @@ pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
     Ok(ommx::artifact::get_image_dir(&image_name))
 }
+
+/// Get all image names stored in the local registry.
+///
+/// Returns a list of image names (as strings) found in the local registry.
+///
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_images() -> Result<Vec<String>> {
+    let images = ommx::artifact::get_images()?;
+    Ok(images.into_iter().map(|img| img.to_string()).collect())
+}
