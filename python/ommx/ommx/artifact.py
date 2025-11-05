@@ -49,11 +49,6 @@ def get_local_registry_root() -> Path:
     Returns:
         Path: Path to the local registry root directory
 
-    Example:
-        >>> root = get_local_registry_root()
-        >>> print(root)
-        /home/user/.local/share/ommx
-
     See Also:
         :py:func:`set_local_registry_root`: Set a custom registry root path
         :py:func:`get_image_dir`: Get the directory for a specific image
@@ -70,13 +65,6 @@ def set_local_registry_root(path: str | Path) -> None:
 
     Args:
         path: Path to the local registry root directory
-
-    Example:
-        >>> from pathlib import Path
-        >>> set_local_registry_root("/custom/path/to/registry")
-        >>> root = get_local_registry_root()
-        >>> print(root)
-        /custom/path/to/registry
 
     See Also:
         :py:func:`get_local_registry_root`: Get the current registry root path
@@ -98,11 +86,6 @@ def get_image_dir(image_name: str) -> Path:
     Returns:
         Path: Directory path for the image in the local registry
 
-    Example:
-        >>> image_dir = get_image_dir("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
-        >>> print(image_dir)
-        /home/user/.local/share/ommx/ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
-
     See Also:
         :py:func:`get_local_registry_root`: Get the registry root directory
         :py:class:`Artifact`: Load artifacts from the registry
@@ -119,13 +102,6 @@ def get_images() -> list[str]:
 
     Returns:
         list[str]: List of image names in the format ``registry/repository:tag``
-
-    Example:
-        >>> images = get_images()
-        >>> for image in images:
-        ...     print(image)
-        ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
-        ghcr.io/jij-inc/ommx/knapsack:v1
 
     See Also:
         :py:func:`get_local_registry_root`: Get the registry root directory
