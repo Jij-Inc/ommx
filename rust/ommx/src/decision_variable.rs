@@ -14,7 +14,8 @@ use getset::Getters;
 use std::collections::BTreeSet;
 
 /// ID for decision variable and parameter.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct VariableID(u64);
 pub type VariableIDSet = BTreeSet<VariableID>;
 
@@ -42,7 +43,7 @@ impl std::fmt::Display for VariableID {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Continuous,
     Integer,

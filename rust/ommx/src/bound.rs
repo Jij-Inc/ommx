@@ -68,7 +68,7 @@ pub type Bounds = BTreeMap<VariableID, Bound>;
 /// // Default is `(-inf, inf)`
 /// assert_eq!(Bound::default(), Bound::try_from([f64::NEG_INFINITY, f64::INFINITY]).unwrap());
 /// ```
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Bound {
     lower: f64,
     upper: f64,
