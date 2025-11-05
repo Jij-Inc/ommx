@@ -18,7 +18,9 @@ updates:
       dependencies:
         patterns:
           - "*"
+    # Do not upgrade PyO3 related dependencies
     ignore:
       - dependency-name: "pyo3"
       - dependency-name: "pyo3-*"
       - dependency-name: "numpy"
+      - dependency-name: "serde-pyobject"
