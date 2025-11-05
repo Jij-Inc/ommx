@@ -1184,6 +1184,13 @@ def get_image_dir(image_name: builtins.str) -> builtins.str:
     - The directory may not exist if the image is not in the local registry.
     """
 
+def get_images() -> builtins.list[builtins.str]:
+    r"""
+    Get all image names stored in the local registry.
+
+    Returns a list of image names (as strings) found in the local registry.
+    """
+
 def get_local_registry_root() -> builtins.str:
     r"""
     Get the current OMMX Local Registry root path.

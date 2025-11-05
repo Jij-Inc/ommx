@@ -17,6 +17,7 @@ from ._ommx_rust import (
     get_local_registry_root as _get_local_registry_root,
     set_local_registry_root as _set_local_registry_root,
     get_image_dir as _get_image_dir,
+    get_images as _get_images,
 )
 from .v1 import Instance, Solution, ParametricInstance, SampleSet
 
@@ -33,6 +34,7 @@ __all__ = [
     "get_local_registry_root",
     "set_local_registry_root",
     "get_image_dir",
+    "get_images",
 ]
 
 
@@ -106,6 +108,31 @@ def get_image_dir(image_name: str) -> Path:
         :py:class:`Artifact`: Load artifacts from the registry
     """
     return Path(_get_image_dir(image_name))
+
+
+def get_images() -> list[str]:
+    """
+    Get all image names stored in the local registry.
+
+    This function scans the local registry and returns a list of all OMMX artifact
+    image names that are currently stored locally.
+
+    Returns:
+        list[str]: List of image names in the format ``registry/repository:tag``
+
+    Example:
+        >>> images = get_images()
+        >>> for image in images:
+        ...     print(image)
+        ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+        ghcr.io/jij-inc/ommx/knapsack:v1
+
+    See Also:
+        :py:func:`get_local_registry_root`: Get the registry root directory
+        :py:func:`get_image_dir`: Get the directory for a specific image
+        :py:class:`Artifact`: Load artifacts from the registry
+    """
+    return _get_images()
 
 
 class ArtifactBase(ABC):
