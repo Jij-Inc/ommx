@@ -52,7 +52,7 @@ jobs:
           jupyter-book build ${{ matrix.lang }} --warningiserror
 
       - name: Upload HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doc-jupyter-book-${{ matrix.lang }}
           path: ./docs/${{ matrix.lang }}/_build/html
@@ -71,7 +71,7 @@ jobs:
         run: task proto:doc
 
       - name: Upload HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doc-protobuf
           path: ./proto/protobuf.html
@@ -95,7 +95,7 @@ jobs:
           RUSTDOCFLAGS: -D warnings
 
       - name: Upload HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doc-rust
           path: ./target/doc
@@ -114,7 +114,7 @@ jobs:
         run: task api_reference:build
 
       - name: Upload HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doc-python
           path: ./docs/api_reference/_build/html
@@ -133,37 +133,37 @@ jobs:
           mv docs/redirect/* doc/
 
       - name: Download HTML of JupyterBook (ja)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc-jupyter-book-ja
           path: ./doc/ja
 
       - name: Download HTML of JupyterBook (en)
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc-jupyter-book-en
           path: ./doc/en
 
       - name: Download HTML of protobuf
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc-protobuf
           path: ./doc
 
       - name: Download HTML of rust
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc-rust
           path: ./doc/rust
 
       - name: Download HTML of python
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc-python
           path: ./doc/python/ommx
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: doc
           path: doc
@@ -181,7 +181,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download HTML
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: doc
           path: .
