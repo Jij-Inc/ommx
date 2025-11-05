@@ -18,3 +18,7 @@ updates:
       dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "pyo3"
+      - dependency-name: "pyo3-*"
+      - dependency-name: "numpy"
