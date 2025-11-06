@@ -95,3 +95,38 @@ def test_set_default_atol_validation():
 
     # Reset for other tests
     ommx.set_default_atol(initial_atol)
+
+
+def test_instance_evaluate_with_custom_atol():
+    """Test that instance evaluation respects custom atol parameter.
+
+    Tests constraint x1 <= 1.0 with state x1 = 1.0 + 1e-6:
+    - With atol=1e-3: violation (1e-6) < atol, should be feasible
+    - With atol=1e-9: violation (1e-6) > atol, should be infeasible
+    """
+    # Create a decision variable
+    x1 = DecisionVariable.continuous(1, lower=0, upper=10)
+
+    # Create constraint: x1 <= 1.0, which is equivalent to x1 - 1.0 <= 0
+    constraint = (x1 <= 1.0).set_id(1)
+
+    # Create an instance with the constraint
+    instance = Instance.from_components(
+        decision_variables=[x1],
+        objective=x1,
+        constraints=[constraint],
+        sense=Instance.MINIMIZE,
+    )
+
+    # Create a state where x1 = 1.0 + 1e-6 (violates constraint by 1e-6)
+    state = State({1: 1.0 + 1e-6})
+
+    # Test with large atol (1e-3): violation (1e-6) is within tolerance
+    solution_large_atol = instance.evaluate(state, atol=1e-3)
+    # With atol=1e-3, violation of 1e-6 should be considered feasible
+    assert solution_large_atol.feasible, "Solution should be feasible with large atol"
+
+    # Test with small atol (1e-9): violation (1e-6) exceeds tolerance
+    solution_small_atol = instance.evaluate(state, atol=1e-9)
+    # With atol=1e-9, violation of 1e-6 should be considered infeasible
+    assert not solution_small_atol.feasible, "Solution should be infeasible with small atol"
