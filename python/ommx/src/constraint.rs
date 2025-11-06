@@ -89,24 +89,36 @@ impl Constraint {
         PyBytes::new(py, &self.0.to_bytes())
     }
 
+    #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate<'py>(
         &self,
         py: Python<'py>,
         state: &Bound<PyBytes>,
+        atol: Option<f64>,
     ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        let evaluated = self.0.evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let evaluated = self.0.evaluate(&state, atol)?;
         let v1_evaluated: ommx::v1::EvaluatedConstraint = evaluated.into();
         Ok(PyBytes::new(py, &v1_evaluated.encode_to_vec()))
     }
 
+    #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate<'py>(
         &mut self,
         py: Python<'py>,
         state: &Bound<PyBytes>,
+        atol: Option<f64>,
     ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.partial_evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.0.partial_evaluate(&state, atol)?;
         let inner: ommx::v1::Constraint = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }

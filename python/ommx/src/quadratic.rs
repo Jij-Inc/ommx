@@ -177,17 +177,27 @@ impl Quadratic {
         Ok(Self(inner))
     }
 
-    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<f64> {
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<f64> {
         use ommx::{Evaluate, Message};
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.evaluate(&state, ommx::ATol::default())
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.0.evaluate(&state, atol)
     }
 
-    pub fn partial_evaluate(&self, state: &Bound<PyBytes>) -> Result<Quadratic> {
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn partial_evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Quadratic> {
         use ommx::Message;
         let state = ommx::v1::State::decode(state.as_bytes())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
         let mut inner = self.0.clone();
-        inner.partial_evaluate(&state, ommx::ATol::default())?;
+        inner.partial_evaluate(&state, atol)?;
         Ok(Quadratic(inner))
     }
 
