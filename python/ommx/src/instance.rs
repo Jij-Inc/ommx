@@ -151,13 +151,13 @@ impl Instance {
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         let (qubo, constant) = inner.as_qubo_format()?;
-        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
+        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract().map_err(|e| anyhow::anyhow!("{}", e))?, constant))
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         let (hubo, constant) = inner.as_hubo_format()?;
-        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
+        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract().map_err(|e| anyhow::anyhow!("{}", e))?, constant))
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
@@ -295,7 +295,7 @@ impl Instance {
 
     pub fn stats<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
         let stats = self.0.stats();
-        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
+        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract().map_err(|e| anyhow::anyhow!("{}", e))?)
     }
 
     fn __copy__(&self) -> Self {

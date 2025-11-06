@@ -59,7 +59,7 @@ impl Samples {
         }
 
         // Try to extract as dict[int, State] or dict[int, dict[int, float]]
-        if let Ok(dict) = entries.downcast::<PyDict>() {
+        if let Ok(dict) = entries.cast::<PyDict>() {
             let mut state_cand = ommx::v1::State::default();
             let mut sample_cand: ommx::Sampled<ommx::v1::State> = ommx::Sampled::default();
             for (key, value) in dict.iter() {
