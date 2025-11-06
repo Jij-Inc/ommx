@@ -407,6 +407,33 @@ class Instance(UserAnnotationBase):
         return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
     @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this instance.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sorted(instance.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    @property
     def constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
@@ -2352,6 +2379,70 @@ class Solution(UserAnnotationBase):
         """
         # Use the extract method from _ommx_rust.Solution
         return self.raw.extract_decision_variables(name)
+
+    @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this solution.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({i: 1 for i in range(5)})
+            >>> sorted(solution.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    def extract_all_decision_variables(
+        self,
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """
+        Extract all decision variables grouped by name.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        :raises ValueError: If a decision variable with parameters is found, or if the same name and subscript combination is found multiple times.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({i: 1 for i in range(5)})
+            >>> all_vars = solution.extract_all_decision_variables()
+            >>> all_vars["x"]
+            {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+            >>> all_vars["y"]
+            {(0,): 1.0, (1,): 1.0}
+
+        """
+        return self.raw.extract_all_decision_variables()
 
     def extract_constraints(self, name: str) -> dict[tuple[int, ...], float]:
         """
@@ -4380,6 +4471,70 @@ class SampleSet(UserAnnotationBase):
         Extract sampled decision variable values for a given name and sample ID.
         """
         return self.raw.extract_decision_variables(name, sample_id)
+
+    @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this sample set.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+            >>> sorted(sample_set.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    def extract_all_decision_variables(
+        self, sample_id: int
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """
+        Extract all decision variables grouped by name for a given sample ID.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        :raises ValueError: If a decision variable with parameters is found, or if the same name and subscript combination is found multiple times, or if the sample ID is invalid.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+            >>> all_vars = sample_set.extract_all_decision_variables(0)
+            >>> all_vars["x"]
+            {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+            >>> all_vars["y"]
+            {(0,): 1.0, (1,): 1.0}
+
+        """
+        return self.raw.extract_all_decision_variables(sample_id)
 
     def extract_constraints(
         self, name: str, sample_id: int
