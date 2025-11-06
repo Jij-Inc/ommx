@@ -463,7 +463,7 @@ class Instance(UserAnnotationBase):
             df = df.set_index("id")
         return df
 
-    def evaluate(self, state: ToState) -> Solution:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> Solution:
         r"""
         Evaluate the given :class:`State` into a :class:`Solution`.
         
@@ -566,7 +566,7 @@ class Instance(UserAnnotationBase):
         2   Binary    0.0    1.0         []    0.0
         
         """
-        out = self.raw.evaluate(State(state).to_bytes())
+        out = self.raw.evaluate(State(state).to_bytes(), atol=atol)
         return Solution(out)
 
     def partial_evaluate(self, state: ToState) -> Instance:
@@ -1292,12 +1292,14 @@ class Instance(UserAnnotationBase):
             self.raw.as_parametric_instance().to_bytes()
         )
 
-    def evaluate_samples(self, samples: ToSamples) -> SampleSet:
+    def evaluate_samples(
+        self, samples: ToSamples, *, atol: float | None = None
+    ) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
         samples_ = Samples(samples)
-        return SampleSet(self.raw.evaluate_samples(samples_))
+        return SampleSet(self.raw.evaluate_samples(samples_, atol=atol))
 
     def random_state(self, rng: _ommx_rust.Rng) -> State:
         """
@@ -2867,7 +2869,7 @@ class Linear(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol=atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the linear function with the given state.
 
@@ -2892,7 +2894,7 @@ class Linear(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
     def partial_evaluate(self, state: ToState) -> Linear:
         """
@@ -3034,7 +3036,7 @@ class Quadratic(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the quadratic function with the given state.
 
@@ -3062,7 +3064,7 @@ class Quadratic(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
     def partial_evaluate(self, state: ToState) -> Quadratic:
         """
@@ -3253,7 +3255,7 @@ class Polynomial(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the polynomial with the given state.
 
@@ -3281,7 +3283,7 @@ class Polynomial(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
     def partial_evaluate(self, state: ToState) -> Polynomial:
         """
@@ -3474,7 +3476,7 @@ class Function(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the function with the given state.
 
@@ -3502,7 +3504,7 @@ class Function(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
     def partial_evaluate(self, state: ToState) -> Function:
         """

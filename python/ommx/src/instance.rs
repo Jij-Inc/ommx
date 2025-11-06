@@ -184,29 +184,42 @@ impl Instance {
         Ok(ParametricInstance(parametric_instance))
     }
 
-    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Solution> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        let solution = self.0.evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let solution = self.0.evaluate(&state, atol)?;
         Ok(Solution(solution))
     }
 
+    #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate<'py>(
         &mut self,
         py: Python<'py>,
         state: &Bound<PyBytes>,
+        atol: Option<f64>,
     ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.partial_evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.0.partial_evaluate(&state, atol)?;
         let inner: ommx::v1::Instance = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
-    pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
+    #[pyo3(signature = (samples, *, atol=None))]
+    pub fn evaluate_samples(&self, samples: &Samples, atol: Option<f64>) -> Result<SampleSet> {
         let v1_samples: ommx::v1::Samples = samples.0.clone().into();
-        Ok(SampleSet(
-            self.0
-                .evaluate_samples(&v1_samples, ommx::ATol::default())?,
-        ))
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        Ok(SampleSet(self.0.evaluate_samples(&v1_samples, atol)?))
     }
 
     pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
