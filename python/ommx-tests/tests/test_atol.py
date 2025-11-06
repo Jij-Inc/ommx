@@ -129,4 +129,6 @@ def test_instance_evaluate_with_custom_atol():
     # Test with small atol (1e-9): violation (1e-6) exceeds tolerance
     solution_small_atol = instance.evaluate(state, atol=1e-9)
     # With atol=1e-9, violation of 1e-6 should be considered infeasible
-    assert not solution_small_atol.feasible, "Solution should be infeasible with small atol"
+    assert not solution_small_atol.feasible, (
+        "Solution should be infeasible with small atol"
+    )
