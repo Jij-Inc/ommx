@@ -168,6 +168,12 @@ impl SampleSet {
             .collect()
     }
 
+    /// Get all unique decision variable names in this sample set
+    #[getter]
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.0.decision_variable_names()
+    }
+
     /// Extract decision variable values for a given name and sample ID
     pub fn extract_decision_variables<'py>(
         &self,
@@ -184,6 +190,25 @@ impl SampleSet {
             dict.set_item(key, value)?;
         }
         Ok(dict)
+    }
+
+    /// Extract all decision variables grouped by name for a given sample ID
+    pub fn extract_all_decision_variables<'py>(
+        &self,
+        py: Python<'py>,
+        sample_id: u64,
+    ) -> Result<Bound<'py, PyDict>> {
+        let sample_id = ommx::SampleID::from(sample_id);
+        let result_dict = PyDict::new(py);
+        for (name, variables) in self.0.extract_all_decision_variables(sample_id)? {
+            let var_dict = PyDict::new(py);
+            for (subscripts, value) in variables {
+                let key_tuple = PyTuple::new(py, &subscripts)?;
+                var_dict.set_item(key_tuple, value)?;
+            }
+            result_dict.set_item(name, var_dict)?;
+        }
+        Ok(result_dict)
     }
 
     /// Extract constraint values for a given name and sample ID
