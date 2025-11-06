@@ -16,7 +16,7 @@ pub struct PyDescriptor(Descriptor);
 impl PyDescriptor {
     pub fn to_dict<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
         let any = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(any.extract().map_err(|e| anyhow::anyhow!("{}", e))?)
+        any.extract().map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     #[staticmethod]
