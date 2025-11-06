@@ -569,7 +569,9 @@ class Instance(UserAnnotationBase):
         out = self.raw.evaluate(State(state).to_bytes(), atol=atol)
         return Solution(out)
 
-    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Instance:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Instance:
         """
         Creates a new instance with specific decision variables fixed to given values.
 
@@ -3068,7 +3070,9 @@ class Quadratic(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Quadratic:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Quadratic:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -3287,7 +3291,9 @@ class Polynomial(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Polynomial:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Polynomial:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -3508,7 +3514,9 @@ class Function(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Function:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Function:
         """
         Partially evaluate the function with the given state.
 
