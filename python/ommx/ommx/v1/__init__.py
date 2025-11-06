@@ -569,7 +569,7 @@ class Instance(UserAnnotationBase):
         out = self.raw.evaluate(State(state).to_bytes(), atol=atol)
         return Solution(out)
 
-    def partial_evaluate(self, state: ToState) -> Instance:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Instance:
         """
         Creates a new instance with specific decision variables fixed to given values.
 
@@ -584,6 +584,8 @@ class Instance(UserAnnotationBase):
         :param state: Maps decision variable IDs to their fixed values.
                      Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
         :type state: :class:`~ommx.v1.ToState`
+        :param atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+        :type atol: float | None
         :return: A new instance with the specified decision variables fixed to their given values.
         :rtype: :class:`~ommx.v1.Instance`
 
@@ -621,7 +623,7 @@ class Instance(UserAnnotationBase):
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = copy.deepcopy(self.raw)
-        temp_instance.partial_evaluate(State(state).to_bytes())
+        temp_instance.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -2896,7 +2898,7 @@ class Linear(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Linear:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Linear:
         """
         Partially evaluate the linear function with the given state.
 
@@ -2915,7 +2917,7 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3066,7 +3068,7 @@ class Quadratic(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Quadratic:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Quadratic:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -3088,7 +3090,7 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Quadratic.from_raw(new_raw)
 
     @property
@@ -3285,7 +3287,7 @@ class Polynomial(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Polynomial:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Polynomial:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -3307,7 +3309,7 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3506,7 +3508,7 @@ class Function(AsConstraint):
         """
         return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Function:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Function:
         """
         Partially evaluate the function with the given state.
 
@@ -3528,7 +3530,7 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
