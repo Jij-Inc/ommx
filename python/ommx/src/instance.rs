@@ -82,6 +82,12 @@ impl Instance {
         Ok(())
     }
 
+    /// Get all unique decision variable names in this instance
+    #[getter]
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.0.decision_variable_names()
+    }
+
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
@@ -151,13 +157,23 @@ impl Instance {
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         let (qubo, constant) = inner.as_qubo_format()?;
-        Ok((serde_pyobject::to_pyobject(py, &qubo)?.extract()?, constant))
+        Ok((
+            serde_pyobject::to_pyobject(py, &qubo)?
+                .extract()
+                .map_err(|e| anyhow::anyhow!("{}", e))?,
+            constant,
+        ))
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
         let inner: ommx::v1::Instance = self.0.clone().into();
         let (hubo, constant) = inner.as_hubo_format()?;
-        Ok((serde_pyobject::to_pyobject(py, &hubo)?.extract()?, constant))
+        Ok((
+            serde_pyobject::to_pyobject(py, &hubo)?
+                .extract()
+                .map_err(|e| anyhow::anyhow!("{}", e))?,
+            constant,
+        ))
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
@@ -174,29 +190,42 @@ impl Instance {
         Ok(ParametricInstance(parametric_instance))
     }
 
-    pub fn evaluate(&self, state: &Bound<PyBytes>) -> Result<Solution> {
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Solution> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        let solution = self.0.evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let solution = self.0.evaluate(&state, atol)?;
         Ok(Solution(solution))
     }
 
+    #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate<'py>(
         &mut self,
         py: Python<'py>,
         state: &Bound<PyBytes>,
+        atol: Option<f64>,
     ) -> Result<Bound<'py, PyBytes>> {
         let state = ommx::v1::State::decode(state.as_bytes())?;
-        self.0.partial_evaluate(&state, ommx::ATol::default())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.0.partial_evaluate(&state, atol)?;
         let inner: ommx::v1::Instance = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 
-    pub fn evaluate_samples(&self, samples: &Samples) -> Result<SampleSet> {
+    #[pyo3(signature = (samples, *, atol=None))]
+    pub fn evaluate_samples(&self, samples: &Samples, atol: Option<f64>) -> Result<SampleSet> {
         let v1_samples: ommx::v1::Samples = samples.0.clone().into();
-        Ok(SampleSet(
-            self.0
-                .evaluate_samples(&v1_samples, ommx::ATol::default())?,
-        ))
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        Ok(SampleSet(self.0.evaluate_samples(&v1_samples, atol)?))
     }
 
     pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
@@ -295,7 +324,9 @@ impl Instance {
 
     pub fn stats<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
         let stats = self.0.stats();
-        Ok(serde_pyobject::to_pyobject(py, &stats)?.extract()?)
+        serde_pyobject::to_pyobject(py, &stats)?
+            .extract()
+            .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
     fn __copy__(&self) -> Self {

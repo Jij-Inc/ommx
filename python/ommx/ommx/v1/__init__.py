@@ -407,6 +407,33 @@ class Instance(UserAnnotationBase):
         return [DecisionVariable(dv) for dv in self.raw.decision_variables]
 
     @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this instance.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sorted(instance.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    @property
     def constraints(self) -> list[Constraint]:
         """
         Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
@@ -463,7 +490,7 @@ class Instance(UserAnnotationBase):
             df = df.set_index("id")
         return df
 
-    def evaluate(self, state: ToState) -> Solution:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> Solution:
         r"""
         Evaluate the given :class:`State` into a :class:`Solution`.
         
@@ -566,10 +593,12 @@ class Instance(UserAnnotationBase):
         2   Binary    0.0    1.0         []    0.0
         
         """
-        out = self.raw.evaluate(State(state).to_bytes())
+        out = self.raw.evaluate(State(state).to_bytes(), atol=atol)
         return Solution(out)
 
-    def partial_evaluate(self, state: ToState) -> Instance:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Instance:
         """
         Creates a new instance with specific decision variables fixed to given values.
 
@@ -584,6 +613,8 @@ class Instance(UserAnnotationBase):
         :param state: Maps decision variable IDs to their fixed values.
                      Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
         :type state: :class:`~ommx.v1.ToState`
+        :param atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+        :type atol: float | None
         :return: A new instance with the specified decision variables fixed to their given values.
         :rtype: :class:`~ommx.v1.Instance`
 
@@ -621,7 +652,7 @@ class Instance(UserAnnotationBase):
         # Create a copy of the instance and call partial_evaluate on it
         # Note: partial_evaluate modifies the instance in place and returns bytes
         temp_instance = copy.deepcopy(self.raw)
-        temp_instance.partial_evaluate(State(state).to_bytes())
+        temp_instance.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -1292,12 +1323,14 @@ class Instance(UserAnnotationBase):
             self.raw.as_parametric_instance().to_bytes()
         )
 
-    def evaluate_samples(self, samples: ToSamples) -> SampleSet:
+    def evaluate_samples(
+        self, samples: ToSamples, *, atol: float | None = None
+    ) -> SampleSet:
         """
         Evaluate the instance with multiple states.
         """
         samples_ = Samples(samples)
-        return SampleSet(self.raw.evaluate_samples(samples_))
+        return SampleSet(self.raw.evaluate_samples(samples_, atol=atol))
 
     def random_state(self, rng: _ommx_rust.Rng) -> State:
         """
@@ -2347,6 +2380,70 @@ class Solution(UserAnnotationBase):
         # Use the extract method from _ommx_rust.Solution
         return self.raw.extract_decision_variables(name)
 
+    @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this solution.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({i: 1 for i in range(5)})
+            >>> sorted(solution.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    def extract_all_decision_variables(
+        self,
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """
+        Extract all decision variables grouped by name.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        :raises ValueError: If a decision variable with parameters is found, or if the same name and subscript combination is found multiple times.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> solution = instance.evaluate({i: 1 for i in range(5)})
+            >>> all_vars = solution.extract_all_decision_variables()
+            >>> all_vars["x"]
+            {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+            >>> all_vars["y"]
+            {(0,): 1.0, (1,): 1.0}
+
+        """
+        return self.raw.extract_all_decision_variables()
+
     def extract_constraints(self, name: str) -> dict[tuple[int, ...], float]:
         """
         Extract the values of constraints based on the `name` with `subscripts` key.
@@ -2867,7 +2964,7 @@ class Linear(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol=atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the linear function with the given state.
 
@@ -2892,9 +2989,9 @@ class Linear(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Linear:
+    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Linear:
         """
         Partially evaluate the linear function with the given state.
 
@@ -2913,7 +3010,7 @@ class Linear(AsConstraint):
             Linear(19)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Linear.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3034,7 +3131,7 @@ class Quadratic(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the quadratic function with the given state.
 
@@ -3062,9 +3159,11 @@ class Quadratic(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Quadratic:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Quadratic:
         """
         Partially evaluate the quadratic function with the given state.
 
@@ -3086,7 +3185,7 @@ class Quadratic(AsConstraint):
             Quadratic(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Quadratic.from_raw(new_raw)
 
     @property
@@ -3253,7 +3352,7 @@ class Polynomial(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the polynomial with the given state.
 
@@ -3281,9 +3380,11 @@ class Polynomial(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Polynomial:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Polynomial:
         """
         Partially evaluate the polynomial with the given state.
 
@@ -3305,7 +3406,7 @@ class Polynomial(AsConstraint):
             Polynomial(9*x2*x3 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Polynomial.from_raw(new_raw)
 
     def __repr__(self) -> str:
@@ -3474,7 +3575,7 @@ class Function(AsConstraint):
         """
         return self.raw.almost_equal(other.raw, atol)
 
-    def evaluate(self, state: ToState) -> float:
+    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
         """
         Evaluate the function with the given state.
 
@@ -3502,9 +3603,11 @@ class Function(AsConstraint):
             RuntimeError: Missing entry for id: 2
 
         """
-        return self.raw.evaluate(State(state).to_bytes())
+        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
 
-    def partial_evaluate(self, state: ToState) -> Function:
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> Function:
         """
         Partially evaluate the function with the given state.
 
@@ -3526,7 +3629,7 @@ class Function(AsConstraint):
             Function(3*x2*x3 + 6*x2 + 1)
 
         """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes())
+        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
         return Function.from_raw(new_raw)
 
     def used_decision_variable_ids(self) -> set[int]:
@@ -4368,6 +4471,70 @@ class SampleSet(UserAnnotationBase):
         Extract sampled decision variable values for a given name and sample ID.
         """
         return self.raw.extract_decision_variables(name, sample_id)
+
+    @property
+    def decision_variable_names(self) -> set[str]:
+        """
+        Get all unique decision variable names in this sample set.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+            >>> sorted(sample_set.decision_variable_names)
+            ['x', 'y']
+
+        """
+        return self.raw.decision_variable_names
+
+    def extract_all_decision_variables(
+        self, sample_id: int
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """
+        Extract all decision variables grouped by name for a given sample ID.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        :raises ValueError: If a decision variable with parameters is found, or if the same name and subscript combination is found multiple times, or if the sample ID is invalid.
+
+        Examples
+        =========
+
+        .. doctest::
+
+            >>> from ommx.v1 import Instance, DecisionVariable
+            >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+            >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+            >>> instance = Instance.from_components(
+            ...     decision_variables=x + y,
+            ...     objective=sum(x) + sum(y),
+            ...     constraints=[],
+            ...     sense=Instance.MAXIMIZE,
+            ... )
+            >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+            >>> all_vars = sample_set.extract_all_decision_variables(0)
+            >>> all_vars["x"]
+            {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+            >>> all_vars["y"]
+            {(0,): 1.0, (1,): 1.0}
+
+        """
+        return self.raw.extract_all_decision_variables(sample_id)
 
     def extract_constraints(
         self, name: str, sample_id: int

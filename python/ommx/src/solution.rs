@@ -130,6 +130,12 @@ impl Solution {
             .collect()
     }
 
+    /// Get all unique decision variable names in this solution
+    #[getter]
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.0.decision_variable_names()
+    }
+
     /// Extract decision variables by name with subscripts as key (returns a Python dict)
     pub fn extract_decision_variables<'py>(
         &self,
@@ -142,6 +148,23 @@ impl Solution {
             dict.set_item(key_tuple, value)?;
         }
         Ok(dict)
+    }
+
+    /// Extract all decision variables grouped by name (returns a Python dict)
+    pub fn extract_all_decision_variables<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> Result<Bound<'py, PyDict>> {
+        let result_dict = PyDict::new(py);
+        for (name, variables) in self.0.extract_all_decision_variables()? {
+            let var_dict = PyDict::new(py);
+            for (subscripts, value) in variables {
+                let key_tuple = PyTuple::new(py, &subscripts)?;
+                var_dict.set_item(key_tuple, value)?;
+            }
+            result_dict.set_item(name, var_dict)?;
+        }
+        Ok(result_dict)
     }
 
     /// Extract constraints by name with subscripts as key (returns a Python dict)

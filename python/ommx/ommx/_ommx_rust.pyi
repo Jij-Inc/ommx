@@ -2,15 +2,19 @@
 # ruff: noqa: E501, F401
 
 import builtins
+import enum
 import os
 import pathlib
 import typing
-from enum import Enum
 
+@typing.final
 class ArtifactArchive:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
+    @property
+    def image_name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def layers(self) -> builtins.list[Descriptor]: ...
     @staticmethod
     def from_oci_archive(
         path: builtins.str | os.PathLike | pathlib.Path,
@@ -18,6 +22,7 @@ class ArtifactArchive:
     def get_blob(self, digest: builtins.str) -> bytes: ...
     def push(self) -> None: ...
 
+@typing.final
 class ArtifactArchiveBuilder:
     @staticmethod
     def new_unnamed(
@@ -38,10 +43,14 @@ class ArtifactArchiveBuilder:
     def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
     def build(self) -> ArtifactArchive: ...
 
+@typing.final
 class ArtifactDir:
-    image_name: typing.Optional[builtins.str]
-    annotations: builtins.dict[builtins.str, builtins.str]
-    layers: builtins.list[Descriptor]
+    @property
+    def image_name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def layers(self) -> builtins.list[Descriptor]: ...
     @staticmethod
     def from_image_name(image_name: builtins.str) -> ArtifactDir: ...
     @staticmethod
@@ -51,6 +60,7 @@ class ArtifactDir:
     def get_blob(self, digest: builtins.str) -> bytes: ...
     def push(self) -> None: ...
 
+@typing.final
 class ArtifactDirBuilder:
     @staticmethod
     def new(image_name: builtins.str) -> ArtifactDirBuilder: ...
@@ -67,6 +77,7 @@ class ArtifactDirBuilder:
     def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
     def build(self) -> ArtifactDir: ...
 
+@typing.final
 class Bound:
     r"""
     Variable bound wrapper for Python
@@ -74,9 +85,11 @@ class Bound:
     Note: This struct is named `VariableBound` in Rust code to avoid conflicts with PyO3's `Bound` type,
     but is exposed as `Bound` in Python through the `#[pyclass(name = "Bound")]` attribute.
     """
-
-    lower: builtins.float
-    upper: builtins.float
+    @property
+    def lower(self) -> builtins.float: ...
+    @property
+    def upper(self) -> builtins.float: ...
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(cls, lower: builtins.float, upper: builtins.float) -> Bound: ...
     @staticmethod
     def unbounded() -> Bound: ...
@@ -97,18 +110,25 @@ class Bound:
     def __copy__(self) -> Bound: ...
     def __deepcopy__(self, _memo: typing.Any) -> Bound: ...
 
+@typing.final
 class Constraint:
     r"""
     Constraint wrapper for Python
     """
-
-    id: builtins.int
-    function: Function
-    equality: Equality
-    name: builtins.str
-    subscripts: builtins.list[builtins.int]
-    description: builtins.str
-    parameters: builtins.dict[builtins.str, builtins.str]
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def equality(self) -> Equality: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def description(self) -> builtins.str: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -122,8 +142,12 @@ class Constraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> Constraint: ...
     def to_bytes(self) -> bytes: ...
-    def evaluate(self, state: bytes) -> bytes: ...
-    def partial_evaluate(self, state: bytes) -> bytes: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> bytes: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> bytes: ...
     def set_name(self, name: builtins.str) -> None:
         r"""
         Set the name of the constraint
@@ -158,13 +182,16 @@ class Constraint:
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
 
+@typing.final
 class ConstraintHints:
     r"""
     ConstraintHints wrapper for Python
     """
-
-    one_hot_constraints: builtins.list[OneHot]
-    sos1_constraints: builtins.list[Sos1]
+    @property
+    def one_hot_constraints(self) -> builtins.list[OneHot]: ...
+    @property
+    def sos1_constraints(self) -> builtins.list[Sos1]: ...
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(
         cls,
         one_hot_constraints: typing.Sequence[OneHot] = [],
@@ -174,19 +201,27 @@ class ConstraintHints:
     def __copy__(self) -> ConstraintHints: ...
     def __deepcopy__(self, _memo: typing.Any) -> ConstraintHints: ...
 
+@typing.final
 class DecisionVariable:
     r"""
     DecisionVariable wrapper for Python
     """
-
-    id: builtins.int
-    kind: builtins.int
-    bound: Bound
-    name: builtins.str
-    subscripts: builtins.list[builtins.int]
-    parameters: builtins.dict[builtins.str, builtins.str]
-    description: builtins.str
-    substituted_value: typing.Optional[builtins.float]
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def kind(self) -> builtins.int: ...
+    @property
+    def bound(self) -> Bound: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def description(self) -> builtins.str: ...
+    @property
+    def substituted_value(self) -> typing.Optional[builtins.float]: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -248,6 +283,7 @@ class DecisionVariable:
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
 
+@typing.final
 class DecisionVariableAnalysis:
     def used_binary(self) -> builtins.dict[builtins.int, Bound]: ...
     def used_integer(self) -> builtins.dict[builtins.int, Bound]: ...
@@ -264,19 +300,24 @@ class DecisionVariableAnalysis:
     def irrelevant(self) -> builtins.set[builtins.int]: ...
     def dependent(self) -> builtins.set[builtins.int]: ...
 
+@typing.final
 class Descriptor:
     r"""
     Descriptor of blob in artifact
     """
-
-    digest: builtins.str
-    size: builtins.int
-    media_type: builtins.str
-    annotations: builtins.dict[builtins.str, builtins.str]
-    user_annotations: builtins.dict[builtins.str, builtins.str]
-    r"""
-    Return annotations with key prefix "org.ommx.user."
-    """
+    @property
+    def digest(self) -> builtins.str: ...
+    @property
+    def size(self) -> builtins.int: ...
+    @property
+    def media_type(self) -> builtins.str: ...
+    @property
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def user_annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Return annotations with key prefix "org.ommx.user."
+        """
     def to_dict(self) -> dict: ...
     @staticmethod
     def from_dict(dict: dict) -> Descriptor: ...
@@ -286,125 +327,155 @@ class Descriptor:
     def __str__(self) -> builtins.str: ...
     def __eq__(self, rhs: typing.Any) -> builtins.bool: ...
 
+@typing.final
 class EvaluatedConstraint:
-    id: builtins.int
-    r"""
-    Get the constraint ID
-    """
-    equality: Equality
-    r"""
-    Get the constraint equality type
-    """
-    evaluated_value: builtins.float
-    r"""
-    Get the evaluated constraint value
-    """
-    dual_variable: typing.Optional[builtins.float]
-    r"""
-    Get the dual variable value
-    """
-    feasible: builtins.bool
-    r"""
-    Get the feasibility status
-    """
-    removed_reason: typing.Optional[builtins.str]
-    r"""
-    Get the removal reason
-    """
-    name: typing.Optional[builtins.str]
-    r"""
-    Get the constraint name
-    """
-    subscripts: builtins.list[builtins.int]
-    r"""
-    Get the subscripts
-    """
-    parameters: builtins.dict[builtins.str, builtins.str]
-    r"""
-    Get the parameters
-    """
-    description: typing.Optional[builtins.str]
-    r"""
-    Get the description
-    """
-    used_decision_variable_ids: builtins.set[builtins.int]
-    r"""
-    Get the used decision variable IDs
-    """
-    @staticmethod
-    def from_bytes(bytes: bytes) -> EvaluatedConstraint: ...
-    def to_bytes(self) -> bytes: ...
-    def set_dual_variable(self, value: typing.Optional[builtins.float]) -> None:
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        Get the constraint ID
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Get the constraint equality type
+        """
+    @property
+    def evaluated_value(self) -> builtins.float:
+        r"""
+        Get the evaluated constraint value
+        """
+    @property
+    def dual_variable(self) -> typing.Optional[builtins.float]:
+        r"""
+        Get the dual variable value
+        """
+    @dual_variable.setter
+    def dual_variable(self, value: typing.Optional[builtins.float]) -> None:
         r"""
         Set the dual variable value
         """
+    @property
+    def feasible(self) -> builtins.bool:
+        r"""
+        Get the feasibility status
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the removal reason
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the constraint name
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Get the used decision variable IDs
+        """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> EvaluatedConstraint: ...
+    def to_bytes(self) -> bytes: ...
 
+@typing.final
 class EvaluatedDecisionVariable:
-    id: builtins.int
-    r"""
-    Get the variable ID
-    """
-    kind: Kind
-    r"""
-    Get the variable kind
-    """
-    value: builtins.float
-    r"""
-    Get the evaluated value
-    """
-    lower_bound: builtins.float
-    r"""
-    Get the lower bound
-    """
-    upper_bound: builtins.float
-    r"""
-    Get the upper bound
-    """
-    name: typing.Optional[builtins.str]
-    r"""
-    Get the variable name
-    """
-    subscripts: builtins.list[builtins.int]
-    r"""
-    Get the subscripts
-    """
-    parameters: builtins.dict[builtins.str, builtins.str]
-    r"""
-    Get the parameters
-    """
-    description: typing.Optional[builtins.str]
-    r"""
-    Get the description
-    """
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        Get the variable ID
+        """
+    @property
+    def kind(self) -> Kind:
+        r"""
+        Get the variable kind
+        """
+    @property
+    def value(self) -> builtins.float:
+        r"""
+        Get the evaluated value
+        """
+    @property
+    def lower_bound(self) -> builtins.float:
+        r"""
+        Get the lower bound
+        """
+    @property
+    def upper_bound(self) -> builtins.float:
+        r"""
+        Get the upper bound
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the variable name
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> EvaluatedDecisionVariable: ...
     def to_bytes(self) -> bytes: ...
 
+@typing.final
 class Function:
-    linear_terms: builtins.dict[builtins.int, builtins.float]
-    r"""
-    Get linear terms as a dictionary mapping variable id to coefficient.
-    
-    Returns dictionary mapping variable IDs to their linear coefficients.
-    Returns empty dict if function has no linear terms.
-    Works for all polynomial functions by filtering only degree-1 terms.
-    """
-    quadratic_terms: builtins.dict[tuple[builtins.int, builtins.int], builtins.float]
-    r"""
-    Get quadratic terms as a dictionary mapping (row, col) to coefficient.
-    
-    Returns dictionary mapping variable ID pairs to their quadratic coefficients.
-    Returns empty dict if function has no quadratic terms.
-    Works for all polynomial functions by filtering only degree-2 terms.
-    """
-    constant_term: builtins.float
-    r"""
-    Get the constant term of the function.
-    
-    Returns the constant term. Returns 0.0 if function has no constant term.
-    Works for all polynomial functions by filtering the degree-0 term.
-    """
-    type_name: builtins.str
+    @property
+    def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Get linear terms as a dictionary mapping variable id to coefficient.
+
+        Returns dictionary mapping variable IDs to their linear coefficients.
+        Returns empty dict if function has no linear terms.
+        Works for all polynomial functions by filtering only degree-1 terms.
+        """
+    @property
+    def quadratic_terms(
+        self,
+    ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]:
+        r"""
+        Get quadratic terms as a dictionary mapping (row, col) to coefficient.
+
+        Returns dictionary mapping variable ID pairs to their quadratic coefficients.
+        Returns empty dict if function has no quadratic terms.
+        Works for all polynomial functions by filtering only degree-2 terms.
+        """
+    @property
+    def constant_term(self) -> builtins.float:
+        r"""
+        Get the constant term of the function.
+
+        Returns the constant term. Returns 0.0 if function has no constant term.
+        Works for all polynomial functions by filtering the degree-0 term.
+        """
+    @property
+    def type_name(self) -> builtins.str: ...
     @staticmethod
     def from_scalar(scalar: builtins.float) -> Function: ...
     @staticmethod
@@ -472,8 +543,12 @@ class Function:
         max_degree: builtins.int = 3,
         max_id: builtins.int = 10,
     ) -> Function: ...
-    def evaluate(self, state: bytes) -> builtins.float: ...
-    def partial_evaluate(self, state: bytes) -> Function: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.float: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> Function: ...
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
     def reduce_binary_power(
@@ -491,24 +566,40 @@ class Function:
             True if any reduction was performed, False otherwise
         """
 
+@typing.final
 class Instance:
-    sense: Sense
-    objective: Function
-    decision_variables: builtins.list[DecisionVariable]
-    r"""
-    List of all decision variables in the instance sorted by their IDs.
-    """
-    constraints: builtins.list[Constraint]
-    r"""
-    List of all decision variables in the instance sorted by their IDs.
-    """
-    removed_constraints: builtins.list[RemovedConstraint]
-    r"""
-    List of all removed constraints in the instance sorted by their IDs.
-    """
-    description: typing.Optional[InstanceDescription]
-    constraint_hints: ConstraintHints
-    used_decision_variables: builtins.list[DecisionVariable]
+    @property
+    def sense(self) -> Sense: ...
+    @property
+    def objective(self) -> Function: ...
+    @objective.setter
+    def objective(self, value: Function) -> None: ...
+    @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this instance
+        """
+    @property
+    def decision_variables(self) -> builtins.list[DecisionVariable]:
+        r"""
+        List of all decision variables in the instance sorted by their IDs.
+        """
+    @property
+    def constraints(self) -> builtins.list[Constraint]:
+        r"""
+        List of all decision variables in the instance sorted by their IDs.
+        """
+    @property
+    def removed_constraints(self) -> builtins.list[RemovedConstraint]:
+        r"""
+        List of all removed constraints in the instance sorted by their IDs.
+        """
+    @property
+    def description(self) -> typing.Optional[InstanceDescription]: ...
+    @property
+    def constraint_hints(self) -> ConstraintHints: ...
+    @property
+    def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
@@ -520,7 +611,6 @@ class Instance:
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance: ...
-    def set_objective(self, objective: Function) -> None: ...
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
@@ -528,9 +618,15 @@ class Instance:
     def as_parametric_instance(self) -> ParametricInstance: ...
     def penalty_method(self) -> ParametricInstance: ...
     def uniform_penalty_method(self) -> ParametricInstance: ...
-    def evaluate(self, state: bytes) -> Solution: ...
-    def partial_evaluate(self, state: bytes) -> bytes: ...
-    def evaluate_samples(self, samples: Samples) -> SampleSet: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> Solution: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> bytes: ...
+    def evaluate_samples(
+        self, samples: Samples, *, atol: typing.Optional[builtins.float] = None
+    ) -> SampleSet: ...
     def random_state(self, rng: Rng) -> State: ...
     def random_samples(
         self,
@@ -591,11 +687,16 @@ class Instance:
     @staticmethod
     def load_qplib(path: builtins.str) -> Instance: ...
 
+@typing.final
 class InstanceDescription:
-    name: typing.Optional[builtins.str]
-    description: typing.Optional[builtins.str]
-    authors: builtins.list[builtins.str]
-    created_by: typing.Optional[builtins.str]
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def authors(self) -> builtins.list[builtins.str]: ...
+    @property
+    def created_by(self) -> typing.Optional[builtins.str]: ...
     def __new__(
         cls,
         name: typing.Optional[builtins.str] = None,
@@ -607,9 +708,12 @@ class InstanceDescription:
     def __copy__(self) -> InstanceDescription: ...
     def __deepcopy__(self, _memo: typing.Any) -> InstanceDescription: ...
 
+@typing.final
 class Linear:
-    linear_terms: builtins.dict[builtins.int, builtins.float]
-    constant_term: builtins.float
+    @property
+    def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
+    @property
+    def constant_term(self) -> builtins.float: ...
     def __new__(
         cls,
         terms: typing.Mapping[builtins.int, builtins.float],
@@ -637,18 +741,25 @@ class Linear:
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
-    def evaluate(self, state: bytes) -> builtins.float: ...
-    def partial_evaluate(self, state: bytes) -> Linear: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.float: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
 
+@typing.final
 class OneHot:
     r"""
     OneHot constraint hint wrapper for Python
     """
-
-    id: builtins.int
-    variables: builtins.list[builtins.int]
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(
         cls, id: builtins.int, variables: typing.Sequence[builtins.int]
     ) -> OneHot: ...
@@ -656,17 +767,20 @@ class OneHot:
     def __copy__(self) -> OneHot: ...
     def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
 
+@typing.final
 class Parameters:
     @staticmethod
     def from_bytes(bytes: bytes) -> Parameters: ...
     def to_bytes(self) -> bytes: ...
 
+@typing.final
 class ParametricInstance:
     @staticmethod
     def from_bytes(bytes: bytes) -> ParametricInstance: ...
     def to_bytes(self) -> bytes: ...
     def with_parameters(self, parameters: Parameters) -> Instance: ...
 
+@typing.final
 class Polynomial:
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
@@ -696,15 +810,25 @@ class Polynomial:
         max_degree: builtins.int = 3,
         max_id: builtins.int = 10,
     ) -> Polynomial: ...
-    def evaluate(self, state: bytes) -> builtins.float: ...
-    def partial_evaluate(self, state: bytes) -> Polynomial: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.float: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
 
+@typing.final
 class Quadratic:
-    linear_terms: builtins.dict[builtins.int, builtins.float]
-    constant_term: builtins.float
-    quadratic_terms: builtins.dict[tuple[builtins.int, builtins.int], builtins.float]
+    @property
+    def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
+    @property
+    def constant_term(self) -> builtins.float: ...
+    @property
+    def quadratic_terms(
+        self,
+    ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]: ...
     def __new__(
         cls,
         columns: typing.Sequence[builtins.int],
@@ -732,21 +856,32 @@ class Quadratic:
     def random(
         rng: Rng, num_terms: builtins.int = 5, max_id: builtins.int = 10
     ) -> Quadratic: ...
-    def evaluate(self, state: bytes) -> builtins.float: ...
-    def partial_evaluate(self, state: bytes) -> Quadratic: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> builtins.float: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
 
+@typing.final
 class RemovedConstraint:
     r"""
     RemovedConstraint wrapper for Python
     """
-
-    constraint: Constraint
-    removed_reason: builtins.str
-    removed_reason_parameters: builtins.dict[builtins.str, builtins.str]
-    id: builtins.int
-    name: builtins.str
+    @property
+    def constraint(self) -> Constraint: ...
+    @property
+    def removed_reason(self) -> builtins.str: ...
+    @property
+    def removed_reason_parameters(
+        self,
+    ) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def name(self) -> builtins.str: ...
     def __new__(
         cls,
         constraint: Constraint,
@@ -762,50 +897,70 @@ class RemovedConstraint:
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
 
+@typing.final
 class Rng:
     def __new__(cls) -> Rng:
         r"""
         Create a new random number generator with a deterministic seed.
         """
 
+@typing.final
 class SampleSet:
-    best_feasible_id: builtins.int
-    best_feasible_relaxed_id: builtins.int
-    best_feasible: Solution
-    best_feasible_relaxed: Solution
-    best_feasible_unrelaxed: Solution
-    objectives: builtins.dict[builtins.int, builtins.float]
-    r"""
-    Get objectives for all samples
-    """
-    feasible: builtins.dict[builtins.int, builtins.bool]
-    r"""
-    Get feasibility status for all samples
-    """
-    feasible_relaxed: builtins.dict[builtins.int, builtins.bool]
-    r"""
-    Get relaxed feasibility status for all samples
-    """
-    feasible_unrelaxed: builtins.dict[builtins.int, builtins.bool]
-    r"""
-    Get unrelaxed feasibility status for all samples
-    """
-    sense: Sense
-    r"""
-    Get the optimization sense (minimize or maximize)
-    """
-    constraints: builtins.list[SampledConstraint]
-    r"""
-    Get constraints for compatibility with existing Python code
-    """
-    decision_variables: builtins.list[SampledDecisionVariable]
-    r"""
-    Get decision variables for compatibility with existing Python code
-    """
-    sample_ids_list: builtins.list[builtins.int]
-    r"""
-    Get sample IDs as a list (property version)
-    """
+    @property
+    def best_feasible_id(self) -> builtins.int: ...
+    @property
+    def best_feasible_relaxed_id(self) -> builtins.int: ...
+    @property
+    def best_feasible(self) -> Solution: ...
+    @property
+    def best_feasible_relaxed(self) -> Solution: ...
+    @property
+    def best_feasible_unrelaxed(self) -> Solution: ...
+    @property
+    def objectives(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Get objectives for all samples
+        """
+    @property
+    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Get feasibility status for all samples
+        """
+    @property
+    def feasible_relaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Get relaxed feasibility status for all samples
+        """
+    @property
+    def feasible_unrelaxed(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Get unrelaxed feasibility status for all samples
+        """
+    @property
+    def sense(self) -> Sense:
+        r"""
+        Get the optimization sense (minimize or maximize)
+        """
+    @property
+    def constraints(self) -> builtins.list[SampledConstraint]:
+        r"""
+        Get constraints for compatibility with existing Python code
+        """
+    @property
+    def decision_variables(self) -> builtins.list[SampledDecisionVariable]:
+        r"""
+        Get decision variables for compatibility with existing Python code
+        """
+    @property
+    def sample_ids_list(self) -> builtins.list[builtins.int]:
+        r"""
+        Get sample IDs as a list (property version)
+        """
+    @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this sample set
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
@@ -825,6 +980,10 @@ class SampleSet:
         r"""
         Extract decision variable values for a given name and sample ID
         """
+    def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
+        r"""
+        Extract all decision variables grouped by name for a given sample ID
+        """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
         Extract constraint values for a given name and sample ID
@@ -840,88 +999,109 @@ class SampleSet:
         Get a specific sampled constraint by ID
         """
 
+@typing.final
 class SampledConstraint:
-    id: builtins.int
-    r"""
-    Get the constraint ID
-    """
-    equality: Equality
-    r"""
-    Get the constraint equality type
-    """
-    name: typing.Optional[builtins.str]
-    r"""
-    Get the constraint name
-    """
-    subscripts: builtins.list[builtins.int]
-    r"""
-    Get the subscripts
-    """
-    description: typing.Optional[builtins.str]
-    r"""
-    Get the description
-    """
-    removed_reason: typing.Optional[builtins.str]
-    r"""
-    Get the removal reason
-    """
-    removed_reason_parameters: builtins.dict[builtins.str, builtins.str]
-    r"""
-    Get the removal reason parameters
-    """
-    used_decision_variable_ids: builtins.set[builtins.int]
-    r"""
-    Get the used decision variable IDs
-    """
-    evaluated_values: builtins.dict[builtins.int, builtins.float]
-    r"""
-    Get the evaluated values for all samples
-    """
-    feasible: builtins.dict[builtins.int, builtins.bool]
-    r"""
-    Get the feasibility status for all samples
-    """
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        Get the constraint ID
+        """
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Get the constraint equality type
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the constraint name
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description
+        """
+    @property
+    def removed_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the removal reason
+        """
+    @property
+    def removed_reason_parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the removal reason parameters
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Get the used decision variable IDs
+        """
+    @property
+    def evaluated_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Get the evaluated values for all samples
+        """
+    @property
+    def feasible(self) -> builtins.dict[builtins.int, builtins.bool]:
+        r"""
+        Get the feasibility status for all samples
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampledConstraint: ...
     def to_bytes(self) -> bytes: ...
 
+@typing.final
 class SampledDecisionVariable:
-    id: builtins.int
-    r"""
-    Get the decision variable ID
-    """
-    kind: Kind
-    r"""
-    Get the decision variable kind
-    """
-    bound: Bound
-    r"""
-    Get the decision variable bound
-    """
-    name: typing.Optional[builtins.str]
-    r"""
-    Get the decision variable name
-    """
-    subscripts: builtins.list[builtins.int]
-    r"""
-    Get the subscripts
-    """
-    description: typing.Optional[builtins.str]
-    r"""
-    Get the description
-    """
-    parameters: builtins.dict[builtins.str, builtins.str]
-    r"""
-    Get the parameters
-    """
-    samples: builtins.dict[builtins.int, builtins.float]
-    r"""
-    Get the sampled values for all samples
-    """
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        Get the decision variable ID
+        """
+    @property
+    def kind(self) -> Kind:
+        r"""
+        Get the decision variable kind
+        """
+    @property
+    def bound(self) -> Bound:
+        r"""
+        Get the decision variable bound
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the decision variable name
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters
+        """
+    @property
+    def samples(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Get the sampled values for all samples
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampledDecisionVariable: ...
     def to_bytes(self) -> bytes: ...
 
+@typing.final
 class Samples:
     def __new__(cls, entries: typing.Any) -> Samples: ...
     @staticmethod
@@ -944,60 +1124,84 @@ class Samples:
         Append a sample with the given sample IDs and state
         """
 
+@typing.final
 class Solution:
-    objective: builtins.float
-    r"""
-    Get the objective function value
-    """
-    state: State
-    r"""
-    Get the solution state containing variable values
-    """
-    feasible: builtins.bool
-    r"""
-    Check if the solution is feasible
-    """
-    feasible_relaxed: builtins.bool
-    r"""
-    Check if the solution is feasible in the relaxed problem
-    """
-    feasible_unrelaxed: builtins.bool
-    r"""
-    Check if the solution is feasible in the unrelaxed problem
-    """
-    sense: Sense
-    optimality: Optimality
-    r"""
-    Get the optimality status
-    """
-    relaxation: Relaxation
-    r"""
-    Get the relaxation status
-    """
-    decision_variables: builtins.list[EvaluatedDecisionVariable]
-    r"""
-    Get evaluated decision variables as a list sorted by ID
-    """
-    constraints: builtins.list[EvaluatedConstraint]
-    r"""
-    Get evaluated constraints as a list sorted by ID
-    """
-    decision_variable_ids: builtins.set[builtins.int]
-    constraint_ids: builtins.set[builtins.int]
-    @staticmethod
-    def from_bytes(bytes: bytes) -> Solution: ...
-    def to_bytes(self) -> bytes: ...
-    def set_optimality(self, optimality: Optimality) -> None:
+    @property
+    def objective(self) -> builtins.float:
+        r"""
+        Get the objective function value
+        """
+    @property
+    def state(self) -> State:
+        r"""
+        Get the solution state containing variable values
+        """
+    @property
+    def feasible(self) -> builtins.bool:
+        r"""
+        Check if the solution is feasible
+        """
+    @property
+    def feasible_relaxed(self) -> builtins.bool:
+        r"""
+        Check if the solution is feasible in the relaxed problem
+        """
+    @property
+    def feasible_unrelaxed(self) -> builtins.bool:
+        r"""
+        Check if the solution is feasible in the unrelaxed problem
+        """
+    @property
+    def sense(self) -> Sense: ...
+    @property
+    def optimality(self) -> Optimality:
+        r"""
+        Get the optimality status
+        """
+    @optimality.setter
+    def optimality(self, value: Optimality) -> None:
         r"""
         Set the optimality status
         """
-    def set_relaxation(self, relaxation: Relaxation) -> None:
+    @property
+    def relaxation(self) -> Relaxation:
+        r"""
+        Get the relaxation status
+        """
+    @relaxation.setter
+    def relaxation(self, value: Relaxation) -> None:
         r"""
         Set the relaxation status
         """
+    @property
+    def decision_variables(self) -> builtins.list[EvaluatedDecisionVariable]:
+        r"""
+        Get evaluated decision variables as a list sorted by ID
+        """
+    @property
+    def constraints(self) -> builtins.list[EvaluatedConstraint]:
+        r"""
+        Get evaluated constraints as a list sorted by ID
+        """
+    @property
+    def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def constraint_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this solution
+        """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> Solution: ...
+    def to_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract decision variables by name with subscripts as key (returns a Python dict)
+        """
+    def extract_all_decision_variables(self) -> dict:
+        r"""
+        Extract all decision variables grouped by name (returns a Python dict)
         """
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
@@ -1020,14 +1224,18 @@ class Solution:
         Get a specific evaluated constraint by ID
         """
 
+@typing.final
 class Sos1:
     r"""
     SOS1 constraint hint wrapper for Python
     """
-
-    binary_constraint_id: builtins.int
-    big_m_constraint_ids: builtins.list[builtins.int]
-    variables: builtins.list[builtins.int]
+    @property
+    def binary_constraint_id(self) -> builtins.int: ...
+    @property
+    def big_m_constraint_ids(self) -> builtins.list[builtins.int]: ...
+    @property
+    def variables(self) -> builtins.list[builtins.int]: ...
+    def __eq__(self, other: builtins.object) -> builtins.bool: ...
     def __new__(
         cls,
         binary_constraint_id: builtins.int,
@@ -1038,19 +1246,19 @@ class Sos1:
     def __copy__(self) -> Sos1: ...
     def __deepcopy__(self, _memo: typing.Any) -> Sos1: ...
 
+@typing.final
 class State:
     r"""
     State wrapper for Python
     """
-
-    entries: builtins.dict[builtins.int, builtins.float]
+    @property
+    def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
+    @entries.setter
+    def entries(self, value: builtins.dict[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: typing.Any) -> State: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
     def to_bytes(self) -> bytes: ...
-    def set_entries(
-        self, entries: typing.Mapping[builtins.int, builtins.float]
-    ) -> None: ...
     def get(self, key: builtins.int) -> typing.Optional[builtins.float]: ...
     def set(self, key: builtins.int, value: builtins.float) -> None: ...
     def __len__(self) -> builtins.int: ...
@@ -1062,122 +1270,159 @@ class State:
     def __copy__(self) -> State: ...
     def __deepcopy__(self, _memo: typing.Any) -> State: ...
 
-class Equality(Enum):
+@typing.final
+class Equality(enum.Enum):
     r"""
     Equality type for constraints
     """
 
     EqualToZero = ...
+    r"""
+    Equal to zero constraint (=)
+    """
     LessThanOrEqualToZero = ...
+    r"""
+    Less than or equal to zero constraint (<=)
+    """
 
     @staticmethod
     def from_pb(value: builtins.int) -> Equality:
         r"""
         Convert from Protocol Buffer equality value
         """
-
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer equality value
         """
-
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-class Kind(Enum):
+@typing.final
+class Kind(enum.Enum):
     r"""
     Kind of decision variable
     """
 
     Binary = ...
+    r"""
+    Binary decision variable (0 or 1)
+    """
     Integer = ...
+    r"""
+    Integer decision variable
+    """
     Continuous = ...
+    r"""
+    Continuous decision variable (real-valued)
+    """
     SemiInteger = ...
+    r"""
+    Semi-integer decision variable (integer in range or zero)
+    """
     SemiContinuous = ...
+    r"""
+    Semi-continuous decision variable (continuous in range or zero)
+    """
 
     @staticmethod
     def from_pb(value: builtins.int) -> Kind:
         r"""
         Convert from Protocol Buffer kind value
         """
-
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer kind value
         """
-
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-class Optimality(Enum):
+@typing.final
+class Optimality(enum.Enum):
     r"""
     Optimality status of a solution
     """
 
     Unspecified = ...
+    r"""
+    The solver cannot determine whether the solution is optimal
+    """
     Optimal = ...
+    r"""
+    The solver has determined that the solution is optimal
+    """
     NotOptimal = ...
+    r"""
+    The solver has determined that the solution is not optimal
+    """
 
     @staticmethod
     def from_pb(value: builtins.int) -> Optimality:
         r"""
         Convert from Protocol Buffer optimality value
         """
-
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer optimality value
         """
-
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-class Relaxation(Enum):
+@typing.final
+class Relaxation(enum.Enum):
     r"""
     Relaxation status of a solution
     """
 
     Unspecified = ...
+    r"""
+    No relaxation is used
+    """
     LpRelaxed = ...
+    r"""
+    The solution is obtained by a relaxed linear programming problem
+    """
 
     @staticmethod
     def from_pb(value: builtins.int) -> Relaxation:
         r"""
         Convert from Protocol Buffer relaxation value
         """
-
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer relaxation value
         """
-
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
-class Sense(Enum):
+@typing.final
+class Sense(enum.Enum):
     r"""
     Sense of optimization (minimize or maximize)
     """
 
     Minimize = ...
+    r"""
+    Minimize the objective function
+    """
     Maximize = ...
+    r"""
+    Maximize the objective function
+    """
 
     @staticmethod
     def from_pb(value: builtins.int) -> Sense:
         r"""
         Convert from Protocol Buffer sense value
         """
-
     def to_pb(self) -> builtins.int:
         r"""
         Convert to Protocol Buffer sense value
         """
-
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
 def get_default_atol() -> builtins.float: ...
-def get_image_dir(image_name: builtins.str) -> builtins.str:
+def get_image_dir(image_name: builtins.str) -> pathlib.Path:
     r"""
     Get the path where given image is stored in the local registry.
 
@@ -1191,7 +1436,7 @@ def get_images() -> builtins.list[builtins.str]:
     Returns a list of image names (as strings) found in the local registry.
     """
 
-def get_local_registry_root() -> builtins.str:
+def get_local_registry_root() -> pathlib.Path:
     r"""
     Get the current OMMX Local Registry root path.
     """
