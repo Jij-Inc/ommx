@@ -310,7 +310,7 @@ mod tests {
         let deserialized: LinearMonomial = serde_json::from_str("42").unwrap();
         assert_eq!(deserialized, LinearMonomial::Variable(42.into()));
 
-        // Test Constant serialization/deserialization
+        // Test Constant serialization/deserialization (empty tuple)
         let constant = LinearMonomial::Constant;
         let json = serde_json::to_string(&constant).unwrap();
         assert_eq!(json, "[]");
