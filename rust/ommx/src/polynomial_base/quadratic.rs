@@ -93,6 +93,24 @@ impl Quadratic {
     }
 }
 
+impl serde::Serialize for QuadraticMonomial {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for QuadraticMonomial {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct VariableIDPair {
     lower: VariableID,

@@ -2,6 +2,7 @@ use super::*;
 use crate::{random::unique_integers, VariableID, VariableIDPair};
 use anyhow::{bail, Result};
 use proptest::prelude::*;
+use serde::ser::SerializeTuple;
 use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
 pub type Linear = PolynomialBase<LinearMonomial>;
@@ -103,6 +104,34 @@ impl std::ops::Neg for LinearMonomial {
 
     fn neg(self) -> Self::Output {
         Linear::single_term(self, crate::coeff!(-1.0))
+    }
+}
+
+impl serde::Serialize for LinearMonomial {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            LinearMonomial::Variable(id) => {
+                let mut tuple = serializer.serialize_tuple(1)?;
+                tuple.serialize_element(&id.into_inner())?;
+                tuple.end()
+            }
+            LinearMonomial::Constant => {
+                let tuple = serializer.serialize_tuple(0)?;
+                tuple.end()
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for LinearMonomial {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
     }
 }
 

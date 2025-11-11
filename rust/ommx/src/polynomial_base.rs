@@ -33,7 +33,17 @@ use std::{fmt::Debug, hash::Hash};
 /// Monomial, without coefficient
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Into<MonomialDyn> + Debug + Clone + Hash + Eq + Default + 'static {
+pub trait Monomial:
+    Into<MonomialDyn>
+    + Debug
+    + Clone
+    + Hash
+    + Eq
+    + Default
+    + serde::Serialize
+    + for<'de> serde::Deserialize<'de>
+    + 'static
+{
     type Parameters: Default;
 
     fn degree(&self) -> Degree;

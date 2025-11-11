@@ -50,6 +50,24 @@ impl From<QuadraticMonomial> for MonomialDyn {
     }
 }
 
+impl serde::Serialize for MonomialDyn {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MonomialDyn {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        todo!()
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error("Cannot convert {degree}-degree monomial to {max_degree}-degree")]
 pub struct InvalidDegreeError {
