@@ -575,6 +575,11 @@ class Instance:
     @objective.setter
     def objective(self, value: Function) -> None: ...
     @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this instance
+        """
+    @property
     def decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
         List of all decision variables in the instance sorted by their IDs.
@@ -951,6 +956,11 @@ class SampleSet:
         r"""
         Get sample IDs as a list (property version)
         """
+    @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this sample set
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
     def to_bytes(self) -> bytes: ...
@@ -969,6 +979,10 @@ class SampleSet:
     ) -> dict:
         r"""
         Extract decision variable values for a given name and sample ID
+        """
+    def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
+        r"""
+        Extract all decision variables grouped by name for a given sample ID
         """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
@@ -1173,12 +1187,21 @@ class Solution:
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def constraint_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def decision_variable_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique decision variable names in this solution
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract decision variables by name with subscripts as key (returns a Python dict)
+        """
+    def extract_all_decision_variables(self) -> dict:
+        r"""
+        Extract all decision variables grouped by name (returns a Python dict)
         """
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
