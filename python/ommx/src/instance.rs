@@ -82,6 +82,12 @@ impl Instance {
         Ok(())
     }
 
+    /// Get all unique decision variable names in this instance
+    #[getter]
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.0.decision_variable_names()
+    }
+
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {

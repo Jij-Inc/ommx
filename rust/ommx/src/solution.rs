@@ -121,6 +121,17 @@ impl Solution {
         crate::v1::State { entries }
     }
 
+    /// Get all unique decision variable names in this solution
+    ///
+    /// Returns a set of all unique variable names that have at least one named variable.
+    /// Variables without names are not included.
+    pub fn decision_variable_names(&self) -> BTreeSet<String> {
+        self.decision_variables
+            .values()
+            .filter_map(|dv| dv.metadata.name.clone())
+            .collect()
+    }
+
     /// Extract decision variables by name with subscripts as key
     ///
     /// Returns a mapping from subscripts (as a vector) to the variable's value.
@@ -160,6 +171,46 @@ impl Solution {
             }
             result.insert(key, *dv.value());
         }
+        Ok(result)
+    }
+
+    /// Extract all decision variables grouped by name
+    ///
+    /// Returns a mapping from variable name to a mapping from subscripts to values.
+    /// This is useful for extracting all variables at once in a structured format.
+    /// Variables without names are not included in the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A decision variable with parameters is found
+    /// - The same name and subscript combination is found multiple times
+    ///
+    pub fn extract_all_decision_variables(
+        &self,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for dv in self.decision_variables.values() {
+            if !dv.metadata.parameters.is_empty() {
+                return Err(SolutionError::ParameterizedVariable);
+            }
+
+            let name = match &dv.metadata.name {
+                Some(n) => n.clone(),
+                None => continue, // Skip variables without names
+            };
+
+            let subscripts = dv.metadata.subscripts.clone();
+            let value = *dv.value();
+
+            let vars_map = result.entry(name).or_insert_with(BTreeMap::new);
+            if vars_map.contains_key(&subscripts) {
+                return Err(SolutionError::DuplicateSubscript { subscripts });
+            }
+            vars_map.insert(subscripts, value);
+        }
+
         Ok(result)
     }
 

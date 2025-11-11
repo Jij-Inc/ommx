@@ -1,6 +1,17 @@
 use crate::{ATol, Bound, DecisionVariable, DecisionVariableError, Instance, Kind, VariableID};
 
 impl Instance {
+    /// Get all unique decision variable names in this instance
+    ///
+    /// Returns a set of all unique variable names that have at least one named variable.
+    /// Variables without names are not included.
+    pub fn decision_variable_names(&self) -> std::collections::BTreeSet<String> {
+        self.decision_variables
+            .values()
+            .filter_map(|var| var.metadata.name.clone())
+            .collect()
+    }
+
     /// Get a decision variable by name and subscripts
     ///
     /// # Arguments
