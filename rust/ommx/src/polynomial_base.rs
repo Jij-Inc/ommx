@@ -73,6 +73,30 @@ pub struct PolynomialBase<M: Monomial> {
     terms: FnvHashMap<M, Coefficient>,
 }
 
+impl<M: Monomial> serde::Serialize for PolynomialBase<M> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.terms.len()))?;
+        for (monomial, coefficient) in &self.terms {
+            map.serialize_entry(monomial, coefficient)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de, M: Monomial> serde::Deserialize<'de> for PolynomialBase<M> {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let terms = FnvHashMap::<M, Coefficient>::deserialize(deserializer)?;
+        Ok(Self { terms })
+    }
+}
+
 impl<M: Monomial> Default for PolynomialBase<M> {
     fn default() -> Self {
         Self {
