@@ -24,7 +24,19 @@ pub enum Equality {
 }
 
 /// ID for constraint
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, From, Deref, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    From,
+    Deref,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(transparent)]
 pub struct ConstraintID(u64);
 
