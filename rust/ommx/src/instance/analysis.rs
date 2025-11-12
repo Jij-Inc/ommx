@@ -401,6 +401,142 @@ impl Instance {
     }
 }
 
+impl std::fmt::Display for DecisionVariableAnalysis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "DecisionVariableAnalysis {{")?;
+        writeln!(f, "  Total Variables: {}", self.all.len())?;
+        writeln!(f)?;
+
+        // Kind-based partitioning summary
+        writeln!(f, "  Kind-based Partitioning:")?;
+        writeln!(
+            f,
+            "    Binary: {}, Integer: {}, Continuous: {}, Semi-Integer: {}, Semi-Continuous: {}",
+            self.binary.len(),
+            self.integer.len(),
+            self.continuous.len(),
+            self.semi_integer.len(),
+            self.semi_continuous.len()
+        )?;
+        writeln!(f)?;
+
+        // Usage-based partitioning summary
+        writeln!(f, "  Usage-based Partitioning:")?;
+        writeln!(
+            f,
+            "    Used: {} (in objective: {}, in constraints: {} constraints), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            self.used.len(),
+            self.used_in_objective.len(),
+            self.used_in_constraints.len(),
+            self.fixed.len(),
+            self.dependent.len(),
+            self.irrelevant.len()
+        )?;
+
+        // Kind-based details
+        if !self.binary.is_empty() {
+            writeln!(f, "\n  Binary Variables ({}):", self.binary.len())?;
+            for (id, bound) in &self.binary {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.integer.is_empty() {
+            writeln!(f, "\n  Integer Variables ({}):", self.integer.len())?;
+            for (id, bound) in &self.integer {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.continuous.is_empty() {
+            writeln!(f, "\n  Continuous Variables ({}):", self.continuous.len())?;
+            for (id, bound) in &self.continuous {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.semi_integer.is_empty() {
+            writeln!(f, "\n  Semi-Integer Variables ({}):", self.semi_integer.len())?;
+            for (id, bound) in &self.semi_integer {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.semi_continuous.is_empty() {
+            writeln!(
+                f,
+                "\n  Semi-Continuous Variables ({}):",
+                self.semi_continuous.len()
+            )?;
+            for (id, bound) in &self.semi_continuous {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        // Usage-based details
+        if !self.used_in_objective.is_empty() {
+            writeln!(
+                f,
+                "\n  Used in Objective ({}):",
+                self.used_in_objective.len()
+            )?;
+            let vars: Vec<String> = self.used_in_objective.iter().map(|id| format!("x{}", id.into_inner())).collect();
+            writeln!(f, "    {}", vars.join(", "))?;
+        }
+
+        if !self.used_in_constraints.is_empty() {
+            writeln!(
+                f,
+                "\n  Used in Constraints ({} constraints):",
+                self.used_in_constraints.len()
+            )?;
+            for (constraint_id, var_ids) in &self.used_in_constraints {
+                write!(f, "    {}: ", constraint_id)?;
+                let vars: Vec<String> = var_ids.iter().map(|id| format!("x{}", id.into_inner())).collect();
+                writeln!(f, "{}", vars.join(", "))?;
+            }
+        }
+
+        if !self.fixed.is_empty() {
+            writeln!(f, "\n  Fixed Variables ({}):", self.fixed.len())?;
+            for (id, value) in &self.fixed {
+                writeln!(f, "    x{} = {}", id.into_inner(), value)?;
+            }
+        }
+
+        if !self.dependent.is_empty() {
+            writeln!(f, "\n  Dependent Variables ({}):", self.dependent.len())?;
+            for (id, (kind, bound, function)) in &self.dependent {
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {}): {}",
+                    id.into_inner(),
+                    kind,
+                    bound,
+                    function
+                )?;
+            }
+        }
+
+        if !self.irrelevant.is_empty() {
+            writeln!(f, "\n  Irrelevant Variables ({}):", self.irrelevant.len())?;
+            for (id, (kind, bound)) in &self.irrelevant {
+                let default_value = bound.nearest_to_zero();
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {}): will be set to {}",
+                    id.into_inner(),
+                    kind,
+                    bound,
+                    default_value
+                )?;
+            }
+        }
+
+        write!(f, "}}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

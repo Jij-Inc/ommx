@@ -11,8 +11,71 @@
 # name: test_constraint_print_less_equal
   'Constraint(x1 + 2*x2 - 10 <= 0)'
 # ---
-# name: test_decision_variable_analysis_print
-  'DecisionVariableAnalysis(raw=<builtins.DecisionVariableAnalysis object at 0x106a679b0>)'
+# name: test_decision_variable_analysis_print[repr]
+  '''
+  DecisionVariableAnalysis {
+    Total Variables: 5
+  
+    Kind-based Partitioning:
+      Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
+  
+    Usage-based Partitioning:
+      Used: 3 (in objective: 2, in constraints: 2 constraints), Fixed: 1, Dependent: 0, Irrelevant: 1
+  
+    Binary Variables (5):
+      x0: [0, 1]
+      x1: [0, 1]
+      x2: [0, 1]
+      x3: [0, 1]
+      x4: [0, 1]
+  
+    Used in Objective (2):
+      x1, x2
+  
+    Used in Constraints (2 constraints):
+      0: x1, x2
+      1: x1, x3
+  
+    Fixed Variables (1):
+      x0 = 1
+  
+    Irrelevant Variables (1):
+      x4 (Binary, [0, 1]): will be set to 0
+  }
+  '''
+# ---
+# name: test_decision_variable_analysis_print[str]
+  '''
+  DecisionVariableAnalysis {
+    Total Variables: 5
+  
+    Kind-based Partitioning:
+      Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
+  
+    Usage-based Partitioning:
+      Used: 3 (in objective: 2, in constraints: 2 constraints), Fixed: 1, Dependent: 0, Irrelevant: 1
+  
+    Binary Variables (5):
+      x0: [0, 1]
+      x1: [0, 1]
+      x2: [0, 1]
+      x3: [0, 1]
+      x4: [0, 1]
+  
+    Used in Objective (2):
+      x1, x2
+  
+    Used in Constraints (2 constraints):
+      0: x1, x2
+      1: x1, x3
+  
+    Fixed Variables (1):
+      x0 = 1
+  
+    Irrelevant Variables (1):
+      x4 (Binary, [0, 1]): will be set to 0
+  }
+  '''
 # ---
 # name: test_decision_variable_analysis_to_dict
   "{'all': [0, 1, 2], 'binary': {0: {'lower': 0.0, 'upper': 1.0}, 1: {'lower': 0.0, 'upper': 1.0}, 2: {'lower': 0.0, 'upper': 1.0}}, 'integer': {}, 'continuous': {}, 'semi_integer': {}, 'semi_continuous': {}, 'used_in_objective': [0, 1], 'used_in_constraints': {0: [1, 2]}, 'used': [0, 1, 2], 'fixed': {}, 'dependent': {}, 'irrelevant': {}}"

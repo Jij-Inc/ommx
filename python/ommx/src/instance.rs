@@ -516,6 +516,10 @@ impl DecisionVariableAnalysis {
         let obj = serde_pyobject::to_pyobject(py, &self.0)?;
         Ok(obj.cast::<PyDict>()?.clone())
     }
+
+    pub fn __str__(&self) -> String {
+        self.0.to_string()
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
