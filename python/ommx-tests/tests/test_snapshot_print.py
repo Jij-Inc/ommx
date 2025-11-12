@@ -136,3 +136,51 @@ def test_instance_print_integer_variables(snapshot):
         sense=Instance.MAXIMIZE,
     )
     assert str(instance) == snapshot
+
+
+def test_decision_variable_analysis_print(snapshot):
+    """Test DecisionVariableAnalysis print output."""
+    x = [DecisionVariable.binary(i, name="x") for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints=[(x[1] + x[2] == 1).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    analysis = instance.decision_variable_analysis()
+    assert str(analysis) == snapshot
+
+
+def test_bound_print(snapshot):
+    """Test Bound print output."""
+    x = [DecisionVariable.binary(i) for i in range(2)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[],
+        sense=Instance.MAXIMIZE,
+    )
+    analysis = instance.decision_variable_analysis()
+    binary_vars = analysis.used_binary()
+    bound = binary_vars[0]
+    assert str(bound) == snapshot
+
+
+def test_instance_stats_print(snapshot):
+    """Test instance.stats() output."""
+    x = [
+        DecisionVariable.binary(0, name="x", subscripts=[0]),
+        DecisionVariable.binary(1, name="x", subscripts=[1]),
+        DecisionVariable.integer(2, lower=0, upper=10, name="y"),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints=[
+            (x[0] + x[1] <= 1).set_id(0),
+            (x[1] + x[2] >= 1).set_id(1),
+        ],
+        sense=Instance.MINIMIZE,
+    )
+    stats = instance.stats()
+    assert str(stats) == snapshot
