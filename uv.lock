@@ -1782,7 +1782,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.23.0,<3.0.0" },
     { name = "pandas", specifier = ">=2.0.0,<3.0.0" },
     { name = "protobuf", specifier = ">=5.26.1,<6.0.0" },
-    { name = "pyarrow", specifier = ">=16.0.0,<20.0.0" },
+    { name = "pyarrow", specifier = ">=16.0.0,<23.0.0" },
     { name = "python-dateutil", specifier = ">=2.9.0,<3.0.0" },
     { name = "typing-extensions", specifier = ">=4.12.2,<5.0.0" },
 ]
