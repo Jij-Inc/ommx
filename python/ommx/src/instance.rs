@@ -511,6 +511,11 @@ impl DecisionVariableAnalysis {
             .map(|id| id.into_inner())
             .collect()
     }
+
+    pub fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

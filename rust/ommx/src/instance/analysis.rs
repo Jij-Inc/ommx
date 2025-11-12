@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 ///   are disjoint, and their union is equal to [`Self::all`].
 /// - (usage-based partitioning) The union of [`Self::used_in_objective`] and [`Self::used_in_constraints`] (= [`Self::used`]), [`Self::fixed`],
 ///   and [`Self::dependent`] are disjoint each other. Remaining decision variables are [`Self::irrelevant`].
-#[derive(Debug, Clone, PartialEq, getset::Getters)]
+#[derive(Debug, Clone, PartialEq, getset::Getters, serde::Serialize, serde::Deserialize)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
     #[getset(get = "pub")]

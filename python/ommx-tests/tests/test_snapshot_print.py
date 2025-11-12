@@ -184,3 +184,16 @@ def test_instance_stats_print(snapshot):
     )
     stats = instance.stats()
     assert str(stats) == snapshot
+
+
+def test_decision_variable_analysis_to_dict(snapshot):
+    """Test DecisionVariableAnalysis.to_dict() output."""
+    x = [DecisionVariable.binary(i, name="x") for i in range(3)]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0] + x[1],
+        constraints=[(x[1] + x[2] == 1).set_id(0)],
+        sense=Instance.MAXIMIZE,
+    )
+    analysis = instance.decision_variable_analysis()
+    assert str(analysis.to_dict()) == snapshot
