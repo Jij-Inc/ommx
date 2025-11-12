@@ -463,7 +463,11 @@ impl std::fmt::Display for DecisionVariableAnalysis {
         }
 
         if !self.semi_integer.is_empty() {
-            writeln!(f, "\n  Semi-Integer Variables ({}):", self.semi_integer.len())?;
+            writeln!(
+                f,
+                "\n  Semi-Integer Variables ({}):",
+                self.semi_integer.len()
+            )?;
             for (id, bound) in &self.semi_integer {
                 writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
             }
@@ -487,7 +491,11 @@ impl std::fmt::Display for DecisionVariableAnalysis {
                 "\n  Used in Objective ({}):",
                 self.used_in_objective.len()
             )?;
-            let vars: Vec<String> = self.used_in_objective.iter().map(|id| format!("x{}", id.into_inner())).collect();
+            let vars: Vec<String> = self
+                .used_in_objective
+                .iter()
+                .map(|id| format!("x{}", id.into_inner()))
+                .collect();
             writeln!(f, "    {}", vars.join(", "))?;
         }
 
@@ -499,7 +507,10 @@ impl std::fmt::Display for DecisionVariableAnalysis {
             )?;
             for (constraint_id, var_ids) in &self.used_in_constraints {
                 write!(f, "    {}: ", constraint_id)?;
-                let vars: Vec<String> = var_ids.iter().map(|id| format!("x{}", id.into_inner())).collect();
+                let vars: Vec<String> = var_ids
+                    .iter()
+                    .map(|id| format!("x{}", id.into_inner()))
+                    .collect();
                 writeln!(f, "{}", vars.join(", "))?;
             }
         }
