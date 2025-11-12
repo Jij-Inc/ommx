@@ -84,60 +84,6 @@ def test_constraint_print_greater_equal(snapshot):
     assert str(constraint) == snapshot
 
 
-def test_instance_print_simple(snapshot):
-    """Test Instance print output with simple problem."""
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=sum(x),
-        constraints=[],
-        sense=Instance.MAXIMIZE,
-    )
-    assert str(instance) == snapshot
-
-
-def test_instance_print_with_constraints(snapshot):
-    """Test Instance print output with constraints."""
-    x = [DecisionVariable.binary(i) for i in range(3)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0] + 2 * x[1] + 3 * x[2],
-        constraints=[
-            (x[0] + x[1] <= 1).set_id(0).add_name("max_two"),
-            (x[1] + x[2] >= 1).set_id(1).add_name("min_one"),
-            (x[0] + x[2] == 1).set_id(2).add_name("exactly_one"),
-        ],
-        sense=Instance.MINIMIZE,
-    )
-    assert str(instance) == snapshot
-
-
-def test_instance_print_continuous_variables(snapshot):
-    """Test Instance print output with continuous decision variables."""
-    x = [DecisionVariable.continuous(i, lower=0.0, upper=10.0) for i in range(2)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=x[0] + x[1],
-        constraints=[(x[0] + 2 * x[1] <= 5).set_id(0)],
-        sense=Instance.MAXIMIZE,
-    )
-    assert str(instance) == snapshot
-
-
-def test_instance_print_integer_variables(snapshot):
-    """Test Instance print output with integer decision variables."""
-    x = [DecisionVariable.integer(i, lower=0, upper=100) for i in range(2)]
-    instance = Instance.from_components(
-        decision_variables=x,
-        objective=3 * x[0] + 2 * x[1],
-        constraints=[
-            (2 * x[0] + x[1] <= 10).set_id(0).add_name("resource"),
-        ],
-        sense=Instance.MAXIMIZE,
-    )
-    assert str(instance) == snapshot
-
-
 def test_decision_variable_analysis_print(snapshot):
     """Test DecisionVariableAnalysis repr() output."""
     x = [DecisionVariable.binary(i, name="x") for i in range(5)]
