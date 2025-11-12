@@ -1,0 +1,43 @@
+# serializer version: 1
+# name: test_constraint_print_equality
+  'Constraint(x1 + 2*x2 - 5 == 0)'
+# ---
+# name: test_constraint_print_greater_equal
+  'Constraint(-x1 - x2 - x3 + 1 <= 0)'
+# ---
+# name: test_constraint_print_less_equal
+  'Constraint(x1 + 2*x2 - 10 <= 0)'
+# ---
+# name: test_function_print_linear
+  'Function(2*x1 + 3*x2 + 1)'
+# ---
+# name: test_function_print_polynomial
+  'Function(x1*x2*x3 + x1*x2 + x1)'
+# ---
+# name: test_function_print_quadratic
+  'Function(x1*x2 + 2*x1 + 3*x2 + 4)'
+# ---
+# name: test_instance_print_continuous_variables
+  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+# ---
+# name: test_instance_print_integer_variables
+  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+# ---
+# name: test_instance_print_simple
+  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+# ---
+# name: test_instance_print_with_constraints
+  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+# ---
+# name: test_linear_print_constant_only
+  'Linear(5)'
+# ---
+# name: test_linear_print_empty
+  'Linear(0)'
+# ---
+# name: test_linear_print_negative_coefficients
+  'Linear(-2.5*x1 + 4*x3 - x5 - 3)'
+# ---
+# name: test_linear_print_simple
+  'Linear(2*x1 + 3*x2 + 1.5)'
+# ---
