@@ -9,7 +9,7 @@ DecisionVariableAnalysis {
     Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
 
   Usage-based Partitioning:
-    Used: 3 (in objective: 2, in constraints: 2 constraints), Fixed: 1, Dependent: 1, Irrelevant: 1
+    Used: 3 (in objective: 2, in constraints: 3), Fixed: 1, Dependent: 1, Irrelevant: 1
 
   Binary Variables (5):
     x0: [0, 1]

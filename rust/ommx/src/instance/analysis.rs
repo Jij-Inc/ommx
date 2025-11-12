@@ -422,12 +422,19 @@ impl std::fmt::Display for DecisionVariableAnalysis {
 
         // Usage-based partitioning summary
         writeln!(f, "  Usage-based Partitioning:")?;
+        // Count unique variables used in constraints (union of all constraint variable sets)
+        let used_in_constraints_count: usize = self
+            .used_in_constraints
+            .values()
+            .flat_map(|ids| ids.iter())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         writeln!(
             f,
-            "    Used: {} (in objective: {}, in constraints: {} constraints), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
             self.used.len(),
             self.used_in_objective.len(),
-            self.used_in_constraints.len(),
+            used_in_constraints_count,
             self.fixed.len(),
             self.dependent.len(),
             self.irrelevant.len()
