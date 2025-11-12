@@ -2,10 +2,10 @@ use crate::{Linear, Polynomial, Rng};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{ATol, Coefficient, CoefficientError, Evaluate, Monomial, VariableIDPair};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, VariableIDPair};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::BTreeMap;
@@ -154,7 +154,7 @@ impl Quadratic {
 
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let obj = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(obj.downcast::<PyDict>()?.clone())
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     #[staticmethod]

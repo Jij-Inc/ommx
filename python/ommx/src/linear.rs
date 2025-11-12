@@ -6,7 +6,7 @@ use ommx::LinearMonomial;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::BTreeMap;
@@ -134,7 +134,7 @@ impl Linear {
 
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let obj = serde_pyobject::to_pyobject(py, &self.0)?;
-        Ok(obj.downcast::<PyDict>()?.clone())
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     #[pyo3(signature = (state, *, atol=None))]

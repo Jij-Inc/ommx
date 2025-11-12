@@ -83,7 +83,7 @@ impl SampleSet {
             let subscripts = variable.metadata.subscripts.clone();
             let value = *variable.samples().get(sample_id)?;
 
-            let vars_map = result.entry(name.clone()).or_insert_with(BTreeMap::new);
+            let vars_map = result.entry(name.clone()).or_default();
             if vars_map.contains_key(&subscripts) {
                 return Err(SampleSetError::DuplicateSubscripts { name, subscripts });
             }
