@@ -5,18 +5,18 @@ build-backend = "maturin"
 [project]
 name = "ommx"
 
-version = "2.0.13"
+version = "2.1.0"
 description = "Open Mathematical prograMming eXchange (OMMX)"
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
 readme = "README.md"
 
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Rust",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
@@ -24,12 +24,12 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
 ]
 
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
   "numpy>=1.23.0, <3.0.0",
   "pandas>=2.0.0, <3.0.0",
   "protobuf>=5.26.1, <6.0.0",
-  "pyarrow>=16.0.0, <20.0.0",
+  "pyarrow>=16.0.0, <23.0.0",
   "python-dateutil>=2.9.0, <3.0.0",
   "typing-extensions >= 4.12.2, < 5.0.0",
 ]
@@ -40,7 +40,7 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 
 [tool.maturin]
 module-name = "ommx._ommx_rust"
-features = ["pyo3/extension-module", "pyo3/abi3-py39"]
+features = ["pyo3/extension-module", "pyo3/abi3-py310"]
 
 [tool.ruff.lint]
 per-file-ignores = { "*_pb2.py" = ["ALL"] }
