@@ -25,7 +25,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.9 3.13t
+          args: --release --out dist --interpreter 3.10 3.13t 3.14t
           target: ${{ matrix.target }}
           working-directory: ./python/ommx
           manylinux: manylinux_2_28
@@ -47,7 +47,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.9 3.13t
+          args: --release --out dist --interpreter 3.10 3.13t 3.14t
           working-directory: ./python/ommx
 
       - name: Upload wheels
@@ -66,13 +66,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.13t
+          python-version: 3.14t
           cache: "pip"
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.9 3.13t
+          args: --release --out dist --interpreter 3.10 3.13t 3.14t
           working-directory: ./python/ommx
 
       - name: Upload wheels
@@ -157,7 +157,7 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.9"
+          python-version: "3.10"
 
       - name: Bump version
         run: |
@@ -193,7 +193,7 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
         with:
-          python-version: "3.9"
+          python-version: "3.10"
 
       - name: Extract released version from tag
         run: |
