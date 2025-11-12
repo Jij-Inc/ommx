@@ -30,6 +30,36 @@ pub enum Function {
     Polynomial(Polynomial),
 }
 
+impl serde::Serialize for Function {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Function::Zero => {
+                use serde::ser::SerializeMap;
+                let map = serializer.serialize_map(Some(0))?;
+                map.end()
+            }
+            Function::Constant(c) => c.serialize(serializer),
+            Function::Linear(l) => l.serialize(serializer),
+            Function::Quadratic(q) => q.serialize(serializer),
+            Function::Polynomial(p) => p.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Function {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Always deserialize as Polynomial
+        let polynomial = Polynomial::deserialize(deserializer)?;
+        Ok(Function::Polynomial(polynomial))
+    }
+}
+
 impl TryFrom<f64> for Function {
     type Error = crate::CoefficientError;
     fn try_from(value: f64) -> Result<Self, Self::Error> {
