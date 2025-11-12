@@ -139,7 +139,7 @@ def test_instance_print_integer_variables(snapshot):
 
 
 def test_decision_variable_analysis_print(snapshot):
-    """Test DecisionVariableAnalysis str() and repr() output."""
+    """Test DecisionVariableAnalysis repr() output."""
     x = [DecisionVariable.binary(i, name="x") for i in range(5)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -155,8 +155,7 @@ def test_decision_variable_analysis_print(snapshot):
     instance_partial = instance.partial_evaluate({0: 1.0})
 
     analysis = instance_partial.decision_variable_analysis()
-    assert str(analysis) == snapshot(name="str")
-    assert repr(analysis) == snapshot(name="repr")
+    assert repr(analysis) == snapshot
 
 
 def test_bound_print(snapshot):

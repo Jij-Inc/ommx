@@ -517,7 +517,7 @@ impl DecisionVariableAnalysis {
         Ok(obj.cast::<PyDict>()?.clone())
     }
 
-    pub fn __str__(&self) -> String {
+    pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
 }

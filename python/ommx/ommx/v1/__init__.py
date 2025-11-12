@@ -4829,13 +4829,9 @@ class DecisionVariableAnalysis:
         """
         return self.raw.to_dict()
 
-    def __str__(self) -> str:
-        """Return a human-readable string representation."""
-        return str(self.raw)
-
     def __repr__(self) -> str:
         """Return a detailed string representation."""
-        return str(self.raw)
+        return repr(self.raw)
 
 
 @dataclass

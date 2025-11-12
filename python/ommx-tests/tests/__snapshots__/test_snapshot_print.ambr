@@ -11,40 +11,7 @@
 # name: test_constraint_print_less_equal
   'Constraint(x1 + 2*x2 - 10 <= 0)'
 # ---
-# name: test_decision_variable_analysis_print[repr]
-  '''
-  DecisionVariableAnalysis {
-    Total Variables: 5
-  
-    Kind-based Partitioning:
-      Binary: 5, Integer: 0, Continuous: 0, Semi-Integer: 0, Semi-Continuous: 0
-  
-    Usage-based Partitioning:
-      Used: 3 (in objective: 2, in constraints: 2 constraints), Fixed: 1, Dependent: 0, Irrelevant: 1
-  
-    Binary Variables (5):
-      x0: [0, 1]
-      x1: [0, 1]
-      x2: [0, 1]
-      x3: [0, 1]
-      x4: [0, 1]
-  
-    Used in Objective (2):
-      x1, x2
-  
-    Used in Constraints (2 constraints):
-      0: x1, x2
-      1: x1, x3
-  
-    Fixed Variables (1):
-      x0 = 1
-  
-    Irrelevant Variables (1):
-      x4 (Binary, [0, 1]): will be set to 0
-  }
-  '''
-# ---
-# name: test_decision_variable_analysis_print[str]
+# name: test_decision_variable_analysis_print
   '''
   DecisionVariableAnalysis {
     Total Variables: 5
@@ -90,16 +57,16 @@
   'Function(x1*x2 + 2*x1 + 3*x2 + 4)'
 # ---
 # name: test_instance_print_continuous_variables
-  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+  'Instance(raw=<builtins.Instance object at 0x10b7e3c30>, annotations={})'
 # ---
 # name: test_instance_print_integer_variables
-  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+  'Instance(raw=<builtins.Instance object at 0x10c6b4030>, annotations={})'
 # ---
 # name: test_instance_print_simple
-  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+  'Instance(raw=<builtins.Instance object at 0x10b7e3a30>, annotations={})'
 # ---
 # name: test_instance_print_with_constraints
-  'Instance(raw=<builtins.Instance object at 0x10d831a30>, annotations={})'
+  'Instance(raw=<builtins.Instance object at 0x10b7e3a30>, annotations={})'
 # ---
 # name: test_instance_stats_print
   "{'decision_variables': {'total': 3, 'by_kind': {'binary': 2, 'integer': 1, 'continuous': 0, 'semi_integer': 0, 'semi_continuous': 0}, 'by_usage': {'used_in_objective': 2, 'used_in_constraints': 3, 'used': 3, 'fixed': 0, 'dependent': 0, 'irrelevant': 0}}, 'constraints': {'total': 2, 'active': 2, 'removed': 0}}"
