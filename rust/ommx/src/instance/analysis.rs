@@ -540,7 +540,68 @@ impl std::fmt::Display for DecisionVariableAnalysis {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        assign, coeff, linear, v1::State, Constraint, ConstraintID, Evaluate, Sense, Substitute,
+        VariableID,
+    };
+    use maplit::hashmap;
     use proptest::prelude::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_decision_variable_analysis_display() {
+        // Create instance with 5 binary variables
+        let mut decision_variables = BTreeMap::new();
+        for i in 0..5 {
+            decision_variables.insert(
+                VariableID::from(i),
+                crate::DecisionVariable::binary(VariableID::from(i)),
+            );
+        }
+
+        // Objective: x0 + x1 + x2
+        let objective = crate::Function::from(linear!(0) + linear!(1) + linear!(2));
+
+        // Constraints:
+        // 0: x1 + x2 == 1
+        // 1: x3 == x0 + x1  (this will make x3 dependent after substitution)
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(0),
+            Constraint::equal_to_zero(
+                ConstraintID::from(0),
+                (linear!(1) + linear!(2) + coeff!(-1.0)).into(),
+            ),
+        );
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint::equal_to_zero(
+                ConstraintID::from(1),
+                (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
+            ),
+        );
+
+        let mut instance =
+            Instance::new(Sense::Maximize, objective, decision_variables, constraints).unwrap();
+
+        // Apply partial_evaluate to fix x0 = 1
+        let state = State {
+            entries: hashmap! { 0 => 1.0 },
+        };
+        instance
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // Apply substitute_acyclic to create dependent variables
+        // x3 <- x0 + x1, but x0 is already fixed to 1, so x3 <- 1 + x1
+        let substitutions = assign! {
+            3 <- linear!(0) + linear!(1)
+        };
+        let instance = instance.substitute_acyclic(&substitutions).unwrap();
+
+        let analysis = instance.analyze_decision_variables();
+        insta::assert_snapshot!(analysis);
+    }
 
     proptest! {
         // Binary, integer, continuous, semi_integer, and semi_continuous are disjoint
