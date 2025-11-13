@@ -66,13 +66,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: 3.14t
+          python-version: 3.13t
           cache: "pip"
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           command: build
-          args: --release --out dist --interpreter 3.10 3.13t 3.14t
+          args: --release --out dist --interpreter 3.10 3.13t
           working-directory: ./python/ommx
 
       - name: Upload wheels
