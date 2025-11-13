@@ -6,7 +6,7 @@ use ommx::LinearMonomial;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::BTreeMap;
@@ -133,16 +133,8 @@ impl Linear {
     }
 
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let result = PyDict::new(py);
-        for (monomial, coeff) in self.0.iter() {
-            let u64_ids: Vec<u64> = match monomial {
-                LinearMonomial::Variable(id) => vec![id.into_inner()],
-                LinearMonomial::Constant => vec![],
-            };
-            let py_tuple = PyTuple::new(py, &u64_ids)?;
-            result.set_item(py_tuple, coeff.into_inner())?;
-        }
-        Ok(result)
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     #[pyo3(signature = (state, *, atol=None))]

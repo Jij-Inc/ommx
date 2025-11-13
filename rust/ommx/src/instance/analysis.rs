@@ -30,7 +30,7 @@ use std::collections::BTreeMap;
 ///   are disjoint, and their union is equal to [`Self::all`].
 /// - (usage-based partitioning) The union of [`Self::used_in_objective`] and [`Self::used_in_constraints`] (= [`Self::used`]), [`Self::fixed`],
 ///   and [`Self::dependent`] are disjoint each other. Remaining decision variables are [`Self::irrelevant`].
-#[derive(Debug, Clone, PartialEq, getset::Getters)]
+#[derive(Debug, Clone, PartialEq, getset::Getters, serde::Serialize, serde::Deserialize)]
 pub struct DecisionVariableAnalysis {
     /// The IDs of all decision variables
     #[getset(get = "pub")]
@@ -401,10 +401,225 @@ impl Instance {
     }
 }
 
+impl std::fmt::Display for DecisionVariableAnalysis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "DecisionVariableAnalysis {{")?;
+        writeln!(f, "  Total Variables: {}", self.all.len())?;
+        writeln!(f)?;
+
+        // Kind-based partitioning summary
+        writeln!(f, "  Kind-based Partitioning:")?;
+        writeln!(
+            f,
+            "    Binary: {}, Integer: {}, Continuous: {}, Semi-Integer: {}, Semi-Continuous: {}",
+            self.binary.len(),
+            self.integer.len(),
+            self.continuous.len(),
+            self.semi_integer.len(),
+            self.semi_continuous.len()
+        )?;
+        writeln!(f)?;
+
+        // Usage-based partitioning summary
+        writeln!(f, "  Usage-based Partitioning:")?;
+        // Count unique variables used in constraints (union of all constraint variable sets)
+        let used_in_constraints_count: usize = self
+            .used_in_constraints
+            .values()
+            .flat_map(|ids| ids.iter())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
+        writeln!(
+            f,
+            "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            self.used.len(),
+            self.used_in_objective.len(),
+            used_in_constraints_count,
+            self.fixed.len(),
+            self.dependent.len(),
+            self.irrelevant.len()
+        )?;
+
+        // Kind-based details
+        if !self.binary.is_empty() {
+            writeln!(f, "\n  Binary Variables ({}):", self.binary.len())?;
+            for (id, bound) in &self.binary {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.integer.is_empty() {
+            writeln!(f, "\n  Integer Variables ({}):", self.integer.len())?;
+            for (id, bound) in &self.integer {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.continuous.is_empty() {
+            writeln!(f, "\n  Continuous Variables ({}):", self.continuous.len())?;
+            for (id, bound) in &self.continuous {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.semi_integer.is_empty() {
+            writeln!(
+                f,
+                "\n  Semi-Integer Variables ({}):",
+                self.semi_integer.len()
+            )?;
+            for (id, bound) in &self.semi_integer {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        if !self.semi_continuous.is_empty() {
+            writeln!(
+                f,
+                "\n  Semi-Continuous Variables ({}):",
+                self.semi_continuous.len()
+            )?;
+            for (id, bound) in &self.semi_continuous {
+                writeln!(f, "    x{}: {}", id.into_inner(), bound)?;
+            }
+        }
+
+        // Usage-based details
+        if !self.used_in_objective.is_empty() {
+            writeln!(
+                f,
+                "\n  Used in Objective ({}):",
+                self.used_in_objective.len()
+            )?;
+            let vars: Vec<String> = self
+                .used_in_objective
+                .iter()
+                .map(|id| format!("x{}", id.into_inner()))
+                .collect();
+            writeln!(f, "    {}", vars.join(", "))?;
+        }
+
+        if !self.used_in_constraints.is_empty() {
+            writeln!(
+                f,
+                "\n  Used in Constraints ({} constraints):",
+                self.used_in_constraints.len()
+            )?;
+            for (constraint_id, var_ids) in &self.used_in_constraints {
+                write!(f, "    {}: ", constraint_id)?;
+                let vars: Vec<String> = var_ids
+                    .iter()
+                    .map(|id| format!("x{}", id.into_inner()))
+                    .collect();
+                writeln!(f, "{}", vars.join(", "))?;
+            }
+        }
+
+        if !self.fixed.is_empty() {
+            writeln!(f, "\n  Fixed Variables ({}):", self.fixed.len())?;
+            for (id, value) in &self.fixed {
+                writeln!(f, "    x{} = {}", id.into_inner(), value)?;
+            }
+        }
+
+        if !self.dependent.is_empty() {
+            writeln!(f, "\n  Dependent Variables ({}):", self.dependent.len())?;
+            for (id, (kind, bound, function)) in &self.dependent {
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {}): {}",
+                    id.into_inner(),
+                    kind,
+                    bound,
+                    function
+                )?;
+            }
+        }
+
+        if !self.irrelevant.is_empty() {
+            writeln!(f, "\n  Irrelevant Variables ({}):", self.irrelevant.len())?;
+            for (id, (kind, bound)) in &self.irrelevant {
+                let default_value = bound.nearest_to_zero();
+                writeln!(
+                    f,
+                    "    x{} ({:?}, {}): will be set to {}",
+                    id.into_inner(),
+                    kind,
+                    bound,
+                    default_value
+                )?;
+            }
+        }
+
+        write!(f, "}}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        assign, coeff, linear, v1::State, Constraint, ConstraintID, Evaluate, Sense, Substitute,
+        VariableID,
+    };
+    use maplit::hashmap;
     use proptest::prelude::*;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_decision_variable_analysis_display() {
+        // Create instance with 5 binary variables
+        let mut decision_variables = BTreeMap::new();
+        for i in 0..5 {
+            decision_variables.insert(
+                VariableID::from(i),
+                crate::DecisionVariable::binary(VariableID::from(i)),
+            );
+        }
+
+        // Objective: x0 + x1 + x2
+        let objective = crate::Function::from(linear!(0) + linear!(1) + linear!(2));
+
+        // Constraints:
+        // 0: x1 + x2 == 1
+        // 1: x3 == x0 + x1  (this will make x3 dependent after substitution)
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(0),
+            Constraint::equal_to_zero(
+                ConstraintID::from(0),
+                (linear!(1) + linear!(2) + coeff!(-1.0)).into(),
+            ),
+        );
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint::equal_to_zero(
+                ConstraintID::from(1),
+                (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
+            ),
+        );
+
+        let mut instance =
+            Instance::new(Sense::Maximize, objective, decision_variables, constraints).unwrap();
+
+        // Apply partial_evaluate to fix x0 = 1
+        let state = State {
+            entries: hashmap! { 0 => 1.0 },
+        };
+        instance
+            .partial_evaluate(&state, crate::ATol::default())
+            .unwrap();
+
+        // Apply substitute_acyclic to create dependent variables
+        // x3 <- x0 + x1, but x0 is already fixed to 1, so x3 <- 1 + x1
+        let substitutions = assign! {
+            3 <- linear!(0) + linear!(1)
+        };
+        let instance = instance.substitute_acyclic(&substitutions).unwrap();
+
+        let analysis = instance.analyze_decision_variables();
+        insta::assert_snapshot!(analysis);
+    }
 
     proptest! {
         // Binary, integer, continuous, semi_integer, and semi_continuous are disjoint

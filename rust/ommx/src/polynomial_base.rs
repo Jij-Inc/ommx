@@ -33,7 +33,17 @@ use std::{fmt::Debug, hash::Hash};
 /// Monomial, without coefficient
 ///
 /// - [`Default`] must return the 0-degree monomial for the constant term
-pub trait Monomial: Into<MonomialDyn> + Debug + Clone + Hash + Eq + Default + 'static {
+pub trait Monomial:
+    Into<MonomialDyn>
+    + Debug
+    + Clone
+    + Hash
+    + Eq
+    + Default
+    + serde::Serialize
+    + for<'de> serde::Deserialize<'de>
+    + 'static
+{
     type Parameters: Default;
 
     fn degree(&self) -> Degree;
@@ -61,6 +71,30 @@ pub trait Monomial: Into<MonomialDyn> + Debug + Clone + Hash + Eq + Default + 's
 #[derive(Clone, PartialEq, Eq)]
 pub struct PolynomialBase<M: Monomial> {
     terms: FnvHashMap<M, Coefficient>,
+}
+
+impl<M: Monomial> serde::Serialize for PolynomialBase<M> {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.terms.len()))?;
+        for (monomial, coefficient) in &self.terms {
+            map.serialize_entry(monomial, coefficient)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de, M: Monomial> serde::Deserialize<'de> for PolynomialBase<M> {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let terms = FnvHashMap::<M, Coefficient>::deserialize(deserializer)?;
+        Ok(Self { terms })
+    }
 }
 
 impl<M: Monomial> Default for PolynomialBase<M> {

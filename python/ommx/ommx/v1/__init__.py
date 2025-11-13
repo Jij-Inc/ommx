@@ -4817,6 +4817,22 @@ class DecisionVariableAnalysis:
         """
         return self.raw.dependent()
 
+    def to_dict(self) -> dict:
+        """
+        Convert the analysis to a dictionary representation.
+
+        Returns
+        -------
+        dict
+            Dictionary containing all analysis information including variable bounds,
+            usage patterns, and categorizations
+        """
+        return self.raw.to_dict()
+
+    def __repr__(self) -> str:
+        """Return a detailed string representation."""
+        return repr(self.raw)
+
 
 @dataclass
 class Bound:

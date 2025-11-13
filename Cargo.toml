@@ -3,7 +3,7 @@ resolver = "2"
 members = ["rust/ommx", "rust/protogen", "rust/dataset", "python/ommx"]
 
 [workspace.package]
-version = "2.1.1"
+version = "3.0.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -34,7 +34,7 @@ log = "0.4.28"
 maplit = "1.0.2"
 num = "0.4.3"
 ocipkg = "0.3.9"
-ordered-float = "5.1.0"
+ordered-float = { version = "5.1.0", features = ["serde"] }
 petgraph = "0.8.3"
 proptest = "1.8.0"
 prost = "0.12.0"

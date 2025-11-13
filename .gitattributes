@@ -6,3 +6,6 @@ requirements.txt linguist-generated=true
 
 # Insta snapshot files
 **/*.snap linguist-generated=true
+
+# syrupy snapshot files
+**/*.ambr linguist-generated=true

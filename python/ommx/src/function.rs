@@ -5,7 +5,7 @@ use approx::AbsDiffEq;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet};
@@ -167,13 +167,8 @@ impl Function {
     }
 
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let result = PyDict::new(py);
-        for (ids, coeff) in self.0.iter() {
-            let u64_ids: Vec<u64> = ids.into_iter().map(|id| id.into_inner()).collect();
-            let py_tuple = PyTuple::new(py, &u64_ids)?;
-            result.set_item(py_tuple, coeff.into_inner())?;
-        }
-        Ok(result)
+        let obj = serde_pyobject::to_pyobject(py, &self.0)?;
+        Ok(obj.cast::<PyDict>()?.clone())
     }
 
     /// Get linear terms as a dictionary mapping variable id to coefficient.

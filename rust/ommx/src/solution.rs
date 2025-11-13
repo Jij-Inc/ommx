@@ -204,7 +204,7 @@ impl Solution {
             let subscripts = dv.metadata.subscripts.clone();
             let value = *dv.value();
 
-            let vars_map = result.entry(name).or_insert_with(BTreeMap::new);
+            let vars_map = result.entry(name).or_default();
             if vars_map.contains_key(&subscripts) {
                 return Err(SolutionError::DuplicateSubscript { subscripts });
             }

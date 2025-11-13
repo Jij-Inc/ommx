@@ -325,7 +325,7 @@ mod tests {
 
         // Verify that old format "QPLIB_0018" does NOT work as a key
         assert!(
-            annotations.get("QPLIB_0018").is_none(),
+            !annotations.contains_key("QPLIB_0018"),
             "Old format key 'QPLIB_0018' should not exist in HashMap"
         );
 
@@ -347,7 +347,7 @@ mod tests {
             Ok((instance, annotation)) => {
                 assert_eq!(annotation.title().unwrap(), "QPLIB_3877");
                 assert_eq!(annotation.dataset().unwrap(), "QPLIB");
-                assert!(instance.decision_variables.len() > 0);
+                assert!(!instance.decision_variables.is_empty());
                 println!(
                     "Successfully loaded QPLIB_3877: {} vars, {} constraints",
                     instance.decision_variables.len(),

@@ -24,5 +24,6 @@ dev = [
   "pyyaml>=6.0.3",
   "ruamel-yaml>=0.18.10",
   "ruff>=0.9.6",
+  "syrupy>=4.7.2",
   "tomlkit>=0.13.2",
 ]
