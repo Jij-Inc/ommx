@@ -207,7 +207,7 @@ pub enum StateValidationError {
     #[error("The state does not contain some required IDs: {missing_ids:?}")]
     MissingRequiredIDs { missing_ids: VariableIDSet },
     #[deprecated(
-        since = "2.1.2",
+        since = "2.2.0",
         note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
     )]
     #[error(
@@ -220,7 +220,7 @@ pub enum StateValidationError {
         kind: Kind,
     },
     #[deprecated(
-        since = "2.1.2",
+        since = "2.2.0",
         note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
     )]
     #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
