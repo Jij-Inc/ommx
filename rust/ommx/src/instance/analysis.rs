@@ -139,28 +139,8 @@ impl DecisionVariableAnalysis {
             return Err(StateValidationError::MissingRequiredIDs { missing_ids });
         }
 
-        // Check bounds and integrality
-        for (id, &value) in &state.entries {
-            let id = &VariableID::from(*id);
-            if let Some(bound) = self.binary.get(id) {
-                check_integer(*id, value, atol)?;
-                check_bound(*id, value, *bound, Kind::Binary, atol)?;
-            } else if let Some(bound) = self.integer.get(id) {
-                check_integer(*id, value, atol)?;
-                check_bound(*id, value, *bound, Kind::Integer, atol)?;
-            } else if let Some(bound) = self.continuous.get(id) {
-                check_bound(*id, value, *bound, Kind::Continuous, atol)?;
-            } else if let Some(bound) = self.semi_integer.get(id) {
-                if value.abs() > atol {
-                    check_integer(*id, value, atol)?;
-                    check_bound(*id, value, *bound, Kind::SemiInteger, atol)?;
-                }
-            } else if let Some(bound) = self.semi_continuous.get(id) {
-                if value.abs() > atol {
-                    check_bound(*id, value, *bound, Kind::SemiContinuous, atol)?;
-                }
-            }
-        }
+        // Note: Bound and kind checking is intentionally omitted here.
+        // These constraints will be validated as part of Solution::feasible() instead.
 
         // Populate the state with fixed variables
         for (id, value) in self.fixed() {
@@ -184,12 +164,9 @@ impl DecisionVariableAnalysis {
         for (id, (kind, bound)) in self.irrelevant() {
             use std::collections::hash_map::Entry;
             match state.entries.entry(id.into_inner()) {
-                Entry::Occupied(entry) => {
-                    let value = *entry.get();
-                    if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
-                        check_integer(*id, value, atol)?;
-                    }
-                    check_bound(*id, value, *bound, *kind, atol)?;
+                Entry::Occupied(_entry) => {
+                    // Value already exists, no need to check or modify
+                    // Note: Bound and kind checking is intentionally omitted here.
                 }
                 Entry::Vacant(entry) => {
                     let value = match kind {
@@ -201,14 +178,12 @@ impl DecisionVariableAnalysis {
             }
         }
         // Populate the state with dependent variables
-        for (id, (kind, bound, f)) in self.dependent() {
+        for (id, (_kind, _bound, f)) in self.dependent() {
             let value = f.evaluate(&state, atol).map_err(|error| {
                 StateValidationError::FailedToEvaluateDependentVariable { id: *id, error }
             })?;
-            if matches!(kind, Kind::Binary | Kind::Integer | Kind::SemiInteger) {
-                check_integer(*id, value, atol)?;
-            }
-            check_bound(*id, value, *bound, *kind, atol)?;
+            // Note: Bound and kind checking is intentionally omitted here.
+            // These constraints will be validated as part of Solution::feasible() instead.
             if let Some(v) = state.entries.insert(id.into_inner(), value) {
                 if (v - value).abs() > atol {
                     return Err(StateValidationError::StateValueInconsistent {
@@ -224,31 +199,6 @@ impl DecisionVariableAnalysis {
     }
 }
 
-fn check_integer(id: VariableID, value: f64, atol: ATol) -> Result<(), StateValidationError> {
-    let rounded = value.round();
-    if (rounded - value).abs() > atol {
-        return Err(StateValidationError::NotAnInteger { id, value });
-    }
-    Ok(())
-}
-
-fn check_bound(
-    id: VariableID,
-    value: f64,
-    bound: Bound,
-    kind: Kind,
-    atol: ATol,
-) -> Result<(), StateValidationError> {
-    if !bound.contains(value, atol) {
-        return Err(StateValidationError::ValueOutOfBounds {
-            id,
-            value,
-            bound,
-            kind,
-        });
-    }
-    Ok(())
-}
 
 #[non_exhaustive]
 #[derive(Debug, thiserror::Error)]
@@ -257,17 +207,6 @@ pub enum StateValidationError {
     UnknownIDs { unknown_ids: VariableIDSet },
     #[error("The state does not contain some required IDs: {missing_ids:?}")]
     MissingRequiredIDs { missing_ids: VariableIDSet },
-    #[error(
-        "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
-    )]
-    ValueOutOfBounds {
-        id: VariableID,
-        value: f64,
-        bound: Bound,
-        kind: Kind,
-    },
-    #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
-    NotAnInteger { id: VariableID, value: f64 },
     #[error("State's value for variable {id:?} is inconsistent to instance. State value: {state_value}, Instance value: {instance_value}")]
     StateValueInconsistent {
         id: VariableID,

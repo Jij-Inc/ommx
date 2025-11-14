@@ -410,7 +410,9 @@ pub struct EvaluatedDecisionVariable {
 impl EvaluatedDecisionVariable {
     /// Create a new EvaluatedDecisionVariable from a DecisionVariable and value
     ///
-    /// If the DecisionVariable has a substituted_value, this method verifies consistency
+    /// If the DecisionVariable has a substituted_value, this method verifies consistency.
+    /// This method does not enforce kind or bound constraints - those are checked
+    /// as part of solution feasibility validation.
     pub fn new(
         decision_variable: DecisionVariable,
         value: f64,
@@ -428,8 +430,8 @@ impl EvaluatedDecisionVariable {
             }
         }
 
-        // Check if the value is consistent with the variable's constraints
-        decision_variable.check_value_consistency(value, atol)?;
+        // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
+        // These will be checked as part of Solution::feasible() validation.
 
         Ok(Self {
             id: decision_variable.id,
@@ -438,6 +440,23 @@ impl EvaluatedDecisionVariable {
             value,
             metadata: decision_variable.metadata,
         })
+    }
+
+    /// Check if the value satisfies kind and bound constraints
+    pub fn is_valid(&self, atol: crate::ATol) -> bool {
+        // Check bound
+        if !self.bound.contains(self.value, atol) {
+            return false;
+        }
+
+        // Check integrality for integer-like kinds
+        match self.kind {
+            Kind::Integer | Kind::Binary | Kind::SemiInteger => {
+                let rounded = self.value.round();
+                (rounded - self.value).abs() < atol
+            }
+            _ => true,
+        }
     }
 }
 
@@ -459,7 +478,8 @@ impl SampledDecisionVariable {
     /// Create a new SampledDecisionVariable from a DecisionVariable and samples
     ///
     /// If the DecisionVariable has a substituted_value, this method verifies consistency
-    /// with all samples
+    /// with all samples. This method does not enforce kind or bound constraints - those are
+    /// checked as part of solution feasibility validation.
     pub fn new(
         decision_variable: DecisionVariable,
         samples: Sampled<f64>,
@@ -480,10 +500,7 @@ impl SampledDecisionVariable {
             }
         }
 
-        // Check if all sample values are consistent with the variable's constraints
-        for (_, &sample_value) in samples.iter() {
-            decision_variable.check_value_consistency(sample_value, atol)?;
-        }
+        // Note: Kind and bound checking is intentionally omitted to allow infeasible solutions.
 
         Ok(Self {
             id: decision_variable.id,
@@ -510,7 +527,7 @@ impl SampledDecisionVariable {
             metadata: self.metadata.clone(),
         };
 
-        // unwrap is safe here since we already checked consistency in new()
+        // unwrap is safe here since there's no substituted_value to check
         Ok(EvaluatedDecisionVariable::new(dv, value, crate::ATol::default()).unwrap())
     }
 }
