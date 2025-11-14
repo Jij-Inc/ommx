@@ -207,6 +207,25 @@ pub enum StateValidationError {
     UnknownIDs { unknown_ids: VariableIDSet },
     #[error("The state does not contain some required IDs: {missing_ids:?}")]
     MissingRequiredIDs { missing_ids: VariableIDSet },
+    #[deprecated(
+        since = "2.1.2",
+        note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
+    )]
+    #[error(
+        "Value for {kind:?} variable {id:?} is out of bounds. Value: {value}, Bound: {bound:?}"
+    )]
+    ValueOutOfBounds {
+        id: VariableID,
+        value: f64,
+        bound: Bound,
+        kind: Kind,
+    },
+    #[deprecated(
+        since = "2.1.2",
+        note = "Bound and kind constraints are no longer checked during state population. Use Solution::feasible_decision_variables() instead."
+    )]
+    #[error("Value for integer variable {id:?} is not an integer. Value: {value}")]
+    NotAnInteger { id: VariableID, value: f64 },
     #[error("State's value for variable {id:?} is inconsistent to instance. State value: {state_value}, Instance value: {instance_value}")]
     StateValueInconsistent {
         id: VariableID,
