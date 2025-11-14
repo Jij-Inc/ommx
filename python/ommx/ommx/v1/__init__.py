@@ -537,12 +537,11 @@ class Instance(UserAnnotationBase):
         1   Binary    0.0    1.0         []    0.0
         2   Binary    0.0    1.0         []    0.0
 
-        If the value is out of the range, this raises an error:
+        If the value is out of the range, the solution is infeasible:
 
-        >>> instance.evaluate({0: 1, 1: 0, 2: 2})
-        Traceback (most recent call last):
-            ...
-        RuntimeError: Value for Binary variable VariableID(2) is out of bounds. Value: 2, Bound: Bound[0, 1]
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})
+        >>> solution.feasible
+        False
 
         If some of the decision variables are not set, this raises an error:
 

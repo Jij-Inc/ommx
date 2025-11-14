@@ -98,17 +98,50 @@ impl Solution {
         self.evaluated_constraints.keys().cloned().collect()
     }
 
+    /// Check if all decision variables satisfy their kind and bound constraints
+    pub fn feasible_decision_variables(&self) -> bool {
+        self.decision_variables
+            .values()
+            .all(|dv| dv.is_valid(crate::ATol::default()))
+    }
+
     /// Check if all constraints are feasible
-    pub fn feasible(&self) -> bool {
+    ///
+    /// Note: This only checks constraints, not decision variable bounds/kinds.
+    /// - To check both constraints and decision variables, use [`feasible()`](Self::feasible)
+    /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
+    pub fn feasible_constraints(&self) -> bool {
         self.evaluated_constraints.values().all(|c| *c.feasible())
     }
 
+    /// Check if all constraints and decision variables are feasible
+    ///
+    /// This is the most comprehensive feasibility check, verifying:
+    /// - All constraints are satisfied (via [`feasible_constraints()`](Self::feasible_constraints))
+    /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
+    pub fn feasible(&self) -> bool {
+        self.feasible_constraints() && self.feasible_decision_variables()
+    }
+
     /// Check if all constraints are feasible in the relaxed problem
-    pub fn feasible_relaxed(&self) -> bool {
+    ///
+    /// Note: This only checks constraints, not decision variable bounds/kinds.
+    /// - To check both constraints and decision variables, use [`feasible_relaxed()`](Self::feasible_relaxed)
+    /// - To check only decision variables, use [`feasible_decision_variables()`](Self::feasible_decision_variables)
+    pub fn feasible_constraints_relaxed(&self) -> bool {
         self.evaluated_constraints
             .values()
             .filter(|c| c.removed_reason().is_none())
             .all(|c| *c.feasible())
+    }
+
+    /// Check if all constraints and decision variables are feasible in the relaxed problem
+    ///
+    /// This checks:
+    /// - Relaxed constraints are satisfied (via [`feasible_constraints_relaxed()`](Self::feasible_constraints_relaxed))
+    /// - All decision variables satisfy their bounds and kinds (via [`feasible_decision_variables()`](Self::feasible_decision_variables))
+    pub fn feasible_relaxed(&self) -> bool {
+        self.feasible_constraints_relaxed() && self.feasible_decision_variables()
     }
 
     /// Generate state from decision variables (for backward compatibility)
