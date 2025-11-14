@@ -71,3 +71,20 @@ jobs:
       - name: Check updated
         run: |
           git diff --exit-code
+
+  wasm-emscripten:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-emscripten
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Check OMMX for wasm32-unknown-emscripten
+        run: cargo +nightly check -p ommx --target wasm32-unknown-emscripten
