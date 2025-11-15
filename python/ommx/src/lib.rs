@@ -3,6 +3,7 @@ mod bound;
 mod builder;
 mod constraint;
 mod constraint_hints;
+#[cfg(feature = "default")]
 mod dataset;
 mod decision_variable;
 mod descriptor;
@@ -29,6 +30,7 @@ pub use bound::*;
 pub use builder::*;
 pub use constraint::*;
 pub use constraint_hints::*;
+#[cfg(feature = "default")]
 pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
@@ -118,8 +120,11 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Rng>()?;
 
     // Dataset
-    m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
-    m.add_function(wrap_pyfunction!(qplib_instance_annotations, m)?)?;
+    #[cfg(feature = "default")]
+    {
+        m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
+        m.add_function(wrap_pyfunction!(qplib_instance_annotations, m)?)?;
+    }
 
     // ATol functions
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;

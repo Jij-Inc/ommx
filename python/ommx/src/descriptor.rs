@@ -47,13 +47,13 @@ impl PyDescriptor {
     }
 
     #[getter]
-    pub fn digest(&self) -> &str {
-        self.0.digest()
+    pub fn digest(&self) -> String {
+        self.0.digest().to_string()
     }
 
     #[getter]
     pub fn size(&self) -> i64 {
-        self.0.size()
+        self.0.size() as i64
     }
 
     #[getter]
