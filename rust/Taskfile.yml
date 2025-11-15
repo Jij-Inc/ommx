@@ -51,4 +51,4 @@ tasks:
   check:wasm32-emscripten:
     desc: Check OMMX for wasm32-unknown-emscripten target
     cmds:
-      - cargo +nightly check -p ommx --target wasm32-unknown-emscripten
+      - cargo +nightly check -p ommx --target wasm32-unknown-emscripten --no-default-features

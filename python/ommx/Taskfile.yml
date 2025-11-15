@@ -68,3 +68,8 @@ tasks:
       - uvx maturin build --release -o dist --target wasm32-unknown-emscripten -i python3.10 --no-default-features
     env:
       RUSTUP_TOOLCHAIN: nightly
+
+  test:pyodide:
+    desc: Test OMMX Python SDK in pyodide (Node.js)
+    cmds:
+      - npm test
