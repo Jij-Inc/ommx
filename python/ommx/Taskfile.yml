@@ -61,3 +61,10 @@ tasks:
     cmds:
       - uv run pytest python/ommx-tests --codspeed
     dir: ../..
+
+  build:pyodide:
+    desc: Build OMMX Python SDK for pyodide (wasm32-unknown-emscripten)
+    cmds:
+      - uvx maturin build --release -o dist --target wasm32-unknown-emscripten -i python3.10 --no-default-features
+    env:
+      RUSTUP_TOOLCHAIN: nightly
