@@ -292,7 +292,7 @@ impl<Base: Image> Artifact<Base> {
 
     pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.digest() == &digest.to_string() {
+            if desc.digest() == digest {
                 return Ok((desc, blob));
             }
         }

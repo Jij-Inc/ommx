@@ -34,7 +34,7 @@ katexit.workspace = true
 log.workspace = true
 maplit.workspace = true
 num.workspace = true
-ocipkg.workspace = true
+ocipkg = { workspace = true, features = ["remote"] }
 ordered-float.workspace = true
 petgraph.workspace = true
 proptest.workspace = true

@@ -33,7 +33,7 @@ katexit = "0.1.5"
 log = "0.4.28"
 maplit = "1.0.2"
 num = "0.4.3"
-ocipkg = "0.3.9"
+ocipkg = { path = "../../termoshtt/ocipkg/ocipkg", default-features = false }
 ordered-float = { version = "5.1.0", features = ["serde"] }
 petgraph = "0.8.3"
 proptest = "1.8.0"
