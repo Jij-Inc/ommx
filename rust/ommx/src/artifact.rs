@@ -12,9 +12,8 @@ pub use config::*;
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
-    distribution::MediaType,
     image::{Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder},
-    oci_spec::image::{Descriptor, ImageManifest},
+    oci_spec::image::{Descriptor, ImageManifest, MediaType},
     Digest, ImageName,
 };
 
