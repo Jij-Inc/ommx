@@ -1,7 +1,10 @@
 use crate::PyDescriptor;
 use anyhow::Result;
 use derive_more::{Deref, From};
-use ocipkg::{image::{Image, OciArchive, OciDir}, ImageName};
+use ocipkg::{
+    image::{Image, OciArchive, OciDir},
+    ImageName,
+};
 use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
