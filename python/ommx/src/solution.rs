@@ -218,4 +218,22 @@ impl Solution {
                 ))
             })
     }
+
+    /// Calculate total constraint violation using L1 norm (sum of absolute violations)
+    ///
+    /// Returns the sum of violations across all constraints (including removed constraints):
+    /// - For equality constraints: `Σ|f(x)|`
+    /// - For inequality constraints: `Σmax(0, f(x))`
+    pub fn total_violation_l1(&self) -> f64 {
+        self.0.total_violation_l1()
+    }
+
+    /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
+    ///
+    /// Returns the sum of squared violations across all constraints (including removed constraints):
+    /// - For equality constraints: `Σ(f(x))²`
+    /// - For inequality constraints: `Σ(max(0, f(x)))²`
+    pub fn total_violation_l2(&self) -> f64 {
+        self.0.total_violation_l2()
+    }
 }
