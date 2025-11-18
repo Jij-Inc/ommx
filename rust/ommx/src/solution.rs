@@ -144,6 +144,43 @@ impl Solution {
         self.feasible_constraints_relaxed() && self.feasible_decision_variables()
     }
 
+    /// Calculate total constraint violation using L1 norm (sum of absolute violations)
+    ///
+    /// Returns the sum of violations across all constraints (including removed constraints):
+    /// - For equality constraints: `Σ|f(x)|`
+    /// - For inequality constraints: `Σmax(0, f(x))`
+    ///
+    /// This metric is useful for:
+    /// - Assessing solution quality when constraints are violated
+    /// - Penalty method implementations
+    /// - Comparing different solutions
+    pub fn total_violation_l1(&self) -> f64 {
+        self.evaluated_constraints
+            .values()
+            .map(|c| c.violation())
+            .sum()
+    }
+
+    /// Calculate total constraint violation using L2 norm squared (sum of squared violations)
+    ///
+    /// Returns the sum of squared violations across all constraints (including removed constraints):
+    /// - For equality constraints: `Σ(f(x))²`
+    /// - For inequality constraints: `Σ(max(0, f(x)))²`
+    ///
+    /// This metric is useful for:
+    /// - Penalty methods that use quadratic penalties
+    /// - Emphasizing larger violations over smaller ones
+    /// - Smooth optimization objectives
+    pub fn total_violation_l2(&self) -> f64 {
+        self.evaluated_constraints
+            .values()
+            .map(|c| {
+                let v = c.violation();
+                v * v
+            })
+            .sum()
+    }
+
     /// Generate state from decision variables (for backward compatibility)
     pub fn state(&self) -> crate::v1::State {
         let entries = self
@@ -320,5 +357,183 @@ impl Solution {
         } else {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Coefficient, Constraint, Equality, Evaluate, Function};
+
+    #[test]
+    fn test_total_violation_l1_all_satisfied() {
+        // All constraints satisfied → total violation = 0
+        let mut constraints = BTreeMap::new();
+
+        // Equality constraint: f(x) = 0.0001 (near zero, but not exactly zero due to Coefficient restrictions)
+        let c1 = Constraint {
+            id: ConstraintID::from(1),
+            equality: Equality::EqualToZero,
+            function: Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        let state = crate::v1::State::default();
+        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+
+        // Inequality constraint: f(x) = -1.0 ≤ 0 (satisfied)
+        let c2 = Constraint {
+            id: ConstraintID::from(2),
+            equality: Equality::LessThanOrEqualToZero,
+            function: Function::Constant(Coefficient::try_from(-1.0).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+
+        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+
+        // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
+        assert_eq!(solution.total_violation_l1(), 0.0001);
+    }
+
+    #[test]
+    fn test_total_violation_l1_mixed() {
+        // Mix of satisfied and violated constraints
+        let mut constraints = BTreeMap::new();
+        let state = crate::v1::State::default();
+
+        // Equality constraint violated: f(x) = 2.5
+        let c1 = Constraint {
+            id: ConstraintID::from(1),
+            equality: Equality::EqualToZero,
+            function: Function::Constant(Coefficient::try_from(2.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+
+        // Inequality constraint violated: f(x) = 1.5 > 0
+        let c2 = Constraint {
+            id: ConstraintID::from(2),
+            equality: Equality::LessThanOrEqualToZero,
+            function: Function::Constant(Coefficient::try_from(1.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+
+        // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
+        let c3 = Constraint {
+            id: ConstraintID::from(3),
+            equality: Equality::LessThanOrEqualToZero,
+            function: Function::Constant(Coefficient::try_from(-0.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(3), c3.evaluate(&state, crate::ATol::default()).unwrap());
+
+        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+
+        // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
+        assert_eq!(solution.total_violation_l1(), 4.0);
+    }
+
+    #[test]
+    fn test_total_violation_l2_mixed() {
+        // Same constraints as L1 test
+        let mut constraints = BTreeMap::new();
+        let state = crate::v1::State::default();
+
+        // Equality constraint violated: f(x) = 2.5
+        let c1 = Constraint {
+            id: ConstraintID::from(1),
+            equality: Equality::EqualToZero,
+            function: Function::Constant(Coefficient::try_from(2.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+
+        // Inequality constraint violated: f(x) = 1.5 > 0
+        let c2 = Constraint {
+            id: ConstraintID::from(2),
+            equality: Equality::LessThanOrEqualToZero,
+            function: Function::Constant(Coefficient::try_from(1.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+
+        // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
+        let c3 = Constraint {
+            id: ConstraintID::from(3),
+            equality: Equality::LessThanOrEqualToZero,
+            function: Function::Constant(Coefficient::try_from(-0.5).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(3), c3.evaluate(&state, crate::ATol::default()).unwrap());
+
+        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+
+        // L2: (2.5)² + (1.5)² + 0² = 6.25 + 2.25 + 0 = 8.5
+        assert_eq!(solution.total_violation_l2(), 8.5);
+    }
+
+    #[test]
+    fn test_total_violation_empty() {
+        // No constraints → total violation = 0
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        assert_eq!(solution.total_violation_l1(), 0.0);
+        assert_eq!(solution.total_violation_l2(), 0.0);
+    }
+
+    #[test]
+    fn test_total_violation_equality_negative() {
+        // Test with negative value for equality constraint
+        let mut constraints = BTreeMap::new();
+        let state = crate::v1::State::default();
+
+        // Equality constraint: f(x) = -3.0
+        let c1 = Constraint {
+            id: ConstraintID::from(1),
+            equality: Equality::EqualToZero,
+            function: Function::Constant(Coefficient::try_from(-3.0).unwrap()),
+            name: None,
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+
+        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+
+        // L1: |-3.0| = 3.0
+        assert_eq!(solution.total_violation_l1(), 3.0);
+        // L2: (-3.0)² = 9.0
+        assert_eq!(solution.total_violation_l2(), 9.0);
     }
 }
