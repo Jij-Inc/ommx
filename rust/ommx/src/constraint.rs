@@ -199,6 +199,20 @@ impl EvaluatedConstraint {
             Equality::LessThanOrEqualToZero => *self.evaluated_value() < *atol,
         }
     }
+
+    /// Calculate the violation (constraint breach) value for this constraint
+    ///
+    /// Returns the amount by which this constraint is violated:
+    /// - For `f(x) = 0`: returns `|f(x)|`
+    /// - For `f(x) ≤ 0`: returns `max(0, f(x))`
+    ///
+    /// Returns 0.0 if the constraint is satisfied.
+    pub fn violation(&self) -> f64 {
+        match self.equality {
+            Equality::EqualToZero => self.evaluated_value.abs(),
+            Equality::LessThanOrEqualToZero => self.evaluated_value.max(0.0),
+        }
+    }
 }
 
 impl From<EvaluatedConstraint> for crate::v1::EvaluatedConstraint {
@@ -336,5 +350,90 @@ impl From<SampledConstraint> for crate::v1::SampledConstraint {
                 .collect(),
             feasible,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Coefficient, Evaluate};
+
+    #[test]
+    fn test_violation_equality_positive() {
+        // f(x) = 0 constraint with f(x) = 2.5 → violation = |2.5| = 2.5
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(2.5).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 2.5);
+    }
+
+    #[test]
+    fn test_violation_equality_negative() {
+        // f(x) = 0 constraint with f(x) = -3.0 → violation = |-3.0| = 3.0
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(-3.0).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 3.0);
+    }
+
+    #[test]
+    fn test_violation_equality_near_zero() {
+        // f(x) = 0 constraint with f(x) = 0.0001 → violation = 0.0001
+        // Note: Coefficient cannot be exactly 0.0
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 0.0001);
+    }
+
+    #[test]
+    fn test_violation_inequality_violated() {
+        // f(x) ≤ 0 constraint with f(x) = 1.5 → violation = max(0, 1.5) = 1.5
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(1.5).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 1.5);
+    }
+
+    #[test]
+    fn test_violation_inequality_satisfied() {
+        // f(x) ≤ 0 constraint with f(x) = -1.0 → violation = max(0, -1.0) = 0.0
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(-1.0).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 0.0);
+    }
+
+    #[test]
+    fn test_violation_inequality_near_boundary() {
+        // f(x) ≤ 0 constraint with f(x) = 0.0001 → violation = max(0, 0.0001) = 0.0001
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+        );
+
+        let state = crate::v1::State::default();
+        let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
+        assert_eq!(evaluated.violation(), 0.0001);
     }
 }

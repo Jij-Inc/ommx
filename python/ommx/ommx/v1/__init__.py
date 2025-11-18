@@ -2558,6 +2558,38 @@ class Solution(UserAnnotationBase):
         """Get a specific evaluated constraint by ID."""
         return self.raw.get_constraint_by_id(constraint_id)
 
+    def total_violation_l1(self) -> float:
+        """
+        Calculate total constraint violation using L1 norm (sum of absolute violations).
+
+        Returns the sum of violations across all constraints (including removed constraints):
+
+        - For equality constraints: ``Σ|f(x)|``
+        - For inequality constraints: ``Σmax(0, f(x))``
+
+        Returns
+        -------
+        float
+            The total L1 norm violation value.
+        """
+        return self.raw.total_violation_l1()
+
+    def total_violation_l2(self) -> float:
+        """
+        Calculate total constraint violation using L2 norm squared (sum of squared violations).
+
+        Returns the sum of squared violations across all constraints (including removed constraints):
+
+        - For equality constraints: ``Σ(f(x))²``
+        - For inequality constraints: ``Σ(max(0, f(x)))²``
+
+        Returns
+        -------
+        float
+            The total L2 norm squared violation value.
+        """
+        return self.raw.total_violation_l2()
+
 
 @dataclass
 class DecisionVariable(VariableBase):

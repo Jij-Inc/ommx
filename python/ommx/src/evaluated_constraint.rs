@@ -101,4 +101,15 @@ impl EvaluatedConstraint {
             .map(|id| id.into_inner())
             .collect()
     }
+
+    /// Calculate the violation (constraint breach) value for this constraint
+    ///
+    /// Returns the amount by which this constraint is violated:
+    /// - For `f(x) = 0`: returns `|f(x)|`
+    /// - For `f(x) ≤ 0`: returns `max(0, f(x))`
+    ///
+    /// Returns 0.0 if the constraint is satisfied.
+    pub fn violation(&self) -> f64 {
+        self.0.violation()
+    }
 }
