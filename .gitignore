@@ -42,3 +42,6 @@ proto/protobuf.html
 
 # Downloaded binaries (e.g., task)
 bin/
+
+# For Pyodide testing
+node_modules/

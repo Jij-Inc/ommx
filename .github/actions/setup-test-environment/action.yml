@@ -6,6 +6,10 @@ inputs:
     description: "Python version to setup"
     required: true
     default: "3.10"
+  setup-wasm:
+    description: "Setup WASM toolchain (Rust nightly, Emscripten, Node.js)"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -28,10 +32,27 @@ runs:
         version: 3.x
         repo-token: ${{ github.token }}
 
-    - name: Setup Rust
+    - name: Setup Rust (stable)
+      if: inputs.setup-wasm == 'false'
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt, clippy
+
+    - name: Setup Rust (nightly for WASM)
+      if: inputs.setup-wasm == 'true'
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        targets: wasm32-unknown-emscripten
+
+    - name: Setup Emscripten
+      if: inputs.setup-wasm == 'true'
+      uses: mymindstorm/setup-emsdk@v14
+
+    - name: Setup Node.js
+      if: inputs.setup-wasm == 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
 
     - name: Setup caching for Rust
       uses: Swatinem/rust-cache@v2

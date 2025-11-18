@@ -269,7 +269,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.instance").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.instance`",
         )?;
-        Digest::new(digest)
+        digest.parse().context("Failed to parse digest")
     }
 
     /// Set `org.ommx.v1.solution.solver`
@@ -285,7 +285,7 @@ impl SolutionAnnotations {
         let digest = self.0.get("org.ommx.v1.solution.solver").context(
             "Annotation does not have the entry with the key `org.ommx.v1.solution.solver`",
         )?;
-        Digest::new(digest)
+        digest.parse().context("Failed to parse digest")
     }
 
     /// Set `org.ommx.v1.solution.parameters`
@@ -364,7 +364,7 @@ impl SampleSetAnnotations {
         let digest = self.0.get("org.ommx.v1.sample-set.instance").context(
             "Annotation does not have the entry with the key `org.ommx.v1.sample-set.instance`",
         )?;
-        Digest::new(digest)
+        digest.parse().context("Failed to parse digest")
     }
 
     /// Set `org.ommx.v1.sample-set.solver`
@@ -380,7 +380,7 @@ impl SampleSetAnnotations {
         let digest = self.0.get("org.ommx.v1.sample-set.solver").context(
             "Annotation does not have the entry with the key `org.ommx.v1.sample-set.solver`",
         )?;
-        Digest::new(digest)
+        digest.parse().context("Failed to parse digest")
     }
 
     /// Set `org.ommx.v1.sample-set.parameters`

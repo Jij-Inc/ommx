@@ -71,3 +71,17 @@ jobs:
       - name: Check updated
         run: |
           git diff --exit-code
+
+  wasm-emscripten:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+        with:
+          setup-wasm: true
+
+      - name: Check OMMX for wasm32-unknown-emscripten
+        run: task rust:check:wasm32-emscripten

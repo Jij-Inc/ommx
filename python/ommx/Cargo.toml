@@ -20,10 +20,13 @@ doc = false
 required-features = ["stub_gen"]
 
 [features]
+default = ["remote-artifact"]
+remote-artifact = ["ommx/remote-artifact"]
 stub_gen = ["pyo3-stub-gen"]
 
 [dependencies.ommx]
 path = "../../rust/ommx"
+default-features = false
 
 [dependencies]
 anyhow.workspace = true

@@ -3,7 +3,7 @@ use anyhow::Result;
 use derive_more::{Deref, From};
 use ocipkg::{
     image::{Image, OciArchive, OciDir},
-    Digest, ImageName,
+    ImageName,
 };
 use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
@@ -58,11 +58,12 @@ impl ArtifactArchive {
     }
 
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
-        let digest = Digest::new(digest)?;
+        let digest = digest.parse()?;
         let blob = self.0.lock().unwrap().get_blob(&digest)?;
         Ok(PyBytes::new(py, blob.as_ref()))
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<()> {
         // Do not expose Artifact<Remote> to Python API for simplicity.
         // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
@@ -80,6 +81,7 @@ pub struct ArtifactDir(Artifact<OciDir>);
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl ArtifactDir {
+    #[cfg(feature = "remote-artifact")]
     #[staticmethod]
     pub fn from_image_name(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
@@ -120,11 +122,12 @@ impl ArtifactDir {
     }
 
     pub fn get_blob<'py>(&mut self, py: Python<'py>, digest: &str) -> Result<Bound<'py, PyBytes>> {
-        let digest = Digest::new(digest)?;
+        let digest = digest.parse()?;
         let blob = self.0.get_blob(&digest)?;
         Ok(PyBytes::new(py, blob.as_ref()))
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<()> {
         // Do not expose Artifact<Remote> to Python API for simplicity.
         // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.

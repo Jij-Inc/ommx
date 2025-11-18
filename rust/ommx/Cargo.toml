@@ -14,6 +14,10 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
+[features]
+default = ["remote-artifact"]
+remote-artifact = ["ocipkg/remote"]
+
 [dependencies]
 anyhow.workspace = true
 approx.workspace = true
@@ -34,7 +38,7 @@ katexit.workspace = true
 log.workspace = true
 maplit.workspace = true
 num.workspace = true
-ocipkg.workspace = true
+ocipkg = { workspace = true }
 ordered-float.workspace = true
 petgraph.workspace = true
 proptest.workspace = true
@@ -55,6 +59,11 @@ insta.workspace = true
 
 [build-dependencies]
 built.workspace = true
+
+[[bin]]
+name = "ommx"
+path = "src/bin/ommx.rs"
+required-features = ["remote-artifact"]
 
 [[bench]]
 name = "evaluate"

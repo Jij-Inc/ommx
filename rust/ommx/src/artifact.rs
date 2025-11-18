@@ -12,14 +12,13 @@ pub use config::*;
 use crate::v1;
 use anyhow::{bail, ensure, Context, Result};
 use ocipkg::{
-    distribution::MediaType,
-    image::{
-        Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder, Remote,
-        RemoteBuilder,
-    },
-    oci_spec::image::{Descriptor, ImageManifest},
+    image::{Image, OciArchive, OciArchiveBuilder, OciArtifact, OciDir, OciDirBuilder},
+    oci_spec::image::{Descriptor, ImageManifest, MediaType},
     Digest, ImageName,
 };
+
+#[cfg(feature = "remote-artifact")]
+use ocipkg::image::{Remote, RemoteBuilder};
 use prost::Message;
 use std::{env, path::PathBuf, sync::OnceLock};
 use std::{
@@ -128,6 +127,7 @@ fn gather_oci_dirs(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(images)
 }
 
+#[cfg(feature = "remote-artifact")]
 fn auth_from_env() -> Result<(String, String, String)> {
     if let (Ok(domain), Ok(username), Ok(password)) = (
         env::var("OMMX_BASIC_AUTH_DOMAIN"),
@@ -178,6 +178,7 @@ impl Artifact<OciArchive> {
         Self::new(artifact)
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {name}");
@@ -208,6 +209,7 @@ impl Artifact<OciDir> {
         Self::new(artifact)
     }
 
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<Artifact<Remote>> {
         let name = self.get_name()?;
         log::info!("Pushing: {name}");
@@ -233,6 +235,7 @@ impl Artifact<OciDir> {
     }
 }
 
+#[cfg(feature = "remote-artifact")]
 impl Artifact<Remote> {
     pub fn from_remote(image_name: ImageName) -> Result<Self> {
         let artifact = OciArtifact::from_remote(image_name)?;
@@ -292,7 +295,7 @@ impl<Base: Image> Artifact<Base> {
 
     pub fn get_layer(&mut self, digest: &Digest) -> Result<(Descriptor, Vec<u8>)> {
         for (desc, blob) in self.0.get_layers()? {
-            if desc.digest() == &digest.to_string() {
+            if desc.digest() == digest {
                 return Ok((desc, blob));
             }
         }
