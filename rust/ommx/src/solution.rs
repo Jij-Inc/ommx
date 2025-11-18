@@ -363,7 +363,7 @@ impl Solution {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Coefficient, Constraint, Equality, Evaluate, Function};
+    use crate::{Coefficient, Constraint, Evaluate, Function};
 
     #[test]
     fn test_total_violation_l1_all_satisfied() {
@@ -371,15 +371,10 @@ mod tests {
         let mut constraints = BTreeMap::new();
 
         // Equality constraint: f(x) = 0.0001 (near zero, but not exactly zero due to Coefficient restrictions)
-        let c1 = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c1 = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+        );
         let state = crate::v1::State::default();
         constraints.insert(
             ConstraintID::from(1),
@@ -387,15 +382,10 @@ mod tests {
         );
 
         // Inequality constraint: f(x) = -1.0 ≤ 0 (satisfied)
-        let c2 = Constraint {
-            id: ConstraintID::from(2),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(-1.0).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c2 = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(2),
+            Function::Constant(Coefficient::try_from(-1.0).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -414,45 +404,30 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint violated: f(x) = 2.5
-        let c1 = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(2.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c1 = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(2.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
-        let c2 = Constraint {
-            id: ConstraintID::from(2),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(1.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c2 = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(2),
+            Function::Constant(Coefficient::try_from(1.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
-        let c3 = Constraint {
-            id: ConstraintID::from(3),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(-0.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c3 = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(3),
+            Function::Constant(Coefficient::try_from(-0.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(3),
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -471,45 +446,30 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint violated: f(x) = 2.5
-        let c1 = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(2.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c1 = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(2.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
-        let c2 = Constraint {
-            id: ConstraintID::from(2),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(1.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c2 = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(2),
+            Function::Constant(Coefficient::try_from(1.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(2),
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
-        let c3 = Constraint {
-            id: ConstraintID::from(3),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(-0.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c3 = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(3),
+            Function::Constant(Coefficient::try_from(-0.5).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(3),
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
@@ -537,15 +497,10 @@ mod tests {
         let state = crate::v1::State::default();
 
         // Equality constraint: f(x) = -3.0
-        let c1 = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(-3.0).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let c1 = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(-3.0).unwrap()),
+        );
         constraints.insert(
             ConstraintID::from(1),
             c1.evaluate(&state, crate::ATol::default()).unwrap(),

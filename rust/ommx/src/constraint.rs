@@ -361,15 +361,10 @@ mod tests {
     #[test]
     fn test_violation_equality_positive() {
         // f(x) = 0 constraint with f(x) = 2.5 → violation = |2.5| = 2.5
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(2.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(2.5).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
@@ -379,15 +374,10 @@ mod tests {
     #[test]
     fn test_violation_equality_negative() {
         // f(x) = 0 constraint with f(x) = -3.0 → violation = |-3.0| = 3.0
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(-3.0).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(-3.0).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
@@ -398,15 +388,10 @@ mod tests {
     fn test_violation_equality_near_zero() {
         // f(x) = 0 constraint with f(x) = 0.0001 → violation = 0.0001
         // Note: Coefficient cannot be exactly 0.0
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::EqualToZero,
-            function: Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
@@ -416,15 +401,10 @@ mod tests {
     #[test]
     fn test_violation_inequality_violated() {
         // f(x) ≤ 0 constraint with f(x) = 1.5 → violation = max(0, 1.5) = 1.5
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(1.5).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(1.5).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
@@ -434,15 +414,10 @@ mod tests {
     #[test]
     fn test_violation_inequality_satisfied() {
         // f(x) ≤ 0 constraint with f(x) = -1.0 → violation = max(0, -1.0) = 0.0
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(-1.0).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(-1.0).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
@@ -452,15 +427,10 @@ mod tests {
     #[test]
     fn test_violation_inequality_near_boundary() {
         // f(x) ≤ 0 constraint with f(x) = 0.0001 → violation = max(0, 0.0001) = 0.0001
-        let constraint = Constraint {
-            id: ConstraintID::from(1),
-            equality: Equality::LessThanOrEqualToZero,
-            function: Function::Constant(Coefficient::try_from(0.0001).unwrap()),
-            name: None,
-            subscripts: vec![],
-            parameters: Default::default(),
-            description: None,
-        };
+        let constraint = Constraint::less_than_or_equal_to_zero(
+            ConstraintID::from(1),
+            Function::Constant(Coefficient::try_from(0.0001).unwrap()),
+        );
 
         let state = crate::v1::State::default();
         let evaluated = constraint.evaluate(&state, crate::ATol::default()).unwrap();
