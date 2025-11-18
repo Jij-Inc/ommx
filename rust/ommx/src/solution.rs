@@ -381,7 +381,10 @@ mod tests {
             description: None,
         };
         let state = crate::v1::State::default();
-        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(1),
+            c1.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         // Inequality constraint: f(x) = -1.0 ≤ 0 (satisfied)
         let c2 = Constraint {
@@ -393,7 +396,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(2),
+            c2.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
 
@@ -417,7 +423,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(1),
+            c1.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
         let c2 = Constraint {
@@ -429,7 +438,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(2),
+            c2.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
         let c3 = Constraint {
@@ -441,7 +453,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(3), c3.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(3),
+            c3.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
 
@@ -465,7 +480,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(1),
+            c1.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         // Inequality constraint violated: f(x) = 1.5 > 0
         let c2 = Constraint {
@@ -477,7 +495,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(2), c2.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(2),
+            c2.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         // Inequality constraint satisfied: f(x) = -0.5 ≤ 0
         let c3 = Constraint {
@@ -489,7 +510,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(3), c3.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(3),
+            c3.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
 
@@ -500,12 +524,7 @@ mod tests {
     #[test]
     fn test_total_violation_empty() {
         // No constraints → total violation = 0
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new(), Sense::Minimize);
 
         assert_eq!(solution.total_violation_l1(), 0.0);
         assert_eq!(solution.total_violation_l2(), 0.0);
@@ -527,7 +546,10 @@ mod tests {
             parameters: Default::default(),
             description: None,
         };
-        constraints.insert(ConstraintID::from(1), c1.evaluate(&state, crate::ATol::default()).unwrap());
+        constraints.insert(
+            ConstraintID::from(1),
+            c1.evaluate(&state, crate::ATol::default()).unwrap(),
+        );
 
         let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
 

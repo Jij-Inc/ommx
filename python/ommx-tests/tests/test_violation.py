@@ -78,8 +78,12 @@ def test_solution_total_violation_l1():
         decision_variables=[x],
         objective=x,
         constraints=[
-            (x == 2.5).set_id(1),  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
-            (x <= 1.5).set_id(2),  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
+            (x == 2.5).set_id(
+                1
+            ),  # Equality: x = 2.5, evaluated at x=0 gives f(x) = -2.5
+            (x <= 1.5).set_id(
+                2
+            ),  # Inequality: x <= 1.5, evaluated at x=3 gives f(x) = 1.5
         ],
         sense=Instance.MINIMIZE,
     )
@@ -123,8 +127,12 @@ def test_solution_total_violation_with_satisfied_constraints():
         decision_variables=[x],
         objective=x,
         constraints=[
-            (x == 2.0).set_id(1),  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
-            (x <= 10.0).set_id(2),  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
+            (x == 2.0).set_id(
+                1
+            ),  # Violated equality: x = 2.0, evaluated at x=5 gives |5-2| = 3
+            (x <= 10.0).set_id(
+                2
+            ),  # Satisfied inequality: x <= 10, evaluated at x=5 gives max(0, 5-10) = 0
         ],
         sense=Instance.MINIMIZE,
     )
