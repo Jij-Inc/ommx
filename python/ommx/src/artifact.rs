@@ -63,7 +63,7 @@ impl ArtifactArchive {
         Ok(PyBytes::new(py, blob.as_ref()))
     }
 
-    #[cfg(feature = "default")]
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<()> {
         // Do not expose Artifact<Remote> to Python API for simplicity.
         // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.
@@ -81,7 +81,7 @@ pub struct ArtifactDir(Artifact<OciDir>);
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
 #[pymethods]
 impl ArtifactDir {
-    #[cfg(feature = "default")]
+    #[cfg(feature = "remote-artifact")]
     #[staticmethod]
     pub fn from_image_name(image_name: &str) -> Result<Self> {
         let image_name = ImageName::parse(image_name)?;
@@ -127,7 +127,7 @@ impl ArtifactDir {
         Ok(PyBytes::new(py, blob.as_ref()))
     }
 
-    #[cfg(feature = "default")]
+    #[cfg(feature = "remote-artifact")]
     pub fn push(&mut self) -> Result<()> {
         // Do not expose Artifact<Remote> to Python API for simplicity.
         // In Python API, the `Artifact` class always refers to the local artifact, which may be either an OCI archive or an OCI directory.

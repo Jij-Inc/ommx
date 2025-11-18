@@ -3,7 +3,7 @@ mod bound;
 mod builder;
 mod constraint;
 mod constraint_hints;
-#[cfg(feature = "default")]
+#[cfg(feature = "remote-artifact")]
 mod dataset;
 mod decision_variable;
 mod descriptor;
@@ -30,7 +30,7 @@ pub use bound::*;
 pub use builder::*;
 pub use constraint::*;
 pub use constraint_hints::*;
-#[cfg(feature = "default")]
+#[cfg(feature = "remote-artifact")]
 pub use dataset::*;
 pub use decision_variable::*;
 pub use descriptor::*;
@@ -120,7 +120,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Rng>()?;
 
     // Dataset
-    #[cfg(feature = "default")]
+    #[cfg(feature = "remote-artifact")]
     {
         m.add_function(wrap_pyfunction!(miplib2017_instance_annotations, m)?)?;
         m.add_function(wrap_pyfunction!(qplib_instance_annotations, m)?)?;

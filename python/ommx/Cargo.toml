@@ -20,7 +20,8 @@ doc = false
 required-features = ["stub_gen"]
 
 [features]
-default = ["ommx/remote-artifact"]
+default = ["remote-artifact"]
+remote-artifact = ["ommx/remote-artifact"]
 stub_gen = ["pyo3-stub-gen"]
 
 [dependencies.ommx]
