@@ -166,7 +166,7 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           path: dist
-          pattern: "*"
+          pattern: "!pyodide"
           merge-multiple: true
 
       - name: Check wheel
@@ -184,7 +184,7 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           path: dist
-          pattern: "*"
+          pattern: "!pyodide"
           merge-multiple: true
 
       - name: Upload wheels to PyPI
