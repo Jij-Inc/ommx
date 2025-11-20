@@ -42,7 +42,7 @@ This design provides:
 The reported byte counts are:
 - ✅ **Useful for**: Comparing relative sizes, identifying large data structures, tracking growth trends
 - ⚠️ **Not exact**: Does not account for allocator overhead, padding, internal fragmentation
-- ⚠️ **Approximation**: Uses `capacity()` and `size_of::<T>()` for estimation
+- ⚠️ **Approximation**: Uses `len()` and `size_of::<T>()` for estimation of data actually present (ignored unused capacity)
 - ⚠️ **Different from real allocations**: Actual heap profiling tools (like `jemalloc` or `valgrind`) will show different numbers
 
 For precise memory profiling, use dedicated heap profilers. This tool is designed for:
@@ -290,10 +290,10 @@ impl LogicalMemoryProfile for A {
 - **Complex structs** (with heap allocations): Delegate via `visit_logical_memory()`
   - Examples: `Metadata`, `Constraint`, `DecisionVariable`
 
-- **Collections**: Count stack overhead + heap separately
-  - Vec: `size_of::<Vec<T>>()` + `capacity() * size_of::<T>()`
-  - HashMap: `size_of::<HashMap<K,V>>()` + entry bytes
-  - String: `size_of::<String>()` + `capacity()`
+- **Collections**: Count stack overhead + heap content separately (ignore unused capacity)
+  - Vec: `size_of::<Vec<T>>()` + `len() * size_of::<T>()`
+  - HashMap: `size_of::<HashMap<K,V>>()` + `len()`-based entry bytes
+  - String: `size_of::<String>()` + `len()`
 
 **Trade-off**: Padding between fields is not tracked, but this prevents double-counting.
 
@@ -399,7 +399,8 @@ To create a flamegraph visualization:
 - Helper functions: `logical_memory_to_folded()`, `logical_total_bytes()`
 
 ✅ **Domain Type Implementations**:
-- `Instance` - Root type with full hierarchy
+- `Instance` - Root type covering major components (sense, objective, decision_variables, constraints, removed_constraints, decision_variable_dependency, constraint_hints, parameters, description)
+- `v1::Parameters` and `v1::instance::Description` - Protobuf metadata fields
 - `Function` enum (Linear/Quadratic/Polynomial/Zero)
 - `PolynomialBase<M>` - Generic polynomial implementation
 - `DecisionVariable` - Variables with metadata
@@ -430,7 +431,7 @@ To create a flamegraph visualization:
 
 ### Trade-offs
 
-⚠️ **Approximation**: Not exact heap profiling, uses `capacity()` and `size_of::<T>()`
+⚠️ **Approximation**: Not exact heap profiling, uses `len()` and `size_of::<T>()` (unused capacity is intentionally ignored)
 ⚠️ **Padding not tracked**: Field-by-field counting omits padding between fields
 ⚠️ **Static names only**: Paths use `&'static str`, can't include dynamic indices (can be extended with `String` if needed)
 

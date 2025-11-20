@@ -50,7 +50,7 @@ mod tests {
     fn test_function_linear_snapshot() {
         let func = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
         let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Linear;terms 104");
+        insta::assert_snapshot!(folded, @"Function;Linear;terms 80");
     }
 
     #[test]
@@ -58,6 +58,6 @@ mod tests {
         let func =
             Function::Quadratic(coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1));
         let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Quadratic;terms 128");
+        insta::assert_snapshot!(folded, @"Function;Quadratic;terms 96");
     }
 }

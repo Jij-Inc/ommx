@@ -1905,7 +1905,7 @@ class Instance(UserAnnotationBase):
         Instance;decision_variables;DecisionVariable;metadata;subscripts 72
         Instance;decision_variables;DecisionVariable;substituted_value 48
         Instance;decision_variables;keys 24
-        Instance;objective;Linear;terms 104
+        Instance;objective;Linear;terms 80
         Instance;removed_constraints 24
         Instance;sense 1
         """

@@ -18,13 +18,11 @@ impl LogicalMemoryProfile for Constraint {
             .visit_logical_memory(path.with("function").as_mut(), visitor);
 
         // name: Option<String>
-        let name_bytes =
-            size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.capacity());
+        let name_bytes = size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.len());
         visitor.visit_leaf(&path.with("name"), name_bytes);
 
         // subscripts: Vec<i64>
-        let subscripts_bytes =
-            size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
+        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.len() * size_of::<i64>();
         visitor.visit_leaf(&path.with("subscripts"), subscripts_bytes);
 
         // parameters: FnvHashMap<String, String>
@@ -32,15 +30,15 @@ impl LogicalMemoryProfile for Constraint {
         let mut entries_bytes = 0;
         for (k, v) in &self.parameters {
             entries_bytes += size_of::<(String, String)>();
-            entries_bytes += k.capacity();
-            entries_bytes += v.capacity();
+            entries_bytes += k.len();
+            entries_bytes += v.len();
         }
         let parameters_bytes = map_overhead + entries_bytes;
         visitor.visit_leaf(&path.with("parameters"), parameters_bytes);
 
         // description: Option<String>
         let description_bytes =
-            size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.capacity());
+            size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.len());
         visitor.visit_leaf(&path.with("description"), description_bytes);
     }
 }
@@ -54,7 +52,7 @@ impl LogicalMemoryProfile for RemovedConstraint {
             .visit_logical_memory(path.with("constraint").as_mut(), visitor);
 
         // removed_reason: String
-        let removed_reason_bytes = size_of::<String>() + self.removed_reason.capacity();
+        let removed_reason_bytes = size_of::<String>() + self.removed_reason.len();
         visitor.visit_leaf(&path.with("removed_reason"), removed_reason_bytes);
 
         // removed_reason_parameters: FnvHashMap<String, String>
@@ -62,8 +60,8 @@ impl LogicalMemoryProfile for RemovedConstraint {
         let mut entries_bytes = 0;
         for (k, v) in &self.removed_reason_parameters {
             entries_bytes += size_of::<(String, String)>();
-            entries_bytes += k.capacity();
-            entries_bytes += v.capacity();
+            entries_bytes += k.len();
+            entries_bytes += v.len();
         }
         let parameters_bytes = map_overhead + entries_bytes;
         visitor.visit_leaf(&path.with("removed_reason_parameters"), parameters_bytes);
@@ -87,7 +85,7 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Constraint;description 24
         Constraint;equality 1
-        Constraint;function;Linear;terms 104
+        Constraint;function;Linear;terms 80
         Constraint;id 8
         Constraint;name 24
         Constraint;parameters 32
@@ -110,7 +108,7 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         Constraint;description 41
         Constraint;equality 1
-        Constraint;function;Linear;terms 104
+        Constraint;function;Linear;terms 56
         Constraint;id 8
         Constraint;name 39
         Constraint;parameters 32
@@ -134,7 +132,7 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         RemovedConstraint;constraint;description 24
         RemovedConstraint;constraint;equality 1
-        RemovedConstraint;constraint;function;Linear;terms 104
+        RemovedConstraint;constraint;function;Linear;terms 56
         RemovedConstraint;constraint;id 8
         RemovedConstraint;constraint;name 24
         RemovedConstraint;constraint;parameters 32

@@ -110,5 +110,5 @@ fn test_medium_linear_snapshot() {
     let folded = logical_memory_to_folded("Linear", &expr);
 
     // Snapshot test for medium-sized expression
-    insta::assert_snapshot!(folded, @"Linear;terms 368");
+    insta::assert_snapshot!(folded, @"Linear;terms 272");
 }

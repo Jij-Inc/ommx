@@ -16,7 +16,7 @@ impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
 
         let map_overhead = size_of::<FnvHashMap<M, Coefficient>>();
         let entry_size = size_of::<(M, Coefficient)>();
-        let entries_bytes = self.terms.capacity() * entry_size;
+        let entries_bytes = self.terms.len() * entry_size;
 
         let total_bytes = map_overhead + entries_bytes;
 
@@ -45,7 +45,7 @@ mod tests {
         let linear = coeff!(2.0) * linear!(1);
         let folded = logical_memory_to_folded("Linear", &linear);
 
-        insta::assert_snapshot!(folded, @"Linear;terms 104");
+        insta::assert_snapshot!(folded, @"Linear;terms 56");
     }
 
     #[test]

@@ -1,6 +1,61 @@
 use crate::instance::Instance;
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
+use crate::v1;
 use std::mem::size_of;
+
+// Implementations for protobuf types
+
+impl LogicalMemoryProfile for v1::Parameters {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        // HashMap stack overhead
+        let map_overhead = size_of::<std::collections::HashMap<u64, f64>>();
+        visitor.visit_leaf(path, map_overhead);
+
+        // Keys (u64)
+        let key_size = size_of::<u64>();
+        let keys_bytes = self.entries.len() * key_size;
+        visitor.visit_leaf(&path.with("keys"), keys_bytes);
+
+        // Values (f64)
+        let value_size = size_of::<f64>();
+        let values_bytes = self.entries.len() * value_size;
+        visitor.visit_leaf(&path.with("values"), values_bytes);
+    }
+}
+
+impl LogicalMemoryProfile for v1::instance::Description {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        // name: Option<String>
+        if let Some(name) = &self.name {
+            let bytes = size_of::<String>() + name.len();
+            visitor.visit_leaf(&path.with("name"), bytes);
+        }
+
+        // description: Option<String>
+        if let Some(description) = &self.description {
+            let bytes = size_of::<String>() + description.len();
+            visitor.visit_leaf(&path.with("description"), bytes);
+        }
+
+        // authors: Vec<String>
+        {
+            let mut guard = path.with("authors");
+            let vec_overhead = size_of::<Vec<String>>();
+            visitor.visit_leaf(&guard, vec_overhead);
+
+            for author in &self.authors {
+                let bytes = size_of::<String>() + author.len();
+                visitor.visit_leaf(&guard.with("String"), bytes);
+            }
+        }
+
+        // created_by: Option<String>
+        if let Some(created_by) = &self.created_by {
+            let bytes = size_of::<String>() + created_by.len();
+            visitor.visit_leaf(&path.with("created_by"), bytes);
+        }
+    }
+}
 
 impl LogicalMemoryProfile for Instance {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
@@ -82,9 +137,15 @@ impl LogicalMemoryProfile for Instance {
         self.constraint_hints()
             .visit_logical_memory(path.with("constraint_hints").as_mut(), visitor);
 
-        // Option<v1::Parameters> parameters
-        // Option<v1::instance::Description> description
-        // These are protobuf types - we could add estimates but skip for now
+        // parameters: Option<v1::Parameters>
+        if let Some(parameters) = &self.parameters {
+            parameters.visit_logical_memory(path.with("parameters").as_mut(), visitor);
+        }
+
+        // description: Option<v1::instance::Description>
+        if let Some(description) = &self.description {
+            description.visit_logical_memory(path.with("description").as_mut(), visitor);
+        }
     }
 }
 
@@ -149,7 +210,7 @@ mod tests {
         Instance;decision_variables;DecisionVariable;metadata;subscripts 48
         Instance;decision_variables;DecisionVariable;substituted_value 32
         Instance;decision_variables;keys 16
-        Instance;objective;Linear;terms 104
+        Instance;objective;Linear;terms 80
         Instance;removed_constraints 24
         Instance;sense 1
         "###);
@@ -194,7 +255,7 @@ mod tests {
         Instance;constraints 24
         Instance;constraints;Constraint;description 24
         Instance;constraints;Constraint;equality 1
-        Instance;constraints;Constraint;function;Linear;terms 104
+        Instance;constraints;Constraint;function;Linear;terms 80
         Instance;constraints;Constraint;id 8
         Instance;constraints;Constraint;name 24
         Instance;constraints;Constraint;parameters 32
@@ -212,7 +273,7 @@ mod tests {
         Instance;decision_variables;DecisionVariable;metadata;subscripts 48
         Instance;decision_variables;DecisionVariable;substituted_value 32
         Instance;decision_variables;keys 16
-        Instance;objective;Linear;terms 104
+        Instance;objective;Linear;terms 80
         Instance;removed_constraints 24
         Instance;sense 1
         "###);
@@ -262,6 +323,68 @@ mod tests {
         Instance;decision_variables;DecisionVariable;substituted_value 48
         Instance;decision_variables;keys 24
         Instance;objective;Zero 40
+        Instance;removed_constraints 24
+        Instance;sense 1
+        "###);
+    }
+
+    #[test]
+    fn test_instance_with_parameters_and_description_snapshot() {
+        let dv1 = DecisionVariable::continuous(1.into());
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(dv1.id(), dv1);
+
+        let mut instance = Instance::new(
+            crate::instance::Sense::Minimize,
+            Function::Zero,
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // Set parameters
+        let mut parameters = v1::Parameters {
+            entries: std::collections::HashMap::new(),
+        };
+        parameters.entries.insert(1, 10.0);
+        parameters.entries.insert(2, 20.0);
+        instance.parameters = Some(parameters);
+
+        // Set description
+        let description = v1::instance::Description {
+            name: Some("Test Instance".to_string()),
+            description: Some("A test optimization problem".to_string()),
+            authors: vec!["Alice".to_string(), "Bob".to_string()],
+            created_by: Some("OMMX Test Suite".to_string()),
+        };
+        instance.description = Some(description);
+
+        let folded = logical_memory_to_folded("Instance", &instance);
+        insta::assert_snapshot!(folded, @r###"
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
+        Instance;decision_variables;DecisionVariable;bound 16
+        Instance;decision_variables;DecisionVariable;id 8
+        Instance;decision_variables;DecisionVariable;kind 1
+        Instance;decision_variables;DecisionVariable;metadata;description 24
+        Instance;decision_variables;DecisionVariable;metadata;name 24
+        Instance;decision_variables;DecisionVariable;metadata;parameters 32
+        Instance;decision_variables;DecisionVariable;metadata;subscripts 24
+        Instance;decision_variables;DecisionVariable;substituted_value 16
+        Instance;decision_variables;keys 8
+        Instance;description;authors 24
+        Instance;description;authors;String 56
+        Instance;description;created_by 39
+        Instance;description;description 51
+        Instance;description;name 37
+        Instance;objective;Zero 40
+        Instance;parameters 48
+        Instance;parameters;keys 16
+        Instance;parameters;values 16
         Instance;removed_constraints 24
         Instance;sense 1
         "###);

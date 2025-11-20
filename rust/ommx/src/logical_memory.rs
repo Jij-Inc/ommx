@@ -53,7 +53,7 @@ pub use path::{Path, PathGuard};
 ///         visitor.visit_leaf(&path.with("field1"), size_of::<u64>());
 ///
 ///         // Count String: stack + heap
-///         let field2_bytes = size_of::<String>() + self.field2.capacity();
+///         let field2_bytes = size_of::<String>() + self.field2.len();
 ///         visitor.visit_leaf(&path.with("field2"), field2_bytes);
 ///     }
 /// }
