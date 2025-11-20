@@ -21,6 +21,7 @@
 //! println!("{}", folded);
 //! ```
 
+mod collections;
 mod path;
 pub use path::{Path, PathGuard};
 
@@ -185,6 +186,23 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
     value.visit_logical_memory(&mut path, &mut sum);
     sum.0
 }
+
+// Generic implementations for primitive types
+
+macro_rules! impl_logical_memory_profile_for_primitive {
+    ($($ty:ty),*) => {
+        $(
+            impl LogicalMemoryProfile for $ty {
+                fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+                    use std::mem::size_of;
+                    visitor.visit_leaf(path, size_of::<$ty>());
+                }
+            }
+        )*
+    };
+}
+
+impl_logical_memory_profile_for_primitive!(u8, u16, u32, u64, u128, usize, i8, i16, i32, i64, i128, isize, f32, f64);
 
 #[cfg(test)]
 mod tests;

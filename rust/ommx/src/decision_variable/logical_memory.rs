@@ -1,7 +1,13 @@
-use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata};
+use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata, VariableID};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use fnv::FnvHashMap;
 use std::mem::size_of;
+
+impl LogicalMemoryProfile for VariableID {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, size_of::<VariableID>());
+    }
+}
 
 impl LogicalMemoryProfile for DecisionVariable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {

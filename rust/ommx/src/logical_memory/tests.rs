@@ -106,3 +106,71 @@ fn test_medium_linear_snapshot() {
     // Snapshot test for medium-sized expression
     insta::assert_snapshot!(folded, @"PolynomialBase.terms 272");
 }
+
+// Tests for generic collection implementations
+
+#[test]
+fn test_btreemap_with_linear() {
+    use crate::VariableID;
+    use std::collections::BTreeMap;
+
+    let mut map = BTreeMap::new();
+    map.insert(VariableID::from(1), coeff!(2.0) * linear!(1));
+    map.insert(VariableID::from(2), coeff!(3.0) * linear!(2));
+
+    let folded = logical_memory_to_folded(&map);
+    insta::assert_snapshot!(folded, @r###"
+    BTreeMap[key] 16
+    BTreeMap[overhead] 24
+    PolynomialBase.terms 112
+    "###);
+}
+
+#[test]
+fn test_hashmap_with_linear() {
+    use crate::VariableID;
+    use std::collections::HashMap;
+
+    let mut map = HashMap::new();
+    map.insert(VariableID::from(1), coeff!(2.0) * linear!(1));
+    map.insert(VariableID::from(2), coeff!(3.0) * linear!(2));
+
+    let folded = logical_memory_to_folded(&map);
+    // Note: HashMap iteration order is non-deterministic, but snapshots should still be stable
+    insta::assert_snapshot!(folded, @r###"
+    HashMap[key] 16
+    HashMap[overhead] 48
+    PolynomialBase.terms 112
+    "###);
+}
+
+#[test]
+fn test_vec_with_linear() {
+    let vec = vec![
+        coeff!(2.0) * linear!(1),
+        coeff!(3.0) * linear!(2),
+        coeff!(4.0) * linear!(3),
+    ];
+
+    let folded = logical_memory_to_folded(&vec);
+    insta::assert_snapshot!(folded, @r###"
+    PolynomialBase.terms 168
+    Vec[overhead] 24
+    "###);
+}
+
+#[test]
+fn test_empty_collections() {
+    use crate::Linear;
+    use std::collections::BTreeMap;
+
+    let empty_map: BTreeMap<u64, Linear> = BTreeMap::new();
+    let folded = logical_memory_to_folded(&empty_map);
+    // Empty map should only have struct overhead
+    insta::assert_snapshot!(folded, @"BTreeMap[overhead] 24");
+
+    let empty_vec: Vec<Linear> = Vec::new();
+    let folded_vec = logical_memory_to_folded(&empty_vec);
+    // Empty vec should only have struct overhead
+    insta::assert_snapshot!(folded_vec, @"Vec[overhead] 24");
+}

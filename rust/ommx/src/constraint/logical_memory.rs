@@ -1,7 +1,13 @@
-use crate::constraint::{Constraint, RemovedConstraint};
+use crate::constraint::{Constraint, ConstraintID, RemovedConstraint};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use fnv::FnvHashMap;
 use std::mem::size_of;
+
+impl LogicalMemoryProfile for ConstraintID {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, size_of::<ConstraintID>());
+    }
+}
 
 impl LogicalMemoryProfile for Constraint {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
