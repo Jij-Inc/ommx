@@ -698,6 +698,23 @@ class Instance:
     def save_mps(self, path: builtins.str, compress: builtins.bool = True) -> None: ...
     @staticmethod
     def load_qplib(path: builtins.str) -> Instance: ...
+    def logical_memory_profile(self) -> builtins.str:
+        r"""
+        Generate folded stack format for memory profiling.
+
+        This generates a format compatible with flamegraph visualization tools.
+        Each line has format: "frame1;frame2;...;frameN bytes"
+
+        Returns:
+            str: Folded stack format string that can be visualized with flamegraph tools
+
+        Example:
+            >>> instance = Instance(...)
+            >>> folded = instance.logical_memory_profile()
+            >>> # Save to file and visualize with: flamegraph.pl folded.txt > memory.svg
+            >>> with open("folded.txt", "w") as f:
+            ...     f.write(folded)
+        """
 
 @typing.final
 class InstanceDescription:

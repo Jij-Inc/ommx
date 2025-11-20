@@ -1858,6 +1858,60 @@ class Instance(UserAnnotationBase):
         """
         return DecisionVariableAnalysis(self.raw.decision_variable_analysis())
 
+    def logical_memory_profile(self) -> str:
+        """
+        Generate folded stack format for memory profiling of this instance.
+
+        This method generates a format compatible with flamegraph visualization tools
+        like `flamegraph.pl` and `inferno`. Each line has the format:
+        "frame1;frame2;...;frameN bytes"
+
+        The output shows the hierarchical memory structure of the instance, making it
+        easy to identify which components are consuming the most memory.
+
+        To visualize with flamegraph:
+
+        1. Save the output to a file: ``profile.txt``
+        2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
+        3. Open memory.svg in a browser
+
+        Returns
+        -------
+        str
+            Folded stack format string that can be visualized with flamegraph tools
+
+        Examples
+        --------
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> print(instance.logical_memory_profile())  # doctest: +NORMALIZE_WHITESPACE
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
+        Instance;decision_variables;DecisionVariable;bound 48
+        Instance;decision_variables;DecisionVariable;id 24
+        Instance;decision_variables;DecisionVariable;kind 3
+        Instance;decision_variables;DecisionVariable;metadata;description 72
+        Instance;decision_variables;DecisionVariable;metadata;name 72
+        Instance;decision_variables;DecisionVariable;metadata;parameters 96
+        Instance;decision_variables;DecisionVariable;metadata;subscripts 72
+        Instance;decision_variables;DecisionVariable;substituted_value 48
+        Instance;decision_variables;keys 24
+        Instance;objective;Linear;terms 104
+        Instance;removed_constraints 24
+        Instance;sense 1
+        <BLANKLINE>
+        """
+        return self.raw.logical_memory_profile()
+
 
 @dataclass
 class ParametricInstance(UserAnnotationBase):

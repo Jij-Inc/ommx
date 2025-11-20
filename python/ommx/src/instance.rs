@@ -410,6 +410,24 @@ impl Instance {
         let instance = ommx::qplib::load(path)?;
         Ok(Self(instance))
     }
+
+    /// Generate folded stack format for memory profiling.
+    ///
+    /// This generates a format compatible with flamegraph visualization tools.
+    /// Each line has format: "frame1;frame2;...;frameN bytes"
+    ///
+    /// Returns:
+    ///     str: Folded stack format string that can be visualized with flamegraph tools
+    ///
+    /// Example:
+    ///     >>> instance = Instance(...)
+    ///     >>> folded = instance.logical_memory_profile()
+    ///     >>> # Save to file and visualize with: flamegraph.pl folded.txt > memory.svg
+    ///     >>> with open("folded.txt", "w") as f:
+    ///     ...     f.write(folded)
+    pub fn logical_memory_profile(&self) -> String {
+        ommx::logical_memory::logical_memory_to_folded("Instance", &self.0)
+    }
 }
 
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
