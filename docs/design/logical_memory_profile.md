@@ -2,7 +2,7 @@
 
 ## Overview
 
-Add memory profiling capabilities to `ommx::Instance` and related types to analyze logical memory usage of optimization problem instances. This enables visualization and tuning of memory efficiency.
+The logical memory profiler provides memory profiling capabilities for OMMX optimization problem instances. It enables visualization and analysis of memory usage through a flamegraph-compatible format, making it easy to identify memory-intensive components and optimize memory efficiency.
 
 ## Motivation
 
@@ -57,7 +57,34 @@ Output formats and aggregation methods are delegated to visitor implementations.
 
 ## API Design
 
-### Trait Definitions
+### Core Types
+
+#### Path Management
+
+```rust
+/// Logical path for memory profiling
+pub struct Path(Vec<&'static str>);
+
+impl Path {
+    /// Create a new path with a root name
+    pub fn new(root: &'static str) -> Self;
+
+    /// Get the path as a slice
+    pub fn as_slice(&self) -> &[&'static str];
+
+    /// Create a path guard that automatically pops on drop
+    pub fn with(&mut self, name: &'static str) -> PathGuard<'_>;
+}
+
+/// RAII guard for path management that automatically pops on drop
+pub struct PathGuard<'a> {
+    path: &'a mut Path,
+}
+```
+
+The `PathGuard` ensures that path push/pop operations are always paired, preventing bugs from forgetting to pop.
+
+#### Trait Definitions
 
 ```rust
 /// Types that provide logical memory profiling
@@ -65,16 +92,17 @@ pub trait LogicalMemoryProfile {
     /// Enumerate the "logical memory leaves" of this value.
     ///
     /// # Arguments
-    /// - `path`: Logical path to the current node (mutated with push/pop during recursion)
+    /// - `path`: Logical path to the current node (managed with RAII guards)
     /// - `visitor`: Visitor that receives leaf node callbacks
     ///
     /// # Implementation Notes
-    /// - At leaf nodes, call `visitor.visit_leaf(path, bytes)`
-    /// - Intermediate nodes delegate to children
+    /// - Use `path.with("name")` to create RAII guards for automatic cleanup
+    /// - At leaf nodes: `visitor.visit_leaf(&path.with("field"), bytes)`
+    /// - For delegation: `self.field.visit_logical_memory(path.with("field").as_mut(), visitor)`
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
-        visitor: &mut V
+        path: &mut Path,
+        visitor: &mut V,
     );
 }
 
@@ -83,17 +111,27 @@ pub trait LogicalMemoryVisitor {
     /// Callback for a single "leaf node" (logical memory chunk)
     ///
     /// # Arguments
-    /// - `path`: Logical path (e.g., `["Model", "matrix", "values"]`)
+    /// - `path`: Logical path
     /// - `bytes`: Bytes used by this node
-    fn visit_leaf(&mut self, path: &[&'static str], bytes: usize);
+    fn visit_leaf(&mut self, path: &Path, bytes: usize);
 }
 ```
 
-### Path Representation
+### Helper Functions
 
-- Use `&[&'static str]` (almost all names can be covered with literals)
-- Separator is determined by visitor (`';'` for folded stack)
-- Extension to allow `String` for dynamic names can be considered if needed
+```rust
+/// Generate folded stack format for a value
+pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
+    root_name: &'static str,
+    value: &T,
+) -> String;
+
+/// Calculate total bytes used by a value
+pub fn logical_total_bytes<T: LogicalMemoryProfile>(
+    root_name: &'static str,
+    value: &T,
+) -> usize;
+```
 
 ## Implementation Patterns
 
@@ -106,137 +144,112 @@ Instead, count or delegate each field individually:
 - Nested structs: delegate via `visit_logical_memory()`
 - Collections: count stack overhead + elements separately
 
-### Pattern 1: Struct with Primitive Fields
+### Pattern 1: Using Path Guards
 
-**Example**: Simple struct with primitive fields
-
-```rust
-struct Point {
-    x: f64,
-    y: f64,
-}
-
-impl LogicalMemoryProfile for Point {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Vec<&'static str>,
-        visitor: &mut V
-    ) {
-        // Count each field individually
-        path.push("x");
-        visitor.visit_leaf(path, std::mem::size_of::<f64>());
-        path.pop();
-
-        path.push("y");
-        visitor.visit_leaf(path, std::mem::size_of::<f64>());
-        path.pop();
-    }
-}
-```
-
-**Key points**:
-- Count each primitive field separately
-- Do NOT use `size_of::<Point>()` - this would include padding
-
-### Pattern 2: Struct with Nested Struct Fields
-
-**Example**: Struct containing another struct
+**Recommended**: Use RAII guards for automatic path management
 
 ```rust
-struct DecisionVariable {
-    id: VariableID,           // u64 wrapper
-    kind: Kind,               // enum
-    bound: Bound,             // struct with two f64s
-    metadata: Metadata,       // nested struct
-}
-
 impl LogicalMemoryProfile for DecisionVariable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
-        visitor: &mut V
+        path: &mut Path,
+        visitor: &mut V,
     ) {
-        // Count primitive/simple fields
-        path.push("id");
-        visitor.visit_leaf(path, std::mem::size_of::<VariableID>());
-        path.pop();
-
-        path.push("kind");
-        visitor.visit_leaf(path, std::mem::size_of::<Kind>());
-        path.pop();
-
-        path.push("bound");
-        visitor.visit_leaf(path, std::mem::size_of::<Bound>());
-        path.pop();
+        // Count primitive fields using path guards
+        visitor.visit_leaf(&path.with("id"), size_of::<VariableID>());
+        visitor.visit_leaf(&path.with("kind"), size_of::<Kind>());
+        visitor.visit_leaf(&path.with("bound"), size_of::<Bound>());
 
         // Delegate to nested struct
-        path.push("metadata");
-        self.metadata.visit_logical_memory(path, visitor);
-        path.pop();
+        self.metadata.visit_logical_memory(path.with("metadata").as_mut(), visitor);
     }
 }
 ```
 
-**Key points**:
-- Simple structs (like `Bound` with just two f64s) can be counted directly
-- Complex structs with heap allocations should be delegated
-- Never use `size_of::<DecisionVariable>()` - would double-count metadata
+**Key benefits**:
+- No manual push/pop needed
+- Automatic cleanup on scope exit
+- Prevents path management bugs
 
-### Pattern 3: Collections (Vec, HashMap, BTreeMap)
+### Pattern 2: Collections with Nested Guards
 
-**Example**: Struct with collection fields
+For collections, use nested guards to manage complex hierarchies:
 
 ```rust
-struct Metadata {
-    name: Option<String>,
-    subscripts: Vec<i64>,
-    parameters: HashMap<String, String>,
-}
-
-impl LogicalMemoryProfile for Metadata {
+impl LogicalMemoryProfile for ConstraintHints {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
-        visitor: &mut V
+        path: &mut Path,
+        visitor: &mut V,
     ) {
-        // Option<String>: count stack + heap
-        path.push("name");
-        let name_bytes = std::mem::size_of::<Option<String>>()
-            + self.name.as_ref().map_or(0, |s| s.capacity());
-        visitor.visit_leaf(path, name_bytes);
-        path.pop();
+        // one_hot_constraints: Vec<OneHot>
+        {
+            let mut guard = path.with("one_hot_constraints");
+            let vec_overhead = size_of::<Vec<OneHot>>();
+            visitor.visit_leaf(&guard, vec_overhead);
 
-        // Vec<i64>: count stack + heap
-        path.push("subscripts");
-        let vec_bytes = std::mem::size_of::<Vec<i64>>()
-            + self.subscripts.capacity() * std::mem::size_of::<i64>();
-        visitor.visit_leaf(path, vec_bytes);
-        path.pop();
+            for one_hot in &self.one_hot_constraints {
+                one_hot.visit_logical_memory(guard.with("OneHot").as_mut(), visitor);
+            }
+        } // guard automatically pops here
 
-        // HashMap: count stack + entries
-        path.push("parameters");
-        let map_overhead = std::mem::size_of::<HashMap<String, String>>();
-        let mut entries_bytes = 0;
-        for (k, v) in &self.parameters {
-            entries_bytes += std::mem::size_of::<(String, String)>();
-            entries_bytes += k.capacity() + v.capacity();
+        // sos1_constraints: Vec<Sos1>
+        {
+            let mut guard = path.with("sos1_constraints");
+            let vec_overhead = size_of::<Vec<Sos1>>();
+            visitor.visit_leaf(&guard, vec_overhead);
+
+            for sos1 in &self.sos1_constraints {
+                sos1.visit_logical_memory(guard.with("Sos1").as_mut(), visitor);
+            }
         }
-        visitor.visit_leaf(path, map_overhead + entries_bytes);
-        path.pop();
     }
 }
 ```
 
-**Key points**:
-- Always count collection stack overhead (Vec header, HashMap header, etc.)
-- Use `capacity()` for heap-allocated sizes, not `len()`
-- For String, count both `size_of::<String>()` and `capacity()`
+### Pattern 3: Key-Value Separation in Collections
 
-## Implementation Guidelines
+For `HashMap<K, V>` and `BTreeMap<K, V>`, separate keys and values:
+
+```rust
+impl LogicalMemoryProfile for Instance {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(
+        &self,
+        path: &mut Path,
+        visitor: &mut V,
+    ) {
+        // decision_variables: BTreeMap<VariableID, DecisionVariable>
+        {
+            let mut guard = path.with("decision_variables");
+
+            // BTreeMap stack overhead
+            let map_overhead = size_of::<BTreeMap<VariableID, DecisionVariable>>();
+            visitor.visit_leaf(&guard, map_overhead);
+
+            // Keys (VariableID)
+            let key_size = size_of::<VariableID>();
+            let keys_bytes = self.decision_variables().len() * key_size;
+            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
+
+            // Delegate to each DecisionVariable
+            for dv in self.decision_variables().values() {
+                dv.visit_logical_memory(guard.with("DecisionVariable").as_mut(), visitor);
+            }
+        }
+    }
+}
+```
+
+**Output example** (2 DecisionVariables):
+```
+Instance;decision_variables 24                              # BTreeMap overhead
+Instance;decision_variables;keys 16                         # 2 × 8 bytes (VariableID)
+Instance;decision_variables;DecisionVariable;id 16          # Aggregated IDs
+Instance;decision_variables;DecisionVariable;bound 32       # Aggregated bounds
+...
+```
 
 ### Avoiding Double-Counting
-
-**Critical Rule**: Never use `size_of::<Self>()` to count the entire struct size.
 
 **Problem**: When struct A contains struct B as a field:
 ```rust
@@ -252,16 +265,16 @@ If you count both `size_of::<A>()` and then delegate to `B.visit_logical_memory(
 
 ```rust
 impl LogicalMemoryProfile for A {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(...) {
-        // Count field1
-        path.push("field1");
-        visitor.visit_leaf(path, size_of::<u64>());
-        path.pop();
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(
+        &self,
+        path: &mut Path,
+        visitor: &mut V,
+    ) {
+        // Count primitive field
+        visitor.visit_leaf(&path.with("field1"), size_of::<u64>());
 
-        // Delegate to field2 (don't count it!)
-        path.push("field2");
-        self.field2.visit_logical_memory(path, visitor);
-        path.pop();
+        // Delegate to nested struct (don't count it!)
+        self.field2.visit_logical_memory(path.with("field2").as_mut(), visitor);
     }
 }
 ```
@@ -284,59 +297,6 @@ impl LogicalMemoryProfile for A {
 
 **Trade-off**: Padding between fields is not tracked, but this prevents double-counting.
 
-### Key-Value Separation in Collections
-
-For `HashMap<K, V>` and `BTreeMap<K, V>`, separate keys and values into distinct paths:
-
-```rust
-// BTreeMap overhead
-let map_overhead = size_of::<BTreeMap<K, V>>();
-visitor.visit_leaf(path, map_overhead);
-
-// Keys
-path.push("keys");
-let keys_bytes = len * size_of::<K>();
-visitor.visit_leaf(path, keys_bytes);
-path.pop();
-
-// Delegate to each value
-for value in values() {
-    path.push("ValueType");  // Add type name
-    value.visit_logical_memory(path, visitor);
-    path.pop();
-}
-```
-
-**Output example** (2 DecisionVariables):
-```
-Instance;decision_variables 24                              # BTreeMap overhead
-Instance;decision_variables;keys 16                         # 2 × 8 bytes (VariableID)
-Instance;decision_variables;DecisionVariable 304            # 2 × 152 bytes (aggregated)
-Instance;decision_variables;DecisionVariable;metadata;name 95  # metadata heap allocations
-```
-
-**Rationale**: Provides clear breakdown of collection structure vs content in flamegraphs.
-
-### Type Names in Delegation Paths
-
-When delegating from a collection to value types, add the type name to the path:
-
-```rust
-// ❌ Bad: Values reported directly under collection path
-for constraint in constraints.values() {
-    constraint.visit_logical_memory(path, visitor);
-}
-
-// ✅ Good: Values reported under type-specific subpath
-for constraint in constraints.values() {
-    path.push("Constraint");
-    constraint.visit_logical_memory(path, visitor);
-    path.pop();
-}
-```
-
-**Rationale**: Creates hierarchical flamegraph structure that distinguishes collection metadata from element content.
-
 ### Automatic Aggregation
 
 `FoldedCollector` automatically aggregates multiple visits to the same path:
@@ -344,19 +304,21 @@ for constraint in constraints.values() {
 ```rust
 // Multiple DecisionVariables report to same path
 for dv in decision_variables.values() {
-    path.push("DecisionVariable");
-    dv.visit_logical_memory(path, visitor);  // Each reports 152 bytes
-    path.pop();
+    dv.visit_logical_memory(guard.with("DecisionVariable").as_mut(), visitor);
 }
 
-// FoldedCollector aggregates: "Instance;decision_variables;DecisionVariable 304"
+// FoldedCollector aggregates automatically:
+// "Instance;decision_variables;DecisionVariable;id 24" (3 × 8 bytes)
 ```
 
-**Implementation** (in `FoldedCollector`):
+**Implementation**:
 ```rust
 impl LogicalMemoryVisitor for FoldedCollector {
-    fn visit_leaf(&mut self, path: &[&'static str], bytes: usize) {
-        let frames = path.join(";");
+    fn visit_leaf(&mut self, path: &Path, bytes: usize) {
+        if bytes == 0 {
+            return;
+        }
+        let frames = path.as_slice().join(";");
         *self.aggregated.entry(frames).or_insert(0) += bytes;
     }
 }
@@ -364,213 +326,123 @@ impl LogicalMemoryVisitor for FoldedCollector {
 
 **Rationale**: Flamegraphs naturally aggregate same stack frames; this provides clean visualization without manual aggregation logic in each type's implementation.
 
-## Use Cases
+## Python API
 
-### 1. Folded Stack Generation
-
-Generate folded stack format for flamegraph visualization tools:
-
-```rust
-pub struct FoldedCollector {
-    lines: Vec<String>,
-}
-
-impl FoldedCollector {
-    pub fn new() -> Self {
-        Self { lines: Vec::new() }
-    }
-
-    pub fn finish(self) -> String {
-        self.lines.join("\n")
-    }
-}
-
-impl LogicalMemoryVisitor for FoldedCollector {
-    fn visit_leaf(&mut self, path: &[&'static str], bytes: usize) {
-        if bytes == 0 {
-            return;
-        }
-        let frames = path.join(";");
-        self.lines.push(format!("{frames} {bytes}"));
-    }
-}
-
-// Helper function
-pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T
-) -> String {
-    let mut path = vec![root_name];
-    let mut collector = FoldedCollector::new();
-    value.visit_logical_memory(&mut path, &mut collector);
-    collector.finish()
-}
-```
-
-**Usage**:
-```rust
-let instance: Instance = ...;
-let folded = logical_memory_to_folded("Instance", &instance);
-// Pass to flamegraph.pl or similar tools
-```
-
-### 2. Total Bytes Calculation
-
-```rust
-pub fn logical_total_bytes<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T
-) -> usize {
-    struct Sum(usize);
-    impl LogicalMemoryVisitor for Sum {
-        fn visit_leaf(&mut self, _path: &[&'static str], bytes: usize) {
-            self.0 += bytes;
-        }
-    }
-
-    let mut path = vec![root_name];
-    let mut sum = Sum(0);
-    value.visit_logical_memory(&mut path, &mut sum);
-    sum.0
-}
-```
-
-### 3. JSON/YAML Tree Output
-
-Hierarchical JSON or YAML output can also be implemented as visitors:
-
-```json
-{
-  "Instance": {
-    "objective": {
-      "Quadratic": {
-        "terms": 16384
-      }
-    },
-    "decision_variables": {
-      "btree_overhead": 512,
-      "entries": 2048
-    },
-    "constraints": {
-      "btree_overhead": 1024,
-      "entries": {
-        "functions": 8192
-      }
-    }
-  }
-}
-```
-
-### 4. ASCII Tree Output
-
-For CLI tool display:
-
-```
-Instance
-├─ objective (Quadratic)
-│  └─ terms: 16.0 KB
-├─ decision_variables
-│  ├─ btree_overhead: 512 B
-│  └─ entries: 2.0 KB
-└─ constraints
-   ├─ btree_overhead: 1.0 KB
-   └─ entries: 8.0 KB
-```
-
-## Python API Design
-
-Make it accessible from Python via PyO3:
+The profiler is accessible from Python via PyO3:
 
 ```python
-from ommx.v1 import Instance
+from ommx.v1 import Instance, DecisionVariable
 
-instance = Instance.from_file("problem.ommx")
+# Create instance
+x = [DecisionVariable.binary(i) for i in range(3)]
+instance = Instance.from_components(
+    decision_variables=x,
+    objective=x[0] + x[1],
+    constraints=[],
+    sense=Instance.MAXIMIZE,
+)
 
-# Get folded stack
-folded = instance.logical_memory_profile()
-print(folded)
-
-# Total bytes
-total = instance.logical_memory_bytes()
-print(f"Total: {total / 1024 / 1024:.2f} MB")
-
-# Visualization in Jupyter
-instance.show_memory_flamegraph()  # Display SVG inline
+# Get folded stack format
+profile = instance.logical_memory_profile()
+print(profile)
 ```
 
-## Implementation Plan
+**Output**:
+```
+Instance;constraint_hints;one_hot_constraints 24
+Instance;constraint_hints;sos1_constraints 24
+Instance;constraints 24
+Instance;decision_variable_dependency;assignments 32
+Instance;decision_variable_dependency;dependency 144
+Instance;decision_variables 24
+Instance;decision_variables;DecisionVariable;bound 48
+Instance;decision_variables;DecisionVariable;id 24
+Instance;decision_variables;DecisionVariable;kind 3
+Instance;decision_variables;DecisionVariable;metadata;description 72
+Instance;decision_variables;DecisionVariable;metadata;name 72
+Instance;decision_variables;DecisionVariable;metadata;parameters 96
+Instance;decision_variables;DecisionVariable;metadata;subscripts 72
+Instance;decision_variables;DecisionVariable;substituted_value 48
+Instance;decision_variables;keys 24
+Instance;objective;Linear;terms 104
+Instance;removed_constraints 24
+Instance;sense 1
+```
 
-### Phase 1: Core Traits and Utilities
+### Visualization with Flamegraph
 
-1. Create `rust/ommx/src/logical_memory.rs`
-   - `LogicalMemoryProfile` trait
-   - `LogicalMemoryVisitor` trait
-   - `FoldedCollector`
-   - `logical_memory_to_folded()`
-   - `logical_total_bytes()`
+To create a flamegraph visualization:
 
-2. Add generic implementations
-   - Implementation for `Vec<T>`
-   - Implementation for `HashMap<K, V>`
-   - Implementation for primitive types
+1. Save the output to a file:
+   ```python
+   with open("profile.txt", "w") as f:
+       f.write(instance.logical_memory_profile())
+   ```
 
-### Phase 2: Domain Type Implementations
+2. Generate SVG using `flamegraph.pl`:
+   ```bash
+   flamegraph.pl profile.txt > memory.svg
+   ```
 
-3. Implement `LogicalMemoryProfile` for major types
-   - `Instance` (root node, delegates to all fields)
-   - `Function` enum variants (`Linear`, `Quadratic`, `Polynomial`)
-   - `PolynomialBase<M>` (generic implementation for all polynomial types)
-   - `Constraint` (delegates to embedded `Function`)
-   - Collections: `BTreeMap<K, V>`, `FnvHashMap<K, V>`
+3. Open `memory.svg` in a browser to visualize the memory hierarchy
 
-4. Add tests
-   - `rust/ommx/tests/logical_memory_test.rs`
-   - Integration tests for flamegraph generation
-   - Verify memory accounting accuracy
+## Implementation Status
 
-### Phase 3: Python Bindings
+### Implemented Components
 
-5. Add PyO3 methods
-   - `Instance.logical_memory_profile() -> str`
-   - `Instance.logical_memory_bytes() -> int`
+✅ **Core Infrastructure** (`rust/ommx/src/logical_memory.rs`):
+- `Path` type with RAII guards
+- `PathGuard` for automatic path management
+- `LogicalMemoryProfile` trait
+- `LogicalMemoryVisitor` trait
+- `FoldedCollector` for folded stack generation
+- Helper functions: `logical_memory_to_folded()`, `logical_total_bytes()`
 
-6. Python-side utilities
-   - Flamegraph SVG generation helper
-   - Display functions for Jupyter
+✅ **Domain Type Implementations**:
+- `Instance` - Root type with full hierarchy
+- `Function` enum (Linear/Quadratic/Polynomial/Zero)
+- `PolynomialBase<M>` - Generic polynomial implementation
+- `DecisionVariable` - Variables with metadata
+- `Constraint` and `RemovedConstraint` - Constraint types
+- `ConstraintHints`, `OneHot`, `Sos1` - Constraint hints
+- `AcyclicAssignments` - Variable dependencies
 
-### Phase 4: Documentation and Samples
+✅ **Python Bindings** (`python/ommx/src/instance.rs`):
+- `Instance.logical_memory_profile()` method
+- Type stubs generation
+- Comprehensive documentation with examples
 
-7. API documentation
-8. Add tutorials to Jupyter Book
-9. Sample code and benchmarks
+✅ **Testing**:
+- 30 Rust unit tests with snapshot testing
+- 115 Python tests including doctests
+- All tests passing
 
 ## Benefits and Trade-offs
 
 ### Benefits
 
-✅ **Simple Trait**: Only `visit` method needed, concise implementation
-✅ **Flexibility**: Each type can decide decomposition granularity freely
+✅ **Simple implementation**: RAII guards make path management automatic and bug-free
+✅ **Type safety**: `Path` type prevents incorrect path manipulation
+✅ **Flexibility**: Each type decides decomposition granularity
 ✅ **Extensibility**: New output formats just need new visitor implementations
-✅ **Avoid double-counting**: No inclusive/exclusive calculation needed
-✅ **Easy Python integration**: Folded stack can be passed as string
+✅ **Avoid double-counting**: Field-by-field counting prevents errors
+✅ **Easy Python integration**: Folded stack passed as string
 
 ### Trade-offs
 
-⚠️ **Dynamic dispatch overhead**: Visitor pattern has slight overhead (acceptable for profiling use case)
-⚠️ **Path management**: Need to correctly push/pop `Vec<&'static str>` (addressed with docs and samples)
-⚠️ **Dynamic names**: Paths with indices or keys can't be represented with `&'static str` (future extension with `Cow<'static, str>` can be considered)
+⚠️ **Approximation**: Not exact heap profiling, uses `capacity()` and `size_of::<T>()`
+⚠️ **Padding not tracked**: Field-by-field counting omits padding between fields
+⚠️ **Static names only**: Paths use `&'static str`, can't include dynamic indices (can be extended with `String` if needed)
 
 ## Related Resources
 
 - [flamegraph.pl](https://github.com/brendangregg/FlameGraph)
 - [inferno (Rust flamegraph tool)](https://github.com/jonhoo/inferno)
-- [Python memory_profiler](https://pypi.org/project/memory-profiler/)
+- [Brendan Gregg's Blog on Flamegraphs](https://www.brendangregg.com/flamegraphs.html)
 
 ## Revision History
 
-- 2025-11-20: Initial version (visitor-based design)
-- 2025-11-20: Fixed double-counting issue by eliminating `size_of::<Self>()` usage
-  - Changed to count each field individually instead of entire struct size
-  - Prevents double-counting when structs contain other structs as fields
-  - Trade-off: padding between fields is no longer tracked
-  - Updated all implementation patterns and guidelines
+- 2025-11-20: Initial design with visitor-based approach
+- 2025-11-20: Fixed double-counting by eliminating `size_of::<Self>()` usage
+- 2025-11-20: Introduced `Path` and `PathGuard` RAII pattern for automatic path management
+- 2025-11-20: Completed implementation with Python API and comprehensive testing
