@@ -1,12 +1,12 @@
 use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for DecisionVariable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting
@@ -32,7 +32,7 @@ impl LogicalMemoryProfile for DecisionVariable {
 impl LogicalMemoryProfile for DecisionVariableMetadata {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting

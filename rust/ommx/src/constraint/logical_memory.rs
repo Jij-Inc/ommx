@@ -1,21 +1,21 @@
 use crate::constraint::{Constraint, RemovedConstraint};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Constraint {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting
 
         // id: ConstraintID (u64 wrapper)
-        visitor.visit_leaf(path.with("id").as_ref(), size_of::<crate::ConstraintID>());
+        visitor.visit_leaf(&path.with("id"), size_of::<crate::ConstraintID>());
 
         // equality: Equality (enum)
-        visitor.visit_leaf(path.with("equality").as_ref(), size_of::<crate::Equality>());
+        visitor.visit_leaf(&path.with("equality"), size_of::<crate::Equality>());
 
         // Delegate to Function
         self.function
@@ -24,12 +24,12 @@ impl LogicalMemoryProfile for Constraint {
         // name: Option<String>
         let name_bytes =
             size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.capacity());
-        visitor.visit_leaf(path.with("name").as_ref(), name_bytes);
+        visitor.visit_leaf(&path.with("name"), name_bytes);
 
         // subscripts: Vec<i64>
         let subscripts_bytes =
             size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
-        visitor.visit_leaf(path.with("subscripts").as_ref(), subscripts_bytes);
+        visitor.visit_leaf(&path.with("subscripts"), subscripts_bytes);
 
         // parameters: FnvHashMap<String, String>
         let map_overhead = size_of::<FnvHashMap<String, String>>();
@@ -40,36 +40,32 @@ impl LogicalMemoryProfile for Constraint {
             entries_bytes += v.capacity();
         }
         let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(path.with("parameters").as_ref(), parameters_bytes);
+        visitor.visit_leaf(&path.with("parameters"), parameters_bytes);
 
         // description: Option<String>
         let description_bytes =
             size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.capacity());
-        visitor.visit_leaf(path.with("description").as_ref(), description_bytes);
+        visitor.visit_leaf(&path.with("description"), description_bytes);
     }
 }
 
 impl LogicalMemoryProfile for RemovedConstraint {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting
 
         // Delegate to Constraint
-        path.push("constraint");
-        self.constraint.visit_logical_memory(path, visitor);
-        path.pop();
+        self.constraint
+            .visit_logical_memory(path.with("constraint").as_mut(), visitor);
 
         // removed_reason: String
-        path.push("removed_reason");
         let removed_reason_bytes = size_of::<String>() + self.removed_reason.capacity();
-        visitor.visit_leaf(path, removed_reason_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("removed_reason"), removed_reason_bytes);
 
         // removed_reason_parameters: FnvHashMap<String, String>
-        path.push("removed_reason_parameters");
         let map_overhead = size_of::<FnvHashMap<String, String>>();
         let mut entries_bytes = 0;
         for (k, v) in &self.removed_reason_parameters {
@@ -78,8 +74,7 @@ impl LogicalMemoryProfile for RemovedConstraint {
             entries_bytes += v.capacity();
         }
         let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(path, parameters_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("removed_reason_parameters"), parameters_bytes);
     }
 }
 

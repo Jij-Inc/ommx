@@ -1,4 +1,4 @@
-use super::{logical_memory_to_folded, logical_total_bytes, FoldedCollector, LogicalMemoryVisitor};
+use super::{logical_memory_to_folded, logical_total_bytes, FoldedCollector, LogicalMemoryVisitor, Path};
 use crate::{coeff, linear, quadratic, Linear, Quadratic};
 
 // Unit tests for core collectors
@@ -6,8 +6,8 @@ use crate::{coeff, linear, quadratic, Linear, Quadratic};
 #[test]
 fn test_folded_collector() {
     let mut collector = FoldedCollector::new();
-    collector.visit_leaf(&["root", "child", "leaf"], 1024);
-    collector.visit_leaf(&["root", "child", "other"], 2048);
+    collector.visit_leaf(&Path::from(vec!["root", "child", "leaf"]), 1024);
+    collector.visit_leaf(&Path::from(vec!["root", "child", "other"]), 2048);
 
     let output = collector.finish();
     assert_eq!(output, "root;child;leaf 1024\nroot;child;other 2048");
@@ -16,8 +16,8 @@ fn test_folded_collector() {
 #[test]
 fn test_folded_collector_skip_zero() {
     let mut collector = FoldedCollector::new();
-    collector.visit_leaf(&["root", "empty"], 0);
-    collector.visit_leaf(&["root", "nonempty"], 100);
+    collector.visit_leaf(&Path::from(vec!["root", "empty"]), 0);
+    collector.visit_leaf(&Path::from(vec!["root", "nonempty"]), 100);
 
     let output = collector.finish();
     assert_eq!(output, "root;nonempty 100");

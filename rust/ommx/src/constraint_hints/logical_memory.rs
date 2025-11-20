@@ -1,11 +1,11 @@
 use crate::constraint_hints::{ConstraintHints, OneHot, Sos1};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for ConstraintHints {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting
@@ -35,7 +35,7 @@ impl LogicalMemoryProfile for ConstraintHints {
 impl LogicalMemoryProfile for OneHot {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting
@@ -53,7 +53,7 @@ impl LogicalMemoryProfile for OneHot {
 impl LogicalMemoryProfile for Sos1 {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting

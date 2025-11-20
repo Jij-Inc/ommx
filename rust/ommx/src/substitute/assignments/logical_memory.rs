@@ -1,11 +1,11 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::substitute::AcyclicAssignments;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for AcyclicAssignments {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Count each field individually to avoid double-counting

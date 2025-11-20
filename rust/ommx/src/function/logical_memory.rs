@@ -1,11 +1,11 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::function::Function;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Function {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         match self {

@@ -1,4 +1,4 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::polynomial_base::{Monomial, PolynomialBase};
 use crate::Coefficient;
 use fnv::FnvHashMap;
@@ -7,7 +7,7 @@ use std::mem::size_of;
 impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
-        path: &mut Vec<&'static str>,
+        path: &mut Path,
         visitor: &mut V,
     ) {
         // Calculate FnvHashMap memory usage:
