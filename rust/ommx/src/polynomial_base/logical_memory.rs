@@ -5,11 +5,7 @@ use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Calculate FnvHashMap memory usage:
         // 1. HashMap struct overhead
         // 2. Allocated capacity for entries (keys + values)

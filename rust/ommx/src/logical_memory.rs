@@ -69,11 +69,7 @@ pub trait LogicalMemoryProfile {
     /// - Use `path.with("name")` to create RAII guards for automatic cleanup
     /// - At leaf nodes: `visitor.visit_leaf(path.with("field"), bytes)`
     /// - For delegation: `self.field.visit_logical_memory(path.with("field").as_mut(), visitor)`
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    );
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V);
 }
 
 /// Visitor for logical memory leaf nodes.

@@ -1,4 +1,6 @@
-use super::{logical_memory_to_folded, logical_total_bytes, FoldedCollector, LogicalMemoryVisitor, Path};
+use super::{
+    logical_memory_to_folded, logical_total_bytes, FoldedCollector, LogicalMemoryVisitor, Path,
+};
 use crate::{coeff, linear, quadratic, Linear, Quadratic};
 
 // Unit tests for core collectors

@@ -3,11 +3,7 @@ use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Instance {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // sense: Sense (enum)
@@ -22,7 +18,8 @@ impl LogicalMemoryProfile for Instance {
             let mut guard = path.with("decision_variables");
 
             // BTreeMap stack overhead
-            let map_overhead = size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
+            let map_overhead =
+                size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
             visitor.visit_leaf(&guard, map_overhead);
 
             // Keys (VariableID)
@@ -41,7 +38,8 @@ impl LogicalMemoryProfile for Instance {
             let mut guard = path.with("constraints");
 
             // BTreeMap stack overhead
-            let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
+            let map_overhead =
+                size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
             visitor.visit_leaf(&guard, map_overhead);
 
             // Keys (ConstraintID)
@@ -60,7 +58,9 @@ impl LogicalMemoryProfile for Instance {
             let mut guard = path.with("removed_constraints");
 
             // BTreeMap stack overhead
-            let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>>();
+            let map_overhead = size_of::<
+                std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>,
+            >();
             visitor.visit_leaf(&guard, map_overhead);
 
             // Keys (ConstraintID)

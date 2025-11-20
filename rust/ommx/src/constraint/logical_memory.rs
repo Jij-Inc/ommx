@@ -4,11 +4,7 @@ use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Constraint {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // id: ConstraintID (u64 wrapper)
@@ -50,11 +46,7 @@ impl LogicalMemoryProfile for Constraint {
 }
 
 impl LogicalMemoryProfile for RemovedConstraint {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // Delegate to Constraint

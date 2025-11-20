@@ -4,11 +4,7 @@ use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for DecisionVariable {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // id: VariableID (u64 wrapper)
@@ -30,20 +26,17 @@ impl LogicalMemoryProfile for DecisionVariable {
 }
 
 impl LogicalMemoryProfile for DecisionVariableMetadata {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // name: Option<String> - count stack overhead
-        let name_bytes = size_of::<Option<String>>()
-            + self.name.as_ref().map_or(0, |s| s.capacity());
+        let name_bytes =
+            size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.capacity());
         visitor.visit_leaf(&path.with("name"), name_bytes);
 
         // subscripts: Vec<i64> - count stack overhead + heap
-        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
+        let subscripts_bytes =
+            size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
         visitor.visit_leaf(&path.with("subscripts"), subscripts_bytes);
 
         // parameters: FnvHashMap<String, String> - count stack overhead + heap
@@ -58,8 +51,8 @@ impl LogicalMemoryProfile for DecisionVariableMetadata {
         visitor.visit_leaf(&path.with("parameters"), parameters_bytes);
 
         // description: Option<String> - count stack overhead
-        let description_bytes = size_of::<Option<String>>()
-            + self.description.as_ref().map_or(0, |s| s.capacity());
+        let description_bytes =
+            size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.capacity());
         visitor.visit_leaf(&path.with("description"), description_bytes);
     }
 }

@@ -3,11 +3,7 @@ use crate::substitute::AcyclicAssignments;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for AcyclicAssignments {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
 
         // assignments: FnvHashMap<VariableID, Function>

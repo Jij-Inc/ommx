@@ -1,13 +1,9 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::function::Function;
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Function {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         match self {
             Function::Zero => {
                 // Zero variant has no heap allocation, only stack size
@@ -59,7 +55,8 @@ mod tests {
 
     #[test]
     fn test_function_quadratic_snapshot() {
-        let func = Function::Quadratic(coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1));
+        let func =
+            Function::Quadratic(coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1));
         let folded = logical_memory_to_folded("Function", &func);
         insta::assert_snapshot!(folded, @"Function;Quadratic;terms 128");
     }
