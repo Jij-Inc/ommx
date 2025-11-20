@@ -12,9 +12,22 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         if !self.assignments.is_empty() {
             path.push("assignments");
 
-            // Iterate over each assignment and delegate to Function
-            for (_id, function) in &self.assignments {
+            // HashMap overhead
+            let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
+            visitor.visit_leaf(path, map_overhead);
+
+            // Keys (VariableID)
+            path.push("keys");
+            let key_size = size_of::<crate::VariableID>();
+            let keys_bytes = self.assignments.len() * key_size;
+            visitor.visit_leaf(path, keys_bytes);
+            path.pop();
+
+            // Delegate to each Function
+            for function in self.assignments.values() {
+                path.push("Function");
                 function.visit_logical_memory(path, visitor);
+                path.pop();
             }
 
             path.pop();
@@ -61,7 +74,9 @@ mod tests {
 
         let folded = logical_memory_to_folded("Assignments", &assignments);
         insta::assert_snapshot!(folded, @r###"
-        Assignments;assignments;Linear;terms 208
+        Assignments;assignments 32
+        Assignments;assignments;Function;Linear;terms 208
+        Assignments;assignments;keys 16
         Assignments;dependency 80
         "###);
     }

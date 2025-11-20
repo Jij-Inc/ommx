@@ -9,7 +9,11 @@ impl LogicalMemoryProfile for DecisionVariable {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Delegate to metadata
+        // Count the struct itself (id, kind, bound, substituted_value)
+        let struct_size = size_of::<DecisionVariable>();
+        visitor.visit_leaf(path, struct_size);
+
+        // Delegate to metadata (heap allocations)
         path.push("metadata");
         self.metadata.visit_logical_memory(path, visitor);
         path.pop();
@@ -74,7 +78,7 @@ mod tests {
         let dv = DecisionVariable::binary(VariableID::from(1));
         let folded = logical_memory_to_folded("DecisionVariable", &dv);
         // Empty metadata should produce no output
-        insta::assert_snapshot!(folded, @"");
+        insta::assert_snapshot!(folded, @"DecisionVariable 152");
     }
 
     #[test]
@@ -94,6 +98,7 @@ mod tests {
 
         let folded = logical_memory_to_folded("DecisionVariable", &dv);
         insta::assert_snapshot!(folded, @r###"
+        DecisionVariable 152
         DecisionVariable;metadata;description 38
         DecisionVariable;metadata;name 26
         DecisionVariable;metadata;subscripts 48

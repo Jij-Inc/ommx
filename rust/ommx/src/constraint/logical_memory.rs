@@ -9,6 +9,10 @@ impl LogicalMemoryProfile for Constraint {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
+        // Count the struct itself (id, equality, and small fields)
+        let struct_size = size_of::<Constraint>();
+        visitor.visit_leaf(path, struct_size);
+
         // Delegate to Function
         path.push("function");
         self.function.visit_logical_memory(path, visitor);
@@ -60,6 +64,10 @@ impl LogicalMemoryProfile for RemovedConstraint {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
+        // Count the struct itself
+        let struct_size = size_of::<RemovedConstraint>();
+        visitor.visit_leaf(path, struct_size);
+
         // Delegate to Constraint
         path.push("constraint");
         self.constraint.visit_logical_memory(path, visitor);
@@ -102,7 +110,10 @@ mod tests {
             Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2)),
         );
         let folded = logical_memory_to_folded("Constraint", &constraint);
-        insta::assert_snapshot!(folded, @"Constraint;function;Linear;terms 104");
+        insta::assert_snapshot!(folded, @r###"
+        Constraint 160
+        Constraint;function;Linear;terms 104
+        "###);
     }
 
     #[test]
@@ -118,6 +129,7 @@ mod tests {
         let folded = logical_memory_to_folded("Constraint", &constraint);
         // Should include function, name, description, and subscripts
         insta::assert_snapshot!(folded, @r###"
+        Constraint 160
         Constraint;description 41
         Constraint;function;Linear;terms 104
         Constraint;name 39
@@ -139,6 +151,8 @@ mod tests {
 
         let folded = logical_memory_to_folded("RemovedConstraint", &removed);
         insta::assert_snapshot!(folded, @r###"
+        RemovedConstraint 216
+        RemovedConstraint;constraint 160
         RemovedConstraint;constraint;function;Linear;terms 104
         RemovedConstraint;removed_reason 34
         "###);
