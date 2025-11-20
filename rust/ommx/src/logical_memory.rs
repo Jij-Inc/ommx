@@ -50,15 +50,11 @@ pub use path::{Path, PathGuard};
 ///         visitor: &mut V,
 ///     ) {
 ///         // Count primitive fields using path guards
-///         visitor.visit_leaf(path.with("field1"), size_of::<u64>());
+///         visitor.visit_leaf(&path.with("field1"), size_of::<u64>());
 ///
 ///         // Count String: stack + heap
 ///         let field2_bytes = size_of::<String>() + self.field2.capacity();
-///         visitor.visit_leaf(path.with("field2"), field2_bytes);
-///
-///         // For delegation to nested structs
-///         self.nested
-///             .visit_logical_memory(path.with("nested").as_mut(), visitor);
+///         visitor.visit_leaf(&path.with("field2"), field2_bytes);
 ///     }
 /// }
 /// ```
