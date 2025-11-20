@@ -8,23 +8,8 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         // Use "Type.field" format for flamegraph clarity
 
         // assignments: FnvHashMap<VariableID, Function>
-        {
-            let mut guard = path.with("AcyclicAssignments.assignments");
-
-            // HashMap stack overhead
-            let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
-            visitor.visit_leaf(&guard, map_overhead);
-
-            // Keys (VariableID) - use type name for clarity
-            let key_size = size_of::<crate::VariableID>();
-            let keys_bytes = self.assignments.len() * key_size;
-            visitor.visit_leaf(&guard.with("VariableID"), keys_bytes);
-
-            // Delegate to each Function
-            for function in self.assignments.values() {
-                function.visit_logical_memory(guard.as_mut(), visitor);
-            }
-        }
+        self.assignments
+            .visit_logical_memory(path.with("AcyclicAssignments.assignments").as_mut(), visitor);
 
         // dependency: DiGraphMap<VariableID, ()>
         // Estimate: node count * size_of::<VariableID>() + edge count * (size_of::<VariableID>() * 2)
@@ -48,7 +33,7 @@ mod tests {
         let folded = logical_memory_to_folded(&assignments);
         // Empty assignments should produce no output
         insta::assert_snapshot!(folded, @r###"
-        AcyclicAssignments.assignments 32
+        AcyclicAssignments.assignments;FnvHashMap[overhead] 32
         AcyclicAssignments.dependency 144
         "###);
     }
@@ -64,9 +49,9 @@ mod tests {
 
         let folded = logical_memory_to_folded(&assignments);
         insta::assert_snapshot!(folded, @r###"
-        AcyclicAssignments.assignments 32
+        AcyclicAssignments.assignments;FnvHashMap[key] 16
+        AcyclicAssignments.assignments;FnvHashMap[overhead] 32
         AcyclicAssignments.assignments;Linear;PolynomialBase.terms 160
-        AcyclicAssignments.assignments;VariableID 16
         AcyclicAssignments.dependency 224
         "###);
     }

@@ -8,24 +8,12 @@ impl LogicalMemoryProfile for ConstraintHints {
         // Use "Type.field" format for flamegraph clarity
 
         // one_hot_constraints: Vec<OneHot>
-        {
-            let mut guard = path.with("ConstraintHints.one_hot_constraints");
-            let vec_overhead = size_of::<Vec<OneHot>>();
-            visitor.visit_leaf(&guard, vec_overhead);
-            for one_hot in &self.one_hot_constraints {
-                one_hot.visit_logical_memory(guard.as_mut(), visitor);
-            }
-        }
+        self.one_hot_constraints
+            .visit_logical_memory(path.with("ConstraintHints.one_hot_constraints").as_mut(), visitor);
 
         // sos1_constraints: Vec<Sos1>
-        {
-            let mut guard = path.with("ConstraintHints.sos1_constraints");
-            let vec_overhead = size_of::<Vec<Sos1>>();
-            visitor.visit_leaf(&guard, vec_overhead);
-            for sos1 in &self.sos1_constraints {
-                sos1.visit_logical_memory(guard.as_mut(), visitor);
-            }
-        }
+        self.sos1_constraints
+            .visit_logical_memory(path.with("ConstraintHints.sos1_constraints").as_mut(), visitor);
     }
 }
 
@@ -82,8 +70,8 @@ mod tests {
         let hints = ConstraintHints::default();
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints.one_hot_constraints 24
-        ConstraintHints.sos1_constraints 24
+        ConstraintHints.one_hot_constraints;Vec[overhead] 24
+        ConstraintHints.sos1_constraints;Vec[overhead] 24
         "###);
     }
 
@@ -101,10 +89,10 @@ mod tests {
 
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints.one_hot_constraints 24
         ConstraintHints.one_hot_constraints;OneHot.id 8
         ConstraintHints.one_hot_constraints;OneHot.variables 48
-        ConstraintHints.sos1_constraints 24
+        ConstraintHints.one_hot_constraints;Vec[overhead] 24
+        ConstraintHints.sos1_constraints;Vec[overhead] 24
         "###);
     }
 
@@ -126,11 +114,11 @@ mod tests {
 
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints.one_hot_constraints 24
-        ConstraintHints.sos1_constraints 24
+        ConstraintHints.one_hot_constraints;Vec[overhead] 24
         ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids 40
         ConstraintHints.sos1_constraints;Sos1.binary_constraint_id 8
         ConstraintHints.sos1_constraints;Sos1.variables 48
+        ConstraintHints.sos1_constraints;Vec[overhead] 24
         "###);
     }
 }
