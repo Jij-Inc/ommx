@@ -2,18 +2,10 @@ use crate::constraint_hints::{ConstraintHints, OneHot, Sos1};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
-impl LogicalMemoryProfile for ConstraintHints {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // one_hot_constraints: Vec<OneHot>
-        self.one_hot_constraints
-            .visit_logical_memory(path.with("ConstraintHints.one_hot_constraints").as_mut(), visitor);
-
-        // sos1_constraints: Vec<Sos1>
-        self.sos1_constraints
-            .visit_logical_memory(path.with("ConstraintHints.sos1_constraints").as_mut(), visitor);
+crate::impl_logical_memory_profile! {
+    ConstraintHints {
+        one_hot_constraints,
+        sos1_constraints,
     }
 }
 

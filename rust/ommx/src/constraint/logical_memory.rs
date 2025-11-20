@@ -41,22 +41,11 @@ impl LogicalMemoryProfile for Constraint {
     }
 }
 
-impl LogicalMemoryProfile for RemovedConstraint {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // Delegate to Constraint
-        self.constraint
-            .visit_logical_memory(path.with("RemovedConstraint.constraint").as_mut(), visitor);
-
-        // removed_reason: String
-        self.removed_reason
-            .visit_logical_memory(path.with("RemovedConstraint.removed_reason").as_mut(), visitor);
-
-        // removed_reason_parameters: FnvHashMap<String, String>
-        self.removed_reason_parameters
-            .visit_logical_memory(path.with("RemovedConstraint.removed_reason_parameters").as_mut(), visitor);
+crate::impl_logical_memory_profile! {
+    RemovedConstraint {
+        constraint,
+        removed_reason,
+        removed_reason_parameters,
     }
 }
 

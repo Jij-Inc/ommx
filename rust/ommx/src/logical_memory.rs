@@ -187,6 +187,39 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
     sum.0
 }
 
+// Macro to implement LogicalMemoryProfile for structs with fields
+/// Generates a LogicalMemoryProfile implementation that delegates to each field.
+///
+/// # Example
+/// ```ignore
+/// impl_logical_memory_profile! {
+///     RemovedConstraint {
+///         constraint,
+///         removed_reason,
+///         removed_reason_parameters,
+///     }
+/// }
+/// ```
+#[macro_export]
+macro_rules! impl_logical_memory_profile {
+    ($type_name:ident { $($field:ident),* $(,)? }) => {
+        impl $crate::logical_memory::LogicalMemoryProfile for $type_name {
+            fn visit_logical_memory<V: $crate::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut $crate::logical_memory::Path,
+                visitor: &mut V,
+            ) {
+                $(
+                    self.$field.visit_logical_memory(
+                        path.with(concat!(stringify!($type_name), ".", stringify!($field))).as_mut(),
+                        visitor,
+                    );
+                )*
+            }
+        }
+    };
+}
+
 // Generic implementations for primitive types
 
 macro_rules! impl_logical_memory_profile_for_primitive {

@@ -31,26 +31,12 @@ impl LogicalMemoryProfile for DecisionVariable {
     }
 }
 
-impl LogicalMemoryProfile for DecisionVariableMetadata {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // name: Option<String>
-        self.name
-            .visit_logical_memory(path.with("DecisionVariableMetadata.name").as_mut(), visitor);
-
-        // subscripts: Vec<i64>
-        self.subscripts
-            .visit_logical_memory(path.with("DecisionVariableMetadata.subscripts").as_mut(), visitor);
-
-        // parameters: FnvHashMap<String, String>
-        self.parameters
-            .visit_logical_memory(path.with("DecisionVariableMetadata.parameters").as_mut(), visitor);
-
-        // description: Option<String>
-        self.description
-            .visit_logical_memory(path.with("DecisionVariableMetadata.description").as_mut(), visitor);
+crate::impl_logical_memory_profile! {
+    DecisionVariableMetadata {
+        name,
+        subscripts,
+        parameters,
+        description,
     }
 }
 
