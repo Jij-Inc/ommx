@@ -1,6 +1,5 @@
 use crate::constraint::{Constraint, ConstraintID, RemovedConstraint};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for ConstraintID {
@@ -25,28 +24,20 @@ impl LogicalMemoryProfile for Constraint {
             .visit_logical_memory(path.with("Constraint.function").as_mut(), visitor);
 
         // name: Option<String>
-        let name_bytes = size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.len());
-        visitor.visit_leaf(&path.with("Constraint.name"), name_bytes);
+        self.name
+            .visit_logical_memory(path.with("Constraint.name").as_mut(), visitor);
 
         // subscripts: Vec<i64>
-        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.len() * size_of::<i64>();
-        visitor.visit_leaf(&path.with("Constraint.subscripts"), subscripts_bytes);
+        self.subscripts
+            .visit_logical_memory(path.with("Constraint.subscripts").as_mut(), visitor);
 
         // parameters: FnvHashMap<String, String>
-        let map_overhead = size_of::<FnvHashMap<String, String>>();
-        let mut entries_bytes = 0;
-        for (k, v) in &self.parameters {
-            entries_bytes += size_of::<(String, String)>();
-            entries_bytes += k.len();
-            entries_bytes += v.len();
-        }
-        let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(&path.with("Constraint.parameters"), parameters_bytes);
+        self.parameters
+            .visit_logical_memory(path.with("Constraint.parameters").as_mut(), visitor);
 
         // description: Option<String>
-        let description_bytes =
-            size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.len());
-        visitor.visit_leaf(&path.with("Constraint.description"), description_bytes);
+        self.description
+            .visit_logical_memory(path.with("Constraint.description").as_mut(), visitor);
     }
 }
 
@@ -60,19 +51,12 @@ impl LogicalMemoryProfile for RemovedConstraint {
             .visit_logical_memory(path.with("RemovedConstraint.constraint").as_mut(), visitor);
 
         // removed_reason: String
-        let removed_reason_bytes = size_of::<String>() + self.removed_reason.len();
-        visitor.visit_leaf(&path.with("RemovedConstraint.removed_reason"), removed_reason_bytes);
+        self.removed_reason
+            .visit_logical_memory(path.with("RemovedConstraint.removed_reason").as_mut(), visitor);
 
         // removed_reason_parameters: FnvHashMap<String, String>
-        let map_overhead = size_of::<FnvHashMap<String, String>>();
-        let mut entries_bytes = 0;
-        for (k, v) in &self.removed_reason_parameters {
-            entries_bytes += size_of::<(String, String)>();
-            entries_bytes += k.len();
-            entries_bytes += v.len();
-        }
-        let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(&path.with("RemovedConstraint.removed_reason_parameters"), parameters_bytes);
+        self.removed_reason_parameters
+            .visit_logical_memory(path.with("RemovedConstraint.removed_reason_parameters").as_mut(), visitor);
     }
 }
 
@@ -96,8 +80,8 @@ mod tests {
         Constraint.function;Linear;PolynomialBase.terms 80
         Constraint.id 8
         Constraint.name 24
-        Constraint.parameters 32
-        Constraint.subscripts 24
+        Constraint.parameters;FnvHashMap[overhead] 32
+        Constraint.subscripts;Vec[overhead] 24
         "###);
     }
 
@@ -119,8 +103,9 @@ mod tests {
         Constraint.function;Linear;PolynomialBase.terms 56
         Constraint.id 8
         Constraint.name 39
-        Constraint.parameters 32
-        Constraint.subscripts 48
+        Constraint.parameters;FnvHashMap[overhead] 32
+        Constraint.subscripts 24
+        Constraint.subscripts;Vec[overhead] 24
         "###);
     }
 
@@ -143,10 +128,10 @@ mod tests {
         RemovedConstraint.constraint;Constraint.function;Linear;PolynomialBase.terms 56
         RemovedConstraint.constraint;Constraint.id 8
         RemovedConstraint.constraint;Constraint.name 24
-        RemovedConstraint.constraint;Constraint.parameters 32
-        RemovedConstraint.constraint;Constraint.subscripts 24
+        RemovedConstraint.constraint;Constraint.parameters;FnvHashMap[overhead] 32
+        RemovedConstraint.constraint;Constraint.subscripts;Vec[overhead] 24
         RemovedConstraint.removed_reason 34
-        RemovedConstraint.removed_reason_parameters 32
+        RemovedConstraint.removed_reason_parameters;FnvHashMap[overhead] 32
         "###);
     }
 }

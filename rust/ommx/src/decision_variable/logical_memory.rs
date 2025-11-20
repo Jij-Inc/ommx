@@ -1,6 +1,5 @@
 use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata, VariableID};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use fnv::FnvHashMap;
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for VariableID {
@@ -35,30 +34,23 @@ impl LogicalMemoryProfile for DecisionVariable {
 impl LogicalMemoryProfile for DecisionVariableMetadata {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
-        // name: Option<String> - count stack overhead
-        let name_bytes = size_of::<Option<String>>() + self.name.as_ref().map_or(0, |s| s.len());
-        visitor.visit_leaf(&path.with("name"), name_bytes);
+        // name: Option<String>
+        self.name
+            .visit_logical_memory(path.with("DecisionVariableMetadata.name").as_mut(), visitor);
 
-        // subscripts: Vec<i64> - count stack overhead + heap
-        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.len() * size_of::<i64>();
-        visitor.visit_leaf(&path.with("subscripts"), subscripts_bytes);
+        // subscripts: Vec<i64>
+        self.subscripts
+            .visit_logical_memory(path.with("DecisionVariableMetadata.subscripts").as_mut(), visitor);
 
-        // parameters: FnvHashMap<String, String> - count stack overhead + heap
-        let map_overhead = size_of::<FnvHashMap<String, String>>();
-        let mut entries_bytes = 0;
-        for (k, v) in &self.parameters {
-            entries_bytes += size_of::<(String, String)>();
-            entries_bytes += k.len();
-            entries_bytes += v.len();
-        }
-        let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(&path.with("parameters"), parameters_bytes);
+        // parameters: FnvHashMap<String, String>
+        self.parameters
+            .visit_logical_memory(path.with("DecisionVariableMetadata.parameters").as_mut(), visitor);
 
-        // description: Option<String> - count stack overhead
-        let description_bytes =
-            size_of::<Option<String>>() + self.description.as_ref().map_or(0, |s| s.len());
-        visitor.visit_leaf(&path.with("description"), description_bytes);
+        // description: Option<String>
+        self.description
+            .visit_logical_memory(path.with("DecisionVariableMetadata.description").as_mut(), visitor);
     }
 }
 
@@ -78,10 +70,10 @@ mod tests {
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.metadata;description 24
-        DecisionVariable.metadata;name 24
-        DecisionVariable.metadata;parameters 32
-        DecisionVariable.metadata;subscripts 24
+        DecisionVariable.metadata;DecisionVariableMetadata.description 24
+        DecisionVariable.metadata;DecisionVariableMetadata.name 24
+        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
+        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
         DecisionVariable.substituted_value 16
         "###);
     }
@@ -106,10 +98,11 @@ mod tests {
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.metadata;description 38
-        DecisionVariable.metadata;name 26
-        DecisionVariable.metadata;parameters 32
-        DecisionVariable.metadata;subscripts 48
+        DecisionVariable.metadata;DecisionVariableMetadata.description 38
+        DecisionVariable.metadata;DecisionVariableMetadata.name 26
+        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
+        DecisionVariable.metadata;DecisionVariableMetadata.subscripts 24
+        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
         DecisionVariable.substituted_value 16
         "###);
     }

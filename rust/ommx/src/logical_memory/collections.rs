@@ -1,7 +1,36 @@
-//! LogicalMemoryProfile implementations for standard collections.
+//! LogicalMemoryProfile implementations for standard collections and common types.
 
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
+
+// Implementation for String
+impl LogicalMemoryProfile for String {
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        // String overhead + heap-allocated bytes
+        let total_bytes = size_of::<String>() + self.len();
+        visitor.visit_leaf(path, total_bytes);
+    }
+}
+
+// Implementation for Option<T>
+impl<T> LogicalMemoryProfile for Option<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        if let Some(value) = self {
+            // Option overhead + delegated value
+            visitor.visit_leaf(
+                &path.with("Option[overhead]"),
+                size_of::<Option<T>>() - size_of::<T>(), // size_of::<T> will be counted in the value
+            );
+            value.visit_logical_memory(path, visitor);
+        } else {
+            // Empty Option only has overhead
+            visitor.visit_leaf(path, size_of::<Option<T>>());
+        }
+    }
+}
 
 impl<K, V> LogicalMemoryProfile for std::collections::BTreeMap<K, V>
 where

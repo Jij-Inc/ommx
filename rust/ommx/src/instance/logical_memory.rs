@@ -156,10 +156,10 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;description 48
-        Instance.decision_variables;DecisionVariable.metadata;name 48
-        Instance.decision_variables;DecisionVariable.metadata;parameters 64
-        Instance.decision_variables;DecisionVariable.metadata;subscripts 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 64
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 48
         Instance.decision_variables;DecisionVariable.substituted_value 32
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.removed_constraints;BTreeMap[overhead] 24
@@ -210,8 +210,8 @@ mod tests {
         Instance.constraints;Constraint.function;Linear;PolynomialBase.terms 80
         Instance.constraints;Constraint.id 8
         Instance.constraints;Constraint.name 24
-        Instance.constraints;Constraint.parameters 32
-        Instance.constraints;Constraint.subscripts 24
+        Instance.constraints;Constraint.parameters;FnvHashMap[overhead] 32
+        Instance.constraints;Constraint.subscripts;Vec[overhead] 24
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
@@ -219,10 +219,10 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;description 48
-        Instance.decision_variables;DecisionVariable.metadata;name 48
-        Instance.decision_variables;DecisionVariable.metadata;parameters 64
-        Instance.decision_variables;DecisionVariable.metadata;subscripts 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 64
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 48
         Instance.decision_variables;DecisionVariable.substituted_value 32
         Instance.objective;Linear;PolynomialBase.terms 80
         Instance.removed_constraints;BTreeMap[overhead] 24
@@ -268,10 +268,10 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 48
         Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
-        Instance.decision_variables;DecisionVariable.metadata;description 72
-        Instance.decision_variables;DecisionVariable.metadata;name 95
-        Instance.decision_variables;DecisionVariable.metadata;parameters 96
-        Instance.decision_variables;DecisionVariable.metadata;subscripts 72
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 72
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 95
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 96
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 72
         Instance.decision_variables;DecisionVariable.substituted_value 48
         Instance.objective;Zero 40
         Instance.removed_constraints;BTreeMap[overhead] 24
@@ -322,10 +322,10 @@ mod tests {
         Instance.decision_variables;DecisionVariable.bound 16
         Instance.decision_variables;DecisionVariable.id 8
         Instance.decision_variables;DecisionVariable.kind 1
-        Instance.decision_variables;DecisionVariable.metadata;description 24
-        Instance.decision_variables;DecisionVariable.metadata;name 24
-        Instance.decision_variables;DecisionVariable.metadata;parameters 32
-        Instance.decision_variables;DecisionVariable.metadata;subscripts 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
         Instance.decision_variables;DecisionVariable.substituted_value 16
         Instance.description;authors 24
         Instance.description;authors;String 56
