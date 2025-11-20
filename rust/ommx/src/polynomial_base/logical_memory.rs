@@ -33,7 +33,6 @@ impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::logical_memory::logical_memory_to_folded;
     use crate::polynomial_base::Linear;
     use crate::{coeff, linear, quadratic};

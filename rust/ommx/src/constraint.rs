@@ -1,6 +1,7 @@
 mod approx;
 mod arbitrary;
 mod evaluate;
+mod logical_memory;
 mod parse;
 mod reduce_binary_power;
 mod serialize;
