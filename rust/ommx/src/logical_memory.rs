@@ -152,26 +152,4 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_folded_collector() {
-        let mut collector = FoldedCollector::new();
-        collector.visit_leaf(&["root", "child", "leaf"], 1024);
-        collector.visit_leaf(&["root", "child", "other"], 2048);
-
-        let output = collector.finish();
-        assert_eq!(output, "root;child;leaf 1024\nroot;child;other 2048");
-    }
-
-    #[test]
-    fn test_folded_collector_skip_zero() {
-        let mut collector = FoldedCollector::new();
-        collector.visit_leaf(&["root", "empty"], 0);
-        collector.visit_leaf(&["root", "nonempty"], 100);
-
-        let output = collector.finish();
-        assert_eq!(output, "root;nonempty 100");
-    }
-}
+mod tests;

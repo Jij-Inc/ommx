@@ -87,4 +87,14 @@ mod tests {
         let bytes: usize = parts[1].parse().expect("Should be a valid number");
         assert!(bytes > 0);
     }
+
+    #[test]
+    fn test_single_term_snapshot() {
+        // Single term: 2*x1
+        let linear = coeff!(2.0) * linear!(1);
+        let folded = logical_memory_to_folded("Linear", &linear);
+
+        // Snapshot test to verify exact output format
+        insta::assert_snapshot!(folded, @"Linear;terms 104");
+    }
 }
