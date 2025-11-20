@@ -8,94 +8,74 @@ impl LogicalMemoryProfile for Instance {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
+        // Count the struct itself (sense, and stack parts of all fields)
+        let struct_size = size_of::<Instance>();
+        visitor.visit_leaf(path, struct_size);
+
         // Delegate to objective Function
         path.push("objective");
         self.objective().visit_logical_memory(path, visitor);
         path.pop();
 
         // BTreeMap<VariableID, DecisionVariable> decision_variables
-        if !self.decision_variables().is_empty() {
-            path.push("decision_variables");
+        path.push("decision_variables");
 
-            // BTreeMap overhead
-            let map_overhead =
-                size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>(
-                );
-            visitor.visit_leaf(path, map_overhead);
+        // Keys (VariableID)
+        path.push("keys");
+        let key_size = size_of::<crate::VariableID>();
+        let keys_bytes = self.decision_variables().len() * key_size;
+        visitor.visit_leaf(path, keys_bytes);
+        path.pop();
 
-            // Keys (VariableID)
-            path.push("keys");
-            let key_size = size_of::<crate::VariableID>();
-            let keys_bytes = self.decision_variables().len() * key_size;
-            visitor.visit_leaf(path, keys_bytes);
-            path.pop();
-
-            // Delegate to each DecisionVariable (struct + heap allocations)
-            // Note: FoldedCollector will automatically aggregate same paths
-            for dv in self.decision_variables().values() {
-                path.push("DecisionVariable");
-                dv.visit_logical_memory(path, visitor);
-                path.pop();
-            }
-
+        // Delegate to each DecisionVariable (struct + heap allocations)
+        // Note: FoldedCollector will automatically aggregate same paths
+        for dv in self.decision_variables().values() {
+            path.push("DecisionVariable");
+            dv.visit_logical_memory(path, visitor);
             path.pop();
         }
+
+        path.pop();
 
         // BTreeMap<ConstraintID, Constraint> constraints
-        if !self.constraints().is_empty() {
-            path.push("constraints");
+        path.push("constraints");
 
-            // BTreeMap overhead
-            let map_overhead = size_of::<
-                std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>,
-            >();
-            visitor.visit_leaf(path, map_overhead);
+        // Keys (ConstraintID)
+        path.push("keys");
+        let key_size = size_of::<crate::ConstraintID>();
+        let keys_bytes = self.constraints().len() * key_size;
+        visitor.visit_leaf(path, keys_bytes);
+        path.pop();
 
-            // Keys (ConstraintID)
-            path.push("keys");
-            let key_size = size_of::<crate::ConstraintID>();
-            let keys_bytes = self.constraints().len() * key_size;
-            visitor.visit_leaf(path, keys_bytes);
-            path.pop();
-
-            // Delegate to each Constraint (struct + function + metadata heap allocations)
-            // Note: FoldedCollector will automatically aggregate same paths
-            for constraint in self.constraints().values() {
-                path.push("Constraint");
-                constraint.visit_logical_memory(path, visitor);
-                path.pop();
-            }
-
+        // Delegate to each Constraint (struct + function + metadata heap allocations)
+        // Note: FoldedCollector will automatically aggregate same paths
+        for constraint in self.constraints().values() {
+            path.push("Constraint");
+            constraint.visit_logical_memory(path, visitor);
             path.pop();
         }
+
+        path.pop();
 
         // BTreeMap<ConstraintID, RemovedConstraint> removed_constraints
-        if !self.removed_constraints().is_empty() {
-            path.push("removed_constraints");
+        path.push("removed_constraints");
 
-            // BTreeMap overhead
-            let map_overhead = size_of::<
-                std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>,
-            >();
-            visitor.visit_leaf(path, map_overhead);
+        // Keys (ConstraintID)
+        path.push("keys");
+        let key_size = size_of::<crate::ConstraintID>();
+        let keys_bytes = self.removed_constraints().len() * key_size;
+        visitor.visit_leaf(path, keys_bytes);
+        path.pop();
 
-            // Keys (ConstraintID)
-            path.push("keys");
-            let key_size = size_of::<crate::ConstraintID>();
-            let keys_bytes = self.removed_constraints().len() * key_size;
-            visitor.visit_leaf(path, keys_bytes);
-            path.pop();
-
-            // Delegate to each RemovedConstraint (struct + heap allocations)
-            // Note: FoldedCollector will automatically aggregate same paths
-            for removed in self.removed_constraints().values() {
-                path.push("RemovedConstraint");
-                removed.visit_logical_memory(path, visitor);
-                path.pop();
-            }
-
+        // Delegate to each RemovedConstraint (struct + heap allocations)
+        // Note: FoldedCollector will automatically aggregate same paths
+        for removed in self.removed_constraints().values() {
+            path.push("RemovedConstraint");
+            removed.visit_logical_memory(path, visitor);
             path.pop();
         }
+
+        path.pop();
 
         // AcyclicAssignments decision_variable_dependency
         if !self.decision_variable_dependency().is_empty() {
@@ -131,7 +111,10 @@ mod tests {
         let instance = Instance::default();
         let folded = logical_memory_to_folded("Instance", &instance);
         // Empty instance has zero objective
-        insta::assert_snapshot!(folded, @"Instance;objective;Zero 40");
+        insta::assert_snapshot!(folded, @r###"
+        Instance 488
+        Instance;objective;Zero 40
+        "###);
     }
 
     #[test]
@@ -155,7 +138,7 @@ mod tests {
 
         let folded = logical_memory_to_folded("Instance", &instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance;decision_variables 24
+        Instance 488
         Instance;decision_variables;DecisionVariable 304
         Instance;decision_variables;keys 16
         Instance;objective;Linear;terms 104
@@ -196,11 +179,10 @@ mod tests {
 
         let folded = logical_memory_to_folded("Instance", &instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraints 24
+        Instance 488
         Instance;constraints;Constraint 160
         Instance;constraints;Constraint;function;Linear;terms 104
         Instance;constraints;keys 8
-        Instance;decision_variables 24
         Instance;decision_variables;DecisionVariable 304
         Instance;decision_variables;keys 16
         Instance;objective;Linear;terms 104
@@ -235,7 +217,7 @@ mod tests {
         let folded = logical_memory_to_folded("Instance", &instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
-        Instance;decision_variables 24
+        Instance 488
         Instance;decision_variables;DecisionVariable 456
         Instance;decision_variables;DecisionVariable;metadata;name 95
         Instance;decision_variables;keys 24

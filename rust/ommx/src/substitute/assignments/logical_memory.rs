@@ -8,44 +8,40 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
+        // Count the struct itself (includes stack parts of assignments and dependency)
+        let struct_size = size_of::<AcyclicAssignments>();
+        visitor.visit_leaf(path, struct_size);
+
         // FnvHashMap<VariableID, Function> assignments
-        if !self.assignments.is_empty() {
-            path.push("assignments");
+        path.push("assignments");
 
-            // HashMap overhead
-            let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
-            visitor.visit_leaf(path, map_overhead);
+        // Keys (VariableID)
+        path.push("keys");
+        let key_size = size_of::<crate::VariableID>();
+        let keys_bytes = self.assignments.len() * key_size;
+        visitor.visit_leaf(path, keys_bytes);
+        path.pop();
 
-            // Keys (VariableID)
-            path.push("keys");
-            let key_size = size_of::<crate::VariableID>();
-            let keys_bytes = self.assignments.len() * key_size;
-            visitor.visit_leaf(path, keys_bytes);
-            path.pop();
-
-            // Delegate to each Function
-            for function in self.assignments.values() {
-                path.push("Function");
-                function.visit_logical_memory(path, visitor);
-                path.pop();
-            }
-
+        // Delegate to each Function
+        for function in self.assignments.values() {
+            path.push("Function");
+            function.visit_logical_memory(path, visitor);
             path.pop();
         }
+
+        path.pop();
 
         // DiGraphMap<VariableID, ()> dependency
         // Estimate: node count * size_of::<VariableID>() + edge count * (size_of::<VariableID>() * 2)
-        if self.dependency.node_count() > 0 {
-            path.push("dependency");
+        path.push("dependency");
 
-            let node_bytes = self.dependency.node_count() * size_of::<crate::VariableID>();
-            let edge_bytes =
-                self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
-            let total_bytes = node_bytes + edge_bytes;
+        let node_bytes = self.dependency.node_count() * size_of::<crate::VariableID>();
+        let edge_bytes =
+            self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
+        let total_bytes = node_bytes + edge_bytes;
+        visitor.visit_leaf(path, total_bytes);
 
-            visitor.visit_leaf(path, total_bytes);
-            path.pop();
-        }
+        path.pop();
     }
 }
 
@@ -60,7 +56,7 @@ mod tests {
         let assignments = AcyclicAssignments::default();
         let folded = logical_memory_to_folded("Assignments", &assignments);
         // Empty assignments should produce no output
-        insta::assert_snapshot!(folded, @"");
+        insta::assert_snapshot!(folded, @"Assignments 176");
     }
 
     #[test]
@@ -74,7 +70,7 @@ mod tests {
 
         let folded = logical_memory_to_folded("Assignments", &assignments);
         insta::assert_snapshot!(folded, @r###"
-        Assignments;assignments 32
+        Assignments 176
         Assignments;assignments;Function;Linear;terms 208
         Assignments;assignments;keys 16
         Assignments;dependency 80
