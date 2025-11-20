@@ -94,8 +94,8 @@ mod tests {
 
         let folded = logical_memory_to_folded("DecisionVariable", &dv);
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable;metadata;name 26
         DecisionVariable;metadata;description 38
+        DecisionVariable;metadata;name 26
         DecisionVariable;metadata;subscripts 48
         "###);
     }

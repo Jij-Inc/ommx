@@ -118,9 +118,9 @@ mod tests {
         let folded = logical_memory_to_folded("Constraint", &constraint);
         // Should include function, name, description, and subscripts
         insta::assert_snapshot!(folded, @r###"
+        Constraint;description 41
         Constraint;function;Linear;terms 104
         Constraint;name 39
-        Constraint;description 41
         Constraint;subscripts 48
         "###);
     }

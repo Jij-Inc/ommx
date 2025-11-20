@@ -61,8 +61,7 @@ mod tests {
 
         let folded = logical_memory_to_folded("Assignments", &assignments);
         insta::assert_snapshot!(folded, @r###"
-        Assignments;assignments;Linear;terms 104
-        Assignments;assignments;Linear;terms 104
+        Assignments;assignments;Linear;terms 208
         Assignments;dependency 80
         "###);
     }

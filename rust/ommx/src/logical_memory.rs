@@ -57,9 +57,14 @@ pub trait LogicalMemoryVisitor {
 ///
 /// This format is compatible with flamegraph visualization tools like
 /// `flamegraph.pl` and `inferno`.
+///
+/// The collector automatically aggregates multiple visits to the same path,
+/// which is useful when profiling collections (e.g., multiple DecisionVariables
+/// with the same metadata structure).
 #[derive(Debug, Default)]
 pub struct FoldedCollector {
-    lines: Vec<String>,
+    // Use HashMap to aggregate same paths
+    aggregated: std::collections::HashMap<String, usize>,
 }
 
 impl FoldedCollector {
@@ -71,8 +76,15 @@ impl FoldedCollector {
     /// Finish collecting and return the folded stack output.
     ///
     /// Each line has format: `"frame1;frame2;...;frameN bytes"`
+    /// Lines are sorted for deterministic output.
     pub fn finish(self) -> String {
-        self.lines.join("\n")
+        let mut lines: Vec<_> = self
+            .aggregated
+            .into_iter()
+            .map(|(path, bytes)| format!("{path} {bytes}"))
+            .collect();
+        lines.sort();
+        lines.join("\n")
     }
 }
 
@@ -82,7 +94,7 @@ impl LogicalMemoryVisitor for FoldedCollector {
             return;
         }
         let frames = path.join(";");
-        self.lines.push(format!("{frames} {bytes}"));
+        *self.aggregated.entry(frames).or_insert(0) += bytes;
     }
 }
 
