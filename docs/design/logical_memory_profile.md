@@ -97,123 +97,192 @@ pub trait LogicalMemoryVisitor {
 
 ## Implementation Patterns
 
-### Pattern 1: Leaf Node (No Logical Decomposition)
+### Critical Implementation Rule
 
-**Example**: CSR matrix `values` array
+**Never count struct size with `size_of::<Self>()`** - this causes double-counting when the struct contains other structs as fields.
+
+Instead, count or delegate each field individually:
+- Primitive types: count with `size_of::<T>()`
+- Nested structs: delegate via `visit_logical_memory()`
+- Collections: count stack overhead + elements separately
+
+### Pattern 1: Struct with Primitive Fields
+
+**Example**: Simple struct with primitive fields
 
 ```rust
-struct Values {
-    data: Vec<f64>,
+struct Point {
+    x: f64,
+    y: f64,
 }
 
-impl LogicalMemoryProfile for Values {
+impl LogicalMemoryProfile for Point {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
         visitor: &mut V
     ) {
-        path.push("values");
-        let bytes = self.data.capacity() * std::mem::size_of::<f64>();
-        visitor.visit_leaf(path, bytes);
+        // Count each field individually
+        path.push("x");
+        visitor.visit_leaf(path, std::mem::size_of::<f64>());
+        path.pop();
+
+        path.push("y");
+        visitor.visit_leaf(path, std::mem::size_of::<f64>());
         path.pop();
     }
 }
 ```
 
 **Key points**:
-- Use `capacity()` (actual allocated memory, not `len()`)
-- Get element size with `std::mem::size_of::<T>()`
+- Count each primitive field separately
+- Do NOT use `size_of::<Point>()` - this would include padding
 
-### Pattern 2: Intermediate Node (Delegate to Children)
+### Pattern 2: Struct with Nested Struct Fields
 
-**Example**: Quadratic polynomial (function in objective or constraint)
+**Example**: Struct containing another struct
 
 ```rust
-// Quadratic = PolynomialBase<QuadraticMonomial>
-// where PolynomialBase<M> has: terms: FnvHashMap<M, Coefficient>
+struct DecisionVariable {
+    id: VariableID,           // u64 wrapper
+    kind: Kind,               // enum
+    bound: Bound,             // struct with two f64s
+    metadata: Metadata,       // nested struct
+}
 
-impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
+impl LogicalMemoryProfile for DecisionVariable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
         visitor: &mut V
     ) {
-        path.push("terms");
+        // Count primitive/simple fields
+        path.push("id");
+        visitor.visit_leaf(path, std::mem::size_of::<VariableID>());
+        path.pop();
 
-        // HashMap: keys (monomials) + values (coefficients) + overhead
-        let map_overhead = std::mem::size_of::<FnvHashMap<M, Coefficient>>();
-        let keys_bytes = self.terms.capacity() * std::mem::size_of::<M>();
-        let values_bytes = self.terms.capacity() * std::mem::size_of::<Coefficient>();
+        path.push("kind");
+        visitor.visit_leaf(path, std::mem::size_of::<Kind>());
+        path.pop();
 
-        visitor.visit_leaf(path, map_overhead + keys_bytes + values_bytes);
+        path.push("bound");
+        visitor.visit_leaf(path, std::mem::size_of::<Bound>());
+        path.pop();
+
+        // Delegate to nested struct
+        path.push("metadata");
+        self.metadata.visit_logical_memory(path, visitor);
         path.pop();
     }
 }
 ```
 
-**Emitted leaves**:
-- `["...", "Quadratic", "terms"]` with total HashMap memory
-- Or split into `["...", "keys"]`, `["...", "values"]`, `["...", "overhead"]` for finer granularity
+**Key points**:
+- Simple structs (like `Bound` with just two f64s) can be counted directly
+- Complex structs with heap allocations should be delegated
+- Never use `size_of::<DecisionVariable>()` - would double-count metadata
 
-### Pattern 3: Root Node
+### Pattern 3: Collections (Vec, HashMap, BTreeMap)
 
-**Example**: Entire optimization problem instance
+**Example**: Struct with collection fields
 
 ```rust
-impl LogicalMemoryProfile for Instance {
+struct Metadata {
+    name: Option<String>,
+    subscripts: Vec<i64>,
+    parameters: HashMap<String, String>,
+}
+
+impl LogicalMemoryProfile for Metadata {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
         visitor: &mut V
     ) {
-        path.push("Instance");
-
-        // Objective function
-        path.push("objective");
-        self.objective.visit_logical_memory(path, visitor);
+        // Option<String>: count stack + heap
+        path.push("name");
+        let name_bytes = std::mem::size_of::<Option<String>>()
+            + self.name.as_ref().map_or(0, |s| s.capacity());
+        visitor.visit_leaf(path, name_bytes);
         path.pop();
 
-        // Decision variables (BTreeMap<VariableID, DecisionVariable>)
-        path.push("decision_variables");
-        // ... visit BTreeMap structure
+        // Vec<i64>: count stack + heap
+        path.push("subscripts");
+        let vec_bytes = std::mem::size_of::<Vec<i64>>()
+            + self.subscripts.capacity() * std::mem::size_of::<i64>();
+        visitor.visit_leaf(path, vec_bytes);
         path.pop();
 
-        // Constraints (BTreeMap<ConstraintID, Constraint>)
-        path.push("constraints");
-        // ... visit each constraint's function
+        // HashMap: count stack + entries
+        path.push("parameters");
+        let map_overhead = std::mem::size_of::<HashMap<String, String>>();
+        let mut entries_bytes = 0;
+        for (k, v) in &self.parameters {
+            entries_bytes += std::mem::size_of::<(String, String)>();
+            entries_bytes += k.capacity() + v.capacity();
+        }
+        visitor.visit_leaf(path, map_overhead + entries_bytes);
         path.pop();
-
-        // Removed constraints
-        path.push("removed_constraints");
-        // ... visit BTreeMap structure
-        path.pop();
-
-        path.pop(); // "Instance"
     }
 }
 ```
 
-**Key point**: Root node doesn't emit leaves itself, delegates everything to children
+**Key points**:
+- Always count collection stack overhead (Vec header, HashMap header, etc.)
+- Use `capacity()` for heap-allocated sizes, not `len()`
+- For String, count both `size_of::<String>()` and `capacity()`
 
 ## Implementation Guidelines
 
-### Stack vs Heap Separation
+### Avoiding Double-Counting
 
-**Rule**: Stack-allocated fields are counted as part of the struct; heap-allocated fields are counted separately.
+**Critical Rule**: Never use `size_of::<Self>()` to count the entire struct size.
 
-- **Stack fields** (struct overhead + all inline fields):
-  - Count entire struct size: `size_of::<T>()`
-  - Includes padding and alignment
-  - Example: `DecisionVariable` struct (id, kind, bound, substituted_value) → single `visit_leaf` call
+**Problem**: When struct A contains struct B as a field:
+```rust
+struct A {
+    field1: u64,
+    field2: B,  // B's stack space is included in size_of::<A>()
+}
+```
 
-- **Heap-allocated fields** (dynamic allocations):
-  - Count separately with dedicated paths
-  - String: `size_of::<String>() + capacity()`
-  - Vec: `size_of::<Vec<T>>() + capacity() * size_of::<T>()`
-  - HashMap/BTreeMap: overhead + keys + values
-  - Example: `DecisionVariableMetadata` (name, description, subscripts, parameters) → separate paths
+If you count both `size_of::<A>()` and then delegate to `B.visit_logical_memory()`, the stack space of B gets counted twice.
 
-**Rationale**: Stack memory is fixed per instance; heap memory varies dynamically and benefits from separate tracking.
+**Solution**: Count or delegate each field individually:
+
+```rust
+impl LogicalMemoryProfile for A {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(...) {
+        // Count field1
+        path.push("field1");
+        visitor.visit_leaf(path, size_of::<u64>());
+        path.pop();
+
+        // Delegate to field2 (don't count it!)
+        path.push("field2");
+        self.field2.visit_logical_memory(path, visitor);
+        path.pop();
+    }
+}
+```
+
+### Stack vs Heap Counting
+
+- **Primitive types**: Count with `size_of::<T>()`
+  - Examples: `u64`, `f64`, `bool`, enums
+
+- **Simple structs** (no heap allocations): Count with `size_of::<T>()`
+  - Example: `Bound` (just two f64s)
+
+- **Complex structs** (with heap allocations): Delegate via `visit_logical_memory()`
+  - Examples: `Metadata`, `Constraint`, `DecisionVariable`
+
+- **Collections**: Count stack overhead + heap separately
+  - Vec: `size_of::<Vec<T>>()` + `capacity() * size_of::<T>()`
+  - HashMap: `size_of::<HashMap<K,V>>()` + entry bytes
+  - String: `size_of::<String>()` + `capacity()`
+
+**Trade-off**: Padding between fields is not tracked, but this prevents double-counting.
 
 ### Key-Value Separation in Collections
 
@@ -500,3 +569,8 @@ instance.show_memory_flamegraph()  # Display SVG inline
 ## Revision History
 
 - 2025-11-20: Initial version (visitor-based design)
+- 2025-11-20: Fixed double-counting issue by eliminating `size_of::<Self>()` usage
+  - Changed to count each field individually instead of entire struct size
+  - Prevents double-counting when structs contain other structs as fields
+  - Trade-off: padding between fields is no longer tracked
+  - Updated all implementation patterns and guidelines
