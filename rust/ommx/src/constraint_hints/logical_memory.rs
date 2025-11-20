@@ -8,23 +8,27 @@ impl LogicalMemoryProfile for ConstraintHints {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
+        // Count the struct itself (includes Vec stack parts)
+        let struct_size = size_of::<ConstraintHints>();
+        visitor.visit_leaf(path, struct_size);
+
         // Vec<OneHot> one_hot_constraints
-        if !self.one_hot_constraints.is_empty() {
-            path.push("one_hot_constraints");
-            for one_hot in &self.one_hot_constraints {
-                one_hot.visit_logical_memory(path, visitor);
-            }
+        path.push("one_hot_constraints");
+        for one_hot in &self.one_hot_constraints {
+            path.push("OneHot");
+            one_hot.visit_logical_memory(path, visitor);
             path.pop();
         }
+        path.pop();
 
         // Vec<Sos1> sos1_constraints
-        if !self.sos1_constraints.is_empty() {
-            path.push("sos1_constraints");
-            for sos1 in &self.sos1_constraints {
-                sos1.visit_logical_memory(path, visitor);
-            }
+        path.push("sos1_constraints");
+        for sos1 in &self.sos1_constraints {
+            path.push("Sos1");
+            sos1.visit_logical_memory(path, visitor);
             path.pop();
         }
+        path.pop();
     }
 }
 
@@ -34,15 +38,15 @@ impl LogicalMemoryProfile for OneHot {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // BTreeSet<VariableID> variables
-        if !self.variables.is_empty() {
-            path.push("variables");
-            // BTreeSet overhead + number of elements * size of element
-            let bytes = size_of::<std::collections::BTreeSet<crate::VariableID>>()
-                + self.variables.len() * size_of::<crate::VariableID>();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // Count the struct itself (id field + BTreeSet stack part)
+        let struct_size = size_of::<OneHot>();
+        visitor.visit_leaf(path, struct_size);
+
+        // BTreeSet<VariableID> variables - only count elements
+        path.push("variables");
+        let bytes = self.variables.len() * size_of::<crate::VariableID>();
+        visitor.visit_leaf(path, bytes);
+        path.pop();
     }
 }
 
@@ -52,23 +56,21 @@ impl LogicalMemoryProfile for Sos1 {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // BTreeSet<ConstraintID> big_m_constraint_ids
-        if !self.big_m_constraint_ids.is_empty() {
-            path.push("big_m_constraint_ids");
-            let bytes = size_of::<std::collections::BTreeSet<crate::ConstraintID>>()
-                + self.big_m_constraint_ids.len() * size_of::<crate::ConstraintID>();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // Count the struct itself (binary_constraint_id + BTreeSet stack parts)
+        let struct_size = size_of::<Sos1>();
+        visitor.visit_leaf(path, struct_size);
 
-        // BTreeSet<VariableID> variables
-        if !self.variables.is_empty() {
-            path.push("variables");
-            let bytes = size_of::<std::collections::BTreeSet<crate::VariableID>>()
-                + self.variables.len() * size_of::<crate::VariableID>();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // BTreeSet<ConstraintID> big_m_constraint_ids - only count elements
+        path.push("big_m_constraint_ids");
+        let bytes = self.big_m_constraint_ids.len() * size_of::<crate::ConstraintID>();
+        visitor.visit_leaf(path, bytes);
+        path.pop();
+
+        // BTreeSet<VariableID> variables - only count elements
+        path.push("variables");
+        let bytes = self.variables.len() * size_of::<crate::VariableID>();
+        visitor.visit_leaf(path, bytes);
+        path.pop();
     }
 }
 
@@ -83,7 +85,7 @@ mod tests {
     fn test_constraint_hints_empty_snapshot() {
         let hints = ConstraintHints::default();
         let folded = logical_memory_to_folded("ConstraintHints", &hints);
-        insta::assert_snapshot!(folded, @"");
+        insta::assert_snapshot!(folded, @"ConstraintHints 48");
     }
 
     #[test]
@@ -102,7 +104,11 @@ mod tests {
         };
 
         let folded = logical_memory_to_folded("ConstraintHints", &hints);
-        insta::assert_snapshot!(folded, @"ConstraintHints;one_hot_constraints;variables 48");
+        insta::assert_snapshot!(folded, @r###"
+        ConstraintHints 48
+        ConstraintHints;one_hot_constraints;OneHot 32
+        ConstraintHints;one_hot_constraints;OneHot;variables 24
+        "###);
     }
 
     #[test]
@@ -126,8 +132,10 @@ mod tests {
 
         let folded = logical_memory_to_folded("ConstraintHints", &hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints;sos1_constraints;big_m_constraint_ids 40
-        ConstraintHints;sos1_constraints;variables 48
+        ConstraintHints 48
+        ConstraintHints;sos1_constraints;Sos1 56
+        ConstraintHints;sos1_constraints;Sos1;big_m_constraint_ids 16
+        ConstraintHints;sos1_constraints;Sos1;variables 24
         "###);
     }
 }
