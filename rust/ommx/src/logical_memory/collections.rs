@@ -113,3 +113,19 @@ where
         }
     }
 }
+
+impl<T> LogicalMemoryProfile for std::collections::BTreeSet<T>
+where
+    T: LogicalMemoryProfile,
+{
+    fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
+        // BTreeSet struct overhead
+        let set_overhead = size_of::<std::collections::BTreeSet<T>>();
+        visitor.visit_leaf(&path.with("BTreeSet[overhead]"), set_overhead);
+
+        // Delegate to each element
+        for element in self {
+            element.visit_logical_memory(path, visitor);
+        }
+    }
+}

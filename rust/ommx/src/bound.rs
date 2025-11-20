@@ -527,6 +527,8 @@ impl Arbitrary for Bound {
     }
 }
 
+mod logical_memory;
+
 #[cfg(test)]
 mod tests {
     use approx::assert_abs_diff_eq;

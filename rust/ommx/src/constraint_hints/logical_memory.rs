@@ -1,6 +1,4 @@
 use crate::constraint_hints::{ConstraintHints, OneHot, Sos1};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
-use std::mem::size_of;
 
 crate::impl_logical_memory_profile! {
     ConstraintHints {
@@ -9,44 +7,18 @@ crate::impl_logical_memory_profile! {
     }
 }
 
-impl LogicalMemoryProfile for OneHot {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // id: ConstraintID (u64 wrapper)
-        visitor.visit_leaf(&path.with("OneHot.id"), size_of::<crate::ConstraintID>());
-
-        // variables: BTreeSet<VariableID>
-        let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
-        let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(&path.with("OneHot.variables"), set_overhead + elements_bytes);
+crate::impl_logical_memory_profile! {
+    OneHot {
+        id,
+        variables,
     }
 }
 
-impl LogicalMemoryProfile for Sos1 {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // binary_constraint_id: ConstraintID (u64 wrapper)
-        visitor.visit_leaf(
-            &path.with("Sos1.binary_constraint_id"),
-            size_of::<crate::ConstraintID>(),
-        );
-
-        // big_m_constraint_ids: BTreeSet<ConstraintID>
-        let set_overhead = size_of::<std::collections::BTreeSet<crate::ConstraintID>>();
-        let elements_bytes = self.big_m_constraint_ids.len() * size_of::<crate::ConstraintID>();
-        visitor.visit_leaf(
-            &path.with("Sos1.big_m_constraint_ids"),
-            set_overhead + elements_bytes,
-        );
-
-        // variables: BTreeSet<VariableID>
-        let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
-        let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(&path.with("Sos1.variables"), set_overhead + elements_bytes);
+crate::impl_logical_memory_profile! {
+    Sos1 {
+        binary_constraint_id,
+        big_m_constraint_ids,
+        variables,
     }
 }
 
@@ -82,7 +54,8 @@ mod tests {
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
         ConstraintHints.one_hot_constraints;OneHot.id 8
-        ConstraintHints.one_hot_constraints;OneHot.variables 48
+        ConstraintHints.one_hot_constraints;OneHot.variables 24
+        ConstraintHints.one_hot_constraints;OneHot.variables;BTreeSet[overhead] 24
         ConstraintHints.one_hot_constraints;Vec[overhead] 24
         ConstraintHints.sos1_constraints;Vec[overhead] 24
         "###);
@@ -107,9 +80,11 @@ mod tests {
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
         ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids 40
+        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids 16
+        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids;BTreeSet[overhead] 24
         ConstraintHints.sos1_constraints;Sos1.binary_constraint_id 8
-        ConstraintHints.sos1_constraints;Sos1.variables 48
+        ConstraintHints.sos1_constraints;Sos1.variables 24
+        ConstraintHints.sos1_constraints;Sos1.variables;BTreeSet[overhead] 24
         ConstraintHints.sos1_constraints;Vec[overhead] 24
         "###);
     }

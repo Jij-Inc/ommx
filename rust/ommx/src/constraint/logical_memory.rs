@@ -1,4 +1,4 @@
-use crate::constraint::{Constraint, ConstraintID, RemovedConstraint};
+use crate::constraint::{Constraint, ConstraintID, Equality, RemovedConstraint};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -8,36 +8,21 @@ impl LogicalMemoryProfile for ConstraintID {
     }
 }
 
-impl LogicalMemoryProfile for Constraint {
+impl LogicalMemoryProfile for Equality {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
+        visitor.visit_leaf(path, size_of::<Equality>());
+    }
+}
 
-        // id: ConstraintID (u64 wrapper)
-        visitor.visit_leaf(&path.with("Constraint.id"), size_of::<crate::ConstraintID>());
-
-        // equality: Equality (enum)
-        visitor.visit_leaf(&path.with("Constraint.equality"), size_of::<crate::Equality>());
-
-        // Delegate to Function
-        self.function
-            .visit_logical_memory(path.with("Constraint.function").as_mut(), visitor);
-
-        // name: Option<String>
-        self.name
-            .visit_logical_memory(path.with("Constraint.name").as_mut(), visitor);
-
-        // subscripts: Vec<i64>
-        self.subscripts
-            .visit_logical_memory(path.with("Constraint.subscripts").as_mut(), visitor);
-
-        // parameters: FnvHashMap<String, String>
-        self.parameters
-            .visit_logical_memory(path.with("Constraint.parameters").as_mut(), visitor);
-
-        // description: Option<String>
-        self.description
-            .visit_logical_memory(path.with("Constraint.description").as_mut(), visitor);
+crate::impl_logical_memory_profile! {
+    Constraint {
+        id,
+        equality,
+        function,
+        name,
+        subscripts,
+        parameters,
+        description,
     }
 }
 

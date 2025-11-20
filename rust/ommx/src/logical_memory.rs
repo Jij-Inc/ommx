@@ -144,8 +144,8 @@ impl LogicalMemoryVisitor for FoldedCollector {
 ///
 /// let linear = Linear::default();
 /// let folded = logical_memory_to_folded(&linear);
-/// // Output: "Linear;terms 32" (HashMap struct overhead)
-/// assert_eq!(folded, "Linear;terms 32");
+/// // Output: "PolynomialBase.terms 32" (HashMap struct overhead)
+/// assert_eq!(folded, "PolynomialBase.terms 32");
 /// ```
 pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(value: &T) -> String {
     let mut path = Path::new();

@@ -1,4 +1,4 @@
-use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata, VariableID};
+use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind, VariableID};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use std::mem::size_of;
 
@@ -8,26 +8,19 @@ impl LogicalMemoryProfile for VariableID {
     }
 }
 
-impl LogicalMemoryProfile for DecisionVariable {
+impl LogicalMemoryProfile for Kind {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
+        visitor.visit_leaf(path, size_of::<Kind>());
+    }
+}
 
-        // id: VariableID (u64 wrapper)
-        visitor.visit_leaf(&path.with("DecisionVariable.id"), size_of::<crate::VariableID>());
-
-        // kind: Kind (enum)
-        visitor.visit_leaf(&path.with("DecisionVariable.kind"), size_of::<crate::Kind>());
-
-        // bound: Bound (two f64s)
-        visitor.visit_leaf(&path.with("DecisionVariable.bound"), size_of::<crate::Bound>());
-
-        // substituted_value: Option<f64>
-        visitor.visit_leaf(&path.with("DecisionVariable.substituted_value"), size_of::<Option<f64>>());
-
-        // Delegate to metadata
-        self.metadata
-            .visit_logical_memory(path.with("DecisionVariable.metadata").as_mut(), visitor);
+crate::impl_logical_memory_profile! {
+    DecisionVariable {
+        id,
+        kind,
+        bound,
+        substituted_value,
+        metadata,
     }
 }
 
