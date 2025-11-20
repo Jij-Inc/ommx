@@ -35,6 +35,21 @@ This design provides:
 - **Simple Trait**: Unified with `visit` pattern only, no need for multiple methods like `size_bytes()`
 - **Easy aggregation**: Derived information (total bytes, folded stack) can be added as visitor implementations
 
+### Important Limitations
+
+**This is logical memory estimation, not exact heap profiling**
+
+The reported byte counts are:
+- ✅ **Useful for**: Comparing relative sizes, identifying large data structures, tracking growth trends
+- ⚠️ **Not exact**: Does not account for allocator overhead, padding, internal fragmentation
+- ⚠️ **Approximation**: Uses `capacity()` and `size_of::<T>()` for estimation
+- ⚠️ **Different from real allocations**: Actual heap profiling tools (like `jemalloc` or `valgrind`) will show different numbers
+
+For precise memory profiling, use dedicated heap profilers. This tool is designed for:
+- Understanding logical structure and proportions
+- Flamegraph visualization of component relationships
+- Development-time memory analysis
+
 ### Visitor Pattern
 
 Each type only has the responsibility of communicating its logical structure to visitors.
