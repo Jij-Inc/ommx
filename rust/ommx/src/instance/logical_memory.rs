@@ -8,17 +8,24 @@ impl LogicalMemoryProfile for Instance {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Count the struct itself (sense, and stack parts of all fields)
-        let struct_size = size_of::<Instance>();
-        visitor.visit_leaf(path, struct_size);
+        // Count each field individually to avoid double-counting
+
+        // sense: Sense (enum)
+        path.push("sense");
+        visitor.visit_leaf(path, size_of::<crate::instance::Sense>());
+        path.pop();
 
         // Delegate to objective Function
         path.push("objective");
         self.objective().visit_logical_memory(path, visitor);
         path.pop();
 
-        // BTreeMap<VariableID, DecisionVariable> decision_variables
+        // decision_variables: BTreeMap<VariableID, DecisionVariable>
         path.push("decision_variables");
+
+        // BTreeMap stack overhead
+        let map_overhead = size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
+        visitor.visit_leaf(path, map_overhead);
 
         // Keys (VariableID)
         path.push("keys");
@@ -27,8 +34,7 @@ impl LogicalMemoryProfile for Instance {
         visitor.visit_leaf(path, keys_bytes);
         path.pop();
 
-        // Delegate to each DecisionVariable (struct + heap allocations)
-        // Note: FoldedCollector will automatically aggregate same paths
+        // Delegate to each DecisionVariable
         for dv in self.decision_variables().values() {
             path.push("DecisionVariable");
             dv.visit_logical_memory(path, visitor);
@@ -37,8 +43,12 @@ impl LogicalMemoryProfile for Instance {
 
         path.pop();
 
-        // BTreeMap<ConstraintID, Constraint> constraints
+        // constraints: BTreeMap<ConstraintID, Constraint>
         path.push("constraints");
+
+        // BTreeMap stack overhead
+        let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
+        visitor.visit_leaf(path, map_overhead);
 
         // Keys (ConstraintID)
         path.push("keys");
@@ -47,8 +57,7 @@ impl LogicalMemoryProfile for Instance {
         visitor.visit_leaf(path, keys_bytes);
         path.pop();
 
-        // Delegate to each Constraint (struct + function + metadata heap allocations)
-        // Note: FoldedCollector will automatically aggregate same paths
+        // Delegate to each Constraint
         for constraint in self.constraints().values() {
             path.push("Constraint");
             constraint.visit_logical_memory(path, visitor);
@@ -57,8 +66,12 @@ impl LogicalMemoryProfile for Instance {
 
         path.pop();
 
-        // BTreeMap<ConstraintID, RemovedConstraint> removed_constraints
+        // removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>
         path.push("removed_constraints");
+
+        // BTreeMap stack overhead
+        let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>>();
+        visitor.visit_leaf(path, map_overhead);
 
         // Keys (ConstraintID)
         path.push("keys");
@@ -67,8 +80,7 @@ impl LogicalMemoryProfile for Instance {
         visitor.visit_leaf(path, keys_bytes);
         path.pop();
 
-        // Delegate to each RemovedConstraint (struct + heap allocations)
-        // Note: FoldedCollector will automatically aggregate same paths
+        // Delegate to each RemovedConstraint
         for removed in self.removed_constraints().values() {
             path.push("RemovedConstraint");
             removed.visit_logical_memory(path, visitor);
@@ -77,21 +89,17 @@ impl LogicalMemoryProfile for Instance {
 
         path.pop();
 
-        // AcyclicAssignments decision_variable_dependency
-        if !self.decision_variable_dependency().is_empty() {
-            path.push("decision_variable_dependency");
-            self.decision_variable_dependency()
-                .visit_logical_memory(path, visitor);
-            path.pop();
-        }
+        // decision_variable_dependency: AcyclicAssignments
+        path.push("decision_variable_dependency");
+        self.decision_variable_dependency()
+            .visit_logical_memory(path, visitor);
+        path.pop();
 
-        // ConstraintHints constraint_hints
-        if !self.constraint_hints().is_empty() {
-            path.push("constraint_hints");
-            self.constraint_hints()
-                .visit_logical_memory(path, visitor);
-            path.pop();
-        }
+        // constraint_hints: ConstraintHints
+        path.push("constraint_hints");
+        self.constraint_hints()
+            .visit_logical_memory(path, visitor);
+        path.pop();
 
         // Option<v1::Parameters> parameters
         // Option<v1::instance::Description> description
@@ -112,8 +120,15 @@ mod tests {
         let folded = logical_memory_to_folded("Instance", &instance);
         // Empty instance has zero objective
         insta::assert_snapshot!(folded, @r###"
-        Instance 488
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
         Instance;objective;Zero 40
+        Instance;removed_constraints 24
+        Instance;sense 1
         "###);
     }
 
@@ -138,10 +153,24 @@ mod tests {
 
         let folded = logical_memory_to_folded("Instance", &instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance 488
-        Instance;decision_variables;DecisionVariable 304
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
+        Instance;decision_variables;DecisionVariable;bound 32
+        Instance;decision_variables;DecisionVariable;id 16
+        Instance;decision_variables;DecisionVariable;kind 2
+        Instance;decision_variables;DecisionVariable;metadata;description 48
+        Instance;decision_variables;DecisionVariable;metadata;name 48
+        Instance;decision_variables;DecisionVariable;metadata;parameters 64
+        Instance;decision_variables;DecisionVariable;metadata;subscripts 48
+        Instance;decision_variables;DecisionVariable;substituted_value 32
         Instance;decision_variables;keys 16
         Instance;objective;Linear;terms 104
+        Instance;removed_constraints 24
+        Instance;sense 1
         "###);
     }
 
@@ -179,13 +208,32 @@ mod tests {
 
         let folded = logical_memory_to_folded("Instance", &instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance 488
-        Instance;constraints;Constraint 160
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;constraints;Constraint;description 24
+        Instance;constraints;Constraint;equality 1
         Instance;constraints;Constraint;function;Linear;terms 104
+        Instance;constraints;Constraint;id 8
+        Instance;constraints;Constraint;name 24
+        Instance;constraints;Constraint;parameters 32
+        Instance;constraints;Constraint;subscripts 24
         Instance;constraints;keys 8
-        Instance;decision_variables;DecisionVariable 304
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
+        Instance;decision_variables;DecisionVariable;bound 32
+        Instance;decision_variables;DecisionVariable;id 16
+        Instance;decision_variables;DecisionVariable;kind 2
+        Instance;decision_variables;DecisionVariable;metadata;description 48
+        Instance;decision_variables;DecisionVariable;metadata;name 48
+        Instance;decision_variables;DecisionVariable;metadata;parameters 64
+        Instance;decision_variables;DecisionVariable;metadata;subscripts 48
+        Instance;decision_variables;DecisionVariable;substituted_value 32
         Instance;decision_variables;keys 16
         Instance;objective;Linear;terms 104
+        Instance;removed_constraints 24
+        Instance;sense 1
         "###);
     }
 
@@ -217,11 +265,24 @@ mod tests {
         let folded = logical_memory_to_folded("Instance", &instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
-        Instance 488
-        Instance;decision_variables;DecisionVariable 456
+        Instance;constraint_hints;one_hot_constraints 24
+        Instance;constraint_hints;sos1_constraints 24
+        Instance;constraints 24
+        Instance;decision_variable_dependency;assignments 32
+        Instance;decision_variable_dependency;dependency 144
+        Instance;decision_variables 24
+        Instance;decision_variables;DecisionVariable;bound 48
+        Instance;decision_variables;DecisionVariable;id 24
+        Instance;decision_variables;DecisionVariable;kind 3
+        Instance;decision_variables;DecisionVariable;metadata;description 72
         Instance;decision_variables;DecisionVariable;metadata;name 95
+        Instance;decision_variables;DecisionVariable;metadata;parameters 96
+        Instance;decision_variables;DecisionVariable;metadata;subscripts 72
+        Instance;decision_variables;DecisionVariable;substituted_value 48
         Instance;decision_variables;keys 24
         Instance;objective;Zero 40
+        Instance;removed_constraints 24
+        Instance;sense 1
         "###);
     }
 }

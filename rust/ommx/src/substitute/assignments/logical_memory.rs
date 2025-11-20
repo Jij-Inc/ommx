@@ -8,12 +8,14 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Count the struct itself (includes stack parts of assignments and dependency)
-        let struct_size = size_of::<AcyclicAssignments>();
-        visitor.visit_leaf(path, struct_size);
+        // Count each field individually to avoid double-counting
 
-        // FnvHashMap<VariableID, Function> assignments
+        // assignments: FnvHashMap<VariableID, Function>
         path.push("assignments");
+
+        // HashMap stack overhead
+        let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
+        visitor.visit_leaf(path, map_overhead);
 
         // Keys (VariableID)
         path.push("keys");
@@ -31,14 +33,14 @@ impl LogicalMemoryProfile for AcyclicAssignments {
 
         path.pop();
 
-        // DiGraphMap<VariableID, ()> dependency
+        // dependency: DiGraphMap<VariableID, ()>
         // Estimate: node count * size_of::<VariableID>() + edge count * (size_of::<VariableID>() * 2)
         path.push("dependency");
 
+        let graph_overhead = size_of::<petgraph::graphmap::DiGraphMap<crate::VariableID, ()>>();
         let node_bytes = self.dependency.node_count() * size_of::<crate::VariableID>();
-        let edge_bytes =
-            self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
-        let total_bytes = node_bytes + edge_bytes;
+        let edge_bytes = self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
+        let total_bytes = graph_overhead + node_bytes + edge_bytes;
         visitor.visit_leaf(path, total_bytes);
 
         path.pop();
@@ -56,7 +58,10 @@ mod tests {
         let assignments = AcyclicAssignments::default();
         let folded = logical_memory_to_folded("Assignments", &assignments);
         // Empty assignments should produce no output
-        insta::assert_snapshot!(folded, @"Assignments 176");
+        insta::assert_snapshot!(folded, @r###"
+        Assignments;assignments 32
+        Assignments;dependency 144
+        "###);
     }
 
     #[test]
@@ -70,10 +75,10 @@ mod tests {
 
         let folded = logical_memory_to_folded("Assignments", &assignments);
         insta::assert_snapshot!(folded, @r###"
-        Assignments 176
+        Assignments;assignments 32
         Assignments;assignments;Function;Linear;terms 208
         Assignments;assignments;keys 16
-        Assignments;dependency 80
+        Assignments;dependency 224
         "###);
     }
 }

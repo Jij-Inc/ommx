@@ -9,11 +9,29 @@ impl LogicalMemoryProfile for DecisionVariable {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Count the struct itself (id, kind, bound, substituted_value)
-        let struct_size = size_of::<DecisionVariable>();
-        visitor.visit_leaf(path, struct_size);
+        // Count each field individually to avoid double-counting
 
-        // Delegate to metadata (heap allocations)
+        // id: VariableID (u64 wrapper)
+        path.push("id");
+        visitor.visit_leaf(path, size_of::<crate::VariableID>());
+        path.pop();
+
+        // kind: Kind (enum)
+        path.push("kind");
+        visitor.visit_leaf(path, size_of::<crate::Kind>());
+        path.pop();
+
+        // bound: Bound (two f64s)
+        path.push("bound");
+        visitor.visit_leaf(path, size_of::<crate::Bound>());
+        path.pop();
+
+        // substituted_value: Option<f64>
+        path.push("substituted_value");
+        visitor.visit_leaf(path, size_of::<Option<f64>>());
+        path.pop();
+
+        // Delegate to metadata
         path.push("metadata");
         self.metadata.visit_logical_memory(path, visitor);
         path.pop();
@@ -26,43 +44,40 @@ impl LogicalMemoryProfile for DecisionVariableMetadata {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // String fields: name and description
-        if let Some(name) = &self.name {
-            path.push("name");
-            let bytes = size_of::<String>() + name.capacity();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // Count each field individually to avoid double-counting
 
-        if let Some(description) = &self.description {
-            path.push("description");
-            let bytes = size_of::<String>() + description.capacity();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // name: Option<String> - count stack overhead
+        path.push("name");
+        let name_bytes = size_of::<Option<String>>()
+            + self.name.as_ref().map_or(0, |s| s.capacity());
+        visitor.visit_leaf(path, name_bytes);
+        path.pop();
 
-        // Vec<i64> subscripts
-        if !self.subscripts.is_empty() {
-            path.push("subscripts");
-            let bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // subscripts: Vec<i64> - count stack overhead + heap
+        path.push("subscripts");
+        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
+        visitor.visit_leaf(path, subscripts_bytes);
+        path.pop();
 
-        // FnvHashMap<String, String> parameters
-        if !self.parameters.is_empty() {
-            path.push("parameters");
-            let map_overhead = size_of::<FnvHashMap<String, String>>();
-            let mut entries_bytes = 0;
-            for (k, v) in &self.parameters {
-                entries_bytes += size_of::<(String, String)>();
-                entries_bytes += k.capacity();
-                entries_bytes += v.capacity();
-            }
-            let total_bytes = map_overhead + entries_bytes;
-            visitor.visit_leaf(path, total_bytes);
-            path.pop();
+        // parameters: FnvHashMap<String, String> - count stack overhead + heap
+        path.push("parameters");
+        let map_overhead = size_of::<FnvHashMap<String, String>>();
+        let mut entries_bytes = 0;
+        for (k, v) in &self.parameters {
+            entries_bytes += size_of::<(String, String)>();
+            entries_bytes += k.capacity();
+            entries_bytes += v.capacity();
         }
+        let parameters_bytes = map_overhead + entries_bytes;
+        visitor.visit_leaf(path, parameters_bytes);
+        path.pop();
+
+        // description: Option<String> - count stack overhead
+        path.push("description");
+        let description_bytes = size_of::<Option<String>>()
+            + self.description.as_ref().map_or(0, |s| s.capacity());
+        visitor.visit_leaf(path, description_bytes);
+        path.pop();
     }
 }
 
@@ -78,7 +93,16 @@ mod tests {
         let dv = DecisionVariable::binary(VariableID::from(1));
         let folded = logical_memory_to_folded("DecisionVariable", &dv);
         // Empty metadata should produce no output
-        insta::assert_snapshot!(folded, @"DecisionVariable 152");
+        insta::assert_snapshot!(folded, @r###"
+        DecisionVariable;bound 16
+        DecisionVariable;id 8
+        DecisionVariable;kind 1
+        DecisionVariable;metadata;description 24
+        DecisionVariable;metadata;name 24
+        DecisionVariable;metadata;parameters 32
+        DecisionVariable;metadata;subscripts 24
+        DecisionVariable;substituted_value 16
+        "###);
     }
 
     #[test]
@@ -98,10 +122,14 @@ mod tests {
 
         let folded = logical_memory_to_folded("DecisionVariable", &dv);
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable 152
+        DecisionVariable;bound 16
+        DecisionVariable;id 8
+        DecisionVariable;kind 1
         DecisionVariable;metadata;description 38
         DecisionVariable;metadata;name 26
+        DecisionVariable;metadata;parameters 32
         DecisionVariable;metadata;subscripts 48
+        DecisionVariable;substituted_value 16
         "###);
     }
 }

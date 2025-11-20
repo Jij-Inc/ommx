@@ -9,52 +9,55 @@ impl LogicalMemoryProfile for Constraint {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Count the struct itself (id, equality, and small fields)
-        let struct_size = size_of::<Constraint>();
-        visitor.visit_leaf(path, struct_size);
+        // Count each field individually to avoid double-counting
+
+        // id: ConstraintID (u64 wrapper)
+        path.push("id");
+        visitor.visit_leaf(path, size_of::<crate::ConstraintID>());
+        path.pop();
+
+        // equality: Equality (enum)
+        path.push("equality");
+        visitor.visit_leaf(path, size_of::<crate::Equality>());
+        path.pop();
 
         // Delegate to Function
         path.push("function");
         self.function.visit_logical_memory(path, visitor);
         path.pop();
 
-        // String fields: name and description
-        if let Some(name) = &self.name {
-            path.push("name");
-            let bytes = size_of::<String>() + name.capacity();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // name: Option<String>
+        path.push("name");
+        let name_bytes = size_of::<Option<String>>()
+            + self.name.as_ref().map_or(0, |s| s.capacity());
+        visitor.visit_leaf(path, name_bytes);
+        path.pop();
 
-        if let Some(description) = &self.description {
-            path.push("description");
-            let bytes = size_of::<String>() + description.capacity();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
-        }
+        // subscripts: Vec<i64>
+        path.push("subscripts");
+        let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
+        visitor.visit_leaf(path, subscripts_bytes);
+        path.pop();
 
-        // Vec<i64> subscripts
-        if !self.subscripts.is_empty() {
-            path.push("subscripts");
-            let bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
-            visitor.visit_leaf(path, bytes);
-            path.pop();
+        // parameters: FnvHashMap<String, String>
+        path.push("parameters");
+        let map_overhead = size_of::<FnvHashMap<String, String>>();
+        let mut entries_bytes = 0;
+        for (k, v) in &self.parameters {
+            entries_bytes += size_of::<(String, String)>();
+            entries_bytes += k.capacity();
+            entries_bytes += v.capacity();
         }
+        let parameters_bytes = map_overhead + entries_bytes;
+        visitor.visit_leaf(path, parameters_bytes);
+        path.pop();
 
-        // FnvHashMap<String, String> parameters
-        if !self.parameters.is_empty() {
-            path.push("parameters");
-            let map_overhead = size_of::<FnvHashMap<String, String>>();
-            let mut entries_bytes = 0;
-            for (k, v) in &self.parameters {
-                entries_bytes += size_of::<(String, String)>();
-                entries_bytes += k.capacity();
-                entries_bytes += v.capacity();
-            }
-            let total_bytes = map_overhead + entries_bytes;
-            visitor.visit_leaf(path, total_bytes);
-            path.pop();
-        }
+        // description: Option<String>
+        path.push("description");
+        let description_bytes = size_of::<Option<String>>()
+            + self.description.as_ref().map_or(0, |s| s.capacity());
+        visitor.visit_leaf(path, description_bytes);
+        path.pop();
     }
 }
 
@@ -64,35 +67,31 @@ impl LogicalMemoryProfile for RemovedConstraint {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        // Count the struct itself
-        let struct_size = size_of::<RemovedConstraint>();
-        visitor.visit_leaf(path, struct_size);
+        // Count each field individually to avoid double-counting
 
         // Delegate to Constraint
         path.push("constraint");
         self.constraint.visit_logical_memory(path, visitor);
         path.pop();
 
-        // String field: removed_reason
+        // removed_reason: String
         path.push("removed_reason");
-        let bytes = size_of::<String>() + self.removed_reason.capacity();
-        visitor.visit_leaf(path, bytes);
+        let removed_reason_bytes = size_of::<String>() + self.removed_reason.capacity();
+        visitor.visit_leaf(path, removed_reason_bytes);
         path.pop();
 
-        // FnvHashMap<String, String> removed_reason_parameters
-        if !self.removed_reason_parameters.is_empty() {
-            path.push("removed_reason_parameters");
-            let map_overhead = size_of::<FnvHashMap<String, String>>();
-            let mut entries_bytes = 0;
-            for (k, v) in &self.removed_reason_parameters {
-                entries_bytes += size_of::<(String, String)>();
-                entries_bytes += k.capacity();
-                entries_bytes += v.capacity();
-            }
-            let total_bytes = map_overhead + entries_bytes;
-            visitor.visit_leaf(path, total_bytes);
-            path.pop();
+        // removed_reason_parameters: FnvHashMap<String, String>
+        path.push("removed_reason_parameters");
+        let map_overhead = size_of::<FnvHashMap<String, String>>();
+        let mut entries_bytes = 0;
+        for (k, v) in &self.removed_reason_parameters {
+            entries_bytes += size_of::<(String, String)>();
+            entries_bytes += k.capacity();
+            entries_bytes += v.capacity();
         }
+        let parameters_bytes = map_overhead + entries_bytes;
+        visitor.visit_leaf(path, parameters_bytes);
+        path.pop();
     }
 }
 
@@ -111,8 +110,13 @@ mod tests {
         );
         let folded = logical_memory_to_folded("Constraint", &constraint);
         insta::assert_snapshot!(folded, @r###"
-        Constraint 160
+        Constraint;description 24
+        Constraint;equality 1
         Constraint;function;Linear;terms 104
+        Constraint;id 8
+        Constraint;name 24
+        Constraint;parameters 32
+        Constraint;subscripts 24
         "###);
     }
 
@@ -129,10 +133,12 @@ mod tests {
         let folded = logical_memory_to_folded("Constraint", &constraint);
         // Should include function, name, description, and subscripts
         insta::assert_snapshot!(folded, @r###"
-        Constraint 160
         Constraint;description 41
+        Constraint;equality 1
         Constraint;function;Linear;terms 104
+        Constraint;id 8
         Constraint;name 39
+        Constraint;parameters 32
         Constraint;subscripts 48
         "###);
     }
@@ -151,10 +157,15 @@ mod tests {
 
         let folded = logical_memory_to_folded("RemovedConstraint", &removed);
         insta::assert_snapshot!(folded, @r###"
-        RemovedConstraint 216
-        RemovedConstraint;constraint 160
+        RemovedConstraint;constraint;description 24
+        RemovedConstraint;constraint;equality 1
         RemovedConstraint;constraint;function;Linear;terms 104
+        RemovedConstraint;constraint;id 8
+        RemovedConstraint;constraint;name 24
+        RemovedConstraint;constraint;parameters 32
+        RemovedConstraint;constraint;subscripts 24
         RemovedConstraint;removed_reason 34
+        RemovedConstraint;removed_reason_parameters 32
         "###);
     }
 }
