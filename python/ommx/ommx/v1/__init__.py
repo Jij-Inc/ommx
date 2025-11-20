@@ -1890,24 +1890,24 @@ class Instance(UserAnnotationBase):
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> print(instance.logical_memory_profile())  # doctest: +NORMALIZE_WHITESPACE
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;decision_variables;DecisionVariable;bound 48
-        Instance;decision_variables;DecisionVariable;id 24
-        Instance;decision_variables;DecisionVariable;kind 3
-        Instance;decision_variables;DecisionVariable;metadata;description 72
-        Instance;decision_variables;DecisionVariable;metadata;name 72
-        Instance;decision_variables;DecisionVariable;metadata;parameters 96
-        Instance;decision_variables;DecisionVariable;metadata;subscripts 72
-        Instance;decision_variables;DecisionVariable;substituted_value 48
-        Instance;decision_variables;keys 24
-        Instance;objective;Linear;terms 80
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.decision_variables;DecisionVariable.bound 48
+        Instance.decision_variables;DecisionVariable.id 24
+        Instance.decision_variables;DecisionVariable.kind 3
+        Instance.decision_variables;DecisionVariable.metadata;description 72
+        Instance.decision_variables;DecisionVariable.metadata;name 72
+        Instance.decision_variables;DecisionVariable.metadata;parameters 96
+        Instance.decision_variables;DecisionVariable.metadata;subscripts 72
+        Instance.decision_variables;DecisionVariable.substituted_value 48
+        Instance.decision_variables;VariableID 24
+        Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.removed_constraints 24
+        Instance.sense 1
         """
         return self.raw.logical_memory_profile()
 

@@ -426,7 +426,7 @@ impl Instance {
     ///     >>> with open("folded.txt", "w") as f:
     ///     ...     f.write(folded)
     pub fn logical_memory_profile(&self) -> String {
-        ommx::logical_memory::logical_memory_to_folded("Instance", &self.0)
+        ommx::logical_memory::logical_memory_to_folded(&self.0)
     }
 }
 

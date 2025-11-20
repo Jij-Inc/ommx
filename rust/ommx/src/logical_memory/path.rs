@@ -8,9 +8,9 @@
 pub struct Path(Vec<&'static str>);
 
 impl Path {
-    /// Create a new path with a root name.
-    pub fn new(root: &'static str) -> Self {
-        Self(vec![root])
+    /// Create a new empty path.
+    pub fn new() -> Self {
+        Self(vec![])
     }
 
     /// Get the path as a slice.
@@ -30,7 +30,7 @@ impl Path {
     /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
     /// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
     /// # }
-    /// let mut path = Path::new("root");
+    /// let mut path = Path::new();
     /// let mut visitor = MyVisitor;
     ///
     /// visitor.visit_leaf(&path.with("field"), size_of::<u64>());
@@ -62,7 +62,7 @@ impl From<Vec<&'static str>> for Path {
 /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
 /// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
 /// # }
-/// let mut path = Path::new("root");
+/// let mut path = Path::new();
 /// let mut visitor = MyVisitor;
 ///
 /// // Automatic pop via guard:
@@ -90,7 +90,7 @@ impl<'a> PathGuard<'a> {
     /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
     /// #     fn visit_leaf(&mut self, _path: &Path, _bytes: usize) {}
     /// # }
-    /// let mut path = Path::new("root");
+    /// let mut path = Path::new();
     /// let mut visitor = MyVisitor;
     ///
     /// // Nested guards

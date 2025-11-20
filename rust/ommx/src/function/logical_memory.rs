@@ -35,29 +35,29 @@ mod tests {
     #[test]
     fn test_function_zero_snapshot() {
         let func = Function::Zero;
-        let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Zero 40");
+        let folded = logical_memory_to_folded(&func);
+        insta::assert_snapshot!(folded, @"Zero 40");
     }
 
     #[test]
     fn test_function_constant_snapshot() {
         let func = Function::Constant(coeff!(42.0));
-        let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Constant 40");
+        let folded = logical_memory_to_folded(&func);
+        insta::assert_snapshot!(folded, @"Constant 40");
     }
 
     #[test]
     fn test_function_linear_snapshot() {
         let func = Function::Linear(coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2));
-        let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Linear;terms 80");
+        let folded = logical_memory_to_folded(&func);
+        insta::assert_snapshot!(folded, @"Linear;PolynomialBase.terms 80");
     }
 
     #[test]
     fn test_function_quadratic_snapshot() {
         let func =
             Function::Quadratic(coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1));
-        let folded = logical_memory_to_folded("Function", &func);
-        insta::assert_snapshot!(folded, @"Function;Quadratic;terms 96");
+        let folded = logical_memory_to_folded(&func);
+        insta::assert_snapshot!(folded, @"Quadratic;PolynomialBase.terms 96");
     }
 }

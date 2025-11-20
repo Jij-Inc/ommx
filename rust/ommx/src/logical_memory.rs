@@ -17,7 +17,7 @@
 //! use ommx::Linear;
 //!
 //! let linear = Linear::default();
-//! let folded = logical_memory_to_folded("Linear", &linear);
+//! let folded = logical_memory_to_folded(&linear);
 //! println!("{}", folded);
 //! ```
 
@@ -130,7 +130,6 @@ impl LogicalMemoryVisitor for FoldedCollector {
 /// Generate folded stack format for a value.
 ///
 /// # Arguments
-/// - `root_name`: Name of the root node in the flamegraph
 /// - `value`: Value to profile
 ///
 /// # Returns
@@ -143,15 +142,12 @@ impl LogicalMemoryVisitor for FoldedCollector {
 /// use ommx::Linear;
 ///
 /// let linear = Linear::default();
-/// let folded = logical_memory_to_folded("Linear", &linear);
+/// let folded = logical_memory_to_folded(&linear);
 /// // Output: "Linear;terms 32" (HashMap struct overhead)
 /// assert_eq!(folded, "Linear;terms 32");
 /// ```
-pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T,
-) -> String {
-    let mut path = Path::new(root_name);
+pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(value: &T) -> String {
+    let mut path = Path::new();
     let mut collector = FoldedCollector::new();
     value.visit_logical_memory(&mut path, &mut collector);
     collector.finish()
@@ -160,7 +156,6 @@ pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
 /// Calculate total bytes used by a value.
 ///
 /// # Arguments
-/// - `root_name`: Name of the root node (not used in calculation, for consistency with other APIs)
 /// - `value`: Value to profile
 ///
 /// # Returns
@@ -173,11 +168,11 @@ pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
 /// use ommx::Linear;
 ///
 /// let linear = Linear::default();
-/// let total = logical_total_bytes("Linear", &linear);
+/// let total = logical_total_bytes(&linear);
 /// // Empty polynomial has only struct overhead
 /// assert!(total > 0);
 /// ```
-pub fn logical_total_bytes<T: LogicalMemoryProfile>(root_name: &'static str, value: &T) -> usize {
+pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
     struct Sum(usize);
     impl LogicalMemoryVisitor for Sum {
         fn visit_leaf(&mut self, _path: &Path, bytes: usize) {
@@ -185,7 +180,7 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(root_name: &'static str, val
         }
     }
 
-    let mut path = Path::new(root_name);
+    let mut path = Path::new();
     let mut sum = Sum(0);
     value.visit_logical_memory(&mut path, &mut sum);
     sum.0

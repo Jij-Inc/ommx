@@ -60,57 +60,58 @@ impl LogicalMemoryProfile for v1::instance::Description {
 impl LogicalMemoryProfile for Instance {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // sense: Sense (enum)
-        visitor.visit_leaf(&path.with("sense"), size_of::<crate::instance::Sense>());
+        visitor.visit_leaf(&path.with("Instance.sense"), size_of::<crate::instance::Sense>());
 
         // Delegate to objective Function
         self.objective()
-            .visit_logical_memory(path.with("objective").as_mut(), visitor);
+            .visit_logical_memory(path.with("Instance.objective").as_mut(), visitor);
 
         // decision_variables: BTreeMap<VariableID, DecisionVariable>
         {
-            let mut guard = path.with("decision_variables");
+            let mut guard = path.with("Instance.decision_variables");
 
             // BTreeMap stack overhead
             let map_overhead =
                 size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
             visitor.visit_leaf(&guard, map_overhead);
 
-            // Keys (VariableID)
+            // Keys (VariableID) - use type name for clarity
             let key_size = size_of::<crate::VariableID>();
             let keys_bytes = self.decision_variables().len() * key_size;
-            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
+            visitor.visit_leaf(&guard.with("VariableID"), keys_bytes);
 
             // Delegate to each DecisionVariable
             for dv in self.decision_variables().values() {
-                dv.visit_logical_memory(guard.with("DecisionVariable").as_mut(), visitor);
+                dv.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
 
         // constraints: BTreeMap<ConstraintID, Constraint>
         {
-            let mut guard = path.with("constraints");
+            let mut guard = path.with("Instance.constraints");
 
             // BTreeMap stack overhead
             let map_overhead =
                 size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
             visitor.visit_leaf(&guard, map_overhead);
 
-            // Keys (ConstraintID)
+            // Keys (ConstraintID) - use type name for clarity
             let key_size = size_of::<crate::ConstraintID>();
             let keys_bytes = self.constraints().len() * key_size;
-            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
+            visitor.visit_leaf(&guard.with("ConstraintID"), keys_bytes);
 
             // Delegate to each Constraint
             for constraint in self.constraints().values() {
-                constraint.visit_logical_memory(guard.with("Constraint").as_mut(), visitor);
+                constraint.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
 
         // removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>
         {
-            let mut guard = path.with("removed_constraints");
+            let mut guard = path.with("Instance.removed_constraints");
 
             // BTreeMap stack overhead
             let map_overhead = size_of::<
@@ -118,33 +119,33 @@ impl LogicalMemoryProfile for Instance {
             >();
             visitor.visit_leaf(&guard, map_overhead);
 
-            // Keys (ConstraintID)
+            // Keys (ConstraintID) - use type name for clarity
             let key_size = size_of::<crate::ConstraintID>();
             let keys_bytes = self.removed_constraints().len() * key_size;
-            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
+            visitor.visit_leaf(&guard.with("ConstraintID"), keys_bytes);
 
             // Delegate to each RemovedConstraint
             for removed in self.removed_constraints().values() {
-                removed.visit_logical_memory(guard.with("RemovedConstraint").as_mut(), visitor);
+                removed.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
 
         // decision_variable_dependency: AcyclicAssignments
         self.decision_variable_dependency()
-            .visit_logical_memory(path.with("decision_variable_dependency").as_mut(), visitor);
+            .visit_logical_memory(path.with("Instance.decision_variable_dependency").as_mut(), visitor);
 
         // constraint_hints: ConstraintHints
         self.constraint_hints()
-            .visit_logical_memory(path.with("constraint_hints").as_mut(), visitor);
+            .visit_logical_memory(path.with("Instance.constraint_hints").as_mut(), visitor);
 
         // parameters: Option<v1::Parameters>
         if let Some(parameters) = &self.parameters {
-            parameters.visit_logical_memory(path.with("parameters").as_mut(), visitor);
+            parameters.visit_logical_memory(path.with("Instance.parameters").as_mut(), visitor);
         }
 
         // description: Option<v1::instance::Description>
         if let Some(description) = &self.description {
-            description.visit_logical_memory(path.with("description").as_mut(), visitor);
+            description.visit_logical_memory(path.with("Instance.description").as_mut(), visitor);
         }
     }
 }
@@ -159,18 +160,18 @@ mod tests {
     #[test]
     fn test_instance_empty_snapshot() {
         let instance = Instance::default();
-        let folded = logical_memory_to_folded("Instance", &instance);
+        let folded = logical_memory_to_folded(&instance);
         // Empty instance has zero objective
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;objective;Zero 40
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.objective;Zero 40
+        Instance.removed_constraints 24
+        Instance.sense 1
         "###);
     }
 
@@ -193,26 +194,26 @@ mod tests {
         )
         .unwrap();
 
-        let folded = logical_memory_to_folded("Instance", &instance);
+        let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;decision_variables;DecisionVariable;bound 32
-        Instance;decision_variables;DecisionVariable;id 16
-        Instance;decision_variables;DecisionVariable;kind 2
-        Instance;decision_variables;DecisionVariable;metadata;description 48
-        Instance;decision_variables;DecisionVariable;metadata;name 48
-        Instance;decision_variables;DecisionVariable;metadata;parameters 64
-        Instance;decision_variables;DecisionVariable;metadata;subscripts 48
-        Instance;decision_variables;DecisionVariable;substituted_value 32
-        Instance;decision_variables;keys 16
-        Instance;objective;Linear;terms 80
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.decision_variables;DecisionVariable.bound 32
+        Instance.decision_variables;DecisionVariable.id 16
+        Instance.decision_variables;DecisionVariable.kind 2
+        Instance.decision_variables;DecisionVariable.metadata;description 48
+        Instance.decision_variables;DecisionVariable.metadata;name 48
+        Instance.decision_variables;DecisionVariable.metadata;parameters 64
+        Instance.decision_variables;DecisionVariable.metadata;subscripts 48
+        Instance.decision_variables;DecisionVariable.substituted_value 32
+        Instance.decision_variables;VariableID 16
+        Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.removed_constraints 24
+        Instance.sense 1
         "###);
     }
 
@@ -248,34 +249,34 @@ mod tests {
         )
         .unwrap();
 
-        let folded = logical_memory_to_folded("Instance", &instance);
+        let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;constraints;Constraint;description 24
-        Instance;constraints;Constraint;equality 1
-        Instance;constraints;Constraint;function;Linear;terms 80
-        Instance;constraints;Constraint;id 8
-        Instance;constraints;Constraint;name 24
-        Instance;constraints;Constraint;parameters 32
-        Instance;constraints;Constraint;subscripts 24
-        Instance;constraints;keys 8
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;decision_variables;DecisionVariable;bound 32
-        Instance;decision_variables;DecisionVariable;id 16
-        Instance;decision_variables;DecisionVariable;kind 2
-        Instance;decision_variables;DecisionVariable;metadata;description 48
-        Instance;decision_variables;DecisionVariable;metadata;name 48
-        Instance;decision_variables;DecisionVariable;metadata;parameters 64
-        Instance;decision_variables;DecisionVariable;metadata;subscripts 48
-        Instance;decision_variables;DecisionVariable;substituted_value 32
-        Instance;decision_variables;keys 16
-        Instance;objective;Linear;terms 80
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.constraints;Constraint.description 24
+        Instance.constraints;Constraint.equality 1
+        Instance.constraints;Constraint.function;Linear;PolynomialBase.terms 80
+        Instance.constraints;Constraint.id 8
+        Instance.constraints;Constraint.name 24
+        Instance.constraints;Constraint.parameters 32
+        Instance.constraints;Constraint.subscripts 24
+        Instance.constraints;ConstraintID 8
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.decision_variables;DecisionVariable.bound 32
+        Instance.decision_variables;DecisionVariable.id 16
+        Instance.decision_variables;DecisionVariable.kind 2
+        Instance.decision_variables;DecisionVariable.metadata;description 48
+        Instance.decision_variables;DecisionVariable.metadata;name 48
+        Instance.decision_variables;DecisionVariable.metadata;parameters 64
+        Instance.decision_variables;DecisionVariable.metadata;subscripts 48
+        Instance.decision_variables;DecisionVariable.substituted_value 32
+        Instance.decision_variables;VariableID 16
+        Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.removed_constraints 24
+        Instance.sense 1
         "###);
     }
 
@@ -304,27 +305,27 @@ mod tests {
         )
         .unwrap();
 
-        let folded = logical_memory_to_folded("Instance", &instance);
+        let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;decision_variables;DecisionVariable;bound 48
-        Instance;decision_variables;DecisionVariable;id 24
-        Instance;decision_variables;DecisionVariable;kind 3
-        Instance;decision_variables;DecisionVariable;metadata;description 72
-        Instance;decision_variables;DecisionVariable;metadata;name 95
-        Instance;decision_variables;DecisionVariable;metadata;parameters 96
-        Instance;decision_variables;DecisionVariable;metadata;subscripts 72
-        Instance;decision_variables;DecisionVariable;substituted_value 48
-        Instance;decision_variables;keys 24
-        Instance;objective;Zero 40
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.decision_variables;DecisionVariable.bound 48
+        Instance.decision_variables;DecisionVariable.id 24
+        Instance.decision_variables;DecisionVariable.kind 3
+        Instance.decision_variables;DecisionVariable.metadata;description 72
+        Instance.decision_variables;DecisionVariable.metadata;name 95
+        Instance.decision_variables;DecisionVariable.metadata;parameters 96
+        Instance.decision_variables;DecisionVariable.metadata;subscripts 72
+        Instance.decision_variables;DecisionVariable.substituted_value 48
+        Instance.decision_variables;VariableID 24
+        Instance.objective;Zero 40
+        Instance.removed_constraints 24
+        Instance.sense 1
         "###);
     }
 
@@ -359,34 +360,34 @@ mod tests {
         };
         instance.description = Some(description);
 
-        let folded = logical_memory_to_folded("Instance", &instance);
+        let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance;constraint_hints;one_hot_constraints 24
-        Instance;constraint_hints;sos1_constraints 24
-        Instance;constraints 24
-        Instance;decision_variable_dependency;assignments 32
-        Instance;decision_variable_dependency;dependency 144
-        Instance;decision_variables 24
-        Instance;decision_variables;DecisionVariable;bound 16
-        Instance;decision_variables;DecisionVariable;id 8
-        Instance;decision_variables;DecisionVariable;kind 1
-        Instance;decision_variables;DecisionVariable;metadata;description 24
-        Instance;decision_variables;DecisionVariable;metadata;name 24
-        Instance;decision_variables;DecisionVariable;metadata;parameters 32
-        Instance;decision_variables;DecisionVariable;metadata;subscripts 24
-        Instance;decision_variables;DecisionVariable;substituted_value 16
-        Instance;decision_variables;keys 8
-        Instance;description;authors 24
-        Instance;description;authors;String 56
-        Instance;description;created_by 39
-        Instance;description;description 51
-        Instance;description;name 37
-        Instance;objective;Zero 40
-        Instance;parameters 48
-        Instance;parameters;keys 16
-        Instance;parameters;values 16
-        Instance;removed_constraints 24
-        Instance;sense 1
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
+        Instance.constraints 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+        Instance.decision_variables 24
+        Instance.decision_variables;DecisionVariable.bound 16
+        Instance.decision_variables;DecisionVariable.id 8
+        Instance.decision_variables;DecisionVariable.kind 1
+        Instance.decision_variables;DecisionVariable.metadata;description 24
+        Instance.decision_variables;DecisionVariable.metadata;name 24
+        Instance.decision_variables;DecisionVariable.metadata;parameters 32
+        Instance.decision_variables;DecisionVariable.metadata;subscripts 24
+        Instance.decision_variables;DecisionVariable.substituted_value 16
+        Instance.decision_variables;VariableID 8
+        Instance.description;authors 24
+        Instance.description;authors;String 56
+        Instance.description;created_by 39
+        Instance.description;description 51
+        Instance.description;name 37
+        Instance.objective;Zero 40
+        Instance.parameters 48
+        Instance.parameters;keys 16
+        Instance.parameters;values 16
+        Instance.removed_constraints 24
+        Instance.sense 1
         "###);
     }
 }

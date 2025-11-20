@@ -6,22 +6,23 @@ use std::mem::size_of;
 impl LogicalMemoryProfile for DecisionVariable {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // id: VariableID (u64 wrapper)
-        visitor.visit_leaf(&path.with("id"), size_of::<crate::VariableID>());
+        visitor.visit_leaf(&path.with("DecisionVariable.id"), size_of::<crate::VariableID>());
 
         // kind: Kind (enum)
-        visitor.visit_leaf(&path.with("kind"), size_of::<crate::Kind>());
+        visitor.visit_leaf(&path.with("DecisionVariable.kind"), size_of::<crate::Kind>());
 
         // bound: Bound (two f64s)
-        visitor.visit_leaf(&path.with("bound"), size_of::<crate::Bound>());
+        visitor.visit_leaf(&path.with("DecisionVariable.bound"), size_of::<crate::Bound>());
 
         // substituted_value: Option<f64>
-        visitor.visit_leaf(&path.with("substituted_value"), size_of::<Option<f64>>());
+        visitor.visit_leaf(&path.with("DecisionVariable.substituted_value"), size_of::<Option<f64>>());
 
         // Delegate to metadata
         self.metadata
-            .visit_logical_memory(path.with("metadata").as_mut(), visitor);
+            .visit_logical_memory(path.with("DecisionVariable.metadata").as_mut(), visitor);
     }
 }
 
@@ -65,17 +66,17 @@ mod tests {
     #[test]
     fn test_decision_variable_minimal_snapshot() {
         let dv = DecisionVariable::binary(VariableID::from(1));
-        let folded = logical_memory_to_folded("DecisionVariable", &dv);
+        let folded = logical_memory_to_folded(&dv);
         // Empty metadata should produce no output
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable;bound 16
-        DecisionVariable;id 8
-        DecisionVariable;kind 1
-        DecisionVariable;metadata;description 24
-        DecisionVariable;metadata;name 24
-        DecisionVariable;metadata;parameters 32
-        DecisionVariable;metadata;subscripts 24
-        DecisionVariable;substituted_value 16
+        DecisionVariable.bound 16
+        DecisionVariable.id 8
+        DecisionVariable.kind 1
+        DecisionVariable.metadata;description 24
+        DecisionVariable.metadata;name 24
+        DecisionVariable.metadata;parameters 32
+        DecisionVariable.metadata;subscripts 24
+        DecisionVariable.substituted_value 16
         "###);
     }
 
@@ -94,16 +95,16 @@ mod tests {
         dv.metadata.description = Some("First variable".to_string());
         dv.metadata.subscripts = vec![1, 2, 3];
 
-        let folded = logical_memory_to_folded("DecisionVariable", &dv);
+        let folded = logical_memory_to_folded(&dv);
         insta::assert_snapshot!(folded, @r###"
-        DecisionVariable;bound 16
-        DecisionVariable;id 8
-        DecisionVariable;kind 1
-        DecisionVariable;metadata;description 38
-        DecisionVariable;metadata;name 26
-        DecisionVariable;metadata;parameters 32
-        DecisionVariable;metadata;subscripts 48
-        DecisionVariable;substituted_value 16
+        DecisionVariable.bound 16
+        DecisionVariable.id 8
+        DecisionVariable.kind 1
+        DecisionVariable.metadata;description 38
+        DecisionVariable.metadata;name 26
+        DecisionVariable.metadata;parameters 32
+        DecisionVariable.metadata;subscripts 48
+        DecisionVariable.substituted_value 16
         "###);
     }
 }

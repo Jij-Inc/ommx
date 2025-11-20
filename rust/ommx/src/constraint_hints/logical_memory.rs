@@ -5,24 +5,25 @@ use std::mem::size_of;
 impl LogicalMemoryProfile for ConstraintHints {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // one_hot_constraints: Vec<OneHot>
         {
-            let mut guard = path.with("one_hot_constraints");
+            let mut guard = path.with("ConstraintHints.one_hot_constraints");
             let vec_overhead = size_of::<Vec<OneHot>>();
             visitor.visit_leaf(&guard, vec_overhead);
             for one_hot in &self.one_hot_constraints {
-                one_hot.visit_logical_memory(guard.with("OneHot").as_mut(), visitor);
+                one_hot.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
 
         // sos1_constraints: Vec<Sos1>
         {
-            let mut guard = path.with("sos1_constraints");
+            let mut guard = path.with("ConstraintHints.sos1_constraints");
             let vec_overhead = size_of::<Vec<Sos1>>();
             visitor.visit_leaf(&guard, vec_overhead);
             for sos1 in &self.sos1_constraints {
-                sos1.visit_logical_memory(guard.with("Sos1").as_mut(), visitor);
+                sos1.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
     }
@@ -31,24 +32,26 @@ impl LogicalMemoryProfile for ConstraintHints {
 impl LogicalMemoryProfile for OneHot {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // id: ConstraintID (u64 wrapper)
-        visitor.visit_leaf(&path.with("id"), size_of::<crate::ConstraintID>());
+        visitor.visit_leaf(&path.with("OneHot.id"), size_of::<crate::ConstraintID>());
 
         // variables: BTreeSet<VariableID>
         let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
         let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(&path.with("variables"), set_overhead + elements_bytes);
+        visitor.visit_leaf(&path.with("OneHot.variables"), set_overhead + elements_bytes);
     }
 }
 
 impl LogicalMemoryProfile for Sos1 {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // binary_constraint_id: ConstraintID (u64 wrapper)
         visitor.visit_leaf(
-            &path.with("binary_constraint_id"),
+            &path.with("Sos1.binary_constraint_id"),
             size_of::<crate::ConstraintID>(),
         );
 
@@ -56,14 +59,14 @@ impl LogicalMemoryProfile for Sos1 {
         let set_overhead = size_of::<std::collections::BTreeSet<crate::ConstraintID>>();
         let elements_bytes = self.big_m_constraint_ids.len() * size_of::<crate::ConstraintID>();
         visitor.visit_leaf(
-            &path.with("big_m_constraint_ids"),
+            &path.with("Sos1.big_m_constraint_ids"),
             set_overhead + elements_bytes,
         );
 
         // variables: BTreeSet<VariableID>
         let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
         let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(&path.with("variables"), set_overhead + elements_bytes);
+        visitor.visit_leaf(&path.with("Sos1.variables"), set_overhead + elements_bytes);
     }
 }
 
@@ -77,10 +80,10 @@ mod tests {
     #[test]
     fn test_constraint_hints_empty_snapshot() {
         let hints = ConstraintHints::default();
-        let folded = logical_memory_to_folded("ConstraintHints", &hints);
+        let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints;one_hot_constraints 24
-        ConstraintHints;sos1_constraints 24
+        ConstraintHints.one_hot_constraints 24
+        ConstraintHints.sos1_constraints 24
         "###);
     }
 
@@ -96,12 +99,12 @@ mod tests {
             sos1_constraints: vec![],
         };
 
-        let folded = logical_memory_to_folded("ConstraintHints", &hints);
+        let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints;one_hot_constraints 24
-        ConstraintHints;one_hot_constraints;OneHot;id 8
-        ConstraintHints;one_hot_constraints;OneHot;variables 48
-        ConstraintHints;sos1_constraints 24
+        ConstraintHints.one_hot_constraints 24
+        ConstraintHints.one_hot_constraints;OneHot.id 8
+        ConstraintHints.one_hot_constraints;OneHot.variables 48
+        ConstraintHints.sos1_constraints 24
         "###);
     }
 
@@ -121,13 +124,13 @@ mod tests {
             sos1_constraints: vec![sos1],
         };
 
-        let folded = logical_memory_to_folded("ConstraintHints", &hints);
+        let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints;one_hot_constraints 24
-        ConstraintHints;sos1_constraints 24
-        ConstraintHints;sos1_constraints;Sos1;big_m_constraint_ids 40
-        ConstraintHints;sos1_constraints;Sos1;binary_constraint_id 8
-        ConstraintHints;sos1_constraints;Sos1;variables 48
+        ConstraintHints.one_hot_constraints 24
+        ConstraintHints.sos1_constraints 24
+        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids 40
+        ConstraintHints.sos1_constraints;Sos1.binary_constraint_id 8
+        ConstraintHints.sos1_constraints;Sos1.variables 48
         "###);
     }
 }

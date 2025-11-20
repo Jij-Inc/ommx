@@ -5,23 +5,24 @@ use std::mem::size_of;
 impl LogicalMemoryProfile for AcyclicAssignments {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
         // Count each field individually to avoid double-counting
+        // Use "Type.field" format for flamegraph clarity
 
         // assignments: FnvHashMap<VariableID, Function>
         {
-            let mut guard = path.with("assignments");
+            let mut guard = path.with("AcyclicAssignments.assignments");
 
             // HashMap stack overhead
             let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
             visitor.visit_leaf(&guard, map_overhead);
 
-            // Keys (VariableID)
+            // Keys (VariableID) - use type name for clarity
             let key_size = size_of::<crate::VariableID>();
             let keys_bytes = self.assignments.len() * key_size;
-            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
+            visitor.visit_leaf(&guard.with("VariableID"), keys_bytes);
 
             // Delegate to each Function
             for function in self.assignments.values() {
-                function.visit_logical_memory(guard.with("Function").as_mut(), visitor);
+                function.visit_logical_memory(guard.as_mut(), visitor);
             }
         }
 
@@ -31,7 +32,7 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         let node_bytes = self.dependency.node_count() * size_of::<crate::VariableID>();
         let edge_bytes = self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
         let total_bytes = graph_overhead + node_bytes + edge_bytes;
-        visitor.visit_leaf(&path.with("dependency"), total_bytes);
+        visitor.visit_leaf(&path.with("AcyclicAssignments.dependency"), total_bytes);
     }
 }
 
@@ -44,11 +45,11 @@ mod tests {
     #[test]
     fn test_acyclic_assignments_empty_snapshot() {
         let assignments = AcyclicAssignments::default();
-        let folded = logical_memory_to_folded("Assignments", &assignments);
+        let folded = logical_memory_to_folded(&assignments);
         // Empty assignments should produce no output
         insta::assert_snapshot!(folded, @r###"
-        Assignments;assignments 32
-        Assignments;dependency 144
+        AcyclicAssignments.assignments 32
+        AcyclicAssignments.dependency 144
         "###);
     }
 
@@ -61,12 +62,12 @@ mod tests {
             4 <- linear!(1) + coeff!(2.0)
         };
 
-        let folded = logical_memory_to_folded("Assignments", &assignments);
+        let folded = logical_memory_to_folded(&assignments);
         insta::assert_snapshot!(folded, @r###"
-        Assignments;assignments 32
-        Assignments;assignments;Function;Linear;terms 160
-        Assignments;assignments;keys 16
-        Assignments;dependency 224
+        AcyclicAssignments.assignments 32
+        AcyclicAssignments.assignments;Linear;PolynomialBase.terms 160
+        AcyclicAssignments.assignments;VariableID 16
+        AcyclicAssignments.dependency 224
         "###);
     }
 }

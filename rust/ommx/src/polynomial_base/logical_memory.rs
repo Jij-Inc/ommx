@@ -20,7 +20,7 @@ impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
 
         let total_bytes = map_overhead + entries_bytes;
 
-        visitor.visit_leaf(&path.with("terms"), total_bytes);
+        visitor.visit_leaf(&path.with("PolynomialBase.terms"), total_bytes);
     }
 }
 
@@ -33,36 +33,36 @@ mod tests {
     #[test]
     fn test_empty_linear_snapshot() {
         let linear = Linear::default();
-        let folded = logical_memory_to_folded("Linear", &linear);
+        let folded = logical_memory_to_folded(&linear);
 
         // Empty HashMap: only struct overhead, no entries
-        insta::assert_snapshot!(folded, @"Linear;terms 32");
+        insta::assert_snapshot!(folded, @"PolynomialBase.terms 32");
     }
 
     #[test]
     fn test_single_term_snapshot() {
         // Single term: 2*x1
         let linear = coeff!(2.0) * linear!(1);
-        let folded = logical_memory_to_folded("Linear", &linear);
+        let folded = logical_memory_to_folded(&linear);
 
-        insta::assert_snapshot!(folded, @"Linear;terms 56");
+        insta::assert_snapshot!(folded, @"PolynomialBase.terms 56");
     }
 
     #[test]
     fn test_linear_three_terms_snapshot() {
         // Create: 2*x1 + 3*x2 + 5 (3 terms)
         let linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
-        let folded = logical_memory_to_folded("Linear", &linear);
+        let folded = logical_memory_to_folded(&linear);
 
-        insta::assert_snapshot!(folded, @"Linear;terms 104");
+        insta::assert_snapshot!(folded, @"PolynomialBase.terms 104");
     }
 
     #[test]
     fn test_quadratic_three_terms_snapshot() {
         // Create: x1*x2 + 2*x1 + 1 (3 terms)
         let quad = coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
-        let folded = logical_memory_to_folded("Quadratic", &quad);
+        let folded = logical_memory_to_folded(&quad);
 
-        insta::assert_snapshot!(folded, @"Quadratic;terms 128");
+        insta::assert_snapshot!(folded, @"PolynomialBase.terms 128");
     }
 }

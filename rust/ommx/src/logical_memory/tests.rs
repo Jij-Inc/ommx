@@ -32,13 +32,10 @@ fn test_linear_memory_profile() {
     // Create a linear expression: 2*x1 + 3*x2 + 5
     let expr: Linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
 
-    let folded = logical_memory_to_folded("Linear", &expr);
-    println!("Linear folded stack:\n{}", folded);
+    let folded = logical_memory_to_folded(&expr);
+    insta::assert_snapshot!(folded, @"PolynomialBase.terms 104");
 
-    let total = logical_total_bytes("Linear", &expr);
-    println!("Linear total bytes: {}", total);
-
-    assert!(folded.contains("Linear;terms"));
+    let total = logical_total_bytes(&expr);
     assert!(total > 0);
 }
 
@@ -47,10 +44,10 @@ fn test_linear_snapshot() {
     // Create a deterministic linear expression: 2*x1 + 3*x2 + 5
     let expr: Linear = coeff!(2.0) * linear!(1) + coeff!(3.0) * linear!(2) + coeff!(5.0);
 
-    let folded = logical_memory_to_folded("Linear", &expr);
+    let folded = logical_memory_to_folded(&expr);
 
     // Snapshot test: verify the exact format of folded stack output
-    insta::assert_snapshot!(folded, @"Linear;terms 104");
+    insta::assert_snapshot!(folded, @"PolynomialBase.terms 104");
 }
 
 #[test]
@@ -59,13 +56,10 @@ fn test_quadratic_memory_profile() {
     let expr: Quadratic =
         coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
 
-    let folded = logical_memory_to_folded("Quadratic", &expr);
-    println!("Quadratic folded stack:\n{}", folded);
+    let folded = logical_memory_to_folded(&expr);
+    insta::assert_snapshot!(folded, @"PolynomialBase.terms 128");
 
-    let total = logical_total_bytes("Quadratic", &expr);
-    println!("Quadratic total bytes: {}", total);
-
-    assert!(folded.contains("Quadratic;terms"));
+    let total = logical_total_bytes(&expr);
     assert!(total > 0);
 }
 
@@ -75,10 +69,10 @@ fn test_quadratic_snapshot() {
     let expr: Quadratic =
         coeff!(1.0) * quadratic!(1, 2) + coeff!(2.0) * quadratic!(1) + coeff!(1.0);
 
-    let folded = logical_memory_to_folded("Quadratic", &expr);
+    let folded = logical_memory_to_folded(&expr);
 
     // Snapshot test: verify the exact format of folded stack output
-    insta::assert_snapshot!(folded, @"Quadratic;terms 128");
+    insta::assert_snapshot!(folded, @"PolynomialBase.terms 128");
 }
 
 #[test]
@@ -89,10 +83,10 @@ fn test_large_linear_memory() {
         expr = expr + coeff!(i as f64) * linear!(i);
     }
 
-    let folded = logical_memory_to_folded("Linear", &expr);
+    let folded = logical_memory_to_folded(&expr);
     println!("Large Linear folded stack:\n{}", folded);
 
-    let total = logical_total_bytes("Linear", &expr);
+    let total = logical_total_bytes(&expr);
     println!("Large Linear total bytes: {}", total);
 
     // With 100 terms, memory should be substantial
@@ -107,8 +101,8 @@ fn test_medium_linear_snapshot() {
         expr = expr + coeff!(i as f64) * linear!(i);
     }
 
-    let folded = logical_memory_to_folded("Linear", &expr);
+    let folded = logical_memory_to_folded(&expr);
 
     // Snapshot test for medium-sized expression
-    insta::assert_snapshot!(folded, @"Linear;terms 272");
+    insta::assert_snapshot!(folded, @"PolynomialBase.terms 272");
 }
