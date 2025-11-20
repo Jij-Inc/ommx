@@ -1908,7 +1908,6 @@ class Instance(UserAnnotationBase):
         Instance;objective;Linear;terms 104
         Instance;removed_constraints 24
         Instance;sense 1
-        <BLANKLINE>
         """
         return self.raw.logical_memory_profile()
 
