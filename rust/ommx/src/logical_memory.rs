@@ -13,8 +13,8 @@
 //! # Example
 //!
 //! ```rust
-//! use ommx::logical_memory::{LogicalMemoryProfile, logical_memory_to_folded};
-//! use ommx::polynomial_base::Linear;
+//! use ommx::logical_memory::logical_memory_to_folded;
+//! use ommx::Linear;
 //!
 //! let linear = Linear::default();
 //! let folded = logical_memory_to_folded("Linear", &linear);
@@ -99,11 +99,11 @@ impl LogicalMemoryVisitor for FoldedCollector {
 ///
 /// ```rust
 /// use ommx::logical_memory::logical_memory_to_folded;
-/// use ommx::polynomial_base::Linear;
+/// use ommx::Linear;
 ///
 /// let linear = Linear::default();
 /// let folded = logical_memory_to_folded("Linear", &linear);
-/// // Output: "Linear;terms 0" (for empty polynomial)
+/// // Output: "" (empty polynomial emits no output)
 /// ```
 pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
     root_name: &'static str,
@@ -128,11 +128,12 @@ pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
 ///
 /// ```rust
 /// use ommx::logical_memory::logical_total_bytes;
-/// use ommx::polynomial_base::Linear;
+/// use ommx::Linear;
 ///
 /// let linear = Linear::default();
 /// let total = logical_total_bytes("Linear", &linear);
-/// assert_eq!(total, 0); // Empty polynomial
+/// // Empty polynomial has only struct overhead
+/// assert!(total > 0);
 /// ```
 pub fn logical_total_bytes<T: LogicalMemoryProfile>(
     root_name: &'static str,
