@@ -10,9 +10,9 @@ Add memory profiling capabilities to `ommx::Instance` and related types to analy
 
 Memory usage often becomes a bottleneck for large-scale optimization problems, particularly:
 
-- **Sparse matrix internal representation**: CSR/CSC format with `row_ptr`, `col_idx`, `values` arrays
-- **Decision variables and constraints**: Variable names, bounds, index maps
-- **Polynomial data**: Quadratic polynomial terms, linear coefficients
+- **Polynomial data structures**: `PolynomialBase<M>` with `FnvHashMap<M, Coefficient>` for storing terms
+- **Decision variables and constraints**: `BTreeMap` collections with metadata like names, bounds
+- **Function representations**: `Linear`, `Quadratic`, `Polynomial` variants in objective and constraints
 
 Understanding actual memory consumption of these structures enables optimization opportunities.
 
@@ -111,75 +111,69 @@ impl LogicalMemoryProfile for Values {
 
 ### Pattern 2: Intermediate Node (Delegate to Children)
 
-**Example**: CSR format sparse matrix
+**Example**: Quadratic polynomial (function in objective or constraint)
 
 ```rust
-struct SparseMatrix {
-    row_ptr: Vec<u32>,
-    col_idx: Vec<u32>,
-    values: Vec<f64>,
-}
+// Quadratic = PolynomialBase<QuadraticMonomial>
+// where PolynomialBase<M> has: terms: FnvHashMap<M, Coefficient>
 
-impl LogicalMemoryProfile for SparseMatrix {
+impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
         visitor: &mut V
     ) {
-        path.push("matrix");
+        path.push("terms");
 
-        // row_ptr
-        path.push("row_ptr");
-        let row_bytes = self.row_ptr.capacity() * std::mem::size_of::<u32>();
-        visitor.visit_leaf(path, row_bytes);
+        // HashMap: keys (monomials) + values (coefficients) + overhead
+        let map_overhead = std::mem::size_of::<FnvHashMap<M, Coefficient>>();
+        let keys_bytes = self.terms.capacity() * std::mem::size_of::<M>();
+        let values_bytes = self.terms.capacity() * std::mem::size_of::<Coefficient>();
+
+        visitor.visit_leaf(path, map_overhead + keys_bytes + values_bytes);
         path.pop();
-
-        // col_idx
-        path.push("col_idx");
-        let col_bytes = self.col_idx.capacity() * std::mem::size_of::<u32>();
-        visitor.visit_leaf(path, col_bytes);
-        path.pop();
-
-        // values
-        path.push("values");
-        let val_bytes = self.values.capacity() * std::mem::size_of::<f64>();
-        visitor.visit_leaf(path, val_bytes);
-        path.pop();
-
-        path.pop(); // "matrix"
     }
 }
 ```
 
 **Emitted leaves**:
-- `["...", "matrix", "row_ptr"]`
-- `["...", "matrix", "col_idx"]`
-- `["...", "matrix", "values"]`
+- `["...", "Quadratic", "terms"]` with total HashMap memory
+- Or split into `["...", "keys"]`, `["...", "values"]`, `["...", "overhead"]` for finer granularity
 
 ### Pattern 3: Root Node
 
-**Example**: Entire optimization model
+**Example**: Entire optimization problem instance
 
 ```rust
-struct Model {
-    vars: Vars,
-    cons: Constraints,
-    matrix: SparseMatrix,
-}
-
-impl LogicalMemoryProfile for Model {
+impl LogicalMemoryProfile for Instance {
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
         visitor: &mut V
     ) {
-        path.push("Model");
+        path.push("Instance");
 
-        self.vars.visit_logical_memory(path, visitor);
-        self.cons.visit_logical_memory(path, visitor);
-        self.matrix.visit_logical_memory(path, visitor);
-
+        // Objective function
+        path.push("objective");
+        self.objective.visit_logical_memory(path, visitor);
         path.pop();
+
+        // Decision variables (BTreeMap<VariableID, DecisionVariable>)
+        path.push("decision_variables");
+        // ... visit BTreeMap structure
+        path.pop();
+
+        // Constraints (BTreeMap<ConstraintID, Constraint>)
+        path.push("constraints");
+        // ... visit each constraint's function
+        path.pop();
+
+        // Removed constraints
+        path.push("removed_constraints");
+        // ... visit BTreeMap structure
+        path.pop();
+
+        path.pop(); // "Instance"
     }
 }
 ```
@@ -264,14 +258,20 @@ Hierarchical JSON or YAML output can also be implemented as visitors:
 ```json
 {
   "Instance": {
-    "vars": {
-      "names": 1024,
-      "bounds": 2048
+    "objective": {
+      "Quadratic": {
+        "terms": 16384
+      }
     },
-    "matrix": {
-      "row_ptr": 4096,
-      "col_idx": 8192,
-      "values": 16384
+    "decision_variables": {
+      "btree_overhead": 512,
+      "entries": 2048
+    },
+    "constraints": {
+      "btree_overhead": 1024,
+      "entries": {
+        "functions": 8192
+      }
     }
   }
 }
@@ -283,13 +283,14 @@ For CLI tool display:
 
 ```
 Instance
-├─ vars
-│  ├─ names: 1.0 KB
-│  └─ bounds: 2.0 KB
-└─ matrix
-   ├─ row_ptr: 4.0 KB
-   ├─ col_idx: 8.0 KB
-   └─ values: 16.0 KB
+├─ objective (Quadratic)
+│  └─ terms: 16.0 KB
+├─ decision_variables
+│  ├─ btree_overhead: 512 B
+│  └─ entries: 2.0 KB
+└─ constraints
+   ├─ btree_overhead: 1.0 KB
+   └─ entries: 8.0 KB
 ```
 
 ## Python API Design
@@ -332,14 +333,16 @@ instance.show_memory_flamegraph()  # Display SVG inline
 ### Phase 2: Domain Type Implementations
 
 3. Implement `LogicalMemoryProfile` for major types
-   - `Instance`
-   - `Linear` / `Quadratic` (polynomials)
-   - Constraint-related types
-   - Sparse matrix-related types
+   - `Instance` (root node, delegates to all fields)
+   - `Function` enum variants (`Linear`, `Quadratic`, `Polynomial`)
+   - `PolynomialBase<M>` (generic implementation for all polynomial types)
+   - `Constraint` (delegates to embedded `Function`)
+   - Collections: `BTreeMap<K, V>`, `FnvHashMap<K, V>`
 
 4. Add tests
    - `rust/ommx/tests/logical_memory_test.rs`
    - Integration tests for flamegraph generation
+   - Verify memory accounting accuracy
 
 ### Phase 3: Python Bindings
 
