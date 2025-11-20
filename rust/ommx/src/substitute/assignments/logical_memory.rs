@@ -1,4 +1,4 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use crate::substitute::AcyclicAssignments;
 use std::mem::size_of;
 
@@ -11,39 +11,31 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         // Count each field individually to avoid double-counting
 
         // assignments: FnvHashMap<VariableID, Function>
-        path.push("assignments");
+        {
+            let mut guard = path.with("assignments");
 
-        // HashMap stack overhead
-        let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
-        visitor.visit_leaf(path, map_overhead);
+            // HashMap stack overhead
+            let map_overhead = size_of::<fnv::FnvHashMap<crate::VariableID, crate::Function>>();
+            visitor.visit_leaf(&guard, map_overhead);
 
-        // Keys (VariableID)
-        path.push("keys");
-        let key_size = size_of::<crate::VariableID>();
-        let keys_bytes = self.assignments.len() * key_size;
-        visitor.visit_leaf(path, keys_bytes);
-        path.pop();
+            // Keys (VariableID)
+            let key_size = size_of::<crate::VariableID>();
+            let keys_bytes = self.assignments.len() * key_size;
+            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
 
-        // Delegate to each Function
-        for function in self.assignments.values() {
-            path.push("Function");
-            function.visit_logical_memory(path, visitor);
-            path.pop();
+            // Delegate to each Function
+            for function in self.assignments.values() {
+                function.visit_logical_memory(guard.with("Function").as_mut(), visitor);
+            }
         }
-
-        path.pop();
 
         // dependency: DiGraphMap<VariableID, ()>
         // Estimate: node count * size_of::<VariableID>() + edge count * (size_of::<VariableID>() * 2)
-        path.push("dependency");
-
         let graph_overhead = size_of::<petgraph::graphmap::DiGraphMap<crate::VariableID, ()>>();
         let node_bytes = self.dependency.node_count() * size_of::<crate::VariableID>();
         let edge_bytes = self.dependency.edge_count() * (size_of::<crate::VariableID>() * 2);
         let total_bytes = graph_overhead + node_bytes + edge_bytes;
-        visitor.visit_leaf(path, total_bytes);
-
-        path.pop();
+        visitor.visit_leaf(&path.with("dependency"), total_bytes);
     }
 }
 

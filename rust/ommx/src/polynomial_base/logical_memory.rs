@@ -1,4 +1,4 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use crate::polynomial_base::{Monomial, PolynomialBase};
 use crate::Coefficient;
 use fnv::FnvHashMap;
@@ -10,8 +10,6 @@ impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
         path: &mut Vec<&'static str>,
         visitor: &mut V,
     ) {
-        path.push("terms");
-
         // Calculate FnvHashMap memory usage:
         // 1. HashMap struct overhead
         // 2. Allocated capacity for entries (keys + values)
@@ -26,8 +24,7 @@ impl<M: Monomial> LogicalMemoryProfile for PolynomialBase<M> {
 
         let total_bytes = map_overhead + entries_bytes;
 
-        visitor.visit_leaf(path, total_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("terms"), total_bytes);
     }
 }
 

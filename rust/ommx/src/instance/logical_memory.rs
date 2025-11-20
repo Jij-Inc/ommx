@@ -1,5 +1,5 @@
 use crate::instance::Instance;
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for Instance {
@@ -11,95 +11,76 @@ impl LogicalMemoryProfile for Instance {
         // Count each field individually to avoid double-counting
 
         // sense: Sense (enum)
-        path.push("sense");
-        visitor.visit_leaf(path, size_of::<crate::instance::Sense>());
-        path.pop();
+        visitor.visit_leaf(&path.with("sense"), size_of::<crate::instance::Sense>());
 
         // Delegate to objective Function
-        path.push("objective");
-        self.objective().visit_logical_memory(path, visitor);
-        path.pop();
+        self.objective()
+            .visit_logical_memory(path.with("objective").as_mut(), visitor);
 
         // decision_variables: BTreeMap<VariableID, DecisionVariable>
-        path.push("decision_variables");
+        {
+            let mut guard = path.with("decision_variables");
 
-        // BTreeMap stack overhead
-        let map_overhead = size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
-        visitor.visit_leaf(path, map_overhead);
+            // BTreeMap stack overhead
+            let map_overhead = size_of::<std::collections::BTreeMap<crate::VariableID, crate::DecisionVariable>>();
+            visitor.visit_leaf(&guard, map_overhead);
 
-        // Keys (VariableID)
-        path.push("keys");
-        let key_size = size_of::<crate::VariableID>();
-        let keys_bytes = self.decision_variables().len() * key_size;
-        visitor.visit_leaf(path, keys_bytes);
-        path.pop();
+            // Keys (VariableID)
+            let key_size = size_of::<crate::VariableID>();
+            let keys_bytes = self.decision_variables().len() * key_size;
+            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
 
-        // Delegate to each DecisionVariable
-        for dv in self.decision_variables().values() {
-            path.push("DecisionVariable");
-            dv.visit_logical_memory(path, visitor);
-            path.pop();
+            // Delegate to each DecisionVariable
+            for dv in self.decision_variables().values() {
+                dv.visit_logical_memory(guard.with("DecisionVariable").as_mut(), visitor);
+            }
         }
-
-        path.pop();
 
         // constraints: BTreeMap<ConstraintID, Constraint>
-        path.push("constraints");
+        {
+            let mut guard = path.with("constraints");
 
-        // BTreeMap stack overhead
-        let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
-        visitor.visit_leaf(path, map_overhead);
+            // BTreeMap stack overhead
+            let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::Constraint>>();
+            visitor.visit_leaf(&guard, map_overhead);
 
-        // Keys (ConstraintID)
-        path.push("keys");
-        let key_size = size_of::<crate::ConstraintID>();
-        let keys_bytes = self.constraints().len() * key_size;
-        visitor.visit_leaf(path, keys_bytes);
-        path.pop();
+            // Keys (ConstraintID)
+            let key_size = size_of::<crate::ConstraintID>();
+            let keys_bytes = self.constraints().len() * key_size;
+            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
 
-        // Delegate to each Constraint
-        for constraint in self.constraints().values() {
-            path.push("Constraint");
-            constraint.visit_logical_memory(path, visitor);
-            path.pop();
+            // Delegate to each Constraint
+            for constraint in self.constraints().values() {
+                constraint.visit_logical_memory(guard.with("Constraint").as_mut(), visitor);
+            }
         }
-
-        path.pop();
 
         // removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>
-        path.push("removed_constraints");
+        {
+            let mut guard = path.with("removed_constraints");
 
-        // BTreeMap stack overhead
-        let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>>();
-        visitor.visit_leaf(path, map_overhead);
+            // BTreeMap stack overhead
+            let map_overhead = size_of::<std::collections::BTreeMap<crate::ConstraintID, crate::RemovedConstraint>>();
+            visitor.visit_leaf(&guard, map_overhead);
 
-        // Keys (ConstraintID)
-        path.push("keys");
-        let key_size = size_of::<crate::ConstraintID>();
-        let keys_bytes = self.removed_constraints().len() * key_size;
-        visitor.visit_leaf(path, keys_bytes);
-        path.pop();
+            // Keys (ConstraintID)
+            let key_size = size_of::<crate::ConstraintID>();
+            let keys_bytes = self.removed_constraints().len() * key_size;
+            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
 
-        // Delegate to each RemovedConstraint
-        for removed in self.removed_constraints().values() {
-            path.push("RemovedConstraint");
-            removed.visit_logical_memory(path, visitor);
-            path.pop();
+            // Delegate to each RemovedConstraint
+            for removed in self.removed_constraints().values() {
+                removed.visit_logical_memory(guard.with("RemovedConstraint").as_mut(), visitor);
+            }
         }
 
-        path.pop();
-
         // decision_variable_dependency: AcyclicAssignments
-        path.push("decision_variable_dependency");
         self.decision_variable_dependency()
-            .visit_logical_memory(path, visitor);
-        path.pop();
+            .visit_logical_memory(path.with("decision_variable_dependency").as_mut(), visitor);
 
         // constraint_hints: ConstraintHints
-        path.push("constraint_hints");
         self.constraint_hints()
-            .visit_logical_memory(path, visitor);
-        path.pop();
+            .visit_logical_memory(path.with("constraint_hints").as_mut(), visitor);
 
         // Option<v1::Parameters> parameters
         // Option<v1::instance::Description> description

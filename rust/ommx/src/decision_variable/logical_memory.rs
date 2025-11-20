@@ -1,5 +1,5 @@
 use crate::decision_variable::{DecisionVariable, DecisionVariableMetadata};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use fnv::FnvHashMap;
 use std::mem::size_of;
 
@@ -12,29 +12,20 @@ impl LogicalMemoryProfile for DecisionVariable {
         // Count each field individually to avoid double-counting
 
         // id: VariableID (u64 wrapper)
-        path.push("id");
-        visitor.visit_leaf(path, size_of::<crate::VariableID>());
-        path.pop();
+        visitor.visit_leaf(&path.with("id"), size_of::<crate::VariableID>());
 
         // kind: Kind (enum)
-        path.push("kind");
-        visitor.visit_leaf(path, size_of::<crate::Kind>());
-        path.pop();
+        visitor.visit_leaf(&path.with("kind"), size_of::<crate::Kind>());
 
         // bound: Bound (two f64s)
-        path.push("bound");
-        visitor.visit_leaf(path, size_of::<crate::Bound>());
-        path.pop();
+        visitor.visit_leaf(&path.with("bound"), size_of::<crate::Bound>());
 
         // substituted_value: Option<f64>
-        path.push("substituted_value");
-        visitor.visit_leaf(path, size_of::<Option<f64>>());
-        path.pop();
+        visitor.visit_leaf(&path.with("substituted_value"), size_of::<Option<f64>>());
 
         // Delegate to metadata
-        path.push("metadata");
-        self.metadata.visit_logical_memory(path, visitor);
-        path.pop();
+        self.metadata
+            .visit_logical_memory(path.with("metadata").as_mut(), visitor);
     }
 }
 
@@ -47,20 +38,15 @@ impl LogicalMemoryProfile for DecisionVariableMetadata {
         // Count each field individually to avoid double-counting
 
         // name: Option<String> - count stack overhead
-        path.push("name");
         let name_bytes = size_of::<Option<String>>()
             + self.name.as_ref().map_or(0, |s| s.capacity());
-        visitor.visit_leaf(path, name_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("name"), name_bytes);
 
         // subscripts: Vec<i64> - count stack overhead + heap
-        path.push("subscripts");
         let subscripts_bytes = size_of::<Vec<i64>>() + self.subscripts.capacity() * size_of::<i64>();
-        visitor.visit_leaf(path, subscripts_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("subscripts"), subscripts_bytes);
 
         // parameters: FnvHashMap<String, String> - count stack overhead + heap
-        path.push("parameters");
         let map_overhead = size_of::<FnvHashMap<String, String>>();
         let mut entries_bytes = 0;
         for (k, v) in &self.parameters {
@@ -69,15 +55,12 @@ impl LogicalMemoryProfile for DecisionVariableMetadata {
             entries_bytes += v.capacity();
         }
         let parameters_bytes = map_overhead + entries_bytes;
-        visitor.visit_leaf(path, parameters_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("parameters"), parameters_bytes);
 
         // description: Option<String> - count stack overhead
-        path.push("description");
         let description_bytes = size_of::<Option<String>>()
             + self.description.as_ref().map_or(0, |s| s.capacity());
-        visitor.visit_leaf(path, description_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("description"), description_bytes);
     }
 }
 

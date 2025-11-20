@@ -1,4 +1,4 @@
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use crate::function::Function;
 use std::mem::size_of;
 
@@ -11,30 +11,20 @@ impl LogicalMemoryProfile for Function {
         match self {
             Function::Zero => {
                 // Zero variant has no heap allocation, only stack size
-                path.push("Zero");
-                visitor.visit_leaf(path, size_of::<Function>());
-                path.pop();
+                visitor.visit_leaf(&path.with("Zero"), size_of::<Function>());
             }
             Function::Constant(_c) => {
                 // Constant variant has coefficient on stack, no heap allocation
-                path.push("Constant");
-                visitor.visit_leaf(path, size_of::<Function>());
-                path.pop();
+                visitor.visit_leaf(&path.with("Constant"), size_of::<Function>());
             }
             Function::Linear(linear) => {
-                path.push("Linear");
-                linear.visit_logical_memory(path, visitor);
-                path.pop();
+                linear.visit_logical_memory(path.with("Linear").as_mut(), visitor);
             }
             Function::Quadratic(quadratic) => {
-                path.push("Quadratic");
-                quadratic.visit_logical_memory(path, visitor);
-                path.pop();
+                quadratic.visit_logical_memory(path.with("Quadratic").as_mut(), visitor);
             }
             Function::Polynomial(polynomial) => {
-                path.push("Polynomial");
-                polynomial.visit_logical_memory(path, visitor);
-                path.pop();
+                polynomial.visit_logical_memory(path.with("Polynomial").as_mut(), visitor);
             }
         }
     }

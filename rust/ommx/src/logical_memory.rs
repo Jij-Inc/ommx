@@ -21,21 +21,168 @@
 //! println!("{}", folded);
 //! ```
 
+/// RAII guard for path management that automatically pops on drop.
+///
+/// This guard ensures that path push/pop operations are always paired,
+/// preventing bugs from forgetting to pop.
+///
+/// # Example
+///
+/// ```rust
+/// use ommx::logical_memory::{PathExt, LogicalMemoryVisitor};
+/// use std::mem::size_of;
+///
+/// # struct MyVisitor;
+/// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
+/// #     fn visit_leaf(&mut self, _path: &[&'static str], _bytes: usize) {}
+/// # }
+/// let mut path = vec!["root"];
+/// let mut visitor = MyVisitor;
+///
+/// // Old style (manual push/pop):
+/// // path.push("field");
+/// // visitor.visit_leaf(&path, size_of::<u64>());
+/// // path.pop();
+///
+/// // New style (automatic pop via guard):
+/// visitor.visit_leaf(&path.with("field"), size_of::<u64>());
+/// // path is automatically popped when guard is dropped
+/// ```
+pub struct PathGuard<'a> {
+    path: &'a mut Vec<&'static str>,
+}
+
+impl<'a> PathGuard<'a> {
+    /// Create a new path guard by pushing a name onto the path.
+    fn new(path: &'a mut Vec<&'static str>, name: &'static str) -> Self {
+        path.push(name);
+        Self { path }
+    }
+
+    /// Create a nested path guard.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use ommx::logical_memory::{PathExt, LogicalMemoryVisitor};
+    /// # struct MyVisitor;
+    /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
+    /// #     fn visit_leaf(&mut self, _path: &[&'static str], _bytes: usize) {}
+    /// # }
+    /// let mut path = vec!["root"];
+    /// let mut visitor = MyVisitor;
+    ///
+    /// // Nested guards
+    /// let mut guard1 = path.with("parent");
+    /// visitor.visit_leaf(&guard1.with("child"), 42);
+    /// // Both "child" and "parent" are automatically popped in reverse order
+    /// ```
+    pub fn with(&mut self, name: &'static str) -> PathGuard<'_> {
+        PathGuard::new(self.path, name)
+    }
+}
+
+impl Drop for PathGuard<'_> {
+    fn drop(&mut self) {
+        self.path.pop();
+    }
+}
+
+impl std::ops::Deref for PathGuard<'_> {
+    type Target = [&'static str];
+
+    fn deref(&self) -> &Self::Target {
+        self.path.as_slice()
+    }
+}
+
+impl AsMut<Vec<&'static str>> for PathGuard<'_> {
+    fn as_mut(&mut self) -> &mut Vec<&'static str> {
+        self.path
+    }
+}
+
+/// Extension trait for `Vec<&'static str>` to create path guards.
+pub trait PathExt {
+    /// Create a path guard that automatically pops on drop.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use ommx::logical_memory::{PathExt, LogicalMemoryVisitor};
+    /// use std::mem::size_of;
+    ///
+    /// # struct MyVisitor;
+    /// # impl ommx::logical_memory::LogicalMemoryVisitor for MyVisitor {
+    /// #     fn visit_leaf(&mut self, _path: &[&'static str], _bytes: usize) {}
+    /// # }
+    /// let mut path = vec!["root"];
+    /// let mut visitor = MyVisitor;
+    ///
+    /// visitor.visit_leaf(&path.with("field"), size_of::<u64>());
+    /// // path is automatically popped here
+    /// assert_eq!(path, vec!["root"]);
+    /// ```
+    fn with(&mut self, name: &'static str) -> PathGuard<'_>;
+}
+
+impl PathExt for Vec<&'static str> {
+    fn with(&mut self, name: &'static str) -> PathGuard<'_> {
+        PathGuard::new(self, name)
+    }
+}
+
 /// Types that provide logical memory profiling.
 ///
 /// Implementations should enumerate their "logical memory leaves" by calling
-/// `visitor.visit_leaf(path, bytes)` for each leaf node, while intermediate
-/// nodes should delegate to their children.
+/// `visitor.visit_leaf()` for each leaf node, while intermediate nodes should
+/// delegate to their children.
+///
+/// # Recommended Implementation Pattern
+///
+/// Use [`PathExt::with()`] to create RAII guards that automatically manage path push/pop:
+///
+/// ```rust
+/// use ommx::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
+/// use std::mem::size_of;
+///
+/// struct MyStruct {
+///     field1: u64,
+///     field2: String,
+/// }
+///
+/// impl LogicalMemoryProfile for MyStruct {
+///     fn visit_logical_memory<V: LogicalMemoryVisitor>(
+///         &self,
+///         path: &mut Vec<&'static str>,
+///         visitor: &mut V,
+///     ) {
+///         // Count primitive fields using path guards
+///         visitor.visit_leaf(path.with("field1").as_ref(), size_of::<u64>());
+///
+///         // Count String: stack + heap
+///         let field2_bytes = size_of::<String>() + self.field2.capacity();
+///         visitor.visit_leaf(path.with("field2").as_ref(), field2_bytes);
+///
+///         // For delegation to nested structs, use a scoped guard
+///         // {
+///         //     let mut guard = path.with("nested");
+///         //     self.nested.visit_logical_memory(guard.as_mut(), visitor);
+///         // }
+///     }
+/// }
+/// ```
 pub trait LogicalMemoryProfile {
     /// Enumerate the "logical memory leaves" of this value.
     ///
     /// # Arguments
-    /// - `path`: Logical path to the current node (mutated with push/pop during recursion)
+    /// - `path`: Logical path to the current node (mutated during recursion)
     /// - `visitor`: Visitor that receives leaf node callbacks
     ///
     /// # Implementation Notes
-    /// - At leaf nodes, call `visitor.visit_leaf(path, bytes)`
-    /// - Intermediate nodes delegate to children and manage path stack
+    /// - Use `path.with("name")` to create RAII guards for automatic cleanup
+    /// - At leaf nodes: `visitor.visit_leaf(path.with("field").as_ref(), bytes)`
+    /// - For delegation: create a scoped guard with `path.with("field")` and call `as_mut()`
     fn visit_logical_memory<V: LogicalMemoryVisitor>(
         &self,
         path: &mut Vec<&'static str>,
@@ -147,10 +294,7 @@ pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
 /// // Empty polynomial has only struct overhead
 /// assert!(total > 0);
 /// ```
-pub fn logical_total_bytes<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T,
-) -> usize {
+pub fn logical_total_bytes<T: LogicalMemoryProfile>(root_name: &'static str, value: &T) -> usize {
     struct Sum(usize);
     impl LogicalMemoryVisitor for Sum {
         fn visit_leaf(&mut self, _path: &[&'static str], bytes: usize) {

@@ -1,5 +1,5 @@
 use crate::constraint_hints::{ConstraintHints, OneHot, Sos1};
-use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor};
+use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, PathExt};
 use std::mem::size_of;
 
 impl LogicalMemoryProfile for ConstraintHints {
@@ -11,26 +11,24 @@ impl LogicalMemoryProfile for ConstraintHints {
         // Count each field individually to avoid double-counting
 
         // one_hot_constraints: Vec<OneHot>
-        path.push("one_hot_constraints");
-        let vec_overhead = size_of::<Vec<OneHot>>();
-        visitor.visit_leaf(path, vec_overhead);
-        for one_hot in &self.one_hot_constraints {
-            path.push("OneHot");
-            one_hot.visit_logical_memory(path, visitor);
-            path.pop();
+        {
+            let mut guard = path.with("one_hot_constraints");
+            let vec_overhead = size_of::<Vec<OneHot>>();
+            visitor.visit_leaf(&guard, vec_overhead);
+            for one_hot in &self.one_hot_constraints {
+                one_hot.visit_logical_memory(guard.with("OneHot").as_mut(), visitor);
+            }
         }
-        path.pop();
 
         // sos1_constraints: Vec<Sos1>
-        path.push("sos1_constraints");
-        let vec_overhead = size_of::<Vec<Sos1>>();
-        visitor.visit_leaf(path, vec_overhead);
-        for sos1 in &self.sos1_constraints {
-            path.push("Sos1");
-            sos1.visit_logical_memory(path, visitor);
-            path.pop();
+        {
+            let mut guard = path.with("sos1_constraints");
+            let vec_overhead = size_of::<Vec<Sos1>>();
+            visitor.visit_leaf(&guard, vec_overhead);
+            for sos1 in &self.sos1_constraints {
+                sos1.visit_logical_memory(guard.with("Sos1").as_mut(), visitor);
+            }
         }
-        path.pop();
     }
 }
 
@@ -43,16 +41,12 @@ impl LogicalMemoryProfile for OneHot {
         // Count each field individually to avoid double-counting
 
         // id: ConstraintID (u64 wrapper)
-        path.push("id");
-        visitor.visit_leaf(path, size_of::<crate::ConstraintID>());
-        path.pop();
+        visitor.visit_leaf(&path.with("id"), size_of::<crate::ConstraintID>());
 
         // variables: BTreeSet<VariableID>
-        path.push("variables");
         let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
         let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(path, set_overhead + elements_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("variables"), set_overhead + elements_bytes);
     }
 }
 
@@ -65,23 +59,17 @@ impl LogicalMemoryProfile for Sos1 {
         // Count each field individually to avoid double-counting
 
         // binary_constraint_id: ConstraintID (u64 wrapper)
-        path.push("binary_constraint_id");
-        visitor.visit_leaf(path, size_of::<crate::ConstraintID>());
-        path.pop();
+        visitor.visit_leaf(&path.with("binary_constraint_id"), size_of::<crate::ConstraintID>());
 
         // big_m_constraint_ids: BTreeSet<ConstraintID>
-        path.push("big_m_constraint_ids");
         let set_overhead = size_of::<std::collections::BTreeSet<crate::ConstraintID>>();
         let elements_bytes = self.big_m_constraint_ids.len() * size_of::<crate::ConstraintID>();
-        visitor.visit_leaf(path, set_overhead + elements_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("big_m_constraint_ids"), set_overhead + elements_bytes);
 
         // variables: BTreeSet<VariableID>
-        path.push("variables");
         let set_overhead = size_of::<std::collections::BTreeSet<crate::VariableID>>();
         let elements_bytes = self.variables.len() * size_of::<crate::VariableID>();
-        visitor.visit_leaf(path, set_overhead + elements_bytes);
-        path.pop();
+        visitor.visit_leaf(&path.with("variables"), set_overhead + elements_bytes);
     }
 }
 
