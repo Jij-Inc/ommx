@@ -195,6 +195,106 @@ impl LogicalMemoryProfile for Instance {
 
 **Key point**: Root node doesn't emit leaves itself, delegates everything to children
 
+## Implementation Guidelines
+
+### Stack vs Heap Separation
+
+**Rule**: Stack-allocated fields are counted as part of the struct; heap-allocated fields are counted separately.
+
+- **Stack fields** (struct overhead + all inline fields):
+  - Count entire struct size: `size_of::<T>()`
+  - Includes padding and alignment
+  - Example: `DecisionVariable` struct (id, kind, bound, substituted_value) → single `visit_leaf` call
+
+- **Heap-allocated fields** (dynamic allocations):
+  - Count separately with dedicated paths
+  - String: `size_of::<String>() + capacity()`
+  - Vec: `size_of::<Vec<T>>() + capacity() * size_of::<T>()`
+  - HashMap/BTreeMap: overhead + keys + values
+  - Example: `DecisionVariableMetadata` (name, description, subscripts, parameters) → separate paths
+
+**Rationale**: Stack memory is fixed per instance; heap memory varies dynamically and benefits from separate tracking.
+
+### Key-Value Separation in Collections
+
+For `HashMap<K, V>` and `BTreeMap<K, V>`, separate keys and values into distinct paths:
+
+```rust
+// BTreeMap overhead
+let map_overhead = size_of::<BTreeMap<K, V>>();
+visitor.visit_leaf(path, map_overhead);
+
+// Keys
+path.push("keys");
+let keys_bytes = len * size_of::<K>();
+visitor.visit_leaf(path, keys_bytes);
+path.pop();
+
+// Delegate to each value
+for value in values() {
+    path.push("ValueType");  // Add type name
+    value.visit_logical_memory(path, visitor);
+    path.pop();
+}
+```
+
+**Output example** (2 DecisionVariables):
+```
+Instance;decision_variables 24                              # BTreeMap overhead
+Instance;decision_variables;keys 16                         # 2 × 8 bytes (VariableID)
+Instance;decision_variables;DecisionVariable 304            # 2 × 152 bytes (aggregated)
+Instance;decision_variables;DecisionVariable;metadata;name 95  # metadata heap allocations
+```
+
+**Rationale**: Provides clear breakdown of collection structure vs content in flamegraphs.
+
+### Type Names in Delegation Paths
+
+When delegating from a collection to value types, add the type name to the path:
+
+```rust
+// ❌ Bad: Values reported directly under collection path
+for constraint in constraints.values() {
+    constraint.visit_logical_memory(path, visitor);
+}
+
+// ✅ Good: Values reported under type-specific subpath
+for constraint in constraints.values() {
+    path.push("Constraint");
+    constraint.visit_logical_memory(path, visitor);
+    path.pop();
+}
+```
+
+**Rationale**: Creates hierarchical flamegraph structure that distinguishes collection metadata from element content.
+
+### Automatic Aggregation
+
+`FoldedCollector` automatically aggregates multiple visits to the same path:
+
+```rust
+// Multiple DecisionVariables report to same path
+for dv in decision_variables.values() {
+    path.push("DecisionVariable");
+    dv.visit_logical_memory(path, visitor);  // Each reports 152 bytes
+    path.pop();
+}
+
+// FoldedCollector aggregates: "Instance;decision_variables;DecisionVariable 304"
+```
+
+**Implementation** (in `FoldedCollector`):
+```rust
+impl LogicalMemoryVisitor for FoldedCollector {
+    fn visit_leaf(&mut self, path: &[&'static str], bytes: usize) {
+        let frames = path.join(";");
+        *self.aggregated.entry(frames).or_insert(0) += bytes;
+    }
+}
+```
+
+**Rationale**: Flamegraphs naturally aggregate same stack frames; this provides clean visualization without manual aggregation logic in each type's implementation.
+
 ## Use Cases
 
 ### 1. Folded Stack Generation
