@@ -49,11 +49,11 @@ mod tests {
         DecisionVariable.bound 16
         DecisionVariable.id 8
         DecisionVariable.kind 1
-        DecisionVariable.metadata;DecisionVariableMetadata.description 24
-        DecisionVariable.metadata;DecisionVariableMetadata.name 24
-        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
-        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
-        DecisionVariable.substituted_value 16
+        DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 24
+        DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 24
+        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
+        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
+        DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }
 
@@ -79,10 +79,10 @@ mod tests {
         DecisionVariable.kind 1
         DecisionVariable.metadata;DecisionVariableMetadata.description 38
         DecisionVariable.metadata;DecisionVariableMetadata.name 26
-        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
+        DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
         DecisionVariable.metadata;DecisionVariableMetadata.subscripts 24
-        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
-        DecisionVariable.substituted_value 16
+        DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
+        DecisionVariable.substituted_value;Option[stack] 16
         "###);
     }
 }

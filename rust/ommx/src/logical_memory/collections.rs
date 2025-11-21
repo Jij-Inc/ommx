@@ -19,15 +19,15 @@ where
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
         if let Some(value) = self {
-            // Option overhead + delegated value
+            // Option additional stack (Option size minus inner T size)
             visitor.visit_leaf(
-                &path.with("Option[overhead]"),
+                &path.with("Option[additional stack]"),
                 size_of::<Option<T>>() - size_of::<T>(), // size_of::<T> will be counted in the value
             );
             value.visit_logical_memory(path, visitor);
         } else {
-            // Empty Option only has overhead
-            visitor.visit_leaf(path, size_of::<Option<T>>());
+            // Empty Option only has stack
+            visitor.visit_leaf(&path.with("Option[stack]"), size_of::<Option<T>>());
         }
     }
 }
@@ -38,9 +38,9 @@ where
     V: LogicalMemoryProfile,
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
-        // BTreeMap struct overhead
-        let map_overhead = size_of::<std::collections::BTreeMap<K, V>>();
-        visitor.visit_leaf(&path.with("BTreeMap[overhead]"), map_overhead);
+        // BTreeMap struct stack
+        let map_stack = size_of::<std::collections::BTreeMap<K, V>>();
+        visitor.visit_leaf(&path.with("BTreeMap[stack]"), map_stack);
 
         // Keys
         for k in self.keys() {
@@ -60,9 +60,9 @@ where
     V: LogicalMemoryProfile,
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
-        // HashMap struct overhead
-        let map_overhead = size_of::<std::collections::HashMap<K, V>>();
-        visitor.visit_leaf(&path.with("HashMap[overhead]"), map_overhead);
+        // HashMap struct stack
+        let map_stack = size_of::<std::collections::HashMap<K, V>>();
+        visitor.visit_leaf(&path.with("HashMap[stack]"), map_stack);
 
         // Keys
         for k in self.keys() {
@@ -82,9 +82,9 @@ where
     V: LogicalMemoryProfile,
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
-        // FnvHashMap struct overhead
-        let map_overhead = size_of::<fnv::FnvHashMap<K, V>>();
-        visitor.visit_leaf(&path.with("FnvHashMap[overhead]"), map_overhead);
+        // FnvHashMap struct stack
+        let map_stack = size_of::<fnv::FnvHashMap<K, V>>();
+        visitor.visit_leaf(&path.with("FnvHashMap[stack]"), map_stack);
 
         // Keys
         for k in self.keys() {
@@ -103,9 +103,9 @@ where
     T: LogicalMemoryProfile,
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
-        // Vec struct overhead
-        let vec_overhead = size_of::<Vec<T>>();
-        visitor.visit_leaf(&path.with("Vec[overhead]"), vec_overhead);
+        // Vec struct stack
+        let vec_stack = size_of::<Vec<T>>();
+        visitor.visit_leaf(&path.with("Vec[stack]"), vec_stack);
 
         // Delegate to each element
         for element in self {
@@ -119,9 +119,9 @@ where
     T: LogicalMemoryProfile,
 {
     fn visit_logical_memory<Vis: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut Vis) {
-        // BTreeSet struct overhead
-        let set_overhead = size_of::<std::collections::BTreeSet<T>>();
-        visitor.visit_leaf(&path.with("BTreeSet[overhead]"), set_overhead);
+        // BTreeSet struct stack
+        let set_stack = size_of::<std::collections::BTreeSet<T>>();
+        visitor.visit_leaf(&path.with("BTreeSet[stack]"), set_stack);
 
         // Delegate to each element
         for element in self {

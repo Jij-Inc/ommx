@@ -34,8 +34,8 @@ mod tests {
         let hints = ConstraintHints::default();
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        ConstraintHints.sos1_constraints;Vec[overhead] 24
+        ConstraintHints.one_hot_constraints;Vec[stack] 24
+        ConstraintHints.sos1_constraints;Vec[stack] 24
         "###);
     }
 
@@ -55,9 +55,9 @@ mod tests {
         insta::assert_snapshot!(folded, @r###"
         ConstraintHints.one_hot_constraints;OneHot.id 8
         ConstraintHints.one_hot_constraints;OneHot.variables 24
-        ConstraintHints.one_hot_constraints;OneHot.variables;BTreeSet[overhead] 24
-        ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        ConstraintHints.sos1_constraints;Vec[overhead] 24
+        ConstraintHints.one_hot_constraints;OneHot.variables;BTreeSet[stack] 24
+        ConstraintHints.one_hot_constraints;Vec[stack] 24
+        ConstraintHints.sos1_constraints;Vec[stack] 24
         "###);
     }
 
@@ -79,13 +79,13 @@ mod tests {
 
         let folded = logical_memory_to_folded(&hints);
         insta::assert_snapshot!(folded, @r###"
-        ConstraintHints.one_hot_constraints;Vec[overhead] 24
+        ConstraintHints.one_hot_constraints;Vec[stack] 24
         ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids 16
-        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids;BTreeSet[overhead] 24
+        ConstraintHints.sos1_constraints;Sos1.big_m_constraint_ids;BTreeSet[stack] 24
         ConstraintHints.sos1_constraints;Sos1.binary_constraint_id 8
         ConstraintHints.sos1_constraints;Sos1.variables 24
-        ConstraintHints.sos1_constraints;Sos1.variables;BTreeSet[overhead] 24
-        ConstraintHints.sos1_constraints;Vec[overhead] 24
+        ConstraintHints.sos1_constraints;Sos1.variables;BTreeSet[stack] 24
+        ConstraintHints.sos1_constraints;Vec[stack] 24
         "###);
     }
 }

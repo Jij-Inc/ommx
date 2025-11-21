@@ -121,7 +121,7 @@ fn test_btreemap_with_linear() {
     let folded = logical_memory_to_folded(&map);
     insta::assert_snapshot!(folded, @r###"
     BTreeMap[key] 16
-    BTreeMap[overhead] 24
+    BTreeMap[stack] 24
     PolynomialBase.terms 112
     "###);
 }
@@ -139,7 +139,7 @@ fn test_hashmap_with_linear() {
     // Note: HashMap iteration order is non-deterministic, but snapshots should still be stable
     insta::assert_snapshot!(folded, @r###"
     HashMap[key] 16
-    HashMap[overhead] 48
+    HashMap[stack] 48
     PolynomialBase.terms 112
     "###);
 }
@@ -155,7 +155,7 @@ fn test_vec_with_linear() {
     let folded = logical_memory_to_folded(&vec);
     insta::assert_snapshot!(folded, @r###"
     PolynomialBase.terms 168
-    Vec[overhead] 24
+    Vec[stack] 24
     "###);
 }
 
@@ -167,10 +167,10 @@ fn test_empty_collections() {
     let empty_map: BTreeMap<u64, Linear> = BTreeMap::new();
     let folded = logical_memory_to_folded(&empty_map);
     // Empty map should only have struct overhead
-    insta::assert_snapshot!(folded, @"BTreeMap[overhead] 24");
+    insta::assert_snapshot!(folded, @"BTreeMap[stack] 24");
 
     let empty_vec: Vec<Linear> = Vec::new();
     let folded_vec = logical_memory_to_folded(&empty_vec);
     // Empty vec should only have struct overhead
-    insta::assert_snapshot!(folded_vec, @"Vec[overhead] 24");
+    insta::assert_snapshot!(folded_vec, @"Vec[stack] 24");
 }

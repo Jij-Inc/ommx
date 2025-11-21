@@ -113,14 +113,14 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Empty instance has zero objective
         insta::assert_snapshot!(folded, @r###"
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[overhead] 24
-        Instance.constraints;BTreeMap[overhead] 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
-        Instance.decision_variables;BTreeMap[overhead] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.objective;Zero 40
-        Instance.removed_constraints;BTreeMap[overhead] 24
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -146,23 +146,23 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[overhead] 24
-        Instance.constraints;BTreeMap[overhead] 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
-        Instance.decision_variables;BTreeMap[overhead] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 64
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 48
-        Instance.decision_variables;DecisionVariable.substituted_value 32
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
+        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.objective;Linear;PolynomialBase.terms 80
-        Instance.removed_constraints;BTreeMap[overhead] 24
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -201,31 +201,31 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[overhead] 24
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
         Instance.constraints;BTreeMap[key] 8
-        Instance.constraints;BTreeMap[overhead] 24
-        Instance.constraints;Constraint.description 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.constraints;Constraint.description;Option[stack] 24
         Instance.constraints;Constraint.equality 1
         Instance.constraints;Constraint.function;Linear;PolynomialBase.terms 80
         Instance.constraints;Constraint.id 8
-        Instance.constraints;Constraint.name 24
-        Instance.constraints;Constraint.parameters;FnvHashMap[overhead] 32
-        Instance.constraints;Constraint.subscripts;Vec[overhead] 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        Instance.constraints;Constraint.name;Option[stack] 24
+        Instance.constraints;Constraint.parameters;FnvHashMap[stack] 32
+        Instance.constraints;Constraint.subscripts;Vec[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 16
-        Instance.decision_variables;BTreeMap[overhead] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 32
         Instance.decision_variables;DecisionVariable.id 16
         Instance.decision_variables;DecisionVariable.kind 2
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 48
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 64
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 48
-        Instance.decision_variables;DecisionVariable.substituted_value 32
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
+        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
         Instance.objective;Linear;PolynomialBase.terms 80
-        Instance.removed_constraints;BTreeMap[overhead] 24
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -258,23 +258,23 @@ mod tests {
         let folded = logical_memory_to_folded(&instance);
         // Note: Same path appears multiple times, flamegraph tools will aggregate them
         insta::assert_snapshot!(folded, @r###"
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[overhead] 24
-        Instance.constraints;BTreeMap[overhead] 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 24
-        Instance.decision_variables;BTreeMap[overhead] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 48
         Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 72
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 72
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 95
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 96
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 72
-        Instance.decision_variables;DecisionVariable.substituted_value 48
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
+        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
         Instance.objective;Zero 40
-        Instance.removed_constraints;BTreeMap[overhead] 24
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }
@@ -312,21 +312,21 @@ mod tests {
 
         let folded = logical_memory_to_folded(&instance);
         insta::assert_snapshot!(folded, @r###"
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[overhead] 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[overhead] 24
-        Instance.constraints;BTreeMap[overhead] 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[key] 8
-        Instance.decision_variables;BTreeMap[overhead] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 16
         Instance.decision_variables;DecisionVariable.id 8
         Instance.decision_variables;DecisionVariable.kind 1
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description 24
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name 24
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[overhead] 32
-        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[overhead] 24
-        Instance.decision_variables;DecisionVariable.substituted_value 16
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
+        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 16
         Instance.description;authors 24
         Instance.description;authors;String 56
         Instance.description;created_by 39
@@ -336,7 +336,7 @@ mod tests {
         Instance.parameters 48
         Instance.parameters;keys 16
         Instance.parameters;values 16
-        Instance.removed_constraints;BTreeMap[overhead] 24
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
     }

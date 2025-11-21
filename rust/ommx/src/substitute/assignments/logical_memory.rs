@@ -33,7 +33,7 @@ mod tests {
         let folded = logical_memory_to_folded(&assignments);
         // Empty assignments should produce no output
         insta::assert_snapshot!(folded, @r###"
-        AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        AcyclicAssignments.assignments;FnvHashMap[stack] 32
         AcyclicAssignments.dependency 144
         "###);
     }
@@ -50,7 +50,7 @@ mod tests {
         let folded = logical_memory_to_folded(&assignments);
         insta::assert_snapshot!(folded, @r###"
         AcyclicAssignments.assignments;FnvHashMap[key] 16
-        AcyclicAssignments.assignments;FnvHashMap[overhead] 32
+        AcyclicAssignments.assignments;FnvHashMap[stack] 32
         AcyclicAssignments.assignments;Linear;PolynomialBase.terms 160
         AcyclicAssignments.dependency 224
         "###);

@@ -49,13 +49,13 @@ mod tests {
         );
         let folded = logical_memory_to_folded(&constraint);
         insta::assert_snapshot!(folded, @r###"
-        Constraint.description 24
+        Constraint.description;Option[stack] 24
         Constraint.equality 1
         Constraint.function;Linear;PolynomialBase.terms 80
         Constraint.id 8
-        Constraint.name 24
-        Constraint.parameters;FnvHashMap[overhead] 32
-        Constraint.subscripts;Vec[overhead] 24
+        Constraint.name;Option[stack] 24
+        Constraint.parameters;FnvHashMap[stack] 32
+        Constraint.subscripts;Vec[stack] 24
         "###);
     }
 
@@ -77,9 +77,9 @@ mod tests {
         Constraint.function;Linear;PolynomialBase.terms 56
         Constraint.id 8
         Constraint.name 39
-        Constraint.parameters;FnvHashMap[overhead] 32
+        Constraint.parameters;FnvHashMap[stack] 32
         Constraint.subscripts 24
-        Constraint.subscripts;Vec[overhead] 24
+        Constraint.subscripts;Vec[stack] 24
         "###);
     }
 
@@ -97,15 +97,15 @@ mod tests {
 
         let folded = logical_memory_to_folded(&removed);
         insta::assert_snapshot!(folded, @r###"
-        RemovedConstraint.constraint;Constraint.description 24
+        RemovedConstraint.constraint;Constraint.description;Option[stack] 24
         RemovedConstraint.constraint;Constraint.equality 1
         RemovedConstraint.constraint;Constraint.function;Linear;PolynomialBase.terms 56
         RemovedConstraint.constraint;Constraint.id 8
-        RemovedConstraint.constraint;Constraint.name 24
-        RemovedConstraint.constraint;Constraint.parameters;FnvHashMap[overhead] 32
-        RemovedConstraint.constraint;Constraint.subscripts;Vec[overhead] 24
+        RemovedConstraint.constraint;Constraint.name;Option[stack] 24
+        RemovedConstraint.constraint;Constraint.parameters;FnvHashMap[stack] 32
+        RemovedConstraint.constraint;Constraint.subscripts;Vec[stack] 24
         RemovedConstraint.removed_reason 34
-        RemovedConstraint.removed_reason_parameters;FnvHashMap[overhead] 32
+        RemovedConstraint.removed_reason_parameters;FnvHashMap[stack] 32
         "###);
     }
 }
