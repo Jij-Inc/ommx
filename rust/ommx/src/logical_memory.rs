@@ -199,9 +199,34 @@ pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize {
 ///         removed_reason_parameters,
 ///     }
 /// }
+///
+/// // For types with path (e.g., v1::Parameters), specify type name explicitly:
+/// impl_logical_memory_profile! {
+///     v1::Parameters as "Parameters" {
+///         entries,
+///     }
+/// }
 /// ```
 #[macro_export]
 macro_rules! impl_logical_memory_profile {
+    // For types with explicit name (e.g., v1::Parameters as "Parameters")
+    ($type_path:path as $type_name:literal { $($field:ident),* $(,)? }) => {
+        impl $crate::logical_memory::LogicalMemoryProfile for $type_path {
+            fn visit_logical_memory<V: $crate::logical_memory::LogicalMemoryVisitor>(
+                &self,
+                path: &mut $crate::logical_memory::Path,
+                visitor: &mut V,
+            ) {
+                $(
+                    self.$field.visit_logical_memory(
+                        path.with(concat!($type_name, ".", stringify!($field))).as_mut(),
+                        visitor,
+                    );
+                )*
+            }
+        }
+    };
+    // For simple types (e.g., RemovedConstraint)
     ($type_name:ident { $($field:ident),* $(,)? }) => {
         impl $crate::logical_memory::LogicalMemoryProfile for $type_name {
             fn visit_logical_memory<V: $crate::logical_memory::LogicalMemoryVisitor>(

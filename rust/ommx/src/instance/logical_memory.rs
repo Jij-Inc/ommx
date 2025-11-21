@@ -11,55 +11,18 @@ impl LogicalMemoryProfile for Sense {
 
 // Implementations for protobuf types
 
-impl LogicalMemoryProfile for v1::Parameters {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // HashMap stack overhead
-        let map_overhead = size_of::<std::collections::HashMap<u64, f64>>();
-        visitor.visit_leaf(path, map_overhead);
-
-        // Keys (u64)
-        let key_size = size_of::<u64>();
-        let keys_bytes = self.entries.len() * key_size;
-        visitor.visit_leaf(&path.with("keys"), keys_bytes);
-
-        // Values (f64)
-        let value_size = size_of::<f64>();
-        let values_bytes = self.entries.len() * value_size;
-        visitor.visit_leaf(&path.with("values"), values_bytes);
+crate::impl_logical_memory_profile! {
+    v1::Parameters as "Parameters" {
+        entries,
     }
 }
 
-impl LogicalMemoryProfile for v1::instance::Description {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // name: Option<String>
-        if let Some(name) = &self.name {
-            let bytes = size_of::<String>() + name.len();
-            visitor.visit_leaf(&path.with("name"), bytes);
-        }
-
-        // description: Option<String>
-        if let Some(description) = &self.description {
-            let bytes = size_of::<String>() + description.len();
-            visitor.visit_leaf(&path.with("description"), bytes);
-        }
-
-        // authors: Vec<String>
-        {
-            let mut guard = path.with("authors");
-            let vec_overhead = size_of::<Vec<String>>();
-            visitor.visit_leaf(&guard, vec_overhead);
-
-            for author in &self.authors {
-                let bytes = size_of::<String>() + author.len();
-                visitor.visit_leaf(&guard.with("String"), bytes);
-            }
-        }
-
-        // created_by: Option<String>
-        if let Some(created_by) = &self.created_by {
-            let bytes = size_of::<String>() + created_by.len();
-            visitor.visit_leaf(&path.with("created_by"), bytes);
-        }
+crate::impl_logical_memory_profile! {
+    v1::instance::Description as "Description" {
+        name,
+        description,
+        authors,
+        created_by,
     }
 }
 
@@ -312,15 +275,15 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 32
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 24
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 16
-        Instance.description;authors 24
-        Instance.description;authors;String 56
-        Instance.description;created_by 39
-        Instance.description;description 51
-        Instance.description;name 37
+        Instance.description;Description.authors 56
+        Instance.description;Description.authors;Vec[stack] 24
+        Instance.description;Description.created_by 39
+        Instance.description;Description.description 51
+        Instance.description;Description.name 37
         Instance.objective;Zero 40
-        Instance.parameters 48
-        Instance.parameters;keys 16
-        Instance.parameters;values 16
+        Instance.parameters;Parameters.entries 16
+        Instance.parameters;Parameters.entries;HashMap[key] 16
+        Instance.parameters;Parameters.entries;HashMap[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
