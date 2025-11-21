@@ -63,14 +63,14 @@ Output formats and aggregation methods are delegated to visitor implementations.
 
 ```rust
 /// Logical path for memory profiling
-pub struct Path(Vec<&'static str>);
+pub struct Path(Vec<String>);
 
 impl Path {
-    /// Create a new path with a root name
-    pub fn new(root: &'static str) -> Self;
+    /// Create a new empty path
+    pub fn new() -> Self;
 
     /// Get the path as a slice
-    pub fn as_slice(&self) -> &[&'static str];
+    pub fn as_slice(&self) -> &[String];
 
     /// Create a path guard that automatically pops on drop
     pub fn with(&mut self, name: &'static str) -> PathGuard<'_>;
@@ -121,16 +121,10 @@ pub trait LogicalMemoryVisitor {
 
 ```rust
 /// Generate folded stack format for a value
-pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T,
-) -> String;
+pub fn logical_memory_to_folded<T: LogicalMemoryProfile>(value: &T) -> String;
 
 /// Calculate total bytes used by a value
-pub fn logical_total_bytes<T: LogicalMemoryProfile>(
-    root_name: &'static str,
-    value: &T,
-) -> usize;
+pub fn logical_total_bytes<T: LogicalMemoryProfile>(value: &T) -> usize;
 ```
 
 ## Implementation Patterns
@@ -143,6 +137,40 @@ Instead, count or delegate each field individually:
 - Primitive types: count with `size_of::<T>()`
 - Nested structs: delegate via `visit_logical_memory()`
 - Collections: count stack overhead + elements separately
+
+### Pattern 0: Using the Macro (Recommended)
+
+**Most common case**: For structs that simply delegate to their fields, use the macro:
+
+```rust
+// Simple type
+crate::impl_logical_memory_profile! {
+    DecisionVariableMetadata {
+        name,
+        subscripts,
+        parameters,
+        description,
+    }
+}
+
+// Type with path (e.g., protobuf types)
+crate::impl_logical_memory_profile! {
+    v1::Parameters as "Parameters" {
+        entries,
+    }
+}
+```
+
+**Macro features**:
+- Automatically uses `Type.field` naming convention
+- Delegates each field to its `LogicalMemoryProfile` implementation
+- Two variants: simple types and types with path (using `as "TypeName"`)
+- Eliminates boilerplate and ensures consistency
+
+**When NOT to use the macro**:
+- Type has fields that need manual counting (primitives)
+- Type needs custom logic (e.g., computed values)
+- Type is an enum with match pattern
 
 ### Pattern 1: Using Path Guards
 
@@ -171,83 +199,61 @@ impl LogicalMemoryProfile for DecisionVariable {
 - Automatic cleanup on scope exit
 - Prevents path management bugs
 
-### Pattern 2: Collections with Nested Guards
+### Pattern 2: Generic Collection Implementations
 
-For collections, use nested guards to manage complex hierarchies:
+Collections have generic implementations that handle stack overhead and element delegation:
 
+**Available generic implementations**:
+- `Vec<T>` - Reports `Vec[stack]` + delegates to each element
+- `HashMap<K, V>` - Reports `HashMap[stack]` + delegates to keys (`HashMap[key]`) and values
+- `BTreeMap<K, V>` - Reports `BTreeMap[stack]` + delegates to keys (`BTreeMap[key]`) and values
+- `FnvHashMap<K, V>` - Reports `FnvHashMap[stack]` + delegates to keys and values
+- `BTreeSet<T>` - Reports `BTreeSet[stack]` + delegates to each element
+- `Option<T>` - Reports `Option[additional stack]` (Some) or `Option[stack]` (None)
+- `String` - Reports stack + heap length
+
+**Example**: Using macro with collections (automatic):
 ```rust
-impl LogicalMemoryProfile for ConstraintHints {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
-        // one_hot_constraints: Vec<OneHot>
-        {
-            let mut guard = path.with("one_hot_constraints");
-            let vec_overhead = size_of::<Vec<OneHot>>();
-            visitor.visit_leaf(&guard, vec_overhead);
-
-            for one_hot in &self.one_hot_constraints {
-                one_hot.visit_logical_memory(guard.with("OneHot").as_mut(), visitor);
-            }
-        } // guard automatically pops here
-
-        // sos1_constraints: Vec<Sos1>
-        {
-            let mut guard = path.with("sos1_constraints");
-            let vec_overhead = size_of::<Vec<Sos1>>();
-            visitor.visit_leaf(&guard, vec_overhead);
-
-            for sos1 in &self.sos1_constraints {
-                sos1.visit_logical_memory(guard.with("Sos1").as_mut(), visitor);
-            }
-        }
+// ConstraintHints now uses the macro
+crate::impl_logical_memory_profile! {
+    ConstraintHints {
+        one_hot_constraints,  // Vec<OneHot> - automatically handled
+        sos1_constraints,     // Vec<Sos1> - automatically handled
     }
 }
 ```
 
-### Pattern 3: Key-Value Separation in Collections
+**Output format** (note the `[stack]` suffix):
+```
+ConstraintHints.one_hot_constraints;Vec[stack] 24
+ConstraintHints.sos1_constraints;Vec[stack] 24
+```
 
-For `HashMap<K, V>` and `BTreeMap<K, V>`, separate keys and values:
+### Pattern 3: Naming Convention - Type.field
+
+All implementations use the `Type.field` naming convention for clarity:
 
 ```rust
-impl LogicalMemoryProfile for Instance {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(
-        &self,
-        path: &mut Path,
-        visitor: &mut V,
-    ) {
-        // decision_variables: BTreeMap<VariableID, DecisionVariable>
-        {
-            let mut guard = path.with("decision_variables");
-
-            // BTreeMap stack overhead
-            let map_overhead = size_of::<BTreeMap<VariableID, DecisionVariable>>();
-            visitor.visit_leaf(&guard, map_overhead);
-
-            // Keys (VariableID)
-            let key_size = size_of::<VariableID>();
-            let keys_bytes = self.decision_variables().len() * key_size;
-            visitor.visit_leaf(&guard.with("keys"), keys_bytes);
-
-            // Delegate to each DecisionVariable
-            for dv in self.decision_variables().values() {
-                dv.visit_logical_memory(guard.with("DecisionVariable").as_mut(), visitor);
-            }
-        }
-    }
-}
+// DecisionVariable delegates to each field with Type.field naming
+visitor.visit_leaf(&path.with("DecisionVariable.id"), size_of::<VariableID>());
+visitor.visit_leaf(&path.with("DecisionVariable.kind"), size_of::<Kind>());
+self.metadata.visit_logical_memory(
+    path.with("DecisionVariable.metadata").as_mut(),
+    visitor
+);
 ```
 
-**Output example** (2 DecisionVariables):
+**Output format**:
 ```
-Instance;decision_variables 24                              # BTreeMap overhead
-Instance;decision_variables;keys 16                         # 2 × 8 bytes (VariableID)
-Instance;decision_variables;DecisionVariable;id 16          # Aggregated IDs
-Instance;decision_variables;DecisionVariable;bound 32       # Aggregated bounds
-...
+DecisionVariable.id 8
+DecisionVariable.kind 1
+DecisionVariable.metadata;DecisionVariableMetadata.name 26
 ```
+
+**Benefits**:
+- Flamegraph frames show both type and field names
+- Easier to understand hierarchy at a glance
+- Consistent across all implementations
 
 ### Avoiding Double-Counting
 
@@ -290,10 +296,10 @@ impl LogicalMemoryProfile for A {
 - **Complex structs** (with heap allocations): Delegate via `visit_logical_memory()`
   - Examples: `Metadata`, `Constraint`, `DecisionVariable`
 
-- **Collections**: Count stack overhead + heap content separately (ignore unused capacity)
-  - Vec: `size_of::<Vec<T>>()` + `len() * size_of::<T>()`
-  - HashMap: `size_of::<HashMap<K,V>>()` + `len()`-based entry bytes
-  - String: `size_of::<String>()` + `len()`
+- **Collections**: Generic implementations handle stack (`[stack]`) + heap content (ignore unused capacity)
+  - Vec: Reports `Vec[stack]` + delegates to elements
+  - HashMap/BTreeMap: Reports `Map[stack]` + `Map[key]` + delegates to values
+  - String: Reports stack + heap (`size_of::<String>() + len()`)
 
 **Trade-off**: Padding between fields is not tracked, but this prevents double-counting.
 
@@ -349,24 +355,26 @@ print(profile)
 
 **Output**:
 ```
-Instance;constraint_hints;one_hot_constraints 24
-Instance;constraint_hints;sos1_constraints 24
-Instance;constraints 24
-Instance;decision_variable_dependency;assignments 32
-Instance;decision_variable_dependency;dependency 144
-Instance;decision_variables 24
-Instance;decision_variables;DecisionVariable;bound 48
-Instance;decision_variables;DecisionVariable;id 24
-Instance;decision_variables;DecisionVariable;kind 3
-Instance;decision_variables;DecisionVariable;metadata;description 72
-Instance;decision_variables;DecisionVariable;metadata;name 72
-Instance;decision_variables;DecisionVariable;metadata;parameters 96
-Instance;decision_variables;DecisionVariable;metadata;subscripts 72
-Instance;decision_variables;DecisionVariable;substituted_value 48
-Instance;decision_variables;keys 24
-Instance;objective;Linear;terms 104
-Instance;removed_constraints 24
-Instance;sense 1
+Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+Instance.constraints;BTreeMap[stack] 24
+Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
+Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
+Instance.decision_variables;BTreeMap[key] 24
+Instance.decision_variables;BTreeMap[stack] 24
+Instance.decision_variables;DecisionVariable.bound 48
+Instance.decision_variables;DecisionVariable.id 24
+Instance.decision_variables;DecisionVariable.kind 3
+Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 72
+Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 72
+Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
+Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
+Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
+Instance.description;Option[stack] 96
+Instance.objective;Linear;PolynomialBase.terms 80
+Instance.parameters;Option[stack] 48
+Instance.removed_constraints;BTreeMap[stack] 24
+Instance.sense 1
 ```
 
 ### Visualization with Flamegraph
@@ -391,22 +399,33 @@ To create a flamegraph visualization:
 ### Implemented Components
 
 ✅ **Core Infrastructure** (`rust/ommx/src/logical_memory.rs`):
-- `Path` type with RAII guards
+- `Path` type with RAII guards (no root name, starts empty)
 - `PathGuard` for automatic path management
 - `LogicalMemoryProfile` trait
 - `LogicalMemoryVisitor` trait
 - `FoldedCollector` for folded stack generation
 - Helper functions: `logical_memory_to_folded()`, `logical_total_bytes()`
+- **`impl_logical_memory_profile!` macro** - Auto-generates implementations for field delegation
+  - Simple variant: `Type { fields... }`
+  - Path variant: `path::to::Type as "TypeName" { fields... }`
 
-✅ **Domain Type Implementations**:
-- `Instance` - Root type covering major components (sense, objective, decision_variables, constraints, removed_constraints, decision_variable_dependency, constraint_hints, parameters, description)
-- `v1::Parameters` and `v1::instance::Description` - Protobuf metadata fields
-- `Function` enum (Linear/Quadratic/Polynomial/Zero)
+✅ **Generic Collection Implementations** (`rust/ommx/src/logical_memory/collections.rs`):
+- `String` - Stack + heap length
+- `Option<T>` - `[additional stack]` (Some) or `[stack]` (None)
+- `Vec<T>` - `Vec[stack]` + element delegation
+- `HashMap<K, V>`, `BTreeMap<K, V>`, `FnvHashMap<K, V>` - `Map[stack]` + `Map[key]` + value delegation
+- `BTreeSet<T>` - `BTreeSet[stack]` + element delegation
+
+✅ **Domain Type Implementations** (all using macro where possible):
+- `Instance` - Root type with 9 fields (uses macro)
+- `v1::Parameters`, `v1::instance::Description` - Protobuf types (uses macro with path variant)
+- `Function` enum (Linear/Quadratic/Polynomial/Zero) - Custom implementation
 - `PolynomialBase<M>` - Generic polynomial implementation
-- `DecisionVariable` - Variables with metadata
-- `Constraint` and `RemovedConstraint` - Constraint types
-- `ConstraintHints`, `OneHot`, `Sos1` - Constraint hints
-- `AcyclicAssignments` - Variable dependencies
+- `DecisionVariable`, `DecisionVariableMetadata` - Variables (uses macro)
+- `Constraint`, `RemovedConstraint` - Constraint types (uses macro)
+- `ConstraintHints`, `OneHot`, `Sos1` - Constraint hints (uses macro)
+- `AcyclicAssignments` - Variable dependencies (partial macro use)
+- **Basic types**: `Sense`, `Equality`, `Kind`, `Bound`, `ConstraintID`, `VariableID` - Primitives
 
 ✅ **Python Bindings** (`python/ommx/src/instance.rs`):
 - `Instance.logical_memory_profile()` method
@@ -414,8 +433,8 @@ To create a flamegraph visualization:
 - Comprehensive documentation with examples
 
 ✅ **Testing**:
-- 30 Rust unit tests with snapshot testing
-- 115 Python tests including doctests
+- 35 Rust unit tests with snapshot testing
+- 390 Python tests including doctests
 - All tests passing
 
 ## Benefits and Trade-offs
@@ -433,7 +452,7 @@ To create a flamegraph visualization:
 
 ⚠️ **Approximation**: Not exact heap profiling, uses `len()` and `size_of::<T>()` (unused capacity is intentionally ignored)
 ⚠️ **Padding not tracked**: Field-by-field counting omits padding between fields
-⚠️ **Static names only**: Paths use `&'static str`, can't include dynamic indices (can be extended with `String` if needed)
+⚠️ **Stack vs heap**: Stack memory shown as `[stack]` suffix, actual heap profilers may show different allocations
 
 ## Related Resources
 
@@ -447,3 +466,11 @@ To create a flamegraph visualization:
 - 2025-11-20: Fixed double-counting by eliminating `size_of::<Self>()` usage
 - 2025-11-20: Introduced `Path` and `PathGuard` RAII pattern for automatic path management
 - 2025-11-20: Completed implementation with Python API and comprehensive testing
+- 2025-11-21: Removed root_name from Path::new(), now starts with empty path
+- 2025-11-21: Renamed `[overhead]` → `[stack]` for clarity
+- 2025-11-21: Improved Option<T> to show `[additional stack]` (Some) vs `[stack]` (None)
+- 2025-11-21: Introduced `impl_logical_memory_profile!` macro for boilerplate reduction
+- 2025-11-21: Extended macro to support type paths (`v1::Parameters as "Parameters"`)
+- 2025-11-21: Implemented generic collection types (Vec, HashMap, BTreeMap, BTreeSet, Option, String)
+- 2025-11-21: Adopted `Type.field` naming convention throughout
+- 2025-11-21: Converted 13 types to use macro, added 8 basic type implementations
