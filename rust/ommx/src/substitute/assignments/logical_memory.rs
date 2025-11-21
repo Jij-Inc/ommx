@@ -8,8 +8,10 @@ impl LogicalMemoryProfile for AcyclicAssignments {
         // Use "Type.field" format for flamegraph clarity
 
         // assignments: FnvHashMap<VariableID, Function>
-        self.assignments
-            .visit_logical_memory(path.with("AcyclicAssignments.assignments").as_mut(), visitor);
+        self.assignments.visit_logical_memory(
+            path.with("AcyclicAssignments.assignments").as_mut(),
+            visitor,
+        );
 
         // dependency: DiGraphMap<VariableID, ()>
         // Estimate: node count * size_of::<VariableID>() + edge count * (size_of::<VariableID>() * 2)
