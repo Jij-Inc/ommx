@@ -1,5 +1,6 @@
 mod approx;
 mod arbitrary;
+mod logical_memory;
 mod parse;
 mod serialize;
 

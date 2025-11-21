@@ -256,6 +256,7 @@ pub use prost::Message;
 pub mod artifact;
 #[cfg(feature = "remote-artifact")]
 pub mod dataset;
+pub mod logical_memory;
 pub mod mps;
 pub mod parse;
 pub mod qplib;

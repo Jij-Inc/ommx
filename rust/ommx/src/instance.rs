@@ -8,6 +8,7 @@ mod decision_variable;
 mod error;
 mod evaluate;
 mod log_encode;
+mod logical_memory;
 mod new;
 mod parse;
 mod pass;

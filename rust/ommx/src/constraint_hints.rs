@@ -1,3 +1,4 @@
+mod logical_memory;
 mod one_hot;
 mod sos1;
 

@@ -9,6 +9,7 @@ mod add;
 mod approx;
 mod arbitrary;
 mod evaluate;
+mod logical_memory;
 mod mul;
 mod parse;
 mod reduce_binary_power;

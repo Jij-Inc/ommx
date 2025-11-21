@@ -1,3 +1,5 @@
+mod logical_memory;
+
 use super::error::SubstitutionError;
 use crate::{
     check_self_assignment,
