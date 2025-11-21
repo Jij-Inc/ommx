@@ -1890,23 +1890,25 @@ class Instance(UserAnnotationBase):
         ...     sense=Instance.MAXIMIZE,
         ... )
         >>> print(instance.logical_memory_profile())  # doctest: +NORMALIZE_WHITESPACE
-        Instance.constraint_hints;ConstraintHints.one_hot_constraints 24
-        Instance.constraint_hints;ConstraintHints.sos1_constraints 24
-        Instance.constraints 24
-        Instance.decision_variable_dependency;AcyclicAssignments.assignments 32
+        Instance.constraint_hints;ConstraintHints.one_hot_constraints;Vec[stack] 24
+        Instance.constraint_hints;ConstraintHints.sos1_constraints;Vec[stack] 24
+        Instance.constraints;BTreeMap[stack] 24
+        Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
-        Instance.decision_variables 24
+        Instance.decision_variables;BTreeMap[key] 24
+        Instance.decision_variables;BTreeMap[stack] 24
         Instance.decision_variables;DecisionVariable.bound 48
         Instance.decision_variables;DecisionVariable.id 24
         Instance.decision_variables;DecisionVariable.kind 3
-        Instance.decision_variables;DecisionVariable.metadata;description 72
-        Instance.decision_variables;DecisionVariable.metadata;name 72
-        Instance.decision_variables;DecisionVariable.metadata;parameters 96
-        Instance.decision_variables;DecisionVariable.metadata;subscripts 72
-        Instance.decision_variables;DecisionVariable.substituted_value 48
-        Instance.decision_variables;VariableID 24
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.description;Option[stack] 72
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.name;Option[stack] 72
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
+        Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
+        Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
+        Instance.description;Option[stack] 96
         Instance.objective;Linear;PolynomialBase.terms 80
-        Instance.removed_constraints 24
+        Instance.parameters;Option[stack] 48
+        Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         """
         return self.raw.logical_memory_profile()
