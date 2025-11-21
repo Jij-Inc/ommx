@@ -1,6 +1,13 @@
-use crate::instance::Instance;
+use crate::instance::{Instance, Sense};
 use crate::logical_memory::{LogicalMemoryProfile, LogicalMemoryVisitor, Path};
 use crate::v1;
+use std::mem::size_of;
+
+impl LogicalMemoryProfile for Sense {
+    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
+        visitor.visit_leaf(path, size_of::<Sense>());
+    }
+}
 
 // Implementations for protobuf types
 
@@ -56,47 +63,17 @@ impl LogicalMemoryProfile for v1::instance::Description {
     }
 }
 
-impl LogicalMemoryProfile for Instance {
-    fn visit_logical_memory<V: LogicalMemoryVisitor>(&self, path: &mut Path, visitor: &mut V) {
-        // Count each field individually to avoid double-counting
-        // Use "Type.field" format for flamegraph clarity
-
-        // sense: Sense (enum)
-        visitor.visit_leaf(&path.with("Instance.sense"), size_of::<crate::instance::Sense>());
-
-        // Delegate to objective Function
-        self.objective()
-            .visit_logical_memory(path.with("Instance.objective").as_mut(), visitor);
-
-        // decision_variables: BTreeMap<VariableID, DecisionVariable>
-        self.decision_variables()
-            .visit_logical_memory(path.with("Instance.decision_variables").as_mut(), visitor);
-
-        // constraints: BTreeMap<ConstraintID, Constraint>
-        self.constraints()
-            .visit_logical_memory(path.with("Instance.constraints").as_mut(), visitor);
-
-        // removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>
-        self.removed_constraints()
-            .visit_logical_memory(path.with("Instance.removed_constraints").as_mut(), visitor);
-
-        // decision_variable_dependency: AcyclicAssignments
-        self.decision_variable_dependency()
-            .visit_logical_memory(path.with("Instance.decision_variable_dependency").as_mut(), visitor);
-
-        // constraint_hints: ConstraintHints
-        self.constraint_hints()
-            .visit_logical_memory(path.with("Instance.constraint_hints").as_mut(), visitor);
-
-        // parameters: Option<v1::Parameters>
-        if let Some(parameters) = &self.parameters {
-            parameters.visit_logical_memory(path.with("Instance.parameters").as_mut(), visitor);
-        }
-
-        // description: Option<v1::instance::Description>
-        if let Some(description) = &self.description {
-            description.visit_logical_memory(path.with("Instance.description").as_mut(), visitor);
-        }
+crate::impl_logical_memory_profile! {
+    Instance {
+        sense,
+        objective,
+        decision_variables,
+        constraints,
+        removed_constraints,
+        decision_variable_dependency,
+        constraint_hints,
+        parameters,
+        description,
     }
 }
 
@@ -119,7 +96,9 @@ mod tests {
         Instance.decision_variable_dependency;AcyclicAssignments.assignments;FnvHashMap[stack] 32
         Instance.decision_variable_dependency;AcyclicAssignments.dependency 144
         Instance.decision_variables;BTreeMap[stack] 24
+        Instance.description;Option[stack] 96
         Instance.objective;Zero 40
+        Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
@@ -161,7 +140,9 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
+        Instance.description;Option[stack] 96
         Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
@@ -224,7 +205,9 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 64
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 48
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 32
+        Instance.description;Option[stack] 96
         Instance.objective;Linear;PolynomialBase.terms 80
+        Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
@@ -273,7 +256,9 @@ mod tests {
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.parameters;FnvHashMap[stack] 96
         Instance.decision_variables;DecisionVariable.metadata;DecisionVariableMetadata.subscripts;Vec[stack] 72
         Instance.decision_variables;DecisionVariable.substituted_value;Option[stack] 48
+        Instance.description;Option[stack] 96
         Instance.objective;Zero 40
+        Instance.parameters;Option[stack] 48
         Instance.removed_constraints;BTreeMap[stack] 24
         Instance.sense 1
         "###);
