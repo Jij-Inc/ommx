@@ -1,0 +1,25 @@
+[package]
+name = "ommx-scip-adapter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "SCIP solver adapter for OMMX using C FFI"
+repository = "https://github.com/Jij-Inc/ommx"
+keywords = ["optimization", "ommx", "scip"]
+categories = ["mathematics", "science"]
+
+[dependencies]
+ommx = { path = "../ommx" }
+anyhow.workspace = true
+thiserror.workspace = true
+log.workspace = true
+
+[build-dependencies]
+bindgen = "0.69"
+pkg-config = "0.3"
+
+[dev-dependencies]
+approx.workspace = true
+env_logger.workspace = true
+maplit.workspace = true
