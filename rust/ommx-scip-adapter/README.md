@@ -56,12 +56,13 @@ Add to your `Cargo.toml`:
 [dependencies]
 ommx = { version = "2.3" }
 ommx-scip-adapter = { version = "2.3" }
+maplit = "1.0"
 ```
 
-Basic example:
+### Quick Start Example
 
 ```rust
-use ommx::{Instance, DecisionVariable, Sense, linear, coeff};
+use ommx::{Instance, DecisionVariable, Sense, linear, coeff, Constraint};
 use ommx_scip_adapter::ScipAdapter;
 use maplit::btreemap;
 
@@ -89,6 +90,18 @@ let solution = ScipAdapter::solve(&instance)?;
 
 println!("Objective value: {}", solution.objective());
 println!("Feasible: {}", solution.feasible());
+```
+
+### Examples
+
+See the `examples/` directory for complete examples:
+
+```bash
+# Knapsack problem (0-1 integer programming)
+cargo run --example knapsack -p ommx-scip-adapter
+
+# Simple linear programming
+cargo run --example simple_lp -p ommx-scip-adapter
 ```
 
 ## Features
