@@ -31,7 +31,7 @@ mod scip_ffi;
 
 pub use error::{Result, ScipAdapterError};
 
-use ommx::{Constraint, DecisionVariable, Equality, Function, Instance, Kind, Solution, Sense};
+use ommx::{Constraint, DecisionVariable, Equality, Function, Instance, Kind, Sense, Solution};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::ptr;
@@ -195,10 +195,7 @@ impl ScipAdapter {
 
     /// Add constraints to SCIP model
     fn add_constraints(&mut self) -> Result<()> {
-        log::debug!(
-            "Adding {} constraints",
-            self.instance.constraints().len()
-        );
+        log::debug!("Adding {} constraints", self.instance.constraints().len());
 
         for (id, constraint) in self.instance.constraints() {
             let func = constraint.function();
@@ -255,9 +252,7 @@ impl ScipAdapter {
                     let bound = -func.constant_term();
                     (bound, bound)
                 }
-                Equality::LessThanOrEqualToZero => {
-                    (f64::NEG_INFINITY, -func.constant_term())
-                }
+                Equality::LessThanOrEqualToZero => (f64::NEG_INFINITY, -func.constant_term()),
             };
 
             // Collect variables and coefficients
