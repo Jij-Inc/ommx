@@ -1,0 +1,159 @@
+name: "Setup SCIP"
+description: "Install SCIP Optimization Suite with caching for CI/CD"
+
+inputs:
+  scip-version:
+    description: "SCIP version to install (e.g., 9.2.4)"
+    required: false
+    default: "9.2.4"
+  cache-key-suffix:
+    description: "Additional cache key suffix for custom cache invalidation"
+    required: false
+    default: ""
+  force-source:
+    description: "Force build from source instead of using pre-built packages"
+    required: false
+    default: "false"
+
+outputs:
+  scip-version:
+    description: "Installed SCIP version"
+    value: ${{ steps.verify.outputs.version }}
+  cache-hit:
+    description: "Whether cache was hit"
+    value: ${{ steps.cache-scip.outputs.cache-hit }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Determine cache paths
+      id: cache-paths
+      shell: bash
+      run: |
+        echo "lib=/usr/local/lib" >> $GITHUB_OUTPUT
+        echo "include=/usr/local/include" >> $GITHUB_OUTPUT
+        echo "cmake=/usr/local/lib/cmake" >> $GITHUB_OUTPUT
+        echo "pkgconfig=/usr/local/lib/pkgconfig" >> $GITHUB_OUTPUT
+
+    - name: Cache SCIP Installation
+      id: cache-scip
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ steps.cache-paths.outputs.lib }}/libscip*
+          ${{ steps.cache-paths.outputs.lib }}/cmake/scip/
+          ${{ steps.cache-paths.outputs.include }}/scip/
+          ${{ steps.cache-paths.outputs.pkgconfig }}/scip.pc
+        key: scip-${{ inputs.scip-version }}-${{ runner.os }}-${{ runner.arch }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          scip-${{ inputs.scip-version }}-${{ runner.os }}-
+
+    - name: Install SCIP (cache miss)
+      if: steps.cache-scip.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        SCIP_VERSION: ${{ inputs.scip-version }}
+        FORCE_SOURCE: ${{ inputs.force-source }}
+      run: |
+        SCIP_VERSION_NUM="${SCIP_VERSION//./}"
+
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          echo "Installing SCIP ${SCIP_VERSION} on Linux..."
+
+          if [[ "$FORCE_SOURCE" == "true" ]]; then
+            echo "Force source build requested"
+            # Install build dependencies
+            sudo apt-get update
+            sudo apt-get install -y \
+              cmake g++ libgmp-dev zlib1g-dev \
+              libreadline-dev pkg-config wget
+
+            # Download and build
+            wget -q "https://github.com/scipopt/scip/archive/refs/tags/v${SCIP_VERSION_NUM}.tar.gz" -O /tmp/scip.tar.gz
+            mkdir -p /tmp/scip-build
+            tar -xzf /tmp/scip.tar.gz -C /tmp/scip-build --strip-components=1
+            cd /tmp/scip-build
+            mkdir build && cd build
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+            make -j$(nproc)
+            sudo make install
+          else
+            # Try .deb package first
+            DEB_URL="https://github.com/scipopt/scip/releases/download/v${SCIP_VERSION_NUM}/SCIPOptSuite-${SCIP_VERSION}-Linux-ubuntu22.deb"
+            echo "Downloading ${DEB_URL}..."
+
+            if wget -q "$DEB_URL" -O /tmp/scip.deb; then
+              echo "Installing .deb package..."
+              sudo dpkg -i /tmp/scip.deb || sudo apt-get install -f -y
+              rm /tmp/scip.deb
+            else
+              echo "Pre-built package not available, building from source..."
+              sudo apt-get update
+              sudo apt-get install -y cmake g++ libgmp-dev zlib1g-dev libreadline-dev pkg-config wget
+              wget -q "https://github.com/scipopt/scip/archive/refs/tags/v${SCIP_VERSION_NUM}.tar.gz" -O /tmp/scip.tar.gz
+              mkdir -p /tmp/scip-build
+              tar -xzf /tmp/scip.tar.gz -C /tmp/scip-build --strip-components=1
+              cd /tmp/scip-build
+              mkdir build && cd build
+              cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
+              make -j$(nproc)
+              sudo make install
+            fi
+          fi
+
+          sudo ldconfig
+
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          echo "Installing SCIP ${SCIP_VERSION} on macOS..."
+          brew install scip
+
+        else
+          echo "Unsupported OS: $RUNNER_OS"
+          exit 1
+        fi
+
+    - name: Restore library cache (cache hit)
+      if: steps.cache-scip.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        echo "SCIP cache hit, updating ldconfig..."
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo ldconfig
+        fi
+
+    - name: Verify SCIP Installation
+      id: verify
+      shell: bash
+      run: |
+        echo "Verifying SCIP installation..."
+
+        if ! pkg-config --exists scip; then
+          echo "::error::pkg-config cannot find SCIP"
+          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+          echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+          ls -la /usr/local/lib/pkgconfig/ || true
+          exit 1
+        fi
+
+        INSTALLED_VERSION=$(pkg-config --modversion scip)
+        echo "version=$INSTALLED_VERSION" >> $GITHUB_OUTPUT
+
+        echo "✓ SCIP installed successfully"
+        echo "Version:  $INSTALLED_VERSION"
+        echo "CFLAGS:   $(pkg-config --cflags scip)"
+        echo "LIBS:     $(pkg-config --libs scip)"
+
+    - name: Display installation summary
+      shell: bash
+      run: |
+        echo "### SCIP Installation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.verify.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Cache Hit**: ${{ steps.cache-scip.outputs.cache-hit }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **OS**: ${{ runner.os }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architecture**: ${{ runner.arch }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "#### Configuration" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        pkg-config --cflags --libs scip >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

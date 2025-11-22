@@ -85,3 +85,23 @@ jobs:
 
       - name: Check OMMX for wasm32-unknown-emscripten
         run: task rust:check:wasm32-emscripten
+
+  scip-adapter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-test-environment
+
+      - name: Setup SCIP
+        uses: ./.github/actions/setup-scip
+        with:
+          scip-version: "9.2.4"
+
+      - name: Build SCIP Adapter
+        run: cargo build -p ommx-scip-adapter --verbose
+
+      - name: Test SCIP Adapter
+        run: cargo test -p ommx-scip-adapter --verbose
