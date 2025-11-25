@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -41,7 +41,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -61,7 +61,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       # Windows requires local Python
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -89,7 +89,7 @@ jobs:
         name: [python-mip, pyscipopt, openjij, highs]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
@@ -130,7 +130,7 @@ jobs:
     needs: pyodide
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           submodules: true
 
@@ -157,7 +157,7 @@ jobs:
     needs: [linux, macos, windows, adapters]
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Test Environment
         uses: ./.github/actions/setup-test-environment
@@ -200,7 +200,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
@@ -236,7 +236,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
