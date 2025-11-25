@@ -6,6 +6,7 @@ mod convert;
 mod degree;
 mod evaluate;
 mod linear;
+mod logical_memory;
 mod mul;
 mod parse;
 mod polynomial;
