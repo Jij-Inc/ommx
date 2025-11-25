@@ -16,7 +16,7 @@ jobs:
     name: Benchmarks for Rust SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
       - name: Install cargo-codspeed
@@ -34,7 +34,7 @@ jobs:
     name: Benchmarks for Python SDK
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
