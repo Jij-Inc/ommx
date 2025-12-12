@@ -63,6 +63,7 @@ class InfeasibleDetected(Exception):
 
     This corresponds to ``Optimality.OPTIMALITY_INFEASIBLE`` and indicates that
     the mathematical model itself has no feasible solution.
+    Should not be used when infeasibility cannot be proven (e.g., heuristic solvers).
     """
 
     pass
@@ -74,6 +75,7 @@ class UnboundedDetected(Exception):
 
     This corresponds to ``Optimality.OPTIMALITY_UNBOUNDED`` and indicates that
     the mathematical model itself is unbounded.
+    Should not be used when unboundedness cannot be proven (e.g., heuristic solvers).
     """
 
     pass
