@@ -64,6 +64,7 @@ class InfeasibleDetected(Exception):
     This corresponds to ``Optimality.OPTIMALITY_INFEASIBLE`` and indicates that
     the mathematical model itself has no feasible solution.
     """
+
     pass
 
 
@@ -74,6 +75,7 @@ class UnboundedDetected(Exception):
     This corresponds to ``Optimality.OPTIMALITY_UNBOUNDED`` and indicates that
     the mathematical model itself is unbounded.
     """
+
     pass
 
 
@@ -85,4 +87,5 @@ class NoSolutionObtained(Exception):
     or not) (e.g., due to time limits).
     This does not prove that the mathematical model itself is infeasible.
     """
+
     pass

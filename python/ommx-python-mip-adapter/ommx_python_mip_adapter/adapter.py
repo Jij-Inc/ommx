@@ -283,7 +283,9 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             {1: 0.0}
         """
         if data.status == mip.OptimizationStatus.LOADED:
-            raise OMMXPythonMIPAdapterError("The model may not be optimized. [status: LOADED]")
+            raise OMMXPythonMIPAdapterError(
+                "The model may not be optimized. [status: LOADED]"
+            )
 
         if data.status == mip.OptimizationStatus.INFEASIBLE:
             raise InfeasibleDetected("Model was infeasible")
