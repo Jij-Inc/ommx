@@ -4,7 +4,12 @@ from typing import Optional
 
 import mip
 
-from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
+from ommx.adapter import (
+    SolverAdapter,
+    InfeasibleDetected,
+    UnboundedDetected,
+    NoSolutionObtained,
+)
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
 from .exception import OMMXPythonMIPAdapterError
@@ -228,14 +233,6 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             42.0
 
         """
-        # TODO check if `optimize()` has been called
-
-        if data.status == mip.OptimizationStatus.INFEASIBLE:
-            raise InfeasibleDetected("Model was infeasible")
-
-        if data.status == mip.OptimizationStatus.UNBOUNDED:
-            raise UnboundedDetected("Model was unbounded")
-
         state = self.decode_to_state(data)
         solution = self.instance.evaluate(state)
 
@@ -285,12 +282,25 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             >>> ommx_state.entries
             {1: 0.0}
         """
+        if data.status == mip.OptimizationStatus.LOADED:
+            raise OMMXPythonMIPAdapterError("The model may not be optimized. [status: LOADED]")
+
+        if data.status == mip.OptimizationStatus.INFEASIBLE:
+            raise InfeasibleDetected("Model was infeasible")
+
+        if data.status == mip.OptimizationStatus.UNBOUNDED:
+            raise UnboundedDetected("Model was unbounded")
+
+        if data.status == mip.OptimizationStatus.NO_SOLUTION_FOUND:
+            raise NoSolutionObtained("No solution was obtained during the search")
+
+        # Check for other statuses (CUTOFF, ERROR, INT_INFEASIBLE, etc.)
         if not (
             data.status == mip.OptimizationStatus.OPTIMAL
             or data.status == mip.OptimizationStatus.FEASIBLE
         ):
             raise OMMXPythonMIPAdapterError(
-                " The model's `status` must be `OPTIMAL` or `FEASIBLE`."
+                f"Optimization ended with status: {data.status.name}"
             )
 
         return State(
