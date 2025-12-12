@@ -296,7 +296,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         if data.status == mip.OptimizationStatus.NO_SOLUTION_FOUND:
             raise NoSolutionObtained("No solution was obtained during the search")
 
-        # Check for other statuses (CUTOFF, ERROR, INT_INFEASIBLE, etc.)
+        # Catch all other statuses (CUTOFF, ERROR, INT_INFEASIBLE, etc.)
         if not (
             data.status == mip.OptimizationStatus.OPTIMAL
             or data.status == mip.OptimizationStatus.FEASIBLE
