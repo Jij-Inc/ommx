@@ -58,8 +58,36 @@ class SamplerAdapter(SolverAdapter):
 
 
 class InfeasibleDetected(Exception):
+    """
+    Raised when the problem is proven to be infeasible.
+
+    This corresponds to ``Optimality.OPTIMALITY_INFEASIBLE`` and indicates that
+    the mathematical model itself has no feasible solution.
+    Should not be used when infeasibility cannot be proven (e.g., heuristic solvers).
+    """
+
     pass
 
 
 class UnboundedDetected(Exception):
+    """
+    Raised when the problem is proven to be unbounded.
+
+    This corresponds to ``Optimality.OPTIMALITY_UNBOUNDED`` and indicates that
+    the mathematical model itself is unbounded.
+    Should not be used when unboundedness cannot be proven (e.g., heuristic solvers).
+    """
+
+    pass
+
+
+class NoSolutionReturned(Exception):
+    """
+    Raised when no solution was returned.
+
+    This indicates that the solver did not return any solution (whether feasible
+    or not) (e.g., due to time limits).
+    This does not prove that the mathematical model itself is infeasible.
+    """
+
     pass

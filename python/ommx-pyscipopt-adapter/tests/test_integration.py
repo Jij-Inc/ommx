@@ -1,9 +1,10 @@
 import pytest
 
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
-from ommx.adapter import InfeasibleDetected
+from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 
@@ -250,25 +251,28 @@ def test_integration_feasible_constant_constraint():
 
 
 def test_integration_timelimit():
-    # Objective function: x1 + x2
-    # x1, x2: binary
-    x1 = DecisionVariable.binary(1)
-    x2 = DecisionVariable.binary(2)
+    # KnapSack Problem
+    p = [10, 13, 18, 32, 7, 15, 12, 6, 22, 20, 19, 13, 11, 39, 10]
+    w = [11, 15, 20, 35, 10, 33, 28, 23, 11, 10, 12, 16, 17, 26, 29]
+    n = len(p)
+    x = [DecisionVariable.binary(i) for i in range(n)]
+    constraint = sum(w[i] * x[i] for i in range(n)) <= sum(w) // 2
+    assert not isinstance(constraint, bool)
     instance = Instance.from_components(
-        decision_variables=[x1, x2],
-        objective=-x1 + x2,
-        constraints=[],
+        decision_variables=x,
+        objective=sum(p[i] * x[i] for i in range(n)),
+        constraints=[constraint],
         sense=Instance.MAXIMIZE,
     )
-
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
-    # Set a very small time limit to force the solver to stop before finding the optimal solution
+    # Set a very small time limit to force the solver to stop before finding any solution
     model.setParam("limits/time", 0.00001)
     model.optimize()
 
     with pytest.raises(
-        InfeasibleDetected, match=r"Model was infeasible \[status: timelimit\]"
+        NoSolutionReturned,
+        match=r"No solution was returned \[status: timelimit\]",
     ):
         adapter.decode_to_state(model)
 
@@ -315,3 +319,56 @@ def test_relax_constraint():
     solution = OMMXPySCIPOptAdapter.solve(instance)
     # x[2] is still present as part of the evaluate/decoding process but has a value of 0
     assert [var.value for var in solution.decision_variables] == [0, 0, 0]
+
+
+def test_infeasible_problem():
+    # x must be >= 4, but upper bound is 3 -> infeasible
+    x = DecisionVariable.integer(0, lower=0, upper=3)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints=[x >= 4],
+        sense=Instance.MAXIMIZE,
+    )
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    model.optimize()
+
+    with pytest.raises(InfeasibleDetected):
+        adapter.decode_to_state(model)
+
+
+def test_unbounded_problem():
+    # x has no upper bound, maximize x -> unbounded
+    x = DecisionVariable.integer(0, lower=0)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints=[],
+        sense=Instance.MAXIMIZE,
+    )
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    model.optimize()
+
+    with pytest.raises(UnboundedDetected):
+        adapter.decode_to_state(model)
+
+
+def test_decode_before_optimize():
+    x = DecisionVariable.integer(0, lower=0, upper=5)
+    instance = Instance.from_components(
+        decision_variables=[x],
+        objective=x,
+        constraints=[],
+        sense=Instance.MINIMIZE,
+    )
+    adapter = OMMXPySCIPOptAdapter(instance)
+    model = adapter.solver_input
+    # Do not call model.optimize()
+
+    with pytest.raises(
+        OMMXPySCIPOptAdapterError,
+        match=r"The model may not be optimized. \[status: unknown\]",
+    ):
+        adapter.decode_to_state(model)
