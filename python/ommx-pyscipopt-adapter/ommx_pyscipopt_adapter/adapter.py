@@ -5,7 +5,12 @@ import pyscipopt
 import math
 
 
-from ommx.adapter import SolverAdapter, InfeasibleDetected, UnboundedDetected
+from ommx.adapter import (
+    SolverAdapter,
+    InfeasibleDetected,
+    UnboundedDetected,
+    NoSolutionReturned,
+)
 from ommx.v1 import (
     Instance,
     Solution,
@@ -260,7 +265,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             # The following condition checks if there is no feasible primal solution.
             # In other words, it is checking for the absence of any feasible solution.
             if data.getNSols() == 0:
-                raise InfeasibleDetected("Model was infeasible [status: timelimit]")
+                raise NoSolutionReturned("No solution was returned [status: timelimit]")
 
         # NOTE: It is assumed that getBestSol will return an error
         #       if there is no feasible solution.
