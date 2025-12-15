@@ -12,6 +12,7 @@
   - [Switching Adapters](#switching-adapters)
   - [Share In Ommx Artifact](#share-in-ommx-artifact)
   - [Download Miplib Instance](#download-miplib-instance)
+  - [Download Qplib Instance](#download-qplib-instance)
   - [Implement Adapter](#implement-adapter)
 - [User Guide](#user-guide)
   - [Supported Ommx Adapters](#supported-ommx-adapters)
@@ -864,9 +865,9 @@ Please see [this page](https://docs.github.com/ja/packages/working-with-a-github
 ```
 
 You can easily download these instances with the OMMX SDK, then directly use them as inputs to OMMX Adapters.
-For example, to solve the air05 instance from MIPLIB 2017 ([reference](https://miplib.zib.de/instance_details_air05.html)) with PySCIPOpt, you can:
+For example, to solve the neos-1122047 instance from MIPLIB 2017 ([reference](https://miplib.zib.de/instance_details_neos-1122047.html)) with PySCIPOpt, you can:
 
-1. Download the air05 instance with `dataset.miplib2017` from the OMMX Python SDK.
+1. Download the neos-1122047 instance with `dataset.miplib2017` from the OMMX Python SDK.
 2. Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter.
 
 Here is a sample Python code:
@@ -878,8 +879,8 @@ from ommx import dataset
 # OMMX PySCIPOpt Adapter
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
-# Step 1: Download the air05 instance from MIPLIB 2017
-instance = dataset.miplib2017("air05")
+# Step 1: Download the neos-1122047 instance from MIPLIB 2017
+instance = dataset.miplib2017("neos-1122047")
 
 # Step 2: Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter
 solution = OMMXPySCIPOptAdapter.solve(instance)
@@ -914,13 +915,13 @@ There are seven dataset-wide annotations with dedicated properties:
 
 MIPLIB-specific annotations are prefixed with `org.ommx.miplib.*`.
 
-For example, the optimal objective of the air05 instance is `26374`, which you can check with the key `org.ommx.miplib.objective`:
+For example, the optimal objective of the neos-1122047 instance is `161`, which you can check with the key `org.ommx.miplib.objective`:
 
 
 
 ```python
 # Note that the values of annotations are all strings (str)!
-assert instance.annotations["org.ommx.miplib.objective"] == "26374"
+instance.annotations["org.ommx.miplib.objective"]
 ```
 
 Thus, we can verify that the optimization result from the OMMX PySCIPOpt Adapter matches the expected optimal value.
@@ -931,6 +932,90 @@ import numpy as np
 
 best = float(instance.annotations["org.ommx.miplib.objective"])
 assert np.isclose(solution.objective, best)
+```
+
+
+
+-------------
+
+### Download Qplib Instance
+
+
+The OMMX repository provides quadratic programming benchmark instances from QPLIB in OMMX Artifact format.
+
+```{note}
+More details: The QPLIB instances in OMMX Artifact format are hosted in the GitHub Container Registry for the OMMX repository ([link](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fqplib)).
+
+QPLIB is a library of quadratic programming instances. For more information about QPLIB, see the [QPLIB website](http://qplib.zib.de/).
+
+Please see [this page](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for information on GitHub Container Registry.
+```
+
+You can easily download these instances with the OMMX SDK, then directly use them as inputs to OMMX Adapters.
+For example, to solve the QPLIB_3514 instance ([reference](http://qplib.zib.de/QPLIB_3514.html)) with PySCIPOpt, you can:
+
+1. Download the 3514 instance with `dataset.qplib` from the OMMX Python SDK.
+2. Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter.
+
+Here is a sample Python code:
+
+
+```python
+# OMMX Python SDK
+from ommx import dataset
+# OMMX PySCIPOpt Adapter
+from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
+
+# Step 1: Download the 3514 instance from QPLIB
+instance = dataset.qplib("3514")
+
+# Step 2: Solve with PySCIPOpt via the OMMX PySCIPOpt Adapter
+solution = OMMXPySCIPOptAdapter.solve(instance)
+```
+
+This makes it easy to benchmark quadratic programming solvers using the same QPLIB instances.
+
+## Note about Annotations with the Instance
+
+The downloaded instance includes various annotations accessible via the `annotations` property:
+
+
+```python
+import pandas as pd
+# Display annotations in tabular form using pandas
+pd.DataFrame.from_dict(instance.annotations, orient="index", columns=["Value"]).sort_index()
+```
+
+These instances have both dataset-level annotations and dataset-specific annotations.
+
+There are seven dataset-wide annotations with dedicated properties:
+
+| Annotation                                    | Property          | Description                                               |
+|----------------------------------------------|-------------------|-----------------------------------------------------------|
+| `org.ommx.v1.instance.authors`               | `authors`         | The authors of the instance                              |
+| `org.ommx.v1.instance.constraints`           | `num_constraints` | The number of constraint conditions in the instance      |
+| `org.ommx.v1.instance.created`               | `created`         | The date of the instance was saved as an OMMX Artifact   |
+| `org.ommx.v1.instance.dataset`               | `dataset`         | The name of the dataset to which this instance belongs   |
+| `org.ommx.v1.instance.license`               | `license`         | The license of this dataset                              |
+| `org.ommx.v1.instance.title`                 | `title`           | The name of the instance                                 |
+| `org.ommx.v1.instance.variables`             | `num_variables`   | The total number of decision variables in the instance   |
+
+## QPLIB Annotations
+
+QPLIB instances include comprehensive annotations that describe the mathematical properties of quadratic programming problems. These annotations are based on the official QPLIB specification and are prefixed with `org.ommx.qplib.*`.
+
+For detailed information about all available QPLIB annotations and their meanings, please refer to the [official QPLIB documentation](https://qplib.zib.de/doc.html).
+
+For example, you can check the problem type and objective curvature of the QPLIB instance:
+
+
+```python
+# QPLIB-specific annotations
+print(f"Problem type: {instance.annotations['org.ommx.qplib.probtype']}")
+print(f"Objective type: {instance.annotations['org.ommx.qplib.objtype']}")
+print(f"Objective curvature: {instance.annotations['org.ommx.qplib.objcurvature']}")
+print(f"Number of variables: {instance.annotations['org.ommx.qplib.nvars']}")
+print(f"Number of constraints: {instance.annotations['org.ommx.qplib.ncons']}")
 ```
 
 
@@ -1536,6 +1621,8 @@ Non-OSS solvers/samplers are also supported in other repositories.
 |  [ommx-dwave-adapter](https://github.com/Jij-Inc/ommx-dwave-adapter) | [](https://pypi.org/project/ommx-dwave-adapter) | Adapter for [D-Wave](https://docs.dwavequantum.com/en/latest/index.html) |
 | [ommx-fixstars-amplify-adapter](https://github.com/Jij-Inc/ommx-fixstars-amplify-adapter) | [](https://pypi.org/project/ommx-fixstars-amplify-adapter/) | Adapter for [Fixstars Amplify](https://amplify.fixstars.com/ja/docs/amplify/v1/index.html#) |
 | [ommx-gurobipy-adapter](https://github.com/Jij-Inc/ommx-gurobipy-adapter) | [](https://pypi.org/project/ommx-gurobipy-adapter/) | Adapter for [Gurobi](https://www.gurobi.com/) |
+| [ommx-kipu-iskay-adapter](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter) | [](https://pypi.org/project/ommx-kipu-iskay-adapter/) | Adapter for [Kipu Iskay through Qiskit Functions Catalog](https://quantum.cloud.ibm.com/docs/en/guides/kipu-optimization) |
+| [ommx-qctrl-qaoa-adapter](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter) | [](https://pypi.org/project/ommx-qctrl-qaoa-adapter/) | Adapter for [Fire Opal QAOA Solver](https://docs.q-ctrl.com/fire-opal/execute/run-algorithms/solve-optimization-problems/fire-opals-qaoa-solver) |
 
 
 ```python
