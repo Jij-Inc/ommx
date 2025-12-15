@@ -81,11 +81,11 @@ class UnboundedDetected(Exception):
     pass
 
 
-class NoSolutionObtained(Exception):
+class NoSolutionReturned(Exception):
     """
-    Raised when no solution was obtained.
+    Raised when no solution was returned.
 
-    This indicates that the solver did not obtain any solution (whether feasible
+    This indicates that the solver did not return any solution (whether feasible
     or not) (e.g., due to time limits).
     This does not prove that the mathematical model itself is infeasible.
     """

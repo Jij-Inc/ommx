@@ -8,7 +8,7 @@ from ommx.adapter import (
     SolverAdapter,
     InfeasibleDetected,
     UnboundedDetected,
-    NoSolutionObtained,
+    NoSolutionReturned,
 )
 from ommx.v1 import Instance, Constraint, DecisionVariable, Solution, State, Function
 
@@ -294,7 +294,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             raise UnboundedDetected("Model was unbounded")
 
         if data.status == mip.OptimizationStatus.NO_SOLUTION_FOUND:
-            raise NoSolutionObtained("No solution was obtained during the search")
+            raise NoSolutionReturned("No solution was returned during the search")
 
         # Catch all other statuses (CUTOFF, ERROR, INT_INFEASIBLE, etc.)
         if not (

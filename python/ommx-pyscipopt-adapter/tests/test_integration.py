@@ -4,7 +4,7 @@ from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 from ommx_pyscipopt_adapter.exception import OMMXPySCIPOptAdapterError
 
 from ommx.v1 import Constraint, Instance, DecisionVariable, Quadratic, Linear
-from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionObtained
+from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 
@@ -271,8 +271,8 @@ def test_integration_timelimit():
     model.optimize()
 
     with pytest.raises(
-        NoSolutionObtained,
-        match=r"No solution was obtained \[status: timelimit\]",
+        NoSolutionReturned,
+        match=r"No solution was returned \[status: timelimit\]",
     ):
         adapter.decode_to_state(model)
 

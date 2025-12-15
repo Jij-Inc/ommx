@@ -1,7 +1,7 @@
 import pytest
 
 from ommx.v1 import Instance, DecisionVariable, Solution
-from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionObtained
+from ommx.adapter import InfeasibleDetected, UnboundedDetected, NoSolutionReturned
 from ommx.testing import SingleFeasibleLPGenerator, DataType
 
 from ommx_python_mip_adapter import OMMXPythonMIPAdapter
@@ -144,8 +144,8 @@ def test_integration_timelimit():
     model.optimize()
 
     with pytest.raises(
-        NoSolutionObtained,
-        match=r"No solution was obtained during the search",
+        NoSolutionReturned,
+        match="No solution was returned during the search",
     ):
         adapter.decode(model)
 
