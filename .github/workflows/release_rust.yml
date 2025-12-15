@@ -48,7 +48,7 @@ jobs:
           private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           title: "Start developing ${{ env.NEW_VERSION }}"

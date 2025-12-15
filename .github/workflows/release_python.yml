@@ -31,7 +31,7 @@ jobs:
           manylinux: manylinux_2_28
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: linux-${{ matrix.target }}
           path: ./python/ommx/dist
@@ -51,7 +51,7 @@ jobs:
           working-directory: ./python/ommx
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: macos
           path: ./python/ommx/dist
@@ -76,7 +76,7 @@ jobs:
           working-directory: ./python/ommx
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: windows
           path: ./python/ommx/dist
@@ -98,7 +98,7 @@ jobs:
         run: uv build --out-dir ./dist --sdist ./python/ommx-${{ matrix.name }}-adapter
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.name }}-adapter
           path: ./dist/
@@ -119,7 +119,7 @@ jobs:
         run: task python:ommx:build:pyodide
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: pyodide
           path: ./python/ommx/dist
@@ -140,7 +140,7 @@ jobs:
           setup-wasm: true
 
       - name: Download pyodide wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: pyodide
           path: ./python/ommx/dist
@@ -163,7 +163,7 @@ jobs:
         uses: ./.github/actions/setup-test-environment
 
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: dist
           pattern: "!pyodide"
@@ -181,7 +181,7 @@ jobs:
     needs: [linux, macos, windows, adapters, check-wheel]
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: dist
           pattern: "!pyodide"
@@ -219,7 +219,7 @@ jobs:
           private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           title: "Start developing OMMX Python SDK ${{ env.NEW_VERSION }}"
@@ -259,7 +259,7 @@ jobs:
           private-key: ${{ secrets.TOKEN_PROVIDER_OMMX_PRIVATE_KEY }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           title: "Update docs dependencies to OMMX ${{ env.RELEASED_VERSION }}"
@@ -279,7 +279,7 @@ jobs:
       contents: write
     steps:
       - name: Download pyodide wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: pyodide
           path: dist
