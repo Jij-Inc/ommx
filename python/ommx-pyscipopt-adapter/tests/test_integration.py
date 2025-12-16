@@ -252,6 +252,7 @@ def test_integration_feasible_constant_constraint():
 
 def test_integration_timelimit():
     # Knapsack Problem
+    # fmt: off
     base_v = [
         9, 28, 26, 5, 26, 29, 13, 20, 24, 10, 23, 15, 5, 27, 21, 8, 7, 8, 21, 13,
         24, 5, 5, 6, 20, 16, 25, 12, 28, 20, 20, 6, 6, 10, 29, 29, 17, 12, 26, 20,
@@ -266,6 +267,7 @@ def test_integration_timelimit():
         20, 18, 14, 26, 23, 20, 36, 37, 31, 27, 18, 23, 30, 22, 8, 26, 16, 37, 26, 10,
         24, 12, 11, 21, 4, 14, 34, 12, 15, 34, 24, 27, 36, 31, 23, 37, 45, 44, 7, 20,
     ]
+    # fmt: on
     v = base_v * 100
     w = base_w * 100
     n = len(v)
@@ -281,7 +283,7 @@ def test_integration_timelimit():
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
     # Set a very small time limit to force the solver to stop before finding any solution
-    model.setParam("limits/time", 0.1)
+    model.setParam("limits/time", 0.01)
     model.optimize()
 
     with pytest.raises(
