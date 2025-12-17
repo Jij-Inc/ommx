@@ -124,30 +124,46 @@ def test_relax_constraint():
 
 
 def test_integration_timelimit():
-    # KnapSack Problem
-    p = [10, 13, 18, 32, 7, 15, 12, 6, 22, 20, 19, 13, 11, 39, 10]
-    w = [11, 15, 20, 35, 10, 33, 28, 23, 11, 10, 12, 16, 17, 26, 29]
-    n = len(p)
+    # Knapsack Problem
+    # fmt: off
+    base_v = [
+        9, 28, 26, 5, 26, 29, 13, 20, 24, 10, 23, 15, 5, 27, 21, 8, 7, 8, 21, 13,
+        24, 5, 5, 6, 20, 16, 25, 12, 28, 20, 20, 6, 6, 10, 29, 29, 17, 12, 26, 20,
+        22, 20, 22, 23, 6, 23, 28, 5, 18, 17, 22, 13, 24, 17, 18, 11, 8, 9, 23, 21,
+        17, 7, 10, 15, 7, 20, 17, 29, 22, 29, 15, 5, 24, 7, 5, 12, 11, 28, 13, 6,
+        9, 8, 8, 13, 6, 15, 27, 7, 15, 29, 9, 26, 25, 27, 6, 26, 29, 26, 9, 10,
+    ]
+    base_w = [
+        21, 37, 35, 19, 39, 36, 32, 32, 22, 20, 29, 21, 12, 39, 24, 8, 9, 19, 22, 12,
+        38, 21, 7, 9, 24, 23, 35, 27, 29, 21, 18, 10, 20, 21, 30, 35, 36, 10, 45, 36,
+        38, 22, 34, 23, 4, 29, 28, 12, 37, 23, 39, 32, 32, 18, 28, 26, 6, 10, 23, 29,
+        20, 18, 14, 26, 23, 20, 36, 37, 31, 27, 18, 23, 30, 22, 8, 26, 16, 37, 26, 10,
+        24, 12, 11, 21, 4, 14, 34, 12, 15, 34, 24, 27, 36, 31, 23, 37, 45, 44, 7, 20,
+    ]
+    # fmt: on
+    v = base_v * 100
+    w = base_w * 100
+    n = len(v)
     x = [DecisionVariable.binary(i) for i in range(n)]
-    constraint = sum(w[i] * x[i] for i in range(n)) <= sum(w) // 2
+    constraint = sum(w[i] * x[i] for i in range(n)) <= 100 * 100
     assert not isinstance(constraint, bool)
     instance = Instance.from_components(
         decision_variables=x,
-        objective=sum(p[i] * x[i] for i in range(n)),
+        objective=sum(v[i] * x[i] for i in range(n)),
         constraints=[constraint],
         sense=Instance.MAXIMIZE,
     )
     adapter = OMMXPythonMIPAdapter(instance)
     model = adapter.solver_input
     # Set a very small time limit to force the solver to stop before finding any solution
-    model.max_seconds = 0.0001
+    model.max_seconds = 0.01
     model.optimize()
 
     with pytest.raises(
         NoSolutionReturned,
         match="No solution was returned during the search",
     ):
-        adapter.decode(model)
+        adapter.decode_to_state(model)
 
 
 def test_infeasible_problem():
