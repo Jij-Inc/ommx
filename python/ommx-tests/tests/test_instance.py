@@ -422,3 +422,26 @@ def test_stats_with_constraints():
     assert stats["constraints"]["removed"] == 1
     # x[0] is used in objective, x[0] and x[1] are used in active constraint
     assert stats["decision_variables"]["by_usage"]["used_in_constraints"] == 2
+
+
+def test_multiple_log_encodes():
+    x = [
+        DecisionVariable.integer(0, lower=0, upper=10, name="x", subscripts=[0]),
+        DecisionVariable.integer(1, lower=0, upper=10, name="x", subscripts=[1]),
+        DecisionVariable.integer(2, lower=0, upper=10, name="x", subscripts=[2]),
+    ]
+    instance = Instance.from_components(
+        decision_variables=x,
+        objective=x[0],
+        constraints=[
+            (x[0] + x[1] <= 5).set_id(0),
+            (x[1] + x[2] <= 5).set_id(1),
+        ],
+        sense=Instance.MAXIMIZE,
+    )
+
+    instance.log_encode()
+    first_encode = instance.decision_variables
+    instance.log_encode()
+    second_encode = instance.decision_variables
+    assert first_encode == second_encode
