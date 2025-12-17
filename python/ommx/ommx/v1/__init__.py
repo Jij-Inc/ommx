@@ -1632,7 +1632,7 @@ class Instance(UserAnnotationBase):
         if not decision_variable_ids:
             decision_variable_ids = {
                 var.id
-                for var in self.decision_variables
+                for var in self.used_decision_variables
                 if var.kind == DecisionVariable.INTEGER
             }
             if not decision_variable_ids:
