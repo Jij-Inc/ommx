@@ -283,7 +283,7 @@ def test_integration_timelimit():
     adapter = OMMXPySCIPOptAdapter(instance)
     model = adapter.solver_input
     # Set a very small time limit to force the solver to stop before finding any solution
-    model.setParam("limits/time", 0.01)
+    model.setParam("limits/time", 0.001)
     model.optimize()
 
     with pytest.raises(
