@@ -80,7 +80,7 @@ jobs:
             --out wheels
             -m python/ommx/Cargo.toml
       - name: Upload wheel
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: wheels
           path: wheels
@@ -101,7 +101,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Download wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: wheels
           path: wheels
