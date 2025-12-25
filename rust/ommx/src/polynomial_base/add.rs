@@ -96,98 +96,162 @@ impl<M: Monomial> Add<&M> for &PolynomialBase<M> {
     }
 }
 
-// Add support for Monomial + Monomial operations for specific monomial types
-macro_rules! impl_monomial_add {
-    ($monomial:ty) => {
-        impl Add for $monomial {
+// Add missing Sub<Coefficient> operations
+impl<M: Monomial> Sub<Coefficient> for PolynomialBase<M> {
+    type Output = Self;
+    fn sub(mut self, rhs: Coefficient) -> Self::Output {
+        self -= rhs;
+        self
+    }
+}
+
+impl<M: Monomial> Sub<PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn sub(self, mut rhs: PolynomialBase<M>) -> Self::Output {
+        rhs = -rhs;
+        rhs += self;
+        rhs
+    }
+}
+
+impl<M: Monomial> Sub<Coefficient> for &PolynomialBase<M> {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: Coefficient) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
+impl<M: Monomial> Sub<&PolynomialBase<M>> for Coefficient {
+    type Output = PolynomialBase<M>;
+    fn sub(self, rhs: &PolynomialBase<M>) -> Self::Output {
+        self - rhs.clone()
+    }
+}
+
+// Generic macro for implementing binary operations for monomial types
+macro_rules! impl_monomial_op {
+    ($op_trait:ident, $op_method:ident, $monomial:ty) => {
+        impl $op_trait for $monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: Self) -> Self::Output {
-                PolynomialBase::from(self) + PolynomialBase::from(rhs)
+            fn $op_method(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self).$op_method(PolynomialBase::from(rhs))
             }
         }
 
-        impl Add<&$monomial> for $monomial {
+        impl $op_trait<&$monomial> for $monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: &Self) -> Self::Output {
-                PolynomialBase::from(self) + PolynomialBase::from(rhs.clone())
+            fn $op_method(self, rhs: &Self) -> Self::Output {
+                PolynomialBase::from(self).$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
-        impl Add<$monomial> for &$monomial {
+        impl $op_trait<$monomial> for &$monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: $monomial) -> Self::Output {
-                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs)
+            fn $op_method(self, rhs: $monomial) -> Self::Output {
+                PolynomialBase::from(self.clone()).$op_method(PolynomialBase::from(rhs))
             }
         }
 
-        impl Add for &$monomial {
+        impl $op_trait for &$monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: Self) -> Self::Output {
-                PolynomialBase::from(self.clone()) + PolynomialBase::from(rhs.clone())
+            fn $op_method(self, rhs: Self) -> Self::Output {
+                PolynomialBase::from(self.clone()).$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
-        // Add support for Monomial + Coefficient operations
-        impl Add<Coefficient> for $monomial {
+        // Operations with Coefficient
+        impl $op_trait<Coefficient> for $monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: Coefficient) -> Self::Output {
-                PolynomialBase::from(self) + rhs
+            fn $op_method(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self).$op_method(rhs)
             }
         }
 
-        impl Add<$monomial> for Coefficient {
+        impl $op_trait<$monomial> for Coefficient {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: $monomial) -> Self::Output {
-                self + PolynomialBase::from(rhs)
+            fn $op_method(self, rhs: $monomial) -> Self::Output {
+                self.$op_method(PolynomialBase::from(rhs))
             }
         }
 
-        impl Add<Coefficient> for &$monomial {
+        impl $op_trait<Coefficient> for &$monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: Coefficient) -> Self::Output {
-                PolynomialBase::from(self.clone()) + rhs
+            fn $op_method(self, rhs: Coefficient) -> Self::Output {
+                PolynomialBase::from(self.clone()).$op_method(rhs)
             }
         }
 
-        impl Add<&$monomial> for Coefficient {
+        impl $op_trait<&$monomial> for Coefficient {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: &$monomial) -> Self::Output {
-                self + PolynomialBase::from(rhs.clone())
+            fn $op_method(self, rhs: &$monomial) -> Self::Output {
+                self.$op_method(PolynomialBase::from(rhs.clone()))
             }
         }
 
-        // Add support for Monomial + PolynomialBase operations
-        impl Add<PolynomialBase<$monomial>> for $monomial {
+        // Operations with PolynomialBase
+        impl $op_trait<PolynomialBase<$monomial>> for $monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
-                rhs.add_term(self, coeff!(1.0));
-                rhs
+            fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
+                // Special handling for different operation types
+                impl_monomial_op!(@internal $op_trait, $op_method, self, rhs)
             }
         }
 
-        impl Add<&PolynomialBase<$monomial>> for $monomial {
+        impl $op_trait<&PolynomialBase<$monomial>> for $monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
-                self + rhs.clone()
+            fn $op_method(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self.$op_method(rhs.clone())
             }
         }
 
-        impl Add<PolynomialBase<$monomial>> for &$monomial {
+        impl $op_trait<PolynomialBase<$monomial>> for &$monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, mut rhs: PolynomialBase<$monomial>) -> Self::Output {
-                rhs.add_term(self.clone(), coeff!(1.0));
-                rhs
+            fn $op_method(self, rhs: PolynomialBase<$monomial>) -> Self::Output {
+                // Special handling for different operation types
+                impl_monomial_op!(@internal $op_trait, $op_method, self.clone(), rhs)
             }
         }
 
-        impl Add<&PolynomialBase<$monomial>> for &$monomial {
+        impl $op_trait<&PolynomialBase<$monomial>> for &$monomial {
             type Output = PolynomialBase<$monomial>;
-            fn add(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
-                self.clone() + rhs.clone()
+            fn $op_method(self, rhs: &PolynomialBase<$monomial>) -> Self::Output {
+                self.clone().$op_method(rhs.clone())
             }
         }
     };
+
+    // Internal helper for optimized Add implementation
+    (@internal Add, add, $self:expr, $rhs:expr) => {{
+        let mut rhs = $rhs;
+        rhs.add_term($self, coeff!(1.0));
+        rhs
+    }};
+
+    // Internal helper for Sub implementation
+    (@internal Sub, sub, $self:expr, $rhs:expr) => {{
+        let mut result = PolynomialBase::from($self);
+        result -= $rhs;
+        result
+    }};
 }
+
+// Legacy macro for backward compatibility - delegates to generic macro
+macro_rules! impl_monomial_add {
+    ($monomial:ty) => {
+        impl_monomial_op!(Add, add, $monomial);
+    };
+}
+
+// Legacy macro for backward compatibility - delegates to generic macro
+macro_rules! impl_monomial_sub {
+    ($monomial:ty) => {
+        impl_monomial_op!(Sub, sub, $monomial);
+    };
+}
+
+impl_monomial_sub!(LinearMonomial);
+impl_monomial_sub!(QuadraticMonomial);
+impl_monomial_sub!(MonomialDyn);
 
 impl_monomial_add!(LinearMonomial);
 impl_monomial_add!(QuadraticMonomial);
