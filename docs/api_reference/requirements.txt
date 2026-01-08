@@ -78,5 +78,7 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 tomlkit==0.13.2
     # via ommx-api-reference (pyproject.toml)
-urllib3==2.3.0
-    # via requests
+urllib3==2.6.3
+    # via
+    #   ommx-api-reference (pyproject.toml)
+    #   requests
