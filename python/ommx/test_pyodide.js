@@ -1,28 +1,25 @@
 const path = require('node:path');
+const { glob } = require('glob');
 const { loadPyodide } = require("pyodide");
-const fs = require('fs');
 
 async function test_ommx() {
-    console.log("Loading pyodide...");
-    let pyodide = await loadPyodide();
-
     // Find the wheel file in dist directory
-    const distDir = path.join(__dirname, 'dist');
-    const files = fs.readdirSync(distDir);
-    const wheelFile = files.find(f => f.endsWith('.whl') && f.includes('emscripten'));
-
-    if (!wheelFile) {
+    const wheels = await glob('dist/ommx-*.whl', { cwd: __dirname });
+    if (wheels.length === 0) {
         console.error("No wheel file found in dist directory");
         process.exit(1);
     }
+    const wheelPath = path.resolve(__dirname, wheels[0]);
+    console.log(`Loading wheel: ${wheels[0]}`);
 
-    console.log(`Loading wheel: ${wheelFile}`);
+    console.log("Loading pyodide...");
+    let pyodide = await loadPyodide();
 
     // Load dependencies required by OMMX
     console.log("Loading dependencies...");
     await pyodide.loadPackage(['typing-extensions', 'numpy', 'pandas', 'protobuf']);
 
-    const wheelPath = path.join(distDir, wheelFile);
+    console.log("Loading OMMX wheel...");
     await pyodide.loadPackage(wheelPath);
 
     console.log("Testing OMMX...");

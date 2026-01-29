@@ -110,13 +110,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
-        with:
-          setup-wasm: true
-
       - name: Build pyodide wheel
-        run: task python:ommx:build:pyodide
+        uses: pypa/cibuildwheel@v3.3
+        with:
+          package-dir: ./python/ommx
+          output-dir: ./python/ommx/dist
+        env:
+          CIBW_PLATFORM: pyodide
+          CIBW_BUILD: cp313-pyodide_wasm32
+          CIBW_PYODIDE_VERSION: "0.29.0"
+          CIBW_ENVIRONMENT: "RUSTUP_TOOLCHAIN=nightly"
+          CIBW_CONFIG_SETTINGS: "build-args=--no-default-features"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v6
@@ -131,13 +135,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          submodules: true
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          setup-wasm: true
+          node-version: "20"
 
       - name: Download pyodide wheel
         uses: actions/download-artifact@v7
@@ -146,11 +148,12 @@ jobs:
           path: ./python/ommx/dist
 
       - name: Install Node.js dependencies
-        run: npm install
+        run: npm ci
         working-directory: python/ommx
 
       - name: Test OMMX in pyodide
-        run: task python:ommx:test:pyodide
+        run: npm test
+        working-directory: python/ommx
 
   check-wheel:
     runs-on: ubuntu-latest
