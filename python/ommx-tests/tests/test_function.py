@@ -193,3 +193,82 @@ def test_function():
     func_instance += Function(x2)
     assert id(func_instance) == original_id  # Verify it's the same object
     assert_eq(func_instance, Function(x1 + x2))
+
+
+def test_function_terms_zero():
+    zero = Function(0)
+    assert zero.terms == {}
+
+
+def test_function_terms_non_zero_constant():
+    constant = Function(2)
+    assert constant.terms == {(): 2.0}
+
+
+def test_function_terms_linear():
+    homogeneous_linear = Function(Linear(terms={0: 9, 2: 8.7}))
+    assert homogeneous_linear.terms == {(0,): 9.0, (2,): 8.7}
+
+    linear = Function(Linear(terms={0: 9}, constant=1))
+    assert linear.terms == {(0,): 9.0, (): 1.0}
+
+
+def test_function_terms_quadratic():
+    homogeneous_quadratic = Function(
+        Quadratic(
+            columns=[0, 1, 2],
+            rows=[3, 4, 5],
+            values=[6, 7, 8.9],
+        )
+    )
+    assert homogeneous_quadratic.terms == {
+        (0, 3): 6.0,
+        (1, 4): 7.0,
+        (2, 5): 8.9,
+    }
+
+    quadratic = Function(
+        Quadratic(
+            columns=[0],
+            rows=[1],
+            values=[2.3],
+            linear=Linear(terms={4: 5}, constant=6.7),
+        )
+    )
+    assert quadratic.terms == {
+        (0, 1): 2.3,
+        (4,): 5.0,
+        (): 6.7,
+    }
+
+
+def test_function_terms_polynomial():
+    homogeneous_polynomial = Function(
+        Polynomial(
+            terms={
+                (0, 1, 2): 3.4,
+                (5, 6, 7): 8,
+            }
+        )
+    )
+    assert homogeneous_polynomial.terms == {
+        (0, 1, 2): 3.4,
+        (5, 6, 7): 8.0,
+    }
+
+    polynomial = Function(
+        Polynomial(
+            terms={
+                (0, 1, 2): 3,
+                (4, 5): 6.7,
+                (8,): 9,
+                (): 10,
+            }
+        )
+    )
+    assert polynomial.terms == {
+        (0, 1, 2): 3.0,
+        (4, 5): 6.7,
+        (8,): 9.0,
+        (): 10.0,
+    }
