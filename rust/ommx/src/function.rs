@@ -47,7 +47,7 @@ impl serde::Serialize for Function {
                 let mut map = serializer.serialize_map(Some(1))?;
                 map.serialize_entry(&(), &c.into_inner())?;
                 map.end()
-            },
+            }
             Function::Linear(l) => l.serialize(serializer),
             Function::Quadratic(q) => q.serialize(serializer),
             Function::Polynomial(p) => p.serialize(serializer),
