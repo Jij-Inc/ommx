@@ -16,7 +16,8 @@ categories = ["data-structures", "mathematics", "science"]
 
 [features]
 default = ["remote-artifact"]
-remote-artifact = ["ocipkg/remote"]
+remote-artifact = ["ocipkg/remote", "built"]
+built = ["dep:built"]
 
 [dependencies]
 anyhow.workspace = true
@@ -58,11 +59,19 @@ indoc.workspace = true
 insta.workspace = true
 
 [build-dependencies]
-built.workspace = true
+built = { workspace = true, optional = true }
 
 [[bin]]
 name = "ommx"
 path = "src/bin/ommx.rs"
+required-features = ["remote-artifact", "built"]
+
+[[example]]
+name = "create_artifact"
+required-features = ["remote-artifact", "built"]
+
+[[example]]
+name = "pull_artifact"
 required-features = ["remote-artifact"]
 
 [[bench]]
