@@ -70,6 +70,10 @@ required-features = ["remote-artifact", "built"]
 name = "create_artifact"
 required-features = ["remote-artifact", "built"]
 
+[[example]]
+name = "pull_artifact"
+required-features = ["remote-artifact"]
+
 [[bench]]
 name = "evaluate"
 harness = false
