@@ -118,9 +118,9 @@ jobs:
         env:
           CIBW_PLATFORM: pyodide
           CIBW_BUILD: cp313-pyodide_wasm32
-          CIBW_PYODIDE_VERSION: "0.29.0"
-          CIBW_ENVIRONMENT: "RUSTUP_TOOLCHAIN=nightly"
-          CIBW_BEFORE_BUILD: "rustup target add wasm32-unknown-emscripten --toolchain nightly"
+          CIBW_PYODIDE_VERSION: "0.29.3"
+          CIBW_ENVIRONMENT: "RUSTUP_TOOLCHAIN=nightly-2026-01-01"
+          CIBW_BEFORE_BUILD: "rustup toolchain install nightly-2026-01-01 && rustup target add wasm32-unknown-emscripten --toolchain nightly-2026-01-01"
           CIBW_CONFIG_SETTINGS: "build-args=--no-default-features"
 
       - name: Upload wheels
