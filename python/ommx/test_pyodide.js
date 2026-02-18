@@ -2,15 +2,8 @@ const path = require('node:path');
 const { glob } = require('glob');
 const { loadPyodide } = require("pyodide");
 
-async function test_ommx() {
-    // Find the wheel file in dist directory
-    const wheels = await glob('dist/ommx-*.whl', { cwd: __dirname });
-    if (wheels.length === 0) {
-        console.error("No wheel file found in dist directory");
-        process.exit(1);
-    }
-    const wheelPath = path.resolve(__dirname, wheels[0]);
-    console.log(`Loading wheel: ${wheels[0]}`);
+async function test_wheel(wheelPath) {
+    console.log(`\n=== Testing wheel: ${path.basename(wheelPath)} ===\n`);
 
     console.log("Loading pyodide...");
     let pyodide = await loadPyodide();
@@ -23,7 +16,7 @@ async function test_ommx() {
     await pyodide.loadPackage(wheelPath);
 
     console.log("Testing OMMX...");
-    return pyodide.runPythonAsync(`
+    await pyodide.runPythonAsync(`
 import ommx.v1 as v1
 import ommx._ommx_rust as rust
 
@@ -47,9 +40,25 @@ print("Rust SDK successfully compiled to WebAssembly and works in Node.js!")
     `);
 }
 
-test_ommx()
+async function main() {
+    // Find wheel files in dist directory
+    const wheels = await glob('dist/ommx-*.whl', { cwd: __dirname });
+    if (wheels.length === 0) {
+        console.error("No wheel file found in dist directory");
+        process.exit(1);
+    }
+
+    console.log(`Found ${wheels.length} wheel(s): ${wheels.join(', ')}`);
+
+    for (const wheel of wheels) {
+        const wheelPath = path.resolve(__dirname, wheel);
+        await test_wheel(wheelPath);
+    }
+}
+
+main()
     .then(() => {
-        console.log("\nTest completed successfully!");
+        console.log("\nAll tests completed successfully!");
         process.exit(0);
     })
     .catch(err => {
