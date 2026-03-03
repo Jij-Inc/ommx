@@ -249,7 +249,7 @@ jobs:
       - name: Update docs dependencies
         run: |
           task python:update-docs-deps -- ${RELEASED_VERSION}
-          task pip_compile
+          task upgrade
 
       - uses: actions/create-github-app-token@v2
         id: app-token
