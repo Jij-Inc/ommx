@@ -199,6 +199,18 @@ css = [
 ]
 
 [[package]]
+name = "cbcbox"
+version = "2.913"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/27/e05264250ce36b705267d03a45063a76d4eb243bb1e1d19381db4770ade2/cbcbox-2.913-py3-none-macosx_15_0_arm64.whl", hash = "sha256:3b7d1987e4a24d3a1bec7846aae5c3be72ed0c86bfc940a36c7e982bd005d3f1", size = 31682183, upload-time = "2026-03-03T04:07:50.665Z" },
+    { url = "https://files.pythonhosted.org/packages/df/2d/3006f15b2d0b176d803152a7f2d7baeea1798a6a3de8e1f06f54efc4beef/cbcbox-2.913-py3-none-macosx_15_0_x86_64.whl", hash = "sha256:aa8c8aeb02e3eeb2624b083e9069d655b55ef07a2f54e1f3ff141b17aac63e44", size = 74437751, upload-time = "2026-03-03T04:07:55.346Z" },
+    { url = "https://files.pythonhosted.org/packages/69/37/11940bc065f22b20ffb36c70c51cd0d49a10e638909350855b7d71b0192b/cbcbox-2.913-py3-none-manylinux2014_aarch64.whl", hash = "sha256:f42e78cbf5a439a2394577a5d08a6a506d9db8da64e6aaf80d7ec0755606199e", size = 38904907, upload-time = "2026-03-03T04:07:59.282Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/ef/edd1b2f944e694c830e2c5f4e1347a45e4d7ab3939f53d5dc67c837622b9/cbcbox-2.913-py3-none-manylinux2014_x86_64.whl", hash = "sha256:b1f8b4dfd1b3cee58fcb2916231ea210e7e323c04199e20a4eddfc4d1df97a7a", size = 90367322, upload-time = "2026-03-03T04:08:04.015Z" },
+    { url = "https://files.pythonhosted.org/packages/f4/c3/d1ee79af42fc9252c1554f54a985712828b7e5c907bdf47fbe324fc00e6b/cbcbox-2.913-py3-none-win_amd64.whl", hash = "sha256:d28908dddd1e722348c9128851167796eda66cea6d9cfd077a626814a719a0f8", size = 57893228, upload-time = "2026-03-03T04:08:09.406Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.11.12"
 source = { registry = "https://pypi.org/simple" }
@@ -1542,10 +1554,15 @@ wheels = [
 
 [[package]]
 name = "mip"
-version = "1.16rc1.dev3+g45f60c0a0"
-source = { git = "https://github.com/coin-or/python-mip.git#45f60c0a0f44ae346db61db1399fd21c276edc6b" }
+version = "1.17.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "cbcbox" },
     { name = "cffi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/c9/1880c86294e8d3ec4971a2ef78781fba93d1a2dc8db1177912db06f795ac/mip-1.17.1.tar.gz", hash = "sha256:cc77afd50c7f5446c55fade258ed43b0e2b229285ee1b3b118d0fbbebdd88d0f", size = 9442513, upload-time = "2026-03-01T23:03:07.668Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/49/8fb6bbd16b724528b5b62c0ff46895519af0dd8599c303cfefeb8ec75502/mip-1.17.1-py3-none-any.whl", hash = "sha256:06a04dacffea2b05a2cc93ce8881a5bd0aa32ee9c9676b2d2c65c2a799b9bacd", size = 88124, upload-time = "2026-03-01T23:03:06.277Z" },
 ]
 
 [[package]]
@@ -1941,20 +1958,12 @@ dependencies = [
     { name = "ommx" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "mip" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "cffi", specifier = ">=1.15.0,<2.0.0" },
-    { name = "mip", specifier = ">=1.15.0,<2.0.0" },
+    { name = "mip", specifier = ">=1.17.0,<2.0.0" },
     { name = "ommx", editable = "python/ommx" },
 ]
-
-[package.metadata.requires-dev]
-dev = [{ name = "mip", git = "https://github.com/coin-or/python-mip.git" }]
 
 [[package]]
 name = "ommx-tests"
