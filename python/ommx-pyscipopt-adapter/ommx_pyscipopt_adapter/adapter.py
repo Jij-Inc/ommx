@@ -247,7 +247,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
 
             >>> ommx_state = adapter.decode_to_state(model)
             >>> ommx_state.entries
-            {1: -0.0}
+            {1: 0.0}
 
         """
         if data.getStatus() == "unknown":
