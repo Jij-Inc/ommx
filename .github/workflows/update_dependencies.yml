@@ -20,18 +20,14 @@ jobs:
       - name: Setup Environment
         uses: ./.github/actions/setup-test-environment
 
-      - name: Update Python dependencies
+      - name: Upgrade Python dependencies
         run: uv sync --all-extras --upgrade
 
-      - name: Update API reference dependencies
-        run: uv sync --upgrade
-        working-directory: docs/api_reference
+      - name: Upgrade docs dependencies
+        run: task upgrade
 
-      - name: Compile docs/requirements.txt
-        run: task pip_compile
-
-      - name: Compile docs/api_reference/requirements.txt
-        run: task api_reference:pip_compile
+      - name: Upgrade API reference dependencies
+        run: task api_reference:upgrade
 
       - name: Create GitHub App Token
         uses: actions/create-github-app-token@v2
