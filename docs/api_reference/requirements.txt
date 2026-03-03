@@ -76,7 +76,11 @@ sphinxcontrib-qthelp==2.0.0
     # via sphinx
 sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
+tomli==2.4.0
+    # via sphinx
 tomlkit==0.13.2
     # via ommx-api-reference (pyproject.toml)
+typing-extensions==4.15.0
+    # via astroid
 urllib3==2.3.0
     # via requests
