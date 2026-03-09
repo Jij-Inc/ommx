@@ -63,11 +63,8 @@ impl Instance {
     ///
     pub fn insert_constraints(
         &mut self,
-        constraints: impl IntoIterator<Item = Constraint>,
-    ) -> anyhow::Result<Vec<Option<Constraint>>> {
-        // Collect all constraints first
-        let constraints: Vec<_> = constraints.into_iter().collect();
-
+        constraints: Vec<Constraint>,
+    ) -> anyhow::Result<BTreeMap<ConstraintID, Constraint>> {
         // Build validation sets once
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
@@ -85,19 +82,21 @@ impl Instance {
         }
 
         // Insert all constraints (validation already done)
-        let mut results = Vec::with_capacity(constraints.len());
+        let mut replaced = BTreeMap::new();
         for constraint in constraints {
             use std::collections::btree_map::Entry;
-            let result =
-                if let Entry::Occupied(mut o) = self.removed_constraints.entry(constraint.id) {
-                    Some(std::mem::replace(&mut o.get_mut().constraint, constraint))
-                } else {
-                    self.constraints.insert(constraint.id, constraint)
-                };
-            results.push(result);
+            let id = constraint.id;
+            let old = if let Entry::Occupied(mut o) = self.removed_constraints.entry(id) {
+                Some(std::mem::replace(&mut o.get_mut().constraint, constraint))
+            } else {
+                self.constraints.insert(id, constraint)
+            };
+            if let Some(old_constraint) = old {
+                replaced.insert(id, old_constraint);
+            }
         }
 
-        Ok(results)
+        Ok(replaced)
     }
 
     /// Returns the next available ConstraintID.
@@ -465,10 +464,10 @@ mod tests {
             Constraint::equal_to_zero(ConstraintID::from(3), (linear!(3) + coeff!(3.0)).into()),
         ];
 
-        let results = instance.insert_constraints(constraints.clone()).unwrap();
+        let replaced = instance.insert_constraints(constraints.clone()).unwrap();
 
-        // All should return None since no constraints existed before
-        assert!(results.iter().all(|r| r.is_none()));
+        // No constraints were replaced since none existed before
+        assert!(replaced.is_empty());
         assert_eq!(instance.constraints.len(), 3);
 
         // Verify constraints were inserted correctly
