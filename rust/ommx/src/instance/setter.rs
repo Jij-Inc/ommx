@@ -50,6 +50,56 @@ impl Instance {
         Ok(self.constraints.insert(constraint.id, constraint))
     }
 
+    /// Insert multiple constraints into the instance with a single validation pass.
+    ///
+    /// This is more efficient than calling [`insert_constraint`] multiple times
+    /// because it validates all required variable IDs once, rather than
+    /// rebuilding the validation sets for each constraint.
+    ///
+    /// The behavior for each constraint follows the same rules as [`insert_constraint`]:
+    /// - If the constraint already exists, it will be replaced.
+    /// - If the ID of given constraint is in the removed constraints, it replaces it.
+    /// - Otherwise, it adds the constraint to the instance.
+    ///
+    pub fn insert_constraints(
+        &mut self,
+        constraints: impl IntoIterator<Item = Constraint>,
+    ) -> anyhow::Result<Vec<Option<Constraint>>> {
+        // Collect all constraints first
+        let constraints: Vec<_> = constraints.into_iter().collect();
+
+        // Build validation sets once
+        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
+        let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
+
+        // Validate all constraints
+        for constraint in &constraints {
+            let required_ids = constraint.required_ids();
+            if !required_ids.is_subset(&variable_ids) {
+                let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
+                return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
+            }
+            if let Some(&id) = required_ids.intersection(&dependency_keys).next() {
+                return Err(InstanceError::DependentVariableUsed { id }.into());
+            }
+        }
+
+        // Insert all constraints (validation already done)
+        let mut results = Vec::with_capacity(constraints.len());
+        for constraint in constraints {
+            use std::collections::btree_map::Entry;
+            let result =
+                if let Entry::Occupied(mut o) = self.removed_constraints.entry(constraint.id) {
+                    Some(std::mem::replace(&mut o.get_mut().constraint, constraint))
+                } else {
+                    self.constraints.insert(constraint.id, constraint)
+                };
+            results.push(result);
+        }
+
+        Ok(results)
+    }
+
     /// Returns the next available ConstraintID.
     ///
     /// Finds the maximum ID from both active constraints and removed constraints,
@@ -389,6 +439,80 @@ mod tests {
                 .constraint,
             new_constraint
         );
+    }
+
+    #[test]
+    fn test_insert_constraints_bulk() {
+        // Create instance with decision variables
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // Insert multiple constraints at once
+        let constraints = vec![
+            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(2.0)).into()),
+            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(3) + coeff!(3.0)).into()),
+        ];
+
+        let results = instance.insert_constraints(constraints.clone()).unwrap();
+
+        // All should return None since no constraints existed before
+        assert!(results.iter().all(|r| r.is_none()));
+        assert_eq!(instance.constraints.len(), 3);
+
+        // Verify constraints were inserted correctly
+        for constraint in &constraints {
+            assert_eq!(
+                instance.constraints.get(&constraint.id),
+                Some(constraint)
+            );
+        }
+    }
+
+    #[test]
+    fn test_insert_constraints_bulk_with_undefined_variable() {
+        // Create instance with only variables 1 and 2
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // Try to insert constraints where one uses undefined variable 999
+        let constraints = vec![
+            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(999) + coeff!(2.0)).into()), // undefined
+            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(2) + coeff!(3.0)).into()),
+        ];
+
+        let result = instance.insert_constraints(constraints);
+
+        // Should fail with undefined variable error
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Undefined variable ID is used: VariableID(999)"
+        );
+        // Ensure no constraints were added (atomic operation)
+        assert_eq!(instance.constraints.len(), 0);
     }
 
     #[test]
