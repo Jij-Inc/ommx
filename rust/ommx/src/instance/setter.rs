@@ -547,10 +547,12 @@ mod tests {
         // Replace constraint 1, add constraint 3
         let new_constraints = vec![
             Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + coeff!(10.0)).into()), // replace
-            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(1) + coeff!(3.0)).into()),  // new
+            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(1) + coeff!(3.0)).into()), // new
         ];
 
-        let replaced = instance.insert_constraints(new_constraints.clone()).unwrap();
+        let replaced = instance
+            .insert_constraints(new_constraints.clone())
+            .unwrap();
 
         // Should have replaced constraint 1
         assert_eq!(replaced.len(), 1);
