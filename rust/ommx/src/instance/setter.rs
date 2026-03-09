@@ -52,11 +52,11 @@ impl Instance {
 
     /// Insert multiple constraints into the instance with a single validation pass.
     ///
-    /// This is more efficient than calling [`insert_constraint`] multiple times
+    /// This is more efficient than calling [`Self::insert_constraint`] multiple times
     /// because it validates all required variable IDs once, rather than
     /// rebuilding the validation sets for each constraint.
     ///
-    /// The behavior for each constraint follows the same rules as [`insert_constraint`]:
+    /// The behavior for each constraint follows the same rules as [`Self::insert_constraint`]:
     /// - If the constraint already exists, it will be replaced.
     /// - If the ID of given constraint is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
