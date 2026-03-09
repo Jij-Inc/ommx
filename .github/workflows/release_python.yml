@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Build pyodide wheel
-        uses: pypa/cibuildwheel@v3.3
+        uses: pypa/cibuildwheel@v3.4
         with:
           package-dir: ./python/ommx
           output-dir: ./python/ommx/dist
