@@ -473,10 +473,7 @@ mod tests {
 
         // Verify constraints were inserted correctly
         for constraint in &constraints {
-            assert_eq!(
-                instance.constraints.get(&constraint.id),
-                Some(constraint)
-            );
+            assert_eq!(instance.constraints.get(&constraint.id), Some(constraint));
         }
     }
 
