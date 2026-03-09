@@ -1,25 +1,33 @@
 use super::*;
 
 impl Instance {
-    /// Validate that all required variable IDs are defined in the instance
-    /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
-    fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
-        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
-        let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
-
+    /// Internal helper to validate required IDs against precomputed sets.
+    fn validate_required_ids_with_sets(
+        required_ids: &VariableIDSet,
+        variable_ids: &VariableIDSet,
+        dependency_keys: &VariableIDSet,
+    ) -> anyhow::Result<()> {
         // Check if all required IDs are defined
-        if !required_ids.is_subset(&variable_ids) {
-            let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
+        if !required_ids.is_subset(variable_ids) {
+            let undefined_id = required_ids.difference(variable_ids).next().unwrap();
             return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
         }
 
         // Check if any required ID is a dependent variable (used as a key in decision_variable_dependency)
-        let mut intersection = required_ids.intersection(&dependency_keys);
+        let mut intersection = required_ids.intersection(dependency_keys);
         if let Some(&id) = intersection.next() {
             return Err(InstanceError::DependentVariableUsed { id }.into());
         }
 
         Ok(())
+    }
+
+    /// Validate that all required variable IDs are defined in the instance
+    /// and are not dependent variables (i.e., not used as keys in decision_variable_dependency)
+    fn validate_required_ids(&self, required_ids: VariableIDSet) -> anyhow::Result<()> {
+        let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
+        let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
+        Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)
     }
 
     /// Set the objective function
@@ -61,6 +69,11 @@ impl Instance {
     /// - If the ID of given constraint is in the removed constraints, it replaces it.
     /// - Otherwise, it adds the constraint to the instance.
     ///
+    /// # Atomicity
+    ///
+    /// This method is atomic: all constraints are validated before any insertion occurs.
+    /// If any constraint fails validation, no constraints are inserted and an error is returned.
+    ///
     pub fn insert_constraints(
         &mut self,
         constraints: Vec<Constraint>,
@@ -69,16 +82,10 @@ impl Instance {
         let variable_ids: VariableIDSet = self.decision_variables.keys().cloned().collect();
         let dependency_keys: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
-        // Validate all constraints
+        // Validate all constraints first (atomic: fail before any insertion)
         for constraint in &constraints {
             let required_ids = constraint.required_ids();
-            if !required_ids.is_subset(&variable_ids) {
-                let undefined_id = required_ids.difference(&variable_ids).next().unwrap();
-                return Err(InstanceError::UndefinedVariableID { id: *undefined_id }.into());
-            }
-            if let Some(&id) = required_ids.intersection(&dependency_keys).next() {
-                return Err(InstanceError::DependentVariableUsed { id }.into());
-            }
+            Self::validate_required_ids_with_sets(&required_ids, &variable_ids, &dependency_keys)?;
         }
 
         // Insert all constraints (validation already done)
@@ -506,6 +513,130 @@ mod tests {
         assert_eq!(
             result.unwrap_err().to_string(),
             "Undefined variable ID is used: VariableID(999)"
+        );
+        // Ensure no constraints were added (atomic operation)
+        assert_eq!(instance.constraints.len(), 0);
+    }
+
+    #[test]
+    fn test_insert_constraints_bulk_replace_existing() {
+        // Create instance with existing constraints
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(
+                ConstraintID::from(1),
+                (linear!(1) + coeff!(1.0)).into(),
+            ),
+            ConstraintID::from(2) => Constraint::equal_to_zero(
+                ConstraintID::from(2),
+                (linear!(2) + coeff!(2.0)).into(),
+            ),
+        };
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
+
+        // Replace constraint 1, add constraint 3
+        let new_constraints = vec![
+            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + coeff!(10.0)).into()), // replace
+            Constraint::equal_to_zero(ConstraintID::from(3), (linear!(1) + coeff!(3.0)).into()),  // new
+        ];
+
+        let replaced = instance.insert_constraints(new_constraints.clone()).unwrap();
+
+        // Should have replaced constraint 1
+        assert_eq!(replaced.len(), 1);
+        assert!(replaced.contains_key(&ConstraintID::from(1)));
+        assert_eq!(instance.constraints.len(), 3);
+    }
+
+    #[test]
+    fn test_insert_constraints_bulk_replace_removed() {
+        // Create instance with a removed constraint
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
+        let constraints = btreemap! {
+            ConstraintID::from(1) => Constraint::equal_to_zero(
+                ConstraintID::from(1),
+                (linear!(1) + coeff!(1.0)).into(),
+            ),
+        };
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            constraints,
+        )
+        .unwrap();
+
+        // Remove constraint 1
+        instance
+            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+        assert_eq!(instance.constraints.len(), 0);
+        assert_eq!(instance.removed_constraints.len(), 1);
+
+        // Replace the removed constraint
+        let new_constraints = vec![Constraint::equal_to_zero(
+            ConstraintID::from(1),
+            (linear!(2) + coeff!(10.0)).into(),
+        )];
+
+        let replaced = instance.insert_constraints(new_constraints).unwrap();
+
+        // Should have replaced the removed constraint
+        assert_eq!(replaced.len(), 1);
+        assert!(replaced.contains_key(&ConstraintID::from(1)));
+        // Constraint is still in removed_constraints (with updated content)
+        assert_eq!(instance.removed_constraints.len(), 1);
+    }
+
+    #[test]
+    fn test_insert_constraints_bulk_with_dependent_variable() {
+        // Create instance with decision variables and dependency
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::binary(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::binary(VariableID::from(2)),
+            VariableID::from(3) => DecisionVariable::binary(VariableID::from(3)),
+        };
+        let objective = linear!(1) + coeff!(1.0);
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective.into(),
+            decision_variables,
+            BTreeMap::new(),
+        )
+        .unwrap();
+
+        // Add a dependency: x2 = x1 + 1
+        instance.decision_variable_dependency = assign! {
+            2 <- linear!(1) + coeff!(1.0)
+        };
+
+        // Try to insert constraints using variable 2 (which is in dependency keys)
+        let constraints = vec![
+            Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
+            Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(2.0)).into()), // uses dependent var
+        ];
+
+        let result = instance.insert_constraints(constraints);
+
+        // Should fail with DependentVariableUsed error
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Dependent variable cannot be used in objectives or constraints: VariableID(2)"
         );
         // Ensure no constraints were added (atomic operation)
         assert_eq!(instance.constraints.len(), 0);
