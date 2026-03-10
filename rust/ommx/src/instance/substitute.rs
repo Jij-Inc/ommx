@@ -18,7 +18,10 @@ impl Substitute for Instance {
         // Identify constraint IDs that depend on substituted variables
         let mut affected_constraint_ids = std::collections::BTreeSet::new();
 
-        // Check active constraints
+        // Check active constraints only.
+        // Removed constraints are not checked here; they will be substituted
+        // when restored via `restore_constraint`. Constraint hints for removed
+        // constraints are discarded when the constraint is removed.
         for (constraint_id, constraint) in &self.constraints {
             let required_ids = constraint.required_ids();
             if !required_ids.is_disjoint(&substituted_variables) {
@@ -26,28 +29,39 @@ impl Substitute for Instance {
             }
         }
 
-        // Check removed constraints
-        for (constraint_id, removed_constraint) in &self.removed_constraints {
-            let required_ids = removed_constraint.constraint.required_ids();
-            if !required_ids.is_disjoint(&substituted_variables) {
-                affected_constraint_ids.insert(*constraint_id);
-            }
-        }
+        log::info!(
+            "Instance::substitute_acyclic: substituted_variables={}, active_constraints={}, affected_constraints={}",
+            substituted_variables.len(),
+            self.constraints.len(),
+            affected_constraint_ids.len()
+        );
 
         // Apply substitution to the objective function
+        log::info!("Substituting objective function");
         substitute_acyclic(&mut self.objective, acyclic)?;
+        log::info!("Done substituting objective function");
 
         // Apply substitution only to affected active constraints.
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
+        log::info!(
+            "Substituting {} affected constraints",
+            affected_constraint_ids.len()
+        );
         for constraint_id in &affected_constraint_ids {
             if let Some(constraint) = self.constraints.get_mut(constraint_id) {
                 substitute_acyclic(&mut constraint.function, acyclic)?;
             }
         }
+        log::info!("Done substituting affected constraints");
 
         // Apply substitution to the existing decision_variable_dependency
+        log::info!(
+            "Substituting decision_variable_dependency (len={})",
+            self.decision_variable_dependency.len()
+        );
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
+        log::info!("Done substituting decision_variable_dependency");
 
         // Remove constraint hints that reference affected constraints
         //
@@ -329,9 +343,13 @@ mod tests {
             .unwrap();
 
         // After substitution:
-        // Both OneHot constraints should be removed because:
-        // - constraint1 (active) depends on x1
-        // - constraint2 (removed) also depends on x1
-        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 0);
+        // Only the OneHot constraint for the active constraint is removed.
+        // The hint for the removed constraint remains (it should have been
+        // discarded when the constraint was removed, not during substitution).
+        assert_eq!(result.constraint_hints.one_hot_constraints.len(), 1);
+        assert_eq!(
+            result.constraint_hints.one_hot_constraints[0].id,
+            ConstraintID::from(2)
+        );
     }
 }
