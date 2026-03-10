@@ -29,39 +29,20 @@ impl Substitute for Instance {
             }
         }
 
-        log::info!(
-            "Instance::substitute_acyclic: substituted_variables={}, active_constraints={}, affected_constraints={}",
-            substituted_variables.len(),
-            self.constraints.len(),
-            affected_constraint_ids.len()
-        );
-
         // Apply substitution to the objective function
-        log::info!("Substituting objective function");
         substitute_acyclic(&mut self.objective, acyclic)?;
-        log::info!("Done substituting objective function");
 
         // Apply substitution only to affected active constraints.
         // Removed constraints are not substituted here; they will be substituted
         // when restored via `restore_constraint`.
-        log::info!(
-            "Substituting {} affected constraints",
-            affected_constraint_ids.len()
-        );
         for constraint_id in &affected_constraint_ids {
             if let Some(constraint) = self.constraints.get_mut(constraint_id) {
                 substitute_acyclic(&mut constraint.function, acyclic)?;
             }
         }
-        log::info!("Done substituting affected constraints");
 
         // Apply substitution to the existing decision_variable_dependency
-        log::info!(
-            "Substituting decision_variable_dependency (len={})",
-            self.decision_variable_dependency.len()
-        );
         substitute_acyclic(&mut self.decision_variable_dependency, acyclic)?;
-        log::info!("Done substituting decision_variable_dependency");
 
         // Remove constraint hints that reference affected constraints
         //
