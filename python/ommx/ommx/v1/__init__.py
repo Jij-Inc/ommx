@@ -838,12 +838,13 @@ class Instance(UserAnnotationBase):
         7    Binary    0.0    1.0  ommx.log_encode     [2, 0]
         8    Binary    0.0    1.0  ommx.log_encode     [2, 1]
 
-        * The yielded :attr:`objective` and :attr:`removed_constraints` only has these binary variables.
+        * The yielded :attr:`objective` only has these binary variables.
+        * The :attr:`removed_constraints` keep the original variables until restored.
 
         >>> instance.objective
         Function(-x3*x3 - 2*x3*x4 - 4*x3*x5 - 4*x3*x6 - 2*x3*x7 - 4*x3*x8 - x4*x4 - 4*x4*x5 - 4*x4*x6 - 2*x4*x7 - 4*x4*x8 - 4*x5*x5 - 8*x5*x6 - 4*x5*x7 - 8*x5*x8 - 4*x6*x6 - 4*x6*x7 - 8*x6*x8 - x7*x7 - 4*x7*x8 - 4*x8*x8 + 7*x3 + 7*x4 + 13*x5 + 13*x6 + 6*x7 + 12*x8 - 9)
         >>> instance.get_removed_constraint_by_id(0)
-        RemovedConstraint(x3 + x4 + 2*x5 + 2*x6 + x7 + 2*x8 - 3 == 0, reason=uniform_penalty_method)
+        RemovedConstraint(x0 + 2*x1 + x2 - 3 == 0, reason=uniform_penalty_method)
 
         Solvers will return solutions which only contain log-encoded binary variables like:
 
@@ -876,9 +877,9 @@ class Instance(UserAnnotationBase):
         2.0
 
         >>> solution.constraints_df.dropna(axis=1, how="all")  # doctest: +NORMALIZE_WHITESPACE
-           equality  value            used_ids subscripts          removed_reason
-        id                                                                       
-        0        =0    0.0  {3, 4, 5, 6, 7, 8}         []  uniform_penalty_method
+           equality  value   used_ids subscripts          removed_reason
+        id
+        0        =0    0.0  {0, 1, 2}         []  uniform_penalty_method
 
         """
         is_converted_to_minimize = self.as_minimization_problem()
