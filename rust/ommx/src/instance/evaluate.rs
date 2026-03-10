@@ -112,11 +112,11 @@ impl Evaluate for Instance {
             dv.substitute(*value, atol)?;
         }
         self.objective.partial_evaluate(&updated_state, atol)?;
+        // Only partial_evaluate active constraints.
+        // Removed constraints are not evaluated here; they will be substituted
+        // when restored via `restore_constraint`.
         for constraint in self.constraints.values_mut() {
             constraint.partial_evaluate(&updated_state, atol)?;
-        }
-        for removed in self.removed_constraints.values_mut() {
-            removed.partial_evaluate(&updated_state, atol)?;
         }
         self.decision_variable_dependency
             .partial_evaluate(&updated_state, atol)?;

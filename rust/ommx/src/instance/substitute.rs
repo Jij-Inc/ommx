@@ -37,14 +37,13 @@ impl Substitute for Instance {
         // Apply substitution to the objective function
         substitute_acyclic(&mut self.objective, acyclic)?;
 
-        // Apply substitution to all constraints
-        for constraint in self.constraints.values_mut() {
-            substitute_acyclic(&mut constraint.function, acyclic)?;
-        }
-
-        // Apply substitution to all removed constraints
-        for removed_constraint in self.removed_constraints.values_mut() {
-            substitute_acyclic(&mut removed_constraint.constraint.function, acyclic)?;
+        // Apply substitution only to affected active constraints.
+        // Removed constraints are not substituted here; they will be substituted
+        // when restored via `restore_constraint`.
+        for constraint_id in &affected_constraint_ids {
+            if let Some(constraint) = self.constraints.get_mut(constraint_id) {
+                substitute_acyclic(&mut constraint.function, acyclic)?;
+            }
         }
 
         // Apply substitution to the existing decision_variable_dependency
