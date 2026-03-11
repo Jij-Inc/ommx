@@ -47,7 +47,7 @@ pub enum ConstraintHintsError {
 ///
 /// Constraint hints can only reference **active** constraints, not removed constraints.
 /// When a constraint is relaxed (moved to `removed_constraints`), any associated hints
-/// are automatically invalidated. When adding hints via [`Instance::add_constraint_hints`],
+/// are automatically invalidated. When adding hints via [`crate::Instance::add_constraint_hints`],
 /// referencing a removed constraint will result in an error.
 ///
 /// When parsing an instance from bytes, hints that reference removed constraints
