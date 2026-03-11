@@ -40,6 +40,18 @@ pub enum ConstraintHintsError {
     },
 }
 
+/// Constraint hints provide additional information about **active** constraints
+/// to help solvers optimize more efficiently.
+///
+/// # Important
+///
+/// Constraint hints can only reference **active** constraints, not removed constraints.
+/// When a constraint is relaxed (moved to `removed_constraints`), any associated hints
+/// are automatically invalidated. When adding hints via [`Instance::add_constraint_hints`],
+/// referencing a removed constraint will result in an error.
+///
+/// When parsing an instance from bytes, hints that reference removed constraints
+/// are discarded with a warning for backward compatibility with legacy artifacts.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ConstraintHints {
     pub one_hot_constraints: Vec<OneHot>,
