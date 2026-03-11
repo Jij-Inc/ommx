@@ -114,16 +114,66 @@ impl Parse for v1::ConstraintHints {
     );
     fn parse(self, context: &Self::Context) -> Result<Self::Output, ParseError> {
         let message = "ommx.v1.ConstraintHints";
-        let one_hot_constraints = self
+        let (_, constraints, removed_constraints) = context;
+
+        // Parse all hints first
+        let one_hot_constraints: Vec<OneHot> = self
             .one_hot_constraints
             .into_iter()
             .map(|c| c.parse_as(context, message, "one_hot_constraints"))
             .collect::<Result<Vec<_>, ParseError>>()?;
-        let sos1_constraints = self
+        let sos1_constraints: Vec<Sos1> = self
             .sos1_constraints
             .into_iter()
             .map(|c| c.parse_as(context, message, "sos1_constraints"))
             .collect::<Result<_, ParseError>>()?;
+
+        // Filter out hints that reference removed constraints (with warnings)
+        let one_hot_constraints: Vec<OneHot> = one_hot_constraints
+            .into_iter()
+            .filter(|hint| {
+                if removed_constraints.contains_key(&hint.id) {
+                    log::warn!(
+                        "Discarding OneHot hint referencing removed constraint (id={:?})",
+                        hint.id
+                    );
+                    false
+                } else if !constraints.contains_key(&hint.id) {
+                    // This shouldn't happen if as_constraint_id worked correctly,
+                    // but check for safety
+                    log::warn!(
+                        "Discarding OneHot hint referencing unknown constraint (id={:?})",
+                        hint.id
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        let sos1_constraints: Vec<Sos1> = sos1_constraints
+            .into_iter()
+            .filter(|hint| {
+                let binary_removed = removed_constraints.contains_key(&hint.binary_constraint_id);
+                let big_m_removed = hint
+                    .big_m_constraint_ids
+                    .iter()
+                    .any(|id| removed_constraints.contains_key(id));
+
+                if binary_removed || big_m_removed {
+                    log::warn!(
+                        "Discarding Sos1 hint referencing removed constraint (binary_constraint_id={:?}, big_m_constraint_ids={:?})",
+                        hint.binary_constraint_id,
+                        hint.big_m_constraint_ids
+                    );
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+
         Ok(ConstraintHints {
             one_hot_constraints,
             sos1_constraints,
@@ -303,5 +353,83 @@ mod tests {
         // Check that constraints remain unchanged
         assert_eq!(hints.one_hot_constraints.len(), 1);
         assert_eq!(hints.one_hot_constraints[0].variables.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_discards_hints_referencing_removed_constraints() {
+        use crate::{constraint::Equality, parse::Parse, Function, RemovedConstraint};
+
+        // Create decision variables
+        let mut decision_variables = BTreeMap::new();
+        for i in 1..=3 {
+            decision_variables.insert(
+                VariableID::from(i),
+                DecisionVariable::binary(VariableID::from(i)),
+            );
+        }
+
+        // Create one active constraint and one removed constraint
+        let mut constraints = BTreeMap::new();
+        constraints.insert(
+            ConstraintID::from(1),
+            Constraint {
+                id: ConstraintID::from(1),
+                function: Function::Zero,
+                equality: Equality::EqualToZero,
+                name: None,
+                subscripts: Vec::new(),
+                parameters: Default::default(),
+                description: None,
+            },
+        );
+
+        let mut removed_constraints = BTreeMap::new();
+        removed_constraints.insert(
+            ConstraintID::from(2),
+            RemovedConstraint {
+                constraint: Constraint {
+                    id: ConstraintID::from(2),
+                    function: Function::Zero,
+                    equality: Equality::EqualToZero,
+                    name: None,
+                    subscripts: Vec::new(),
+                    parameters: Default::default(),
+                    description: None,
+                },
+                removed_reason: "test".to_string(),
+                removed_reason_parameters: Default::default(),
+            },
+        );
+
+        // Create v1::ConstraintHints with hints referencing both active and removed constraints
+        let v1_hints = crate::v1::ConstraintHints {
+            one_hot_constraints: vec![
+                // This hint references an active constraint - should be kept
+                crate::v1::OneHot {
+                    constraint_id: 1,
+                    decision_variables: vec![1, 2, 3],
+                },
+                // This hint references a removed constraint - should be discarded
+                crate::v1::OneHot {
+                    constraint_id: 2,
+                    decision_variables: vec![1, 2, 3],
+                },
+            ],
+            sos1_constraints: vec![],
+        };
+
+        let context = (decision_variables, constraints, removed_constraints);
+        let parsed_hints = v1_hints.parse(&context).unwrap();
+
+        // Only the hint referencing the active constraint should remain
+        assert_eq!(
+            parsed_hints.one_hot_constraints.len(),
+            1,
+            "Hint referencing removed constraint should be discarded"
+        );
+        assert_eq!(
+            parsed_hints.one_hot_constraints[0].id,
+            ConstraintID::from(1)
+        );
     }
 }
