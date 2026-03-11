@@ -41,6 +41,7 @@ Issues = "https://github.com/Jij-Inc/ommx/issues"
 [tool.maturin]
 module-name = "ommx._ommx_rust"
 features = ["pyo3/extension-module", "pyo3/abi3-py310"]
+python-source = "."
 
 [tool.cibuildwheel]
 build = "cp313-pyodide_wasm32"
