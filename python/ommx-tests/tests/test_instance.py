@@ -330,7 +330,8 @@ def test_restore_constraint_hint():
     ]
 
 
-def test_restore_constraint_hint_relaxed():
+def test_relax_constraint_invalidates_hint():
+    """Test that constraint hints are invalidated when the constraint is relaxed."""
     x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
     instance = Instance.from_components(
         decision_variables=x,
@@ -344,9 +345,8 @@ def test_restore_constraint_hint_relaxed():
     instance.relax_constraint(0, reason="test")
     instance_bytes = instance.to_bytes()
     parsed_instance = Instance.from_bytes(instance_bytes)
-    assert parsed_instance.constraint_hints.one_hot_constraints == [
-        OneHot(id=0, variables=[0, 1, 2])
-    ]
+    # Constraint hints are invalidated when the constraint is relaxed
+    assert parsed_instance.constraint_hints.one_hot_constraints == []
 
 
 def test_stats_empty_instance():

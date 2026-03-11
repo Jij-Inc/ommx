@@ -45,6 +45,8 @@ pub enum Sense {
 /// - [`Self::decision_variables`] contains all decision variables used in the problem.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
 /// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+/// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
+///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, getset::CopyGetters, Default)]
 pub struct Instance {
