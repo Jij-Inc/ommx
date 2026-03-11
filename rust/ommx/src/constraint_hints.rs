@@ -50,8 +50,8 @@ pub enum ConstraintHintsError {
 /// are automatically invalidated. When adding hints via [`crate::Instance::add_constraint_hints`],
 /// referencing a removed constraint will result in an error.
 ///
-/// When parsing an instance from bytes, hints that reference removed constraints
-/// are silently discarded for backward compatibility with legacy artifacts.
+/// When parsing an instance from bytes, hints that reference removed or unknown constraints
+/// are discarded (with debug-level logging) for backward compatibility with legacy artifacts.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ConstraintHints {
     pub one_hot_constraints: Vec<OneHot>,
@@ -140,7 +140,7 @@ impl Parse for v1::ConstraintHints {
             .map(|c| c.parse_as(context, message, "sos1_constraints"))
             .collect::<Result<_, ParseError>>()?;
 
-        // Filter out hints that reference removed constraints
+        // Filter out hints that reference removed or unknown constraints
         let one_hot_constraints: Vec<OneHot> = one_hot_constraints
             .into_iter()
             .filter(|hint| {
