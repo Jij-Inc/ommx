@@ -36,10 +36,11 @@ impl Instance {
     pub fn restore_constraint(&mut self, id: ConstraintID) -> Result<()> {
         let rc = self
             .removed_constraints
-            .remove(&id)
+            .get(&id)
             .ok_or_else(|| anyhow!("Removed constraint with ID {:?} not found", id))?;
 
-        let mut constraint = rc.constraint;
+        // Clone the constraint first to avoid data loss if transformations fail
+        let mut constraint = rc.constraint.clone();
 
         // 1. Substitute dependent variables first
         //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),
@@ -64,6 +65,8 @@ impl Instance {
             constraint.partial_evaluate(&fixed_state, ATol::default())?;
         }
 
+        // Only remove from removed_constraints after all transformations succeed
+        self.removed_constraints.remove(&id);
         self.constraints.insert(id, constraint);
         Ok(())
     }
