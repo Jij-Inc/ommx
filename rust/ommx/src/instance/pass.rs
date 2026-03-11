@@ -41,7 +41,18 @@ impl Instance {
 
         let mut constraint = rc.constraint;
 
-        // 1. Substitute fixed variables (those with substituted_value set)
+        // 1. Substitute dependent variables first
+        //    Dependency expansion may introduce fixed variables (e.g., x3 = x1 + x2 where x1 is fixed),
+        //    so this must happen before partial_evaluate.
+        if !self.decision_variable_dependency.is_empty() {
+            crate::substitute_acyclic(
+                &mut constraint.function,
+                &self.decision_variable_dependency,
+            )?;
+        }
+
+        // 2. Substitute fixed variables (those with substituted_value set)
+        //    This comes after dependency substitution to handle variables introduced by expansion.
         let fixed_state: v1::State = v1::State {
             entries: self
                 .decision_variables
@@ -51,14 +62,6 @@ impl Instance {
         };
         if !fixed_state.entries.is_empty() {
             constraint.partial_evaluate(&fixed_state, ATol::default())?;
-        }
-
-        // 2. Substitute dependent variables
-        if !self.decision_variable_dependency.is_empty() {
-            crate::substitute_acyclic(
-                &mut constraint.function,
-                &self.decision_variable_dependency,
-            )?;
         }
 
         self.constraints.insert(id, constraint);
@@ -244,6 +247,97 @@ mod tests {
         assert!(!required_ids.contains(&VariableID::from(3)));
         // x1 and x2 should be in the required IDs
         assert!(required_ids.contains(&VariableID::from(1)));
+        assert!(required_ids.contains(&VariableID::from(2)));
+    }
+
+    /// Test that restore_constraint correctly handles the case where
+    /// dependency expansion introduces fixed variables.
+    ///
+    /// Scenario:
+    /// 1. Create an Instance with variables x1, x2, x3
+    /// 2. Add a constraint using x3: x3 <= 10
+    /// 3. Relax the constraint
+    /// 4. Fix x1 to 3.0 (set substituted_value)
+    /// 5. Add dependency x3 = x1 + x2
+    /// 6. Restore the constraint
+    /// 7. Expected: constraint should have both x3 and x1 substituted
+    ///    Original: x3 - 10
+    ///    After x3 = x1 + x2: x1 + x2 - 10
+    ///    After x1 = 3: x2 + 3 - 10 = x2 - 7
+    #[test]
+    fn test_restore_constraint_with_fixed_variable_in_dependency() {
+        // Create decision variables
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(
+            VariableID::from(1),
+            DecisionVariable::continuous(VariableID::from(1)),
+        );
+        decision_variables.insert(
+            VariableID::from(2),
+            DecisionVariable::continuous(VariableID::from(2)),
+        );
+        decision_variables.insert(
+            VariableID::from(3),
+            DecisionVariable::continuous(VariableID::from(3)),
+        );
+
+        // Create constraint: x3 - 10 <= 0
+        let constraint_function = Function::from(linear!(3) + coeff!(-10.0));
+        let mut constraints = BTreeMap::new();
+        let constraint = Constraint {
+            id: ConstraintID::from(1),
+            function: constraint_function,
+            equality: Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        };
+        constraints.insert(ConstraintID::from(1), constraint);
+
+        // Create instance
+        let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+
+        // Relax the constraint
+        instance
+            .relax_constraint(ConstraintID::from(1), "test".to_string(), [])
+            .unwrap();
+
+        // Fix x1 to 3.0 BEFORE adding the dependency
+        let fix_state = v1::State {
+            entries: [(1, 3.0)].into_iter().collect(),
+        };
+        instance
+            .partial_evaluate(&fix_state, ATol::default())
+            .unwrap();
+
+        // Add dependency x3 = x1 + x2 AFTER fixing x1
+        // This means when we expand x3, we get x1 + x2, and x1 should also be substituted
+        let substitution = Function::from(linear!(1) + linear!(2));
+        instance = instance
+            .substitute_one(VariableID::from(3), &substitution)
+            .unwrap();
+
+        // Restore the constraint
+        instance.restore_constraint(ConstraintID::from(1)).unwrap();
+
+        // Check the restored constraint has both x3 and x1 substituted
+        // Original: x3 - 10
+        // After x3 = x1 + x2: x1 + x2 - 10
+        // After x1 = 3: x2 - 7
+        let restored_constraint = instance.constraints.get(&ConstraintID::from(1)).unwrap();
+        let required_ids = restored_constraint.required_ids();
+
+        // x3 should NOT be in the required IDs (it's been substituted)
+        assert!(!required_ids.contains(&VariableID::from(3)));
+        // x1 should NOT be in the required IDs (it's been substituted via fixed value)
+        assert!(
+            !required_ids.contains(&VariableID::from(1)),
+            "x1 should be substituted because it was fixed before dependency was added"
+        );
+        // x2 should still be in the required IDs
         assert!(required_ids.contains(&VariableID::from(2)));
     }
 }
