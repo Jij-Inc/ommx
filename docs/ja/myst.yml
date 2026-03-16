@@ -1,8 +1,6 @@
 version: 1
 project:
   title: OMMX
-  authors:
-    - name: Jij Inc.
   github: Jij-Inc/ommx
   thebe:
     binder:
