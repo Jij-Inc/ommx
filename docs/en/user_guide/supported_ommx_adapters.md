@@ -32,10 +32,3 @@ Non-OSS solvers/samplers are also supported in other repositories.
 | [ommx-kipu-iskay-adapter](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter) | [![ommx-kipu-iskay-adapter](https://img.shields.io/pypi/v/ommx-kipu-iskay-adapter)](https://pypi.org/project/ommx-kipu-iskay-adapter/) | Adapter for [Kipu Iskay through Qiskit Functions Catalog](https://quantum.cloud.ibm.com/docs/en/guides/kipu-optimization) |
 | [ommx-qctrl-qaoa-adapter](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter) | [![ommx-qctrl-qaoa-adapter](https://img.shields.io/pypi/v/ommx-qctrl-qaoa-adapter)](https://pypi.org/project/ommx-qctrl-qaoa-adapter/) | Adapter for [Fire Opal QAOA Solver](https://docs.q-ctrl.com/fire-opal/execute/run-algorithms/solve-optimization-problems/fire-opals-qaoa-solver) |
 
-```{code-cell}
----
-vscode:
-  languageId: plaintext
----
-
-```

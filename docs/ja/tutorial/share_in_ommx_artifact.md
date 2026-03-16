@@ -108,30 +108,17 @@ glue("df", df, display=False)
 
 ```{list-table}
 :header-rows: 1
-:widths: 5 30 10
 
 * - 変数名
   - 説明
-  - 値
 * - `instance`
   - 0-1ナップサック問題に対応する `ommx.v1.Instance` オブジェクト
-  - ````{toggle}
-    ```{glue:} instance
-    ```
-    ````
 * - `solution`
   - 0-1ナップサック問題をSCIPで解いた計算結果が格納されている `ommx.v1.Solution` オブジェクト
-  - ````{toggle}
-    ```{glue:} solution
-    ```
-    ````
 * - `data`
   - 0-1ナップサック問題の入力データ
-  - ```{glue:} data
-    ```
 * - `df`
   - 0-1ナップサック問題の最適解表す `pandas.DataFrame` オブジェクト
-  - {glue:}`df`
 ```
 
 +++
