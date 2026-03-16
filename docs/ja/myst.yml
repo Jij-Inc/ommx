@@ -24,22 +24,22 @@ project:
           title: DeepWiki
     - title: Tutorial
       children:
-        - file: tutorial/solve_with_ommx_adapter.ipynb
-        - file: tutorial/tsp_sampling_with_openjij_adapter.ipynb
-        - file: tutorial/switching_adapters.ipynb
-        - file: tutorial/share_in_ommx_artifact.ipynb
-        - file: tutorial/download_miplib_instance.ipynb
-        - file: tutorial/download_qplib_instance.ipynb
-        - file: tutorial/implement_adapter.ipynb
+        - file: tutorial/solve_with_ommx_adapter.md
+        - file: tutorial/tsp_sampling_with_openjij_adapter.md
+        - file: tutorial/switching_adapters.md
+        - file: tutorial/share_in_ommx_artifact.md
+        - file: tutorial/download_miplib_instance.md
+        - file: tutorial/download_qplib_instance.md
+        - file: tutorial/implement_adapter.md
     - title: User Guide
       children:
-        - file: user_guide/supported_ommx_adapters.ipynb
-        - file: user_guide/adapter_initial_state.ipynb
-        - file: user_guide/function.ipynb
-        - file: user_guide/instance.ipynb
-        - file: user_guide/parametric_instance.ipynb
-        - file: user_guide/solution.ipynb
-        - file: user_guide/sample_set.ipynb
+        - file: user_guide/supported_ommx_adapters.md
+        - file: user_guide/adapter_initial_state.md
+        - file: user_guide/function.md
+        - file: user_guide/instance.md
+        - file: user_guide/parametric_instance.md
+        - file: user_guide/solution.md
+        - file: user_guide/sample_set.md
     - title: API Reference
       children:
         - url: https://jij-inc.github.io/ommx/protobuf.html
@@ -51,11 +51,11 @@ project:
     - title: Release Note
       children:
         - file: release_note/ommx-2.0.0.md
-        - file: release_note/ommx-1.9.0.ipynb
-        - file: release_note/ommx-1.8.0.ipynb
-        - file: release_note/ommx-1.7.0.ipynb
-        - file: release_note/ommx-1.6.0.ipynb
-        - file: release_note/ommx-1.5.0.ipynb
+        - file: release_note/ommx-1.9.0.md
+        - file: release_note/ommx-1.8.0.md
+        - file: release_note/ommx-1.7.0.md
+        - file: release_note/ommx-1.6.0.md
+        - file: release_note/ommx-1.5.0.md
 site:
   options:
     logo: ../logo.png
