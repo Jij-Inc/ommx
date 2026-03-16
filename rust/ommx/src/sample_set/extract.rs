@@ -17,7 +17,16 @@ impl SampleSet {
 
     /// Extract decision variable values for a given name and sample ID
     ///
-    /// Returns a map from subscripts to values for the specified sample
+    /// Returns a map from subscripts to values for the specified sample.
+    ///
+    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No decision variables with the given name are found
+    /// - The same subscript is found multiple times (which can happen when parameters differ)
+    /// - The sample ID is not found
     pub fn extract_decision_variables(
         &self,
         name: &str,
@@ -36,9 +45,6 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for variable in &variables_with_name {
-            if !variable.metadata.parameters.is_empty() {
-                return Err(SampleSetError::ParameterizedVariable);
-            }
             let subscripts = variable.metadata.subscripts.clone();
             let value = *variable.samples().get(sample_id)?;
             if result.insert(subscripts.clone(), value).is_some() {
@@ -57,11 +63,12 @@ impl SampleSet {
     /// This is useful for extracting all variables at once in a structured format.
     /// Variables without names are not included in the result.
     ///
+    /// Note: Parameters in decision variable metadata are ignored. Only subscripts are used as keys.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - A decision variable with parameters is found
-    /// - The same name and subscript combination is found multiple times
+    /// - The same name and subscript combination is found multiple times (which can happen when parameters differ)
     /// - The sample ID is invalid
     ///
     pub fn extract_all_decision_variables(
@@ -71,10 +78,6 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for variable in self.decision_variables.values() {
-            if !variable.metadata.parameters.is_empty() {
-                return Err(SampleSetError::ParameterizedVariable);
-            }
-
             let name = match &variable.metadata.name {
                 Some(n) => n.clone(),
                 None => continue, // Skip variables without names
@@ -564,13 +567,13 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_parameterized_variable_error() {
+    fn test_extract_parameterized_variable_success() {
         use crate::{
             decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
             SampleID, SampledDecisionVariable, Sense, VariableID,
         };
 
-        // Create a parameterized decision variable (should cause error)
+        // Create a parameterized decision variable (should succeed - parameters are ignored)
         let mut decision_variables = BTreeMap::new();
 
         let mut dv = DecisionVariable::new(
@@ -588,7 +591,7 @@ mod tests {
                 let mut params = fnv::FnvHashMap::default();
                 params.insert("param1".to_string(), "value1".to_string());
                 params
-            }, // This makes it parameterized
+            }, // Parameters are ignored
             ..Default::default()
         };
 
@@ -614,11 +617,99 @@ mod tests {
         )
         .unwrap();
 
-        // Test that extracting parameterized variable fails
+        // Test that extracting parameterized variable succeeds (parameters are ignored)
+        let result = sample_set.extract_decision_variables("x", SampleID::from(0));
+        assert!(result.is_ok());
+        let vars = result.unwrap();
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars[&vec![0]], 1.0);
+    }
+
+    #[test]
+    fn test_extract_duplicate_subscripts_error() {
+        use crate::{
+            decision_variable::{DecisionVariable, DecisionVariableMetadata, Kind},
+            SampleID, SampledDecisionVariable, Sense, VariableID,
+        };
+
+        // Create two variables with same name and subscripts but different parameters
+        // This should cause a DuplicateSubscripts error
+        let mut decision_variables = BTreeMap::new();
+
+        // First variable with param1
+        let mut dv1 = DecisionVariable::new(
+            VariableID::from(1),
+            Kind::Continuous,
+            crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
+            None,
+            crate::ATol::default(),
+        )
+        .unwrap();
+        dv1.metadata = DecisionVariableMetadata {
+            name: Some("x".to_string()),
+            subscripts: vec![0],
+            parameters: {
+                let mut params = fnv::FnvHashMap::default();
+                params.insert("param".to_string(), "value1".to_string());
+                params
+            },
+            ..Default::default()
+        };
+
+        let mut samples1 = crate::Sampled::default();
+        samples1.append([SampleID::from(0)], 1.0).unwrap();
+
+        decision_variables.insert(
+            VariableID::from(1),
+            SampledDecisionVariable::new(dv1, samples1, crate::ATol::default()).unwrap(),
+        );
+
+        // Second variable with param2 but same name and subscripts
+        let mut dv2 = DecisionVariable::new(
+            VariableID::from(2),
+            Kind::Continuous,
+            crate::Bound::new(f64::NEG_INFINITY, f64::INFINITY).unwrap(),
+            None,
+            crate::ATol::default(),
+        )
+        .unwrap();
+        dv2.metadata = DecisionVariableMetadata {
+            name: Some("x".to_string()),
+            subscripts: vec![0], // Same subscripts as dv1
+            parameters: {
+                let mut params = fnv::FnvHashMap::default();
+                params.insert("param".to_string(), "value2".to_string()); // Different parameter value
+                params
+            },
+            ..Default::default()
+        };
+
+        let mut samples2 = crate::Sampled::default();
+        samples2.append([SampleID::from(0)], 2.0).unwrap();
+
+        decision_variables.insert(
+            VariableID::from(2),
+            SampledDecisionVariable::new(dv2, samples2, crate::ATol::default()).unwrap(),
+        );
+
+        // Create objectives
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 10.0).unwrap();
+
+        // Create sample set
+        let sample_set = SampleSet::new(
+            decision_variables,
+            objectives,
+            BTreeMap::new(),
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        // Test that extracting variables with duplicate subscripts fails
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
         assert!(matches!(
             result,
-            Err(crate::SampleSetError::ParameterizedVariable)
+            Err(crate::SampleSetError::DuplicateSubscripts { .. })
         ));
     }
 }
