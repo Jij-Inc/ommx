@@ -31,7 +31,9 @@ pub enum SolutionError {
     #[error("Missing value for variable {id}: not found in state and no substituted_value")]
     MissingVariableValue { id: u64 },
 
-    #[deprecated(note = "Parameters are now ignored in extract_decision_variables")]
+    #[deprecated(
+        note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
+    )]
     #[error("Decision variable with parameters is not supported")]
     ParameterizedVariable,
 
