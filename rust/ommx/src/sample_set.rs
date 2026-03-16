@@ -42,6 +42,9 @@ pub enum SampleSetError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
+    #[deprecated(
+        note = "Parameters are now ignored in extract_decision_variables and extract_all_decision_variables"
+    )]
     #[error("Decision variable with parameters is not supported")]
     ParameterizedVariable,
 
