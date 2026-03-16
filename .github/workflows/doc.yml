@@ -47,9 +47,9 @@ jobs:
           # Replace GA4_TRACKING_ID placeholder with actual value from secrets
           # Using | as delimiter to avoid issues with / in the GA4 ID
           cd ./docs && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
-          jupyter-book build ${{ matrix.lang }} --warningiserror
+          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/myst.yml && \
+          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/myst.yml && \
+          jupyter book build --html --ci ${{ matrix.lang }}
 
       - name: Upload HTML
         uses: actions/upload-artifact@v7
