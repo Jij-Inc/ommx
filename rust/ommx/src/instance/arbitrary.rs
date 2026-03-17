@@ -118,6 +118,7 @@ pub struct InstanceParameters {
     pub constraint_ids: ConstraintIDParameters,
     pub objective: PolynomialParameters,
     pub constraint: PolynomialParameters,
+    pub named_function: PolynomialParameters,
     pub named_function_ids: NamedFunctionIDParameters,
     pub kinds: KindParameters,
     pub max_irrelevant_ids: usize,
@@ -129,6 +130,7 @@ impl InstanceParameters {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
             named_function_ids: NamedFunctionIDParameters::default(),
+            named_function: PolynomialParameters::default_linear(),
             objective: PolynomialParameters::default_linear(),
             constraint: PolynomialParameters::default_linear(),
             kinds: KindParameters::default(),
@@ -143,6 +145,7 @@ impl InstanceParameters {
             named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
             constraint: PolynomialParameters::default_linear(),
+            named_function: PolynomialParameters::default_linear(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -155,6 +158,7 @@ impl InstanceParameters {
             named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
             constraint: PolynomialParameters::default_quadratic(),
+            named_function: PolynomialParameters::default_quadratic(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -168,6 +172,7 @@ impl Default for InstanceParameters {
             named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
+            named_function: PolynomialParameters::default(),
             kinds: KindParameters::default(),
             max_irrelevant_ids: 5,
         }
@@ -181,10 +186,14 @@ impl Arbitrary for Instance {
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
         let objective = Function::arbitrary_with(p.objective);
         let constraints = arbitrary_constraints(p.constraint_ids, p.constraint);
-        let named_functions = arbitrary_named_functions(p.named_function_ids, p.constraint);
+        let named_functions = arbitrary_named_functions(p.named_function_ids, p.named_function);
         // Generate candidates for irrelevant IDs.
         // Since these IDs are generated without checking against the objective or constraints, some of these may be relevant.
-        let max_id = p.objective.max_id().max(p.constraint.max_id());
+        let max_id = p
+            .objective
+            .max_id()
+            .max(p.constraint.max_id())
+            .max(p.named_function.max_id());
         let irrelevant_candidates =
             proptest::collection::vec(0..=max_id.into_inner(), 0..=p.max_irrelevant_ids);
         (
