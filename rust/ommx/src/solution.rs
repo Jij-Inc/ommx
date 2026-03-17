@@ -43,17 +43,11 @@ pub enum SolutionError {
     #[error("Constraint with parameters is not supported")]
     ParameterizedConstraint,
 
-    #[error("Named function with parameters is not supported")]
-    ParameterizedNamedFunction,
-
     #[error("Duplicate subscript: {subscripts:?}")]
     DuplicateSubscript { subscripts: Vec<i64> },
 
     #[error("Unknown constraint ID: {id:?}")]
     UnknownConstraintID { id: ConstraintID },
-
-    #[error("Unknown named function ID: {id:?}")]
-    UnknownNamedFunctionID { id: NamedFunctionID },
 
     #[error("No decision variables with name '{name}' found")]
     UnknownVariableName { name: String },
@@ -61,8 +55,14 @@ pub enum SolutionError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
+    #[error("Unknown named function ID: {id:?}")]
+    UnknownNamedFunctionID { id: NamedFunctionID },
+
     #[error("No named function with name '{name}' found")]
     UnknownNamedFunctionName { name: String },
+
+    #[error("Named function with parameters is not supported")]
+    ParameterizedNamedFunction,
 }
 
 /// Single solution result with data integrity guarantees

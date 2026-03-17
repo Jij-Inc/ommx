@@ -10,9 +10,6 @@ pub enum InstanceError {
     #[error("Duplicated constraint ID is found in definition: {id:?}")]
     DuplicatedConstraintID { id: ConstraintID },
 
-    #[error("Duplicated named function ID is found in definition: {id:?}")]
-    DuplicatedNamedFunctionID { id: NamedFunctionID },
-
     #[error("Undefined variable ID is used: {id:?}")]
     UndefinedVariableID { id: VariableID },
 
@@ -27,4 +24,7 @@ pub enum InstanceError {
 
     #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
     DependentVariableUsed { id: VariableID },
+
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
 }
