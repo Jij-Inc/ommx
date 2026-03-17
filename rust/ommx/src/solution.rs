@@ -356,6 +356,118 @@ impl Solution {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
         }
     }
+
+    /// Creates a new [`SolutionBuilder`].
+    pub fn builder() -> SolutionBuilder {
+        SolutionBuilder::new()
+    }
+}
+
+/// Builder for creating [`Solution`] with validation.
+///
+/// # Example
+/// ```
+/// use ommx::{Solution, Sense};
+/// use std::collections::BTreeMap;
+///
+/// let solution = Solution::builder()
+///     .objective(0.0)
+///     .evaluated_constraints(BTreeMap::new())
+///     .decision_variables(BTreeMap::new())
+///     .sense(Sense::Minimize)
+///     .build()
+///     .unwrap();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SolutionBuilder {
+    objective: Option<f64>,
+    evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
+    sense: Option<Sense>,
+    optimality: crate::v1::Optimality,
+    relaxation: crate::v1::Relaxation,
+}
+
+impl SolutionBuilder {
+    /// Creates a new `SolutionBuilder` with all fields unset.
+    pub fn new() -> Self {
+        Self {
+            optimality: crate::v1::Optimality::Unspecified,
+            relaxation: crate::v1::Relaxation::Unspecified,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the objective value.
+    pub fn objective(mut self, objective: f64) -> Self {
+        self.objective = Some(objective);
+        self
+    }
+
+    /// Sets the evaluated constraints.
+    pub fn evaluated_constraints(
+        mut self,
+        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    ) -> Self {
+        self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the decision variables.
+    pub fn decision_variables(
+        mut self,
+        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    ) -> Self {
+        self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the optimization sense.
+    pub fn sense(mut self, sense: Sense) -> Self {
+        self.sense = Some(sense);
+        self
+    }
+
+    /// Sets the optimality status.
+    pub fn optimality(mut self, optimality: crate::v1::Optimality) -> Self {
+        self.optimality = optimality;
+        self
+    }
+
+    /// Sets the relaxation status.
+    pub fn relaxation(mut self, relaxation: crate::v1::Relaxation) -> Self {
+        self.relaxation = relaxation;
+        self
+    }
+
+    /// Builds the `Solution`.
+    ///
+    /// # Errors
+    /// Returns an error if required fields (`objective`, `evaluated_constraints`,
+    /// `decision_variables`, `sense`) are not set.
+    pub fn build(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or_else(|| anyhow::anyhow!("objective is required"))?;
+        let evaluated_constraints = self
+            .evaluated_constraints
+            .ok_or_else(|| anyhow::anyhow!("evaluated_constraints is required"))?;
+        let decision_variables = self
+            .decision_variables
+            .ok_or_else(|| anyhow::anyhow!("decision_variables is required"))?;
+        let sense = self
+            .sense
+            .ok_or_else(|| anyhow::anyhow!("sense is required"))?;
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
+    }
 }
 
 #[cfg(test)]

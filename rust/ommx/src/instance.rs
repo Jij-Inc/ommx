@@ -11,6 +11,7 @@ mod evaluate;
 mod log_encode;
 mod logical_memory;
 mod new;
+mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
@@ -24,6 +25,7 @@ pub use analysis::*;
 pub use builder::*;
 pub use error::*;
 pub use log_encode::*;
+pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
