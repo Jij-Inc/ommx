@@ -105,7 +105,6 @@ message SampledNamedFunction {
   repeated uint64 used_decision_variable_ids = 7;
 }
 
-
 // Output of the sampling process.
 message SampleSet {
   SampledValues objectives = 1;
