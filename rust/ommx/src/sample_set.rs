@@ -65,6 +65,13 @@ pub enum SampleSetError {
 }
 
 /// Multiple sample solution results with deduplication
+///
+/// Invariants
+/// -----------
+/// - All [`Self::decision_variables`], [`Self::objectives`], and [`Self::constraints`] have the same sample ID set.
+/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from [`Self::constraints`]:
+///   - `feasible`: true if all constraints are satisfied for that sample
+///   - `feasible_relaxed`: true if all non-removed constraints (where `removed_reason.is_none()`) are satisfied
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     #[getset(get = "pub")]
@@ -220,12 +227,13 @@ impl SampleSet {
 
         let sense = *self.sense();
 
-        Ok(Solution::new(
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            sense,
-        ))
+        Ok(Solution::builder()
+            .objective(objective)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(decision_variables)
+            .sense(sense)
+            .build_unchecked()
+            .expect("SampleSet invariants guarantee Solution invariants"))
     }
 
     pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {

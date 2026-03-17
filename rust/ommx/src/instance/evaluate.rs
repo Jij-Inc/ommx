@@ -33,8 +33,12 @@ impl Evaluate for Instance {
 
         let sense = self.sense();
 
-        let solution =
-            crate::Solution::new(objective, evaluated_constraints, decision_variables, sense);
+        let solution = crate::Solution::builder()
+            .objective(objective)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(decision_variables)
+            .sense(sense)
+            .build_unchecked()?;
 
         Ok(solution)
     }

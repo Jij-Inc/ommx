@@ -51,9 +51,43 @@ pub enum SolutionError {
 
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error(
+        "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
+    )]
+    UndefinedVariableInConstraint {
+        id: VariableID,
+        constraint_id: ConstraintID,
+    },
 }
 
 /// Single solution result with data integrity guarantees
+///
+/// Invariants
+/// -----------
+/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
+///
+/// Note
+/// -----
+/// - [`Self::optimality`] is determined by the solver, not validated by this struct.
+/// - [`Self::relaxation`] is a record of operations, not validated by this struct.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
@@ -71,7 +105,10 @@ pub struct Solution {
 }
 
 impl Solution {
-    /// Create a new Solution
+    /// Create a new Solution without validation.
+    ///
+    /// This constructor does not validate invariants.
+    /// For construction with validation, use [`SolutionBuilder::build`].
     ///
     /// Optimality and relaxation are set to Unspecified by default.
     /// Feasibility is computed on-demand from the evaluated constraints.
@@ -440,24 +477,101 @@ impl SolutionBuilder {
         self
     }
 
-    /// Builds the `Solution`.
+    /// Builds the `Solution` with full validation.
     ///
     /// # Errors
-    /// Returns an error if required fields (`objective`, `evaluated_constraints`,
-    /// `decision_variables`, `sense`) are not set.
+    /// Returns an error if:
+    /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
+    /// - Decision variable keys don't match their value's `id()`
+    /// - Constraint keys don't match their value's `id()`
+    /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
     pub fn build(self) -> anyhow::Result<Solution> {
         let objective = self
             .objective
-            .ok_or_else(|| anyhow::anyhow!("objective is required"))?;
-        let evaluated_constraints = self
-            .evaluated_constraints
-            .ok_or_else(|| anyhow::anyhow!("evaluated_constraints is required"))?;
-        let decision_variables = self
-            .decision_variables
-            .ok_or_else(|| anyhow::anyhow!("decision_variables is required"))?;
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
         let sense = self
             .sense
-            .ok_or_else(|| anyhow::anyhow!("sense is required"))?;
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+
+        // Validate decision variable keys match their id
+        for (key, value) in &decision_variables {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate constraint keys match their id
+        for (key, value) in &evaluated_constraints {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate all used_decision_variable_ids are in decision_variables
+        for constraint in evaluated_constraints.values() {
+            for var_id in constraint.used_decision_variable_ids() {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(SolutionError::UndefinedVariableInConstraint {
+                        id: *var_id,
+                        constraint_id: *constraint.id(),
+                    }
+                    .into());
+                }
+            }
+        }
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
+    }
+
+    /// Builds the `Solution` without validation.
+    ///
+    /// This is useful when the invariants are guaranteed by construction,
+    /// such as when creating a Solution from `Instance::evaluate`.
+    ///
+    /// # Errors
+    /// Returns an error only if required fields are not set.
+    pub(crate) fn build_unchecked(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let sense = self
+            .sense
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
 
         Ok(Solution {
             objective,
