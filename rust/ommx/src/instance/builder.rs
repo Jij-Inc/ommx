@@ -210,20 +210,30 @@ mod tests {
     #[test]
     fn test_builder_missing_required_field() {
         // Missing sense
-        let result = Instance::builder()
+        let err = Instance::builder()
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .build();
-        assert!(result.is_err());
+            .build()
+            .unwrap_err();
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::MissingRequiredField { field: "sense" }
+        ));
 
         // Missing objective
-        let result = Instance::builder()
+        let err = Instance::builder()
             .sense(Sense::Minimize)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .build();
-        assert!(result.is_err());
+            .build()
+            .unwrap_err();
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::MissingRequiredField { field: "objective" }
+        ));
     }
 
     #[test]
@@ -251,14 +261,21 @@ mod tests {
         // Create objective function that uses undefined variable ID 999
         let objective = (linear!(999) + coeff!(1.0)).into();
 
-        let result = Instance::builder()
+        let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(objective)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
-            .build();
+            .build()
+            .unwrap_err();
 
-        assert!(result.is_err());
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::UndefinedVariableID {
+                id
+            } if *id == VariableID::from(999)
+        ));
     }
 
     #[test]
@@ -274,15 +291,20 @@ mod tests {
             removed_reason_parameters: Default::default(),
         };
 
-        let result = Instance::builder()
+        let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(BTreeMap::new())
             .constraints(btreemap! { constraint_id => constraint })
             .removed_constraints(btreemap! { constraint_id => removed_constraint })
-            .build();
+            .build()
+            .unwrap_err();
 
-        assert!(result.is_err());
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::OverlappingConstraintID { id } if *id == constraint_id
+        ));
     }
 
     #[test]
@@ -300,14 +322,19 @@ mod tests {
         })
         .unwrap();
 
-        let result = Instance::builder()
+        let err = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
             .decision_variables(decision_variables)
             .constraints(BTreeMap::new())
             .decision_variable_dependency(dependency)
-            .build();
+            .build()
+            .unwrap_err();
 
-        assert!(result.is_err());
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::OverlappingDependentVariableID { id } if *id == var_id
+        ));
     }
 }
