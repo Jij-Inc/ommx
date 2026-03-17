@@ -12,31 +12,12 @@ impl Instance {
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
     ) -> anyhow::Result<Self> {
-        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        Ok(Instance {
-            sense,
-            objective,
-            decision_variables,
-            constraints,
-            removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints: ConstraintHints::default(),
-            parameters: None,
-            description: None,
-        })
+        Self::builder()
+            .sense(sense)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .build()
     }
 }
 
