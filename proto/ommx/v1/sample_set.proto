@@ -11,7 +11,7 @@ import "ommx/v1/solution.proto";
 message Samples {
   // Sampling processes are likely to generate same samples multiple times.
   // We compress the same samples into one entry.
-  // Note that uncompressed state is also valid. 
+  // Note that uncompressed state is also valid.
   // The reader should not assume that every states are distinct.
   message SamplesEntry {
     // State of the sample
@@ -61,12 +61,12 @@ message SampledConstraint {
   // Detail human-readable description of the constraint.
   optional string description = 6;
 
-  // Short removed reason of the constraint. 
+  // Short removed reason of the constraint.
   // This field exists only if this message is evaluated
   // from a removed constraint.
   optional string removed_reason = 7;
 
-  // Detailed parameters why the constraint is removed. 
+  // Detailed parameters why the constraint is removed.
   // This field exists only if this message is evaluated
   // from a removed constraint.
   map<string, string> removed_reason_parameters = 8;
@@ -120,7 +120,7 @@ message SampleSet {
   // In Python SDK 1.6.0, `feasible` represents the feasibility of
   // remaining constraints of each sample,
   // i.e. removed constraints (introduced in 1.6.0) are not considered.
-  // After Python SDK 1.7.0, `feasible` represents the feasibility of 
+  // After Python SDK 1.7.0, `feasible` represents the feasibility of
   // all constraints of each sample.
   // The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
   map<uint64, bool> feasible = 4;
