@@ -162,10 +162,6 @@ impl SampleSet {
         let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
 
         for nf in self.named_functions.values() {
-            if !nf.parameters.is_empty() {
-                return Err(SampleSetError::ParameterizedVariable);
-            }
-
             let name = match &nf.name {
                 Some(n) => n.clone(),
                 None => continue, // Skip functions without names
