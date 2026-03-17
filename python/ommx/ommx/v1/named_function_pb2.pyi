@@ -50,7 +50,7 @@ class NamedFunction(google.protobuf.message.Message):
     - Named Function IDs are managed separately from decision variable IDs.
       We can use the same ID for both.
       For example, we have a decision variable `x` with
-      decision variable ID `1` and named function `x * 2` 
+      decision variable ID `1` and named function `x * 2`
       with named function ID `1`.
     - IDs are not required to be sequential.
     - IDs must be unique with other types of constraints.

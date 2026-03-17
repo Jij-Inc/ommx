@@ -257,7 +257,7 @@ class SampledConstraint(google.protobuf.message.Message):
     description: builtins.str
     """Detail human-readable description of the constraint."""
     removed_reason: builtins.str
-    """Short removed reason of the constraint. 
+    """Short removed reason of the constraint.
     This field exists only if this message is evaluated
     from a removed constraint.
     """
