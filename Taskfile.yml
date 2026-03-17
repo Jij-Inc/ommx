@@ -45,3 +45,4 @@ tasks:
     cmds:
       - task: python:format
       - task: rust:format
+      - task: proto:format
