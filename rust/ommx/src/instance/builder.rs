@@ -1,4 +1,5 @@
 use super::*;
+use crate::parse::Parse;
 
 /// Builder for creating [`Instance`] with validation.
 ///
@@ -158,6 +159,15 @@ impl InstanceBuilder {
             }
         }
 
+        // Validate constraint_hints using Parse trait (checks variable/constraint existence)
+        let hints: v1::ConstraintHints = self.constraint_hints.into();
+        let context = (
+            decision_variables.clone(),
+            constraints.clone(),
+            self.removed_constraints.clone(),
+        );
+        let constraint_hints = hints.parse(&context)?;
+
         Ok(Instance {
             sense,
             objective,
@@ -165,7 +175,7 @@ impl InstanceBuilder {
             constraints,
             removed_constraints: self.removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
+            constraint_hints,
             parameters: self.parameters,
             description: self.description,
         })
