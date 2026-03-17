@@ -2,12 +2,6 @@ version: 1
 project:
   title: OMMX
   github: Jij-Inc/ommx
-  thebe:
-    binder:
-      repo: Jij-Inc/ommx
-      provider: github
-      url: https://mybinder.org
-      ref: main
   exports:
     - format: pdf
       template: plain_latex_book
