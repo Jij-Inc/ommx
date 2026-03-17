@@ -35,4 +35,25 @@ pub enum InstanceError {
 
     #[error("Variable ID {id:?} in decision_variable_dependency is not in decision_variables")]
     UndefinedDependentVariableID { id: VariableID },
+
+    #[error("Decision variable map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Removed constraint map key {key:?} does not match value's id {value_id:?}")]
+    InconsistentRemovedConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Parameter map key {key:?} does not match value's id {value_id}")]
+    InconsistentParameterID { key: VariableID, value_id: u64 },
 }

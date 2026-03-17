@@ -129,6 +129,50 @@ impl ParametricInstanceBuilder {
                 field: "constraints",
             })?;
 
+        // Validate that decision variable map keys match their value's id
+        for (key, value) in &decision_variables {
+            if *key != value.id() {
+                return Err(InstanceError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate that parameter map keys match their value's id
+        for (key, value) in &parameters {
+            if key.into_inner() != value.id {
+                return Err(InstanceError::InconsistentParameterID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate that constraint map keys match their value's id
+        for (key, value) in &constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate that removed constraint map keys match their value's id
+        for (key, value) in &self.removed_constraints {
+            if *key != value.constraint.id {
+                return Err(InstanceError::InconsistentRemovedConstraintID {
+                    key: *key,
+                    value_id: value.constraint.id,
+                }
+                .into());
+            }
+        }
+
         // Check that decision variable IDs and parameter IDs are disjoint
         let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
@@ -180,13 +224,11 @@ impl ParametricInstanceBuilder {
         }
 
         // Validate constraint_hints using Parse trait (checks variable/constraint existence)
+        // Move values into context tuple to avoid cloning, then destructure to recover ownership
         let hints: v1::ConstraintHints = self.constraint_hints.into();
-        let context = (
-            decision_variables.clone(),
-            constraints.clone(),
-            self.removed_constraints.clone(),
-        );
+        let context = (decision_variables, constraints, self.removed_constraints);
         let constraint_hints = hints.parse(&context)?;
+        let (decision_variables, constraints, removed_constraints) = context;
 
         Ok(ParametricInstance {
             sense,
@@ -194,7 +236,7 @@ impl ParametricInstanceBuilder {
             decision_variables,
             parameters,
             constraints,
-            removed_constraints: self.removed_constraints,
+            removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             description: self.description,

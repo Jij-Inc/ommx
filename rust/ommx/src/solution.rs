@@ -851,4 +851,146 @@ mod tests {
             Err(SolutionError::DuplicateSubscript { .. })
         ));
     }
+
+    #[test]
+    fn test_builder_missing_required_field() {
+        // Missing objective
+        let err = Solution::builder()
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::MissingRequiredField { field: "objective" }
+        ));
+
+        // Missing sense
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::MissingRequiredField { field: "sense" }
+        ));
+    }
+
+    #[test]
+    fn test_builder_inconsistent_decision_variable_id() {
+        use crate::DecisionVariable;
+
+        let var_id_1 = VariableID::from(1);
+        let var_id_2 = VariableID::from(2);
+        let dv = DecisionVariable::binary(var_id_1);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+
+        // Map key (2) doesn't match value's id (1)
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id_2, evaluated_dv);
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::InconsistentDecisionVariableID { key, value_id }
+                if *key == var_id_2 && *value_id == var_id_1
+        ));
+    }
+
+    #[test]
+    fn test_builder_inconsistent_constraint_id() {
+        let state = crate::v1::State::default();
+        let constraint_id_1 = ConstraintID::from(1);
+        let constraint_id_2 = ConstraintID::from(2);
+
+        let c = Constraint::equal_to_zero(
+            constraint_id_1,
+            Function::Constant(Coefficient::try_from(1.0).unwrap()),
+        );
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
+
+        // Map key (2) doesn't match value's id (1)
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id_2, evaluated_c);
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::InconsistentConstraintID { key, value_id }
+                if *key == constraint_id_2 && *value_id == constraint_id_1
+        ));
+    }
+
+    #[test]
+    fn test_builder_undefined_variable_in_constraint() {
+        use crate::linear;
+
+        let state = crate::v1::State::from(std::collections::HashMap::from([(1, 1.0)]));
+        let constraint_id = ConstraintID::from(1);
+        let var_id = VariableID::from(1);
+
+        // Constraint uses variable ID 1
+        let c = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
+
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id, evaluated_c);
+
+        // decision_variables is empty, so variable ID 1 is undefined
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::UndefinedVariableInConstraint { id, constraint_id: cid }
+                if *id == var_id && *cid == constraint_id
+        ));
+    }
+
+    #[test]
+    fn test_builder_success() {
+        use crate::DecisionVariable;
+
+        let var_id = VariableID::from(1);
+        let dv = DecisionVariable::binary(var_id);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id, evaluated_dv);
+
+        let solution = Solution::builder()
+            .objective(42.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Maximize)
+            .build()
+            .unwrap();
+
+        assert_eq!(*solution.objective(), 42.0);
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
+    }
 }

@@ -128,6 +128,39 @@ impl InstanceBuilder {
                 field: "constraints",
             })?;
 
+        // Validate that decision variable map keys match their value's id
+        for (key, value) in &decision_variables {
+            if *key != value.id() {
+                return Err(InstanceError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate that constraint map keys match their value's id
+        for (key, value) in &constraints {
+            if *key != value.id {
+                return Err(InstanceError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: value.id,
+                }
+                .into());
+            }
+        }
+
+        // Validate that removed constraint map keys match their value's id
+        for (key, value) in &self.removed_constraints {
+            if *key != value.constraint.id {
+                return Err(InstanceError::InconsistentRemovedConstraintID {
+                    key: *key,
+                    value_id: value.constraint.id,
+                }
+                .into());
+            }
+        }
+
         // Validate that all variable IDs in objective and constraints are defined
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
         for id in objective.required_ids() {
@@ -159,20 +192,18 @@ impl InstanceBuilder {
         }
 
         // Validate constraint_hints using Parse trait (checks variable/constraint existence)
+        // Move values into context tuple to avoid cloning, then destructure to recover ownership
         let hints: v1::ConstraintHints = self.constraint_hints.into();
-        let context = (
-            decision_variables.clone(),
-            constraints.clone(),
-            self.removed_constraints.clone(),
-        );
+        let context = (decision_variables, constraints, self.removed_constraints);
         let constraint_hints = hints.parse(&context)?;
+        let (decision_variables, constraints, removed_constraints) = context;
 
         Ok(Instance {
             sense,
             objective,
             decision_variables,
             constraints,
-            removed_constraints: self.removed_constraints,
+            removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
             parameters: self.parameters,
