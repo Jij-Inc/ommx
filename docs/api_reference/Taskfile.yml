@@ -20,7 +20,6 @@ tasks:
       - uv run python -m webbrowser file:///$(pwd)/_build/html/autoapi/index.html
 
   upgrade:
-    desc: "Upgrade dependencies and export requirements.txt for Read the Docs"
+    desc: "Upgrade dependencies"
     cmds:
       - uv sync --upgrade
-      - uv export --format requirements-txt -o requirements.txt
