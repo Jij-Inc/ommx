@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 mod arbitrary;
+mod builder;
 mod clip_bounds;
 mod constraint_hints;
 mod convert;
@@ -20,6 +21,7 @@ mod stats;
 mod substitute;
 
 pub use analysis::*;
+pub use builder::*;
 pub use error::*;
 pub use log_encode::*;
 pub use stats::*;
