@@ -12,7 +12,7 @@ use super::*;
 ///
 /// let instance = Instance::builder()
 ///     .sense(Sense::Minimize)
-///     .objective(Function::zero())
+///     .objective(Function::Zero)
 ///     .decision_variables(BTreeMap::new())
 ///     .constraints(BTreeMap::new())
 ///     .build()
