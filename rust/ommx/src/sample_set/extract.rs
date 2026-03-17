@@ -795,6 +795,7 @@ mod tests {
             decision_variables,
             objectives,
             BTreeMap::new(),
+            BTreeMap::new(),
             Sense::Minimize,
         )
         .unwrap();

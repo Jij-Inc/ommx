@@ -703,7 +703,13 @@ mod tests {
             EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            decision_variables,
+            Sense::Minimize,
+        );
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = solution.extract_decision_variables("x");
@@ -773,7 +779,13 @@ mod tests {
             EvaluatedDecisionVariable::new(dv2, 2.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            decision_variables,
+            Sense::Minimize,
+        );
 
         // Test that extracting variables with duplicate subscripts fails
         let result = solution.extract_decision_variables("x");
