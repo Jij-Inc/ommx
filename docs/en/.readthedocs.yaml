@@ -9,10 +9,12 @@ build:
     python: "3.11"
     nodejs: "22"
   commands:
+    # Install uv
+    - pip install uv
     # Install dependencies
-    - pip install -r requirements.txt
+    - cd docs && uv sync
     # Build the site
-    - cd docs/en && jupyter book build --html
+    - cd docs/en && uv run jupyter book build --html
     # Copy the output to Read the Docs expected location
     - mkdir -p $READTHEDOCS_OUTPUT/html/
     - cp -r docs/en/_build/html/. "$READTHEDOCS_OUTPUT/html"
