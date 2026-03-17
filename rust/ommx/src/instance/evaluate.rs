@@ -137,6 +137,9 @@ impl Evaluate for Instance {
         for constraint in self.constraints.values_mut() {
             constraint.partial_evaluate(&updated_state, atol)?;
         }
+        for named_function in self.named_functions.values_mut() {
+            named_function.partial_evaluate(&updated_state, atol)?;
+        }
         self.decision_variable_dependency
             .partial_evaluate(&updated_state, atol)?;
         Ok(())
