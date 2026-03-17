@@ -24,4 +24,17 @@ pub enum InstanceError {
 
     #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
     DependentVariableUsed { id: VariableID },
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error(
+        "Constraint ID {id:?} is in both constraints and removed_constraints, but they must be disjoint"
+    )]
+    OverlappingConstraintID { id: ConstraintID },
+
+    #[error(
+        "Variable ID {id:?} is in both decision_variables and decision_variable_dependency, but dependent variables must not be in decision_variables"
+    )]
+    OverlappingDependentVariableID { id: VariableID },
 }

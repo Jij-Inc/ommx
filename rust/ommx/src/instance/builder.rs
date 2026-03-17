@@ -113,16 +113,20 @@ impl InstanceBuilder {
     pub fn build(self) -> anyhow::Result<Instance> {
         let sense = self
             .sense
-            .ok_or_else(|| anyhow::anyhow!("sense is required"))?;
+            .ok_or(InstanceError::MissingRequiredField { field: "sense" })?;
         let objective = self
             .objective
-            .ok_or_else(|| anyhow::anyhow!("objective is required"))?;
-        let decision_variables = self
-            .decision_variables
-            .ok_or_else(|| anyhow::anyhow!("decision_variables is required"))?;
+            .ok_or(InstanceError::MissingRequiredField { field: "objective" })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(InstanceError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
         let constraints = self
             .constraints
-            .ok_or_else(|| anyhow::anyhow!("constraints is required"))?;
+            .ok_or(InstanceError::MissingRequiredField {
+                field: "constraints",
+            })?;
 
         // Validate that all variable IDs in objective and constraints are defined
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
@@ -142,20 +146,14 @@ impl InstanceBuilder {
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
-                anyhow::bail!(
-                    "Constraint ID {:?} is in both constraints and removed_constraints",
-                    id
-                );
+                return Err(InstanceError::OverlappingConstraintID { id: *id }.into());
             }
         }
 
         // Validate that decision_variable_dependency keys are not in decision_variables
         for id in self.decision_variable_dependency.keys() {
             if variable_ids.contains(&id) {
-                anyhow::bail!(
-                    "Variable ID {:?} is in both decision_variables and decision_variable_dependency",
-                    id
-                );
+                return Err(InstanceError::OverlappingDependentVariableID { id }.into());
             }
         }
 
