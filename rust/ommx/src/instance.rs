@@ -48,7 +48,10 @@ pub enum Sense {
 /// -----------
 /// - [`Self::decision_variables`] contains all decision variables used in the problem.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
-/// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+/// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
+///   but must NOT be used in the objective function or constraints.
+///   These are "dependent variables" whose values are computed from other variables.
+///   See also the document of [`DecisionVariableAnalysis`].
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 ///
@@ -90,7 +93,9 @@ pub struct Instance {
 ///   - This means every IDs appearing in the constraints and the objective function must be included in either of them.
 ///   - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are disjoint sets.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
-/// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+/// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
+///   but must NOT be used in the objective function or constraints.
+///   See also the document of [`DecisionVariableAnalysis`].
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

@@ -33,8 +33,6 @@ pub enum InstanceError {
     )]
     OverlappingConstraintID { id: ConstraintID },
 
-    #[error(
-        "Variable ID {id:?} is in both decision_variables and decision_variable_dependency, but dependent variables must not be in decision_variables"
-    )]
-    OverlappingDependentVariableID { id: VariableID },
+    #[error("Variable ID {id:?} in decision_variable_dependency is not in decision_variables")]
+    UndefinedDependentVariableID { id: VariableID },
 }

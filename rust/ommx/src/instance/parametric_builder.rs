@@ -171,10 +171,11 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate that decision_variable_dependency keys are not in decision_variables
+        // Validate that decision_variable_dependency keys are in decision_variables
+        // (dependent variables must exist as decision variables to get kind/bound info)
         for id in self.decision_variable_dependency.keys() {
-            if decision_variable_ids.contains(&id) {
-                return Err(InstanceError::OverlappingDependentVariableID { id }.into());
+            if !decision_variable_ids.contains(&id) {
+                return Err(InstanceError::UndefinedDependentVariableID { id }.into());
             }
         }
 

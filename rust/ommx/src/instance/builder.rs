@@ -150,10 +150,11 @@ impl InstanceBuilder {
             }
         }
 
-        // Validate that decision_variable_dependency keys are not in decision_variables
+        // Validate that decision_variable_dependency keys are in decision_variables
+        // (dependent variables must exist as decision variables to get kind/bound info)
         for id in self.decision_variable_dependency.keys() {
-            if variable_ids.contains(&id) {
-                return Err(InstanceError::OverlappingDependentVariableID { id }.into());
+            if !variable_ids.contains(&id) {
+                return Err(InstanceError::UndefinedDependentVariableID { id }.into());
             }
         }
 
@@ -308,17 +309,18 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_overlapping_variable_dependency() {
+    fn test_builder_undefined_variable_dependency() {
         use maplit::btreemap;
 
         let var_id = VariableID::from(1);
+        let undefined_var_id = VariableID::from(999);
         let decision_variables = btreemap! {
             var_id => DecisionVariable::binary(var_id),
         };
 
-        // Create a dependency that assigns to the same variable ID
+        // Create a dependency that references a variable not in decision_variables
         let dependency = AcyclicAssignments::new(btreemap! {
-            var_id => Function::Zero,
+            undefined_var_id => Function::Zero,
         })
         .unwrap();
 
@@ -334,7 +336,34 @@ mod tests {
         let instance_err = err.downcast_ref::<InstanceError>().unwrap();
         assert!(matches!(
             instance_err,
-            InstanceError::OverlappingDependentVariableID { id } if *id == var_id
+            InstanceError::UndefinedDependentVariableID { id } if *id == undefined_var_id
         ));
+    }
+
+    #[test]
+    fn test_builder_valid_variable_dependency() {
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        let decision_variables = btreemap! {
+            var_id => DecisionVariable::binary(var_id),
+        };
+
+        // Create a dependency for a variable that IS in decision_variables (this is valid)
+        let dependency = AcyclicAssignments::new(btreemap! {
+            var_id => Function::Zero,
+        })
+        .unwrap();
+
+        // This should succeed because dependent variable must be in decision_variables
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
+            .build();
+
+        assert!(instance.is_ok());
     }
 }
