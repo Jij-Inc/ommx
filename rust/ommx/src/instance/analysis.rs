@@ -323,7 +323,11 @@ impl Instance {
                 named_function.function.required_ids().into_iter().collect();
             debug_assert!(
                 required_ids.is_subset(&all),
-                "Named functions use variables not in the instance"
+                "Named functions use variables not in the instance: {:?}",
+                required_ids
+                    .difference(&all)
+                    .copied()
+                    .collect::<VariableIDSet>()
             );
             used_in_named_functions.insert(named_function.id, required_ids);
         }

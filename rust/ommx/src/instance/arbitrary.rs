@@ -210,6 +210,9 @@ impl Arbitrary for Instance {
                     for c in constraints.values() {
                         unique_ids.extend(c.function.required_ids().into_iter());
                     }
+                    for nf in named_functions.values() {
+                        unique_ids.extend(nf.function.required_ids().into_iter());
+                    }
                     unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
                     (
                         Just(objective),
