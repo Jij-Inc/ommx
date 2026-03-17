@@ -1,6 +1,6 @@
 mod analysis;
 mod approx;
-mod arbitrary;
+pub(crate) mod arbitrary;
 mod clip_bounds;
 mod constraint_hints;
 mod convert;
