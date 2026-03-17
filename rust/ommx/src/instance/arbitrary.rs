@@ -1,9 +1,10 @@
 use super::*;
 use crate::{
-    arbitrary_constraints, arbitrary_decision_variables,
+    arbitrary_constraints, arbitrary_decision_variables, arbitrary_named_functions,
     random::{arbitrary_samples, SamplesParameters},
     v1::State,
-    Bounds, ConstraintIDParameters, Evaluate, KindParameters, PolynomialParameters, Sampled,
+    Bounds, ConstraintIDParameters, Evaluate, KindParameters, NamedFunctionIDParameters,
+    PolynomialParameters, Sampled,
 };
 use fnv::FnvHashSet;
 use proptest::prelude::*;
@@ -117,6 +118,7 @@ pub struct InstanceParameters {
     pub constraint_ids: ConstraintIDParameters,
     pub objective: PolynomialParameters,
     pub constraint: PolynomialParameters,
+    pub named_function_ids: NamedFunctionIDParameters,
     pub kinds: KindParameters,
     pub max_irrelevant_ids: usize,
 }
@@ -126,6 +128,7 @@ impl InstanceParameters {
     pub fn default_lp() -> Self {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_linear(),
             constraint: PolynomialParameters::default_linear(),
             kinds: KindParameters::default(),
@@ -137,6 +140,7 @@ impl InstanceParameters {
     pub fn default_qp() -> Self {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
             constraint: PolynomialParameters::default_linear(),
             kinds: KindParameters::default(),
@@ -148,6 +152,7 @@ impl InstanceParameters {
     pub fn default_qcqp() -> Self {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default_quadratic(),
             constraint: PolynomialParameters::default_quadratic(),
             kinds: KindParameters::default(),
@@ -160,6 +165,7 @@ impl Default for InstanceParameters {
     fn default() -> Self {
         Self {
             constraint_ids: ConstraintIDParameters::default(),
+            named_function_ids: NamedFunctionIDParameters::default(),
             objective: PolynomialParameters::default(),
             constraint: PolynomialParameters::default(),
             kinds: KindParameters::default(),
@@ -175,40 +181,58 @@ impl Arbitrary for Instance {
     fn arbitrary_with(p: Self::Parameters) -> Self::Strategy {
         let objective = Function::arbitrary_with(p.objective);
         let constraints = arbitrary_constraints(p.constraint_ids, p.constraint);
+        let named_functions = arbitrary_named_functions(p.named_function_ids, p.constraint);
         // Generate candidates for irrelevant IDs.
         // Since these IDs are generated without checking against the objective or constraints, some of these may be relevant.
         let max_id = p.objective.max_id().max(p.constraint.max_id());
         let irrelevant_candidates =
             proptest::collection::vec(0..=max_id.into_inner(), 0..=p.max_irrelevant_ids);
-        (objective, constraints, irrelevant_candidates)
-            .prop_flat_map(move |(objective, constraints, irrelevant_candidates)| {
-                // Collect all required IDs from the objective and constraints
-                let mut unique_ids: FnvHashSet<VariableID> =
-                    objective.required_ids().into_iter().collect();
-                for c in constraints.values() {
-                    unique_ids.extend(c.function.required_ids().into_iter());
-                }
-                unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
-                (
-                    Just(objective),
-                    Just(constraints),
-                    arbitrary_decision_variables(unique_ids, p.kinds.clone()),
-                    Sense::arbitrary(),
-                )
-                    .prop_map(
-                        |(objective, constraints, decision_variables, sense)| Instance {
-                            objective,
-                            constraints,
-                            sense,
-                            decision_variables,
-                            constraint_hints: Default::default(),
-                            parameters: Default::default(),
-                            removed_constraints: Default::default(),
-                            decision_variable_dependency: Default::default(),
-                            description: None,
-                        },
+        (
+            objective,
+            constraints,
+            named_functions,
+            irrelevant_candidates,
+        )
+            .prop_flat_map(
+                move |(objective, constraints, named_functions, irrelevant_candidates)| {
+                    // Collect all required IDs from the objective and constraints
+                    let mut unique_ids: FnvHashSet<VariableID> =
+                        objective.required_ids().into_iter().collect();
+                    for c in constraints.values() {
+                        unique_ids.extend(c.function.required_ids().into_iter());
+                    }
+                    unique_ids.extend(irrelevant_candidates.into_iter().map(VariableID::from));
+                    (
+                        Just(objective),
+                        Just(constraints),
+                        Just(named_functions),
+                        arbitrary_decision_variables(unique_ids, p.kinds.clone()),
+                        Sense::arbitrary(),
                     )
-            })
+                        .prop_map(
+                            |(
+                                objective,
+                                constraints,
+                                named_functions,
+                                decision_variables,
+                                sense,
+                            )| {
+                                Instance {
+                                    objective,
+                                    constraints,
+                                    named_functions,
+                                    sense,
+                                    decision_variables,
+                                    constraint_hints: Default::default(),
+                                    parameters: Default::default(),
+                                    removed_constraints: Default::default(),
+                                    decision_variable_dependency: Default::default(),
+                                    description: None,
+                                }
+                            },
+                        )
+                },
+            )
             .boxed()
     }
 }

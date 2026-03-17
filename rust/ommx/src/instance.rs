@@ -9,6 +9,7 @@ mod error;
 mod evaluate;
 mod log_encode;
 mod logical_memory;
+mod named_function;
 mod new;
 mod parse;
 mod pass;
@@ -25,9 +26,9 @@ pub use log_encode::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints, parse::Parse, v1, AcyclicAssignments, Constraint,
-    ConstraintID, DecisionVariable, Evaluate, Function, RemovedConstraint, VariableID,
-    VariableIDSet,
+    constraint_hints::ConstraintHints, named_function::NamedFunctionID, parse::Parse, v1,
+    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -62,6 +63,8 @@ pub struct Instance {
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
+    #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
     /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
     ///
@@ -104,6 +107,8 @@ pub struct ParametricInstance {
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
+    #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
     /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
     ///

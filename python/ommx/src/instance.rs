@@ -1,9 +1,9 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, ParametricInstance, RemovedConstraint,
-    Rng, SampleSet, Samples, Sense, Solution, VariableBound,
+    Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction, ParametricInstance,
+    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
+use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, Parse, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -26,12 +26,13 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None, constraint_hints = None))]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints, named_functions=None, description = None, constraint_hints = None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
+        named_functions: Option<HashMap<u64, NamedFunction>>,
         description: Option<InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
@@ -50,11 +51,18 @@ impl Instance {
 
         let rust_constraint_hints = constraint_hints.map(|hints| hints.0).unwrap_or_default();
 
+        let rust_named_functions = named_functions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
+            .collect();
+
         let mut instance = ommx::Instance::new(
             rust_sense,
             objective.0,
             rust_decision_variables,
             rust_constraints,
+            rust_named_functions,
         )?
         .with_constraint_hints(rust_constraint_hints)?;
 
@@ -88,6 +96,12 @@ impl Instance {
         self.0.decision_variable_names()
     }
 
+    /// Get all unique named function names in this instance
+    #[getter]
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.0.named_function_names()
+    }
+
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
@@ -115,6 +129,16 @@ impl Instance {
             .removed_constraints()
             .values()
             .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .collect()
+    }
+
+    /// List of all named functions in the instance sorted by their IDs.
+    #[getter]
+    pub fn named_functions(&self) -> Vec<NamedFunction> {
+        self.0
+            .named_functions()
+            .values()
+            .map(|named_function| NamedFunction(named_function.clone()))
             .collect()
     }
 
@@ -383,6 +407,19 @@ impl Instance {
             })
     }
 
+    /// Get a specific named function by ID
+    pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
+        self.0
+            .named_functions()
+            .get(&NamedFunctionID::from(named_function_id))
+            .map(|named_function| NamedFunction(named_function.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Named function with ID {named_function_id} not found"
+                ))
+            })
+    }
+
     /// Reduce binary powers in the instance.
     ///
     /// This method replaces binary powers in the instance with their equivalent linear expressions.
@@ -500,6 +537,19 @@ impl DecisionVariableAnalysis {
             .map(|(constraint_id, variable_ids)| {
                 (
                     **constraint_id,
+                    variable_ids.iter().map(|id| id.into_inner()).collect(),
+                )
+            })
+            .collect()
+    }
+
+    pub fn used_in_named_functions(&self) -> BTreeMap<u64, BTreeSet<u64>> {
+        self.0
+            .used_in_named_functions()
+            .iter()
+            .map(|(named_function_id, variable_ids)| {
+                (
+                    **named_function_id,
                     variable_ids.iter().map(|id| id.into_inner()).collect(),
                 )
             })

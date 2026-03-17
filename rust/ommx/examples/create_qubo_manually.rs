@@ -45,7 +45,13 @@ fn main() -> Result<()> {
     let constraints: BTreeMap<_, Constraint> = BTreeMap::new();
 
     // Minimize the objective function
-    let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;
+    let instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )?;
 
     // Display instance information
     println!("Sense: {:?}", instance.sense());

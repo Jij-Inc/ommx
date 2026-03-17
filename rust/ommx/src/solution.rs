@@ -1,7 +1,10 @@
 mod parse;
 mod serialize;
 
-use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sense, VariableID};
+use crate::{
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
+    NamedFunctionID, Sense, VariableID,
+};
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -40,17 +43,26 @@ pub enum SolutionError {
     #[error("Constraint with parameters is not supported")]
     ParameterizedConstraint,
 
+    #[error("Named function with parameters is not supported")]
+    ParameterizedNamedFunction,
+
     #[error("Duplicate subscript: {subscripts:?}")]
     DuplicateSubscript { subscripts: Vec<i64> },
 
     #[error("Unknown constraint ID: {id:?}")]
     UnknownConstraintID { id: ConstraintID },
 
+    #[error("Unknown named function ID: {id:?}")]
+    UnknownNamedFunctionID { id: NamedFunctionID },
+
     #[error("No decision variables with name '{name}' found")]
     UnknownVariableName { name: String },
 
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
+
+    #[error("No named function with name '{name}' found")]
+    UnknownNamedFunctionName { name: String },
 }
 
 /// Single solution result with data integrity guarantees
@@ -60,6 +72,8 @@ pub struct Solution {
     objective: f64,
     #[getset(get = "pub")]
     evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    #[getset(get = "pub")]
+    pub evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     /// Optimality status - not guaranteed by Solution itself
@@ -78,12 +92,14 @@ impl Solution {
     pub fn new(
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+        evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
         sense: Sense,
     ) -> Self {
         Self {
             objective,
             evaluated_constraints,
+            evaluated_named_functions,
             decision_variables,
             optimality: crate::v1::Optimality::Unspecified,
             relaxation: crate::v1::Relaxation::Unspecified,
@@ -99,6 +115,11 @@ impl Solution {
     /// Get constraint IDs evaluated in this solution
     pub fn constraint_ids(&self) -> BTreeSet<ConstraintID> {
         self.evaluated_constraints.keys().cloned().collect()
+    }
+
+    /// Get named function IDs evaluated in this solution
+    pub fn named_function_ids(&self) -> BTreeSet<NamedFunctionID> {
+        self.evaluated_named_functions.keys().cloned().collect()
     }
 
     /// Check if all decision variables satisfy their kind and bound constraints
@@ -202,6 +223,17 @@ impl Solution {
         self.decision_variables
             .values()
             .filter_map(|dv| dv.metadata.name.clone())
+            .collect()
+    }
+
+    /// Get all unique named function names in this solution
+    ///
+    /// Returns a set of all unique named function names that have at least one named function.
+    /// Named functions without names are not included.
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.evaluated_named_functions
+            .values()
+            .filter_map(|nf| nf.name.clone())
             .collect()
     }
 
@@ -324,12 +356,107 @@ impl Solution {
         Ok(result)
     }
 
+    /// Extract named functions by name with subscripts as key
+    ///
+    /// Returns a mapping from subscripts (as a vector) to the named function's value.
+    /// This is useful for extracting named functions that have the same name but different subscripts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No named functions with the given name are found
+    /// - A named function with parameters is found
+    /// - The same subscript is found multiple times
+    ///
+    pub fn extract_named_functions(
+        &self,
+        name: &str,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
+        // Collect all named functions with the given name
+        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
+            .evaluated_named_functions
+            .values()
+            .filter(|nf| nf.name.as_deref() == Some(name))
+            .collect();
+        if functions_with_name.is_empty() {
+            return Err(SolutionError::UnknownNamedFunctionName {
+                name: name.to_string(),
+            });
+        }
+
+        let mut result = BTreeMap::new();
+        for nf in &functions_with_name {
+            if !nf.parameters.is_empty() {
+                return Err(SolutionError::ParameterizedNamedFunction);
+            }
+            let key = nf.subscripts.clone();
+            if result.contains_key(&key) {
+                return Err(SolutionError::DuplicateSubscript { subscripts: key });
+            }
+            result.insert(key, nf.evaluated_value());
+        }
+        Ok(result)
+    }
+
+    /// Extract all named functions grouped by name
+    ///
+    /// Returns a mapping from named function name to a mapping from subscripts to values.
+    /// This is useful for extracting all named functions at once in a structured format.
+    /// Named functions without names are not included in the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A named function with parameters is found
+    /// - The same name and subscript combination is found multiple times
+    ///
+    pub fn extract_all_named_functions(
+        &self,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for nf in self.evaluated_named_functions.values() {
+            if !nf.parameters.is_empty() {
+                return Err(SolutionError::ParameterizedNamedFunction);
+            }
+
+            let name = match &nf.name {
+                Some(n) => n.clone(),
+                None => continue, // Skip named functions without names
+            };
+
+            let subscripts = nf.subscripts.clone();
+            let value = nf.evaluated_value();
+
+            let funcs_map = result.entry(name).or_default();
+            if funcs_map.contains_key(&subscripts) {
+                return Err(SolutionError::DuplicateSubscript { subscripts });
+            }
+            funcs_map.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
     /// Get the evaluated value of a specific constraint by ID
     pub fn get_constraint_value(&self, constraint_id: ConstraintID) -> Result<f64, SolutionError> {
         self.evaluated_constraints
             .get(&constraint_id)
             .map(|c| *c.evaluated_value())
             .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
+    }
+
+    /// Get the evaluated value of a specific named function by ID
+    pub fn get_named_function_value(
+        &self,
+        named_function_id: NamedFunctionID,
+    ) -> Result<f64, SolutionError> {
+        self.evaluated_named_functions
+            .get(&named_function_id)
+            .map(|nf| nf.evaluated_value())
+            .ok_or(SolutionError::UnknownNamedFunctionID {
+                id: named_function_id,
+            })
     }
 
     /// Get the dual variable value of a specific constraint by ID
@@ -389,7 +516,13 @@ mod tests {
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            constraints,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
 
         // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
         assert_eq!(solution.total_violation_l1(), 0.0001);
@@ -431,7 +564,13 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            constraints,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
 
         // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
         assert_eq!(solution.total_violation_l1(), 4.0);
@@ -473,7 +612,13 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            constraints,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
 
         // L2: (2.5)² + (1.5)² + 0² = 6.25 + 2.25 + 0 = 8.5
         assert_eq!(solution.total_violation_l2(), 8.5);
@@ -482,7 +627,13 @@ mod tests {
     #[test]
     fn test_total_violation_empty() {
         // No constraints → total violation = 0
-        let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new(), Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
 
         assert_eq!(solution.total_violation_l1(), 0.0);
         assert_eq!(solution.total_violation_l2(), 0.0);
@@ -504,7 +655,13 @@ mod tests {
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        let solution = Solution::new(
+            0.0,
+            constraints,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
 
         // L1: |-3.0| = 3.0
         assert_eq!(solution.total_violation_l1(), 3.0);

@@ -116,8 +116,15 @@ mod tests {
 
         // Create instance
         let objective = Function::from(linear!(1) + linear!(2));
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let named_functions = BTreeMap::new();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap();
 
         // Relax the constraint
         instance
@@ -207,8 +214,15 @@ mod tests {
 
         // Create instance
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let named_functions = BTreeMap::new();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap();
 
         // Relax the constraint
         instance
@@ -297,11 +311,18 @@ mod tests {
             description: None,
         };
         constraints.insert(ConstraintID::from(1), constraint);
+        let named_functions = BTreeMap::new();
 
         // Create instance
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap();
 
         // Relax the constraint
         instance

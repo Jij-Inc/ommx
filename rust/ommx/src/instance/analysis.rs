@@ -59,6 +59,9 @@ pub struct DecisionVariableAnalysis {
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
     used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
+    /// The set of decision variables that are used in named functions.
+    #[getset(get = "pub")]
+    used_in_named_functions: BTreeMap<NamedFunctionID, VariableIDSet>,
     /// The set of decision variables that are used in the objective function or constraints.
     #[getset(get = "pub")]
     used: VariableIDSet,
@@ -259,6 +262,9 @@ impl Instance {
         for constraint in self.constraints.values() {
             used.extend(constraint.function.required_ids());
         }
+        for named_function in self.named_functions.values() {
+            used.extend(named_function.function.required_ids());
+        }
         used
     }
 
@@ -309,8 +315,24 @@ impl Instance {
             );
             used_in_constraints.insert(constraint.id, required_ids);
         }
+
+        let mut used_in_named_functions: BTreeMap<NamedFunctionID, VariableIDSet> =
+            BTreeMap::default();
+        for named_function in self.named_functions.values() {
+            let required_ids: VariableIDSet =
+                named_function.function.required_ids().into_iter().collect();
+            debug_assert!(
+                required_ids.is_subset(&all),
+                "Named functions use variables not in the instance"
+            );
+            used_in_named_functions.insert(named_function.id, required_ids);
+        }
+
         let mut used = used_in_objective.clone();
-        for ids in used_in_constraints.values() {
+        for ids in used_in_constraints
+            .values()
+            .chain(used_in_named_functions.values())
+        {
             used.extend(ids);
         }
 
@@ -351,6 +373,7 @@ impl Instance {
             semi_continuous,
             used_in_objective,
             used_in_constraints,
+            used_in_named_functions,
             used,
             dependent,
             irrelevant,
@@ -386,12 +409,20 @@ impl std::fmt::Display for DecisionVariableAnalysis {
             .flat_map(|ids| ids.iter())
             .collect::<std::collections::BTreeSet<_>>()
             .len();
+        // Count unique variables used in named functions (union of all named function variable sets)
+        let used_in_named_functions_count: usize = self
+            .used_in_named_functions
+            .values()
+            .flat_map(|ids| ids.iter())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len();
         writeln!(
             f,
-            "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            "    Used: {} (in objective: {}, in constraints: {}, in named functions: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
             self.used.len(),
             self.used_in_objective.len(),
             used_in_constraints_count,
+            used_in_named_functions_count,
             self.fixed.len(),
             self.dependent.len(),
             self.irrelevant.len()
@@ -555,9 +586,16 @@ mod tests {
                 (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
             ),
         );
+        let named_functions = BTreeMap::new();
 
-        let mut instance =
-            Instance::new(Sense::Maximize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Maximize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap();
 
         // Apply partial_evaluate to fix x0 = 1
         let state = State {

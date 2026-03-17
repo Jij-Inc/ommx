@@ -105,7 +105,9 @@ pub struct Constraint {
     /// Constraint ID
     ///
     /// - Constraint IDs are managed separately from decision variable IDs.
-    ///    We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+    ///    We can use the same ID for both.
+    ///    For example, we have a decision variable
+    ///    `x` with decision variable ID `1``
     ///    and constraint `x == 0` with constraint ID `1`.
     /// - IDs are not required to be sequential.
     /// - IDs must be unique with other types of constraints.
@@ -117,10 +119,14 @@ pub struct Constraint {
     pub function: ::core::option::Option<Function>,
     /// Integer parameters of the constraint.
     ///
-    /// Consider for example a problem constains a series of constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-    /// then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-    /// The `name` field of this message is intended to be a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
-    /// and the `subscripts` field is intended to be the value of `\[i, j\]` like `\[1, 5\]`.
+    /// Consider for example a problem constains a series of
+    /// constraints `x\[i, j\] + y\[i, j\] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+    /// then 6 = 3x2 `Constraint` messages should be created
+    /// corresponding to each pair of `i` and `j`.
+    /// The `name` field of this message is intended to be
+    /// a human-readable name of `x\[i, j\] + y\[i, j\] <= 10`,
+    /// and the `subscripts` field is intended to be the
+    /// value of `\[i, j\]` like `\[1, 5\]`.
     ///
     #[prost(int64, repeated, tag = "8")]
     pub subscripts: ::prost::alloc::vec::Vec<i64>,
@@ -164,13 +170,18 @@ pub struct EvaluatedConstraint {
     #[prost(string, optional, tag = "7")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
     /// Value for the Lagrangian dual variable of this constraint.
-    /// This is optional because not all solvers support to evaluate dual variables.
+    /// This is optional because not all solvers support to
+    /// evaluate dual variables.
     #[prost(double, optional, tag = "8")]
     pub dual_variable: ::core::option::Option<f64>,
-    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    /// Short removed reason of the constraint.
+    /// This field exists only if this message is evaluated
+    /// from a removed constraint.
     #[prost(string, optional, tag = "10")]
     pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
-    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    /// Detailed parameters why the constraint is removed.
+    /// This field exists only if this message is evaluated
+    /// from a removed constraint.
     #[prost(map = "string, string", tag = "11")]
     pub removed_reason_parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
@@ -184,7 +195,8 @@ pub struct RemovedConstraint {
     pub constraint: ::core::option::Option<Constraint>,
     /// Short reason why the constraint was removed.
     ///
-    /// This should be the name of method, function or application which remove the constraint.
+    /// This should be the name of method,
+    /// function or application which remove the constraint.
     #[prost(string, tag = "2")]
     pub removed_reason: ::prost::alloc::string::String,
     /// Arbitrary key-value parameters representing why the constraint was removed.
@@ -360,6 +372,80 @@ pub mod decision_variable {
         }
     }
 }
+/// Named Function
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct NamedFunction {
+    /// Named Function ID
+    ///
+    /// - Named Function IDs are managed separately from decision variable IDs.
+    ///    We can use the same ID for both.
+    ///    For example, we have a decision variable `x` with
+    ///    decision variable ID `1` and named function `x * 2`
+    ///    with named function ID `1`.
+    /// - IDs are not required to be sequential.
+    /// - IDs must be unique with other types of constraints.
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(message, optional, tag = "2")]
+    pub function: ::core::option::Option<Function>,
+    /// Integer parameters of the named function.
+    ///
+    /// Consider for example a problem constains a series of named functions
+    /// `x\[i, j\] + y\[i, j\]` for `i = 1, 2, 3` and `j = 4, 5`,
+    /// then 6 = 3x2 `NamedFunction` messages should be created
+    /// corresponding to each pair of `i` and `j`.
+    /// The `name` field of this message is intended to be a human-readable
+    /// name of `x\[i, j\] + y\[i, j\]`, and the `subscripts` field is intended
+    /// to be the value of `\[i, j\]` like `\[1, 5\]`.
+    #[prost(int64, repeated, tag = "3")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the named function.
+    #[prost(map = "string, string", tag = "4")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Name of the named function.
+    #[prost(string, optional, tag = "5")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detail human-readable description of the named function.
+    #[prost(string, optional, tag = "6")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// A named function evaluated with a state
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EvaluatedNamedFunction {
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    #[prost(double, tag = "2")]
+    pub evaluated_value: f64,
+    /// IDs of decision variables used to evalute this constraint
+    #[prost(uint64, repeated, tag = "3")]
+    pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+    /// Integer parameters of the named function.
+    ///
+    /// Consider for example a problem constains a series of named functions
+    /// `x\[i, j\] + y\[i, j\]` for `i = 1, 2, 3` and `j = 4, 5`,
+    /// then 6 = 3x2 `NamedFunction` messages should be created
+    /// corresponding to each pair of `i` and `j`.
+    /// The `name` field of this message is intended to be a human-readable
+    /// name of `x\[i, j\] + y\[i, j\]`, and the `subscripts` field is intended
+    /// to be the value of `\[i, j\]` like `\[1, 5\]`.
+    #[prost(int64, repeated, tag = "4")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the named function.
+    #[prost(map = "string, string", tag = "5")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Name of the named function.
+    #[prost(string, optional, tag = "6")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Detail human-readable description of the named function.
+    #[prost(string, optional, tag = "7")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+}
 /// A set of parameters for instantiating an optimization problem from a parametric instance
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -404,6 +490,8 @@ pub struct Instance {
     /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
     #[prost(map = "uint64, message", tag = "9")]
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
+    #[prost(message, repeated, tag = "10")]
+    pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
 }
 /// Nested message and enum types in `Instance`.
 pub mod instance {
@@ -512,6 +600,8 @@ pub struct ParametricInstance {
     /// When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
     #[prost(map = "uint64, message", tag = "9")]
     pub decision_variable_dependency: ::std::collections::HashMap<u64, Function>,
+    #[prost(message, repeated, tag = "10")]
+    pub named_functions: ::prost::alloc::vec::Vec<NamedFunction>,
 }
 /// A set of values of decision variables, without any evaluation, even the
 /// feasiblity of the solution.
@@ -536,6 +626,8 @@ pub struct Solution {
     pub decision_variables: ::prost::alloc::vec::Vec<DecisionVariable>,
     #[prost(message, repeated, tag = "4")]
     pub evaluated_constraints: ::prost::alloc::vec::Vec<EvaluatedConstraint>,
+    #[prost(message, repeated, tag = "11")]
+    pub evaluated_named_functions: ::prost::alloc::vec::Vec<EvaluatedNamedFunction>,
     /// The feasibility of the solution for all, remaining and removed constraints.
     ///
     /// The feasibility for the remaining constraints is represented by the `feasible_relaxed` field.
@@ -681,8 +773,10 @@ pub struct Samples {
 }
 /// Nested message and enum types in `Samples`.
 pub mod samples {
-    /// Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
-    /// Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
+    /// Sampling processes are likely to generate same samples multiple times.
+    /// We compress the same samples into one entry.
+    /// Note that uncompressed state is also valid.
+    /// The reader should not assume that every states are distinct.
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -705,7 +799,8 @@ pub struct SampledValues {
 }
 /// Nested message and enum types in `SampledValues`.
 pub mod sampled_values {
-    /// Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct.
+    /// Compressed sampled values, but uncompressed state is also valid.
+    /// The reader should not assume that every states are distinct.
     #[non_exhaustive]
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -724,7 +819,8 @@ pub mod sampled_values {
 pub struct SampledDecisionVariable {
     #[prost(message, optional, tag = "1")]
     pub decision_variable: ::core::option::Option<DecisionVariable>,
-    /// Sampled values of decision variable. This becomes `None` if the decision variable is not sampled.
+    /// Sampled values of decision variable.
+    /// This becomes `None` if the decision variable is not sampled.
     #[prost(message, optional, tag = "2")]
     pub samples: ::core::option::Option<SampledValues>,
 }
@@ -751,10 +847,14 @@ pub struct SampledConstraint {
     /// Detail human-readable description of the constraint.
     #[prost(string, optional, tag = "6")]
     pub description: ::core::option::Option<::prost::alloc::string::String>,
-    /// Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+    /// Short removed reason of the constraint.
+    /// This field exists only if this message is evaluated
+    /// from a removed constraint.
     #[prost(string, optional, tag = "7")]
     pub removed_reason: ::core::option::Option<::prost::alloc::string::String>,
-    /// Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+    /// Detailed parameters why the constraint is removed.
+    /// This field exists only if this message is evaluated
+    /// from a removed constraint.
     #[prost(map = "string, string", tag = "8")]
     pub removed_reason_parameters:
         ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
@@ -768,6 +868,34 @@ pub struct SampledConstraint {
     #[prost(map = "uint64, bool", tag = "11")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
 }
+/// Evaluated named function for samples
+#[non_exhaustive]
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SampledNamedFunction {
+    /// Named Function ID
+    #[prost(uint64, tag = "1")]
+    pub id: u64,
+    /// Name of the named function.
+    #[prost(string, optional, tag = "2")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Integer parameters of the named function.
+    #[prost(int64, repeated, tag = "3")]
+    pub subscripts: ::prost::alloc::vec::Vec<i64>,
+    /// Key-value parameters of the named function.
+    #[prost(map = "string, string", tag = "4")]
+    pub parameters:
+        ::std::collections::HashMap<::prost::alloc::string::String, ::prost::alloc::string::String>,
+    /// Detail human-readable description of the named function.
+    #[prost(string, optional, tag = "5")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// Evaluated values of the named function for each sample
+    #[prost(message, optional, tag = "6")]
+    pub evaluated_values: ::core::option::Option<SampledValues>,
+    /// IDs of decision variables used to evaluate this constraint
+    #[prost(uint64, repeated, tag = "7")]
+    pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
+}
 /// Output of the sampling process.
 #[non_exhaustive]
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -779,17 +907,22 @@ pub struct SampleSet {
     pub decision_variables: ::prost::alloc::vec::Vec<SampledDecisionVariable>,
     #[prost(message, repeated, tag = "3")]
     pub constraints: ::prost::alloc::vec::Vec<SampledConstraint>,
+    #[prost(message, repeated, tag = "8")]
+    pub named_functions: ::prost::alloc::vec::Vec<SampledNamedFunction>,
     /// Feasibility for *both* remaining and removed constraints of each sample.
     ///
-    /// The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
-    /// In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+    /// The meaning of `feasible` field in SDK changes between
+    /// Python SDK 1.6.0 to 1.7.0.
+    /// In Python SDK 1.6.0, `feasible` represents the feasibility of
+    /// remaining constraints of each sample,
     /// i.e. removed constraints (introduced in 1.6.0) are not considered.
-    /// After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+    /// After Python SDK 1.7.0, `feasible` represents the feasibility of
+    /// all constraints of each sample.
     /// The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
     #[prost(map = "uint64, bool", tag = "4")]
     pub feasible: ::std::collections::HashMap<u64, bool>,
-    /// \[Deprecated\] This field has been introduced in Python SDK 1.6.0 to represent
-    /// the feasibility of all constraints of each sample.
+    /// \[Deprecated\] This field has been introduced in Python SDK 1.6.0
+    /// to represent the feasibility of all constraints of each sample.
     /// The `feasible` field is used in this sense after Python SDK 1.7.0.
     #[prost(map = "uint64, bool", tag = "6")]
     #[deprecated]

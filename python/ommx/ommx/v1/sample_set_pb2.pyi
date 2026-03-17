@@ -25,8 +25,10 @@ class Samples(google.protobuf.message.Message):
 
     @typing.final
     class SamplesEntry(google.protobuf.message.Message):
-        """Sampling processes are likely to generate same samples multiple times. We compress the same samples into one entry.
-        Note that uncompressed state is also valid. The reader should not assume that every states are distinct.
+        """Sampling processes are likely to generate same samples multiple times.
+        We compress the same samples into one entry.
+        Note that uncompressed state is also valid.
+        The reader should not assume that every states are distinct.
         """
 
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
@@ -82,7 +84,9 @@ class SampledValues(google.protobuf.message.Message):
 
     @typing.final
     class SampledValuesEntry(google.protobuf.message.Message):
-        """Compressed sampled values, but uncompressed state is also valid. The reader should not assume that every states are distinct."""
+        """Compressed sampled values, but uncompressed state is also valid.
+        The reader should not assume that every states are distinct.
+        """
 
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -136,7 +140,9 @@ class SampledDecisionVariable(google.protobuf.message.Message):
     def decision_variable(self) -> ommx.v1.decision_variables_pb2.DecisionVariable: ...
     @property
     def samples(self) -> global___SampledValues:
-        """Sampled values of decision variable. This becomes `None` if the decision variable is not sampled."""
+        """Sampled values of decision variable.
+        This becomes `None` if the decision variable is not sampled.
+        """
 
     def __init__(
         self,
@@ -251,7 +257,10 @@ class SampledConstraint(google.protobuf.message.Message):
     description: builtins.str
     """Detail human-readable description of the constraint."""
     removed_reason: builtins.str
-    """Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint."""
+    """Short removed reason of the constraint. 
+    This field exists only if this message is evaluated
+    from a removed constraint.
+    """
     @property
     def subscripts(
         self,
@@ -268,7 +277,10 @@ class SampledConstraint(google.protobuf.message.Message):
     def removed_reason_parameters(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
-        """Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint."""
+        """Detailed parameters why the constraint is removed.
+        This field exists only if this message is evaluated
+        from a removed constraint.
+        """
 
     @property
     def evaluated_values(self) -> global___SampledValues:
@@ -370,6 +382,125 @@ class SampledConstraint(google.protobuf.message.Message):
 global___SampledConstraint = SampledConstraint
 
 @typing.final
+class SampledNamedFunction(google.protobuf.message.Message):
+    """Evaluated named function for samples"""
+
+    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+    @typing.final
+    class ParametersEntry(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        KEY_FIELD_NUMBER: builtins.int
+        VALUE_FIELD_NUMBER: builtins.int
+        key: builtins.str
+        value: builtins.str
+        def __init__(
+            self,
+            *,
+            key: builtins.str = ...,
+            value: builtins.str = ...,
+        ) -> None: ...
+        def ClearField(
+            self, field_name: typing.Literal["key", b"key", "value", b"value"]
+        ) -> None: ...
+
+    ID_FIELD_NUMBER: builtins.int
+    NAME_FIELD_NUMBER: builtins.int
+    SUBSCRIPTS_FIELD_NUMBER: builtins.int
+    PARAMETERS_FIELD_NUMBER: builtins.int
+    DESCRIPTION_FIELD_NUMBER: builtins.int
+    EVALUATED_VALUES_FIELD_NUMBER: builtins.int
+    USED_DECISION_VARIABLE_IDS_FIELD_NUMBER: builtins.int
+    id: builtins.int
+    """Named Function ID"""
+    name: builtins.str
+    """Name of the named function."""
+    description: builtins.str
+    """Detail human-readable description of the named function."""
+    @property
+    def subscripts(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """Integer parameters of the named function."""
+
+    @property
+    def parameters(
+        self,
+    ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
+        """Key-value parameters of the named function."""
+
+    @property
+    def evaluated_values(self) -> global___SampledValues:
+        """Evaluated values of the named function for each sample"""
+
+    @property
+    def used_decision_variable_ids(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
+        """IDs of decision variables used to evaluate this constraint"""
+
+    def __init__(
+        self,
+        *,
+        id: builtins.int = ...,
+        name: builtins.str | None = ...,
+        subscripts: collections.abc.Iterable[builtins.int] | None = ...,
+        parameters: collections.abc.Mapping[builtins.str, builtins.str] | None = ...,
+        description: builtins.str | None = ...,
+        evaluated_values: global___SampledValues | None = ...,
+        used_decision_variable_ids: collections.abc.Iterable[builtins.int] | None = ...,
+    ) -> None: ...
+    def HasField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "evaluated_values",
+            b"evaluated_values",
+            "name",
+            b"name",
+        ],
+    ) -> builtins.bool: ...
+    def ClearField(
+        self,
+        field_name: typing.Literal[
+            "_description",
+            b"_description",
+            "_name",
+            b"_name",
+            "description",
+            b"description",
+            "evaluated_values",
+            b"evaluated_values",
+            "id",
+            b"id",
+            "name",
+            b"name",
+            "parameters",
+            b"parameters",
+            "subscripts",
+            b"subscripts",
+            "used_decision_variable_ids",
+            b"used_decision_variable_ids",
+        ],
+    ) -> None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_description", b"_description"]
+    ) -> typing.Literal["description"] | None: ...
+    @typing.overload
+    def WhichOneof(
+        self, oneof_group: typing.Literal["_name", b"_name"]
+    ) -> typing.Literal["name"] | None: ...
+
+global___SampledNamedFunction = SampledNamedFunction
+
+@typing.final
 class SampleSet(google.protobuf.message.Message):
     """Output of the sampling process."""
 
@@ -432,6 +563,7 @@ class SampleSet(google.protobuf.message.Message):
     OBJECTIVES_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     CONSTRAINTS_FIELD_NUMBER: builtins.int
+    NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
     FEASIBLE_RELAXED_FIELD_NUMBER: builtins.int
@@ -453,15 +585,24 @@ class SampleSet(google.protobuf.message.Message):
         global___SampledConstraint
     ]: ...
     @property
+    def named_functions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        global___SampledNamedFunction
+    ]: ...
+    @property
     def feasible(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
         """Feasibility for *both* remaining and removed constraints of each sample.
 
-        The meaning of `feasible` field in SDK changes between Python SDK 1.6.0 to 1.7.0.
-        In Python SDK 1.6.0, `feasible` represents the feasibility of remaining constraints of each sample,
+        The meaning of `feasible` field in SDK changes between
+        Python SDK 1.6.0 to 1.7.0.
+        In Python SDK 1.6.0, `feasible` represents the feasibility of
+        remaining constraints of each sample,
         i.e. removed constraints (introduced in 1.6.0) are not considered.
-        After Python SDK 1.7.0, `feasible` represents the feasibility of all constraints of each sample.
+        After Python SDK 1.7.0, `feasible` represents the feasibility of
+        all constraints of each sample.
         The feasibility of 1.6.0 is renamed to `feasible_relaxed` in 1.7.0.
         """
 
@@ -469,8 +610,8 @@ class SampleSet(google.protobuf.message.Message):
     def feasible_unrelaxed(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.int, builtins.bool]:
-        """[Deprecated] This field has been introduced in Python SDK 1.6.0 to represent
-        the feasibility of all constraints of each sample.
+        """[Deprecated] This field has been introduced in Python SDK 1.6.0
+        to represent the feasibility of all constraints of each sample.
         The `feasible` field is used in this sense after Python SDK 1.7.0.
         """
 
@@ -487,6 +628,8 @@ class SampleSet(google.protobuf.message.Message):
         decision_variables: collections.abc.Iterable[global___SampledDecisionVariable]
         | None = ...,
         constraints: collections.abc.Iterable[global___SampledConstraint] | None = ...,
+        named_functions: collections.abc.Iterable[global___SampledNamedFunction]
+        | None = ...,
         feasible: collections.abc.Mapping[builtins.int, builtins.bool] | None = ...,
         feasible_unrelaxed: collections.abc.Mapping[builtins.int, builtins.bool]
         | None = ...,
@@ -510,6 +653,8 @@ class SampleSet(google.protobuf.message.Message):
             b"feasible_relaxed",
             "feasible_unrelaxed",
             b"feasible_unrelaxed",
+            "named_functions",
+            b"named_functions",
             "objectives",
             b"objectives",
             "sense",

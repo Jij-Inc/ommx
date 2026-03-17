@@ -50,7 +50,13 @@ fn main() -> Result<()> {
     let mut constraints = BTreeMap::new();
     constraints.insert(ConstraintID::from(1), constraint);
 
-    let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)?;
+    let instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )?;
 
     println!("Initial instance:");
     println!("  Objective: x1 + x2");

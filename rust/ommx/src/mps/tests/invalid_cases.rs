@@ -18,6 +18,7 @@ fn test_nonlinear_objective_error() {
         cubic_function,
         decision_variables,
         BTreeMap::new(),
+        BTreeMap::new(),
     )
     .unwrap();
 
@@ -49,6 +50,7 @@ fn test_nonlinear_constraint_error() {
         Function::Zero, // Linear objective
         decision_variables,
         constraints,
+        BTreeMap::new(),
     )
     .unwrap();
 

@@ -101,6 +101,7 @@ impl Instance {
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 
@@ -151,6 +152,7 @@ impl Instance {
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
+                named_functions: self.named_functions,
             });
         }
 
@@ -208,6 +210,7 @@ impl Instance {
             // All constraints are moved to removed_constraints, so all hints are invalidated
             constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 }
@@ -258,7 +261,14 @@ mod tests {
             },
         );
 
-        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
+        Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            BTreeMap::new(),
+        )
+        .unwrap()
     }
 
     /// Helper function to verify penalty method properties
@@ -361,6 +371,7 @@ mod tests {
             objective.clone(),
             decision_variables,
             constraints,
+            BTreeMap::new(),
         )
         .unwrap();
 

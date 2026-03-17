@@ -173,11 +173,18 @@ mod tests {
             one_hot_constraints: vec![one_hot],
             sos1_constraints: vec![],
         };
+        let named_functions = BTreeMap::new();
 
-        let instance = Instance::new(Sense::Minimize, objective, decision_variables, constraints)
-            .unwrap()
-            .with_constraint_hints(constraint_hints)
-            .unwrap();
+        let instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap()
+        .with_constraint_hints(constraint_hints)
+        .unwrap();
 
         assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
     }
@@ -219,6 +226,7 @@ mod tests {
             decision_variables,
             parameters,
             constraints,
+            BTreeMap::new(), // named_functions
         )
         .unwrap()
         .with_constraint_hints(constraint_hints)
@@ -246,9 +254,16 @@ mod tests {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(1) + coeff!(1.0)).into()),
             ConstraintID::from(2) => Constraint::equal_to_zero(ConstraintID::from(2), (linear!(2) + coeff!(1.0)).into()),
         };
+        let named_functions = BTreeMap::new();
 
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            named_functions,
+        )
+        .unwrap();
 
         // Relax constraint 2 (move to removed_constraints)
         instance

@@ -37,6 +37,14 @@ impl Parse for crate::v1::SampleSet {
             constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
 
+        // Parse named functions into BTreeMap
+        let mut named_functions = std::collections::BTreeMap::new();
+        for v1_named_function in self.named_functions {
+            let parsed_named_function: crate::SampledNamedFunction =
+                v1_named_function.parse_as(&(), message, "named_functions")?;
+            named_functions.insert(*parsed_named_function.id(), parsed_named_function);
+        }
+
         let sense = self.sense.try_into().map_err(|_| {
             crate::RawParseError::UnknownEnumValue {
                 enum_name: "ommx.v1.Sense",
@@ -46,8 +54,14 @@ impl Parse for crate::v1::SampleSet {
         })?;
 
         // Create SampleSet with validation
-        let sample_set = SampleSet::new(decision_variables, objectives, constraints, sense)
-            .map_err(crate::RawParseError::SampleSetError)?;
+        let sample_set = SampleSet::new(
+            decision_variables,
+            objectives,
+            constraints,
+            named_functions,
+            sense,
+        )
+        .map_err(crate::RawParseError::SampleSetError)?;
 
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {

@@ -186,6 +186,7 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
+            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -221,8 +222,14 @@ mod tests {
             ),
         };
 
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            BTreeMap::new(), // named_functions
+        )
+        .unwrap();
 
         // Remove one constraint
         instance
@@ -254,6 +261,7 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
+            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -290,6 +298,7 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
+            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -322,8 +331,14 @@ mod tests {
             ),
         };
 
-        let mut instance =
-            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            constraints,
+            BTreeMap::new(), // named_functions
+        )
+        .unwrap();
 
         // Remove one constraint
         instance

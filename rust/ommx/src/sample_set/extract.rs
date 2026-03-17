@@ -15,6 +15,16 @@ impl SampleSet {
             .collect()
     }
 
+    /// Get all unique named function names in this sample set
+    ///
+    /// Returns a set of all unique named function names that have at least one named function.
+    pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
+        self.named_functions
+            .values()
+            .filter_map(|nf| nf.name.clone())
+            .collect()
+    }
+
     /// Extract decision variable values for a given name and sample ID
     ///
     /// Returns a map from subscripts to values for the specified sample.
@@ -131,6 +141,84 @@ impl SampleSet {
         }
         Ok(result)
     }
+
+    /// Extract all named functions grouped by name for a given sample ID
+    ///
+    /// Returns a mapping from function name to a mapping from subscripts to values.
+    /// This is useful for extracting all functions at once in a structured format.
+    /// Functions without names are not included in the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A named function with parameters is found
+    /// - The same name and subscript combination is found multiple times
+    /// - The sample ID is invalid
+    ///
+    pub fn extract_all_named_functions(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for nf in self.named_functions.values() {
+            if !nf.parameters.is_empty() {
+                return Err(SampleSetError::ParameterizedVariable);
+            }
+
+            let name = match &nf.name {
+                Some(n) => n.clone(),
+                None => continue, // Skip functions without names
+            };
+
+            let subscripts = nf.subscripts.clone();
+            let value = *nf.evaluated_values().get(sample_id)?;
+
+            let vars_map = result.entry(name.clone()).or_default();
+            if vars_map.contains_key(&subscripts) {
+                return Err(SampleSetError::DuplicateSubscripts { name, subscripts });
+            }
+            vars_map.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
+    /// Extract named function values for a given name and sample ID
+    ///
+    /// Returns a map from subscripts to values for the specified sample
+    pub fn extract_named_functions(
+        &self,
+        name: &str,
+        sample_id: SampleID,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
+        // Collect all named functions with the given name
+        let named_functions_with_name: Vec<&SampledNamedFunction> = self
+            .named_functions
+            .values()
+            .filter(|nf| nf.name.as_deref() == Some(name))
+            .collect();
+        if named_functions_with_name.is_empty() {
+            return Err(SampleSetError::UnknownConstraintName {
+                name: name.to_string(),
+            });
+        }
+        let mut result = BTreeMap::new();
+        for nf in &named_functions_with_name {
+            if !nf.parameters.is_empty() {
+                return Err(SampleSetError::ParameterizedConstraint);
+            }
+            let subscripts = nf.subscripts().clone();
+            let value = *nf.evaluated_values().get(sample_id)?;
+            if result.insert(subscripts.clone(), value).is_some() {
+                return Err(SampleSetError::DuplicateSubscripts {
+                    name: name.to_string(),
+                    subscripts,
+                });
+            }
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -226,6 +314,7 @@ mod tests {
         let sample_set = SampleSet::new(
             decision_variables,
             objectives,
+            BTreeMap::new(),
             BTreeMap::new(),
             Sense::Minimize,
         )
@@ -332,6 +421,7 @@ mod tests {
             decision_variables,
             objectives,
             BTreeMap::new(),
+            BTreeMap::new(),
             Sense::Minimize,
         )
         .unwrap();
@@ -354,6 +444,7 @@ mod tests {
         let sample_set = SampleSet::new(
             BTreeMap::new(),
             objectives,
+            BTreeMap::new(),
             BTreeMap::new(),
             Sense::Minimize,
         )
@@ -448,6 +539,7 @@ mod tests {
             decision_variables,
             objectives,
             BTreeMap::new(),
+            BTreeMap::new(),
             Sense::Minimize,
         )
         .unwrap();
@@ -540,6 +632,7 @@ mod tests {
             decision_variables,
             objectives,
             BTreeMap::new(),
+            BTreeMap::new(),
             Sense::Minimize,
         )
         .unwrap();
@@ -612,6 +705,7 @@ mod tests {
         let sample_set = SampleSet::new(
             decision_variables,
             objectives,
+            BTreeMap::new(),
             BTreeMap::new(),
             Sense::Minimize,
         )

@@ -94,6 +94,7 @@
 //! ```rust
 //! use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, linear, coeff};
 //! use maplit::btreemap;
+//! use std::collections::BTreeMap;
 //!
 //! // Create decision variables
 //! let decision_variables = btreemap! {
@@ -124,6 +125,7 @@
 //!     objective,
 //!     decision_variables,
 //!     constraints,
+//!     BTreeMap::new(),
 //! )?;
 //!
 //! assert_eq!(instance.sense(), Sense::Minimize);
@@ -167,7 +169,7 @@
 //! use ommx::{Instance, DecisionVariable, VariableID, Constraint, ConstraintID, Function, Sense, Linear, Evaluate, ATol, linear, coeff};
 //! use ommx::v1::State;
 //! use maplit::btreemap;
-//! use std::collections::HashMap;
+//! use std::collections::{BTreeMap, HashMap};
 //!
 //! // Create an instance with variables and constraints
 //! let decision_variables = btreemap! {
@@ -195,6 +197,7 @@
 //!     objective,
 //!     decision_variables,
 //!     constraints,
+//!     BTreeMap::new(),
 //! )?;
 //!
 //! // Create a state with variable values that satisfy constraints
@@ -275,6 +278,7 @@ mod function;
 mod infeasible_detected;
 mod instance;
 mod macros;
+mod named_function;
 mod polynomial_base;
 mod sample_set;
 mod sampled;
@@ -291,6 +295,7 @@ pub use evaluate::Evaluate;
 pub use function::*;
 pub use infeasible_detected::*;
 pub use instance::*;
+pub use named_function::*;
 pub use parse::*;
 pub use polynomial_base::*;
 pub use sample_set::*;

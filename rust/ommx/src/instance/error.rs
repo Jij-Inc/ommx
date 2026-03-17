@@ -10,6 +10,9 @@ pub enum InstanceError {
     #[error("Duplicated constraint ID is found in definition: {id:?}")]
     DuplicatedConstraintID { id: ConstraintID },
 
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
+
     #[error("Undefined variable ID is used: {id:?}")]
     UndefinedVariableID { id: VariableID },
 

@@ -3,8 +3,9 @@ mod parse;
 mod serialize;
 
 use crate::{
-    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, SampleID, SampleIDSet, Sampled,
-    SampledConstraint, SampledDecisionVariable, Sense, Solution, UnknownSampleIDError, VariableID,
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
+    NamedFunctionID, SampleID, SampleIDSet, Sampled, SampledConstraint, SampledDecisionVariable,
+    SampledNamedFunction, Sense, Solution, UnknownSampleIDError, VariableID,
 };
 use getset::Getters;
 use std::collections::BTreeMap;
@@ -71,6 +72,8 @@ pub struct SampleSet {
     #[getset(get = "pub")]
     constraints: BTreeMap<ConstraintID, SampledConstraint>,
     #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
+    #[getset(get = "pub")]
     sense: Sense,
     #[getset(get = "pub")]
     feasible: BTreeMap<SampleID, bool>,
@@ -84,6 +87,7 @@ impl SampleSet {
         decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
         objectives: Sampled<f64>,
         constraints: BTreeMap<ConstraintID, SampledConstraint>,
+        named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
         sense: Sense,
     ) -> Result<Self, SampleSetError> {
         // Get all sample IDs from objectives
@@ -108,6 +112,19 @@ impl SampleSet {
                 return Err(SampleSetError::InconsistentSampleIDs {
                     expected: objective_sample_ids.clone(),
                     found: sampled_constraint.evaluated_values().ids(),
+                });
+            }
+        }
+
+        // Verify that all named functions have the same sample IDs
+        for sampled_named_function in named_functions.values() {
+            if !sampled_named_function
+                .evaluated_values()
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_named_function.evaluated_values().ids(),
                 });
             }
         }
@@ -146,6 +163,7 @@ impl SampleSet {
             decision_variables,
             objectives,
             constraints,
+            named_functions,
             sense,
             feasible,
             feasible_relaxed,
@@ -215,11 +233,20 @@ impl SampleSet {
             evaluated_constraints.insert(*constraint_id, evaluated_constraint);
         }
 
+        // Get evaluated named functions
+        let mut evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction> =
+            BTreeMap::default();
+        for (named_function_id, named_function) in &self.named_functions {
+            let evaluated_named_function = named_function.get(sample_id)?;
+            evaluated_named_functions.insert(*named_function_id, evaluated_named_function);
+        }
+
         let sense = *self.sense();
 
         Ok(Solution::new(
             objective,
             evaluated_constraints,
+            evaluated_named_functions,
             decision_variables,
             sense,
         ))

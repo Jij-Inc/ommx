@@ -31,10 +31,21 @@ impl Evaluate for Instance {
             decision_variables.insert(*evaluated_dv.id(), evaluated_dv);
         }
 
+        let mut evaluated_named_functions = BTreeMap::default();
+        for (id, named_function) in self.named_functions.iter() {
+            let evaluated_named_function = named_function.evaluate(&state, atol)?;
+            evaluated_named_functions.insert(*id, evaluated_named_function);
+        }
+
         let sense = self.sense();
 
-        let solution =
-            crate::Solution::new(objective, evaluated_constraints, decision_variables, sense);
+        let solution = crate::Solution::new(
+            objective,
+            evaluated_constraints,
+            evaluated_named_functions,
+            decision_variables,
+            sense,
+        );
 
         Ok(solution)
     }
@@ -90,10 +101,18 @@ impl Evaluate for Instance {
             constraints_map.insert(*constraint.id(), constraint);
         }
 
+        // Reconstruct named function values
+        let mut named_functions = std::collections::BTreeMap::new();
+        for (id, named_function) in self.named_functions.iter() {
+            let sampled_named_function = named_function.evaluate_samples(&samples, atol)?;
+            named_functions.insert(*id, sampled_named_function);
+        }
+
         Ok(crate::SampleSet::new(
             decision_variables,
             objectives.try_into()?,
             constraints_map,
+            named_functions,
             self.sense,
         )?)
     }
@@ -198,12 +217,14 @@ mod tests {
             .into_iter()
             .collect(),
         });
+        let named_functions = BTreeMap::new();
 
         let mut instance = Instance::new(
             Sense::Minimize,
             objective,
             decision_variables,
             BTreeMap::new(), // No regular constraints
+            named_functions,
         )
         .unwrap();
         instance.constraint_hints = constraint_hints;

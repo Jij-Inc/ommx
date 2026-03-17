@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::{
     coeff, linear, mps::*, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance,
     Sense, VariableID,
@@ -43,8 +45,14 @@ fn test_unused_variable_filtering() {
         ),
     };
 
-    let instance =
-        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+    let instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )
+    .unwrap();
 
     // Write to MPS and read back
     let mut buffer = Vec::new();
@@ -96,8 +104,14 @@ fn test_removed_constraint_variable_preservation() {
         ),
     };
 
-    let mut instance =
-        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+    let mut instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )
+    .unwrap();
 
     // Relax the constraint to create a removed constraint
     instance
@@ -158,8 +172,14 @@ fn test_removed_constraint_information_loss() {
         ),
     };
 
-    let mut instance =
-        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
+    let mut instance = Instance::new(
+        Sense::Minimize,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )
+    .unwrap();
 
     // Relax one constraint to create a removed constraint
     instance

@@ -6,6 +6,7 @@ import "ommx/v1/constraint.proto";
 import "ommx/v1/constraint_hints.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/function.proto";
+import "ommx/v1/named_function.proto";
 
 // A set of parameters for instantiating an optimization problem from a parametric instance
 message Parameters {
@@ -63,4 +64,6 @@ message Instance {
 
   // When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value.
   map<uint64, Function> decision_variable_dependency = 9;
+
+  repeated NamedFunction named_functions = 10;
 }

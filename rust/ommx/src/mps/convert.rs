@@ -18,7 +18,13 @@ pub fn convert(mps: Mps) -> anyhow::Result<Instance> {
     let constraints = convert_constraints(&mps, &name_id_map)?;
     let sense = convert_sense(mps.obj_sense);
 
-    let mut instance = Instance::new(sense, objective, decision_variables, constraints)?;
+    let mut instance = Instance::new(
+        sense,
+        objective,
+        decision_variables,
+        constraints,
+        BTreeMap::new(),
+    )?;
 
     instance.description = convert_description(&mps);
 
