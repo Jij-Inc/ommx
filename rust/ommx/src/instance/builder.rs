@@ -107,6 +107,8 @@ impl InstanceBuilder {
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
     /// - The objective function references undefined variable IDs
     /// - Any constraint references undefined variable IDs
+    /// - The keys of `constraints` and `removed_constraints` are not disjoint
+    /// - The keys of `decision_variable_dependency` are in `decision_variables`
     pub fn build(self) -> anyhow::Result<Instance> {
         let sense = self
             .sense
@@ -133,6 +135,26 @@ impl InstanceBuilder {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
+            }
+        }
+
+        // Validate that constraints and removed_constraints keys are disjoint
+        for id in self.removed_constraints.keys() {
+            if constraints.contains_key(id) {
+                anyhow::bail!(
+                    "Constraint ID {:?} is in both constraints and removed_constraints",
+                    id
+                );
+            }
+        }
+
+        // Validate that decision_variable_dependency keys are not in decision_variables
+        for id in self.decision_variable_dependency.keys() {
+            if variable_ids.contains(&id) {
+                anyhow::bail!(
+                    "Variable ID {:?} is in both decision_variables and decision_variable_dependency",
+                    id
+                );
             }
         }
 
@@ -226,6 +248,56 @@ mod tests {
             .objective(objective)
             .decision_variables(BTreeMap::new())
             .constraints(BTreeMap::new())
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_builder_overlapping_constraint_ids() {
+        use crate::{Constraint, RemovedConstraint};
+        use maplit::btreemap;
+
+        let constraint_id = ConstraintID::from(1);
+        let constraint = Constraint::equal_to_zero(constraint_id, Function::Zero);
+        let removed_constraint = RemovedConstraint {
+            constraint: constraint.clone(),
+            removed_reason: "test".to_string(),
+            removed_reason_parameters: Default::default(),
+        };
+
+        let result = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(btreemap! { constraint_id => constraint })
+            .removed_constraints(btreemap! { constraint_id => removed_constraint })
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_builder_overlapping_variable_dependency() {
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        let decision_variables = btreemap! {
+            var_id => DecisionVariable::binary(var_id),
+        };
+
+        // Create a dependency that assigns to the same variable ID
+        let dependency = AcyclicAssignments::new(btreemap! {
+            var_id => Function::Zero,
+        })
+        .unwrap();
+
+        let result = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
             .build();
 
         assert!(result.is_err());
