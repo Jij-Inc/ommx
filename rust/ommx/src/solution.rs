@@ -794,4 +794,172 @@ mod tests {
             Err(SolutionError::DuplicateSubscript { .. })
         ));
     }
+
+    /// Helper to create an EvaluatedNamedFunction from its components,
+    /// going through the v1 protobuf type and Parse trait to handle
+    /// the private `used_decision_variable_ids` field.
+    fn make_evaluated_named_function(
+        id: u64,
+        evaluated_value: f64,
+        name: Option<&str>,
+        subscripts: Vec<i64>,
+        parameters: std::collections::HashMap<String, String>,
+    ) -> EvaluatedNamedFunction {
+        use crate::{v1, Parse};
+        v1::EvaluatedNamedFunction {
+            id,
+            evaluated_value,
+            name: name.map(|s| s.to_string()),
+            subscripts,
+            parameters,
+            description: None,
+            used_decision_variable_ids: vec![],
+        }
+        .parse(&())
+        .unwrap()
+    }
+
+    #[test]
+    fn test_extract_named_functions() {
+        // Solution with evaluated named functions -> extract by name
+        let mut named_functions = BTreeMap::new();
+
+        named_functions.insert(
+            NamedFunctionID::from(1),
+            make_evaluated_named_function(1, 10.0, Some("cost"), vec![0], Default::default()),
+        );
+
+        named_functions.insert(
+            NamedFunctionID::from(2),
+            make_evaluated_named_function(2, 20.0, Some("cost"), vec![1], Default::default()),
+        );
+
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            named_functions,
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        let result = solution.extract_named_functions("cost").unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&vec![0]], 10.0);
+        assert_eq!(result[&vec![1]], 20.0);
+    }
+
+    #[test]
+    fn test_extract_named_functions_unknown_name() {
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        let result = solution.extract_named_functions("nonexistent");
+        assert!(matches!(
+            result,
+            Err(SolutionError::UnknownNamedFunctionName { name }) if name == "nonexistent"
+        ));
+    }
+
+    #[test]
+    fn test_extract_named_functions_parameterized() {
+        let mut named_functions = BTreeMap::new();
+
+        let mut params = std::collections::HashMap::new();
+        params.insert("param".to_string(), "value".to_string());
+
+        named_functions.insert(
+            NamedFunctionID::from(1),
+            make_evaluated_named_function(1, 5.0, Some("f"), vec![0], params),
+        );
+
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            named_functions,
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        let result = solution.extract_named_functions("f");
+        assert!(matches!(
+            result,
+            Err(SolutionError::ParameterizedNamedFunction)
+        ));
+    }
+
+    #[test]
+    fn test_extract_all_named_functions() {
+        let mut named_functions = BTreeMap::new();
+
+        // Named function "cost" with subscript [0]
+        named_functions.insert(
+            NamedFunctionID::from(1),
+            make_evaluated_named_function(1, 10.0, Some("cost"), vec![0], Default::default()),
+        );
+
+        // Named function "penalty" with subscript [0]
+        named_functions.insert(
+            NamedFunctionID::from(2),
+            make_evaluated_named_function(2, 5.0, Some("penalty"), vec![0], Default::default()),
+        );
+
+        // Unnamed function (should be skipped)
+        named_functions.insert(
+            NamedFunctionID::from(3),
+            make_evaluated_named_function(3, 99.0, None, vec![], Default::default()),
+        );
+
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            named_functions,
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        let result = solution.extract_all_named_functions().unwrap();
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("cost"));
+        assert!(result.contains_key("penalty"));
+        // Unnamed function should not be present
+        assert!(!result.values().any(|v| v.values().any(|&val| val == 99.0)));
+    }
+
+    #[test]
+    fn test_get_named_function_value() {
+        let mut named_functions = BTreeMap::new();
+
+        named_functions.insert(
+            NamedFunctionID::from(42),
+            make_evaluated_named_function(42, 7.5, Some("f"), vec![], Default::default()),
+        );
+
+        let solution = Solution::new(
+            0.0,
+            BTreeMap::new(),
+            named_functions,
+            BTreeMap::new(),
+            Sense::Minimize,
+        );
+
+        // Existing ID
+        assert_eq!(
+            solution
+                .get_named_function_value(NamedFunctionID::from(42))
+                .unwrap(),
+            7.5
+        );
+
+        // Unknown ID
+        let result = solution.get_named_function_value(NamedFunctionID::from(999));
+        assert!(matches!(
+            result,
+            Err(SolutionError::UnknownNamedFunctionID { id }) if id == NamedFunctionID::from(999)
+        ));
+    }
 }

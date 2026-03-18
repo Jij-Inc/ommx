@@ -804,4 +804,243 @@ mod tests {
             Err(crate::SampleSetError::DuplicateSubscripts { .. })
         ));
     }
+
+    /// Helper to create a SampledNamedFunction via the Parse trait from v1 types.
+    fn make_sampled_named_function(
+        id: u64,
+        entries: Vec<(Vec<u64>, f64)>,
+        name: Option<&str>,
+        subscripts: Vec<i64>,
+        parameters: std::collections::HashMap<String, String>,
+        description: Option<&str>,
+    ) -> crate::SampledNamedFunction {
+        use crate::parse::Parse;
+        let v1_entries = entries
+            .into_iter()
+            .map(|(ids, value)| crate::v1::sampled_values::SampledValuesEntry { ids, value })
+            .collect();
+        let v1_snf = crate::v1::SampledNamedFunction {
+            id,
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: v1_entries,
+            }),
+            name: name.map(|s| s.to_string()),
+            subscripts,
+            parameters,
+            description: description.map(|s| s.to_string()),
+            used_decision_variable_ids: vec![],
+        };
+        v1_snf.parse(&()).unwrap()
+    }
+
+    #[test]
+    fn test_extract_named_functions() {
+        // SampleSet with named functions: extract by name + sample_id
+        let mut named_functions = BTreeMap::new();
+
+        // Named function "cost" with subscript [0]
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 10.0), (vec![1], 11.0)],
+            Some("cost"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        // Named function "cost" with subscript [1]
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 20.0), (vec![1], 21.0)],
+            Some("cost"),
+            vec![1],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+        objectives.append([SampleID::from(1)], 0.0).unwrap();
+
+        let sample_set = SampleSet::new(
+            BTreeMap::new(),
+            objectives,
+            BTreeMap::new(),
+            named_functions,
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        // Extract for sample 0
+        let result = sample_set
+            .extract_named_functions("cost", SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&vec![0]], 10.0);
+        assert_eq!(result[&vec![1]], 20.0);
+
+        // Extract for sample 1
+        let result = sample_set
+            .extract_named_functions("cost", SampleID::from(1))
+            .unwrap();
+        assert_eq!(result[&vec![0]], 11.0);
+        assert_eq!(result[&vec![1]], 21.0);
+    }
+
+    #[test]
+    fn test_extract_named_functions_unknown_name() {
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::new(
+            BTreeMap::new(),
+            objectives,
+            BTreeMap::new(),
+            BTreeMap::new(),
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        let result = sample_set.extract_named_functions("nonexistent", SampleID::from(0));
+        assert!(matches!(
+            result,
+            Err(crate::SampleSetError::UnknownNamedFunctionName { name }) if name == "nonexistent"
+        ));
+    }
+
+    #[test]
+    fn test_extract_named_functions_parameterized() {
+        let mut named_functions = BTreeMap::new();
+
+        let snf = make_sampled_named_function(
+            1,
+            vec![(vec![0], 5.0)],
+            Some("f"),
+            vec![0],
+            [("param".to_string(), "value".to_string())]
+                .into_iter()
+                .collect(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::new(
+            BTreeMap::new(),
+            objectives,
+            BTreeMap::new(),
+            named_functions,
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        let result = sample_set.extract_named_functions("f", SampleID::from(0));
+        assert!(matches!(
+            result,
+            Err(crate::SampleSetError::ParameterizedNamedFunction)
+        ));
+    }
+
+    #[test]
+    fn test_extract_all_named_functions() {
+        let mut named_functions = BTreeMap::new();
+
+        // "cost" [0]
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 10.0)],
+            Some("cost"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        // "penalty" [0]
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 5.0)],
+            Some("penalty"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        // Unnamed (should be skipped)
+        let snf3 = make_sampled_named_function(
+            3,
+            vec![(vec![0], 99.0)],
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(3), snf3);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::new(
+            BTreeMap::new(),
+            objectives,
+            BTreeMap::new(),
+            named_functions,
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        let result = sample_set
+            .extract_all_named_functions(SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("cost"));
+        assert!(result.contains_key("penalty"));
+    }
+
+    #[test]
+    fn test_named_function_names() {
+        let mut named_functions = BTreeMap::new();
+
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 1.0)],
+            Some("alpha"),
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 2.0)],
+            Some("beta"),
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::new(
+            BTreeMap::new(),
+            objectives,
+            BTreeMap::new(),
+            named_functions,
+            Sense::Minimize,
+        )
+        .unwrap();
+
+        let names = sample_set.named_function_names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains("alpha"));
+        assert!(names.contains("beta"));
+    }
 }
