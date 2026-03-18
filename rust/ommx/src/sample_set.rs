@@ -64,6 +64,9 @@ pub enum SampleSetError {
     #[error("No named function with name '{name}' found")]
     UnknownNamedFunctionName { name: String },
 
+    #[deprecated(
+        note = "Parameters are now allowed in extract methods; only subscripts are used as keys"
+    )]
     #[error("Named function with parameters is not supported")]
     ParameterizedNamedFunction,
 

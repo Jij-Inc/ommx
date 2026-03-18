@@ -61,6 +61,9 @@ pub enum SolutionError {
     #[error("No named function with name '{name}' found")]
     UnknownNamedFunctionName { name: String },
 
+    #[deprecated(
+        note = "Parameters are now allowed in extract methods; only subscripts are used as keys"
+    )]
     #[error("Named function with parameters is not supported")]
     ParameterizedNamedFunction,
 
@@ -442,11 +445,12 @@ impl Solution {
     /// Returns a mapping from subscripts (as a vector) to the function's evaluated value.
     /// This is useful for extracting named functions that have the same name but different subscripts.
     ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - No named functions with the given name are found
-    /// - A named function with parameters is found
     /// - The same subscript is found multiple times
     pub fn extract_named_functions(
         &self,
@@ -466,9 +470,6 @@ impl Solution {
 
         let mut result = BTreeMap::new();
         for nf in &functions_with_name {
-            if !nf.parameters().is_empty() {
-                return Err(SolutionError::ParameterizedNamedFunction);
-            }
             let key = nf.subscripts().clone();
             if result.contains_key(&key) {
                 return Err(SolutionError::DuplicateSubscript { subscripts: key });
@@ -487,7 +488,6 @@ impl Solution {
     /// # Errors
     ///
     /// Returns an error if:
-    /// - A named function with parameters is found
     /// - The same name and subscript combination is found multiple times
     pub fn extract_all_named_functions(
         &self,
@@ -499,10 +499,6 @@ impl Solution {
                 Some(n) => n.clone(),
                 None => continue, // Skip named functions without names
             };
-
-            if !nf.parameters().is_empty() {
-                return Err(SolutionError::ParameterizedNamedFunction);
-            }
 
             let subscripts = nf.subscripts().clone();
             let value = nf.evaluated_value();

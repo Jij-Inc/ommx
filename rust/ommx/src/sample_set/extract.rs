@@ -183,7 +183,16 @@ impl SampleSet {
 
     /// Extract named function values for a given name and sample ID
     ///
-    /// Returns a map from subscripts to values for the specified sample
+    /// Returns a map from subscripts to values for the specified sample.
+    ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The same name and subscript combination is found multiple times
+    /// - The sample ID is invalid
+    /// - No named function with the given name is found
     pub fn extract_named_functions(
         &self,
         name: &str,
@@ -202,9 +211,6 @@ impl SampleSet {
         }
         let mut result = BTreeMap::new();
         for nf in &named_functions_with_name {
-            if !nf.parameters.is_empty() {
-                return Err(SampleSetError::ParameterizedNamedFunction);
-            }
             let subscripts = nf.subscripts().clone();
             let value = *nf.evaluated_values().get(sample_id)?;
             if result.insert(subscripts.clone(), value).is_some() {
@@ -903,7 +909,8 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_named_functions_parameterized() {
+    fn test_extract_named_functions_with_parameters() {
+        // Parameters are now allowed (ignored) - only subscripts are used as keys
         let mut named_functions = BTreeMap::new();
 
         let snf = make_sampled_named_function(
@@ -930,11 +937,12 @@ mod tests {
             .build()
             .unwrap();
 
-        let result = sample_set.extract_named_functions("f", SampleID::from(0));
-        assert!(matches!(
-            result,
-            Err(crate::SampleSetError::ParameterizedNamedFunction)
-        ));
+        // Should succeed - parameters are ignored
+        let result = sample_set
+            .extract_named_functions("f", SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[&vec![0]], 5.0);
     }
 
     #[test]
