@@ -25,6 +25,9 @@ pub enum InstanceError {
     #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
     DependentVariableUsed { id: VariableID },
 
+    #[error("Variable {id:?} cannot be both fixed (substituted_value set) and dependent")]
+    FixedAndDependentVariable { id: VariableID },
+
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 

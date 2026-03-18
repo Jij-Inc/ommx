@@ -106,10 +106,12 @@ impl InstanceBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
+    /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
     /// - The objective function references undefined variable IDs
     /// - Any constraint references undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
-    /// - The keys of `decision_variable_dependency` are in `decision_variables`
+    /// - The keys of `decision_variable_dependency` are not in `decision_variables`
+    /// - The keys of `decision_variable_dependency` are used in the objective or constraints
     pub fn build(self) -> anyhow::Result<Instance> {
         let sense = self
             .sense
@@ -189,6 +191,36 @@ impl InstanceBuilder {
             if !variable_ids.contains(&id) {
                 return Err(InstanceError::UndefinedDependentVariableID { id }.into());
             }
+        }
+
+        // Validate that used, fixed, and dependent are disjoint (DecisionVariableAnalysis invariant)
+        // - used: IDs used in objective or constraints
+        // - fixed: IDs with substituted_value set
+        // - dependent: keys of decision_variable_dependency
+        let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
+        for constraint in constraints.values() {
+            used.extend(constraint.required_ids());
+        }
+        let fixed: VariableIDSet = decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
+        let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
+
+        // Check used ∩ dependent = ∅
+        for id in used.intersection(&dependent) {
+            return Err(InstanceError::DependentVariableUsed { id: *id }.into());
+        }
+        // Check used ∩ fixed = ∅ (fixed variables should not be used)
+        // Note: This is already implicitly handled by partial_evaluate, but we validate here
+        // Actually, fixed variables CAN be used - they just have their values substituted.
+        // The disjoint requirement is for the analysis partitioning, not a construction constraint.
+        // So we only check dependent vs used.
+
+        // Check fixed ∩ dependent = ∅
+        for id in fixed.intersection(&dependent) {
+            return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
         // Validate constraint_hints using Parse trait (checks variable/constraint existence)
@@ -387,6 +419,7 @@ mod tests {
         .unwrap();
 
         // This should succeed because dependent variable must be in decision_variables
+        // and is not used in objective/constraints
         let instance = Instance::builder()
             .sense(Sense::Minimize)
             .objective(Function::Zero)
@@ -396,5 +429,107 @@ mod tests {
             .build();
 
         assert!(instance.is_ok());
+    }
+
+    #[test]
+    fn test_builder_dependent_variable_used_in_objective() {
+        use crate::linear;
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        let decision_variables = btreemap! {
+            var_id => DecisionVariable::binary(var_id),
+        };
+
+        // Create a dependency for var_id
+        let dependency = AcyclicAssignments::new(btreemap! {
+            var_id => Function::Zero,
+        })
+        .unwrap();
+
+        // Objective uses var_id, which is also a dependent variable - this should fail
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::DependentVariableUsed { id } if *id == var_id
+        ));
+    }
+
+    #[test]
+    fn test_builder_dependent_variable_used_in_constraint() {
+        use crate::linear;
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        let constraint_id = ConstraintID::from(1);
+        let decision_variables = btreemap! {
+            var_id => DecisionVariable::binary(var_id),
+        };
+
+        // Create a dependency for var_id
+        let dependency = AcyclicAssignments::new(btreemap! {
+            var_id => Function::Zero,
+        })
+        .unwrap();
+
+        // Constraint uses var_id, which is also a dependent variable - this should fail
+        let constraint = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(decision_variables)
+            .constraints(btreemap! { constraint_id => constraint })
+            .decision_variable_dependency(dependency)
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::DependentVariableUsed { id } if *id == var_id
+        ));
+    }
+
+    #[test]
+    fn test_builder_fixed_and_dependent_variable() {
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        // Create a decision variable with substituted_value (fixed)
+        let mut dv = DecisionVariable::binary(var_id);
+        dv.substitute(1.0, crate::ATol::default()).unwrap();
+        let decision_variables = btreemap! {
+            var_id => dv,
+        };
+
+        // Create a dependency for the same var_id (now both fixed and dependent)
+        let dependency = AcyclicAssignments::new(btreemap! {
+            var_id => Function::Zero,
+        })
+        .unwrap();
+
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .decision_variable_dependency(dependency)
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::FixedAndDependentVariable { id } if *id == var_id
+        ));
     }
 }

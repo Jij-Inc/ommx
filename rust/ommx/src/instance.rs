@@ -52,6 +52,10 @@ pub enum Sense {
 ///   but must NOT be used in the objective function or constraints.
 ///   These are "dependent variables" whose values are computed from other variables.
 ///   See also the document of [`DecisionVariableAnalysis`].
+/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
+///   - **used**: Variable IDs appearing in the objective function or constraints
+///   - **fixed**: Variable IDs with `substituted_value` set
+///   - **dependent**: Keys of `decision_variable_dependency`
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 ///
@@ -96,6 +100,10 @@ pub struct Instance {
 /// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
 ///   but must NOT be used in the objective function or constraints.
 ///   See also the document of [`DecisionVariableAnalysis`].
+/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
+///   - **used**: Variable IDs appearing in the objective function or constraints
+///   - **fixed**: Variable IDs with `substituted_value` set
+///   - **dependent**: Keys of `decision_variable_dependency`
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

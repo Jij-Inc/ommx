@@ -223,6 +223,31 @@ impl ParametricInstanceBuilder {
             }
         }
 
+        // Validate that used, fixed, and dependent are disjoint (DecisionVariableAnalysis invariant)
+        // - used: IDs used in objective or constraints
+        // - fixed: IDs with substituted_value set
+        // - dependent: keys of decision_variable_dependency
+        let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
+        for constraint in constraints.values() {
+            used.extend(constraint.required_ids());
+        }
+        let fixed: VariableIDSet = decision_variables
+            .values()
+            .filter(|dv| dv.substituted_value().is_some())
+            .map(|dv| dv.id())
+            .collect();
+        let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
+
+        // Check used ∩ dependent = ∅
+        for id in used.intersection(&dependent) {
+            return Err(InstanceError::DependentVariableUsed { id: *id }.into());
+        }
+
+        // Check fixed ∩ dependent = ∅
+        for id in fixed.intersection(&dependent) {
+            return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
+        }
+
         // Validate constraint_hints using Parse trait (checks variable/constraint existence)
         // Move values into context tuple to avoid cloning, then destructure to recover ownership
         let hints: v1::ConstraintHints = self.constraint_hints.into();
