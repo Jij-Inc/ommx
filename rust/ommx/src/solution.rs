@@ -107,24 +107,30 @@ pub struct Solution {
 impl Solution {
     /// Create a new Solution without validation.
     ///
+    /// # Deprecated
     /// This constructor does not validate invariants.
-    /// For construction with validation, use [`SolutionBuilder::build`].
-    ///
-    /// Optimality and relaxation are set to Unspecified by default.
-    /// Feasibility is computed on-demand from the evaluated constraints.
+    /// Use [`SolutionBuilder::build`] for validated construction,
+    /// or [`SolutionBuilder::build_unchecked`] if invariants are guaranteed by construction.
+    #[deprecated(
+        since = "2.5.0",
+        note = "Use Solution::builder().build() for validated construction, or Solution::builder().build_unchecked() for unchecked construction"
+    )]
     pub fn new(
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
         sense: Sense,
     ) -> Self {
-        Self {
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            optimality: crate::v1::Optimality::Unspecified,
-            relaxation: crate::v1::Relaxation::Unspecified,
-            sense: Some(sense),
+        // SAFETY: This is a deprecated method that doesn't validate invariants.
+        // Callers are responsible for ensuring data integrity.
+        unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("All required fields are provided")
         }
     }
 
@@ -548,14 +554,24 @@ impl SolutionBuilder {
         })
     }
 
-    /// Builds the `Solution` without validation.
+    /// Builds the `Solution` without invariant validation.
     ///
-    /// This is useful when the invariants are guaranteed by construction,
+    /// Builds the `Solution` without invariant validation.
+    ///
+    /// # Safety
+    /// This method does not validate that the Solution invariants hold.
+    /// The caller must ensure:
+    /// - Decision variable keys match their value's `id()`
+    /// - Constraint keys match their value's `id()`
+    /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
+    ///
+    /// Use [`Self::build`] for validated construction.
+    /// This method is useful when invariants are guaranteed by construction,
     /// such as when creating a Solution from `Instance::evaluate`.
     ///
     /// # Errors
     /// Returns an error only if required fields are not set.
-    pub(crate) fn build_unchecked(self) -> anyhow::Result<Solution> {
+    pub unsafe fn build_unchecked(self) -> anyhow::Result<Solution> {
         let objective = self
             .objective
             .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
@@ -615,7 +631,16 @@ mod tests {
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
         assert_eq!(solution.total_violation_l1(), 0.0001);
@@ -657,7 +682,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
         assert_eq!(solution.total_violation_l1(), 4.0);
@@ -699,7 +733,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L2: (2.5)² + (1.5)² + 0² = 6.25 + 2.25 + 0 = 8.5
         assert_eq!(solution.total_violation_l2(), 8.5);
@@ -708,7 +751,16 @@ mod tests {
     #[test]
     fn test_total_violation_empty() {
         // No constraints → total violation = 0
-        let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         assert_eq!(solution.total_violation_l1(), 0.0);
         assert_eq!(solution.total_violation_l2(), 0.0);
@@ -730,7 +782,16 @@ mod tests {
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |-3.0| = 3.0
         assert_eq!(solution.total_violation_l1(), 3.0);
@@ -772,7 +833,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = solution.extract_decision_variables("x");
@@ -842,7 +912,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv2, 2.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting variables with duplicate subscripts fails
         let result = solution.extract_decision_variables("x");

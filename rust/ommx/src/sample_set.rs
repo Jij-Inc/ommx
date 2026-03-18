@@ -227,13 +227,16 @@ impl SampleSet {
 
         let sense = *self.sense();
 
-        Ok(Solution::builder()
-            .objective(objective)
-            .evaluated_constraints(evaluated_constraints)
-            .decision_variables(decision_variables)
-            .sense(sense)
-            .build_unchecked()
-            .expect("SampleSet invariants guarantee Solution invariants"))
+        // SAFETY: SampleSet invariants guarantee Solution invariants
+        Ok(unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("SampleSet invariants guarantee Solution invariants")
+        })
     }
 
     pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {

@@ -33,12 +33,15 @@ impl Evaluate for Instance {
 
         let sense = self.sense();
 
-        let solution = crate::Solution::builder()
-            .objective(objective)
-            .evaluated_constraints(evaluated_constraints)
-            .decision_variables(decision_variables)
-            .sense(sense)
-            .build_unchecked()?;
+        // SAFETY: Instance invariants guarantee Solution invariants
+        let solution = unsafe {
+            crate::Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()?
+        };
 
         Ok(solution)
     }
