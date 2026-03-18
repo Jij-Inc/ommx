@@ -67,7 +67,7 @@ class NamedFunction(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """Integer parameters of the named function.
 
-        Consider for example a problem constains a series of named functions
+        Consider for example a problem contains a series of named functions
         `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
         then 6 = 3x2 `NamedFunction` messages should be created
         corresponding to each pair of `i` and `j`.
@@ -180,7 +180,7 @@ class EvaluatedNamedFunction(google.protobuf.message.Message):
     def used_decision_variable_ids(
         self,
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs of decision variables used to evalute this constraint"""
+        """IDs of decision variables used to evaluate this named function"""
 
     @property
     def subscripts(
@@ -188,7 +188,7 @@ class EvaluatedNamedFunction(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """Integer parameters of the named function.
 
-        Consider for example a problem constains a series of named functions
+        Consider for example a problem contains a series of named functions
         `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
         then 6 = 3x2 `NamedFunction` messages should be created
         corresponding to each pair of `i` and `j`.

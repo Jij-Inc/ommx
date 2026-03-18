@@ -392,7 +392,7 @@ pub struct NamedFunction {
     pub function: ::core::option::Option<Function>,
     /// Integer parameters of the named function.
     ///
-    /// Consider for example a problem constains a series of named functions
+    /// Consider for example a problem contains a series of named functions
     /// `x\[i, j\] + y\[i, j\]` for `i = 1, 2, 3` and `j = 4, 5`,
     /// then 6 = 3x2 `NamedFunction` messages should be created
     /// corresponding to each pair of `i` and `j`.
@@ -421,12 +421,12 @@ pub struct EvaluatedNamedFunction {
     pub id: u64,
     #[prost(double, tag = "2")]
     pub evaluated_value: f64,
-    /// IDs of decision variables used to evalute this constraint
+    /// IDs of decision variables used to evaluate this named function
     #[prost(uint64, repeated, tag = "3")]
     pub used_decision_variable_ids: ::prost::alloc::vec::Vec<u64>,
     /// Integer parameters of the named function.
     ///
-    /// Consider for example a problem constains a series of named functions
+    /// Consider for example a problem contains a series of named functions
     /// `x\[i, j\] + y\[i, j\]` for `i = 1, 2, 3` and `j = 4, 5`,
     /// then 6 = 3x2 `NamedFunction` messages should be created
     /// corresponding to each pair of `i` and `j`.
