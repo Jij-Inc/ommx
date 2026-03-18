@@ -111,13 +111,13 @@ impl Evaluate for Instance {
             named_functions.insert(*id, sampled_named_function);
         }
 
-        Ok(crate::SampleSet::new(
-            decision_variables,
-            objectives.try_into()?,
-            constraints_map,
-            named_functions,
-            self.sense,
-        )?)
+        Ok(crate::SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives.try_into()?)
+            .constraints(constraints_map)
+            .named_functions(named_functions)
+            .sense(self.sense)
+            .build()?)
     }
 
     fn partial_evaluate(&mut self, state: &v1::State, atol: ATol) -> Result<()> {

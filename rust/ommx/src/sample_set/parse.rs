@@ -54,14 +54,14 @@ impl Parse for crate::v1::SampleSet {
         })?;
 
         // Create SampleSet with validation
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            constraints,
-            named_functions,
-            sense,
-        )
-        .map_err(crate::RawParseError::SampleSetError)?;
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(constraints)
+            .named_functions(named_functions)
+            .sense(sense)
+            .build()
+            .map_err(crate::RawParseError::SampleSetError)?;
 
         // Check the consistency of feasibility maps from the original v1 data
         for (sample_id_u64, provided_feasible) in self.feasible {

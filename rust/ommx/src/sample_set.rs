@@ -99,7 +99,30 @@ pub struct SampleSet {
 
 impl SampleSet {
     /// Create a new SampleSet
+    ///
+    /// # Deprecated
+    /// This constructor does not support named functions.
+    /// Use [`SampleSetBuilder::build`] for full functionality.
+    #[deprecated(
+        since = "2.5.0",
+        note = "Use SampleSet::builder().build() for construction with named_functions support"
+    )]
     pub fn new(
+        decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
+        objectives: Sampled<f64>,
+        constraints: BTreeMap<ConstraintID, SampledConstraint>,
+        sense: Sense,
+    ) -> Result<Self, SampleSetError> {
+        Self::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(constraints)
+            .sense(sense)
+            .build()
+    }
+
+    /// Internal constructor that validates and creates SampleSet
+    fn new_validated(
         decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
         objectives: Sampled<f64>,
         constraints: BTreeMap<ConstraintID, SampledConstraint>,
@@ -417,7 +440,7 @@ impl SampleSetBuilder {
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
-        SampleSet::new(
+        SampleSet::new_validated(
             decision_variables,
             objectives,
             constraints,

@@ -308,14 +308,13 @@ mod tests {
         objectives.append([SampleID::from(1)], 20.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test extracting variables with name "x" for sample 0
         let sample0_x = sample_set
@@ -414,14 +413,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting variables with duplicate subscripts fails
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -438,14 +436,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test error case: unknown constraint name
         let result = sample_set.extract_constraints("nonexistent", SampleID::from(0));
@@ -532,14 +529,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that we get both "x" and "y" names
         let names = sample_set.decision_variable_names();
@@ -625,14 +621,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test extract_all_decision_variables
         let all_vars = sample_set
@@ -699,14 +694,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -788,14 +782,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting variables with duplicate subscripts fails
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -864,14 +857,14 @@ mod tests {
         objectives.append([SampleID::from(0)], 0.0).unwrap();
         objectives.append([SampleID::from(1)], 0.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            named_functions,
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Extract for sample 0
         let result = sample_set
@@ -894,14 +887,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         let result = sample_set.extract_named_functions("nonexistent", SampleID::from(0));
         assert!(matches!(
@@ -929,14 +921,14 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            named_functions,
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         let result = sample_set.extract_named_functions("f", SampleID::from(0));
         assert!(matches!(
@@ -985,14 +977,14 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            named_functions,
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         let result = sample_set
             .extract_all_named_functions(SampleID::from(0))
@@ -1029,14 +1021,14 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 0.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            named_functions,
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         let names = sample_set.named_function_names();
         assert_eq!(names.len(), 2);
