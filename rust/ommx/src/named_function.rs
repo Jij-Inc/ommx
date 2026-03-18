@@ -10,7 +10,7 @@ use getset::*;
 use crate::{Function, SampleID, Sampled, UnknownSampleIDError, VariableIDSet};
 pub use arbitrary::*;
 
-/// ID for constraint
+/// ID for named function
 #[derive(
     Clone,
     Copy,
