@@ -69,13 +69,34 @@ pub enum SampleSetError {
 
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
+
+    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        value_id: NamedFunctionID,
+    },
 }
 
 /// Multiple sample solution results with deduplication
 ///
 /// Invariants
 /// -----------
-/// - All [`Self::decision_variables`], [`Self::objectives`], and [`Self::constraints`] have the same sample ID set.
+/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - The keys of [`Self::constraints`] match the `id()` of their values.
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - All [`Self::decision_variables`], [`Self::objectives`], [`Self::constraints`], and [`Self::named_functions`] have the same sample ID set.
 /// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from [`Self::constraints`]:
 ///   - `feasible`: true if all constraints are satisfied for that sample
 ///   - `feasible_relaxed`: true if all non-removed constraints (where `removed_reason.is_none()`) are satisfied
@@ -331,6 +352,7 @@ impl SampleSetBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
+    /// - Keys do not match the `id()` of their values
     /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
     pub fn build(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
@@ -351,6 +373,34 @@ impl SampleSetBuilder {
         let sense = self
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
+
+        // Validate key/id consistency
+        for (key, value) in &decision_variables {
+            if key != value.id() {
+                return Err(SampleSetError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: *value.id(),
+                });
+            }
+        }
+
+        for (key, value) in &constraints {
+            if key != value.id() {
+                return Err(SampleSetError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: *value.id(),
+                });
+            }
+        }
+
+        for (key, value) in &self.named_functions {
+            if key != value.id() {
+                return Err(SampleSetError::InconsistentNamedFunctionID {
+                    key: *key,
+                    value_id: *value.id(),
+                });
+            }
+        }
 
         // Validate sample ID consistency
         let objective_sample_ids = objectives.ids();
@@ -403,10 +453,19 @@ impl SampleSetBuilder {
         })
     }
 
-    /// Builds the `SampleSet` without validation.
+    /// Builds the `SampleSet` without invariant validation.
     ///
     /// # Safety
-    /// The caller must ensure that sample IDs are consistent across all components.
+    /// This method does not validate that the SampleSet invariants hold.
+    /// The caller must ensure:
+    /// - Decision variable keys match their value's `id()`
+    /// - Constraint keys match their value's `id()`
+    /// - Named function keys match their value's `id()`
+    /// - Sample IDs are consistent across all components
+    ///
+    /// Use [`Self::build`] for validated construction.
+    /// This method is useful when invariants are guaranteed by construction,
+    /// such as when creating a SampleSet from `Instance::evaluate_samples`.
     ///
     /// # Errors
     /// Returns an error if required fields are not set.
