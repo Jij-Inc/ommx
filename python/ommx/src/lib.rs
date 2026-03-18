@@ -100,6 +100,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
     m.add_class::<Constraint>()?;
+    m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
     m.add_class::<OneHot>()?;
     m.add_class::<Sos1>()?;
@@ -112,8 +113,10 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<State>()?;
     m.add_class::<EvaluatedDecisionVariable>()?;
     m.add_class::<EvaluatedConstraint>()?;
+    m.add_class::<EvaluatedNamedFunction>()?;
     m.add_class::<SampledConstraint>()?;
     m.add_class::<SampledDecisionVariable>()?;
+    m.add_class::<SampledNamedFunction>()?;
 
     // Enums
     m.add_class::<Sense>()?;
