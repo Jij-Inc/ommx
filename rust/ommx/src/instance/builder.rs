@@ -107,11 +107,10 @@ impl InstanceBuilder {
     /// Returns an error if:
     /// - Required fields (`sense`, `objective`, `decision_variables`, `constraints`) are not set
     /// - Map keys don't match their value's ID (decision_variables, constraints, removed_constraints)
-    /// - The objective function references undefined variable IDs
-    /// - Any constraint references undefined variable IDs
+    /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
     /// - The keys of `decision_variable_dependency` are not in `decision_variables`
-    /// - The keys of `decision_variable_dependency` are used in the objective or constraints
+    /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
     pub fn build(self) -> anyhow::Result<Instance> {
         let sense = self
             .sense
@@ -204,8 +203,9 @@ impl InstanceBuilder {
             }
         }
 
-        // Validate that used, fixed, and dependent are disjoint (DecisionVariableAnalysis invariant)
-        // - used: IDs used in objective or constraints
+        // Invariant: used, fixed, and dependent must be pairwise disjoint.
+        // See DecisionVariableAnalysis for details.
+        // - used: IDs appearing in objective or constraints
         // - fixed: IDs with substituted_value set
         // - dependent: keys of decision_variable_dependency
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
@@ -223,11 +223,11 @@ impl InstanceBuilder {
         if let Some(id) = used.intersection(&dependent).next() {
             return Err(InstanceError::DependentVariableUsed { id: *id }.into());
         }
-        // Check used ∩ fixed = ∅ (fixed variables should not be used)
-        // Note: This is already implicitly handled by partial_evaluate, but we validate here
-        // Actually, fixed variables CAN be used - they just have their values substituted.
-        // The disjoint requirement is for the analysis partitioning, not a construction constraint.
-        // So we only check dependent vs used.
+
+        // Check used ∩ fixed = ∅
+        if let Some(id) = used.intersection(&fixed).next() {
+            return Err(InstanceError::FixedVariableUsed { id: *id }.into());
+        }
 
         // Check fixed ∩ dependent = ∅
         if let Some(id) = fixed.intersection(&dependent).next() {
@@ -577,6 +577,34 @@ mod tests {
         assert!(matches!(
             instance_err,
             InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
+        ));
+    }
+
+    #[test]
+    fn test_builder_fixed_variable_used_in_objective() {
+        use maplit::btreemap;
+
+        let var_id = VariableID::from(1);
+        // Create a decision variable with substituted_value (fixed)
+        let mut dv = DecisionVariable::binary(var_id);
+        dv.substitute(1.0, crate::ATol::default()).unwrap();
+        let decision_variables = btreemap! {
+            var_id => dv,
+        };
+
+        // Objective uses var_id, which is fixed - this should fail
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1)))
+            .decision_variables(decision_variables)
+            .constraints(BTreeMap::new())
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::FixedVariableUsed { id } if *id == var_id
         ));
     }
 }

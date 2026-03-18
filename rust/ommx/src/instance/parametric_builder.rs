@@ -107,7 +107,8 @@ impl ParametricInstanceBuilder {
     /// - Decision variable IDs and parameter IDs overlap
     /// - The objective function or constraints reference undefined variable IDs
     /// - The keys of `constraints` and `removed_constraints` are not disjoint
-    /// - The keys of `decision_variable_dependency` are in `decision_variables`
+    /// - The keys of `decision_variable_dependency` are not in `decision_variables`
+    /// - `used`, `fixed`, and `dependent` are not pairwise disjoint (see [`DecisionVariableAnalysis`])
     pub fn build(self) -> anyhow::Result<ParametricInstance> {
         let sense = self
             .sense
@@ -232,8 +233,9 @@ impl ParametricInstanceBuilder {
             }
         }
 
-        // Validate that used, fixed, and dependent are disjoint (DecisionVariableAnalysis invariant)
-        // - used: IDs used in objective or constraints
+        // Invariant: used, fixed, and dependent must be pairwise disjoint.
+        // See DecisionVariableAnalysis for details.
+        // - used: IDs appearing in objective or constraints
         // - fixed: IDs with substituted_value set
         // - dependent: keys of decision_variable_dependency
         let mut used: VariableIDSet = objective.required_ids().into_iter().collect();
@@ -250,6 +252,11 @@ impl ParametricInstanceBuilder {
         // Check used ∩ dependent = ∅
         if let Some(id) = used.intersection(&dependent).next() {
             return Err(InstanceError::DependentVariableUsed { id: *id }.into());
+        }
+
+        // Check used ∩ fixed = ∅
+        if let Some(id) = used.intersection(&fixed).next() {
+            return Err(InstanceError::FixedVariableUsed { id: *id }.into());
         }
 
         // Check fixed ∩ dependent = ∅
