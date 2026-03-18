@@ -80,7 +80,7 @@ fn test_large_linear_memory() {
     // Create a larger linear expression with many terms
     let mut expr = coeff!(1.0) * linear!(1);
     for i in 2..=100 {
-        expr = expr + coeff!(i as f64) * linear!(i);
+        expr += coeff!(i as f64) * linear!(i);
     }
 
     let folded = logical_memory_to_folded(&expr);
@@ -98,7 +98,7 @@ fn test_medium_linear_snapshot() {
     // Create a medium-sized deterministic linear expression with 10 terms
     let mut expr = coeff!(1.0) * linear!(1);
     for i in 2..=10 {
-        expr = expr + coeff!(i as f64) * linear!(i);
+        expr += coeff!(i as f64) * linear!(i);
     }
 
     let folded = logical_memory_to_folded(&expr);

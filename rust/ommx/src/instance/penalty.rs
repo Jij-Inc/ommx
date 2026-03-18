@@ -261,14 +261,7 @@ mod tests {
             },
         );
 
-        Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            BTreeMap::new(),
-        )
-        .unwrap()
+        Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap()
     }
 
     /// Helper function to verify penalty method properties
@@ -371,7 +364,6 @@ mod tests {
             objective.clone(),
             decision_variables,
             constraints,
-            BTreeMap::new(),
         )
         .unwrap();
 

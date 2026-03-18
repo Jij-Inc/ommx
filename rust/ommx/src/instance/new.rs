@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    VariableID, VariableIDSet,
-};
+use crate::{v1, Constraint, ConstraintID, DecisionVariable, Function, VariableID};
 use std::collections::BTreeMap;
 
 impl Instance {
@@ -11,41 +8,13 @@ impl Instance {
         objective: Function,
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-        named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     ) -> anyhow::Result<Self> {
-        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-        for named_function in named_functions.values() {
-            for id in named_function.required_ids() {
-                if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        Ok(Instance {
-            sense,
-            objective,
-            decision_variables,
-            constraints,
-            named_functions,
-            removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints: ConstraintHints::default(),
-            parameters: None,
-            description: None,
-        })
+        Self::builder()
+            .sense(sense)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .build()
     }
 }
 
@@ -56,66 +25,14 @@ impl ParametricInstance {
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         parameters: BTreeMap<VariableID, v1::Parameter>,
         constraints: BTreeMap<ConstraintID, Constraint>,
-        named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     ) -> anyhow::Result<Self> {
-        // Check that decision variable IDs and parameter IDs are disjoint
-        let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
-
-        let intersection: VariableIDSet = decision_variable_ids
-            .intersection(&parameter_ids)
-            .cloned()
-            .collect();
-        if !intersection.is_empty() {
-            return Err(InstanceError::DuplicatedVariableID {
-                id: *intersection.iter().next().unwrap(),
-            }
-            .into());
-        }
-
-        // Combine decision variables and parameters for validation
-        let all_variable_ids: VariableIDSet = decision_variable_ids
-            .union(&parameter_ids)
-            .cloned()
-            .collect();
-
-        // Check that all IDs used in objective are defined
-        for id in objective.required_ids() {
-            if !all_variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-
-        // Check that all IDs used in constraints are defined
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        // Check that all IDs used in named functions are defined
-        for named_function in named_functions.values() {
-            for id in named_function.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        Ok(ParametricInstance {
-            sense,
-            objective,
-            decision_variables,
-            parameters,
-            constraints,
-            named_functions,
-            removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints: ConstraintHints::default(),
-            description: None,
-        })
+        Self::builder()
+            .sense(sense)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .parameters(parameters)
+            .constraints(constraints)
+            .build()
     }
 }
 
@@ -141,7 +58,6 @@ mod tests {
         let objective = (linear!(999) + coeff!(1.0)).into();
 
         let constraints = BTreeMap::new();
-        let named_functions = BTreeMap::new();
 
         // This should fail because variable ID 999 is used in objective but not defined
         insta::assert_snapshot!(
@@ -150,7 +66,6 @@ mod tests {
                 objective,
                 decision_variables,
                 constraints,
-                named_functions,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#
@@ -172,7 +87,6 @@ mod tests {
         let constraints = btreemap! {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
         };
-        let named_functions = BTreeMap::new();
 
         // This should fail because variable ID 999 is used in constraint but not defined
         insta::assert_snapshot!(
@@ -181,7 +95,6 @@ mod tests {
                 objective,
                 decision_variables,
                 constraints,
-                named_functions,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#
@@ -209,7 +122,6 @@ mod tests {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(2) + linear!(101) + coeff!(1.0)).into()),
             ConstraintID::from(2) => Constraint::less_than_or_equal_to_zero(ConstraintID::from(2), (linear!(1) + linear!(100) + coeff!(2.0)).into()),
         };
-        let named_functions = BTreeMap::new();
 
         let parametric_instance = ParametricInstance::new(
             Sense::Maximize,
@@ -217,14 +129,13 @@ mod tests {
             decision_variables,
             parameters,
             constraints,
-            named_functions,
         )
         .unwrap();
 
-        assert_eq!(parametric_instance.sense, Sense::Maximize);
-        assert_eq!(parametric_instance.decision_variables.len(), 2);
-        assert_eq!(parametric_instance.parameters.len(), 2);
-        assert_eq!(parametric_instance.constraints.len(), 2);
+        assert_eq!(*parametric_instance.sense(), Sense::Maximize);
+        assert_eq!(parametric_instance.decision_variables().len(), 2);
+        assert_eq!(parametric_instance.parameters().len(), 2);
+        assert_eq!(parametric_instance.constraints().len(), 2);
     }
 
     #[test]
@@ -243,7 +154,6 @@ mod tests {
 
         let objective = (linear!(1) + coeff!(1.0)).into();
         let constraints = BTreeMap::new();
-        let named_functions = BTreeMap::new();
 
         insta::assert_snapshot!(
             ParametricInstance::new(
@@ -252,7 +162,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                named_functions,
             )
             .unwrap_err(),
             @"Duplicated variable ID is found in definition: VariableID(1)"
@@ -275,7 +184,6 @@ mod tests {
         let objective = (linear!(999) + coeff!(1.0)).into();
 
         let constraints = BTreeMap::new();
-        let named_functions = BTreeMap::new();
 
         insta::assert_snapshot!(
             ParametricInstance::new(
@@ -284,7 +192,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                named_functions,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#
@@ -309,7 +216,6 @@ mod tests {
         let constraints = btreemap! {
             ConstraintID::from(1) => Constraint::equal_to_zero(ConstraintID::from(1), (linear!(999) + coeff!(1.0)).into()),
         };
-        let named_functions = BTreeMap::new();
 
         insta::assert_snapshot!(
             ParametricInstance::new(
@@ -318,7 +224,6 @@ mod tests {
                 decision_variables,
                 parameters,
                 constraints,
-                named_functions,
             )
             .unwrap_err(),
             @r#"Undefined variable ID is used: VariableID(999)"#

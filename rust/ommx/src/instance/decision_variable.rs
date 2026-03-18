@@ -117,7 +117,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
         assert_eq!(instance.next_variable_id(), VariableID::from(0));
@@ -134,7 +133,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -151,7 +149,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 

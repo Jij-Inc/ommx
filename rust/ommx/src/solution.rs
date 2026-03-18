@@ -63,9 +63,43 @@ pub enum SolutionError {
 
     #[error("Named function with parameters is not supported")]
     ParameterizedNamedFunction,
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error(
+        "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
+    )]
+    UndefinedVariableInConstraint {
+        id: VariableID,
+        constraint_id: ConstraintID,
+    },
 }
 
 /// Single solution result with data integrity guarantees
+///
+/// Invariants
+/// -----------
+/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
+///
+/// Note
+/// -----
+/// - [`Self::optimality`] is determined by the solver, not validated by this struct.
+/// - [`Self::relaxation`] is a record of operations, not validated by this struct.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
@@ -85,25 +119,32 @@ pub struct Solution {
 }
 
 impl Solution {
-    /// Create a new Solution
+    /// Create a new Solution without validation.
     ///
-    /// Optimality and relaxation are set to Unspecified by default.
-    /// Feasibility is computed on-demand from the evaluated constraints.
+    /// # Deprecated
+    /// This constructor does not validate invariants.
+    /// Use [`SolutionBuilder::build`] for validated construction,
+    /// or [`SolutionBuilder::build_unchecked`] if invariants are guaranteed by construction.
+    #[deprecated(
+        since = "2.5.0",
+        note = "Use Solution::builder().build() for validated construction, or Solution::builder().build_unchecked() for unchecked construction"
+    )]
     pub fn new(
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
-        evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
         sense: Sense,
     ) -> Self {
-        Self {
-            objective,
-            evaluated_constraints,
-            evaluated_named_functions,
-            decision_variables,
-            optimality: crate::v1::Optimality::Unspecified,
-            relaxation: crate::v1::Relaxation::Unspecified,
-            sense: Some(sense),
+        // SAFETY: This is a deprecated method that doesn't validate invariants.
+        // Callers are responsible for ensuring data integrity.
+        unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("All required fields are provided")
         }
     }
 
@@ -226,17 +267,6 @@ impl Solution {
             .collect()
     }
 
-    /// Get all unique named function names in this solution
-    ///
-    /// Returns a set of all unique named function names that have at least one named function.
-    /// Named functions without names are not included.
-    pub fn named_function_names(&self) -> BTreeSet<String> {
-        self.evaluated_named_functions
-            .values()
-            .filter_map(|nf| nf.name.clone())
-            .collect()
-    }
-
     /// Extract decision variables by name with subscripts as key
     ///
     /// Returns a mapping from subscripts (as a vector) to the variable's value.
@@ -356,107 +386,12 @@ impl Solution {
         Ok(result)
     }
 
-    /// Extract named functions by name with subscripts as key
-    ///
-    /// Returns a mapping from subscripts (as a vector) to the named function's value.
-    /// This is useful for extracting named functions that have the same name but different subscripts.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No named functions with the given name are found
-    /// - A named function with parameters is found
-    /// - The same subscript is found multiple times
-    ///
-    pub fn extract_named_functions(
-        &self,
-        name: &str,
-    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
-        // Collect all named functions with the given name
-        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
-            .evaluated_named_functions
-            .values()
-            .filter(|nf| nf.name.as_deref() == Some(name))
-            .collect();
-        if functions_with_name.is_empty() {
-            return Err(SolutionError::UnknownNamedFunctionName {
-                name: name.to_string(),
-            });
-        }
-
-        let mut result = BTreeMap::new();
-        for nf in &functions_with_name {
-            if !nf.parameters.is_empty() {
-                return Err(SolutionError::ParameterizedNamedFunction);
-            }
-            let key = nf.subscripts.clone();
-            if result.contains_key(&key) {
-                return Err(SolutionError::DuplicateSubscript { subscripts: key });
-            }
-            result.insert(key, nf.evaluated_value());
-        }
-        Ok(result)
-    }
-
-    /// Extract all named functions grouped by name
-    ///
-    /// Returns a mapping from named function name to a mapping from subscripts to values.
-    /// This is useful for extracting all named functions at once in a structured format.
-    /// Named functions without names are not included in the result.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - A named function with parameters is found
-    /// - The same name and subscript combination is found multiple times
-    ///
-    pub fn extract_all_named_functions(
-        &self,
-    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
-        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
-
-        for nf in self.evaluated_named_functions.values() {
-            if !nf.parameters.is_empty() {
-                return Err(SolutionError::ParameterizedNamedFunction);
-            }
-
-            let name = match &nf.name {
-                Some(n) => n.clone(),
-                None => continue, // Skip named functions without names
-            };
-
-            let subscripts = nf.subscripts.clone();
-            let value = nf.evaluated_value();
-
-            let funcs_map = result.entry(name).or_default();
-            if funcs_map.contains_key(&subscripts) {
-                return Err(SolutionError::DuplicateSubscript { subscripts });
-            }
-            funcs_map.insert(subscripts, value);
-        }
-
-        Ok(result)
-    }
-
     /// Get the evaluated value of a specific constraint by ID
     pub fn get_constraint_value(&self, constraint_id: ConstraintID) -> Result<f64, SolutionError> {
         self.evaluated_constraints
             .get(&constraint_id)
             .map(|c| *c.evaluated_value())
             .ok_or(SolutionError::UnknownConstraintID { id: constraint_id })
-    }
-
-    /// Get the evaluated value of a specific named function by ID
-    pub fn get_named_function_value(
-        &self,
-        named_function_id: NamedFunctionID,
-    ) -> Result<f64, SolutionError> {
-        self.evaluated_named_functions
-            .get(&named_function_id)
-            .map(|nf| nf.evaluated_value())
-            .ok_or(SolutionError::UnknownNamedFunctionID {
-                id: named_function_id,
-            })
     }
 
     /// Get the dual variable value of a specific constraint by ID
@@ -482,6 +417,308 @@ impl Solution {
         } else {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
         }
+    }
+
+    /// Get all unique named function names in this solution
+    ///
+    /// Returns a set of all unique function names that have at least one named function.
+    /// Named functions without names are not included.
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.evaluated_named_functions
+            .values()
+            .filter_map(|nf| nf.name().clone())
+            .collect()
+    }
+
+    /// Extract named functions by name with subscripts as key
+    ///
+    /// Returns a mapping from subscripts (as a vector) to the function's evaluated value.
+    /// This is useful for extracting named functions that have the same name but different subscripts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No named functions with the given name are found
+    /// - A named function with parameters is found
+    /// - The same subscript is found multiple times
+    pub fn extract_named_functions(
+        &self,
+        name: &str,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
+        // Collect all named functions with the given name
+        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
+            .evaluated_named_functions
+            .values()
+            .filter(|nf| nf.name().as_deref() == Some(name))
+            .collect();
+        if functions_with_name.is_empty() {
+            return Err(SolutionError::UnknownNamedFunctionName {
+                name: name.to_string(),
+            });
+        }
+
+        let mut result = BTreeMap::new();
+        for nf in &functions_with_name {
+            if !nf.parameters().is_empty() {
+                return Err(SolutionError::ParameterizedNamedFunction);
+            }
+            let key = nf.subscripts().clone();
+            if result.contains_key(&key) {
+                return Err(SolutionError::DuplicateSubscript { subscripts: key });
+            }
+            result.insert(key, nf.evaluated_value());
+        }
+        Ok(result)
+    }
+
+    /// Extract all named functions grouped by name
+    ///
+    /// Returns a mapping from function name to a mapping from subscripts to evaluated values.
+    /// This is useful for extracting all named functions at once in a structured format.
+    /// Named functions without names are not included in the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - A named function with parameters is found
+    /// - The same name and subscript combination is found multiple times
+    pub fn extract_all_named_functions(
+        &self,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for nf in self.evaluated_named_functions.values() {
+            let name = match nf.name() {
+                Some(n) => n.clone(),
+                None => continue, // Skip named functions without names
+            };
+
+            if !nf.parameters().is_empty() {
+                return Err(SolutionError::ParameterizedNamedFunction);
+            }
+
+            let subscripts = nf.subscripts().clone();
+            let value = nf.evaluated_value();
+
+            let funcs_map = result.entry(name).or_default();
+            if funcs_map.contains_key(&subscripts) {
+                return Err(SolutionError::DuplicateSubscript { subscripts });
+            }
+            funcs_map.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
+    /// Creates a new [`SolutionBuilder`].
+    pub fn builder() -> SolutionBuilder {
+        SolutionBuilder::new()
+    }
+}
+
+/// Builder for creating [`Solution`] with validation.
+///
+/// # Example
+/// ```
+/// use ommx::{Solution, Sense};
+/// use std::collections::BTreeMap;
+///
+/// let solution = Solution::builder()
+///     .objective(0.0)
+///     .evaluated_constraints(BTreeMap::new())
+///     .decision_variables(BTreeMap::new())
+///     .sense(Sense::Minimize)
+///     .build()
+///     .unwrap();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SolutionBuilder {
+    objective: Option<f64>,
+    evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
+    decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
+    sense: Option<Sense>,
+    optimality: crate::v1::Optimality,
+    relaxation: crate::v1::Relaxation,
+}
+
+impl SolutionBuilder {
+    /// Creates a new `SolutionBuilder` with all fields unset.
+    pub fn new() -> Self {
+        Self {
+            optimality: crate::v1::Optimality::Unspecified,
+            relaxation: crate::v1::Relaxation::Unspecified,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the objective value.
+    pub fn objective(mut self, objective: f64) -> Self {
+        self.objective = Some(objective);
+        self
+    }
+
+    /// Sets the evaluated constraints.
+    pub fn evaluated_constraints(
+        mut self,
+        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    ) -> Self {
+        self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the evaluated named functions.
+    pub fn evaluated_named_functions(
+        mut self,
+        evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
+    ) -> Self {
+        self.evaluated_named_functions = evaluated_named_functions;
+        self
+    }
+
+    /// Sets the decision variables.
+    pub fn decision_variables(
+        mut self,
+        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    ) -> Self {
+        self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the optimization sense.
+    pub fn sense(mut self, sense: Sense) -> Self {
+        self.sense = Some(sense);
+        self
+    }
+
+    /// Sets the optimality status.
+    pub fn optimality(mut self, optimality: crate::v1::Optimality) -> Self {
+        self.optimality = optimality;
+        self
+    }
+
+    /// Sets the relaxation status.
+    pub fn relaxation(mut self, relaxation: crate::v1::Relaxation) -> Self {
+        self.relaxation = relaxation;
+        self
+    }
+
+    /// Builds the `Solution` with full validation.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
+    /// - Decision variable keys don't match their value's `id()`
+    /// - Constraint keys don't match their value's `id()`
+    /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
+    pub fn build(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let sense = self
+            .sense
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+
+        // Validate decision variable keys match their id
+        for (key, value) in &decision_variables {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate constraint keys match their id
+        for (key, value) in &evaluated_constraints {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate all used_decision_variable_ids are in decision_variables
+        for constraint in evaluated_constraints.values() {
+            for var_id in constraint.used_decision_variable_ids() {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(SolutionError::UndefinedVariableInConstraint {
+                        id: *var_id,
+                        constraint_id: *constraint.id(),
+                    }
+                    .into());
+                }
+            }
+        }
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            evaluated_named_functions: self.evaluated_named_functions,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
+    }
+
+    /// Builds the `Solution` without invariant validation.
+    ///
+    /// Builds the `Solution` without invariant validation.
+    ///
+    /// # Safety
+    /// This method does not validate that the Solution invariants hold.
+    /// The caller must ensure:
+    /// - Decision variable keys match their value's `id()`
+    /// - Constraint keys match their value's `id()`
+    /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
+    ///
+    /// Use [`Self::build`] for validated construction.
+    /// This method is useful when invariants are guaranteed by construction,
+    /// such as when creating a Solution from `Instance::evaluate`.
+    ///
+    /// # Errors
+    /// Returns an error only if required fields are not set.
+    pub unsafe fn build_unchecked(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let sense = self
+            .sense
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            evaluated_named_functions: self.evaluated_named_functions,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
     }
 }
 
@@ -516,13 +753,16 @@ mod tests {
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            constraints,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
         assert_eq!(solution.total_violation_l1(), 0.0001);
@@ -564,13 +804,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            constraints,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
         assert_eq!(solution.total_violation_l1(), 4.0);
@@ -612,13 +855,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            constraints,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L2: (2.5)² + (1.5)² + 0² = 6.25 + 2.25 + 0 = 8.5
         assert_eq!(solution.total_violation_l2(), 8.5);
@@ -627,13 +873,16 @@ mod tests {
     #[test]
     fn test_total_violation_empty() {
         // No constraints → total violation = 0
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         assert_eq!(solution.total_violation_l1(), 0.0);
         assert_eq!(solution.total_violation_l2(), 0.0);
@@ -655,13 +904,16 @@ mod tests {
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            constraints,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |-3.0| = 3.0
         assert_eq!(solution.total_violation_l1(), 3.0);
@@ -703,13 +955,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            decision_variables,
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = solution.extract_decision_variables("x");
@@ -779,13 +1034,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv2, 2.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            decision_variables,
-            Sense::Minimize,
-        );
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting variables with duplicate subscripts fails
         let result = solution.extract_decision_variables("x");
@@ -795,171 +1053,145 @@ mod tests {
         ));
     }
 
-    /// Helper to create an EvaluatedNamedFunction from its components,
-    /// going through the v1 protobuf type and Parse trait to handle
-    /// the private `used_decision_variable_ids` field.
-    fn make_evaluated_named_function(
-        id: u64,
-        evaluated_value: f64,
-        name: Option<&str>,
-        subscripts: Vec<i64>,
-        parameters: std::collections::HashMap<String, String>,
-    ) -> EvaluatedNamedFunction {
-        use crate::{v1, Parse};
-        v1::EvaluatedNamedFunction {
-            id,
-            evaluated_value,
-            name: name.map(|s| s.to_string()),
-            subscripts,
-            parameters,
-            description: None,
-            used_decision_variable_ids: vec![],
-        }
-        .parse(&())
-        .unwrap()
-    }
-
     #[test]
-    fn test_extract_named_functions() {
-        // Solution with evaluated named functions -> extract by name
-        let mut named_functions = BTreeMap::new();
-
-        named_functions.insert(
-            NamedFunctionID::from(1),
-            make_evaluated_named_function(1, 10.0, Some("cost"), vec![0], Default::default()),
-        );
-
-        named_functions.insert(
-            NamedFunctionID::from(2),
-            make_evaluated_named_function(2, 20.0, Some("cost"), vec![1], Default::default()),
-        );
-
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            named_functions,
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
-
-        let result = solution.extract_named_functions("cost").unwrap();
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[&vec![0]], 10.0);
-        assert_eq!(result[&vec![1]], 20.0);
-    }
-
-    #[test]
-    fn test_extract_named_functions_unknown_name() {
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
-
-        let result = solution.extract_named_functions("nonexistent");
+    fn test_builder_missing_required_field() {
+        // Missing objective
+        let err = Solution::builder()
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
         assert!(matches!(
-            result,
-            Err(SolutionError::UnknownNamedFunctionName { name }) if name == "nonexistent"
+            solution_err,
+            SolutionError::MissingRequiredField { field: "objective" }
+        ));
+
+        // Missing sense
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::MissingRequiredField { field: "sense" }
         ));
     }
 
     #[test]
-    fn test_extract_named_functions_parameterized() {
-        let mut named_functions = BTreeMap::new();
+    fn test_builder_inconsistent_decision_variable_id() {
+        use crate::DecisionVariable;
 
-        let mut params = std::collections::HashMap::new();
-        params.insert("param".to_string(), "value".to_string());
+        let var_id_1 = VariableID::from(1);
+        let var_id_2 = VariableID::from(2);
+        let dv = DecisionVariable::binary(var_id_1);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
 
-        named_functions.insert(
-            NamedFunctionID::from(1),
-            make_evaluated_named_function(1, 5.0, Some("f"), vec![0], params),
-        );
+        // Map key (2) doesn't match value's id (1)
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id_2, evaluated_dv);
 
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            named_functions,
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
-
-        let result = solution.extract_named_functions("f");
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
         assert!(matches!(
-            result,
-            Err(SolutionError::ParameterizedNamedFunction)
+            solution_err,
+            SolutionError::InconsistentDecisionVariableID { key, value_id }
+                if *key == var_id_2 && *value_id == var_id_1
         ));
     }
 
     #[test]
-    fn test_extract_all_named_functions() {
-        let mut named_functions = BTreeMap::new();
+    fn test_builder_inconsistent_constraint_id() {
+        let state = crate::v1::State::default();
+        let constraint_id_1 = ConstraintID::from(1);
+        let constraint_id_2 = ConstraintID::from(2);
 
-        // Named function "cost" with subscript [0]
-        named_functions.insert(
-            NamedFunctionID::from(1),
-            make_evaluated_named_function(1, 10.0, Some("cost"), vec![0], Default::default()),
+        let c = Constraint::equal_to_zero(
+            constraint_id_1,
+            Function::Constant(Coefficient::try_from(1.0).unwrap()),
         );
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
 
-        // Named function "penalty" with subscript [0]
-        named_functions.insert(
-            NamedFunctionID::from(2),
-            make_evaluated_named_function(2, 5.0, Some("penalty"), vec![0], Default::default()),
-        );
+        // Map key (2) doesn't match value's id (1)
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id_2, evaluated_c);
 
-        // Unnamed function (should be skipped)
-        named_functions.insert(
-            NamedFunctionID::from(3),
-            make_evaluated_named_function(3, 99.0, None, vec![], Default::default()),
-        );
-
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            named_functions,
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
-
-        let result = solution.extract_all_named_functions().unwrap();
-        assert_eq!(result.len(), 2);
-        assert!(result.contains_key("cost"));
-        assert!(result.contains_key("penalty"));
-        // Unnamed function should not be present
-        assert!(!result.values().any(|v| v.values().any(|&val| val == 99.0)));
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::InconsistentConstraintID { key, value_id }
+                if *key == constraint_id_2 && *value_id == constraint_id_1
+        ));
     }
 
     #[test]
-    fn test_get_named_function_value() {
-        let mut named_functions = BTreeMap::new();
+    fn test_builder_undefined_variable_in_constraint() {
+        use crate::linear;
 
-        named_functions.insert(
-            NamedFunctionID::from(42),
-            make_evaluated_named_function(42, 7.5, Some("f"), vec![], Default::default()),
-        );
+        let state = crate::v1::State::from(std::collections::HashMap::from([(1, 1.0)]));
+        let constraint_id = ConstraintID::from(1);
+        let var_id = VariableID::from(1);
 
-        let solution = Solution::new(
-            0.0,
-            BTreeMap::new(),
-            named_functions,
-            BTreeMap::new(),
-            Sense::Minimize,
-        );
+        // Constraint uses variable ID 1
+        let c = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
 
-        // Existing ID
-        assert_eq!(
-            solution
-                .get_named_function_value(NamedFunctionID::from(42))
-                .unwrap(),
-            7.5
-        );
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id, evaluated_c);
 
-        // Unknown ID
-        let result = solution.get_named_function_value(NamedFunctionID::from(999));
+        // decision_variables is empty, so variable ID 1 is undefined
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
         assert!(matches!(
-            result,
-            Err(SolutionError::UnknownNamedFunctionID { id }) if id == NamedFunctionID::from(999)
+            solution_err,
+            SolutionError::UndefinedVariableInConstraint { id, constraint_id: cid }
+                if *id == var_id && *cid == constraint_id
         ));
+    }
+
+    #[test]
+    fn test_builder_success() {
+        use crate::DecisionVariable;
+
+        let var_id = VariableID::from(1);
+        let dv = DecisionVariable::binary(var_id);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id, evaluated_dv);
+
+        let solution = Solution::builder()
+            .objective(42.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Maximize)
+            .build()
+            .unwrap();
+
+        assert_eq!(*solution.objective(), 42.0);
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
     }
 }

@@ -158,7 +158,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -199,16 +198,8 @@ mod tests {
             Constraint::equal_to_zero(ConstraintID::from(5), (linear!(1) + coeff!(1.0)).into());
         constraints.insert(ConstraintID::from(5), original_constraint.clone());
 
-        let named_functions = BTreeMap::new();
-
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            named_functions,
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Insert a new constraint with the same ID but using variable 2
         let new_constraint =
@@ -247,7 +238,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -294,7 +284,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -346,7 +335,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -380,7 +368,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -422,14 +409,8 @@ mod tests {
             ),
         };
 
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            BTreeMap::new(), // named_functions
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
             .relax_constraint(ConstraintID::from(2), "test".to_string(), [])
             .unwrap();
@@ -480,7 +461,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -516,7 +496,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -562,7 +541,6 @@ mod tests {
             objective.into(),
             decision_variables,
             constraints,
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -601,7 +579,6 @@ mod tests {
             objective.into(),
             decision_variables,
             constraints,
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -641,7 +618,6 @@ mod tests {
             objective.into(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -680,7 +656,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
         assert_eq!(instance.next_constraint_id(), ConstraintID::from(0));
@@ -700,14 +675,8 @@ mod tests {
                 (linear!(1) + coeff!(2.0)).into(),
             ),
         };
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            BTreeMap::new(), // named_functions
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
         instance
             .relax_constraint(ConstraintID::from(15), "test".to_string(), [])
             .unwrap();

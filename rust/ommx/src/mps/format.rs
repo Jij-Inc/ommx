@@ -390,7 +390,6 @@ mod tests {
             Function::from(crate::linear!(0)),
             decision_variables,
             btreemap! {},
-            BTreeMap::new(),
         )
         .unwrap();
 
@@ -421,7 +420,6 @@ mod tests {
             Function::from(crate::linear!(0)),
             decision_variables,
             btreemap! {},
-            BTreeMap::new(),
         )
         .unwrap();
 
@@ -453,7 +451,6 @@ mod tests {
             Function::from(crate::linear!(0)),
             decision_variables,
             btreemap! {},
-            BTreeMap::new(),
         )
         .unwrap();
 
@@ -492,7 +489,6 @@ mod tests {
             Function::from(crate::linear!(0) + crate::linear!(1)),
             decision_variables,
             btreemap! {},
-            BTreeMap::new(),
         )
         .unwrap();
 
@@ -540,7 +536,6 @@ mod tests {
             Function::from(crate::linear!(0) + crate::linear!(1) + crate::linear!(2)),
             decision_variables,
             btreemap! {},
-            BTreeMap::new(),
         )
         .unwrap();
 

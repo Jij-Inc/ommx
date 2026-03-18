@@ -83,7 +83,6 @@ mod tests {
             objective,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -136,14 +135,11 @@ mod tests {
         let mut constraints = BTreeMap::new();
         constraints.insert(constraint.id, constraint);
 
-        let named_functions = BTreeMap::new();
-
         let instance = Instance::new(
             crate::instance::Sense::Minimize,
             objective,
             decision_variables,
             constraints,
-            named_functions,
         )
         .unwrap();
 
@@ -202,7 +198,6 @@ mod tests {
             Function::Zero,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 
@@ -243,7 +238,6 @@ mod tests {
             Function::Zero,
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 

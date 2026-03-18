@@ -1,6 +1,7 @@
 mod analysis;
 mod approx;
 pub(crate) mod arbitrary;
+mod builder;
 mod clip_bounds;
 mod constraint_hints;
 mod convert;
@@ -11,6 +12,7 @@ mod log_encode;
 mod logical_memory;
 mod named_function;
 mod new;
+mod parametric_builder;
 mod parse;
 mod pass;
 mod penalty;
@@ -21,8 +23,10 @@ mod stats;
 mod substitute;
 
 pub use analysis::*;
+pub use builder::*;
 pub use error::*;
 pub use log_encode::*;
+pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
@@ -45,7 +49,14 @@ pub enum Sense {
 /// -----------
 /// - [`Self::decision_variables`] contains all decision variables used in the problem.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
-/// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+/// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
+///   but must NOT be used in the objective function or constraints.
+///   These are "dependent variables" whose values are computed from other variables.
+///   See also the document of [`DecisionVariableAnalysis`].
+/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
+///   - **used**: Variable IDs appearing in the objective function or constraints
+///   - **fixed**: Variable IDs with `substituted_value` set
+///   - **dependent**: Keys of `decision_variable_dependency`
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
 ///
@@ -89,7 +100,13 @@ pub struct Instance {
 ///   - This means every IDs appearing in the constraints and the objective function must be included in either of them.
 ///   - The IDs of [`Self::decision_variables`] and [`Self::parameters`] are disjoint sets.
 /// - The keys of [`Self::constraints`] and [`Self::removed_constraints`] are disjoint sets.
-/// - The keys of [`Self::decision_variable_dependency`] are not used. See also the document of [`DecisionVariableAnalysis`].
+/// - The keys of [`Self::decision_variable_dependency`] must be in [`Self::decision_variables`],
+///   but must NOT be used in the objective function or constraints.
+///   See also the document of [`DecisionVariableAnalysis`].
+/// - The following three sets must be pairwise disjoint (from [`DecisionVariableAnalysis`]):
+///   - **used**: Variable IDs appearing in the objective function or constraints
+///   - **fixed**: Variable IDs with `substituted_value` set
+///   - **dependent**: Keys of `decision_variable_dependency`
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

@@ -73,17 +73,8 @@ mod tests {
             },
         );
 
-        // No named functions
-        let named_functions = BTreeMap::new();
-
-        let mut instance = Instance::new(
-            Sense::Minimize,
-            objective,
-            decision_variables,
-            constraints,
-            named_functions,
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Minimize, objective, decision_variables, constraints).unwrap();
 
         // Apply reduction
         let changed = instance.reduce_binary_power();
@@ -132,7 +123,6 @@ mod tests {
             objective.clone(),
             decision_variables,
             BTreeMap::new(),
-            BTreeMap::new(), // named_functions
         )
         .unwrap();
 

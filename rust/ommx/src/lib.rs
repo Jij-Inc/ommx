@@ -125,7 +125,6 @@
 //!     objective,
 //!     decision_variables,
 //!     constraints,
-//!     BTreeMap::new(),
 //! )?;
 //!
 //! assert_eq!(instance.sense(), Sense::Minimize);
@@ -197,7 +196,6 @@
 //!     objective,
 //!     decision_variables,
 //!     constraints,
-//!     BTreeMap::new(),
 //! )?;
 //!
 //! // Create a state with variable values that satisfy constraints

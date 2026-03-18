@@ -39,13 +39,16 @@ impl Evaluate for Instance {
 
         let sense = self.sense();
 
-        let solution = crate::Solution::new(
-            objective,
-            evaluated_constraints,
-            evaluated_named_functions,
-            decision_variables,
-            sense,
-        );
+        // SAFETY: Instance invariants guarantee Solution invariants
+        let solution = unsafe {
+            crate::Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .evaluated_named_functions(evaluated_named_functions)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()?
+        };
 
         Ok(solution)
     }
@@ -220,14 +223,11 @@ mod tests {
             .into_iter()
             .collect(),
         });
-        let named_functions = BTreeMap::new();
-
         let mut instance = Instance::new(
             Sense::Minimize,
             objective,
             decision_variables,
             BTreeMap::new(), // No regular constraints
-            named_functions,
         )
         .unwrap();
         instance.constraint_hints = constraint_hints;

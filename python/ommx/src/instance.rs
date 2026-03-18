@@ -36,8 +36,6 @@ impl Instance {
         description: Option<InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
-        let rust_sense = sense.into();
-
         let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
             decision_variables
                 .into_iter()
@@ -49,29 +47,29 @@ impl Instance {
             .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
             .collect();
 
-        let rust_constraint_hints = constraint_hints.map(|hints| hints.0).unwrap_or_default();
+        let mut builder = ommx::Instance::builder()
+            .sense(sense.into())
+            .objective(objective.0)
+            .decision_variables(rust_decision_variables)
+            .constraints(rust_constraints);
 
-        let rust_named_functions = named_functions
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
-            .collect();
-
-        let mut instance = ommx::Instance::new(
-            rust_sense,
-            objective.0,
-            rust_decision_variables,
-            rust_constraints,
-            rust_named_functions,
-        )?
-        .with_constraint_hints(rust_constraint_hints)?;
-
-        // Set description if provided
-        if let Some(desc) = description {
-            instance.description = Some(desc.0);
+        if let Some(nfs) = named_functions {
+            let rust_named_functions = nfs
+                .into_iter()
+                .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
+                .collect();
+            builder = builder.named_functions(rust_named_functions);
         }
 
-        Ok(Self(instance))
+        if let Some(hints) = constraint_hints {
+            builder = builder.constraint_hints(hints.0);
+        }
+
+        if let Some(desc) = description {
+            builder = builder.description(desc.0);
+        }
+
+        Ok(Self(builder.build()?))
     }
 
     #[getter]

@@ -590,16 +590,8 @@ mod tests {
                 (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
             ),
         );
-        let named_functions = BTreeMap::new();
-
-        let mut instance = Instance::new(
-            Sense::Maximize,
-            objective,
-            decision_variables,
-            constraints,
-            named_functions,
-        )
-        .unwrap();
+        let mut instance =
+            Instance::new(Sense::Maximize, objective, decision_variables, constraints).unwrap();
 
         // Apply partial_evaluate to fix x0 = 1
         let state = State {
