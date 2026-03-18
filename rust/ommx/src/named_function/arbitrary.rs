@@ -55,18 +55,18 @@ pub fn arbitrary_named_functions(
     parameters: PolynomialParameters,
 ) -> impl Strategy<Value = BTreeMap<NamedFunctionID, NamedFunction>> {
     let unique_ids_strategy = unique_integers(0, id_parameters.max_id.0, id_parameters.size);
-    let constraints_strategy = proptest::collection::vec(
+    let named_functions_strategy = proptest::collection::vec(
         NamedFunction::arbitrary_with(parameters),
         id_parameters.size,
     );
-    (unique_ids_strategy, constraints_strategy)
-        .prop_map(|(ids, constraints)| {
+    (unique_ids_strategy, named_functions_strategy)
+        .prop_map(|(ids, named_functions)| {
             ids.into_iter()
                 .map(NamedFunctionID::from)
-                .zip(constraints)
-                .map(|(id, mut constraint)| {
-                    constraint.id = id;
-                    (id, constraint)
+                .zip(named_functions)
+                .map(|(id, mut named_function)| {
+                    named_function.id = id;
+                    (id, named_function)
                 })
                 .collect()
         })
