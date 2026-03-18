@@ -46,7 +46,7 @@ message EvaluatedNamedFunction {
 
   double evaluated_value = 2;
 
-  // IDs of decision variables used to evalute this constraint
+  // IDs of decision variables used to evaluate this named function
   repeated uint64 used_decision_variable_ids = 3;
 
   // Integer parameters of the named function.
