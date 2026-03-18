@@ -121,94 +121,6 @@ impl SampleSet {
             .build()
     }
 
-    /// Internal constructor that validates and creates SampleSet
-    fn new_validated(
-        decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
-        objectives: Sampled<f64>,
-        constraints: BTreeMap<ConstraintID, SampledConstraint>,
-        named_functions: BTreeMap<NamedFunctionID, SampledNamedFunction>,
-        sense: Sense,
-    ) -> Result<Self, SampleSetError> {
-        // Get all sample IDs from objectives
-        let objective_sample_ids = objectives.ids();
-
-        // Verify that all decision variables have the same sample IDs
-        for sampled_dv in decision_variables.values() {
-            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_dv.samples().ids(),
-                });
-            }
-        }
-
-        // Verify that all constraints have the same sample IDs
-        for sampled_constraint in constraints.values() {
-            if !sampled_constraint
-                .evaluated_values()
-                .has_same_ids(&objective_sample_ids)
-            {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_constraint.evaluated_values().ids(),
-                });
-            }
-        }
-
-        // Verify that all named functions have the same sample IDs
-        for sampled_named_function in named_functions.values() {
-            if !sampled_named_function
-                .evaluated_values()
-                .has_same_ids(&objective_sample_ids)
-            {
-                return Err(SampleSetError::InconsistentSampleIDs {
-                    expected: objective_sample_ids.clone(),
-                    found: sampled_named_function.evaluated_values().ids(),
-                });
-            }
-        }
-
-        // Compute feasibility from constraints for all samples
-        let mut feasible = BTreeMap::new();
-        let mut feasible_relaxed = BTreeMap::new();
-
-        for sample_id in &objective_sample_ids {
-            // Compute feasibility from constraints
-            let is_feasible = constraints.values().all(|constraint| {
-                constraint
-                    .feasible()
-                    .get(sample_id)
-                    .copied()
-                    .unwrap_or(false)
-            });
-
-            // For feasible_relaxed, only consider constraints that haven't been removed
-            let is_feasible_relaxed = constraints
-                .values()
-                .filter(|constraint| constraint.removed_reason().is_none())
-                .all(|constraint| {
-                    constraint
-                        .feasible()
-                        .get(sample_id)
-                        .copied()
-                        .unwrap_or(false)
-                });
-
-            feasible.insert(*sample_id, is_feasible);
-            feasible_relaxed.insert(*sample_id, is_feasible_relaxed);
-        }
-
-        Ok(Self {
-            decision_variables,
-            objectives,
-            constraints,
-            named_functions,
-            sense,
-            feasible,
-            feasible_relaxed,
-        })
-    }
-
     /// Get sample IDs available in this sample set
     pub fn sample_ids(&self) -> SampleIDSet {
         self.objectives.ids()
@@ -419,7 +331,7 @@ impl SampleSetBuilder {
     /// # Errors
     /// Returns an error if:
     /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
-    /// - Sample IDs are inconsistent across decision variables, objectives, and constraints
+    /// - Sample IDs are inconsistent across decision variables, objectives, constraints, and named functions
     pub fn build(self) -> Result<SampleSet, SampleSetError> {
         let decision_variables =
             self.decision_variables
@@ -440,12 +352,130 @@ impl SampleSetBuilder {
             .sense
             .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
 
-        SampleSet::new_validated(
+        // Validate sample ID consistency
+        let objective_sample_ids = objectives.ids();
+
+        for sampled_dv in decision_variables.values() {
+            if !sampled_dv.samples().has_same_ids(&objective_sample_ids) {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_dv.samples().ids(),
+                });
+            }
+        }
+
+        for sampled_constraint in constraints.values() {
+            if !sampled_constraint
+                .evaluated_values()
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_constraint.evaluated_values().ids(),
+                });
+            }
+        }
+
+        for sampled_named_function in self.named_functions.values() {
+            if !sampled_named_function
+                .evaluated_values()
+                .has_same_ids(&objective_sample_ids)
+            {
+                return Err(SampleSetError::InconsistentSampleIDs {
+                    expected: objective_sample_ids.clone(),
+                    found: sampled_named_function.evaluated_values().ids(),
+                });
+            }
+        }
+
+        // Compute feasibility
+        let (feasible, feasible_relaxed) =
+            Self::compute_feasibility(&constraints, &objective_sample_ids);
+
+        Ok(SampleSet {
             decision_variables,
             objectives,
             constraints,
-            self.named_functions,
+            named_functions: self.named_functions,
             sense,
-        )
+            feasible,
+            feasible_relaxed,
+        })
+    }
+
+    /// Builds the `SampleSet` without validation.
+    ///
+    /// # Safety
+    /// The caller must ensure that sample IDs are consistent across all components.
+    ///
+    /// # Errors
+    /// Returns an error if required fields are not set.
+    pub unsafe fn build_unchecked(self) -> Result<SampleSet, SampleSetError> {
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SampleSetError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let objectives = self
+            .objectives
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "objectives",
+            })?;
+        let constraints = self
+            .constraints
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "constraints",
+            })?;
+        let sense = self
+            .sense
+            .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
+
+        let objective_sample_ids = objectives.ids();
+        let (feasible, feasible_relaxed) =
+            Self::compute_feasibility(&constraints, &objective_sample_ids);
+
+        Ok(SampleSet {
+            decision_variables,
+            objectives,
+            constraints,
+            named_functions: self.named_functions,
+            sense,
+            feasible,
+            feasible_relaxed,
+        })
+    }
+
+    fn compute_feasibility(
+        constraints: &BTreeMap<ConstraintID, SampledConstraint>,
+        sample_ids: &SampleIDSet,
+    ) -> (BTreeMap<SampleID, bool>, BTreeMap<SampleID, bool>) {
+        let mut feasible = BTreeMap::new();
+        let mut feasible_relaxed = BTreeMap::new();
+
+        for sample_id in sample_ids {
+            let is_feasible = constraints.values().all(|constraint| {
+                constraint
+                    .feasible()
+                    .get(sample_id)
+                    .copied()
+                    .unwrap_or(false)
+            });
+
+            let is_feasible_relaxed = constraints
+                .values()
+                .filter(|constraint| constraint.removed_reason().is_none())
+                .all(|constraint| {
+                    constraint
+                        .feasible()
+                        .get(sample_id)
+                        .copied()
+                        .unwrap_or(false)
+                });
+
+            feasible.insert(*sample_id, is_feasible);
+            feasible_relaxed.insert(*sample_id, is_feasible_relaxed);
+        }
+
+        (feasible, feasible_relaxed)
     }
 }
