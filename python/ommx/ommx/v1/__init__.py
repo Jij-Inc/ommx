@@ -51,8 +51,10 @@ Rng = _ommx_rust.Rng
 # Import evaluated classes
 EvaluatedDecisionVariable = _ommx_rust.EvaluatedDecisionVariable
 EvaluatedConstraint = _ommx_rust.EvaluatedConstraint
+EvaluatedNamedFunction = _ommx_rust.EvaluatedNamedFunction
 SampledDecisionVariable = _ommx_rust.SampledDecisionVariable
 SampledConstraint = _ommx_rust.SampledConstraint
+SampledNamedFunction = _ommx_rust.SampledNamedFunction
 
 __all__ = [
     "Instance",
@@ -67,6 +69,7 @@ __all__ = [
     "Quadratic",
     "Polynomial",
     "Function",
+    "NamedFunction",
     # Constraint hints
     "OneHot",
     "Sos1",
@@ -87,8 +90,10 @@ __all__ = [
     # Evaluated types
     "EvaluatedDecisionVariable",
     "EvaluatedConstraint",
+    "EvaluatedNamedFunction",
     "SampledDecisionVariable",
     "SampledConstraint",
+    "SampledNamedFunction",
     # Type Alias
     "ToState",
     "ToSamples",
@@ -207,6 +212,7 @@ class Instance(UserAnnotationBase):
         constraints: Iterable[Constraint | _Constraint],
         sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
+        named_functions: Iterable[NamedFunction] | None = None,
         description: Optional["Instance.Description | _Instance.Description"] = None,
         constraint_hints: Optional[ConstraintHints] = None,
     ) -> Instance:
@@ -252,6 +258,13 @@ class Instance(UserAnnotationBase):
                     else None,
                 )
 
+        # Convert named functions if provided
+        rust_named_functions = None
+        if named_functions is not None:
+            rust_named_functions = {}
+            for nf in named_functions:
+                rust_named_functions[nf.id] = nf.raw
+
         # Convert constraint hints if provided
         rust_constraint_hints = constraint_hints
 
@@ -261,6 +274,7 @@ class Instance(UserAnnotationBase):
             objective=objective.raw,
             decision_variables=rust_decision_variables,
             constraints=rust_constraints,
+            named_functions=rust_named_functions,
             description=rust_description,
             constraint_hints=rust_constraint_hints,
         )
@@ -467,6 +481,22 @@ class Instance(UserAnnotationBase):
         """
         return RemovedConstraint.from_raw(
             self.raw.get_removed_constraint_by_id(removed_constraint_id)
+        )
+
+    @property
+    def named_functions(self) -> list[NamedFunction]:
+        """Get named functions as a list of :class:`NamedFunction` instances sorted by their IDs."""
+        return [NamedFunction.from_raw(nf) for nf in self.raw.named_functions]
+
+    @property
+    def named_function_names(self) -> set[str]:
+        """Get all unique named function names in this instance."""
+        return self.raw.named_function_names
+
+    def get_named_function_by_id(self, named_function_id: int) -> NamedFunction:
+        """Get a named function by ID."""
+        return NamedFunction.from_raw(
+            self.raw.get_named_function_by_id(named_function_id)
         )
 
     @property
@@ -2614,6 +2644,37 @@ class Solution(UserAnnotationBase):
         """Get a specific evaluated constraint by ID."""
         return self.raw.get_constraint_by_id(constraint_id)
 
+    @property
+    def named_functions(self) -> list[EvaluatedNamedFunction]:
+        """Get evaluated named functions as a list."""
+        return self.raw.named_functions()
+
+    @property
+    def named_function_ids(self) -> set[int]:
+        """Get all named function IDs in this solution."""
+        return self.raw.named_function_ids
+
+    @property
+    def named_function_names(self) -> set[str]:
+        """Get all unique named function names in this solution."""
+        return self.raw.named_function_names
+
+    def get_named_function_by_id(
+        self, named_function_id: int
+    ) -> EvaluatedNamedFunction:
+        """Get a specific evaluated named function by ID."""
+        return self.raw.get_named_function_by_id(named_function_id)
+
+    def extract_named_functions(self, name: str) -> dict[tuple[int, ...], float]:
+        """Extract named function values by name with subscripts as key."""
+        return self.raw.extract_named_functions(name)
+
+    def extract_all_named_functions(
+        self,
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """Extract all named functions grouped by name."""
+        return self.raw.extract_all_named_functions()
+
     def total_violation_l1(self) -> float:
         """
         Calculate total constraint violation using L1 norm (sum of absolute violations).
@@ -4215,6 +4276,205 @@ class Constraint:
 
 
 @dataclass
+class NamedFunction(AsConstraint):
+    """
+    A named function attached to an optimization instance.
+
+    Named functions are auxiliary functions (not constraints or objectives) that are tracked
+    alongside the optimization problem. They can be evaluated, partially evaluated, and used
+    in arithmetic operations.
+
+    Examples
+    =========
+
+    .. doctest::
+
+        >>> from ommx.v1 import NamedFunction, DecisionVariable, Linear
+        >>> x = DecisionVariable.integer(1)
+        >>> nf = NamedFunction(id=0, function=2*x + 1, name="obj2", subscripts=[0])
+        >>> nf.name
+        'obj2'
+        >>> nf.id
+        0
+
+    """
+
+    raw: _ommx_rust.NamedFunction
+
+    def __init__(
+        self,
+        *,
+        id: int,
+        function: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function
+        | _ommx_rust.Function,
+        name: Optional[str] = None,
+        subscripts: list[int] = [],
+        description: Optional[str] = None,
+        parameters: dict[str, str] = {},
+    ):
+        if not isinstance(function, Function):
+            function = Function(function)
+        self.raw = _ommx_rust.NamedFunction(
+            id=id,
+            function=function.raw,
+            name=name,
+            subscripts=subscripts or [],
+            description=description,
+            parameters=parameters or {},
+        )
+
+    @staticmethod
+    def from_raw(raw: _ommx_rust.NamedFunction) -> NamedFunction:
+        new = NamedFunction(id=0, function=0)
+        new.raw = raw
+        return new
+
+    @staticmethod
+    def from_bytes(data: bytes) -> NamedFunction:
+        raw = _ommx_rust.NamedFunction.from_bytes(data)
+        return NamedFunction.from_raw(raw)
+
+    def to_bytes(self) -> bytes:
+        return self.raw.to_bytes()
+
+    @property
+    def id(self) -> int:
+        return self.raw.id
+
+    @property
+    def function(self) -> Function:
+        return Function(self.raw.function)
+
+    @property
+    def name(self) -> Optional[str]:
+        return self.raw.name
+
+    @property
+    def subscripts(self) -> list[int]:
+        return list(self.raw.subscripts)
+
+    @property
+    def parameters(self) -> dict[str, str]:
+        return self.raw.parameters
+
+    @property
+    def description(self) -> Optional[str]:
+        return self.raw.description
+
+    def evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> EvaluatedNamedFunction:
+        """Evaluate this named function with the given state."""
+        result_bytes = self.raw.evaluate(State(state).to_bytes(), atol=atol)
+        return _ommx_rust.EvaluatedNamedFunction.from_bytes(result_bytes)
+
+    def partial_evaluate(
+        self, state: ToState, *, atol: float | None = None
+    ) -> NamedFunction:
+        """Partially evaluate this named function with the given state."""
+        result_bytes = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
+        return NamedFunction.from_bytes(result_bytes)
+
+    def __add__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self.function + other
+
+    def __radd__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self.function + other
+
+    def __sub__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self.function - other
+
+    def __rsub__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return -self.function + other
+
+    def __mul__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self.function * other
+
+    def __rmul__(
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Function:
+        return self.function * other
+
+    def __neg__(self) -> Function:
+        return -self.function
+
+    def __eq__(  # type: ignore[reportIncompatibleMethodOverride]
+        self,
+        other: int
+        | float
+        | DecisionVariable
+        | Linear
+        | Quadratic
+        | Polynomial
+        | Function,
+    ) -> Constraint:
+        return Constraint(
+            function=self.function - other, equality=Constraint.EQUAL_TO_ZERO
+        )
+
+    def __repr__(self) -> str:
+        return self.raw.__repr__()
+
+
+@dataclass
 class RemovedConstraint:
     """
     Constraints removed while preprocessing
@@ -4651,6 +4911,32 @@ class SampleSet(UserAnnotationBase):
     def get_constraint_by_id(self, constraint_id: int) -> SampledConstraint:
         """Get a specific sampled constraint by ID."""
         return self.raw.get_constraint_by_id(constraint_id)
+
+    @property
+    def named_functions(self) -> list[SampledNamedFunction]:
+        """Get sampled named functions as a list sorted by ID."""
+        return self.raw.named_functions
+
+    @property
+    def named_function_names(self) -> set[str]:
+        """Get all unique named function names in this sample set."""
+        return self.raw.named_function_names
+
+    def get_named_function_by_id(self, named_function_id: int) -> SampledNamedFunction:
+        """Get a specific sampled named function by ID."""
+        return self.raw.get_named_function_by_id(named_function_id)
+
+    def extract_named_functions(
+        self, name: str, sample_id: int
+    ) -> dict[tuple[int, ...], float]:
+        """Extract named function values for a given name and sample ID."""
+        return self.raw.extract_named_functions(name, sample_id)
+
+    def extract_all_named_functions(
+        self, sample_id: int
+    ) -> dict[str, dict[tuple[int, ...], float]]:
+        """Extract all named function values grouped by name for a given sample ID."""
+        return self.raw.extract_all_named_functions(sample_id)
 
     @property
     def decision_variables(self) -> list[SampledDecisionVariable]:
