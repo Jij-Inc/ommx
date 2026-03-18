@@ -140,7 +140,12 @@ impl Parse for v1::ConstraintHints {
             .map(|c| c.parse_as(context, message, "sos1_constraints"))
             .collect::<Result<_, ParseError>>()?;
 
-        // Filter out hints that reference removed or unknown constraints
+        // Filter out hints that reference removed or unknown constraints.
+        // This is intentional healing behavior for deserialization: old serialized instances
+        // may contain hints referencing constraints that have since been removed.
+        // We silently discard such hints (with debug log) rather than failing.
+        // In contrast, `Instance::add_constraint_hints` errors on removed constraint references
+        // because it's adding new hints where referencing removed constraints is a user mistake.
         let one_hot_constraints: Vec<OneHot> = one_hot_constraints
             .into_iter()
             .filter(|hint| {

@@ -207,6 +207,15 @@ impl ParametricInstanceBuilder {
                 }
             }
         }
+        // Validate that all variable IDs in removed_constraints are defined
+        // (removed_constraints may contain fixed or dependent variable IDs)
+        for removed in self.removed_constraints.values() {
+            for id in removed.constraint.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
 
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
@@ -248,8 +257,13 @@ impl ParametricInstanceBuilder {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
-        // Validate constraint_hints using Parse trait (checks variable/constraint existence)
-        // Move values into context tuple to avoid cloning, then destructure to recover ownership
+        // Validate constraint_hints using Parse trait.
+        // Unlike `add_constraint_hints` which errors on removed constraint references,
+        // the builder uses Parse which silently filters invalid hints (with debug log).
+        // This is intentional: the builder may receive data from old serialized instances
+        // where hints may reference constraints that have since been removed, and we want
+        // to heal such inconsistencies rather than fail.
+        // Move values into context tuple to avoid cloning, then destructure to recover ownership.
         let hints: v1::ConstraintHints = self.constraint_hints.into();
         let context = (decision_variables, constraints, self.removed_constraints);
         let constraint_hints = hints.parse(&context)?;

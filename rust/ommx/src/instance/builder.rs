@@ -163,8 +163,10 @@ impl InstanceBuilder {
             }
         }
 
-        // Validate that all variable IDs in objective and constraints are defined
+        // Collect all variable IDs for validation
         let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
+
+        // Validate that all variable IDs in objective and constraints are defined
         for id in objective.required_ids() {
             if !variable_ids.contains(&id) {
                 return Err(InstanceError::UndefinedVariableID { id }.into());
@@ -172,6 +174,15 @@ impl InstanceBuilder {
         }
         for constraint in constraints.values() {
             for id in constraint.required_ids() {
+                if !variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
+        // Validate that all variable IDs in removed_constraints are defined
+        // (removed_constraints may contain fixed or dependent variable IDs)
+        for removed in self.removed_constraints.values() {
+            for id in removed.constraint.required_ids() {
                 if !variable_ids.contains(&id) {
                     return Err(InstanceError::UndefinedVariableID { id }.into());
                 }
@@ -223,8 +234,13 @@ impl InstanceBuilder {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
-        // Validate constraint_hints using Parse trait (checks variable/constraint existence)
-        // Move values into context tuple to avoid cloning, then destructure to recover ownership
+        // Validate constraint_hints using Parse trait.
+        // Unlike `add_constraint_hints` which errors on removed constraint references,
+        // the builder uses Parse which silently filters invalid hints (with debug log).
+        // This is intentional: the builder may receive data from old serialized instances
+        // where hints may reference constraints that have since been removed, and we want
+        // to heal such inconsistencies rather than fail.
+        // Move values into context tuple to avoid cloning, then destructure to recover ownership.
         let hints: v1::ConstraintHints = self.constraint_hints.into();
         let context = (decision_variables, constraints, self.removed_constraints);
         let constraint_hints = hints.parse(&context)?;
@@ -530,6 +546,37 @@ mod tests {
         assert!(matches!(
             instance_err,
             InstanceError::FixedAndDependentVariable { id } if *id == var_id
+        ));
+    }
+
+    #[test]
+    fn test_builder_undefined_variable_in_removed_constraint() {
+        use crate::RemovedConstraint;
+        use maplit::btreemap;
+
+        let constraint_id = ConstraintID::from(1);
+        // Create a removed constraint that references undefined variable ID 999
+        let constraint =
+            Constraint::equal_to_zero(constraint_id, Function::from(linear!(999) + coeff!(1.0)));
+        let removed_constraint = RemovedConstraint {
+            constraint,
+            removed_reason: "test".to_string(),
+            removed_reason_parameters: Default::default(),
+        };
+
+        let err = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .removed_constraints(btreemap! { constraint_id => removed_constraint })
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
         ));
     }
 }
