@@ -195,14 +195,14 @@ impl SampleSet {
             .filter(|nf| nf.name.as_deref() == Some(name))
             .collect();
         if named_functions_with_name.is_empty() {
-            return Err(SampleSetError::UnknownConstraintName {
+            return Err(SampleSetError::UnknownNamedFunctionName {
                 name: name.to_string(),
             });
         }
         let mut result = BTreeMap::new();
         for nf in &named_functions_with_name {
             if !nf.parameters.is_empty() {
-                return Err(SampleSetError::ParameterizedConstraint);
+                return Err(SampleSetError::ParameterizedNamedFunction);
             }
             let subscripts = nf.subscripts().clone();
             let value = *nf.evaluated_values().get(sample_id)?;

@@ -60,6 +60,12 @@ pub enum SampleSetError {
 
     #[error("No feasible solution found in relaxed problem")]
     NoFeasibleSolutionRelaxed,
+
+    #[error("No named function with name '{name}' found")]
+    UnknownNamedFunctionName { name: String },
+
+    #[error("Named function with parameters is not supported")]
+    ParameterizedNamedFunction,
 }
 
 /// Multiple sample solution results with deduplication
