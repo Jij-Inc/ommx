@@ -1,6 +1,6 @@
 use crate::Function;
 use anyhow::Result;
-use ommx::NamedFunctionID;
+use ommx::{Evaluate, Message, NamedFunctionID};
 use pyo3::{prelude::*, types::PyBytes, Bound};
 use std::collections::HashMap;
 
@@ -74,5 +74,39 @@ impl NamedFunction {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.0.to_bytes())
+    }
+
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn evaluate<'py>(
+        &self,
+        py: Python<'py>,
+        state: &Bound<PyBytes>,
+        atol: Option<f64>,
+    ) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        let evaluated = self.0.evaluate(&state, atol)?;
+        let v1_evaluated: ommx::v1::EvaluatedNamedFunction = evaluated.into();
+        Ok(PyBytes::new(py, &v1_evaluated.encode_to_vec()))
+    }
+
+    #[pyo3(signature = (state, *, atol=None))]
+    pub fn partial_evaluate<'py>(
+        &mut self,
+        py: Python<'py>,
+        state: &Bound<PyBytes>,
+        atol: Option<f64>,
+    ) -> Result<Bound<'py, PyBytes>> {
+        let state = ommx::v1::State::decode(state.as_bytes())?;
+        let atol = match atol {
+            Some(value) => ommx::ATol::new(value)?,
+            None => ommx::ATol::default(),
+        };
+        self.0.partial_evaluate(&state, atol)?;
+        let inner: ommx::v1::NamedFunction = self.0.clone().into();
+        Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
 }
