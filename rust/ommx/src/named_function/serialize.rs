@@ -83,4 +83,36 @@ mod tests {
 
         assert_eq!(enf, restored);
     }
+
+    #[test]
+    fn test_sampled_named_function_bytes_roundtrip() {
+        let mut evaluated_values = crate::Sampled::default();
+        evaluated_values
+            .append([crate::SampleID::from(0)], 1.0)
+            .unwrap();
+        evaluated_values
+            .append([crate::SampleID::from(1)], 2.0)
+            .unwrap();
+
+        let snf = SampledNamedFunction {
+            id: NamedFunctionID::from(15),
+            evaluated_values,
+            name: Some("sampled_func".to_string()),
+            subscripts: vec![7, 8, 9],
+            parameters: {
+                let mut params = fnv::FnvHashMap::default();
+                params.insert("sample_key".to_string(), "sample_value".to_string());
+                params
+            },
+            description: Some("sampled roundtrip".to_string()),
+            used_decision_variable_ids: [crate::VariableID::from(3), crate::VariableID::from(4)]
+                .into_iter()
+                .collect(),
+        };
+
+        let bytes = snf.to_bytes();
+        let restored = SampledNamedFunction::from_bytes(&bytes).unwrap();
+
+        assert_eq!(snf, restored);
+    }
 }

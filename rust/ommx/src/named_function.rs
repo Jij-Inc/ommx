@@ -76,7 +76,7 @@ pub struct EvaluatedNamedFunction {
 }
 
 /// Multiple sample evaluation results with deduplication
-#[derive(Debug, Clone, Getters)]
+#[derive(Debug, Clone, PartialEq, Getters)]
 pub struct SampledNamedFunction {
     #[getset(get = "pub")]
     id: NamedFunctionID,
