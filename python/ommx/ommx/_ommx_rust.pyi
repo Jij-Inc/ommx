@@ -1234,12 +1234,12 @@ class SampledNamedFunction:
     @property
     def id(self) -> builtins.int:
         r"""
-        Get the decision variable ID
+        Get the named function ID
         """
     @property
     def name(self) -> typing.Optional[builtins.str]:
         r"""
-        Get the decision variable name
+        Get the named function name
         """
     @property
     def subscripts(self) -> builtins.list[builtins.int]:
