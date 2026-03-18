@@ -59,9 +59,19 @@ pub enum SampleSetError {
 
     #[error("No feasible solution found in relaxed problem")]
     NoFeasibleSolutionRelaxed,
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
 }
 
 /// Multiple sample solution results with deduplication
+///
+/// Invariants
+/// -----------
+/// - All [`Self::decision_variables`], [`Self::objectives`], and [`Self::constraints`] have the same sample ID set.
+/// - [`Self::feasible`] and [`Self::feasible_relaxed`] are computed from [`Self::constraints`]:
+///   - `feasible`: true if all constraints are satisfied for that sample
+///   - `feasible_relaxed`: true if all non-removed constraints (where `removed_reason.is_none()`) are satisfied
 #[derive(Debug, Clone, Getters)]
 pub struct SampleSet {
     #[getset(get = "pub")]
@@ -217,12 +227,16 @@ impl SampleSet {
 
         let sense = *self.sense();
 
-        Ok(Solution::new(
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            sense,
-        ))
+        // SAFETY: SampleSet invariants guarantee Solution invariants
+        Ok(unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("SampleSet invariants guarantee Solution invariants")
+        })
     }
 
     pub fn best_feasible_id(&self) -> Result<SampleID, SampleSetError> {
@@ -270,5 +284,96 @@ impl SampleSet {
     pub fn best_feasible_relaxed(&self) -> Result<Solution, SampleSetError> {
         let id = self.best_feasible_relaxed_id()?;
         self.get(id).map_err(SampleSetError::from)
+    }
+
+    /// Creates a new [`SampleSetBuilder`].
+    pub fn builder() -> SampleSetBuilder {
+        SampleSetBuilder::new()
+    }
+}
+
+/// Builder for creating [`SampleSet`] with validation.
+///
+/// # Example
+/// ```
+/// use ommx::{SampleSet, Sampled, Sense};
+/// use std::collections::BTreeMap;
+///
+/// let sample_set = SampleSet::builder()
+///     .decision_variables(BTreeMap::new())
+///     .objectives(Sampled::default())
+///     .constraints(BTreeMap::new())
+///     .sense(Sense::Minimize)
+///     .build()
+///     .unwrap();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SampleSetBuilder {
+    decision_variables: Option<BTreeMap<VariableID, SampledDecisionVariable>>,
+    objectives: Option<Sampled<f64>>,
+    constraints: Option<BTreeMap<ConstraintID, SampledConstraint>>,
+    sense: Option<Sense>,
+}
+
+impl SampleSetBuilder {
+    /// Creates a new `SampleSetBuilder` with all fields unset.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the decision variables.
+    pub fn decision_variables(
+        mut self,
+        decision_variables: BTreeMap<VariableID, SampledDecisionVariable>,
+    ) -> Self {
+        self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the objectives.
+    pub fn objectives(mut self, objectives: Sampled<f64>) -> Self {
+        self.objectives = Some(objectives);
+        self
+    }
+
+    /// Sets the constraints.
+    pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, SampledConstraint>) -> Self {
+        self.constraints = Some(constraints);
+        self
+    }
+
+    /// Sets the optimization sense.
+    pub fn sense(mut self, sense: Sense) -> Self {
+        self.sense = Some(sense);
+        self
+    }
+
+    /// Builds the `SampleSet` with validation.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Required fields (`decision_variables`, `objectives`, `constraints`, `sense`) are not set
+    /// - Sample IDs are inconsistent across decision variables, objectives, and constraints
+    pub fn build(self) -> Result<SampleSet, SampleSetError> {
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SampleSetError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let objectives = self
+            .objectives
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "objectives",
+            })?;
+        let constraints = self
+            .constraints
+            .ok_or(SampleSetError::MissingRequiredField {
+                field: "constraints",
+            })?;
+        let sense = self
+            .sense
+            .ok_or(SampleSetError::MissingRequiredField { field: "sense" })?;
+
+        SampleSet::new(decision_variables, objectives, constraints, sense)
     }
 }

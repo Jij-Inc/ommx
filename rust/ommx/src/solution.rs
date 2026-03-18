@@ -51,9 +51,43 @@ pub enum SolutionError {
 
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
+
+    #[error("Required field is missing: {field}")]
+    MissingRequiredField { field: &'static str },
+
+    #[error("Decision variable key {key:?} does not match value's id {value_id:?}")]
+    InconsistentDecisionVariableID {
+        key: VariableID,
+        value_id: VariableID,
+    },
+
+    #[error("Constraint key {key:?} does not match value's id {value_id:?}")]
+    InconsistentConstraintID {
+        key: ConstraintID,
+        value_id: ConstraintID,
+    },
+
+    #[error(
+        "Variable ID {id:?} used in constraint {constraint_id:?} is not in decision_variables"
+    )]
+    UndefinedVariableInConstraint {
+        id: VariableID,
+        constraint_id: ConstraintID,
+    },
 }
 
 /// Single solution result with data integrity guarantees
+///
+/// Invariants
+/// -----------
+/// - The keys of [`Self::decision_variables`] match the `id()` of their values.
+/// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
+///
+/// Note
+/// -----
+/// - [`Self::optimality`] is determined by the solver, not validated by this struct.
+/// - [`Self::relaxation`] is a record of operations, not validated by this struct.
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct Solution {
     #[getset(get = "pub")]
@@ -71,23 +105,32 @@ pub struct Solution {
 }
 
 impl Solution {
-    /// Create a new Solution
+    /// Create a new Solution without validation.
     ///
-    /// Optimality and relaxation are set to Unspecified by default.
-    /// Feasibility is computed on-demand from the evaluated constraints.
+    /// # Deprecated
+    /// This constructor does not validate invariants.
+    /// Use [`SolutionBuilder::build`] for validated construction,
+    /// or [`SolutionBuilder::build_unchecked`] if invariants are guaranteed by construction.
+    #[deprecated(
+        since = "2.5.0",
+        note = "Use Solution::builder().build() for validated construction, or Solution::builder().build_unchecked() for unchecked construction"
+    )]
     pub fn new(
         objective: f64,
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
         decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
         sense: Sense,
     ) -> Self {
-        Self {
-            objective,
-            evaluated_constraints,
-            decision_variables,
-            optimality: crate::v1::Optimality::Unspecified,
-            relaxation: crate::v1::Relaxation::Unspecified,
-            sense: Some(sense),
+        // SAFETY: This is a deprecated method that doesn't validate invariants.
+        // Callers are responsible for ensuring data integrity.
+        unsafe {
+            Solution::builder()
+                .objective(objective)
+                .evaluated_constraints(evaluated_constraints)
+                .decision_variables(decision_variables)
+                .sense(sense)
+                .build_unchecked()
+                .expect("All required fields are provided")
         }
     }
 
@@ -356,6 +399,205 @@ impl Solution {
             Err(SolutionError::UnknownConstraintID { id: constraint_id })
         }
     }
+
+    /// Creates a new [`SolutionBuilder`].
+    pub fn builder() -> SolutionBuilder {
+        SolutionBuilder::new()
+    }
+}
+
+/// Builder for creating [`Solution`] with validation.
+///
+/// # Example
+/// ```
+/// use ommx::{Solution, Sense};
+/// use std::collections::BTreeMap;
+///
+/// let solution = Solution::builder()
+///     .objective(0.0)
+///     .evaluated_constraints(BTreeMap::new())
+///     .decision_variables(BTreeMap::new())
+///     .sense(Sense::Minimize)
+///     .build()
+///     .unwrap();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct SolutionBuilder {
+    objective: Option<f64>,
+    evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
+    sense: Option<Sense>,
+    optimality: crate::v1::Optimality,
+    relaxation: crate::v1::Relaxation,
+}
+
+impl SolutionBuilder {
+    /// Creates a new `SolutionBuilder` with all fields unset.
+    pub fn new() -> Self {
+        Self {
+            optimality: crate::v1::Optimality::Unspecified,
+            relaxation: crate::v1::Relaxation::Unspecified,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the objective value.
+    pub fn objective(mut self, objective: f64) -> Self {
+        self.objective = Some(objective);
+        self
+    }
+
+    /// Sets the evaluated constraints.
+    pub fn evaluated_constraints(
+        mut self,
+        evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    ) -> Self {
+        self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the decision variables.
+    pub fn decision_variables(
+        mut self,
+        decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
+    ) -> Self {
+        self.decision_variables = Some(decision_variables);
+        self
+    }
+
+    /// Sets the optimization sense.
+    pub fn sense(mut self, sense: Sense) -> Self {
+        self.sense = Some(sense);
+        self
+    }
+
+    /// Sets the optimality status.
+    pub fn optimality(mut self, optimality: crate::v1::Optimality) -> Self {
+        self.optimality = optimality;
+        self
+    }
+
+    /// Sets the relaxation status.
+    pub fn relaxation(mut self, relaxation: crate::v1::Relaxation) -> Self {
+        self.relaxation = relaxation;
+        self
+    }
+
+    /// Builds the `Solution` with full validation.
+    ///
+    /// # Errors
+    /// Returns an error if:
+    /// - Required fields (`objective`, `evaluated_constraints`, `decision_variables`, `sense`) are not set
+    /// - Decision variable keys don't match their value's `id()`
+    /// - Constraint keys don't match their value's `id()`
+    /// - Variables referenced in constraints' `used_decision_variable_ids` are not in `decision_variables`
+    pub fn build(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let sense = self
+            .sense
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+
+        // Validate decision variable keys match their id
+        for (key, value) in &decision_variables {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentDecisionVariableID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate constraint keys match their id
+        for (key, value) in &evaluated_constraints {
+            if key != value.id() {
+                return Err(SolutionError::InconsistentConstraintID {
+                    key: *key,
+                    value_id: *value.id(),
+                }
+                .into());
+            }
+        }
+
+        // Validate all used_decision_variable_ids are in decision_variables
+        for constraint in evaluated_constraints.values() {
+            for var_id in constraint.used_decision_variable_ids() {
+                if !decision_variables.contains_key(var_id) {
+                    return Err(SolutionError::UndefinedVariableInConstraint {
+                        id: *var_id,
+                        constraint_id: *constraint.id(),
+                    }
+                    .into());
+                }
+            }
+        }
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
+    }
+
+    /// Builds the `Solution` without invariant validation.
+    ///
+    /// Builds the `Solution` without invariant validation.
+    ///
+    /// # Safety
+    /// This method does not validate that the Solution invariants hold.
+    /// The caller must ensure:
+    /// - Decision variable keys match their value's `id()`
+    /// - Constraint keys match their value's `id()`
+    /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
+    ///
+    /// Use [`Self::build`] for validated construction.
+    /// This method is useful when invariants are guaranteed by construction,
+    /// such as when creating a Solution from `Instance::evaluate`.
+    ///
+    /// # Errors
+    /// Returns an error only if required fields are not set.
+    pub unsafe fn build_unchecked(self) -> anyhow::Result<Solution> {
+        let objective = self
+            .objective
+            .ok_or(SolutionError::MissingRequiredField { field: "objective" })?;
+        let evaluated_constraints =
+            self.evaluated_constraints
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "evaluated_constraints",
+                })?;
+        let decision_variables =
+            self.decision_variables
+                .ok_or(SolutionError::MissingRequiredField {
+                    field: "decision_variables",
+                })?;
+        let sense = self
+            .sense
+            .ok_or(SolutionError::MissingRequiredField { field: "sense" })?;
+
+        Ok(Solution {
+            objective,
+            evaluated_constraints,
+            decision_variables,
+            optimality: self.optimality,
+            relaxation: self.relaxation,
+            sense: Some(sense),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -389,7 +631,16 @@ mod tests {
             c2.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |0.0001| + max(0, -1.0) = 0.0001 + 0 = 0.0001
         assert_eq!(solution.total_violation_l1(), 0.0001);
@@ -431,7 +682,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |2.5| + max(0, 1.5) + max(0, -0.5) = 2.5 + 1.5 + 0 = 4.0
         assert_eq!(solution.total_violation_l1(), 4.0);
@@ -473,7 +733,16 @@ mod tests {
             c3.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L2: (2.5)² + (1.5)² + 0² = 6.25 + 2.25 + 0 = 8.5
         assert_eq!(solution.total_violation_l2(), 8.5);
@@ -482,7 +751,16 @@ mod tests {
     #[test]
     fn test_total_violation_empty() {
         // No constraints → total violation = 0
-        let solution = Solution::new(0.0, BTreeMap::new(), BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         assert_eq!(solution.total_violation_l1(), 0.0);
         assert_eq!(solution.total_violation_l2(), 0.0);
@@ -504,7 +782,16 @@ mod tests {
             c1.evaluate(&state, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, constraints, BTreeMap::new(), Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(constraints)
+                .decision_variables(BTreeMap::new())
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // L1: |-3.0| = 3.0
         assert_eq!(solution.total_violation_l1(), 3.0);
@@ -546,7 +833,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = solution.extract_decision_variables("x");
@@ -616,7 +912,16 @@ mod tests {
             EvaluatedDecisionVariable::new(dv2, 2.0, crate::ATol::default()).unwrap(),
         );
 
-        let solution = Solution::new(0.0, BTreeMap::new(), decision_variables, Sense::Minimize);
+        // SAFETY: Test data is constructed to satisfy invariants
+        let solution = unsafe {
+            Solution::builder()
+                .objective(0.0)
+                .evaluated_constraints(BTreeMap::new())
+                .decision_variables(decision_variables)
+                .sense(Sense::Minimize)
+                .build_unchecked()
+                .unwrap()
+        };
 
         // Test that extracting variables with duplicate subscripts fails
         let result = solution.extract_decision_variables("x");
@@ -624,5 +929,147 @@ mod tests {
             result,
             Err(SolutionError::DuplicateSubscript { .. })
         ));
+    }
+
+    #[test]
+    fn test_builder_missing_required_field() {
+        // Missing objective
+        let err = Solution::builder()
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::MissingRequiredField { field: "objective" }
+        ));
+
+        // Missing sense
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(BTreeMap::new())
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::MissingRequiredField { field: "sense" }
+        ));
+    }
+
+    #[test]
+    fn test_builder_inconsistent_decision_variable_id() {
+        use crate::DecisionVariable;
+
+        let var_id_1 = VariableID::from(1);
+        let var_id_2 = VariableID::from(2);
+        let dv = DecisionVariable::binary(var_id_1);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+
+        // Map key (2) doesn't match value's id (1)
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id_2, evaluated_dv);
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::InconsistentDecisionVariableID { key, value_id }
+                if *key == var_id_2 && *value_id == var_id_1
+        ));
+    }
+
+    #[test]
+    fn test_builder_inconsistent_constraint_id() {
+        let state = crate::v1::State::default();
+        let constraint_id_1 = ConstraintID::from(1);
+        let constraint_id_2 = ConstraintID::from(2);
+
+        let c = Constraint::equal_to_zero(
+            constraint_id_1,
+            Function::Constant(Coefficient::try_from(1.0).unwrap()),
+        );
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
+
+        // Map key (2) doesn't match value's id (1)
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id_2, evaluated_c);
+
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::InconsistentConstraintID { key, value_id }
+                if *key == constraint_id_2 && *value_id == constraint_id_1
+        ));
+    }
+
+    #[test]
+    fn test_builder_undefined_variable_in_constraint() {
+        use crate::linear;
+
+        let state = crate::v1::State::from(std::collections::HashMap::from([(1, 1.0)]));
+        let constraint_id = ConstraintID::from(1);
+        let var_id = VariableID::from(1);
+
+        // Constraint uses variable ID 1
+        let c = Constraint::equal_to_zero(constraint_id, Function::from(linear!(1)));
+        let evaluated_c = c.evaluate(&state, crate::ATol::default()).unwrap();
+
+        let mut evaluated_constraints = BTreeMap::new();
+        evaluated_constraints.insert(constraint_id, evaluated_c);
+
+        // decision_variables is empty, so variable ID 1 is undefined
+        let err = Solution::builder()
+            .objective(0.0)
+            .evaluated_constraints(evaluated_constraints)
+            .decision_variables(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap_err();
+        let solution_err = err.downcast_ref::<SolutionError>().unwrap();
+        assert!(matches!(
+            solution_err,
+            SolutionError::UndefinedVariableInConstraint { id, constraint_id: cid }
+                if *id == var_id && *cid == constraint_id
+        ));
+    }
+
+    #[test]
+    fn test_builder_success() {
+        use crate::DecisionVariable;
+
+        let var_id = VariableID::from(1);
+        let dv = DecisionVariable::binary(var_id);
+        let evaluated_dv = EvaluatedDecisionVariable::new(dv, 1.0, crate::ATol::default()).unwrap();
+
+        let mut decision_variables = BTreeMap::new();
+        decision_variables.insert(var_id, evaluated_dv);
+
+        let solution = Solution::builder()
+            .objective(42.0)
+            .evaluated_constraints(BTreeMap::new())
+            .decision_variables(decision_variables)
+            .sense(Sense::Maximize)
+            .build()
+            .unwrap();
+
+        assert_eq!(*solution.objective(), 42.0);
+        assert_eq!(*solution.sense(), Some(Sense::Maximize));
     }
 }
