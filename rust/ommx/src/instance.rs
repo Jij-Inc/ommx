@@ -59,6 +59,10 @@ pub enum Sense {
 ///   - **dependent**: Keys of `decision_variable_dependency`
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
+///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   but are NOT included in the "used" set calculation.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, getset::CopyGetters, Default)]
 pub struct Instance {
@@ -107,6 +111,10 @@ pub struct Instance {
 ///   - **used**: Variable IDs appearing in the objective function or constraints
 ///   - **fixed**: Variable IDs with `substituted_value` set
 ///   - **dependent**: Keys of `decision_variable_dependency`
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
+///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   but are NOT included in the "used" set calculation.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {

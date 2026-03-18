@@ -86,6 +86,12 @@ pub enum SolutionError {
         id: VariableID,
         constraint_id: ConstraintID,
     },
+
+    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        value_id: NamedFunctionID,
+    },
 }
 
 /// Single solution result with data integrity guarantees
@@ -94,6 +100,7 @@ pub enum SolutionError {
 /// -----------
 /// - The keys of [`Self::decision_variables`] match the `id()` of their values.
 /// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
 ///
 /// Note
@@ -651,6 +658,17 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate named function keys match their id
+        for (key, value) in &self.evaluated_named_functions {
+            if *key != value.id() {
+                return Err(SolutionError::InconsistentNamedFunctionID {
+                    key: *key,
+                    value_id: value.id(),
+                }
+                .into());
+            }
+        }
+
         // Validate all used_decision_variable_ids are in decision_variables
         for constraint in evaluated_constraints.values() {
             for var_id in constraint.used_decision_variable_ids() {
@@ -677,13 +695,12 @@ impl SolutionBuilder {
 
     /// Builds the `Solution` without invariant validation.
     ///
-    /// Builds the `Solution` without invariant validation.
-    ///
     /// # Safety
     /// This method does not validate that the Solution invariants hold.
     /// The caller must ensure:
     /// - Decision variable keys match their value's `id()`
     /// - Constraint keys match their value's `id()`
+    /// - Named function keys match their value's `id()`
     /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
     ///
     /// Use [`Self::build`] for validated construction.
