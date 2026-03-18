@@ -20,13 +20,13 @@ impl SampledNamedFunction {
         PyBytes::new(py, &self.0.to_bytes())
     }
 
-    /// Get the decision variable ID
+    /// Get the named function ID
     #[getter]
     pub fn id(&self) -> u64 {
         self.0.id().into_inner()
     }
 
-    /// Get the decision variable name
+    /// Get the named function name
     #[getter]
     pub fn name(&self) -> Option<String> {
         self.0.name.clone()
