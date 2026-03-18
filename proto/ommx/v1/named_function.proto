@@ -21,7 +21,7 @@ message NamedFunction {
 
   // Integer parameters of the named function.
   //
-  // Consider for example a problem constains a series of named functions
+  // Consider for example a problem contains a series of named functions
   // `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
   // then 6 = 3x2 `NamedFunction` messages should be created
   // corresponding to each pair of `i` and `j`.
@@ -51,7 +51,7 @@ message EvaluatedNamedFunction {
 
   // Integer parameters of the named function.
   //
-  // Consider for example a problem constains a series of named functions
+  // Consider for example a problem contains a series of named functions
   // `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
   // then 6 = 3x2 `NamedFunction` messages should be created
   // corresponding to each pair of `i` and `j`.
