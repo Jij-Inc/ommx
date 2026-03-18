@@ -115,6 +115,11 @@ impl From<SampleSet> for crate::v1::SampleSet {
             .values()
             .map(|sc| sc.clone().into())
             .collect();
+        let named_functions: Vec<crate::v1::SampledNamedFunction> = sample_set
+            .named_functions()
+            .values()
+            .map(|nf| nf.clone().into())
+            .collect();
         let sense = (*sample_set.sense()).into();
 
         // Compute feasible maps from constraint evaluations
@@ -139,6 +144,7 @@ impl From<SampleSet> for crate::v1::SampleSet {
             decision_variables,
             objectives,
             constraints,
+            named_functions,
             feasible_relaxed,
             feasible,
             sense,
