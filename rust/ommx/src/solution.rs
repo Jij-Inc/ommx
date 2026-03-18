@@ -73,7 +73,7 @@ pub struct Solution {
     #[getset(get = "pub")]
     evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     #[getset(get = "pub")]
-    pub evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
+    evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     /// Optimality status - not guaranteed by Solution itself
