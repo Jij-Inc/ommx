@@ -109,4 +109,25 @@ impl NamedFunction {
         let inner: ommx::v1::NamedFunction = self.0.clone().into();
         Ok(PyBytes::new(py, &inner.encode_to_vec()))
     }
+
+    pub fn __repr__(&self) -> String {
+        let name_str = self
+            .0
+            .name
+            .as_ref()
+            .map(|n| format!("\"{n}\""))
+            .unwrap_or_else(|| "None".to_string());
+        format!(
+            "NamedFunction(id={}, name={}, subscripts={:?})",
+            self.0.id, name_str, self.0.subscripts
+        )
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
+    }
 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use pyo3::{prelude::*, types::PyBytes, Bound};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// EvaluatedNamedFunction wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
@@ -50,5 +50,35 @@ impl EvaluatedNamedFunction {
     #[getter]
     pub fn description(&self) -> Option<String> {
         self.0.description.clone()
+    }
+
+    #[getter]
+    pub fn used_decision_variable_ids(&self) -> HashSet<u64> {
+        self.0
+            .used_decision_variable_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    pub fn __repr__(&self) -> String {
+        let name_str = self
+            .0
+            .name
+            .as_ref()
+            .map(|n| format!("\"{n}\""))
+            .unwrap_or_else(|| "None".to_string());
+        format!(
+            "EvaluatedNamedFunction(id={}, name={}, evaluated_value={}, subscripts={:?})",
+            self.0.id, name_str, self.0.evaluated_value, self.0.subscripts
+        )
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 }

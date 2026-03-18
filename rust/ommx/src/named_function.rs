@@ -45,7 +45,23 @@ impl NamedFunctionID {
     }
 }
 
-/// `ommx.v1.NamedFunction` with validated, typed fields.
+/// A named function represents an arbitrary mathematical function with associated metadata.
+///
+/// Named functions allow attaching names, subscripts, parameters, and descriptions to
+/// mathematical expressions. This is useful for tracking auxiliary quantities, objectives,
+/// or derived values in optimization problems.
+///
+/// # Examples
+///
+/// A series of named functions `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`
+/// would create 6 `NamedFunction` instances, each with:
+/// - `name`: A human-readable identifier (e.g., "f")
+/// - `subscripts`: The index values (e.g., `[1, 5]` for `f[1, 5]`)
+///
+/// Named function IDs are managed separately from decision variable IDs and constraint IDs,
+/// so the same ID value can be used across these different namespaces.
+///
+/// Corresponds to `ommx.v1.NamedFunction`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NamedFunction {
     pub id: NamedFunctionID,
