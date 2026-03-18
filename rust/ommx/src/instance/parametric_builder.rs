@@ -248,12 +248,12 @@ impl ParametricInstanceBuilder {
         let dependent: VariableIDSet = self.decision_variable_dependency.keys().collect();
 
         // Check used ∩ dependent = ∅
-        for id in used.intersection(&dependent) {
+        if let Some(id) = used.intersection(&dependent).next() {
             return Err(InstanceError::DependentVariableUsed { id: *id }.into());
         }
 
         // Check fixed ∩ dependent = ∅
-        for id in fixed.intersection(&dependent) {
+        if let Some(id) = fixed.intersection(&dependent).next() {
             return Err(InstanceError::FixedAndDependentVariable { id: *id }.into());
         }
 
