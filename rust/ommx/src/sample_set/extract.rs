@@ -148,10 +148,11 @@ impl SampleSet {
     /// This is useful for extracting all functions at once in a structured format.
     /// Functions without names are not included in the result.
     ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - A named function with parameters is found
     /// - The same name and subscript combination is found multiple times
     /// - The sample ID is invalid
     ///
