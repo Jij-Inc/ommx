@@ -23,7 +23,7 @@ impl Instance {
     /// * `subscripts` - The subscripts of the named function (can be empty)
     ///
     /// # Returns
-    /// * `Some(&DecisionVariable)` if a named function with the given name and subscripts is found
+    /// * `Some(&NamedFunction)` if a named function with the given name and subscripts is found
     /// * `None` if no matching named function is found
     ///
     /// # Example
@@ -32,9 +32,9 @@ impl Instance {
     ///
     /// let instance = Instance::default();
     /// // Find named function with name "x" and no subscripts
-    /// let var = instance.get_named_function_by_name("x", vec![]);
+    /// let nf = instance.get_named_function_by_name("x", vec![]);
     /// // Find named function with name "y" and subscripts [1, 2]
-    /// let var_indexed = instance.get_named_function_by_name("y", vec![1, 2]);
+    /// let nf_indexed = instance.get_named_function_by_name("y", vec![1, 2]);
     /// ```
     pub fn get_named_function_by_name(
         &self,
