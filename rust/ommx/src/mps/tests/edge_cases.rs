@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use crate::{
     coeff, linear, mps::*, Bound, Constraint, ConstraintID, DecisionVariable, Function, Instance,
     Sense, VariableID,

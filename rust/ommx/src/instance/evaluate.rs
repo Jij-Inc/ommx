@@ -157,7 +157,7 @@ impl Evaluate for Instance {
 mod tests {
     use super::*;
     use crate::random::arbitrary_split_state;
-    use crate::{constraint_hints::OneHot, linear};
+    use crate::{coeff, constraint_hints::OneHot, linear};
     use ::approx::AbsDiffEq;
     use proptest::prelude::*;
     use std::collections::HashMap;
@@ -255,5 +255,112 @@ mod tests {
 
         // The objective value should be 1 (only x2 = 1)
         assert_eq!(*solution.objective(), 1.0);
+    }
+
+    /// Test that named functions can reference fixed, dependent, and irrelevant variables
+    #[test]
+    fn test_evaluate_named_function_with_fixed_dependent_irrelevant_variables() {
+        use crate::{DecisionVariable, NamedFunction, NamedFunctionID};
+        use maplit::btreemap;
+
+        // Create decision variables:
+        // x1 (id=1): used in objective
+        // x2 (id=2): fixed variable (substituted_value = 3.0)
+        // x3 (id=3): dependent on x4 (x3 = 2 * x4)
+        // x4 (id=4): irrelevant (not used in objective/constraints)
+        // x5 (id=5): only used in named_functions
+
+        let x1 = DecisionVariable::continuous(VariableID::from(1));
+        let mut x2 = DecisionVariable::continuous(VariableID::from(2));
+        x2.substitute(3.0, ATol::default()).unwrap(); // fixed to 3.0
+        let x3 = DecisionVariable::continuous(VariableID::from(3));
+        let x4 = DecisionVariable::continuous(VariableID::from(4));
+        let x5 = DecisionVariable::continuous(VariableID::from(5));
+
+        let decision_variables = btreemap! {
+            VariableID::from(1) => x1,
+            VariableID::from(2) => x2,
+            VariableID::from(3) => x3,
+            VariableID::from(4) => x4,
+            VariableID::from(5) => x5,
+        };
+
+        // Objective: minimize x1 (only x1 is "used")
+        let objective = Function::from(linear!(1));
+
+        // Create instance with dependency: x3 = 2 * x4
+        let decision_variable_dependency = crate::AcyclicAssignments::new(vec![(
+            VariableID::from(3),
+            Function::from(coeff!(2.0) * linear!(4)),
+        )])
+        .unwrap();
+
+        // Named function: f = x2 + x3 + x4 + x5
+        // This references:
+        // - x2: fixed variable
+        // - x3: dependent variable
+        // - x4: irrelevant variable
+        // - x5: only used in named function
+        let named_function = NamedFunction {
+            id: NamedFunctionID::from(1),
+            function: Function::from(linear!(2) + linear!(3) + linear!(4) + linear!(5)),
+            name: Some("f".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let named_functions = btreemap! {
+            NamedFunctionID::from(1) => named_function,
+        };
+
+        let mut instance = Instance::new(
+            Sense::Minimize,
+            objective,
+            decision_variables,
+            BTreeMap::new(), // No constraints
+        )
+        .unwrap();
+        instance.decision_variable_dependency = decision_variable_dependency;
+        instance.named_functions = named_functions;
+
+        // Verify the analysis: x1 is used, x2 is fixed, x3 is dependent,
+        // x4 and x5 should be irrelevant (named_functions don't contribute to "used")
+        let analysis = instance.analyze_decision_variables();
+        assert!(analysis.used().contains(&VariableID::from(1)));
+        assert!(analysis.fixed().contains_key(&VariableID::from(2)));
+        assert!(analysis.dependent().contains_key(&VariableID::from(3)));
+        assert!(analysis.irrelevant().contains_key(&VariableID::from(4)));
+        assert!(analysis.irrelevant().contains_key(&VariableID::from(5)));
+
+        // Create state: x1=1.0, x4=2.0, x5=10.0
+        // x2 is fixed to 3.0
+        // x3 is dependent: x3 = 2 * x4 = 4.0
+        let state = v1::State::from(HashMap::from([(1, 1.0), (4, 2.0), (5, 10.0)]));
+
+        let solution = instance.evaluate(&state, ATol::default()).unwrap();
+
+        // Check objective value
+        assert_eq!(*solution.objective(), 1.0);
+
+        // Check named function evaluation
+        // f = x2 + x3 + x4 + x5 = 3.0 + 4.0 + 2.0 + 10.0 = 19.0
+        let evaluated_nf = solution
+            .evaluated_named_functions()
+            .get(&NamedFunctionID::from(1))
+            .unwrap();
+        assert_eq!(evaluated_nf.evaluated_value(), 19.0);
+
+        // Check used_decision_variable_ids of the evaluated named function
+        // It contains the variable IDs referenced in the named function's expression,
+        // which are x2, x3, x4, x5 (dependency substitution is done at the state level,
+        // not at the expression level)
+        let used_ids = evaluated_nf.used_decision_variable_ids();
+        assert!(used_ids.contains(&VariableID::from(2)));
+        assert!(used_ids.contains(&VariableID::from(3)));
+        assert!(used_ids.contains(&VariableID::from(4)));
+        assert!(used_ids.contains(&VariableID::from(5)));
+        // x1 is not used in the named function
+        assert!(!used_ids.contains(&VariableID::from(1)));
     }
 }
