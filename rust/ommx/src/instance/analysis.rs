@@ -183,7 +183,7 @@ impl DecisionVariableAnalysis {
                 .iter()
                 .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
         )
-        .expect("Dependent variables should be acyclic by construction");
+        .map_err(|error| StateValidationError::CyclicDependency { error })?;
         for (id, f) in acyclic.evaluation_order_iter() {
             let value = f.evaluate(&state, atol).map_err(|error| {
                 StateValidationError::FailedToEvaluateDependentVariable { id, error }
@@ -244,6 +244,8 @@ pub enum StateValidationError {
         id: VariableID,
         error: anyhow::Error,
     },
+    #[error("Cyclic dependency detected in dependent variables: {error}")]
+    CyclicDependency { error: crate::SubstitutionError },
 }
 
 impl Instance {
