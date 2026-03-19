@@ -4516,6 +4516,7 @@ class NamedFunction(AsConstraint):
         return {
             "id": self.id,
             "type": self.function.raw.type_name,
+            "function": self.function,
             "used_ids": self.function.raw.required_ids(),
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
