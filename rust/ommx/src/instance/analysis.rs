@@ -262,9 +262,8 @@ impl Instance {
         for constraint in self.constraints.values() {
             used.extend(constraint.function.required_ids());
         }
-        for named_function in self.named_functions.values() {
-            used.extend(named_function.function.required_ids());
-        }
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent variables.
         used
     }
 
@@ -333,10 +332,9 @@ impl Instance {
         }
 
         let mut used = used_in_objective.clone();
-        for ids in used_in_constraints
-            .values()
-            .chain(used_in_named_functions.values())
-        {
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent variables.
+        for ids in used_in_constraints.values() {
             used.extend(ids);
         }
 

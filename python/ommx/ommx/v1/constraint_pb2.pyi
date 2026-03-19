@@ -77,7 +77,7 @@ class Constraint(google.protobuf.message.Message):
     - Constraint IDs are managed separately from decision variable IDs.
       We can use the same ID for both.
       For example, we have a decision variable
-      `x` with decision variable ID `1``
+      `x` with decision variable ID `1`
       and constraint `x == 0` with constraint ID `1`.
     - IDs are not required to be sequential.
     - IDs must be unique with other types of constraints.
@@ -95,7 +95,7 @@ class Constraint(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """Integer parameters of the constraint.
 
-        Consider for example a problem constains a series of
+        Consider for example a problem contains a series of
         constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
         then 6 = 3x2 `Constraint` messages should be created
         corresponding to each pair of `i` and `j`.
@@ -246,7 +246,7 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     def used_decision_variable_ids(
         self,
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs of decision variables used to evalute this constraint"""
+        """IDs of decision variables used to evaluate this constraint"""
 
     @property
     def subscripts(
