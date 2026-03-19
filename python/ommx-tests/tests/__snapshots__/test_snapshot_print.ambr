@@ -45,7 +45,7 @@
   '''
 # ---
 # name: test_decision_variable_analysis_to_dict
-  "{'all': [0, 1, 2], 'binary': {0: {'lower': 0.0, 'upper': 1.0}, 1: {'lower': 0.0, 'upper': 1.0}, 2: {'lower': 0.0, 'upper': 1.0}}, 'integer': {}, 'continuous': {}, 'semi_integer': {}, 'semi_continuous': {}, 'used_in_objective': [0, 1], 'used_in_constraints': {0: [1, 2]}, 'used_in_named_functions': {}, 'used': [0, 1, 2], 'fixed': {}, 'dependent': {}, 'irrelevant': {}}"
+  "{'all': [0, 1, 2], 'binary': {0: {'lower': 0.0, 'upper': 1.0}, 1: {'lower': 0.0, 'upper': 1.0}, 2: {'lower': 0.0, 'upper': 1.0}}, 'integer': {}, 'continuous': {}, 'semi_integer': {}, 'semi_continuous': {}, 'used_in_objective': [0, 1], 'used_in_constraints': {0: [1, 2]}, 'used': [0, 1, 2], 'fixed': {}, 'dependent': {}, 'irrelevant': {}}"
 # ---
 # name: test_function_print_linear
   'Function(2*x1 + 3*x2 + 1)'

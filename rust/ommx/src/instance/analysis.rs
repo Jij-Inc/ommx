@@ -59,9 +59,6 @@ pub struct DecisionVariableAnalysis {
     /// The set of decision variables that are used in the constraints.
     #[getset(get = "pub")]
     used_in_constraints: BTreeMap<ConstraintID, VariableIDSet>,
-    /// The set of decision variables that are used in named functions.
-    #[getset(get = "pub")]
-    used_in_named_functions: BTreeMap<NamedFunctionID, VariableIDSet>,
     /// The set of decision variables that are used in the objective function or constraints.
     #[getset(get = "pub")]
     used: VariableIDSet,
@@ -315,22 +312,6 @@ impl Instance {
             used_in_constraints.insert(constraint.id, required_ids);
         }
 
-        let mut used_in_named_functions: BTreeMap<NamedFunctionID, VariableIDSet> =
-            BTreeMap::default();
-        for named_function in self.named_functions.values() {
-            let required_ids: VariableIDSet =
-                named_function.function.required_ids().into_iter().collect();
-            debug_assert!(
-                required_ids.is_subset(&all),
-                "Named functions use variables not in the instance: {:?}",
-                required_ids
-                    .difference(&all)
-                    .copied()
-                    .collect::<VariableIDSet>()
-            );
-            used_in_named_functions.insert(named_function.id, required_ids);
-        }
-
         let mut used = used_in_objective.clone();
         // Note: named_functions are intentionally excluded from the "used" set.
         // They are auxiliary quantities that can reference fixed/dependent variables.
@@ -375,7 +356,6 @@ impl Instance {
             semi_continuous,
             used_in_objective,
             used_in_constraints,
-            used_in_named_functions,
             used,
             dependent,
             irrelevant,

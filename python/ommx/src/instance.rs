@@ -541,19 +541,6 @@ impl DecisionVariableAnalysis {
             .collect()
     }
 
-    pub fn used_in_named_functions(&self) -> BTreeMap<u64, BTreeSet<u64>> {
-        self.0
-            .used_in_named_functions()
-            .iter()
-            .map(|(named_function_id, variable_ids)| {
-                (
-                    **named_function_id,
-                    variable_ids.iter().map(|id| id.into_inner()).collect(),
-                )
-            })
-            .collect()
-    }
-
     pub fn fixed(&self) -> BTreeMap<u64, f64> {
         self.0
             .fixed()
