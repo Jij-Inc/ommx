@@ -1,7 +1,10 @@
 mod parse;
 mod serialize;
 
-use crate::{ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, Sense, VariableID};
+use crate::{
+    ConstraintID, EvaluatedConstraint, EvaluatedDecisionVariable, EvaluatedNamedFunction,
+    NamedFunctionID, Sense, VariableID,
+};
 use getset::Getters;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -52,6 +55,18 @@ pub enum SolutionError {
     #[error("No constraint with name '{name}' found")]
     UnknownConstraintName { name: String },
 
+    #[error("Unknown named function ID: {id:?}")]
+    UnknownNamedFunctionID { id: NamedFunctionID },
+
+    #[error("No named function with name '{name}' found")]
+    UnknownNamedFunctionName { name: String },
+
+    #[deprecated(
+        note = "Parameters are now allowed in extract methods; only subscripts are used as keys"
+    )]
+    #[error("Named function with parameters is not supported")]
+    ParameterizedNamedFunction,
+
     #[error("Required field is missing: {field}")]
     MissingRequiredField { field: &'static str },
 
@@ -74,6 +89,12 @@ pub enum SolutionError {
         id: VariableID,
         constraint_id: ConstraintID,
     },
+
+    #[error("Named function key {key:?} does not match value's id {value_id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        value_id: NamedFunctionID,
+    },
 }
 
 /// Single solution result with data integrity guarantees
@@ -82,6 +103,7 @@ pub enum SolutionError {
 /// -----------
 /// - The keys of [`Self::decision_variables`] match the `id()` of their values.
 /// - The keys of [`Self::evaluated_constraints`] match the `id()` of their values.
+/// - The keys of [`Self::evaluated_named_functions`] match the `id()` of their values.
 /// - [`Self::decision_variables`] contains all variable IDs referenced in `used_decision_variable_ids` of each constraint.
 ///
 /// Note
@@ -94,6 +116,8 @@ pub struct Solution {
     objective: f64,
     #[getset(get = "pub")]
     evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
+    #[getset(get = "pub")]
+    evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     #[getset(get = "pub")]
     decision_variables: BTreeMap<VariableID, EvaluatedDecisionVariable>,
     /// Optimality status - not guaranteed by Solution itself
@@ -142,6 +166,11 @@ impl Solution {
     /// Get constraint IDs evaluated in this solution
     pub fn constraint_ids(&self) -> BTreeSet<ConstraintID> {
         self.evaluated_constraints.keys().cloned().collect()
+    }
+
+    /// Get named function IDs evaluated in this solution
+    pub fn named_function_ids(&self) -> BTreeSet<NamedFunctionID> {
+        self.evaluated_named_functions.keys().cloned().collect()
     }
 
     /// Check if all decision variables satisfy their kind and bound constraints
@@ -400,6 +429,90 @@ impl Solution {
         }
     }
 
+    /// Get all unique named function names in this solution
+    ///
+    /// Returns a set of all unique function names that have at least one named function.
+    /// Named functions without names are not included.
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.evaluated_named_functions
+            .values()
+            .filter_map(|nf| nf.name().clone())
+            .collect()
+    }
+
+    /// Extract named functions by name with subscripts as key
+    ///
+    /// Returns a mapping from subscripts (as a vector) to the function's evaluated value.
+    /// This is useful for extracting named functions that have the same name but different subscripts.
+    ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No named functions with the given name are found
+    /// - The same subscript is found multiple times
+    pub fn extract_named_functions(
+        &self,
+        name: &str,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SolutionError> {
+        // Collect all named functions with the given name
+        let functions_with_name: Vec<&EvaluatedNamedFunction> = self
+            .evaluated_named_functions
+            .values()
+            .filter(|nf| nf.name().as_deref() == Some(name))
+            .collect();
+        if functions_with_name.is_empty() {
+            return Err(SolutionError::UnknownNamedFunctionName {
+                name: name.to_string(),
+            });
+        }
+
+        let mut result = BTreeMap::new();
+        for nf in &functions_with_name {
+            let key = nf.subscripts().clone();
+            if result.contains_key(&key) {
+                return Err(SolutionError::DuplicateSubscript { subscripts: key });
+            }
+            result.insert(key, nf.evaluated_value());
+        }
+        Ok(result)
+    }
+
+    /// Extract all named functions grouped by name
+    ///
+    /// Returns a mapping from function name to a mapping from subscripts to evaluated values.
+    /// This is useful for extracting all named functions at once in a structured format.
+    /// Named functions without names are not included in the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The same name and subscript combination is found multiple times
+    pub fn extract_all_named_functions(
+        &self,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SolutionError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for nf in self.evaluated_named_functions.values() {
+            let name = match nf.name() {
+                Some(n) => n.clone(),
+                None => continue, // Skip named functions without names
+            };
+
+            let subscripts = nf.subscripts().clone();
+            let value = nf.evaluated_value();
+
+            let funcs_map = result.entry(name).or_default();
+            if funcs_map.contains_key(&subscripts) {
+                return Err(SolutionError::DuplicateSubscript { subscripts });
+            }
+            funcs_map.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
     /// Creates a new [`SolutionBuilder`].
     pub fn builder() -> SolutionBuilder {
         SolutionBuilder::new()
@@ -425,6 +538,7 @@ impl Solution {
 pub struct SolutionBuilder {
     objective: Option<f64>,
     evaluated_constraints: Option<BTreeMap<ConstraintID, EvaluatedConstraint>>,
+    evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
     decision_variables: Option<BTreeMap<VariableID, EvaluatedDecisionVariable>>,
     sense: Option<Sense>,
     optimality: crate::v1::Optimality,
@@ -453,6 +567,15 @@ impl SolutionBuilder {
         evaluated_constraints: BTreeMap<ConstraintID, EvaluatedConstraint>,
     ) -> Self {
         self.evaluated_constraints = Some(evaluated_constraints);
+        self
+    }
+
+    /// Sets the evaluated named functions.
+    pub fn evaluated_named_functions(
+        mut self,
+        evaluated_named_functions: BTreeMap<NamedFunctionID, EvaluatedNamedFunction>,
+    ) -> Self {
+        self.evaluated_named_functions = evaluated_named_functions;
         self
     }
 
@@ -531,6 +654,17 @@ impl SolutionBuilder {
             }
         }
 
+        // Validate named function keys match their id
+        for (key, value) in &self.evaluated_named_functions {
+            if *key != value.id() {
+                return Err(SolutionError::InconsistentNamedFunctionID {
+                    key: *key,
+                    value_id: value.id(),
+                }
+                .into());
+            }
+        }
+
         // Validate all used_decision_variable_ids are in decision_variables
         for constraint in evaluated_constraints.values() {
             for var_id in constraint.used_decision_variable_ids() {
@@ -547,6 +681,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
             relaxation: self.relaxation,
@@ -556,13 +691,12 @@ impl SolutionBuilder {
 
     /// Builds the `Solution` without invariant validation.
     ///
-    /// Builds the `Solution` without invariant validation.
-    ///
     /// # Safety
     /// This method does not validate that the Solution invariants hold.
     /// The caller must ensure:
     /// - Decision variable keys match their value's `id()`
     /// - Constraint keys match their value's `id()`
+    /// - Named function keys match their value's `id()`
     /// - All `used_decision_variable_ids` in constraints exist in `decision_variables`
     ///
     /// Use [`Self::build`] for validated construction.
@@ -592,6 +726,7 @@ impl SolutionBuilder {
         Ok(Solution {
             objective,
             evaluated_constraints,
+            evaluated_named_functions: self.evaluated_named_functions,
             decision_variables,
             optimality: self.optimality,
             relaxation: self.relaxation,

@@ -1,6 +1,6 @@
 mod analysis;
 mod approx;
-mod arbitrary;
+pub(crate) mod arbitrary;
 mod builder;
 mod clip_bounds;
 mod constraint_hints;
@@ -10,6 +10,7 @@ mod error;
 mod evaluate;
 mod log_encode;
 mod logical_memory;
+mod named_function;
 mod new;
 mod parametric_builder;
 mod parse;
@@ -29,9 +30,9 @@ pub use parametric_builder::*;
 pub use stats::*;
 
 use crate::{
-    constraint_hints::ConstraintHints, parse::Parse, v1, AcyclicAssignments, Constraint,
-    ConstraintID, DecisionVariable, Evaluate, Function, RemovedConstraint, VariableID,
-    VariableIDSet,
+    constraint_hints::ConstraintHints, named_function::NamedFunctionID, parse::Parse, v1,
+    AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
+    NamedFunction, RemovedConstraint, VariableID, VariableIDSet,
 };
 use std::collections::BTreeMap;
 
@@ -58,6 +59,10 @@ pub enum Sense {
 ///   - **dependent**: Keys of `decision_variable_dependency`
 /// - [`Self::removed_constraints`] may contain fixed or dependent variable IDs.
 ///   These are substituted when the constraint is restored via [`Self::restore_constraint`].
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
+///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   but are NOT included in the "used" set calculation.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, getset::CopyGetters, Default)]
 pub struct Instance {
@@ -73,6 +78,8 @@ pub struct Instance {
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
+    #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
     /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
     ///
@@ -104,6 +111,10 @@ pub struct Instance {
 ///   - **used**: Variable IDs appearing in the objective function or constraints
 ///   - **fixed**: Variable IDs with `substituted_value` set
 ///   - **dependent**: Keys of `decision_variable_dependency`
+/// - The keys of [`Self::named_functions`] match the `id()` of their values.
+/// - [`Self::named_functions`] may contain fixed or dependent variable IDs (like `removed_constraints`).
+///   Variable IDs in `named_functions` must be registered in [`Self::decision_variables`],
+///   but are NOT included in the "used" set calculation.
 ///
 #[derive(Debug, Clone, PartialEq, getset::Getters, Default)]
 pub struct ParametricInstance {
@@ -121,6 +132,8 @@ pub struct ParametricInstance {
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     #[getset(get = "pub")]
     decision_variable_dependency: AcyclicAssignments,
+    #[getset(get = "pub")]
+    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
 
     /// The constraint hints, i.e. some constraints are in form of one-hot, SOS1,2, or other special types.
     ///

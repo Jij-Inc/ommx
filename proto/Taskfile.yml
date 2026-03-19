@@ -38,3 +38,8 @@ tasks:
     desc: Generate documentation from Protobuf definitions
     cmds:
       - buf generate --template buf.gen.docs.yaml
+  
+  format:
+    desc: Format all protobuf files
+    cmds:
+    - buf format -w .

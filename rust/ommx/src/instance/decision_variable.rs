@@ -41,6 +41,7 @@ impl Instance {
             var.metadata.name.as_deref() == Some(name) && var.metadata.subscripts == subscripts
         })
     }
+
     /// Returns the next available VariableID.
     ///
     /// Finds the maximum ID from decision variables, then adds 1.

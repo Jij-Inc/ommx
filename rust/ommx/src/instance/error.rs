@@ -25,6 +25,9 @@ pub enum InstanceError {
     #[error("Dependent variable cannot be used in objectives or constraints: {id:?}")]
     DependentVariableUsed { id: VariableID },
 
+    #[error("Duplicated named function ID is found in definition: {id:?}")]
+    DuplicatedNamedFunctionID { id: NamedFunctionID },
+
     #[error("Variable {id:?} cannot be both fixed (substituted_value set) and dependent")]
     FixedAndDependentVariable { id: VariableID },
 
@@ -64,4 +67,10 @@ pub enum InstanceError {
 
     #[error("Parameter map key {key:?} does not match value's id {value_id}")]
     InconsistentParameterID { key: VariableID, value_id: u64 },
+
+    #[error("Named function map key {key:?} does not match value's id {id:?}")]
+    InconsistentNamedFunctionID {
+        key: NamedFunctionID,
+        id: NamedFunctionID,
+    },
 }

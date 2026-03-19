@@ -1,9 +1,9 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, ParametricInstance, RemovedConstraint,
-    Rng, SampleSet, Samples, Sense, Solution, VariableBound,
+    Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction, ParametricInstance,
+    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, Message, Parse, VariableID};
+use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, Parse, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -26,12 +26,13 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints, description = None, constraint_hints = None))]
+    #[pyo3(signature = (sense, objective, decision_variables, constraints, named_functions=None, description = None, constraint_hints = None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
         decision_variables: HashMap<u64, DecisionVariable>,
         constraints: HashMap<u64, Constraint>,
+        named_functions: Option<HashMap<u64, NamedFunction>>,
         description: Option<InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
@@ -51,6 +52,14 @@ impl Instance {
             .objective(objective.0)
             .decision_variables(rust_decision_variables)
             .constraints(rust_constraints);
+
+        if let Some(nfs) = named_functions {
+            let rust_named_functions = nfs
+                .into_iter()
+                .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
+                .collect();
+            builder = builder.named_functions(rust_named_functions);
+        }
 
         if let Some(hints) = constraint_hints {
             builder = builder.constraint_hints(hints.0);
@@ -85,6 +94,12 @@ impl Instance {
         self.0.decision_variable_names()
     }
 
+    /// Get all unique named function names in this instance
+    #[getter]
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.0.named_function_names()
+    }
+
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
@@ -112,6 +127,16 @@ impl Instance {
             .removed_constraints()
             .values()
             .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
+            .collect()
+    }
+
+    /// List of all named functions in the instance sorted by their IDs.
+    #[getter]
+    pub fn named_functions(&self) -> Vec<NamedFunction> {
+        self.0
+            .named_functions()
+            .values()
+            .map(|named_function| NamedFunction(named_function.clone()))
             .collect()
     }
 
@@ -376,6 +401,19 @@ impl Instance {
             .ok_or_else(|| {
                 PyKeyError::new_err(format!(
                     "Removed constraint with ID {constraint_id} not found"
+                ))
+            })
+    }
+
+    /// Get a specific named function by ID
+    pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
+        self.0
+            .named_functions()
+            .get(&NamedFunctionID::from(named_function_id))
+            .map(|named_function| NamedFunction(named_function.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Named function with ID {named_function_id} not found"
                 ))
             })
     }

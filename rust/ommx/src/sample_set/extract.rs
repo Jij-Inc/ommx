@@ -15,6 +15,16 @@ impl SampleSet {
             .collect()
     }
 
+    /// Get all unique named function names in this sample set
+    ///
+    /// Returns a set of all unique named function names that have at least one named function.
+    pub fn named_function_names(&self) -> std::collections::BTreeSet<String> {
+        self.named_functions
+            .values()
+            .filter_map(|nf| nf.name.clone())
+            .collect()
+    }
+
     /// Extract decision variable values for a given name and sample ID
     ///
     /// Returns a map from subscripts to values for the specified sample.
@@ -131,6 +141,87 @@ impl SampleSet {
         }
         Ok(result)
     }
+
+    /// Extract all named functions grouped by name for a given sample ID
+    ///
+    /// Returns a mapping from function name to a mapping from subscripts to values.
+    /// This is useful for extracting all functions at once in a structured format.
+    /// Functions without names are not included in the result.
+    ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The same name and subscript combination is found multiple times
+    /// - The sample ID is invalid
+    ///
+    pub fn extract_all_named_functions(
+        &self,
+        sample_id: SampleID,
+    ) -> Result<BTreeMap<String, BTreeMap<Vec<i64>, f64>>, SampleSetError> {
+        let mut result: BTreeMap<String, BTreeMap<Vec<i64>, f64>> = BTreeMap::new();
+
+        for nf in self.named_functions.values() {
+            let name = match &nf.name {
+                Some(n) => n.clone(),
+                None => continue, // Skip functions without names
+            };
+
+            let subscripts = nf.subscripts.clone();
+            let value = *nf.evaluated_values().get(sample_id)?;
+
+            let vars_map = result.entry(name.clone()).or_default();
+            if vars_map.contains_key(&subscripts) {
+                return Err(SampleSetError::DuplicateSubscripts { name, subscripts });
+            }
+            vars_map.insert(subscripts, value);
+        }
+
+        Ok(result)
+    }
+
+    /// Extract named function values for a given name and sample ID
+    ///
+    /// Returns a map from subscripts to values for the specified sample.
+    ///
+    /// Note: Parameters in named function are ignored. Only subscripts are used as keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The same name and subscript combination is found multiple times
+    /// - The sample ID is invalid
+    /// - No named function with the given name is found
+    pub fn extract_named_functions(
+        &self,
+        name: &str,
+        sample_id: SampleID,
+    ) -> Result<BTreeMap<Vec<i64>, f64>, SampleSetError> {
+        // Collect all named functions with the given name
+        let named_functions_with_name: Vec<&SampledNamedFunction> = self
+            .named_functions
+            .values()
+            .filter(|nf| nf.name.as_deref() == Some(name))
+            .collect();
+        if named_functions_with_name.is_empty() {
+            return Err(SampleSetError::UnknownNamedFunctionName {
+                name: name.to_string(),
+            });
+        }
+        let mut result = BTreeMap::new();
+        for nf in &named_functions_with_name {
+            let subscripts = nf.subscripts().clone();
+            let value = *nf.evaluated_values().get(sample_id)?;
+            if result.insert(subscripts.clone(), value).is_some() {
+                return Err(SampleSetError::DuplicateSubscripts {
+                    name: name.to_string(),
+                    subscripts,
+                });
+            }
+        }
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -223,13 +314,13 @@ mod tests {
         objectives.append([SampleID::from(1)], 20.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test extracting variables with name "x" for sample 0
         let sample0_x = sample_set
@@ -328,13 +419,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting variables with duplicate subscripts fails
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -351,13 +442,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            BTreeMap::new(),
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test error case: unknown constraint name
         let result = sample_set.extract_constraints("nonexistent", SampleID::from(0));
@@ -444,13 +535,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that we get both "x" and "y" names
         let names = sample_set.decision_variable_names();
@@ -536,13 +627,13 @@ mod tests {
         let mut objectives = crate::Sampled::default();
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test extract_all_decision_variables
         let all_vars = sample_set
@@ -609,13 +700,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting parameterized variable succeeds (parameters are ignored)
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -697,13 +788,13 @@ mod tests {
         objectives.append([SampleID::from(0)], 10.0).unwrap();
 
         // Create sample set
-        let sample_set = SampleSet::new(
-            decision_variables,
-            objectives,
-            BTreeMap::new(),
-            Sense::Minimize,
-        )
-        .unwrap();
+        let sample_set = SampleSet::builder()
+            .decision_variables(decision_variables)
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
 
         // Test that extracting variables with duplicate subscripts fails
         let result = sample_set.extract_decision_variables("x", SampleID::from(0));
@@ -711,5 +802,245 @@ mod tests {
             result,
             Err(crate::SampleSetError::DuplicateSubscripts { .. })
         ));
+    }
+
+    /// Helper to create a SampledNamedFunction via the Parse trait from v1 types.
+    fn make_sampled_named_function(
+        id: u64,
+        entries: Vec<(Vec<u64>, f64)>,
+        name: Option<&str>,
+        subscripts: Vec<i64>,
+        parameters: std::collections::HashMap<String, String>,
+        description: Option<&str>,
+    ) -> crate::SampledNamedFunction {
+        use crate::parse::Parse;
+        let v1_entries = entries
+            .into_iter()
+            .map(|(ids, value)| crate::v1::sampled_values::SampledValuesEntry { ids, value })
+            .collect();
+        let v1_snf = crate::v1::SampledNamedFunction {
+            id,
+            evaluated_values: Some(crate::v1::SampledValues {
+                entries: v1_entries,
+            }),
+            name: name.map(|s| s.to_string()),
+            subscripts,
+            parameters,
+            description: description.map(|s| s.to_string()),
+            used_decision_variable_ids: vec![],
+        };
+        v1_snf.parse(&()).unwrap()
+    }
+
+    #[test]
+    fn test_extract_named_functions() {
+        // SampleSet with named functions: extract by name + sample_id
+        let mut named_functions = BTreeMap::new();
+
+        // Named function "cost" with subscript [0]
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 10.0), (vec![1], 11.0)],
+            Some("cost"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        // Named function "cost" with subscript [1]
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 20.0), (vec![1], 21.0)],
+            Some("cost"),
+            vec![1],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+        objectives.append([SampleID::from(1)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        // Extract for sample 0
+        let result = sample_set
+            .extract_named_functions("cost", SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[&vec![0]], 10.0);
+        assert_eq!(result[&vec![1]], 20.0);
+
+        // Extract for sample 1
+        let result = sample_set
+            .extract_named_functions("cost", SampleID::from(1))
+            .unwrap();
+        assert_eq!(result[&vec![0]], 11.0);
+        assert_eq!(result[&vec![1]], 21.0);
+    }
+
+    #[test]
+    fn test_extract_named_functions_unknown_name() {
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let result = sample_set.extract_named_functions("nonexistent", SampleID::from(0));
+        assert!(matches!(
+            result,
+            Err(crate::SampleSetError::UnknownNamedFunctionName { name }) if name == "nonexistent"
+        ));
+    }
+
+    #[test]
+    fn test_extract_named_functions_with_parameters() {
+        // Parameters are now allowed (ignored) - only subscripts are used as keys
+        let mut named_functions = BTreeMap::new();
+
+        let snf = make_sampled_named_function(
+            1,
+            vec![(vec![0], 5.0)],
+            Some("f"),
+            vec![0],
+            [("param".to_string(), "value".to_string())]
+                .into_iter()
+                .collect(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        // Should succeed - parameters are ignored
+        let result = sample_set
+            .extract_named_functions("f", SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[&vec![0]], 5.0);
+    }
+
+    #[test]
+    fn test_extract_all_named_functions() {
+        let mut named_functions = BTreeMap::new();
+
+        // "cost" [0]
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 10.0)],
+            Some("cost"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        // "penalty" [0]
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 5.0)],
+            Some("penalty"),
+            vec![0],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        // Unnamed (should be skipped)
+        let snf3 = make_sampled_named_function(
+            3,
+            vec![(vec![0], 99.0)],
+            None,
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(3), snf3);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let result = sample_set
+            .extract_all_named_functions(SampleID::from(0))
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert!(result.contains_key("cost"));
+        assert!(result.contains_key("penalty"));
+    }
+
+    #[test]
+    fn test_named_function_names() {
+        let mut named_functions = BTreeMap::new();
+
+        let snf1 = make_sampled_named_function(
+            1,
+            vec![(vec![0], 1.0)],
+            Some("alpha"),
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(1), snf1);
+
+        let snf2 = make_sampled_named_function(
+            2,
+            vec![(vec![0], 2.0)],
+            Some("beta"),
+            vec![],
+            Default::default(),
+            None,
+        );
+        named_functions.insert(crate::NamedFunctionID::from(2), snf2);
+
+        let mut objectives = crate::Sampled::default();
+        objectives.append([SampleID::from(0)], 0.0).unwrap();
+
+        let sample_set = SampleSet::builder()
+            .decision_variables(BTreeMap::new())
+            .objectives(objectives)
+            .constraints(BTreeMap::new())
+            .named_functions(named_functions)
+            .sense(Sense::Minimize)
+            .build()
+            .unwrap();
+
+        let names = sample_set.named_function_names();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains("alpha"));
+        assert!(names.contains("beta"));
     }
 }

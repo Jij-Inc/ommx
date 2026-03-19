@@ -5,6 +5,7 @@ package ommx.v1;
 import "ommx/v1/constraint.proto";
 import "ommx/v1/decision_variables.proto";
 import "ommx/v1/instance.proto";
+import "ommx/v1/named_function.proto";
 
 // A set of values of decision variables, without any evaluation, even the
 // feasiblity of the solution.
@@ -36,6 +37,7 @@ message Solution {
 
   repeated DecisionVariable decision_variables = 3;
   repeated EvaluatedConstraint evaluated_constraints = 4;
+  repeated EvaluatedNamedFunction evaluated_named_functions = 11;
 
   // The feasibility of the solution for all, remaining and removed constraints.
   //

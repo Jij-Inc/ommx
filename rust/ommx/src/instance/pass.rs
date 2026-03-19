@@ -297,7 +297,6 @@ mod tests {
             description: None,
         };
         constraints.insert(ConstraintID::from(1), constraint);
-
         // Create instance
         let objective = Function::from(linear!(1) + linear!(2) + linear!(3));
         let mut instance =

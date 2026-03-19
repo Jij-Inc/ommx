@@ -132,10 +132,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(parametric_instance.sense, Sense::Maximize);
-        assert_eq!(parametric_instance.decision_variables.len(), 2);
-        assert_eq!(parametric_instance.parameters.len(), 2);
-        assert_eq!(parametric_instance.constraints.len(), 2);
+        assert_eq!(*parametric_instance.sense(), Sense::Maximize);
+        assert_eq!(parametric_instance.decision_variables().len(), 2);
+        assert_eq!(parametric_instance.parameters().len(), 2);
+        assert_eq!(parametric_instance.constraints().len(), 2);
     }
 
     #[test]

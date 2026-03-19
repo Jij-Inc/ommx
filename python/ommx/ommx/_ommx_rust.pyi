@@ -457,6 +457,32 @@ class EvaluatedDecisionVariable:
     def to_bytes(self) -> bytes: ...
 
 @typing.final
+class EvaluatedNamedFunction:
+    r"""
+    EvaluatedNamedFunction wrapper for Python
+    """
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def evaluated_value(self) -> builtins.float: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @staticmethod
+    def from_bytes(bytes: bytes) -> EvaluatedNamedFunction: ...
+    def to_bytes(self) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> EvaluatedNamedFunction: ...
+    def __deepcopy__(self, _memo: typing.Any) -> EvaluatedNamedFunction: ...
+
+@typing.final
 class Function:
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
@@ -592,6 +618,11 @@ class Instance:
         Get all unique decision variable names in this instance
         """
     @property
+    def named_function_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique named function names in this instance
+        """
+    @property
     def decision_variables(self) -> builtins.list[DecisionVariable]:
         r"""
         List of all decision variables in the instance sorted by their IDs.
@@ -607,6 +638,11 @@ class Instance:
         List of all removed constraints in the instance sorted by their IDs.
         """
     @property
+    def named_functions(self) -> builtins.list[NamedFunction]:
+        r"""
+        List of all named functions in the instance sorted by their IDs.
+        """
+    @property
     def description(self) -> typing.Optional[InstanceDescription]: ...
     @property
     def constraint_hints(self) -> ConstraintHints: ...
@@ -620,6 +656,9 @@ class Instance:
         objective: Function,
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
+        named_functions: typing.Optional[
+            typing.Mapping[builtins.int, NamedFunction]
+        ] = None,
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance: ...
@@ -683,6 +722,12 @@ class Instance:
     ) -> RemovedConstraint:
         r"""
         Get a specific removed constraint by ID
+        """
+    def get_named_function_by_id(
+        self, named_function_id: builtins.int
+    ) -> NamedFunction:
+        r"""
+        Get a specific named function by ID
         """
     def reduce_binary_power(self) -> builtins.bool:
         r"""
@@ -778,6 +823,45 @@ class Linear:
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
+
+@typing.final
+class NamedFunction:
+    r"""
+    NamedFunction wrapper for Python
+    """
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def function(self) -> Function: ...
+    @property
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def description(self) -> typing.Optional[builtins.str]: ...
+    def __new__(
+        cls,
+        id: builtins.int,
+        function: Function,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        description: typing.Optional[builtins.str] = None,
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+    ) -> NamedFunction: ...
+    @staticmethod
+    def from_bytes(bytes: bytes) -> NamedFunction: ...
+    def to_bytes(self) -> bytes: ...
+    def evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> bytes: ...
+    def partial_evaluate(
+        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+    ) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> NamedFunction: ...
+    def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
 
 @typing.final
 class OneHot:
@@ -971,6 +1055,11 @@ class SampleSet:
         Get the optimization sense (minimize or maximize)
         """
     @property
+    def named_functions(self) -> builtins.list[SampledNamedFunction]:
+        r"""
+        Get named functions for compatibility with existing Python code
+        """
+    @property
     def constraints(self) -> builtins.list[SampledConstraint]:
         r"""
         Get constraints for compatibility with existing Python code
@@ -989,6 +1078,11 @@ class SampleSet:
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
         Get all unique decision variable names in this sample set
+        """
+    @property
+    def named_function_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique named function names in this sample set
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> SampleSet: ...
@@ -1017,6 +1111,16 @@ class SampleSet:
         r"""
         Extract constraint values for a given name and sample ID
         """
+    def extract_named_functions(
+        self, name: builtins.str, sample_id: builtins.int
+    ) -> dict:
+        r"""
+        Extract named function values for a given name and sample ID
+        """
+    def extract_all_named_functions(self, sample_id: builtins.int) -> dict:
+        r"""
+        Extract all named function values grouped by name for a given sample ID
+        """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
     ) -> SampledDecisionVariable:
@@ -1026,6 +1130,12 @@ class SampleSet:
     def get_constraint_by_id(self, constraint_id: builtins.int) -> SampledConstraint:
         r"""
         Get a specific sampled constraint by ID
+        """
+    def get_named_function_by_id(
+        self, named_function_id: builtins.int
+    ) -> SampledNamedFunction:
+        r"""
+        Get a specific sampled named function by ID
         """
 
 @typing.final
@@ -1131,6 +1241,47 @@ class SampledDecisionVariable:
     def to_bytes(self) -> bytes: ...
 
 @typing.final
+class SampledNamedFunction:
+    @property
+    def id(self) -> builtins.int:
+        r"""
+        Get the named function ID
+        """
+    @property
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the named function name
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters
+        """
+    @property
+    def evaluated_values(self) -> builtins.dict[builtins.int, builtins.float]:
+        r"""
+        Get the sampled values for all samples
+        """
+    @property
+    def used_decision_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @staticmethod
+    def from_bytes(bytes: bytes) -> SampledNamedFunction: ...
+    def to_bytes(self) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> SampledNamedFunction: ...
+    def __deepcopy__(self, _memo: typing.Any) -> SampledNamedFunction: ...
+
+@typing.final
 class Samples:
     def __new__(cls, entries: typing.Any) -> Samples: ...
     @staticmethod
@@ -1221,9 +1372,17 @@ class Solution:
         r"""
         Get all unique decision variable names in this solution
         """
+    @property
+    def named_function_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def named_function_names(self) -> builtins.set[builtins.str]:
+        r"""
+        Get all unique named function names in this solution
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
+    def named_functions(self) -> builtins.list[EvaluatedNamedFunction]: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract decision variables by name with subscripts as key (returns a Python dict)
@@ -1235,6 +1394,14 @@ class Solution:
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
         Extract constraints by name with subscripts as key (returns a Python dict)
+        """
+    def extract_named_functions(self, name: builtins.str) -> dict:
+        r"""
+        Extract named functions by name with subscripts as key (returns a Python dict)
+        """
+    def extract_all_named_functions(self) -> dict:
+        r"""
+        Extract all named functions grouped by name (returns a Python dict)
         """
     def set_dual_variable(
         self, constraint_id: builtins.int, value: typing.Optional[builtins.float]
@@ -1251,6 +1418,12 @@ class Solution:
     def get_constraint_by_id(self, constraint_id: builtins.int) -> EvaluatedConstraint:
         r"""
         Get a specific evaluated constraint by ID
+        """
+    def get_named_function_by_id(
+        self, named_function_id: builtins.int
+    ) -> EvaluatedNamedFunction:
+        r"""
+        Get a specific evaluated named function by ID
         """
     def total_violation_l1(self) -> builtins.float:
         r"""

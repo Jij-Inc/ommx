@@ -32,6 +32,11 @@ impl Parse for crate::v1::Solution {
             let parsed_constraint = ec.parse_as(&(), message, "evaluated_constraints")?;
             evaluated_constraints.insert(*parsed_constraint.id(), parsed_constraint);
         }
+        let mut evaluated_named_functions = std::collections::BTreeMap::default();
+        for enf in self.evaluated_named_functions {
+            let parsed_named_function = enf.parse_as(&(), message, "evaluated_named_functions")?;
+            evaluated_named_functions.insert(parsed_named_function.id(), parsed_named_function);
+        }
 
         let mut decision_variables = std::collections::BTreeMap::default();
         for dv in self.decision_variables {
@@ -78,6 +83,7 @@ impl Parse for crate::v1::Solution {
         let solution = Solution {
             objective,
             evaluated_constraints,
+            evaluated_named_functions,
             decision_variables,
             optimality,
             relaxation,
@@ -121,6 +127,11 @@ impl From<Solution> for crate::v1::Solution {
             .values()
             .map(|ec| ec.clone().into())
             .collect();
+        let evaluated_named_functions = solution
+            .evaluated_named_functions()
+            .values()
+            .map(|enf| enf.clone().into())
+            .collect();
         let decision_variables: Vec<crate::v1::DecisionVariable> = solution
             .decision_variables()
             .values()
@@ -143,6 +154,7 @@ impl From<Solution> for crate::v1::Solution {
             state: Some(state),
             objective,
             evaluated_constraints,
+            evaluated_named_functions,
             decision_variables,
             feasible,
             feasible_relaxed,

@@ -259,6 +259,8 @@ impl Instance {
         for constraint in self.constraints.values() {
             used.extend(constraint.function.required_ids());
         }
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent variables.
         used
     }
 
@@ -309,7 +311,10 @@ impl Instance {
             );
             used_in_constraints.insert(constraint.id, required_ids);
         }
+
         let mut used = used_in_objective.clone();
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent variables.
         for ids in used_in_constraints.values() {
             used.extend(ids);
         }
@@ -386,6 +391,8 @@ impl std::fmt::Display for DecisionVariableAnalysis {
             .flat_map(|ids| ids.iter())
             .collect::<std::collections::BTreeSet<_>>()
             .len();
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent/irrelevant variables.
         writeln!(
             f,
             "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
@@ -555,7 +562,6 @@ mod tests {
                 (linear!(3) + coeff!(-1.0) * linear!(0) + coeff!(-1.0) * linear!(1)).into(),
             ),
         );
-
         let mut instance =
             Instance::new(Sense::Maximize, objective, decision_variables, constraints).unwrap();
 

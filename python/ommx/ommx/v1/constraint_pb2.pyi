@@ -75,7 +75,9 @@ class Constraint(google.protobuf.message.Message):
     """Constraint ID
 
     - Constraint IDs are managed separately from decision variable IDs.
-      We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+      We can use the same ID for both.
+      For example, we have a decision variable
+      `x` with decision variable ID `1`
       and constraint `x == 0` with constraint ID `1`.
     - IDs are not required to be sequential.
     - IDs must be unique with other types of constraints.
@@ -93,10 +95,14 @@ class Constraint(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
         """Integer parameters of the constraint.
 
-        Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-        then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-        The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-        and the `subscripts` field is intended to be the value of `[i, j]` like `[1, 5]`.
+        Consider for example a problem contains a series of
+        constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+        then 6 = 3x2 `Constraint` messages should be created
+        corresponding to each pair of `i` and `j`.
+        The `name` field of this message is intended to be
+        a human-readable name of `x[i, j] + y[i, j] <= 10`,
+        and the `subscripts` field is intended to be the
+        value of `[i, j]` like `[1, 5]`.
         """
 
     @property
@@ -228,15 +234,19 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     """Detail human-readable description of the constraint."""
     dual_variable: builtins.float
     """Value for the Lagrangian dual variable of this constraint.
-    This is optional because not all solvers support to evaluate dual variables.
+    This is optional because not all solvers support to
+    evaluate dual variables.
     """
     removed_reason: builtins.str
-    """Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint."""
+    """Short removed reason of the constraint.
+    This field exists only if this message is evaluated
+    from a removed constraint.
+    """
     @property
     def used_decision_variable_ids(
         self,
     ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.int]:
-        """IDs of decision variables used to evalute this constraint"""
+        """IDs of decision variables used to evaluate this constraint"""
 
     @property
     def subscripts(
@@ -254,7 +264,10 @@ class EvaluatedConstraint(google.protobuf.message.Message):
     def removed_reason_parameters(
         self,
     ) -> google.protobuf.internal.containers.ScalarMap[builtins.str, builtins.str]:
-        """Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint."""
+        """Detailed parameters why the constraint is removed.
+        This field exists only if this message is evaluated
+        from a removed constraint.
+        """
 
     def __init__(
         self,
@@ -375,7 +388,8 @@ class RemovedConstraint(google.protobuf.message.Message):
     removed_reason: builtins.str
     """Short reason why the constraint was removed.
 
-    This should be the name of method, function or application which remove the constraint.
+    This should be the name of method,
+    function or application which remove the constraint.
     """
     @property
     def constraint(self) -> global___Constraint:

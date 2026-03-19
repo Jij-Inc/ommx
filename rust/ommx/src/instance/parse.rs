@@ -124,6 +124,22 @@ impl Parse for v1::Instance {
             self.removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
+        let named_functions = self
+            .named_functions
+            .parse_as(&(), message, "named_functions")?;
+
+        // Validate that all variables used in named functions are defined as decision variables
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !decision_variable_ids.contains(&id) {
+                    return Err(
+                        RawParseError::from(InstanceError::UndefinedVariableID { id })
+                            .context(message, "named_functions"),
+                    );
+                }
+            }
+        }
+
         let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
             decision_variable_dependency.insert(
@@ -153,6 +169,7 @@ impl Parse for v1::Instance {
             parameters: self.parameters,
             description: self.description,
             constraint_hints,
+            named_functions,
         })
     }
 }
@@ -172,6 +189,11 @@ impl From<Instance> for v1::Instance {
             .map(|dv| dv.into())
             .collect();
         let constraints = value.constraints.into_values().map(|c| c.into()).collect();
+        let named_functions = value
+            .named_functions
+            .into_values()
+            .map(|nf| nf.into())
+            .collect();
         let removed_constraints = value
             .removed_constraints
             .into_values()
@@ -187,6 +209,7 @@ impl From<Instance> for v1::Instance {
             decision_variables,
             objective: Some(value.objective.into()),
             constraints,
+            named_functions,
             removed_constraints,
             decision_variable_dependency,
             parameters: value.parameters,
@@ -266,6 +289,22 @@ impl Parse for v1::ParametricInstance {
             self.removed_constraints
                 .parse_as(&constraints, message, "removed_constraints")?;
 
+        let named_functions = self
+            .named_functions
+            .parse_as(&(), message, "named_functions")?;
+
+        // Validate that all variables used in named functions are defined (either as decision variables or parameters)
+        for named_function in named_functions.values() {
+            for id in named_function.function.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    return Err(
+                        RawParseError::from(InstanceError::UndefinedVariableID { id })
+                            .context(message, "named_functions"),
+                    );
+                }
+            }
+        }
+
         let mut decision_variable_dependency = BTreeMap::default();
         for (id, f) in self.decision_variable_dependency {
             decision_variable_dependency.insert(
@@ -291,6 +330,7 @@ impl Parse for v1::ParametricInstance {
             decision_variables,
             parameters,
             constraints,
+            named_functions,
             removed_constraints,
             decision_variable_dependency,
             constraint_hints,
@@ -311,6 +351,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
         }: ParametricInstance,
     ) -> Self {
         Self {
@@ -323,6 +364,7 @@ impl From<ParametricInstance> for v1::ParametricInstance {
                 .collect(),
             parameters: parameters.into_values().collect(),
             constraints: constraints.into_values().map(|c| c.into()).collect(),
+            named_functions: named_functions.into_values().map(|nf| nf.into()).collect(),
             removed_constraints: removed_constraints
                 .into_values()
                 .map(|rc| rc.into())
@@ -371,6 +413,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -408,6 +451,7 @@ mod tests {
                 Function::from(linear!(999) + coeff!(1.0)),
             )
             .into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -434,6 +478,7 @@ mod tests {
             objective: Some(Function::from(linear!(999) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -467,6 +512,7 @@ mod tests {
                 Function::from(linear!(999) + coeff!(1.0)),
             )
             .into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -512,6 +558,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![constraint.into()],
+            named_functions: vec![],
             removed_constraints: vec![removed_constraint.into()],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -551,6 +598,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![constraint.into()],
+            named_functions: vec![],
             removed_constraints: vec![removed_constraint.into()],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -583,6 +631,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -607,6 +656,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -637,6 +687,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -662,6 +713,7 @@ mod tests {
             objective: None, // Missing objective
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,
@@ -693,6 +745,7 @@ mod tests {
                 ..Default::default()
             }], // Same ID as decision variable
             constraints: vec![],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -735,6 +788,7 @@ mod tests {
                 ..Default::default()
             }],
             constraints: vec![constraint1.into(), constraint2.into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             constraint_hints: None,
@@ -772,6 +826,7 @@ mod tests {
             objective: Some(Function::from(linear!(1) + coeff!(1.0)).into()),
             decision_variables: vec![DecisionVariable::binary(VariableID::from(1)).into()],
             constraints: vec![constraint1.into(), constraint2.into()],
+            named_functions: vec![],
             removed_constraints: vec![],
             decision_variable_dependency: HashMap::new(),
             parameters: None,

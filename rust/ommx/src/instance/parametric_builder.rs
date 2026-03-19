@@ -24,6 +24,7 @@ pub struct ParametricInstanceBuilder {
     decision_variables: Option<BTreeMap<VariableID, DecisionVariable>>,
     parameters: Option<BTreeMap<VariableID, v1::Parameter>>,
     constraints: Option<BTreeMap<ConstraintID, Constraint>>,
+    named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
     removed_constraints: BTreeMap<ConstraintID, RemovedConstraint>,
     decision_variable_dependency: AcyclicAssignments,
     constraint_hints: ConstraintHints,
@@ -66,6 +67,15 @@ impl ParametricInstanceBuilder {
     /// Sets the constraints.
     pub fn constraints(mut self, constraints: BTreeMap<ConstraintID, Constraint>) -> Self {
         self.constraints = Some(constraints);
+        self
+    }
+
+    /// Sets the named functions.
+    pub fn named_functions(
+        mut self,
+        named_functions: BTreeMap<NamedFunctionID, NamedFunction>,
+    ) -> Self {
+        self.named_functions = named_functions;
         self
     }
 
@@ -218,6 +228,22 @@ impl ParametricInstanceBuilder {
             }
         }
 
+        // Validate named_functions: key must match value's id, and all variable IDs must exist
+        for (key, nf) in &self.named_functions {
+            if *key != nf.id {
+                return Err(InstanceError::InconsistentNamedFunctionID {
+                    key: *key,
+                    id: nf.id,
+                }
+                .into());
+            }
+            for id in nf.function.required_ids() {
+                if !all_variable_ids.contains(&id) {
+                    return Err(InstanceError::UndefinedVariableID { id }.into());
+                }
+            }
+        }
+
         // Validate that constraints and removed_constraints keys are disjoint
         for id in self.removed_constraints.keys() {
             if constraints.contains_key(id) {
@@ -282,6 +308,7 @@ impl ParametricInstanceBuilder {
             decision_variables,
             parameters,
             constraints,
+            named_functions: self.named_functions,
             removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints,
@@ -362,5 +389,112 @@ mod tests {
             instance_err,
             InstanceError::DuplicatedVariableID { id } if *id == var_id
         ));
+    }
+
+    #[test]
+    fn test_parametric_builder_inconsistent_named_function_id() {
+        use crate::{NamedFunction, NamedFunctionID};
+        use maplit::btreemap;
+
+        // Create a named function with id=1 but use key=2 in the map
+        let named_function = NamedFunction {
+            id: NamedFunctionID::from(1),
+            function: Function::Zero,
+            name: Some("f".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .named_functions(btreemap! {
+                NamedFunctionID::from(2) => named_function,  // key=2 but id=1
+            })
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::InconsistentNamedFunctionID { key, id }
+                if *key == NamedFunctionID::from(2) && *id == NamedFunctionID::from(1)
+        ));
+    }
+
+    #[test]
+    fn test_parametric_builder_undefined_variable_in_named_function() {
+        use crate::{coeff, linear, NamedFunction, NamedFunctionID};
+        use maplit::btreemap;
+
+        // Create a named function that references undefined variable ID 999
+        let named_function = NamedFunction {
+            id: NamedFunctionID::from(1),
+            function: Function::from(linear!(999) + coeff!(1.0)),
+            name: Some("f".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let err = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(BTreeMap::new())
+            .parameters(BTreeMap::new())
+            .constraints(BTreeMap::new())
+            .named_functions(btreemap! {
+                NamedFunctionID::from(1) => named_function,
+            })
+            .build()
+            .unwrap_err();
+
+        let instance_err = err.downcast_ref::<InstanceError>().unwrap();
+        assert!(matches!(
+            instance_err,
+            InstanceError::UndefinedVariableID { id } if *id == VariableID::from(999)
+        ));
+    }
+
+    #[test]
+    fn test_parametric_builder_named_function_with_parameter() {
+        use crate::{linear, NamedFunction, NamedFunctionID};
+        use maplit::btreemap;
+
+        // Named functions can reference parameters (not just decision variables)
+        let var_id = VariableID::from(1);
+        let param_id = VariableID::from(2);
+
+        let named_function = NamedFunction {
+            id: NamedFunctionID::from(1),
+            function: Function::from(linear!(1) + linear!(2)), // uses both decision var and param
+            name: Some("f".to_string()),
+            subscripts: vec![],
+            parameters: Default::default(),
+            description: None,
+        };
+
+        let instance = ParametricInstance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::Zero)
+            .decision_variables(btreemap! {
+                var_id => DecisionVariable::binary(var_id),
+            })
+            .parameters(btreemap! {
+                param_id => v1::Parameter { id: 2, ..Default::default() },
+            })
+            .constraints(BTreeMap::new())
+            .named_functions(btreemap! {
+                NamedFunctionID::from(1) => named_function,
+            })
+            .build()
+            .unwrap();
+
+        // Should succeed since both var_id and param_id are defined
+        assert_eq!(instance.named_functions().len(), 1);
     }
 }
