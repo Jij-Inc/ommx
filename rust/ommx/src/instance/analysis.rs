@@ -411,20 +411,14 @@ impl std::fmt::Display for DecisionVariableAnalysis {
             .flat_map(|ids| ids.iter())
             .collect::<std::collections::BTreeSet<_>>()
             .len();
-        // Count unique variables used in named functions (union of all named function variable sets)
-        let used_in_named_functions_count: usize = self
-            .used_in_named_functions
-            .values()
-            .flat_map(|ids| ids.iter())
-            .collect::<std::collections::BTreeSet<_>>()
-            .len();
+        // Note: named_functions are intentionally excluded from the "used" set.
+        // They are auxiliary quantities that can reference fixed/dependent/irrelevant variables.
         writeln!(
             f,
-            "    Used: {} (in objective: {}, in constraints: {}, in named functions: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
+            "    Used: {} (in objective: {}, in constraints: {}), Fixed: {}, Dependent: {}, Irrelevant: {}",
             self.used.len(),
             self.used_in_objective.len(),
             used_in_constraints_count,
-            used_in_named_functions_count,
             self.fixed.len(),
             self.dependent.len(),
             self.irrelevant.len()
