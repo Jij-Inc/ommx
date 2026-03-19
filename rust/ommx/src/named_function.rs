@@ -72,6 +72,33 @@ pub struct NamedFunction {
     pub description: Option<String>,
 }
 
+impl std::fmt::Display for NamedFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name_str = self
+            .name
+            .as_ref()
+            .map(|n| format!("name=\"{n}\""))
+            .unwrap_or_else(|| "name=None".to_string());
+
+        let mut parts = vec![name_str];
+
+        if !self.subscripts.is_empty() {
+            parts.push(format!("subscripts={:?}", self.subscripts));
+        }
+
+        if !self.parameters.is_empty() {
+            let params: Vec<String> = self
+                .parameters
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            parts.push(format!("parameters={{{}}}", params.join(", ")));
+        }
+
+        write!(f, "NamedFunction({}, {})", self.function, parts.join(", "))
+    }
+}
+
 /// `ommx.v1.EvaluatedNamedFunction` with validated, typed fields.
 #[derive(Debug, Clone, PartialEq, CopyGetters, Getters)]
 pub struct EvaluatedNamedFunction {
@@ -91,6 +118,33 @@ pub struct EvaluatedNamedFunction {
     used_decision_variable_ids: VariableIDSet,
 }
 
+impl std::fmt::Display for EvaluatedNamedFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name_str = self
+            .name
+            .as_ref()
+            .map(|n| format!("name=\"{n}\""))
+            .unwrap_or_else(|| "name=None".to_string());
+
+        let mut parts = vec![name_str, format!("value={}", self.evaluated_value)];
+
+        if !self.subscripts.is_empty() {
+            parts.push(format!("subscripts={:?}", self.subscripts));
+        }
+
+        if !self.parameters.is_empty() {
+            let params: Vec<String> = self
+                .parameters
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            parts.push(format!("parameters={{{}}}", params.join(", ")));
+        }
+
+        write!(f, "EvaluatedNamedFunction({})", parts.join(", "))
+    }
+}
+
 /// Multiple sample evaluation results with deduplication
 #[derive(Debug, Clone, PartialEq, Getters)]
 pub struct SampledNamedFunction {
@@ -108,6 +162,36 @@ pub struct SampledNamedFunction {
     pub description: Option<String>,
     #[getset(get = "pub")]
     used_decision_variable_ids: VariableIDSet,
+}
+
+impl std::fmt::Display for SampledNamedFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name_str = self
+            .name
+            .as_ref()
+            .map(|n| format!("name=\"{n}\""))
+            .unwrap_or_else(|| "name=None".to_string());
+
+        let mut parts = vec![
+            name_str,
+            format!("num_samples={}", self.evaluated_values.num_samples()),
+        ];
+
+        if !self.subscripts.is_empty() {
+            parts.push(format!("subscripts={:?}", self.subscripts));
+        }
+
+        if !self.parameters.is_empty() {
+            let params: Vec<String> = self
+                .parameters
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            parts.push(format!("parameters={{{}}}", params.join(", ")));
+        }
+
+        write!(f, "SampledNamedFunction({})", parts.join(", "))
+    }
 }
 
 impl SampledNamedFunction {

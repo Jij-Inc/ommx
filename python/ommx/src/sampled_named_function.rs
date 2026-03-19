@@ -75,20 +75,7 @@ impl SampledNamedFunction {
     }
 
     pub fn __repr__(&self) -> String {
-        let name_str = self
-            .0
-            .name
-            .as_ref()
-            .map(|n| format!("\"{n}\""))
-            .unwrap_or_else(|| "None".to_string());
-        let num_samples = self.0.evaluated_values().num_samples();
-        format!(
-            "SampledNamedFunction(id={}, name={}, subscripts={:?}, num_samples={})",
-            self.0.id(),
-            name_str,
-            self.0.subscripts,
-            num_samples
-        )
+        self.0.to_string()
     }
 
     fn __copy__(&self) -> Self {
