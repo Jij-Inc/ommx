@@ -507,6 +507,13 @@ class Instance(UserAnnotationBase):
         return df
 
     @property
+    def named_functions_df(self) -> DataFrame:
+        df = DataFrame(nf._as_pandas_entry() for nf in self.named_functions)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
     def constraints_df(self) -> DataFrame:
         df = DataFrame(c._as_pandas_entry() for c in self.constraints)
         if not df.empty:
@@ -2107,6 +2114,16 @@ class ParametricInstance(UserAnnotationBase):
         ]
 
     @property
+    def named_functions(self) -> list[NamedFunction]:
+        """
+        Get named functions as a list of :class:`NamedFunction` instances.
+        """
+        return [
+            NamedFunction.from_bytes(raw.SerializeToString())
+            for raw in self.raw.named_functions
+        ]
+
+    @property
     def parameters(self) -> list[Parameter]:
         """
         Get parameters as a list of :class:`Parameter`.
@@ -2154,6 +2171,13 @@ class ParametricInstance(UserAnnotationBase):
     @property
     def decision_variables_df(self) -> DataFrame:
         df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        if not df.empty:
+            df = df.set_index("id")
+        return df
+
+    @property
+    def named_functions_df(self) -> DataFrame:
+        df = DataFrame(nf._as_pandas_entry() for nf in self.named_functions)
         if not df.empty:
             df = df.set_index("id")
         return df
@@ -2674,6 +2698,24 @@ class Solution(UserAnnotationBase):
     ) -> dict[str, dict[tuple[int, ...], float]]:
         """Extract all named functions grouped by name."""
         return self.raw.extract_all_named_functions()
+
+    @property
+    def named_functions_df(self) -> DataFrame:
+        df = DataFrame(
+            {
+                "id": nf.id,
+                "value": nf.evaluated_value,
+                "used_ids": set(nf.used_decision_variable_ids),
+                "name": nf.name if nf.name else NA,
+                "subscripts": nf.subscripts,
+                "description": nf.description if nf.description else NA,
+            }
+            | {f"parameters.{key}": value for key, value in nf.parameters.items()}
+            for nf in self.named_functions
+        )
+        if not df.empty:
+            df = df.set_index("id")
+        return df
 
     def total_violation_l1(self) -> float:
         """
@@ -4470,6 +4512,16 @@ class NamedFunction(AsConstraint):
             function=self.function - other, equality=Constraint.EQUAL_TO_ZERO
         )
 
+    def _as_pandas_entry(self) -> dict:
+        return {
+            "id": self.id,
+            "type": self.function.raw.type_name,
+            "used_ids": self.function.raw.required_ids(),
+            "name": self.name if self.name else NA,
+            "subscripts": self.subscripts,
+            "description": self.description if self.description else NA,
+        } | {f"parameters.{key}": value for key, value in self.parameters.items()}
+
     def __repr__(self) -> str:
         return self.raw.__repr__()
 
@@ -4937,6 +4989,24 @@ class SampleSet(UserAnnotationBase):
     ) -> dict[str, dict[tuple[int, ...], float]]:
         """Extract all named function values grouped by name for a given sample ID."""
         return self.raw.extract_all_named_functions(sample_id)
+
+    @property
+    def named_functions_df(self) -> DataFrame:
+        df = DataFrame(
+            {
+                "id": nf.id,
+                "used_ids": set(nf.used_decision_variable_ids),
+                "name": nf.name if nf.name else NA,
+                "subscripts": nf.subscripts,
+                "description": nf.description if nf.description else NA,
+            }
+            | {f"parameters.{key}": value for key, value in nf.parameters.items()}
+            | {str(id): value for id, value in nf.evaluated_values.items()}
+            for nf in self.named_functions
+        )
+        if not df.empty:
+            return df.set_index("id")
+        return df
 
     @property
     def decision_variables(self) -> list[SampledDecisionVariable]:
