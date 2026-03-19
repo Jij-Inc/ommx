@@ -118,8 +118,8 @@ impl NamedFunction {
             .map(|n| format!("\"{n}\""))
             .unwrap_or_else(|| "None".to_string());
         format!(
-            "NamedFunction(id={}, name={}, subscripts={:?})",
-            self.0.id, name_str, self.0.subscripts
+            "NamedFunction(id={}, function={}, name={}, subscripts={:?})",
+            self.0.id, self.0.function, name_str, self.0.subscripts
         )
     }
 
