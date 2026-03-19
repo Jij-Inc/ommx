@@ -1,5 +1,5 @@
 use super::*;
-use crate::{v1::State, ATol, Bound, Bounds, Evaluate, Kind, VariableIDSet};
+use crate::{v1::State, ATol, AcyclicAssignments, Bound, Bounds, Evaluate, Kind, VariableIDSet};
 use std::collections::BTreeMap;
 
 /// The result of analyzing the decision variables in an instance.
@@ -177,17 +177,23 @@ impl DecisionVariableAnalysis {
                 }
             }
         }
-        // Populate the state with dependent variables
-        for (id, (_kind, _bound, f)) in self.dependent() {
+        // Populate the state with dependent variables in topological order
+        let acyclic = AcyclicAssignments::new(
+            self.dependent()
+                .iter()
+                .map(|(id, (_kind, _bound, f))| (*id, f.clone())),
+        )
+        .map_err(|error| StateValidationError::CyclicDependency { error })?;
+        for (id, f) in acyclic.evaluation_order_iter() {
             let value = f.evaluate(&state, atol).map_err(|error| {
-                StateValidationError::FailedToEvaluateDependentVariable { id: *id, error }
+                StateValidationError::FailedToEvaluateDependentVariable { id, error }
             })?;
             // Note: Bound and kind checking is intentionally omitted here.
             // These constraints will be validated as part of Solution::feasible() instead.
             if let Some(v) = state.entries.insert(id.into_inner(), value) {
                 if (v - value).abs() > atol {
                     return Err(StateValidationError::StateValueInconsistent {
-                        id: *id,
+                        id,
                         state_value: v,
                         instance_value: value,
                     });
@@ -238,6 +244,8 @@ pub enum StateValidationError {
         id: VariableID,
         error: anyhow::Error,
     },
+    #[error("Cyclic dependency detected in dependent variables: {error}")]
+    CyclicDependency { error: crate::SubstitutionError },
 }
 
 impl Instance {
@@ -582,6 +590,70 @@ mod tests {
 
         let analysis = instance.analyze_decision_variables();
         insta::assert_snapshot!(analysis);
+    }
+
+    /// Test that dependent variables are evaluated in topological order.
+    ///
+    /// This test creates a chain of dependent variables where:
+    /// - x_10 = x_1 + x_2 (depends on independent variables)
+    /// - x_5 = x_10 + 1 (depends on another dependent variable x_10)
+    ///
+    /// In BTreeMap order (by VariableID), x_5 would be evaluated before x_10,
+    /// which would fail because x_10 is not yet in the state.
+    /// With topological sort, x_10 is evaluated first, then x_5.
+    #[test]
+    fn test_populate_dependent_variables_topological_order() {
+        use crate::{assign, coeff, linear, ATol, DecisionVariable, Sense};
+        use maplit::btreemap;
+        use std::collections::HashMap;
+
+        // Create decision variables:
+        // x_1, x_2: independent variables (used in objective)
+        // x_5: dependent on x_10 (x_5 = x_10 + 1)
+        // x_10: dependent on x_1, x_2 (x_10 = x_1 + x_2)
+        //
+        // Note: x_5 < x_10 in BTreeMap order, but x_10 must be evaluated first
+        let decision_variables = btreemap! {
+            VariableID::from(1) => DecisionVariable::continuous(VariableID::from(1)),
+            VariableID::from(2) => DecisionVariable::continuous(VariableID::from(2)),
+            VariableID::from(5) => DecisionVariable::continuous(VariableID::from(5)),
+            VariableID::from(10) => DecisionVariable::continuous(VariableID::from(10)),
+        };
+
+        // x_10 = x_1 + x_2
+        // x_5 = x_10 + 1
+        let dependency = assign! {
+            10 <- linear!(1) + linear!(2),
+            5 <- linear!(10) + coeff!(1.0)
+        };
+
+        let instance = Instance::builder()
+            .sense(Sense::Minimize)
+            .objective(Function::from(linear!(1) + linear!(2))) // objective uses x_1 and x_2
+            .decision_variables(decision_variables)
+            .constraints(btreemap! {})
+            .decision_variable_dependency(dependency)
+            .build()
+            .unwrap();
+
+        let analysis = instance.analyze_decision_variables();
+
+        // Verify x_5 and x_10 are both dependent
+        assert!(analysis.dependent().contains_key(&VariableID::from(5)));
+        assert!(analysis.dependent().contains_key(&VariableID::from(10)));
+
+        // State with only independent variables
+        let state = crate::v1::State::from(HashMap::from([(1, 2.0), (2, 3.0)]));
+
+        // This should succeed with topological sort:
+        // 1. Evaluate x_10 = x_1 + x_2 = 2.0 + 3.0 = 5.0
+        // 2. Evaluate x_5 = x_10 + 1 = 5.0 + 1.0 = 6.0
+        let populated = analysis.populate(state, ATol::default()).unwrap();
+
+        assert_eq!(populated.entries.get(&1), Some(&2.0));
+        assert_eq!(populated.entries.get(&2), Some(&3.0));
+        assert_eq!(populated.entries.get(&10), Some(&5.0)); // x_10 = 2 + 3
+        assert_eq!(populated.entries.get(&5), Some(&6.0)); // x_5 = 5 + 1
     }
 
     proptest! {
