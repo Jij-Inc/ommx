@@ -6,22 +6,22 @@ tasks:
   build:
     desc: "Build the book in docs/en"
     cmds:
-      - uv run jupyter-book build .
+      - uv run jupyter book build --html --ci .
+
+  start:
+    desc: "Start development server for docs/en"
+    cmds:
+      - uv run jupyter book start .
 
   test:
     desc: "Test each notebook in the book"
     cmds:
-      - uv run pytest --nbval-lax tutorial/*.ipynb user_guide/*.ipynb
+      - uv run pytest --nbval-lax tutorial/*.md user_guide/*.md
 
   open:
     desc: "Open the book in docs/en"
     cmds:
       - uv run python -m webbrowser file:///$(pwd)/_build/html/index.html
-
-  watch:
-    desc: "Watch the book in docs/en"
-    cmds:
-      - fswatch -o $(find . -name '*.ipynb' -or -name '*.md') | xargs -n1 -I{} uv run jupyter-book build .
 
   default:
     desc: "Build and open the book in docs/en"
