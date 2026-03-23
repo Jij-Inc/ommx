@@ -23,11 +23,11 @@ includes:
     dir: proto
 
 tasks:
-  pip_compile:
-    desc: Compile docs/requirements.txt from docs/pyproject.toml
+  upgrade:
+    desc: Upgrade docs dependencies and export requirements.txt
     cmds:
       - uv sync --upgrade
-      - uv pip compile pyproject.toml -o ../requirements.txt
+      - uv export --format requirements-txt -o ../requirements.txt
     dir: docs/
 
   codspeed:trigger:
@@ -45,3 +45,4 @@ tasks:
     cmds:
       - task: python:format
       - task: rust:format
+      - task: proto:format

@@ -36,10 +36,16 @@ def update_version(pyproject_path: Path, new_version: str):
     pyproject_data["project"]["version"] = new_version  # type: ignore
     # Update the version of the OMMX dependency
     for dep in pyproject_data["project"]["dependencies"]:  # type: ignore
-        if re.match(r"ommx\s*>=\s*\d+\.\d+\.\d+,\s*<\s*\d+\.\d+\.\d+", dep):
-            new_dep = re.sub(r"\d+\.\d+\.\d+", new_version, dep, count=1)
-            pyproject_data["project"]["dependencies"].remove(dep)  # type: ignore
-            pyproject_data["project"]["dependencies"].insert(0, new_dep)  # type: ignore
+        if re.match(
+            r"ommx\s*>=\s*\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?,\s*<\s*\d+\.\d+\.\d+", dep
+        ):
+            # Parse new version to get major version for upper bound
+            new_match = re.match(r"(\d+)\.\d+\.\d+", new_version)
+            if new_match:
+                new_major = int(new_match.group(1))
+                new_dep = f"ommx >= {new_version}, < {new_major + 1}.0.0"
+                pyproject_data["project"]["dependencies"].remove(dep)  # type: ignore
+                pyproject_data["project"]["dependencies"].insert(0, new_dep)  # type: ignore
 
     with open(pyproject_path, "w") as file:
         file.write(tomlkit.dumps(pyproject_data))

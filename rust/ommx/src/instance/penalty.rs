@@ -98,8 +98,10 @@ impl Instance {
             constraints: BTreeMap::new(),
             removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
+            // All constraints are moved to removed_constraints, so all hints are invalidated
+            constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 
@@ -150,6 +152,7 @@ impl Instance {
                 decision_variable_dependency: self.decision_variable_dependency,
                 constraint_hints: self.constraint_hints,
                 description: self.description,
+                named_functions: self.named_functions,
             });
         }
 
@@ -204,8 +207,10 @@ impl Instance {
             constraints: BTreeMap::new(),
             removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
-            constraint_hints: self.constraint_hints,
+            // All constraints are moved to removed_constraints, so all hints are invalidated
+            constraint_hints: ConstraintHints::default(),
             description: self.description,
+            named_functions: self.named_functions,
         })
     }
 }
@@ -375,5 +380,65 @@ mod tests {
         assert_eq!(parametric_instance.constraints.len(), 0);
         assert_eq!(parametric_instance.removed_constraints.len(), 0);
         assert_eq!(parametric_instance.objective, objective);
+    }
+
+    #[test]
+    fn test_penalty_method_clears_constraint_hints() {
+        use crate::constraint_hints::OneHot;
+        use std::collections::BTreeSet;
+
+        // Create instance with constraint hints
+        let mut instance = create_test_instance_with_constraints();
+
+        // Add a OneHot hint for constraint 1
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(2));
+        instance.constraint_hints.one_hot_constraints.push(OneHot {
+            id: ConstraintID::from(1),
+            variables,
+        });
+
+        // Verify hint exists before penalty method
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+
+        // Apply penalty_method
+        let parametric_instance = instance.penalty_method().unwrap();
+
+        // All constraints are moved to removed_constraints, so all hints should be cleared
+        assert!(
+            parametric_instance.constraint_hints.is_empty(),
+            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
+        );
+    }
+
+    #[test]
+    fn test_uniform_penalty_method_clears_constraint_hints() {
+        use crate::constraint_hints::OneHot;
+        use std::collections::BTreeSet;
+
+        // Create instance with constraint hints
+        let mut instance = create_test_instance_with_constraints();
+
+        // Add a OneHot hint for constraint 1
+        let mut variables = BTreeSet::new();
+        variables.insert(VariableID::from(1));
+        variables.insert(VariableID::from(2));
+        instance.constraint_hints.one_hot_constraints.push(OneHot {
+            id: ConstraintID::from(1),
+            variables,
+        });
+
+        // Verify hint exists before uniform penalty method
+        assert_eq!(instance.constraint_hints.one_hot_constraints.len(), 1);
+
+        // Apply uniform_penalty_method
+        let parametric_instance = instance.uniform_penalty_method().unwrap();
+
+        // All constraints are moved to removed_constraints, so all hints should be cleared
+        assert!(
+            parametric_instance.constraint_hints.is_empty(),
+            "Constraint hints should be cleared when all constraints are moved to removed_constraints"
+        );
     }
 }

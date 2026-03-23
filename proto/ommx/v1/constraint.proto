@@ -15,7 +15,9 @@ message Constraint {
   // Constraint ID
   //
   // - Constraint IDs are managed separately from decision variable IDs.
-  //   We can use the same ID for both. For example, we have a decision variable `x` with decision variable ID `1``
+  //   We can use the same ID for both.
+  //   For example, we have a decision variable
+  //   `x` with decision variable ID `1`
   //   and constraint `x == 0` with constraint ID `1`.
   // - IDs are not required to be sequential.
   // - IDs must be unique with other types of constraints.
@@ -27,10 +29,14 @@ message Constraint {
 
   // Integer parameters of the constraint.
   //
-  // Consider for example a problem constains a series of constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
-  // then 6 = 3x2 `Constraint` messages should be created corresponding to each pair of `i` and `j`.
-  // The `name` field of this message is intended to be a human-readable name of `x[i, j] + y[i, j] <= 10`,
-  // and the `subscripts` field is intended to be the value of `[i, j]` like `[1, 5]`.
+  // Consider for example a problem contains a series of
+  // constraints `x[i, j] + y[i, j] <= 10` for `i = 1, 2, 3` and `j = 4, 5`,
+  // then 6 = 3x2 `Constraint` messages should be created
+  // corresponding to each pair of `i` and `j`.
+  // The `name` field of this message is intended to be
+  // a human-readable name of `x[i, j] + y[i, j] <= 10`,
+  // and the `subscripts` field is intended to be the
+  // value of `[i, j]` like `[1, 5]`.
   //
   repeated int64 subscripts = 8;
 
@@ -53,7 +59,7 @@ message EvaluatedConstraint {
   // The value of function for the state
   double evaluated_value = 3;
 
-  // IDs of decision variables used to evalute this constraint
+  // IDs of decision variables used to evaluate this constraint
   repeated uint64 used_decision_variable_ids = 4;
 
   // Integer parameters of the constraint.
@@ -69,13 +75,18 @@ message EvaluatedConstraint {
   optional string description = 7;
 
   // Value for the Lagrangian dual variable of this constraint.
-  // This is optional because not all solvers support to evaluate dual variables.
+  // This is optional because not all solvers support to
+  // evaluate dual variables.
   optional double dual_variable = 8;
 
-  // Short removed reason of the constraint. This field exists only if this message is evaluated from a removed constraint.
+  // Short removed reason of the constraint.
+  // This field exists only if this message is evaluated
+  // from a removed constraint.
   optional string removed_reason = 10;
 
-  // Detailed parameters why the constraint is removed. This field exists only if this message is evaluated from a removed constraint.
+  // Detailed parameters why the constraint is removed.
+  // This field exists only if this message is evaluated
+  // from a removed constraint.
   map<string, string> removed_reason_parameters = 11;
 }
 
@@ -85,7 +96,8 @@ message RemovedConstraint {
 
   // Short reason why the constraint was removed.
   //
-  // This should be the name of method, function or application which remove the constraint.
+  // This should be the name of method,
+  // function or application which remove the constraint.
   string removed_reason = 2;
 
   // Arbitrary key-value parameters representing why the constraint was removed.

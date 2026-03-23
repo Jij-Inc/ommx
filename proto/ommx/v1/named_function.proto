@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package ommx.v1;
+
+import "ommx/v1/function.proto";
+
+// Named Function
+message NamedFunction {
+  // Named Function ID
+  //
+  // - Named Function IDs are managed separately from decision variable IDs.
+  //   We can use the same ID for both.
+  //   For example, we have a decision variable `x` with
+  //   decision variable ID `1` and named function `x * 2`
+  //   with named function ID `1`.
+  // - IDs are not required to be sequential.
+  // - IDs must be unique with other types of constraints.
+  uint64 id = 1;
+
+  Function function = 2;
+
+  // Integer parameters of the named function.
+  //
+  // Consider for example a problem contains a series of named functions
+  // `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
+  // then 6 = 3x2 `NamedFunction` messages should be created
+  // corresponding to each pair of `i` and `j`.
+  // The `name` field of this message is intended to be a human-readable
+  // name of `x[i, j] + y[i, j]`, and the `subscripts` field is intended
+  // to be the value of `[i, j]` like `[1, 5]`.
+  repeated int64 subscripts = 3;
+
+  // Key-value parameters of the named function.
+  map<string, string> parameters = 4;
+
+  // Name of the named function.
+  optional string name = 5;
+
+  // Detail human-readable description of the named function.
+  optional string description = 6;
+}
+
+// A named function evaluated with a state
+message EvaluatedNamedFunction {
+  uint64 id = 1;
+
+  double evaluated_value = 2;
+
+  // IDs of decision variables used to evaluate this named function
+  repeated uint64 used_decision_variable_ids = 3;
+
+  // Integer parameters of the named function.
+  //
+  // Consider for example a problem contains a series of named functions
+  // `x[i, j] + y[i, j]` for `i = 1, 2, 3` and `j = 4, 5`,
+  // then 6 = 3x2 `NamedFunction` messages should be created
+  // corresponding to each pair of `i` and `j`.
+  // The `name` field of this message is intended to be a human-readable
+  // name of `x[i, j] + y[i, j]`, and the `subscripts` field is intended
+  // to be the value of `[i, j]` like `[1, 5]`.
+  repeated int64 subscripts = 4;
+
+  // Key-value parameters of the named function.
+  map<string, string> parameters = 5;
+
+  // Name of the named function.
+  optional string name = 6;
+
+  // Detail human-readable description of the named function.
+  optional string description = 7;
+}

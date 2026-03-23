@@ -272,6 +272,14 @@ impl Substitute for AcyclicAssignments {
         self,
         acyclic: &crate::AcyclicAssignments,
     ) -> Result<Self::Output, crate::SubstitutionError> {
+        // If self is empty, just return a clone of acyclic (the new assignments)
+        if self.is_empty() {
+            return Ok(acyclic.clone());
+        }
+        // If acyclic is empty, nothing to substitute
+        if acyclic.is_empty() {
+            return Ok(self);
+        }
         substitute_acyclic_via_one(self, acyclic)
     }
 

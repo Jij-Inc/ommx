@@ -7,7 +7,7 @@ members = ["python/ommx*"]
 [dependency-groups]
 dev = [
   "ipython>=8.18.1",
-  "jupyter-book>=1.0.3",
+  "jupyter-book>=1.0.3,<2",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
   "markdown-code-runner>=2.1.0",

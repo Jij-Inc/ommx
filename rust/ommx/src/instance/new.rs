@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    v1, AcyclicAssignments, Constraint, ConstraintID, DecisionVariable, Evaluate, Function,
-    VariableID, VariableIDSet,
-};
+use crate::{v1, Constraint, ConstraintID, DecisionVariable, Function, VariableID};
 use std::collections::BTreeMap;
 
 impl Instance {
@@ -12,31 +9,12 @@ impl Instance {
         decision_variables: BTreeMap<VariableID, DecisionVariable>,
         constraints: BTreeMap<ConstraintID, Constraint>,
     ) -> anyhow::Result<Self> {
-        let variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        for id in objective.required_ids() {
-            if !variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        Ok(Instance {
-            sense,
-            objective,
-            decision_variables,
-            constraints,
-            removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints: ConstraintHints::default(),
-            parameters: None,
-            description: None,
-        })
+        Self::builder()
+            .sense(sense)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .constraints(constraints)
+            .build()
     }
 }
 
@@ -48,54 +26,13 @@ impl ParametricInstance {
         parameters: BTreeMap<VariableID, v1::Parameter>,
         constraints: BTreeMap<ConstraintID, Constraint>,
     ) -> anyhow::Result<Self> {
-        // Check that decision variable IDs and parameter IDs are disjoint
-        let decision_variable_ids: VariableIDSet = decision_variables.keys().cloned().collect();
-        let parameter_ids: VariableIDSet = parameters.keys().cloned().collect();
-
-        let intersection: VariableIDSet = decision_variable_ids
-            .intersection(&parameter_ids)
-            .cloned()
-            .collect();
-        if !intersection.is_empty() {
-            return Err(InstanceError::DuplicatedVariableID {
-                id: *intersection.iter().next().unwrap(),
-            }
-            .into());
-        }
-
-        // Combine decision variables and parameters for validation
-        let all_variable_ids: VariableIDSet = decision_variable_ids
-            .union(&parameter_ids)
-            .cloned()
-            .collect();
-
-        // Check that all IDs used in objective are defined
-        for id in objective.required_ids() {
-            if !all_variable_ids.contains(&id) {
-                return Err(InstanceError::UndefinedVariableID { id }.into());
-            }
-        }
-
-        // Check that all IDs used in constraints are defined
-        for constraint in constraints.values() {
-            for id in constraint.required_ids() {
-                if !all_variable_ids.contains(&id) {
-                    return Err(InstanceError::UndefinedVariableID { id }.into());
-                }
-            }
-        }
-
-        Ok(ParametricInstance {
-            sense,
-            objective,
-            decision_variables,
-            parameters,
-            constraints,
-            removed_constraints: BTreeMap::new(),
-            decision_variable_dependency: AcyclicAssignments::default(),
-            constraint_hints: ConstraintHints::default(),
-            description: None,
-        })
+        Self::builder()
+            .sense(sense)
+            .objective(objective)
+            .decision_variables(decision_variables)
+            .parameters(parameters)
+            .constraints(constraints)
+            .build()
     }
 }
 
@@ -195,10 +132,10 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(parametric_instance.sense, Sense::Maximize);
-        assert_eq!(parametric_instance.decision_variables.len(), 2);
-        assert_eq!(parametric_instance.parameters.len(), 2);
-        assert_eq!(parametric_instance.constraints.len(), 2);
+        assert_eq!(*parametric_instance.sense(), Sense::Maximize);
+        assert_eq!(parametric_instance.decision_variables().len(), 2);
+        assert_eq!(parametric_instance.parameters().len(), 2);
+        assert_eq!(parametric_instance.constraints().len(), 2);
     }
 
     #[test]

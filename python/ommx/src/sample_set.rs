@@ -138,6 +138,16 @@ impl SampleSet {
         }
     }
 
+    /// Get named functions for compatibility with existing Python code
+    #[getter]
+    pub fn named_functions(&self) -> Vec<crate::SampledNamedFunction> {
+        self.0
+            .named_functions()
+            .values()
+            .map(|nf| crate::SampledNamedFunction(nf.clone()))
+            .collect()
+    }
+
     /// Get constraints for compatibility with existing Python code
     #[getter]
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
@@ -172,6 +182,12 @@ impl SampleSet {
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.0.decision_variable_names()
+    }
+
+    /// Get all unique named function names in this sample set
+    #[getter]
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.0.named_function_names()
     }
 
     /// Extract decision variable values for a given name and sample ID
@@ -228,6 +244,42 @@ impl SampleSet {
         Ok(dict)
     }
 
+    /// Extract named function values for a given name and sample ID
+    pub fn extract_named_functions<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+        sample_id: u64,
+    ) -> Result<Bound<'py, PyDict>> {
+        let sample_id = ommx::SampleID::from(sample_id);
+        let extracted = self.0.extract_named_functions(name, sample_id)?;
+        let dict = PyDict::new(py);
+        for (subscripts, value) in extracted {
+            let key = PyTuple::new(py, &subscripts)?;
+            dict.set_item(key, value)?;
+        }
+        Ok(dict)
+    }
+
+    /// Extract all named function values grouped by name for a given sample ID
+    pub fn extract_all_named_functions<'py>(
+        &self,
+        py: Python<'py>,
+        sample_id: u64,
+    ) -> Result<Bound<'py, PyDict>> {
+        let sample_id = ommx::SampleID::from(sample_id);
+        let result_dict = PyDict::new(py);
+        for (name, functions) in self.0.extract_all_named_functions(sample_id)? {
+            let func_dict = PyDict::new(py);
+            for (subscripts, value) in functions {
+                let key_tuple = PyTuple::new(py, &subscripts)?;
+                func_dict.set_item(key_tuple, value)?;
+            }
+            result_dict.set_item(name, func_dict)?;
+        }
+        Ok(result_dict)
+    }
+
     /// Get a specific sampled decision variable by ID
     pub fn get_decision_variable_by_id(
         &self,
@@ -255,6 +307,23 @@ impl SampleSet {
             .ok_or_else(|| {
                 pyo3::exceptions::PyKeyError::new_err(format!(
                     "Unknown constraint ID: {constraint_id}"
+                ))
+            })
+    }
+
+    /// Get a specific sampled named function by ID
+    pub fn get_named_function_by_id(
+        &self,
+        named_function_id: u64,
+    ) -> PyResult<crate::SampledNamedFunction> {
+        let named_function_id = ommx::NamedFunctionID::from(named_function_id);
+        self.0
+            .named_functions()
+            .get(&named_function_id)
+            .map(|nf| crate::SampledNamedFunction(nf.clone()))
+            .ok_or_else(|| {
+                pyo3::exceptions::PyKeyError::new_err(format!(
+                    "Unknown named function ID: {named_function_id}"
                 ))
             })
     }

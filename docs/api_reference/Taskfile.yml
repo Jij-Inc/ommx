@@ -19,7 +19,8 @@ tasks:
     cmds:
       - uv run python -m webbrowser file:///$(pwd)/_build/html/autoapi/index.html
 
-  pip_compile:
-    desc: "Compile pyproject.toml into requirements.txt for Read the Docs"
+  upgrade:
+    desc: "Upgrade dependencies and export requirements.txt for Read the Docs"
     cmds:
-      - uv pip compile pyproject.toml -o requirements.txt
+      - uv sync --upgrade
+      - uv export --format requirements-txt -o requirements.txt
