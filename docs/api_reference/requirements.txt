@@ -4,9 +4,9 @@ alabaster==1.0.0 \
     --hash=sha256:c00dca57bca26fa62a6d7d0a9fcce65f3e026e9bfe33e9c538fd3fbb2144fd9e \
     --hash=sha256:fc6786402dc3fcb2de3cabd5fe455a2db534b371124f1f21de8731783dec828b
     # via sphinx
-astroid==4.1.1 \
-    --hash=sha256:445d831fe785df8c670bbb46b900b8424b82f85b4af187103f71a63a63ebed43 \
-    --hash=sha256:6b28522096f7e7a36ffcf3be60e77de15e2411ab3a713184beac33fb8f20c0c9
+astroid==4.1.2 \
+    --hash=sha256:21312e682c0866dc5a309ee57e4b88ea92751b9955a58b1c31371cbbeb088707 \
+    --hash=sha256:d6c4a52bfcda4bbeb7359dead642b0248b90f7d9a07e690230bd86fefd6d37f1
     # via sphinx-autoapi
 babel==2.18.0 \
     --hash=sha256:b80b99a14bd085fcacfa15c9165f651fbb3406e66cc603abf11c5750937c992d \
