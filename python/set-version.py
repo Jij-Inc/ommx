@@ -36,7 +36,9 @@ def update_version(pyproject_path: Path, new_version: str):
     pyproject_data["project"]["version"] = new_version  # type: ignore
     # Update the version of the OMMX dependency
     for dep in pyproject_data["project"]["dependencies"]:  # type: ignore
-        if re.match(r"ommx\s*>=\s*\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?,\s*<\s*\d+\.\d+\.\d+", dep):
+        if re.match(
+            r"ommx\s*>=\s*\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?,\s*<\s*\d+\.\d+\.\d+", dep
+        ):
             # Parse new version to get major version for upper bound
             new_match = re.match(r"(\d+)\.\d+\.\d+", new_version)
             if new_match:
