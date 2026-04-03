@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ommx_python_mip_adapter"
-version = "2.4.1"
+version = "3.0.0a1"
 
 description = "An adapter for the Python-MIP from/to OMMX."
 authors = [{ name = "Jij Inc.", email = "info@j-ij.com" }]
@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 dependencies = [
-  "ommx >= 2.0.0b3, < 3.0.0",
+  "ommx >= 3.0.0a1, < 4.0.0",
   "mip >= 1.17.0, < 2.0.0",
   "cffi >= 1.15.0, < 2.0.0",
 ]

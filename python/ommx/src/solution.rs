@@ -112,6 +112,15 @@ impl Solution {
             .collect()
     }
 
+    // Get evaluated named functions as a list sorted by ID
+    pub fn named_functions(&self) -> Vec<crate::EvaluatedNamedFunction> {
+        self.0
+            .evaluated_named_functions()
+            .values()
+            .map(|nf| crate::EvaluatedNamedFunction(nf.clone()))
+            .collect()
+    }
+
     #[getter]
     pub fn decision_variable_ids(&self) -> BTreeSet<u64> {
         self.0
@@ -134,6 +143,21 @@ impl Solution {
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.0.decision_variable_names()
+    }
+
+    #[getter]
+    pub fn named_function_ids(&self) -> BTreeSet<u64> {
+        self.0
+            .named_function_ids()
+            .iter()
+            .map(|id| id.into_inner())
+            .collect()
+    }
+
+    /// Get all unique named function names in this solution
+    #[getter]
+    pub fn named_function_names(&self) -> BTreeSet<String> {
+        self.0.named_function_names()
     }
 
     /// Extract decision variables by name with subscripts as key (returns a Python dict)
@@ -181,6 +205,34 @@ impl Solution {
         Ok(dict)
     }
 
+    /// Extract named functions by name with subscripts as key (returns a Python dict)
+    pub fn extract_named_functions<'py>(
+        &self,
+        py: Python<'py>,
+        name: &str,
+    ) -> Result<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        for (subscripts, value) in self.0.extract_named_functions(name)? {
+            let key_tuple = PyTuple::new(py, &subscripts)?;
+            dict.set_item(key_tuple, value)?;
+        }
+        Ok(dict)
+    }
+
+    /// Extract all named functions grouped by name (returns a Python dict)
+    pub fn extract_all_named_functions<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
+        let result_dict = PyDict::new(py);
+        for (name, functions) in self.0.extract_all_named_functions()? {
+            let func_dict = PyDict::new(py);
+            for (subscripts, value) in functions {
+                let key_tuple = PyTuple::new(py, &subscripts)?;
+                func_dict.set_item(key_tuple, value)?;
+            }
+            result_dict.set_item(name, func_dict)?;
+        }
+        Ok(result_dict)
+    }
+
     /// Set the dual variable value for a specific constraint by ID
     pub fn set_dual_variable(&mut self, constraint_id: u64, value: Option<f64>) -> PyResult<()> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
@@ -215,6 +267,24 @@ impl Solution {
                 PyKeyError::new_err(format!(
                     "Unknown constraint ID: {}",
                     constraint_id.into_inner()
+                ))
+            })
+    }
+
+    /// Get a specific evaluated named function by ID
+    pub fn get_named_function_by_id(
+        &self,
+        named_function_id: u64,
+    ) -> PyResult<crate::EvaluatedNamedFunction> {
+        let named_function_id = ommx::NamedFunctionID::from(named_function_id);
+        self.0
+            .evaluated_named_functions()
+            .get(&named_function_id)
+            .map(|nf| crate::EvaluatedNamedFunction(nf.clone()))
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Unknown named function ID: {}",
+                    named_function_id.into_inner()
                 ))
             })
     }

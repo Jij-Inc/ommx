@@ -13,6 +13,7 @@ import google.protobuf.message
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.instance_pb2
+import ommx.v1.named_function_pb2
 import sys
 import typing
 
@@ -123,6 +124,7 @@ class Solution(google.protobuf.message.Message):
     OBJECTIVE_FIELD_NUMBER: builtins.int
     DECISION_VARIABLES_FIELD_NUMBER: builtins.int
     EVALUATED_CONSTRAINTS_FIELD_NUMBER: builtins.int
+    EVALUATED_NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
     FEASIBLE_FIELD_NUMBER: builtins.int
     FEASIBLE_RELAXED_FIELD_NUMBER: builtins.int
     FEASIBLE_UNRELAXED_FIELD_NUMBER: builtins.int
@@ -167,6 +169,12 @@ class Solution(google.protobuf.message.Message):
     ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
         ommx.v1.constraint_pb2.EvaluatedConstraint
     ]: ...
+    @property
+    def evaluated_named_functions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.named_function_pb2.EvaluatedNamedFunction
+    ]: ...
     def __init__(
         self,
         *,
@@ -178,6 +186,10 @@ class Solution(google.protobuf.message.Message):
         | None = ...,
         evaluated_constraints: collections.abc.Iterable[
             ommx.v1.constraint_pb2.EvaluatedConstraint
+        ]
+        | None = ...,
+        evaluated_named_functions: collections.abc.Iterable[
+            ommx.v1.named_function_pb2.EvaluatedNamedFunction
         ]
         | None = ...,
         feasible: builtins.bool = ...,
@@ -207,6 +219,8 @@ class Solution(google.protobuf.message.Message):
             b"decision_variables",
             "evaluated_constraints",
             b"evaluated_constraints",
+            "evaluated_named_functions",
+            b"evaluated_named_functions",
             "feasible",
             b"feasible",
             "feasible_relaxed",

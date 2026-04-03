@@ -46,6 +46,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
             ..
         }: Instance,
     ) -> Self {
@@ -59,6 +60,7 @@ impl From<Instance> for ParametricInstance {
             decision_variable_dependency,
             constraint_hints,
             description,
+            named_functions,
         }
     }
 }
@@ -100,7 +102,7 @@ impl ParametricInstance {
         };
         let atol = ATol::default();
 
-        // Partially evaluate the objective and constraints
+        // Partially evaluate the objective, constraints, and named functions
         let mut objective = self.objective;
         objective.partial_evaluate(&state, atol)?;
 
@@ -109,11 +111,17 @@ impl ParametricInstance {
             constraint.function.partial_evaluate(&state, atol)?;
         }
 
+        let mut named_functions = self.named_functions;
+        for (_, named_function) in named_functions.iter_mut() {
+            named_function.partial_evaluate(&state, atol)?;
+        }
+
         Ok(Instance {
             sense: self.sense,
             objective,
             decision_variables: self.decision_variables,
             constraints,
+            named_functions,
             removed_constraints: self.removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
             constraint_hints: self.constraint_hints,

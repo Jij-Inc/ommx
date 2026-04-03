@@ -14,6 +14,7 @@ import ommx.v1.constraint_hints_pb2
 import ommx.v1.constraint_pb2
 import ommx.v1.decision_variables_pb2
 import ommx.v1.function_pb2
+import ommx.v1.named_function_pb2
 import sys
 import typing
 
@@ -202,6 +203,7 @@ class Instance(google.protobuf.message.Message):
     CONSTRAINT_HINTS_FIELD_NUMBER: builtins.int
     REMOVED_CONSTRAINTS_FIELD_NUMBER: builtins.int
     DECISION_VARIABLE_DEPENDENCY_FIELD_NUMBER: builtins.int
+    NAMED_FUNCTIONS_FIELD_NUMBER: builtins.int
     sense: global___Instance.Sense.ValueType
     """The sense of this problem, i.e. minimize the objective or maximize it.
 
@@ -256,6 +258,12 @@ class Instance(google.protobuf.message.Message):
     ]:
         """When a decision variable is dependent on another decision variable as polynomial, this map contains the ID of the dependent decision variable as key and the polynomial as value."""
 
+    @property
+    def named_functions(
+        self,
+    ) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[
+        ommx.v1.named_function_pb2.NamedFunction
+    ]: ...
     def __init__(
         self,
         *,
@@ -276,6 +284,10 @@ class Instance(google.protobuf.message.Message):
         | None = ...,
         decision_variable_dependency: collections.abc.Mapping[
             builtins.int, ommx.v1.function_pb2.Function
+        ]
+        | None = ...,
+        named_functions: collections.abc.Iterable[
+            ommx.v1.named_function_pb2.NamedFunction
         ]
         | None = ...,
     ) -> None: ...
@@ -309,6 +321,8 @@ class Instance(google.protobuf.message.Message):
             b"decision_variables",
             "description",
             b"description",
+            "named_functions",
+            b"named_functions",
             "objective",
             b"objective",
             "parameters",

@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::Instance;
+use crate::{arbitrary::InstanceParameters, Instance, NamedFunctionIDParameters};
 use approx::AbsDiffEq;
 use proptest::prelude::*;
 use similar::{ChangeTag, TextDiff};
@@ -27,8 +27,15 @@ proptest! {
         prop_assert!(format::format(&instance, &mut buffer).is_ok())
     }
 
+    // NOTE: MPS doesn't support named functions, so we limit the test
+    // just to test against instances without named functions.
     #[test]
-    fn test_roundtrip(instance in Instance::arbitrary_with(<Instance as Arbitrary>::Parameters::default_qcqp())) {
+    fn test_roundtrip(instance in Instance::arbitrary_with(
+        InstanceParameters {
+            named_function_ids: NamedFunctionIDParameters::new(0, 0.into()).unwrap(),
+            .. <Instance as Arbitrary>::Parameters::default_qcqp()
+        })
+    ) {
         let mut buffer = Vec::new();
         prop_assert!(format::format(&instance, &mut buffer).is_ok());
         let loaded = parse(&buffer[..]).unwrap();

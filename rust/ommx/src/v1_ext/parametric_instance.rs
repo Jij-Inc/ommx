@@ -17,6 +17,7 @@ impl From<Instance> for ParametricInstance {
             removed_constraints,
             parameters: _, // Drop previous parameters
             decision_variable_dependency,
+            named_functions,
         }: Instance,
     ) -> Self {
         Self {
@@ -29,6 +30,7 @@ impl From<Instance> for ParametricInstance {
             constraint_hints,
             removed_constraints,
             decision_variable_dependency,
+            named_functions,
         }
     }
 }
@@ -84,6 +86,7 @@ impl ParametricInstance {
             constraint_hints: self.constraint_hints,
             removed_constraints: self.removed_constraints,
             decision_variable_dependency: self.decision_variable_dependency,
+            named_functions: self.named_functions,
         })
     }
 
