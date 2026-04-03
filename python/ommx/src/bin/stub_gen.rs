@@ -8,7 +8,7 @@ fn main() -> Result<()> {
     let root: &Path = env!("CARGO_MANIFEST_DIR").as_ref();
     Command::new("ruff")
         .arg("format")
-        .arg(root.join("ommx/_ommx_rust.pyi"))
+        .arg(root.join("ommx/_ommx_rust/__init__.pyi"))
         .status()?;
     Ok(())
 }
