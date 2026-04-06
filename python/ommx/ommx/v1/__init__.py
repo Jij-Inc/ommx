@@ -1,9 +1,9 @@
 from __future__ import annotations
-from typing import Optional, Iterable, overload, Mapping
+from typing import Optional, Iterable, Mapping
 from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA
-from abc import ABC, abstractmethod
+from abc import ABC
 import copy
 
 
@@ -61,6 +61,38 @@ Linear = _ommx_rust.Linear
 Quadratic = _ommx_rust.Quadratic
 Polynomial = _ommx_rust.Polynomial
 Function = _ommx_rust.Function
+
+# Import DecisionVariable and Parameter from Rust
+DecisionVariable = _ommx_rust.DecisionVariable
+Parameter = _ommx_rust.Parameter
+
+
+def _decision_variable_as_pandas_entry(dv: DecisionVariable) -> dict:
+    """Convert a DecisionVariable to a dict suitable for pandas DataFrame."""
+    return {
+        "id": dv.id,
+        "kind": str(Kind.from_pb(dv.kind)),
+        "lower": dv.bound.lower,
+        "upper": dv.bound.upper,
+        "name": dv.name if dv.name else NA,
+        "subscripts": list(dv.subscripts),
+        "description": dv.description if dv.description else NA,
+        "substituted_value": dv.substituted_value
+        if dv.substituted_value is not None
+        else NA,
+    } | {f"parameters.{key}": value for key, value in dv.parameters.items()}
+
+
+def _parameter_as_pandas_entry(p: Parameter) -> dict:
+    """Convert a Parameter to a dict suitable for pandas DataFrame."""
+    return {
+        "id": p.id,
+        "name": p.name if p.name else NA,
+        "subscripts": list(p.subscripts),
+        "description": p.description if p.description else NA,
+        **{f"parameters.{key}": value for key, value in p.parameters.items()},
+    }
+
 
 __all__ = [
     "Instance",
@@ -228,12 +260,13 @@ class Instance(UserAnnotationBase):
         # Convert decision variables to _ommx_rust.DecisionVariable
         rust_decision_variables = {}
         for v in decision_variables:
-            if isinstance(v, DecisionVariable):
-                rust_decision_variables[v.id] = v.raw
+            if isinstance(v, _ommx_rust.DecisionVariable):
+                # Already a Rust DecisionVariable
+                rust_decision_variables[v.id] = v
             else:
-                # Convert protobuf to DecisionVariable first
-                dv = DecisionVariable.from_protobuf(v)
-                rust_decision_variables[dv.id] = dv.raw
+                # Convert protobuf to DecisionVariable
+                dv = DecisionVariable.from_bytes(v.SerializeToString())
+                rust_decision_variables[dv.id] = dv
 
         # Convert constraints to _ommx_rust.Constraint
         rust_constraints = {}
@@ -427,7 +460,7 @@ class Instance(UserAnnotationBase):
         """
         Get decision variables as a list of :class:`DecisionVariable` instances sorted by their IDs.
         """
-        return [DecisionVariable(dv) for dv in self.raw.decision_variables]
+        return list(self.raw.decision_variables)
 
     @property
     def decision_variable_names(self) -> set[str]:
@@ -474,7 +507,7 @@ class Instance(UserAnnotationBase):
         """
         Get a decision variable by ID.
         """
-        return DecisionVariable(self.raw.get_decision_variable_by_id(variable_id))
+        return self.raw.get_decision_variable_by_id(variable_id)
 
     def get_constraint_by_id(self, constraint_id: int) -> Constraint:
         """
@@ -510,7 +543,9 @@ class Instance(UserAnnotationBase):
 
     @property
     def decision_variables_df(self) -> DataFrame:
-        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        df = DataFrame(
+            _decision_variable_as_pandas_entry(v) for v in self.decision_variables
+        )
         if not df.empty:
             df = df.set_index("id")
         return df
@@ -742,7 +777,7 @@ class Instance(UserAnnotationBase):
 
         Decision variables defined in the instance but not actually present in the objective function and constraints are excluded from the list.
         """
-        return [DecisionVariable(dv) for dv in self.raw.used_decision_variables]
+        return list(self.raw.used_decision_variables)
 
     def stats(self) -> dict:
         """
@@ -1981,9 +2016,9 @@ class ParametricInstance(UserAnnotationBase):
 
         Profit and weight of items as parameters
 
-        >>> p = [Parameter.new(id=i+6, name="Profit", subscripts=[i]) for i in range(6)]
-        >>> w = [Parameter.new(id=i+12, name="Weight", subscripts=[i]) for i in range(6)]
-        >>> W = Parameter.new(id=18, name="Capacity")
+        >>> p = [Parameter(i+6, name="Profit", subscripts=[i]) for i in range(6)]
+        >>> w = [Parameter(i+12, name="Weight", subscripts=[i]) for i in range(6)]
+        >>> W = Parameter(18, name="Capacity")
 
         Objective and constraint
 
@@ -2081,19 +2116,30 @@ class ParametricInstance(UserAnnotationBase):
             else:
                 return c
 
+        def convert_decision_variable(v):
+            if isinstance(v, _ommx_rust.DecisionVariable):
+                pb = _DecisionVariable()
+                pb.ParseFromString(v.to_bytes())
+                return pb
+            return v
+
+        def convert_parameter(p):
+            if isinstance(p, _ommx_rust.Parameter):
+                pb = _Parameter()
+                pb.ParseFromString(p.to_bytes())
+                return pb
+            return p
+
         return ParametricInstance(
             _ParametricInstance(
                 description=description,
                 decision_variables=[
-                    v.to_protobuf() if isinstance(v, DecisionVariable) else v
-                    for v in decision_variables
+                    convert_decision_variable(v) for v in decision_variables
                 ],
                 objective=raw_objective,
                 constraints=[convert_constraint(c) for c in constraints],
                 sense=sense,
-                parameters=[
-                    p.raw if isinstance(p, Parameter) else p for p in parameters
-                ],
+                parameters=[convert_parameter(p) for p in parameters],
             )
         )
 
@@ -2112,7 +2158,8 @@ class ParametricInstance(UserAnnotationBase):
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
         return [
-            DecisionVariable.from_protobuf(raw) for raw in self.raw.decision_variables
+            DecisionVariable.from_bytes(raw.SerializeToString())
+            for raw in self.raw.decision_variables
         ]
 
     @property
@@ -2146,7 +2193,9 @@ class ParametricInstance(UserAnnotationBase):
         """
         Get parameters as a list of :class:`Parameter`.
         """
-        return [Parameter(raw) for raw in self.raw.parameters]
+        return [
+            Parameter.from_bytes(raw.SerializeToString()) for raw in self.raw.parameters
+        ]
 
     def get_parameter_by_id(self, parameter_id: int) -> Parameter:
         """
@@ -2154,7 +2203,7 @@ class ParametricInstance(UserAnnotationBase):
         """
         for p in self.raw.parameters:
             if p.id == parameter_id:
-                return Parameter(p)
+                return Parameter.from_bytes(p.SerializeToString())
         raise ValueError(f"Parameter ID {parameter_id} is not found")
 
     def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
@@ -2188,7 +2237,9 @@ class ParametricInstance(UserAnnotationBase):
 
     @property
     def decision_variables_df(self) -> DataFrame:
-        df = DataFrame(v._as_pandas_entry() for v in self.decision_variables)
+        df = DataFrame(
+            _decision_variable_as_pandas_entry(v) for v in self.decision_variables
+        )
         if not df.empty:
             df = df.set_index("id")
         return df
@@ -2216,7 +2267,7 @@ class ParametricInstance(UserAnnotationBase):
 
     @property
     def parameters_df(self) -> DataFrame:
-        df = DataFrame(p._as_pandas_entry() for p in self.parameters)
+        df = DataFrame(_parameter_as_pandas_entry(p) for p in self.parameters)
         if not df.empty:
             df = df.set_index("id")
         return df
@@ -2231,144 +2282,6 @@ class ParametricInstance(UserAnnotationBase):
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
         instance = pi.with_parameters(ps)
         return Instance(instance)
-
-
-class VariableBase(ABC):
-    @property
-    @abstractmethod
-    def id(self) -> int: ...
-
-    def __add__(self, other: int | float | VariableBase) -> Linear:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.id: 1}, constant=other)
-        if isinstance(other, VariableBase):
-            if self.id == other.id:
-                return Linear(terms={self.id: 2})
-            else:
-                return Linear(terms={self.id: 1, other.id: 1})
-        return NotImplemented
-
-    def __sub__(self, other) -> Linear:
-        return self + (-other)
-
-    def __neg__(self) -> Linear:
-        return Linear(terms={self.id: -1})
-
-    def __radd__(self, other) -> Linear:
-        return self + other
-
-    def __rsub__(self, other) -> Linear:
-        return -self + other
-
-    @overload
-    def __mul__(self, other: int | float) -> Linear: ...
-
-    @overload
-    def __mul__(self, other: VariableBase) -> Quadratic: ...
-
-    def __mul__(self, other: int | float | VariableBase) -> Linear | Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            return Linear(terms={self.id: other})
-        if isinstance(other, VariableBase):
-            return Quadratic(columns=[self.id], rows=[other.id], values=[1.0])
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __le__(self, other) -> Constraint:
-        return Constraint(
-            function=self - other, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __ge__(self, other) -> Constraint:
-        return Constraint(
-            function=other - self, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __req__(self, other) -> Constraint:
-        return self == other
-
-    def __rle__(self, other) -> Constraint:
-        return self.__ge__(other)
-
-    def __rge__(self, other) -> Constraint:
-        return self.__le__(other)
-
-
-@dataclass
-class Parameter(VariableBase):
-    """
-    Idiomatic wrapper of ``ommx.v1.Parameter`` protobuf message.
-    """
-
-    raw: _Parameter
-
-    @staticmethod
-    def new(
-        id: int,
-        *,
-        name: Optional[str] = None,
-        subscripts: Iterable[int] = [],
-        description: Optional[str] = None,
-    ):
-        return Parameter(
-            _Parameter(
-                id=id,
-                name=name,
-                subscripts=subscripts,
-                description=description,
-            )
-        )
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Parameter:
-        raw = _Parameter()
-        raw.ParseFromString(data)
-        return Parameter(raw)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
-
-    @property
-    def id(self) -> int:
-        return self.raw.id
-
-    @property
-    def name(self) -> str:
-        return self.raw.name
-
-    @property
-    def subscripts(self) -> list[int]:
-        return list(self.raw.subscripts)
-
-    @property
-    def description(self) -> str:
-        return self.raw.description
-
-    @property
-    def parameters(self) -> dict[str, str]:
-        return dict(self.raw.parameters)
-
-    def equals_to(self, other: Parameter) -> bool:
-        """
-        Alternative to ``==`` operator to compare two decision variables.
-        """
-        return self.raw == other.raw
-
-    # The special function __eq__ cannot be inherited from VariableBase
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
-
-    def _as_pandas_entry(self) -> dict:
-        p = self.raw
-        return {
-            "id": p.id,
-            "name": p.name if p.HasField("name") else NA,
-            "subscripts": p.subscripts,
-            "description": p.description if p.HasField("description") else NA,
-            **{f"parameters.{key}": value for key, value in p.parameters.items()},
-        }
 
 
 @dataclass
@@ -2766,273 +2679,6 @@ class Solution(UserAnnotationBase):
             The total L2 norm squared violation value.
         """
         return self.raw.total_violation_l2()
-
-
-@dataclass
-class DecisionVariable(VariableBase):
-    """
-    Idiomatic wrapper of ``ommx.v1.DecisionVariable`` protobuf message.
-
-    Note that this object overloads `==` for creating a constraint, not for equality comparison for better integration to mathematical programming.
-
-    >>> x = DecisionVariable.integer(1)
-    >>> x == 1
-    Constraint(...)
-
-    To compare two objects, use :py:meth:`equals_to` method.
-
-    >>> y = DecisionVariable.integer(2)
-    >>> x.equals_to(y)
-    False
-
-    """
-
-    raw: _ommx_rust.DecisionVariable
-
-    # Use the new PyO3 Kind enum
-    Kind = _ommx_rust.Kind
-
-    BINARY = _ommx_rust.Kind.Binary
-    INTEGER = _ommx_rust.Kind.Integer
-    CONTINUOUS = _ommx_rust.Kind.Continuous
-    SEMI_INTEGER = _ommx_rust.Kind.SemiInteger
-    SEMI_CONTINUOUS = _ommx_rust.Kind.SemiContinuous
-
-    @staticmethod
-    def from_bytes(data: bytes) -> DecisionVariable:
-        rust_dv = _ommx_rust.DecisionVariable.from_bytes(data)
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def from_protobuf(pb_dv: _DecisionVariable) -> DecisionVariable:
-        """Convert from protobuf DecisionVariable to Rust DecisionVariable via serialization"""
-        data = pb_dv.SerializeToString()
-        return DecisionVariable.from_bytes(data)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    def to_protobuf(self) -> _DecisionVariable:
-        """Convert to protobuf DecisionVariable via serialization"""
-        data = self.to_bytes()
-        pb_dv = _DecisionVariable()
-        pb_dv.ParseFromString(data)
-        return pb_dv
-
-    @staticmethod
-    def of_type(
-        kind: Kind,
-        id: int,
-        *,
-        lower: float,
-        upper: float,
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        # Create Rust bound
-        rust_bound = _ommx_rust.Bound(lower, upper)
-
-        # Create Rust DecisionVariable - convert Kind enum to int
-        rust_dv = _ommx_rust.DecisionVariable(
-            id=id,
-            kind=kind.to_pb(),
-            bound=rust_bound,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def binary(
-        id: int,
-        *,
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        rust_dv = _ommx_rust.DecisionVariable.binary(
-            id=id,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def integer(
-        id: int,
-        *,
-        lower: float = float("-inf"),
-        upper: float = float("inf"),
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        bound = _ommx_rust.Bound(lower, upper)
-        rust_dv = _ommx_rust.DecisionVariable.integer(
-            id=id,
-            bound=bound,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def continuous(
-        id: int,
-        *,
-        lower: float = float("-inf"),
-        upper: float = float("inf"),
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        bound = _ommx_rust.Bound(lower, upper)
-        rust_dv = _ommx_rust.DecisionVariable.continuous(
-            id=id,
-            bound=bound,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def semi_integer(
-        id: int,
-        *,
-        lower: float = float("-inf"),
-        upper: float = float("inf"),
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        bound = _ommx_rust.Bound(lower, upper)
-        rust_dv = _ommx_rust.DecisionVariable.semi_integer(
-            id=id,
-            bound=bound,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-        return DecisionVariable(rust_dv)
-
-    @staticmethod
-    def semi_continuous(
-        id: int,
-        *,
-        lower: float = float("-inf"),
-        upper: float = float("inf"),
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-        description: Optional[str] = None,
-    ) -> DecisionVariable:
-        bound = _ommx_rust.Bound(lower, upper)
-        rust_dv = _ommx_rust.DecisionVariable.semi_continuous(
-            id=id,
-            bound=bound,
-            name=name,
-            subscripts=subscripts,
-            parameters=parameters,
-            description=description,
-        )
-        return DecisionVariable(rust_dv)
-
-    @property
-    def id(self) -> int:
-        return self.raw.id
-
-    @property
-    def name(self) -> str:
-        return self.raw.name
-
-    @property
-    def kind(self) -> Kind:
-        # Convert int from Rust to PyO3 Kind enum
-        return _ommx_rust.Kind.from_pb(self.raw.kind)
-
-    @property
-    def bound(self) -> Bound:
-        rust_bound = self.raw.bound
-        return Bound(lower=rust_bound.lower, upper=rust_bound.upper)
-
-    @property
-    def lower(self) -> float:
-        """Lower bound of the decision variable"""
-        return self.raw.bound.lower
-
-    @property
-    def upper(self) -> float:
-        """Upper bound of the decision variable"""
-        return self.raw.bound.upper
-
-    @property
-    def substituted_value(self) -> float | None:
-        """
-        The value of the decision variable fixed by `:py:attr:`~Instance.partial_evaluate` or presolvers.
-        """
-        return self.raw.substituted_value
-
-    @property
-    def subscripts(self) -> list[int]:
-        return list(self.raw.subscripts)
-
-    @property
-    def parameters(self) -> dict[str, str]:
-        return self.raw.parameters
-
-    @property
-    def description(self) -> str:
-        return self.raw.description
-
-    def equals_to(self, other: DecisionVariable) -> bool:
-        """
-        Alternative to ``==`` operator to compare two decision variables.
-        """
-        # Compare key properties since we can't directly compare Rust objects
-        return (
-            self.id == other.id
-            and self.kind == other.kind
-            and self.name == other.name
-            and self.bound.lower == other.bound.lower
-            and self.bound.upper == other.bound.upper
-            and self.subscripts == other.subscripts
-            and self.parameters == other.parameters
-            and self.description == other.description
-        )
-
-    # The special function __eq__ cannot be inherited from VariableBase
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
-
-    def _as_pandas_entry(self) -> dict:
-        return {
-            "id": self.id,
-            "kind": str(self.kind),
-            "lower": self.bound.lower,
-            "upper": self.bound.upper,
-            "name": self.name if self.name else NA,
-            "subscripts": self.subscripts,
-            "description": self.description if self.description else NA,
-            "substituted_value": self.substituted_value
-            if self.substituted_value is not None
-            else NA,
-        } | {f"parameters.{key}": value for key, value in self.parameters.items()}
 
 
 class AsConstraint(ABC):

@@ -6,6 +6,7 @@ import enum
 import os
 import pathlib
 import typing
+from math import inf
 
 __all__ = [
     "ArtifactArchive",
@@ -30,6 +31,7 @@ __all__ = [
     "NamedFunction",
     "OneHot",
     "Optimality",
+    "Parameter",
     "Parameters",
     "ParametricInstance",
     "Polynomial",
@@ -171,15 +173,21 @@ class Constraint:
     @property
     def id(self) -> builtins.int: ...
     @property
+    def raw(self) -> Constraint:
+        r"""
+        Return self for backward compatibility with Python wrapper pattern
+        This allows code like `constraint.raw` to work
+        """
+    @property
     def function(self) -> Function: ...
     @property
     def equality(self) -> Equality: ...
     @property
-    def name(self) -> builtins.str: ...
+    def name(self) -> typing.Optional[builtins.str]: ...
     @property
     def subscripts(self) -> builtins.list[builtins.int]: ...
     @property
-    def description(self) -> builtins.str: ...
+    def description(self) -> typing.Optional[builtins.str]: ...
     @property
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     def __new__(
@@ -231,11 +239,23 @@ class Constraint:
         Set the description of the constraint
         Returns self for method chaining
         """
+    def add_description(self, description: builtins.str) -> Constraint:
+        r"""
+        Alias for set_description (backward compatibility)
+        Returns self for method chaining
+        """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
     ) -> Constraint:
         r"""
         Set the parameters of the constraint
+        Returns self for method chaining
+        """
+    def add_parameters(
+        self, parameters: typing.Mapping[builtins.str, builtins.str]
+    ) -> Constraint:
+        r"""
+        Alias for set_parameters (backward compatibility)
         Returns self for method chaining
         """
     def add_parameter(self, key: builtins.str, value: builtins.str) -> Constraint:
@@ -269,8 +289,32 @@ class ConstraintHints:
 @typing.final
 class DecisionVariable:
     r"""
-    DecisionVariable wrapper for Python
+    Decision variable in an optimization problem.
+
+    This class represents a variable that will be optimized in a mathematical programming problem.
+    It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
+    can be used in arithmetic expressions to build objective functions and constraints.
+
+    Note that this object overloads `==` for creating a constraint, not for equality comparison.
+
+    Example:
+        >>> x = DecisionVariable.integer(1)
+        >>> x == 1  # Returns Constraint, not bool
+        Constraint(...)
+
+    For object equality comparison, use the ``equals_to()`` method or compare IDs:
+
+    Example:
+        >>> y = DecisionVariable.integer(2)
+        >>> x.id == y.id
+        False
     """
+
+    BINARY: builtins.int = 1
+    INTEGER: builtins.int = 2
+    CONTINUOUS: builtins.int = 3
+    SEMI_INTEGER: builtins.int = 4
+    SEMI_CONTINUOUS: builtins.int = 5
     @property
     def id(self) -> builtins.int: ...
     @property
@@ -308,7 +352,8 @@ class DecisionVariable:
     @staticmethod
     def integer(
         id: builtins.int,
-        bound: Bound,
+        lower: builtins.float = -inf,
+        upper: builtins.float = inf,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -317,7 +362,8 @@ class DecisionVariable:
     @staticmethod
     def continuous(
         id: builtins.int,
-        bound: Bound,
+        lower: builtins.float = -inf,
+        upper: builtins.float = inf,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -326,7 +372,8 @@ class DecisionVariable:
     @staticmethod
     def semi_integer(
         id: builtins.int,
-        bound: Bound,
+        lower: builtins.float = -inf,
+        upper: builtins.float = inf,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -335,7 +382,8 @@ class DecisionVariable:
     @staticmethod
     def semi_continuous(
         id: builtins.int,
-        bound: Bound,
+        lower: builtins.float = -inf,
+        upper: builtins.float = inf,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -347,6 +395,53 @@ class DecisionVariable:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
+    def equals_to(self, other: DecisionVariable) -> builtins.bool:
+        r"""
+        Compare two DecisionVariable objects for equality.
+
+        This is different from `__eq__` which creates a Constraint.
+        Use this method when you want to check if two variables represent the same variable.
+        """
+    def __neg__(self) -> Linear:
+        r"""
+        Negation operator: -x → Linear(-1 * x)
+        """
+    def __add__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic addition: x + ... → Linear or Quadratic or Polynomial
+        """
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic subtraction: x - ... → Linear or Quadratic or Polynomial
+        """
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic multiplication: x * ... → Linear or Quadratic or Polynomial
+        """
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
 
 @typing.final
 class DecisionVariableAnalysis:
@@ -1048,6 +1143,98 @@ class OneHot:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> OneHot: ...
     def __deepcopy__(self, _memo: typing.Any) -> OneHot: ...
+
+@typing.final
+class Parameter:
+    r"""
+    Parameter in an optimization problem.
+
+    Parameters are values that are fixed during optimization but may vary between different
+    runs or scenarios. They share the same ID space with decision variables.
+
+    Note that this object overloads `==` for creating a constraint, not for equality comparison.
+
+    Example:
+        >>> p = Parameter.new(1, name="penalty")
+        >>> x = DecisionVariable.integer(2)
+        >>> x + p  # Returns Linear expression
+        Linear(...)
+    """
+    @property
+    def id(self) -> builtins.int: ...
+    @property
+    def name(self) -> builtins.str: ...
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]: ...
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    @property
+    def description(self) -> builtins.str: ...
+    def __new__(
+        cls,
+        id: builtins.int,
+        name: typing.Optional[builtins.str] = None,
+        subscripts: typing.Sequence[builtins.int] = [],
+        parameters: typing.Mapping[builtins.str, builtins.str] = {},
+        description: typing.Optional[builtins.str] = None,
+    ) -> Parameter:
+        r"""
+        Create a new Parameter.
+
+        Args:
+            id: Unique identifier for the parameter (must be unique within the instance
+                including decision variables)
+            name: Optional name for the parameter
+            subscripts: Optional subscripts for indexing
+            parameters: Optional metadata key-value pairs
+            description: Optional human-readable description
+        """
+    @staticmethod
+    def from_bytes(bytes: bytes) -> Parameter: ...
+    def to_bytes(self) -> bytes: ...
+    def __repr__(self) -> builtins.str: ...
+    def __copy__(self) -> Parameter: ...
+    def __deepcopy__(self, _memo: typing.Any) -> Parameter: ...
+    def __neg__(self) -> Linear:
+        r"""
+        Negation operator: -p → Linear(-1 * p)
+        """
+    def __add__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic addition: p + ... → Linear or Quadratic or Polynomial
+        """
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic subtraction: p - ... → Linear or Quadratic or Polynomial
+        """
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic multiplication: p * ... → Linear or Quadratic or Polynomial
+        """
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
 
 @typing.final
 class Parameters:

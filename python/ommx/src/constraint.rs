@@ -79,6 +79,13 @@ impl Constraint {
         self.0.id.into_inner()
     }
 
+    /// Return self for backward compatibility with Python wrapper pattern
+    /// This allows code like `constraint.raw` to work
+    #[getter]
+    pub fn raw(&self) -> Constraint {
+        self.clone()
+    }
+
     #[getter]
     pub fn function(&self) -> Function {
         Function(self.0.function.clone())
@@ -90,8 +97,8 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn name(&self) -> String {
-        self.0.name.clone().unwrap_or_default()
+    pub fn name(&self) -> Option<String> {
+        self.0.name.clone()
     }
 
     #[getter]
@@ -100,8 +107,8 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn description(&self) -> String {
-        self.0.description.clone().unwrap_or_default()
+    pub fn description(&self) -> Option<String> {
+        self.0.description.clone()
     }
 
     #[getter]
@@ -197,11 +204,23 @@ impl Constraint {
         self.clone()
     }
 
+    /// Alias for set_description (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_description(&mut self, description: String) -> Self {
+        self.set_description(description)
+    }
+
     /// Set the parameters of the constraint
     /// Returns self for method chaining
     pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
         self.0.parameters = parameters.into_iter().collect();
         self.clone()
+    }
+
+    /// Alias for set_parameters (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
+        self.set_parameters(parameters)
     }
 
     /// Add a parameter to the constraint

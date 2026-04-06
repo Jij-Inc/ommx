@@ -99,4 +99,4 @@ def test_constraint_empty_name():
     constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, None)
 
     assert constraint.id == 1
-    assert constraint.name == ""  # Should return empty string for None name
+    assert constraint.name is None  # Should return None for unset name

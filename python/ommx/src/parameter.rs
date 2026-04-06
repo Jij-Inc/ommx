@@ -1,318 +1,128 @@
-use crate::{
-    next_constraint_id, Constraint, Linear, Parameter, Polynomial, Quadratic, VariableBound,
-};
+use crate::{next_constraint_id, Constraint, Linear, Polynomial, Quadratic};
 use anyhow::Result;
-use ommx::{v1, ATol, LinearMonomial, VariableID};
+use ommx::{LinearMonomial, Message, VariableID};
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
-/// Decision variable in an optimization problem.
+/// Parameter in an optimization problem.
 ///
-/// This class represents a variable that will be optimized in a mathematical programming problem.
-/// It supports various types (binary, integer, continuous, semi-integer, semi-continuous) and
-/// can be used in arithmetic expressions to build objective functions and constraints.
+/// Parameters are values that are fixed during optimization but may vary between different
+/// runs or scenarios. They share the same ID space with decision variables.
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
 /// Example:
-///     >>> x = DecisionVariable.integer(1)
-///     >>> x == 1  # Returns Constraint, not bool
-///     Constraint(...)
-///
-/// For object equality comparison, use the ``equals_to()`` method or compare IDs:
-///
-/// Example:
-///     >>> y = DecisionVariable.integer(2)
-///     >>> x.id == y.id
-///     False
+///     >>> p = Parameter.new(1, name="penalty")
+///     >>> x = DecisionVariable.integer(2)
+///     >>> x + p  # Returns Linear expression
+///     Linear(...)
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct DecisionVariable(pub ommx::DecisionVariable);
+pub struct Parameter(pub ommx::v1::Parameter);
 
-impl DecisionVariable {
-    /// Helper to create a Linear term from this decision variable with coefficient 1
+impl Parameter {
+    /// Helper to create a Linear term from this parameter with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
-        ommx::Linear::single_term(LinearMonomial::Variable(self.0.id()), ommx::coeff!(1.0))
+        ommx::Linear::single_term(
+            LinearMonomial::Variable(VariableID::from(self.0.id)),
+            ommx::coeff!(1.0),
+        )
     }
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
-impl DecisionVariable {
+impl Parameter {
+    /// Create a new Parameter.
+    ///
+    /// Args:
+    ///     id: Unique identifier for the parameter (must be unique within the instance
+    ///         including decision variables)
+    ///     name: Optional name for the parameter
+    ///     subscripts: Optional subscripts for indexing
+    ///     parameters: Optional metadata key-value pairs
+    ///     description: Optional human-readable description
     #[new]
-    #[pyo3(signature = (id, kind, bound, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
+    #[pyo3(signature = (id, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
     pub fn new(
         id: u64,
-        kind: i32,
-        bound: VariableBound,
         name: Option<String>,
         subscripts: Vec<i64>,
         parameters: HashMap<String, String>,
         description: Option<String>,
-    ) -> Result<Self> {
-        let variable_id = VariableID::from(id);
-        let kind = v1::decision_variable::Kind::try_from(kind)?.try_into()?;
-
-        let mut decision_variable = ommx::DecisionVariable::new(
-            variable_id,
-            kind,
-            bound.0,
-            None, // substituted_value
-            ATol::default(),
-        )?;
-
-        decision_variable.metadata.name = name;
-        decision_variable.metadata.subscripts = subscripts;
-        decision_variable.metadata.parameters = parameters.into_iter().collect();
-        decision_variable.metadata.description = description;
-
-        Ok(Self(decision_variable))
+    ) -> Self {
+        let mut param = ommx::v1::Parameter::default();
+        param.id = id;
+        param.name = name;
+        param.subscripts = subscripts;
+        param.parameters = parameters;
+        param.description = description;
+        Self(param)
     }
 
     #[getter]
     pub fn id(&self) -> u64 {
-        self.0.id().into_inner()
-    }
-
-    #[getter]
-    pub fn kind(&self) -> i32 {
-        let kind: v1::decision_variable::Kind = self.0.kind().into();
-        kind as i32
-    }
-
-    #[getter]
-    pub fn bound(&self) -> VariableBound {
-        VariableBound(self.0.bound())
+        self.0.id
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.metadata.name.clone().unwrap_or_default()
+        self.0.name.clone().unwrap_or_default()
     }
 
     #[getter]
     pub fn subscripts(&self) -> Vec<i64> {
-        self.0.metadata.subscripts.clone()
+        self.0.subscripts.clone()
     }
 
     #[getter]
     pub fn parameters(&self) -> HashMap<String, String> {
-        self.0
-            .metadata
-            .parameters
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        self.0.parameters.clone()
     }
 
     #[getter]
     pub fn description(&self) -> String {
-        self.0.metadata.description.clone().unwrap_or_default()
-    }
-
-    #[getter]
-    pub fn substituted_value(&self) -> Option<f64> {
-        self.0.substituted_value()
-    }
-
-    #[staticmethod]
-    #[pyo3(signature = (id, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn binary(
-        id: u64,
-        name: Option<String>,
-        subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
-        description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            1, // KIND_BINARY
-            VariableBound(ommx::Bound::of_binary()),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
-    }
-
-    #[staticmethod]
-    #[pyo3(signature = (id, lower=f64::NEG_INFINITY, upper=f64::INFINITY, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn integer(
-        id: u64,
-        lower: f64,
-        upper: f64,
-        name: Option<String>,
-        subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
-        description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            2, // KIND_INTEGER
-            VariableBound(ommx::Bound::new(lower, upper)?),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
-    }
-
-    #[staticmethod]
-    #[pyo3(signature = (id, lower=f64::NEG_INFINITY, upper=f64::INFINITY, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn continuous(
-        id: u64,
-        lower: f64,
-        upper: f64,
-        name: Option<String>,
-        subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
-        description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            3, // KIND_CONTINUOUS
-            VariableBound(ommx::Bound::new(lower, upper)?),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
-    }
-
-    #[staticmethod]
-    #[pyo3(signature = (id, lower=f64::NEG_INFINITY, upper=f64::INFINITY, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn semi_integer(
-        id: u64,
-        lower: f64,
-        upper: f64,
-        name: Option<String>,
-        subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
-        description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            4, // KIND_SEMI_INTEGER
-            VariableBound(ommx::Bound::new(lower, upper)?),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
-    }
-
-    #[staticmethod]
-    #[pyo3(signature = (id, lower=f64::NEG_INFINITY, upper=f64::INFINITY, name=None, subscripts=Vec::new(), parameters=HashMap::default(), description=None))]
-    pub fn semi_continuous(
-        id: u64,
-        lower: f64,
-        upper: f64,
-        name: Option<String>,
-        subscripts: Vec<i64>,
-        parameters: HashMap<String, String>,
-        description: Option<String>,
-    ) -> Result<Self> {
-        Self::new(
-            id,
-            5, // KIND_SEMI_CONTINUOUS
-            VariableBound(ommx::Bound::new(lower, upper)?),
-            name,
-            subscripts,
-            parameters,
-            description,
-        )
+        self.0.description.clone().unwrap_or_default()
     }
 
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::DecisionVariable::from_bytes(bytes.as_bytes())?))
+        let inner = ommx::v1::Parameter::decode(bytes.as_bytes())?;
+        Ok(Self(inner))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
+        PyBytes::new(py, &self.0.encode_to_vec())
     }
 
     pub fn __repr__(&self) -> String {
-        format!(
-            "DecisionVariable(id={}, kind={}, name=\"{}\", bound=[{}, {}])",
-            self.id(),
-            self.kind(),
-            self.name(),
-            self.0.bound().lower(),
-            self.0.bound().upper()
-        )
+        format!("Parameter(id={}, name=\"{}\")", self.id(), self.name(),)
     }
 
     fn __copy__(&self) -> Self {
         self.clone()
     }
 
-    // __deepcopy__ can also be implemented with self.clone()
-    // memo argument is required to match Python protocol but not used in this implementation
-    // Since this implementation contains no PyObject references, simple clone is sufficient
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
-    }
-
-    // =====================
-    // Class-level constants for variable kinds
-    // =====================
-
-    #[classattr]
-    const BINARY: i32 = 1;
-
-    #[classattr]
-    const INTEGER: i32 = 2;
-
-    #[classattr]
-    const CONTINUOUS: i32 = 3;
-
-    #[classattr]
-    const SEMI_INTEGER: i32 = 4;
-
-    #[classattr]
-    const SEMI_CONTINUOUS: i32 = 5;
-
-    // =====================
-    // Comparison for equality (not constraint creation)
-    // =====================
-
-    /// Compare two DecisionVariable objects for equality.
-    ///
-    /// This is different from `__eq__` which creates a Constraint.
-    /// Use this method when you want to check if two variables represent the same variable.
-    pub fn equals_to(&self, other: &DecisionVariable) -> bool {
-        self.0.id() == other.0.id()
-            && self.0.kind() == other.0.kind()
-            && self.0.bound() == other.0.bound()
     }
 
     // =====================
     // Arithmetic Operators
     // =====================
 
-    /// Negation operator: -x → Linear(-1 * x)
+    /// Negation operator: -p → Linear(-1 * p)
     pub fn __neg__(&self) -> Linear {
         Linear(ommx::Linear::single_term(
-            LinearMonomial::Variable(self.0.id()),
+            LinearMonomial::Variable(VariableID::from(self.0.id)),
             ommx::coeff!(-1.0),
         ))
     }
 
-    /// Polymorphic addition: x + ... → Linear or Quadratic or Polynomial
+    /// Polymorphic addition: p + ... → Linear or Quadratic or Polynomial
     #[pyo3(name = "__add__")]
     pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // Try to extract as Rust DecisionVariable directly
-        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
-            let self_linear = self.as_linear();
-            let rhs_linear =
-                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
-            return Ok(Linear(&self_linear + &rhs_linear)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind());
-        }
         // Try to extract as Rust Parameter directly
         if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
             let self_linear = self.as_linear();
@@ -325,9 +135,19 @@ impl DecisionVariable {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust DecisionVariable
+        if let Ok(dv) = rhs.extract::<PyRef<crate::DecisionVariable>>() {
+            let self_linear = self.as_linear();
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Linear(&self_linear + &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
         // Try to extract from Python wrapper (has .raw attribute)
         if let Ok(raw) = rhs.getattr("raw") {
-            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+            if let Ok(dv) = raw.extract::<PyRef<crate::DecisionVariable>>() {
                 let self_linear = self.as_linear();
                 let rhs_linear = ommx::Linear::single_term(
                     LinearMonomial::Variable(dv.0.id()),
@@ -374,7 +194,7 @@ impl DecisionVariable {
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
         Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for +: 'DecisionVariable' and '{}'",
+            "unsupported operand type(s) for +: 'Parameter' and '{}'",
             rhs.get_type().name()?
         )))
     }
@@ -384,19 +204,9 @@ impl DecisionVariable {
         self.py_add(py, lhs) // Addition is commutative
     }
 
-    /// Polymorphic subtraction: x - ... → Linear or Quadratic or Polynomial
+    /// Polymorphic subtraction: p - ... → Linear or Quadratic or Polynomial
     #[pyo3(name = "__sub__")]
     pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // Try to extract as Rust DecisionVariable directly
-        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
-            let self_linear = self.as_linear();
-            let rhs_linear =
-                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
-            return Ok(Linear(&self_linear - &rhs_linear)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind());
-        }
         // Try to extract as Rust Parameter directly
         if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
             let self_linear = self.as_linear();
@@ -409,9 +219,19 @@ impl DecisionVariable {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust DecisionVariable
+        if let Ok(dv) = rhs.extract::<PyRef<crate::DecisionVariable>>() {
+            let self_linear = self.as_linear();
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Linear(&self_linear - &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
         // Try to extract from Python wrapper (has .raw attribute)
         if let Ok(raw) = rhs.getattr("raw") {
-            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+            if let Ok(dv) = raw.extract::<PyRef<crate::DecisionVariable>>() {
                 let self_linear = self.as_linear();
                 let rhs_linear = ommx::Linear::single_term(
                     LinearMonomial::Variable(dv.0.id()),
@@ -431,7 +251,6 @@ impl DecisionVariable {
                 .unbind());
         }
         if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
-            // self - quad = -quad + self
             let self_linear = self.as_linear();
             let mut result = -quad.0.clone();
             result += &self_linear;
@@ -457,31 +276,20 @@ impl DecisionVariable {
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
         Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for -: 'DecisionVariable' and '{}'",
+            "unsupported operand type(s) for -: 'Parameter' and '{}'",
             rhs.get_type().name()?
         )))
     }
 
     /// Reverse subtraction (lhs - self)
     pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
         let neg = self.__neg__();
         neg.py_add(py, lhs)
     }
 
-    /// Polymorphic multiplication: x * ... → Linear or Quadratic or Polynomial
+    /// Polymorphic multiplication: p * ... → Linear or Quadratic or Polynomial
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // Try to extract as Rust DecisionVariable directly
-        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
-            let self_linear = self.as_linear();
-            let rhs_linear =
-                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
-            return Ok(Quadratic(&self_linear * &rhs_linear)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind());
-        }
         // Try to extract as Rust Parameter directly
         if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
             let self_linear = self.as_linear();
@@ -494,9 +302,19 @@ impl DecisionVariable {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust DecisionVariable
+        if let Ok(dv) = rhs.extract::<PyRef<crate::DecisionVariable>>() {
+            let self_linear = self.as_linear();
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Quadratic(&self_linear * &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
         // Try to extract from Python wrapper (has .raw attribute)
         if let Ok(raw) = rhs.getattr("raw") {
-            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+            if let Ok(dv) = raw.extract::<PyRef<crate::DecisionVariable>>() {
                 let self_linear = self.as_linear();
                 let rhs_linear = ommx::Linear::single_term(
                     LinearMonomial::Variable(dv.0.id()),
@@ -531,9 +349,10 @@ impl DecisionVariable {
         }
         if let Ok(val) = rhs.extract::<f64>() {
             let result = match TryInto::<ommx::Coefficient>::try_into(val) {
-                Ok(coeff) => {
-                    ommx::Linear::single_term(LinearMonomial::Variable(self.0.id()), coeff)
-                }
+                Ok(coeff) => ommx::Linear::single_term(
+                    LinearMonomial::Variable(VariableID::from(self.0.id)),
+                    coeff,
+                ),
                 Err(ommx::CoefficientError::Zero) => ommx::Linear::default(),
                 Err(e) => {
                     return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
@@ -544,7 +363,7 @@ impl DecisionVariable {
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
         Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for *: 'DecisionVariable' and '{}'",
+            "unsupported operand type(s) for *: 'Parameter' and '{}'",
             rhs.get_type().name()?
         )))
     }
@@ -563,7 +382,6 @@ impl DecisionVariable {
     #[pyo3(name = "__eq__")]
     pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
         let diff = self.py_sub(py, other)?;
-        // The diff should be a Linear, Quadratic, or Polynomial - extract to ommx::Function
         let function = extract_to_function(py, diff)?;
         let id = next_constraint_id();
         Ok(Constraint(ommx::Constraint {
@@ -597,7 +415,6 @@ impl DecisionVariable {
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        // self >= other is equivalent to other - self <= 0
         let neg_self = self.__neg__();
         let diff = neg_self.py_add(py, other)?;
         let function = extract_to_function(py, diff)?;
