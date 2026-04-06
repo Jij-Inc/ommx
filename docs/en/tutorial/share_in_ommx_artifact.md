@@ -95,43 +95,19 @@ df = pd.DataFrame.from_dict(
 )
 ```
 
-```{code-cell} ipython3
-:tags: [remove-cell]
-
-from myst_nb import glue
-
-glue("instance", instance, display=False)
-glue("solution", solution, display=False)
-glue("data", data, display=False)
-glue("df", df, display=False)
-```
-
 ```{list-table}
 :header-rows: 1
-:widths: 5 30 10
 
 * - Variable Name
   - Description
-  - Value
 * - `instance`
   - `ommx.v1.Instance` object representing the 0-1 knapsack problem
-  - ````{toggle}
-    ```{glue:} instance
-    ```
-    ````
 * - `solution`
   - `ommx.v1.Solution` object containing the results of solving the 0-1 knapsack problem with SCIP
-  - ````{toggle}
-    ```{glue:} solution
-    ```
-    ````
 * - `data`
   - Input data for the 0-1 knapsack problem
-  - ```{glue:} data
-    ```
 * - `df`
   - `pandas.DataFrame` object representing the optimal solution of the 0-1 knapsack problem
-  - {glue:}`df`
 ```
 
 +++
