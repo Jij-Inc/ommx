@@ -31,14 +31,14 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.python-version }}
-          cache: "pip"
-
       - name: Install OMMX Book dependencies
-        run: pip install -r requirements.txt
+        run: |
+          uv pip install --system jupyter-book matplotlib networkx
+          uv pip install --system ./python/ommx
+          uv pip install --system ./python/ommx-highs-adapter
+          uv pip install --system ./python/ommx-openjij-adapter
+          uv pip install --system ./python/ommx-pyscipopt-adapter
+          uv pip install --system ./python/ommx-python-mip-adapter
 
       - name: Jupyter Book
         env:

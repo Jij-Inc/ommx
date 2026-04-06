@@ -23,13 +23,6 @@ includes:
     dir: proto
 
 tasks:
-  upgrade:
-    desc: Upgrade docs dependencies and export requirements.txt
-    cmds:
-      - uv sync --upgrade
-      - uv export --format requirements-txt -o ../requirements.txt
-    dir: docs/
-
   codspeed:trigger:
     desc: Trigger GitHub Actions workflow for Codspeed on current branch
     cmds:
