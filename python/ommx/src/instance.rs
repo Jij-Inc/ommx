@@ -12,12 +12,12 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Instance(pub ommx::Instance);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
     #[staticmethod]
@@ -465,11 +465,11 @@ impl Instance {
     }
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct DecisionVariableAnalysis(ommx::DecisionVariableAnalysis);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl DecisionVariableAnalysis {
     pub fn used_binary(&self) -> BTreeMap<u64, VariableBound> {
@@ -575,12 +575,12 @@ impl DecisionVariableAnalysis {
     }
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct InstanceDescription(ommx::v1::instance::Description);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl InstanceDescription {
     #[new]

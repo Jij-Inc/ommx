@@ -98,7 +98,7 @@ tasks:
   stubgen:
     desc: Generate stubs files for Rust extension
     cmds:
-      - cargo run --bin stub_gen --features=stub_gen
+      - cargo run --bin stub_gen
 
   generate-llms-txt:
     desc: Generate LLMs.txt

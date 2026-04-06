@@ -60,13 +60,13 @@ pub use state::*;
 
 use pyo3::prelude::*;
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
     ommx::ATol::set_default(value)
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_default_atol() -> f64 {
     ommx::ATol::default().into_inner()
@@ -148,5 +148,4 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-#[cfg(feature = "stub_gen")]
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);

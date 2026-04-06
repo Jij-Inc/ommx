@@ -10,14 +10,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static CONSTRAINT_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Get next constraint ID (thread-safe)
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn next_constraint_id() -> u64 {
     CONSTRAINT_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
 /// Set constraint ID counter (for deserialization compatibility)
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn set_constraint_id_counter(value: u64) {
     CONSTRAINT_ID_COUNTER.store(value, Ordering::SeqCst);
@@ -25,26 +25,26 @@ pub fn set_constraint_id_counter(value: u64) {
 
 /// Update counter to ensure it's at least the given value
 /// Returns the new counter value after update
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn update_constraint_id_counter(value: u64) -> u64 {
     CONSTRAINT_ID_COUNTER.fetch_max(value + 1, Ordering::SeqCst)
 }
 
 /// Get current constraint ID counter value
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_constraint_id_counter() -> u64 {
     CONSTRAINT_ID_COUNTER.load(Ordering::SeqCst)
 }
 
 /// Constraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Constraint(pub ommx::Constraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Constraint {
     #[new]
@@ -208,12 +208,12 @@ impl Constraint {
 }
 
 /// RemovedConstraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct RemovedConstraint(pub ommx::RemovedConstraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl RemovedConstraint {
     #[new]

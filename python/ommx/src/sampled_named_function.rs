@@ -2,12 +2,12 @@ use anyhow::Result;
 use pyo3::{prelude::*, types::PyBytes, Bound};
 use std::collections::{BTreeMap, HashSet};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct SampledNamedFunction(pub ommx::SampledNamedFunction);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampledNamedFunction {
     #[staticmethod]

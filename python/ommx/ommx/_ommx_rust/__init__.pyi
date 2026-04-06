@@ -660,10 +660,10 @@ class Function:
         max_id: builtins.int = 10,
     ) -> Function: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -681,7 +681,7 @@ class Function:
         Returns:
             True if any reduction was performed, False otherwise
         """
-    def __eq__(self, other: typing.Any) -> Constraint:
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
 
@@ -939,10 +939,10 @@ class Linear:
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
@@ -1084,14 +1084,14 @@ class Polynomial:
         max_id: builtins.int = 10,
     ) -> Polynomial: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
-    def __eq__(self, other: typing.Any) -> Constraint:
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
@@ -1167,14 +1167,14 @@ class Quadratic:
         rng: Rng, num_terms: builtins.int = 5, max_id: builtins.int = 10
     ) -> Quadratic: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
-    def __eq__(self, other: typing.Any) -> Constraint:
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """

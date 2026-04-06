@@ -1,4 +1,6 @@
-use crate::{next_constraint_id, Constraint, DecisionVariable, Linear, Polynomial, Quadratic, Rng};
+use crate::{
+    next_constraint_id, Constraint, DecisionVariable, Linear, Polynomial, Quadratic, Rng, State,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -11,12 +13,12 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Function {
     #[staticmethod]
@@ -336,26 +338,33 @@ impl Function {
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<f64> {
-        use ommx::{Evaluate, Message};
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<f64> {
+        use ommx::Evaluate;
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => {
+                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
+            }
             None => ommx::ATol::default(),
         };
-        self.0.evaluate(&state, atol)
+        self.0
+            .evaluate(&state.0, atol)
+            .map_err(|e| PyTypeError::new_err(e.to_string()))
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Function> {
-        use ommx::Message;
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn partial_evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Function> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => {
+                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
+            }
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
-        inner.partial_evaluate(&state, atol)?;
+        inner
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| PyTypeError::new_err(e.to_string()))?;
         Ok(Function(inner))
     }
 
@@ -400,6 +409,7 @@ impl Function {
     ///
     /// Returns a Constraint where (self - other) == 0.
     /// Note: This does NOT return bool, it creates a Constraint object.
+    #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
     pub fn py_eq(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
         let diff = self.py_sub(other)?;

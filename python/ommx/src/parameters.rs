@@ -2,11 +2,11 @@ use anyhow::Result;
 use ommx::Message;
 use pyo3::{prelude::*, types::PyBytes, Bound};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct Parameters(pub ommx::v1::Parameters);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Parameters {
     #[staticmethod]

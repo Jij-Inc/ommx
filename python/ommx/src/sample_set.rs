@@ -7,11 +7,11 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct SampleSet(pub ommx::SampleSet);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampleSet {
     #[staticmethod]

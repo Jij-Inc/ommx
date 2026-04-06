@@ -4,12 +4,12 @@ use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::{BTreeMap, HashMap};
 
 /// State wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct State(pub ommx::v1::State);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl State {
     #[new]

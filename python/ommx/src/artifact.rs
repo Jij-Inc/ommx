@@ -9,7 +9,7 @@ use ommx::artifact::Artifact;
 use pyo3::{prelude::*, types::PyBytes};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
@@ -21,7 +21,7 @@ impl From<Artifact<OciArchive>> for ArtifactArchive {
     }
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ArtifactArchive {
     #[staticmethod]
@@ -72,13 +72,13 @@ impl ArtifactArchive {
     }
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 #[derive(From, Deref)]
 pub struct ArtifactDir(Artifact<OciDir>);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ArtifactDir {
     #[cfg(feature = "remote-artifact")]
@@ -137,7 +137,7 @@ impl ArtifactDir {
 }
 
 /// Get the current OMMX Local Registry root path.
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_local_registry_root() -> PathBuf {
     ommx::artifact::get_local_registry_root().to_path_buf()
@@ -154,7 +154,7 @@ pub fn get_local_registry_root() -> PathBuf {
 ///     - `$XDG_DATA_HOME/ommx/` on Linux
 ///     - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS
 ///
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
     ommx::artifact::set_local_registry_root(path)?;
@@ -165,7 +165,7 @@ pub fn set_local_registry_root(path: PathBuf) -> Result<()> {
 ///
 /// - The directory may not exist if the image is not in the local registry.
 ///
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
     let image_name = ImageName::parse(image_name)?;
@@ -176,7 +176,7 @@ pub fn get_image_dir(image_name: &str) -> Result<PathBuf> {
 ///
 /// Returns a list of image names (as strings) found in the local registry.
 ///
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_images() -> Result<Vec<String>> {
     let images = ommx::artifact::get_images()?;

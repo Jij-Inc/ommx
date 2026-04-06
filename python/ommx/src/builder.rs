@@ -9,12 +9,12 @@ use std::{collections::HashMap, path::PathBuf};
 
 use crate::{ArtifactArchive, ArtifactDir, PyDescriptor};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 pub struct ArtifactArchiveBuilder(Option<Builder<OciArchiveBuilder>>);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ArtifactArchiveBuilder {
     #[staticmethod]
@@ -69,12 +69,12 @@ impl ArtifactArchiveBuilder {
     }
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust")]
 pub struct ArtifactDirBuilder(Option<Builder<OciDirBuilder>>);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ArtifactDirBuilder {
     #[staticmethod]
