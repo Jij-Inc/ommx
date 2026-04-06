@@ -10,6 +10,6 @@ build:
     nodejs: "22"
   commands:
     # Install jupyter-book only (no ommx packages needed since we skip execution)
-    - pip install jupyter-book
+    - pip install "jupyter-book>=1.0.3,<2"
     # Build without executing code cells (CI verifies code execution separately)
     - NB_EXECUTION_MODE=off jupyter-book build --path-output $READTHEDOCS_OUTPUT docs/ja
