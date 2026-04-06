@@ -69,6 +69,7 @@ tasks:
       - task: ommx-python-mip-adapter:test
       - task: ommx-pyscipopt-adapter:test
       - task: ommx-highs-adapter:test
+      - task: book
 
   bench:
     desc: Run benchmarks for OMMX Python SDK
@@ -89,6 +90,22 @@ tasks:
     cmds:
       - uv run set-version.py {{.CLI_ARGS}}
       - task: sync
+
+  book:
+    desc: Build Jupyter Book (ja and en)
+    cmds:
+      - task: book:ja
+      - task: book:en
+
+  book:ja:
+    desc: Build Japanese Jupyter Book
+    cmds:
+      - uv run jupyter-book build ../docs/ja
+
+  book:en:
+    desc: Build English Jupyter Book
+    cmds:
+      - uv run jupyter-book build ../docs/en
 
   stubgen:
     desc: Generate stubs files for Rust extension

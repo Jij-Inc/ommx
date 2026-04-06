@@ -31,25 +31,21 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
-      - name: Install OMMX Book dependencies
-        run: |
-          uv pip install --system jupyter-book matplotlib networkx
-          uv pip install --system ./python/ommx
-          uv pip install --system ./python/ommx-highs-adapter
-          uv pip install --system ./python/ommx-openjij-adapter
-          uv pip install --system ./python/ommx-pyscipopt-adapter
-          uv pip install --system ./python/ommx-python-mip-adapter
+      - name: Install Jupyter Book
+        run: uv sync --only-group dev
 
       - name: Jupyter Book
         env:
           GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
+          NB_EXECUTION_MODE: "off"
         run: |
           # Replace GA4_TRACKING_ID placeholder with actual value from secrets
           # Using | as delimiter to avoid issues with / in the GA4 ID
+          # Code execution is skipped (tested in python.yml book-test job)
           cd ./docs && \
           sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
           sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
-          jupyter-book build ${{ matrix.lang }} --warningiserror
+          uv run jupyter-book build ${{ matrix.lang }} --warningiserror
 
       - name: Upload HTML
         uses: actions/upload-artifact@v7
