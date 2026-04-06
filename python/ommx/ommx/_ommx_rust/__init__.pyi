@@ -46,14 +46,18 @@ __all__ = [
     "Solution",
     "Sos1",
     "State",
+    "get_constraint_id_counter",
     "get_default_atol",
     "get_image_dir",
     "get_images",
     "get_local_registry_root",
     "miplib2017_instance_annotations",
+    "next_constraint_id",
     "qplib_instance_annotations",
+    "set_constraint_id_counter",
     "set_default_atol",
     "set_local_registry_root",
+    "update_constraint_id_counter",
 ]
 
 @typing.final
@@ -608,10 +612,35 @@ class Function:
         self, other: Function, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
-    def __add__(self, rhs: Function) -> Function: ...
-    def __sub__(self, rhs: Function) -> Function: ...
+    def __neg__(self) -> Function:
+        r"""
+        Negation operator
+        """
+    def __add__(self, rhs: typing.Any) -> Function:
+        r"""
+        Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        """
+    def __radd__(self, lhs: typing.Any) -> Function:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> Function:
+        r"""
+        Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        """
+    def __rsub__(self, lhs: typing.Any) -> Function:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
     def add_assign(self, rhs: Function) -> None: ...
-    def __mul__(self, rhs: Function) -> Function: ...
+    def __mul__(self, rhs: typing.Any) -> Function:
+        r"""
+        Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        """
+    def __rmul__(self, lhs: typing.Any) -> Function:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
     def add_scalar(self, scalar: builtins.float) -> Function: ...
     def add_linear(self, linear: Linear) -> Function: ...
     def add_quadratic(self, quadratic: Quadratic) -> Function: ...
@@ -651,6 +680,25 @@ class Function:
 
         Returns:
             True if any reduction was performed, False otherwise
+        """
+    def __eq__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+
+        Returns a Constraint where (self - other) == 0.
+        Note: This does NOT return bool, it creates a Constraint object.
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (self - other) <= 0.
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (other - self) <= 0.
         """
 
 @typing.final
@@ -857,9 +905,35 @@ class Linear:
         self, other: Linear, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
-    def __add__(self, rhs: Linear) -> Linear: ...
-    def __sub__(self, rhs: Linear) -> Linear: ...
-    def __mul__(self, rhs: Linear) -> Quadratic: ...
+    def __neg__(self) -> Linear:
+        r"""
+        Negation operator
+        """
+    def __add__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic addition: supports int, float, DecisionVariable, Linear
+        Returns Linear when adding scalars or Linear, Quadratic otherwise
+        """
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic subtraction
+        """
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic multiplication
+        """
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
     def add_assign(self, rhs: Linear) -> None: ...
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
@@ -872,6 +946,18 @@ class Linear:
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
 
 @typing.final
 class NamedFunction:
@@ -954,10 +1040,35 @@ class Polynomial:
         self, other: Polynomial, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
-    def __add__(self, rhs: Polynomial) -> Polynomial: ...
-    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    def __neg__(self) -> Polynomial:
+        r"""
+        Negation operator
+        """
+    def __add__(self, rhs: typing.Any) -> Polynomial:
+        r"""
+        Polymorphic addition - all types promote to Polynomial
+        """
+    def __radd__(self, lhs: typing.Any) -> Polynomial:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> Polynomial:
+        r"""
+        Polymorphic subtraction
+        """
+    def __rsub__(self, lhs: typing.Any) -> Polynomial:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
     def add_assign(self, rhs: Polynomial) -> None: ...
-    def __mul__(self, rhs: Polynomial) -> Polynomial: ...
+    def __mul__(self, rhs: typing.Any) -> Polynomial:
+        r"""
+        Polymorphic multiplication
+        """
+    def __rmul__(self, lhs: typing.Any) -> Polynomial:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
     def add_scalar(self, scalar: builtins.float) -> Polynomial: ...
     def add_linear(self, linear: Linear) -> Polynomial: ...
     def add_quadratic(self, quadratic: Quadratic) -> Polynomial: ...
@@ -980,6 +1091,18 @@ class Polynomial:
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
+    def __eq__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
 
 @typing.final
 class Quadratic:
@@ -1005,10 +1128,35 @@ class Quadratic:
         self, other: Quadratic, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
-    def __add__(self, rhs: Quadratic) -> Quadratic: ...
-    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    def __neg__(self) -> Quadratic:
+        r"""
+        Negation operator
+        """
+    def __add__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic addition
+        """
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse addition (lhs + self)
+        """
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic subtraction
+        """
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse subtraction (lhs - self)
+        """
     def add_assign(self, rhs: Quadratic) -> None: ...
-    def __mul__(self, rhs: Quadratic) -> Polynomial: ...
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
+        r"""
+        Polymorphic multiplication
+        """
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+        r"""
+        Reverse multiplication (lhs * self)
+        """
     def add_scalar(self, scalar: builtins.float) -> Quadratic: ...
     def add_linear(self, linear: Linear) -> Quadratic: ...
     def mul_scalar(self, scalar: builtins.float) -> Quadratic: ...
@@ -1026,6 +1174,18 @@ class Quadratic:
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
+    def __eq__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create an equality constraint: self == other → Constraint with EqualToZero
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self <= other → Constraint
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self >= other → Constraint
+        """
 
 @typing.final
 class RemovedConstraint:
@@ -1688,6 +1848,11 @@ class Sense(enum.Enum):
     def __repr__(self) -> builtins.str: ...
     def __str__(self) -> builtins.str: ...
 
+def get_constraint_id_counter() -> builtins.int:
+    r"""
+    Get current constraint ID counter value
+    """
+
 def get_default_atol() -> builtins.float: ...
 def get_image_dir(image_name: builtins.str) -> pathlib.Path:
     r"""
@@ -1711,9 +1876,19 @@ def get_local_registry_root() -> pathlib.Path:
 def miplib2017_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def next_constraint_id() -> builtins.int:
+    r"""
+    Get next constraint ID (thread-safe)
+    """
+
 def qplib_instance_annotations() -> builtins.dict[
     builtins.str, builtins.dict[builtins.str, builtins.str]
 ]: ...
+def set_constraint_id_counter(value: builtins.int) -> None:
+    r"""
+    Set constraint ID counter (for deserialization compatibility)
+    """
+
 def set_default_atol(value: builtins.float) -> None: ...
 def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> None:
     r"""
@@ -1727,4 +1902,10 @@ def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> 
       - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:
         - `$XDG_DATA_HOME/ommx/` on Linux
         - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS
+    """
+
+def update_constraint_id_counter(value: builtins.int) -> builtins.int:
+    r"""
+    Update counter to ensure it's at least the given value
+    Returns the new counter value after update
     """

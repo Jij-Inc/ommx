@@ -1,10 +1,11 @@
-use crate::{Linear, Quadratic, Rng};
+use crate::{next_constraint_id, Constraint, DecisionVariable, Linear, Quadratic, Rng};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
 use ommx::MonomialDyn;
-use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -55,20 +56,114 @@ impl Polynomial {
         format!("Polynomial({})", self.0)
     }
 
-    pub fn __add__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(&self.0 + &rhs.0)
+    /// Negation operator
+    pub fn __neg__(&self) -> Polynomial {
+        Polynomial(-self.0.clone())
     }
 
-    pub fn __sub__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(&self.0 - &rhs.0)
+    /// Polymorphic addition - all types promote to Polynomial
+    #[pyo3(name = "__add__")]
+    pub fn py_add(&self, rhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(Polynomial(&self.0 + &poly.0));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(Polynomial(&self.0 + &quad.0));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self.add_linear(&linear));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Polynomial(&self.0 + &rhs_linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .add_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for +: 'Polynomial' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse addition (lhs + self)
+    pub fn __radd__(&self, lhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        self.py_add(lhs) // Addition is commutative
+    }
+
+    /// Polymorphic subtraction
+    #[pyo3(name = "__sub__")]
+    pub fn py_sub(&self, rhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(Polynomial(&self.0 - &poly.0));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(Polynomial(self.0.clone() - &quad.0));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(Polynomial(self.0.clone() - &linear.0));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Polynomial(self.0.clone() - &rhs_linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .add_scalar(-val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for -: 'Polynomial' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse subtraction (lhs - self)
+    pub fn __rsub__(&self, lhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        // lhs - self = -self + lhs
+        let neg = self.__neg__();
+        neg.py_add(lhs)
     }
 
     pub fn add_assign(&mut self, rhs: &Polynomial) {
         self.0 += &rhs.0;
     }
 
-    pub fn __mul__(&self, rhs: &Polynomial) -> Polynomial {
-        Polynomial(&self.0 * &rhs.0)
+    /// Polymorphic multiplication
+    #[pyo3(name = "__mul__")]
+    pub fn py_mul(&self, rhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(Polynomial(&self.0 * &poly.0));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(self.mul_quadratic(&quad));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self.mul_linear(&linear));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let rhs_linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Polynomial(&self.0 * &rhs_linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .mul_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for *: 'Polynomial' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse multiplication (lhs * self)
+    pub fn __rmul__(&self, lhs: &Bound<PyAny>) -> PyResult<Polynomial> {
+        self.py_mul(lhs) // Multiplication is commutative
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Polynomial> {
@@ -161,5 +256,55 @@ impl Polynomial {
     // Since this implementation contains no PyObject references, simple clone is sufficient
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
+    }
+
+    /// Create an equality constraint: self == other → Constraint with EqualToZero
+    #[pyo3(name = "__eq__")]
+    pub fn py_eq(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: ommx::Function::from(diff.0),
+            equality: ommx::Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a less-than-or-equal constraint: self <= other → Constraint
+    #[pyo3(name = "__le__")]
+    pub fn py_le(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: ommx::Function::from(diff.0),
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a greater-than-or-equal constraint: self >= other → Constraint
+    #[pyo3(name = "__ge__")]
+    pub fn py_ge(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        // self >= other is equivalent to other - self <= 0
+        let neg_self = self.__neg__();
+        let diff = neg_self.py_add(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: ommx::Function::from(diff.0),
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
     }
 }

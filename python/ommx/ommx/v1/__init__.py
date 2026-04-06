@@ -3146,7 +3146,7 @@ class Linear(AsConstraint):
         """
         Alternative to ``==`` operator to compare two linear functions.
         """
-        return self.raw == other.raw
+        return self.raw.almost_equal(other.raw)
 
     def almost_equal(self, other: Linear, *, atol: float = 1e-10) -> bool:
         """
@@ -3260,10 +3260,16 @@ class Linear(AsConstraint):
         return self * other
 
     def __neg__(self) -> Linear:
-        return -1 * self
+        # Delegate to Rust negation operator
+        return Linear.from_raw(-self.raw)
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
+        # Delegate to Rust comparison operator which returns Constraint directly
+        if isinstance(other, (int, float)):
+            return Constraint.from_raw(self.raw == other)
+        elif hasattr(other, "raw"):
+            return Constraint.from_raw(self.raw == other.raw)
+        return NotImplemented  # type: ignore[return-value]
 
 
 @dataclass
@@ -3484,11 +3490,17 @@ class Quadratic(AsConstraint):
     def __rmul__(self, other):
         return self * other
 
-    def __neg__(self) -> Linear:
-        return -1 * self
+    def __neg__(self) -> Quadratic:
+        # Delegate to Rust negation operator
+        return Quadratic.from_raw(-self.raw)
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
+        # Delegate to Rust comparison operator which returns Constraint directly
+        if isinstance(other, (int, float)):
+            return Constraint.from_raw(self.raw == other)
+        elif hasattr(other, "raw"):
+            return Constraint.from_raw(self.raw == other.raw)
+        return NotImplemented  # type: ignore[return-value]
 
 
 @dataclass
@@ -3664,11 +3676,17 @@ class Polynomial(AsConstraint):
     def __rmul__(self, other):
         return self * other
 
-    def __neg__(self) -> Linear:
-        return -1 * self
+    def __neg__(self) -> Polynomial:
+        # Delegate to Rust negation operator
+        return Polynomial.from_raw(-self.raw)
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
+        # Delegate to Rust comparison operator which returns Constraint directly
+        if isinstance(other, (int, float)):
+            return Constraint.from_raw(self.raw == other)
+        elif hasattr(other, "raw"):
+            return Constraint.from_raw(self.raw == other.raw)
+        return NotImplemented  # type: ignore[return-value]
 
 
 @dataclass
@@ -4046,23 +4064,12 @@ class Function(AsConstraint):
         | Polynomial
         | Function,
     ) -> Function:
-        if isinstance(other, float) or isinstance(other, int):
-            rhs = _ommx_rust.Function.from_scalar(other)
-        elif isinstance(other, DecisionVariable):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(other.raw.id, 1)
-            )
-        elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(other.raw)
-        elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(other.raw)
-        elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(other.raw)
-        elif isinstance(other, Function):
-            rhs = other.raw
-        else:
-            return NotImplemented
-        return Function.from_raw(self.raw + rhs)
+        # Delegate to Rust polymorphic operator
+        if isinstance(other, (int, float)):
+            return Function.from_raw(self.raw + other)
+        elif hasattr(other, "raw"):
+            return Function.from_raw(self.raw + other.raw)
+        return NotImplemented
 
     def __radd__(self, other):
         return self + other
@@ -4107,32 +4114,27 @@ class Function(AsConstraint):
             int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
         ),
     ) -> Function:
-        if isinstance(other, float) or isinstance(other, int):
-            rhs = _ommx_rust.Function.from_scalar(other)
-        elif isinstance(other, DecisionVariable):
-            rhs = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(other.raw.id, 1)
-            )
-        elif isinstance(other, Linear):
-            rhs = _ommx_rust.Function.from_linear(other.raw)
-        elif isinstance(other, Quadratic):
-            rhs = _ommx_rust.Function.from_quadratic(other.raw)
-        elif isinstance(other, Polynomial):
-            rhs = _ommx_rust.Function.from_polynomial(other.raw)
-        elif isinstance(other, Function):
-            rhs = other.raw
-        else:
-            return NotImplemented
-        return Function.from_raw(self.raw * rhs)
+        # Delegate to Rust polymorphic operator
+        if isinstance(other, (int, float)):
+            return Function.from_raw(self.raw * other)
+        elif hasattr(other, "raw"):
+            return Function.from_raw(self.raw * other.raw)
+        return NotImplemented
 
     def __rmul__(self, other):
         return self * other
 
     def __neg__(self) -> Function:
-        return -1 * self
+        # Delegate to Rust negation operator
+        return Function.from_raw(-self.raw)
 
     def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        return Constraint(function=self - other, equality=Constraint.EQUAL_TO_ZERO)
+        # Delegate to Rust comparison operator which returns Constraint directly
+        if isinstance(other, (int, float)):
+            return Constraint.from_raw(self.raw == other)
+        elif hasattr(other, "raw"):
+            return Constraint.from_raw(self.raw == other.raw)
+        return NotImplemented  # type: ignore[return-value]
 
 
 @dataclass
@@ -4181,11 +4183,12 @@ class Constraint:
         subscripts: list[int] = [],
         parameters: dict[str, str] = {},
     ):
+        # Use Rust ID management for thread-safe counter
         if id is None:
-            id = Constraint._counter
-            Constraint._counter += 1
-        if id > Constraint._counter:
-            Constraint._counter = id + 1
+            id = _ommx_rust.next_constraint_id()
+        else:
+            # Update counter to ensure it's at least the given value
+            _ommx_rust.update_constraint_id_counter(id)
 
         if not isinstance(function, Function):
             function = Function(function)
@@ -4211,7 +4214,8 @@ class Constraint:
     def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
         new = Constraint(function=0, equality=Constraint.EQUAL_TO_ZERO)
         new.raw = raw
-        Constraint._counter = max(Constraint._counter, raw.id + 1)
+        # Update Rust counter to ensure it's at least the given value
+        _ommx_rust.update_constraint_id_counter(raw.id)
         return new
 
     @staticmethod

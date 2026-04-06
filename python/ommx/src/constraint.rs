@@ -4,6 +4,39 @@ use fnv::FnvHashMap;
 use ommx::{ConstraintID, Evaluate, Message};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Global counter for auto-generating constraint IDs
+static CONSTRAINT_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Get next constraint ID (thread-safe)
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn next_constraint_id() -> u64 {
+    CONSTRAINT_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Set constraint ID counter (for deserialization compatibility)
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn set_constraint_id_counter(value: u64) {
+    CONSTRAINT_ID_COUNTER.store(value, Ordering::SeqCst);
+}
+
+/// Update counter to ensure it's at least the given value
+/// Returns the new counter value after update
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn update_constraint_id_counter(value: u64) -> u64 {
+    CONSTRAINT_ID_COUNTER.fetch_max(value + 1, Ordering::SeqCst)
+}
+
+/// Get current constraint ID counter value
+#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyfunction]
+pub fn get_constraint_id_counter() -> u64 {
+    CONSTRAINT_ID_COUNTER.load(Ordering::SeqCst)
+}
 
 /// Constraint wrapper for Python
 #[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]

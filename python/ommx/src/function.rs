@@ -1,9 +1,10 @@
-use crate::{Linear, Polynomial, Quadratic, Rng};
+use crate::{next_constraint_id, Constraint, DecisionVariable, Linear, Polynomial, Quadratic, Rng};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -98,20 +99,127 @@ impl Function {
         format!("Function({})", self.0)
     }
 
-    pub fn __add__(&self, rhs: &Function) -> Function {
-        Function(&self.0 + &rhs.0)
+    /// Negation operator
+    pub fn __neg__(&self) -> Function {
+        Function(-self.0.clone())
     }
 
-    pub fn __sub__(&self, rhs: &Function) -> Function {
-        Function(&self.0 - &rhs.0)
+    /// Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__add__")]
+    pub fn py_add(&self, rhs: &Bound<PyAny>) -> PyResult<Function> {
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 + &func.0));
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(self.add_polynomial(&poly));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(self.add_quadratic(&quad));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self.add_linear(&linear));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            // DecisionVariable → Linear(id, 1) conversion
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(&self.0 + &linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .add_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for +: 'Function' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse addition (lhs + self)
+    pub fn __radd__(&self, lhs: &Bound<PyAny>) -> PyResult<Function> {
+        self.py_add(lhs) // Addition is commutative
+    }
+
+    /// Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__sub__")]
+    pub fn py_sub(&self, rhs: &Bound<PyAny>) -> PyResult<Function> {
+        // self - rhs: clone self and use owned subtraction
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 - &func.0));
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(Function(self.0.clone() - poly.0.clone()));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(Function(self.0.clone() - quad.0.clone()));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(Function(self.0.clone() - linear.0.clone()));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(self.0.clone() - linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .add_scalar(-val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for -: 'Function' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse subtraction (lhs - self)
+    pub fn __rsub__(&self, lhs: &Bound<PyAny>) -> PyResult<Function> {
+        // lhs - self = -self + lhs
+        self.__neg__().py_add(lhs)
     }
 
     pub fn add_assign(&mut self, rhs: &Function) {
         self.0 += &rhs.0;
     }
 
-    pub fn __mul__(&self, rhs: &Function) -> Function {
-        Function(&self.0 * &rhs.0)
+    /// Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__mul__")]
+    pub fn py_mul(&self, rhs: &Bound<PyAny>) -> PyResult<Function> {
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 * &func.0));
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(self.mul_polynomial(&poly));
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(self.mul_quadratic(&quad));
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self.mul_linear(&linear));
+        }
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(&self.0 * &linear));
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            return self
+                .mul_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+        }
+        Err(PyTypeError::new_err(format!(
+            "unsupported operand type(s) for *: 'Function' and '{}'",
+            rhs.get_type().name()?
+        )))
+    }
+
+    /// Reverse multiplication (lhs * self)
+    pub fn __rmul__(&self, lhs: &Bound<PyAny>) -> PyResult<Function> {
+        self.py_mul(lhs) // Multiplication is commutative
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
@@ -286,5 +394,63 @@ impl Function {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();
         self.0.reduce_binary_power(&variable_id_set)
+    }
+
+    /// Create an equality constraint: self == other → Constraint with EqualToZero
+    ///
+    /// Returns a Constraint where (self - other) == 0.
+    /// Note: This does NOT return bool, it creates a Constraint object.
+    #[pyo3(name = "__eq__")]
+    pub fn py_eq(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: diff.0,
+            equality: ommx::Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (self - other) <= 0.
+    #[pyo3(name = "__le__")]
+    pub fn py_le(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: diff.0,
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (other - self) <= 0.
+    #[pyo3(name = "__ge__")]
+    pub fn py_ge(&self, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        // self >= other is equivalent to other - self <= 0
+        // But we need to express other as a Function first
+        let neg_self = self.__neg__();
+        let diff = neg_self.py_add(other)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function: diff.0,
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
     }
 }
