@@ -176,7 +176,8 @@ artifact = builder.build()
 This `artifact` is the same as the one that will be explained in the next section, which is the one you just saved. Let's check if the file has been created:
 
 ```{code-cell} ipython3
-! ls $filename
+import os
+print(os.path.exists(filename))
 ```
 
 Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
@@ -218,5 +219,5 @@ artifact.get_json(artifact.layers[3])
 :tags: [remove-cell]
 
 # Remove the created OMMX Artifact file to clean up
-! rm $filename
+os.remove(filename)
 ```

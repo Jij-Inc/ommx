@@ -176,7 +176,8 @@ artifact = builder.build()
 この `artifact` は次説で説明する、今保存したファイルを読み込んだものと同じものです。ファイルが出来上がったか確認してみましょう：
 
 ```{code-cell} ipython3
-! ls $filename
+import os
+print(os.path.exists(filename))
 ```
 
 あとはこの `my_instance.ommx` を通常のファイル共有の方法で共有すれば、他の人とデータを共有することができます。
@@ -218,5 +219,5 @@ artifact.get_json(artifact.layers[3])
 :tags: [remove-cell]
 
 # Remove the created OMMX Artifact file to clean up
-! rm $filename
+os.remove(filename)
 ```
