@@ -157,38 +157,58 @@ impl Constraint {
     }
 
     /// Set the name of the constraint
-    pub fn set_name(&mut self, name: String) {
+    /// Returns self for method chaining
+    pub fn set_name(&mut self, name: String) -> Self {
         self.0.name = Some(name);
+        self.clone()
+    }
+
+    /// Alias for set_name (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_name(&mut self, name: String) -> Self {
+        self.set_name(name)
     }
 
     /// Set the subscripts of the constraint
-    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) {
+    /// Returns self for method chaining
+    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
         self.0.subscripts = subscripts;
+        self.clone()
     }
 
     /// Add subscripts to the constraint
-    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) {
+    /// Returns self for method chaining
+    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
         self.0.subscripts.extend(subscripts);
+        self.clone()
     }
 
     /// Set the ID of the constraint
-    pub fn set_id(&mut self, id: u64) {
+    /// Returns self for method chaining
+    pub fn set_id(&mut self, id: u64) -> Self {
         self.0.id = ConstraintID::from(id);
+        self.clone()
     }
 
     /// Set the description of the constraint
-    pub fn set_description(&mut self, description: String) {
+    /// Returns self for method chaining
+    pub fn set_description(&mut self, description: String) -> Self {
         self.0.description = Some(description);
+        self.clone()
     }
 
     /// Set the parameters of the constraint
-    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) {
+    /// Returns self for method chaining
+    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
         self.0.parameters = parameters.into_iter().collect();
+        self.clone()
     }
 
     /// Add a parameter to the constraint
-    pub fn add_parameter(&mut self, key: String, value: String) {
+    /// Returns self for method chaining
+    pub fn add_parameter(&mut self, key: String, value: String) -> Self {
         self.0.parameters.insert(key, value);
+        self.clone()
     }
 
     pub fn __repr__(&self) -> String {

@@ -21,6 +21,77 @@ pub struct Function(pub ommx::Function);
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Function {
+    /// Create a Function from various types.
+    ///
+    /// Accepts:
+    /// - int or float: creates a constant function
+    /// - DecisionVariable: creates a linear function with single term
+    /// - Linear: creates a linear function
+    /// - Quadratic: creates a quadratic function
+    /// - Polynomial: creates a polynomial function
+    /// - Function: returns a copy
+    #[new]
+    pub fn new(inner: &Bound<PyAny>) -> PyResult<Self> {
+        // Try to extract as Function first (check if it's already our type)
+        if inner.is_instance_of::<Self>() {
+            return Ok(inner.extract::<Self>()?);
+        }
+        // Also try direct extraction in case the type check fails
+        if let Ok(f) = inner.extract::<Self>() {
+            return Ok(f);
+        }
+        // Try to extract as Polynomial
+        if let Ok(p) = inner.extract::<Polynomial>() {
+            return Ok(Self(ommx::Function::from(p.0)));
+        }
+        // Try to extract as Quadratic
+        if let Ok(q) = inner.extract::<Quadratic>() {
+            return Ok(Self(ommx::Function::from(q.0)));
+        }
+        // Try to extract as Linear
+        if let Ok(l) = inner.extract::<Linear>() {
+            return Ok(Self(ommx::Function::from(l.0)));
+        }
+        // Try to extract as Rust DecisionVariable directly
+        if let Ok(dv) = inner.extract::<DecisionVariable>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = inner.getattr("raw") {
+            if let Ok(dv) = raw.extract::<DecisionVariable>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Self(ommx::Function::from(linear)));
+            }
+        }
+        // Try to extract as float
+        if let Ok(scalar) = inner.extract::<f64>() {
+            return match TryInto::<Coefficient>::try_into(scalar) {
+                Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
+                Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())),
+                Err(e) => Err(PyTypeError::new_err(e.to_string())),
+            };
+        }
+        // Try to extract as protobuf message (has SerializeToString method)
+        if let Ok(serialize_method) = inner.getattr("SerializeToString") {
+            if let Ok(bytes) = serialize_method.call0() {
+                if let Ok(bytes_data) = bytes.extract::<Vec<u8>>() {
+                    return ommx::Function::from_bytes(&bytes_data)
+                        .map(Self)
+                        .map_err(|e| PyTypeError::new_err(e.to_string()));
+                }
+            }
+        }
+        Err(PyTypeError::new_err(format!(
+            "Cannot create Function from {}",
+            inner.get_type().name()?
+        )))
+    }
+
     #[staticmethod]
     pub fn from_scalar(scalar: f64) -> Result<Self> {
         match TryInto::<Coefficient>::try_into(scalar) {
@@ -122,11 +193,22 @@ impl Function {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(self.add_linear(&linear));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             // DecisionVariable → Linear(id, 1) conversion
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Function(&self.0 + &linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(&self.0 + &linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -161,10 +243,21 @@ impl Function {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(Function(self.0.clone() - linear.0.clone()));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Function(self.0.clone() - linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(self.0.clone() - linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -187,6 +280,11 @@ impl Function {
         self.0 += &rhs.0;
     }
 
+    /// In-place addition for += operator
+    pub fn __iadd__(&mut self, rhs: &Function) {
+        self.0 += &rhs.0;
+    }
+
     /// Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, rhs: &Bound<PyAny>) -> PyResult<Function> {
@@ -203,10 +301,21 @@ impl Function {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(self.mul_linear(&linear));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Function(&self.0 * &linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(&self.0 * &linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -276,6 +385,7 @@ impl Function {
             .collect()
     }
 
+    #[getter]
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let obj = serde_pyobject::to_pyobject(py, &self.0)?;
         Ok(obj.cast::<PyDict>()?.clone())

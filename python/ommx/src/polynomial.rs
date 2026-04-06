@@ -73,10 +73,21 @@ impl Polynomial {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(self.add_linear(&linear));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Polynomial(&self.0 + &rhs_linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Polynomial(&self.0 + &rhs_linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -106,10 +117,21 @@ impl Polynomial {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(Polynomial(self.0.clone() - &linear.0));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Polynomial(self.0.clone() - &rhs_linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Polynomial(self.0.clone() - &rhs_linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -133,6 +155,11 @@ impl Polynomial {
         self.0 += &rhs.0;
     }
 
+    /// In-place addition for += operator
+    pub fn __iadd__(&mut self, rhs: &Polynomial) {
+        self.0 += &rhs.0;
+    }
+
     /// Polymorphic multiplication
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, rhs: &Bound<PyAny>) -> PyResult<Polynomial> {
@@ -145,10 +172,21 @@ impl Polynomial {
         if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
             return Ok(self.mul_linear(&linear));
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Polynomial(&self.0 * &rhs_linear));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Polynomial(&self.0 * &rhs_linear));
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self

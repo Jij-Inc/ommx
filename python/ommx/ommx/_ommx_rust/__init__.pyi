@@ -201,35 +201,47 @@ class Constraint:
     def partial_evaluate(
         self, state: bytes, *, atol: typing.Optional[builtins.float] = None
     ) -> bytes: ...
-    def set_name(self, name: builtins.str) -> None:
+    def set_name(self, name: builtins.str) -> Constraint:
         r"""
         Set the name of the constraint
+        Returns self for method chaining
         """
-    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+    def add_name(self, name: builtins.str) -> Constraint:
+        r"""
+        Alias for set_name (backward compatibility)
+        Returns self for method chaining
+        """
+    def set_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> Constraint:
         r"""
         Set the subscripts of the constraint
+        Returns self for method chaining
         """
-    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> None:
+    def add_subscripts(self, subscripts: typing.Sequence[builtins.int]) -> Constraint:
         r"""
         Add subscripts to the constraint
+        Returns self for method chaining
         """
-    def set_id(self, id: builtins.int) -> None:
+    def set_id(self, id: builtins.int) -> Constraint:
         r"""
         Set the ID of the constraint
+        Returns self for method chaining
         """
-    def set_description(self, description: builtins.str) -> None:
+    def set_description(self, description: builtins.str) -> Constraint:
         r"""
         Set the description of the constraint
+        Returns self for method chaining
         """
     def set_parameters(
         self, parameters: typing.Mapping[builtins.str, builtins.str]
-    ) -> None:
+    ) -> Constraint:
         r"""
         Set the parameters of the constraint
+        Returns self for method chaining
         """
-    def add_parameter(self, key: builtins.str, value: builtins.str) -> None:
+    def add_parameter(self, key: builtins.str, value: builtins.str) -> Constraint:
         r"""
         Add a parameter to the constraint
+        Returns self for method chaining
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -538,6 +550,8 @@ class EvaluatedNamedFunction:
 @typing.final
 class Function:
     @property
+    def terms(self) -> dict: ...
+    @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]:
         r"""
         Get linear terms as a dictionary mapping variable id to coefficient.
@@ -567,6 +581,18 @@ class Function:
         """
     @property
     def type_name(self) -> builtins.str: ...
+    def __new__(cls, inner: typing.Any) -> Function:
+        r"""
+        Create a Function from various types.
+
+        Accepts:
+        - int or float: creates a constant function
+        - DecisionVariable: creates a linear function with single term
+        - Linear: creates a linear function
+        - Quadratic: creates a quadratic function
+        - Polynomial: creates a polynomial function
+        - Function: returns a copy
+        """
     @staticmethod
     def from_scalar(scalar: builtins.float) -> Function: ...
     @staticmethod
@@ -633,6 +659,10 @@ class Function:
         Reverse subtraction (lhs - self)
         """
     def add_assign(self, rhs: Function) -> None: ...
+    def __iadd__(self, rhs: Function) -> None:
+        r"""
+        In-place addition for += operator
+        """
     def __mul__(self, rhs: typing.Any) -> Function:
         r"""
         Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
@@ -651,7 +681,6 @@ class Function:
     def mul_polynomial(self, polynomial: Polynomial) -> Function: ...
     def content_factor(self) -> builtins.float: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
-    def terms(self) -> dict: ...
     @staticmethod
     def random(
         rng: Rng,
@@ -935,6 +964,11 @@ class Linear:
         Reverse multiplication (lhs * self)
         """
     def add_assign(self, rhs: Linear) -> None: ...
+    def __iadd__(self, rhs: Linear) -> None:
+        r"""
+        In-place addition for += operator
+        Note: PyO3's __iadd__ should return () and Python will keep the same reference
+        """
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
@@ -1061,6 +1095,10 @@ class Polynomial:
         Reverse subtraction (lhs - self)
         """
     def add_assign(self, rhs: Polynomial) -> None: ...
+    def __iadd__(self, rhs: Polynomial) -> None:
+        r"""
+        In-place addition for += operator
+        """
     def __mul__(self, rhs: typing.Any) -> Polynomial:
         r"""
         Polymorphic multiplication
@@ -1149,6 +1187,10 @@ class Quadratic:
         Reverse subtraction (lhs - self)
         """
     def add_assign(self, rhs: Quadratic) -> None: ...
+    def __iadd__(self, rhs: Quadratic) -> None:
+        r"""
+        In-place addition for += operator
+        """
     def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic multiplication

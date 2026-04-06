@@ -129,6 +129,7 @@ impl Linear {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
@@ -136,6 +137,19 @@ impl Linear {
                 .into_pyobject(py)?
                 .into_any()
                 .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Linear(&self.0 + &rhs_linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -174,6 +188,7 @@ impl Linear {
             result += &self.0;
             return Ok(Polynomial(result).into_pyobject(py)?.into_any().unbind());
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
@@ -181,6 +196,19 @@ impl Linear {
                 .into_pyobject(py)?
                 .into_any()
                 .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Linear(&self.0 - &rhs_linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -222,6 +250,7 @@ impl Linear {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust DecisionVariable directly
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
@@ -229,6 +258,19 @@ impl Linear {
                 .into_pyobject(py)?
                 .into_any()
                 .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let rhs_linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Quadratic(&self.0 * &rhs_linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
         }
         if let Ok(val) = rhs.extract::<f64>() {
             return self
@@ -248,6 +290,12 @@ impl Linear {
     }
 
     pub fn add_assign(&mut self, rhs: &Linear) {
+        self.0 += &rhs.0;
+    }
+
+    /// In-place addition for += operator
+    /// Note: PyO3's __iadd__ should return () and Python will keep the same reference
+    pub fn __iadd__(&mut self, rhs: &Linear) {
         self.0 += &rhs.0;
     }
 

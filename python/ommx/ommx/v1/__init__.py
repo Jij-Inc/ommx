@@ -56,6 +56,12 @@ SampledDecisionVariable = _ommx_rust.SampledDecisionVariable
 SampledConstraint = _ommx_rust.SampledConstraint
 SampledNamedFunction = _ommx_rust.SampledNamedFunction
 
+# Import function types from Rust
+Linear = _ommx_rust.Linear
+Quadratic = _ommx_rust.Quadratic
+Polynomial = _ommx_rust.Polynomial
+Function = _ommx_rust.Function
+
 __all__ = [
     "Instance",
     "ParametricInstance",
@@ -209,7 +215,7 @@ class Instance(UserAnnotationBase):
         | Function
         | _Function
         | _ommx_rust.Function,
-        constraints: Iterable[Constraint | _Constraint],
+        constraints: Iterable[Constraint | _Constraint | _ommx_rust.Constraint],
         sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         named_functions: Iterable[NamedFunction] | None = None,
@@ -232,7 +238,10 @@ class Instance(UserAnnotationBase):
         # Convert constraints to _ommx_rust.Constraint
         rust_constraints = {}
         for c in constraints:
-            if isinstance(c, Constraint):
+            if isinstance(c, _ommx_rust.Constraint):
+                # Already a Rust Constraint
+                rust_constraints[c.id] = c
+            elif isinstance(c, Constraint):
                 rust_constraints[c.id] = c.raw
             else:
                 # Convert protobuf to Constraint first
@@ -271,7 +280,7 @@ class Instance(UserAnnotationBase):
         # Create Rust instance
         rust_instance = _ommx_rust.Instance.from_components(
             sense=sense,
-            objective=objective.raw,
+            objective=objective,
             decision_variables=rust_decision_variables,
             constraints=rust_constraints,
             named_functions=rust_named_functions,
@@ -379,7 +388,7 @@ class Instance(UserAnnotationBase):
 
     @property
     def objective(self) -> Function:
-        return Function.from_raw(self.raw.objective)
+        return self.raw.objective
 
     @objective.setter
     def objective(
@@ -402,7 +411,7 @@ class Instance(UserAnnotationBase):
         """
         if not isinstance(value, Function):
             value = Function(value)
-        self.raw.objective = value.raw
+        self.raw.objective = value
 
     @property
     def sense(self) -> _ommx_rust.Sense:
@@ -2046,7 +2055,7 @@ class ParametricInstance(UserAnnotationBase):
         | Quadratic
         | Polynomial
         | Function,
-        constraints: Iterable[Constraint | _Constraint],
+        constraints: Iterable[Constraint | _Constraint | _ommx_rust.Constraint],
         sense: _Instance.Sense.ValueType | Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
@@ -2060,6 +2069,18 @@ class ParametricInstance(UserAnnotationBase):
         if isinstance(sense, Sense):
             sense = _Instance.Sense.ValueType(sense.to_pb())
 
+        def convert_constraint(
+            c: Constraint | _Constraint | _ommx_rust.Constraint,
+        ) -> _Constraint:
+            if isinstance(c, _ommx_rust.Constraint):
+                raw = _Constraint()
+                raw.ParseFromString(c.to_bytes())
+                return raw
+            elif isinstance(c, Constraint):
+                return c.to_protobuf()
+            else:
+                return c
+
         return ParametricInstance(
             _ParametricInstance(
                 description=description,
@@ -2068,10 +2089,7 @@ class ParametricInstance(UserAnnotationBase):
                     for v in decision_variables
                 ],
                 objective=raw_objective,
-                constraints=[
-                    c.to_protobuf() if isinstance(c, Constraint) else c
-                    for c in constraints
-                ],
+                constraints=[convert_constraint(c) for c in constraints],
                 sense=sense,
                 parameters=[
                     p.raw if isinstance(p, Parameter) else p for p in parameters
@@ -3039,1105 +3057,6 @@ class AsConstraint(ABC):
 
 
 @dataclass
-class Linear(AsConstraint):
-    """
-    Modeler API for linear function
-
-    This is a wrapper of :class:`linear_pb2.Linear` protobuf message.
-
-    Examples
-    =========
-
-    .. doctest::
-
-        Create a linear function :math:`f(x_1, x_2) = 2 x_1 + 3 x_2 + 1`
-        >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-
-        Or create via DecisionVariable
-        >>> x1 = DecisionVariable.integer(1)
-        >>> x2 = DecisionVariable.integer(2)
-        >>> g = 2*x1 + 3*x2 + 1
-
-        Compare two linear functions are equal in terms of a polynomial with tolerance
-        >>> assert f.almost_equal(g, atol=1e-12)
-
-        Note that `f == g` becomes an equality `Constraint`
-        >>> assert isinstance(f == g, Constraint)
-
-    """
-
-    raw: _ommx_rust.Linear
-
-    def __init__(self, *, terms: dict[int, float | int], constant: float | int = 0):
-        self.raw = _ommx_rust.Linear(terms=terms, constant=constant)
-
-    @classmethod
-    def from_object(
-        cls, obj: float | int | DecisionVariable | _ommx_rust.Linear | Linear
-    ) -> Linear:
-        if isinstance(obj, Linear):
-            return obj
-        elif isinstance(obj, _ommx_rust.Linear):
-            new = Linear(terms={})
-            new.raw = obj
-            return new
-        elif isinstance(obj, (float, int)):
-            return cls.from_raw(_ommx_rust.Linear.constant(obj))
-        elif isinstance(obj, DecisionVariable):
-            return cls.from_raw(_ommx_rust.Linear.single_term(obj.raw.id, 1))
-        else:
-            raise TypeError(f"Cannot create Linear from {type(obj).__name__}. ")
-
-    @classmethod
-    def from_raw(cls, obj: _ommx_rust.Linear) -> Linear:
-        new = Linear(terms={})
-        new.raw = obj
-        return new
-
-    @property
-    def linear_terms(self) -> dict[int, float]:
-        """
-        Get the terms of the linear function as a dictionary, except for the constant term.
-        """
-        return self.raw.linear_terms
-
-    @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        """
-        Linear terms and constant as a dictionary
-        """
-        return {(id,): value for id, value in self.linear_terms.items()} | {
-            (): self.constant_term
-        }
-
-    @property
-    def constant_term(self) -> float:
-        """
-        Get the constant term of the linear function
-        """
-        return self.raw.constant_term
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Linear:
-        raw = _ommx_rust.Linear.from_bytes(data)
-        return Linear.from_raw(raw)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @staticmethod
-    def random(rng: _ommx_rust.Rng, num_terms: int = 3, max_id: int = 10) -> Linear:
-        """
-        Create a random linear function using the given random number generator.
-
-        Args:
-            rng: Random number generator
-            num_terms: Number of terms in the linear function
-            max_id: Maximum variable ID to use
-
-        Returns:
-            Random Linear function
-        """
-        raw = _ommx_rust.Linear.random(rng, num_terms, max_id)
-        return Linear.from_raw(raw)
-
-    @deprecated("Use almost_equal method instead.")
-    def equals_to(self, other: Linear) -> bool:
-        """
-        Alternative to ``==`` operator to compare two linear functions.
-        """
-        return self.raw.almost_equal(other.raw)
-
-    def almost_equal(self, other: Linear, *, atol: float = 1e-10) -> bool:
-        """
-        Compare two linear functions have almost equal coefficients and constant.
-        """
-        return self.raw.almost_equal(other.raw, atol=atol)
-
-    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
-        """
-        Evaluate the linear function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3, x2 = 4, x3 = 5`
-
-            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> value = f.evaluate({1: 3, 2: 4, 3: 5}) # Unused ID `3` can be included
-
-            2*3 + 3*4 + 1 = 19
-            >>> value
-            19.0
-
-            Missing ID raises an error
-            >>> f.evaluate({1: 3})
-            Traceback (most recent call last):
-            ...
-            RuntimeError: Missing entry for id: 2
-
-        """
-        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
-
-    def partial_evaluate(self, state: ToState, *, atol: float | None = None) -> Linear:
-        """
-        Partially evaluate the linear function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 + 3 x2 + 1` with `x1 = 3`, yielding `3 x2 + 7`
-
-            >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
-            >>> new_f = f.partial_evaluate({1: 3})
-            >>> new_f
-            Linear(3*x2 + 7)
-            >>> new_f.partial_evaluate({2: 4})
-            Linear(19)
-
-        """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return Linear.from_raw(new_raw)
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    def __add__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
-    ) -> Linear:
-        try:
-            rhs = Linear.from_object(rhs)
-            return Linear.from_raw(self.raw + rhs.raw)
-        except TypeError:
-            return NotImplemented
-
-    def __radd__(self, other):
-        return self + other
-
-    def __iadd__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
-    ) -> Linear:
-        try:
-            rhs = Linear.from_object(rhs)
-            self.raw.add_assign(rhs.raw)
-            return self
-        except TypeError:
-            return NotImplemented
-
-    def __sub__(
-        self, rhs: int | float | DecisionVariable | _ommx_rust.Linear | Linear
-    ) -> Linear:
-        try:
-            rhs = Linear.from_object(rhs)
-            return Linear.from_raw(self.raw - rhs.raw)
-        except TypeError:
-            return NotImplemented
-
-    def __rsub__(self, other):
-        return -self + other
-
-    @overload
-    def __mul__(self, other: int | float) -> Linear: ...
-
-    @overload
-    def __mul__(self, other: DecisionVariable | Linear) -> Quadratic: ...
-
-    def __mul__(
-        self, other: int | float | DecisionVariable | _ommx_rust.Linear | Linear
-    ) -> Linear | Quadratic:
-        if isinstance(other, (float, int)):
-            return Linear.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, (DecisionVariable, Linear)):
-            rhs = Linear.from_object(other)
-            return Quadratic.from_raw(self.raw * rhs.raw)
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __neg__(self) -> Linear:
-        # Delegate to Rust negation operator
-        return Linear.from_raw(-self.raw)
-
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        # Delegate to Rust comparison operator which returns Constraint directly
-        if isinstance(other, (int, float)):
-            return Constraint.from_raw(self.raw == other)
-        elif hasattr(other, "raw"):
-            return Constraint.from_raw(self.raw == other.raw)
-        return NotImplemented  # type: ignore[return-value]
-
-
-@dataclass
-class Quadratic(AsConstraint):
-    raw: _ommx_rust.Quadratic
-
-    def __init__(
-        self,
-        *,
-        columns: Iterable[int],
-        rows: Iterable[int],
-        values: Iterable[float | int],
-        linear: Optional[Linear] = None,
-    ):
-        self.raw = _ommx_rust.Quadratic(
-            columns=list(columns),
-            rows=list(rows),
-            values=[float(v) for v in values],
-            linear=linear.raw if linear else None,
-        )
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.Quadratic) -> Quadratic:
-        new = Quadratic(columns=[], rows=[], values=[])
-        new.raw = raw
-        return new
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Quadratic:
-        raw = _ommx_rust.Quadratic.from_bytes(data)
-        return Quadratic.from_raw(raw)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @staticmethod
-    def random(rng: _ommx_rust.Rng, num_terms: int = 5, max_id: int = 10) -> Quadratic:
-        """
-        Create a random quadratic function using the given random number generator.
-
-        Args:
-            rng: Random number generator
-            num_terms: Number of terms in the quadratic function
-            max_id: Maximum variable ID to use
-
-        Returns:
-            Random Quadratic function
-        """
-        raw = _ommx_rust.Quadratic.random(rng, num_terms, max_id)
-        return Quadratic.from_raw(raw)
-
-    def almost_equal(self, other: Quadratic, *, atol: float = 1e-10) -> bool:
-        """
-        Compare two quadratic functions have almost equal coefficients
-        """
-        return self.raw.almost_equal(other.raw, atol)
-
-    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
-        """
-        Evaluate the quadratic function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = 2*x1*x2 + 3*x2*x3 + 1
-            >>> f
-            Quadratic(2*x1*x2 + 3*x2*x3 + 1)
-
-            >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            85.0
-
-            Missing ID raises an error
-            >>> f.evaluate({1: 3})
-            Traceback (most recent call last):
-            ...
-            RuntimeError: Missing entry for id: 2
-
-        """
-        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
-
-    def partial_evaluate(
-        self, state: ToState, *, atol: float | None = None
-    ) -> Quadratic:
-        """
-        Partially evaluate the quadratic function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3`, yielding `3 x2 x3 + 6 x2 + 1`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = 2*x1*x2 + 3*x2*x3 + 1
-            >>> f
-            Quadratic(2*x1*x2 + 3*x2*x3 + 1)
-
-            >>> f.partial_evaluate({1: 3})
-            Quadratic(3*x2*x3 + 6*x2 + 1)
-
-        """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return Quadratic.from_raw(new_raw)
-
-    @property
-    def linear(self) -> Linear | None:
-        linear_terms = self.raw.linear_terms
-        constant = self.raw.constant_term
-        if linear_terms or constant != 0.0:
-            return Linear(terms=linear_terms, constant=constant)
-        return None
-
-    @property
-    def quadratic_terms(self) -> dict[tuple[int, int], float]:
-        """Quadratic terms as a dictionary mapping (row, col) to coefficient"""
-        return self.raw.quadratic_terms
-
-    @property
-    def linear_terms(self) -> dict[int, float]:
-        """Linear terms as a dictionary mapping variable id to coefficient"""
-        return self.raw.linear_terms
-
-    @property
-    def constant_term(self) -> float:
-        """Constant term of the quadratic function"""
-        return self.raw.constant_term
-
-    @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        """All terms as a dictionary mapping variable id tuples to coefficients
-
-        Returns dictionary with tuple keys (hashable) instead of list keys.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            >>> from ommx.v1 import DecisionVariable
-            >>> x = DecisionVariable.binary(1, name="x")
-            >>> y = DecisionVariable.binary(2, name="y")
-            >>> quad = x * y + 2 * x + 3
-            >>> quad.terms
-            {(1,): 2.0, (1, 2): 1.0, (): 3.0}
-        """
-        return self.raw.terms()
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    def __add__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
-    ) -> Quadratic:
-        if isinstance(other, float) or isinstance(other, int):
-            return Quadratic.from_raw(self.raw.add_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
-            return Quadratic.from_raw(self.raw.add_linear(other_linear.raw))
-        if isinstance(other, Linear):
-            return Quadratic.from_raw(self.raw.add_linear(other.raw))
-        if isinstance(other, Quadratic):
-            return Quadratic.from_raw(self.raw + other.raw)
-        return NotImplemented
-
-    def __radd__(self, other):
-        return self + other
-
-    def __iadd__(
-        self, rhs: int | float | DecisionVariable | Linear | Quadratic
-    ) -> Quadratic:
-        if isinstance(rhs, Quadratic):
-            self.raw.add_assign(rhs.raw)
-            return self
-        else:
-            # For other types, fall back to regular addition and assignment
-            result = self + rhs
-            self.raw = result.raw
-            return self
-
-    def __sub__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
-    ) -> Quadratic:
-        return self + (-other)
-
-    def __rsub__(self, other):
-        return -self + other
-
-    @overload
-    def __mul__(self, other: int | float) -> Quadratic: ...
-
-    @overload
-    def __mul__(self, other: DecisionVariable | Linear | Quadratic) -> Polynomial: ...
-
-    def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic
-    ) -> Quadratic | Polynomial:
-        if isinstance(other, float) or isinstance(other, int):
-            return Quadratic.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
-            return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
-        if isinstance(other, Linear):
-            return Polynomial.from_raw(self.raw.mul_linear(other.raw))
-        if isinstance(other, Quadratic):
-            return Polynomial.from_raw(self.raw * other.raw)
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __neg__(self) -> Quadratic:
-        # Delegate to Rust negation operator
-        return Quadratic.from_raw(-self.raw)
-
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        # Delegate to Rust comparison operator which returns Constraint directly
-        if isinstance(other, (int, float)):
-            return Constraint.from_raw(self.raw == other)
-        elif hasattr(other, "raw"):
-            return Constraint.from_raw(self.raw == other.raw)
-        return NotImplemented  # type: ignore[return-value]
-
-
-@dataclass
-class Polynomial(AsConstraint):
-    raw: _ommx_rust.Polynomial
-
-    def __init__(self, *, terms: dict[Sequence[int], float | int] = {}):
-        self.raw = _ommx_rust.Polynomial(terms=terms)
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.Polynomial) -> Polynomial:
-        new = Polynomial()
-        new.raw = raw
-        return new
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Polynomial:
-        raw = _ommx_rust.Polynomial.from_bytes(data)
-        return Polynomial.from_raw(raw)
-
-    @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        raw_terms = self.raw.terms()
-        return {tuple(ids): coeff for ids, coeff in raw_terms.items()}
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @staticmethod
-    def random(
-        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
-    ) -> Polynomial:
-        """
-        Create a random polynomial function using the given random number generator.
-
-        Args:
-            rng: Random number generator
-            num_terms: Number of terms in the polynomial function
-            max_degree: Maximum degree of terms
-            max_id: Maximum variable ID to use
-
-        Returns:
-            Random Polynomial function
-        """
-        raw = _ommx_rust.Polynomial.random(rng, num_terms, max_degree, max_id)
-        return Polynomial.from_raw(raw)
-
-    def almost_equal(self, other: Polynomial, *, atol: float = 1e-10) -> bool:
-        """
-        Compare two polynomial have almost equal coefficients
-        """
-        return self.raw.almost_equal(other.raw, atol)
-
-    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
-        """
-        Evaluate the polynomial with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
-            >>> f
-            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
-
-            >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            181.0
-
-            Missing ID raises an error
-            >>> f.evaluate({1: 3})
-            Traceback (most recent call last):
-            ...
-            RuntimeError: Missing entry for id: 2
-
-        """
-        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
-
-    def partial_evaluate(
-        self, state: ToState, *, atol: float | None = None
-    ) -> Polynomial:
-        """
-        Partially evaluate the polynomial with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 x3 + 3 x2 x3 + 1` with `x1 = 3`, yielding `9 x2 x3 + 1`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = 2*x1*x2*x3 + 3*x2*x3 + 1
-            >>> f
-            Polynomial(2*x1*x2*x3 + 3*x2*x3 + 1)
-
-            >>> f.partial_evaluate({1: 3})
-            Polynomial(9*x2*x3 + 1)
-
-        """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return Polynomial.from_raw(new_raw)
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    def __add__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
-    ) -> Polynomial:
-        if isinstance(other, float) or isinstance(other, int):
-            return Polynomial.from_raw(self.raw.add_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
-            return Polynomial.from_raw(self.raw.add_linear(other_linear.raw))
-        if isinstance(other, Linear):
-            return Polynomial.from_raw(self.raw.add_linear(other.raw))
-        if isinstance(other, Quadratic):
-            return Polynomial.from_raw(self.raw.add_quadratic(other.raw))
-        if isinstance(other, Polynomial):
-            return Polynomial.from_raw(self.raw + other.raw)
-        return NotImplemented
-
-    def __radd__(self, other):
-        return self + other
-
-    def __iadd__(
-        self, rhs: int | float | DecisionVariable | Linear | Quadratic | Polynomial
-    ) -> Polynomial:
-        if isinstance(rhs, Polynomial):
-            self.raw.add_assign(rhs.raw)
-            return self
-        else:
-            # For other types, fall back to regular addition and assignment
-            result = self + rhs
-            self.raw = result.raw
-            return self
-
-    def __sub__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
-    ) -> Polynomial:
-        if isinstance(
-            other, (int, float, DecisionVariable, Linear, Quadratic, Polynomial)
-        ):
-            return self + (-other)
-        return NotImplemented
-
-    def __rsub__(self, other):
-        return -self + other
-
-    def __mul__(
-        self, other: int | float | DecisionVariable | Linear | Quadratic | Polynomial
-    ) -> Polynomial:
-        if isinstance(other, float) or isinstance(other, int):
-            return Polynomial.from_raw(self.raw.mul_scalar(other))
-        if isinstance(other, DecisionVariable):
-            other_linear = Linear(terms={other.raw.id: 1}, constant=0)
-            return Polynomial.from_raw(self.raw.mul_linear(other_linear.raw))
-        if isinstance(other, Linear):
-            return Polynomial.from_raw(self.raw.mul_linear(other.raw))
-        if isinstance(other, Quadratic):
-            return Polynomial.from_raw(self.raw.mul_quadratic(other.raw))
-        if isinstance(other, Polynomial):
-            return Polynomial.from_raw(self.raw * other.raw)
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __neg__(self) -> Polynomial:
-        # Delegate to Rust negation operator
-        return Polynomial.from_raw(-self.raw)
-
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        # Delegate to Rust comparison operator which returns Constraint directly
-        if isinstance(other, (int, float)):
-            return Constraint.from_raw(self.raw == other)
-        elif hasattr(other, "raw"):
-            return Constraint.from_raw(self.raw == other.raw)
-        return NotImplemented  # type: ignore[return-value]
-
-
-@dataclass
-class Function(AsConstraint):
-    raw: _ommx_rust.Function
-
-    def __init__(
-        self,
-        inner: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | _ommx_rust.Function
-        | _Function,
-    ):
-        if isinstance(inner, (int, float)):
-            self.raw = _ommx_rust.Function.from_scalar(inner)
-        elif isinstance(inner, DecisionVariable):
-            self.raw = _ommx_rust.Function.from_linear(
-                _ommx_rust.Linear.single_term(inner.raw.id, 1)
-            )
-        elif isinstance(inner, Linear):
-            self.raw = _ommx_rust.Function.from_linear(inner.raw)
-        elif isinstance(inner, Quadratic):
-            self.raw = _ommx_rust.Function.from_quadratic(inner.raw)
-        elif isinstance(inner, Polynomial):
-            self.raw = _ommx_rust.Function.from_polynomial(inner.raw)
-        elif isinstance(inner, _ommx_rust.Function):
-            self.raw = inner
-        elif isinstance(inner, _Function):
-            self.raw = _ommx_rust.Function.from_bytes(inner.SerializeToString())
-        else:
-            raise TypeError(f"Cannot create Function from {type(inner).__name__}")
-
-    @property
-    def terms(self) -> dict[tuple[int, ...], float]:
-        """All terms as a dictionary mapping variable id tuples to coefficients
-
-        Returns dictionary with tuple keys (hashable) instead of list keys.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            >>> from ommx.v1 import Function, Linear, DecisionVariable
-            >>> x = DecisionVariable.binary(1, name="x")
-            >>> linear = Linear(terms={1: 2.5}, constant=1.0)
-            >>> func = Function(linear)
-            >>> func.terms
-            {(1,): 2.5, (): 1.0}
-        """
-        return self.raw.terms()
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.Function) -> Function:
-        new = Function(0)
-        new.raw = raw
-        return new
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Function:
-        new = Function(0)
-        new.raw = _ommx_rust.Function.from_bytes(data)
-        return new
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @staticmethod
-    def random(
-        rng: _ommx_rust.Rng, num_terms: int = 5, max_degree: int = 3, max_id: int = 10
-    ) -> Function:
-        """
-        Create a random function using the given random number generator.
-
-        Args:
-            rng: Random number generator
-            num_terms: Number of terms in the function
-            max_degree: Maximum degree of terms
-            max_id: Maximum variable ID to use
-
-        Returns:
-            Random Function
-        """
-        raw = _ommx_rust.Function.random(rng, num_terms, max_degree, max_id)
-        return Function.from_raw(raw)
-
-    def almost_equal(self, other: Function, *, atol: float = 1e-10) -> bool:
-        """
-        Compare two functions have almost equal coefficients as a polynomial
-        """
-        return self.raw.almost_equal(other.raw, atol)
-
-    def evaluate(self, state: ToState, *, atol: float | None = None) -> float:
-        """
-        Evaluate the function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3, x2 = 4, x3 = 5`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = Function(2*x1*x2 + 3*x2*x3 + 1)
-            >>> f
-            Function(2*x1*x2 + 3*x2*x3 + 1)
-
-            >>> f.evaluate({1: 3, 2: 4, 3: 5})
-            85.0
-
-            Missing ID raises an error
-            >>> f.evaluate({1: 3})
-            Traceback (most recent call last):
-            ...
-            RuntimeError: Missing entry for id: 2
-
-        """
-        return self.raw.evaluate(State(state).to_bytes(), atol=atol)
-
-    def partial_evaluate(
-        self, state: ToState, *, atol: float | None = None
-    ) -> Function:
-        """
-        Partially evaluate the function with the given state.
-
-        Examples
-        =========
-
-        .. doctest::
-
-            Evaluate `2 x1 x2 + 3 x2 x3 + 1` with `x1 = 3`, yielding `3 x2 x3 + 6 x2 + 1`
-
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> x3 = DecisionVariable.integer(3)
-            >>> f = Function(2*x1*x2 + 3*x2*x3 + 1)
-            >>> f
-            Function(2*x1*x2 + 3*x2*x3 + 1)
-
-            >>> f.partial_evaluate({1: 3})
-            Function(3*x2*x3 + 6*x2 + 1)
-
-        """
-        new_raw = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return Function.from_raw(new_raw)
-
-    def used_decision_variable_ids(self) -> set[int]:
-        """
-        Get the IDs of decision variables used in the function.
-        """
-        return self.raw.required_ids()
-
-    def content_factor(self) -> float:
-        r"""
-        For given polynomial :math:`f(x)`, get the minimal positive factor :math:`a` which makes all coefficient of :math:`a f(x)` integer.
-        See also https://en.wikipedia.org/wiki/Primitive_part_and_content
-
-        Examples
-        =========
-
-        :math:`\frac{1}{3} x_0 + \frac{3}{2} x_1` can be multiplied by 6 to make all coefficients integer.
-
-        >>> x = [DecisionVariable.integer(i) for i in range(2)]
-        >>> f = Function((1.0/3.0)*x[0] + (3.0/2.0)*x[1])
-        >>> a = f.content_factor()
-        >>> (a, a*f)
-        (6.0, Function(2*x0 + 9*x1))
-
-        This works even for non-rational numbers like :math:`\pi` because 64-bit float is actually rational.
-
-        >>> import math
-        >>> f = Function(math.pi*x[0] + 3*math.pi*x[1])
-        >>> a = f.content_factor()
-        >>> (a, a*f)
-        (0.3183098861837907, Function(x0 + 3*x1))
-
-        But this returns very large number if there is no multiplier:
-
-        >>> f = Function(math.pi*x[0] + math.e*x[1])
-        >>> a = f.content_factor()
-        >>> (a, a*f)
-        (3122347504612692.0, Function(9809143982445656*x0 + 8487420483923125*x1))
-
-        In practice, you must check if the multiplier is enough small.
-
-        """
-        return self.raw.content_factor()
-
-    def degree(self) -> int:
-        """
-        Get the degree of the polynomial function.
-
-        Returns:
-            The degree of the polynomial (0 for constants, 1 for linear, 2 for quadratic, etc.)
-        """
-        return self.raw.degree()
-
-    def num_terms(self) -> int:
-        """
-        Get the number of terms in the polynomial function.
-
-        Returns:
-            The number of terms in the polynomial
-        """
-        return self.raw.num_terms()
-
-    def as_linear(self) -> Linear | None:
-        """
-        Try to convert the function to a Linear object if it's linear.
-
-        Returns:
-            A Linear object if the function is linear, None otherwise
-        """
-        linear_raw = self.raw.as_linear()
-        if linear_raw is None:
-            return None
-        return Linear.from_raw(linear_raw)
-
-    def as_quadratic(self) -> Quadratic | None:
-        """
-        Try to convert the function to a Quadratic object if it's quadratic.
-
-        Returns:
-            A Quadratic object if the function is quadratic, None otherwise
-        """
-        quadratic_raw = self.raw.as_quadratic()
-        if quadratic_raw is None:
-            return None
-        return Quadratic.from_raw(quadratic_raw)
-
-    @property
-    def linear_terms(self) -> dict[int, float]:
-        """
-        Get linear terms as a dictionary mapping variable id to coefficient.
-
-        Returns:
-            Dictionary mapping variable IDs to their linear coefficients.
-            Returns empty dict if function has no linear terms.
-            Works for all polynomial functions by filtering only degree-1 terms.
-
-        Examples:
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> f = Function(2*x1 + 3*x2 + 5)
-            >>> f.linear_terms
-            {1: 2.0, 2: 3.0}
-
-            >>> f_const = Function(5)
-            >>> f_const.linear_terms
-            {}
-
-            >>> # Works for higher degree polynomials too
-            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
-            >>> f_cubic.linear_terms
-            {1: 2.0}
-        """
-        return self.raw.linear_terms
-
-    @property
-    def quadratic_terms(self) -> dict[tuple[int, int], float]:
-        """
-        Get quadratic terms as a dictionary mapping (row, col) to coefficient.
-
-        Returns:
-            Dictionary mapping variable ID pairs to their quadratic coefficients.
-            Returns empty dict if function has no quadratic terms.
-            Works for all polynomial functions by filtering only degree-2 terms.
-
-        Examples:
-            >>> x1 = DecisionVariable.integer(1)
-            >>> x2 = DecisionVariable.integer(2)
-            >>> f = Function(2*x1*x2 + 3*x1 + 5)
-            >>> f.quadratic_terms
-            {(1, 2): 2.0}
-
-            >>> f_linear = Function(3*x1 + 5)
-            >>> f_linear.quadratic_terms
-            {}
-
-            >>> # Works for higher degree polynomials too
-            >>> f_cubic = Function(x1*x1*x1 + 2*x1*x2 + 5)
-            >>> f_cubic.quadratic_terms
-            {(1, 2): 2.0}
-        """
-        return self.raw.quadratic_terms
-
-    @property
-    def constant_term(self) -> float:
-        """
-        Get the constant term of the function.
-
-        Returns:
-            The constant term. Returns 0.0 if function has no constant term.
-            Works for all polynomial functions by filtering the degree-0 term.
-
-        Examples:
-            >>> x1 = DecisionVariable.integer(1)
-            >>> f = Function(2*x1 + 5)
-            >>> f.constant_term
-            5.0
-
-            >>> f_no_const = Function(2*x1)
-            >>> f_no_const.constant_term
-            0.0
-
-            >>> f_const_only = Function(7)
-            >>> f_const_only.constant_term
-            7.0
-
-            >>> # Works for higher degree polynomials too
-            >>> f_cubic = Function(x1*x1*x1 + 2*x1 + 5)
-            >>> f_cubic.constant_term
-            5.0
-        """
-        return self.raw.constant_term
-
-    def reduce_binary_power(self, binary_ids: set[int]) -> bool:
-        """
-        Reduce binary powers in the function.
-
-        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
-
-        Args:
-            binary_ids: Set of binary variable IDs to reduce powers for
-
-        Returns:
-            True if any reduction was performed, False otherwise
-
-        Examples
-        =========
-
-        Consider a function with binary variables and quadratic terms:
-
-        >>> from ommx.v1 import DecisionVariable, Function
-        >>> x0 = DecisionVariable.binary(0)
-        >>> x1 = DecisionVariable.binary(1)
-        >>> f = Function(x0 * x0 + x0 * x1)  # x0^2 + x0*x1
-        >>> f
-        Function(x0*x0 + x0*x1)
-
-        After reducing binary powers for variable 0, x0^2 becomes x0:
-
-        >>> changed = f.reduce_binary_power({0})
-        >>> changed
-        True
-        >>> f
-        Function(x0*x1 + x0)
-
-        Running it again should not change anything:
-
-        >>> changed = f.reduce_binary_power({0})
-        >>> changed
-        False
-
-        """
-        return self.raw.reduce_binary_power(binary_ids)
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    def __add__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        # Delegate to Rust polymorphic operator
-        if isinstance(other, (int, float)):
-            return Function.from_raw(self.raw + other)
-        elif hasattr(other, "raw"):
-            return Function.from_raw(self.raw + other.raw)
-        return NotImplemented
-
-    def __radd__(self, other):
-        return self + other
-
-    def __iadd__(
-        self,
-        rhs: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        if isinstance(rhs, Function):
-            self.raw.add_assign(rhs.raw)
-            return self
-        else:
-            # For other types, fall back to regular addition and assignment
-            result = self + rhs
-            self.raw = result.raw
-            return self
-
-    def __sub__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self + (-other)
-
-    def __rsub__(self, other):
-        return -self + other
-
-    def __mul__(
-        self,
-        other: (
-            int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
-        ),
-    ) -> Function:
-        # Delegate to Rust polymorphic operator
-        if isinstance(other, (int, float)):
-            return Function.from_raw(self.raw * other)
-        elif hasattr(other, "raw"):
-            return Function.from_raw(self.raw * other.raw)
-        return NotImplemented
-
-    def __rmul__(self, other):
-        return self * other
-
-    def __neg__(self) -> Function:
-        # Delegate to Rust negation operator
-        return Function.from_raw(-self.raw)
-
-    def __eq__(self, other) -> Constraint:  # type: ignore[reportIncompatibleMethodOverride]
-        # Delegate to Rust comparison operator which returns Constraint directly
-        if isinstance(other, (int, float)):
-            return Constraint.from_raw(self.raw == other)
-        elif hasattr(other, "raw"):
-            return Constraint.from_raw(self.raw == other.raw)
-        return NotImplemented  # type: ignore[return-value]
-
-
-@dataclass
 class Constraint:
     """
     Constraints
@@ -4202,7 +3121,7 @@ class Constraint:
 
         self.raw = _ommx_rust.Constraint(
             id=id,
-            function=function.raw,
+            function=function,
             equality=rust_equality,
             name=name,
             subscripts=subscripts or [],
@@ -4276,7 +3195,7 @@ class Constraint:
 
     @property
     def function(self) -> Function:
-        return Function(self.raw.function)
+        return self.raw.function
 
     @property
     def id(self) -> int:
@@ -4368,7 +3287,7 @@ class NamedFunction(AsConstraint):
             function = Function(function)
         self.raw = _ommx_rust.NamedFunction(
             id=id,
-            function=function.raw,
+            function=function,
             name=name,
             subscripts=subscripts or [],
             description=description,
@@ -4395,7 +3314,7 @@ class NamedFunction(AsConstraint):
 
     @property
     def function(self) -> Function:
-        return Function(self.raw.function)
+        return self.raw.function
 
     @property
     def name(self) -> Optional[str]:
@@ -4519,9 +3438,9 @@ class NamedFunction(AsConstraint):
     def _as_pandas_entry(self) -> dict:
         return {
             "id": self.id,
-            "type": self.function.raw.type_name,
+            "type": self.function.type_name,
             "function": self.function,
-            "used_ids": self.function.raw.required_ids(),
+            "used_ids": self.function.required_ids(),
             "name": self.name if self.name else NA,
             "subscripts": self.subscripts,
             "description": self.description if self.description else NA,
@@ -4569,7 +3488,7 @@ class RemovedConstraint:
 
     @property
     def function(self) -> Function:
-        return Function(self.raw.constraint.function)
+        return self.raw.constraint.function
 
     @property
     def name(self) -> str | None:
