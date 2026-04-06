@@ -95,43 +95,19 @@ df = pd.DataFrame.from_dict(
 )
 ```
 
-```{code-cell} ipython3
-:tags: [remove-cell]
-
-from myst_nb import glue
-
-glue("instance", instance, display=False)
-glue("solution", solution, display=False)
-glue("data", data, display=False)
-glue("df", df, display=False)
-```
-
 ```{list-table}
 :header-rows: 1
-:widths: 5 30 10
 
 * - 変数名
   - 説明
-  - 値
 * - `instance`
   - 0-1ナップサック問題に対応する `ommx.v1.Instance` オブジェクト
-  - ````{toggle}
-    ```{glue:} instance
-    ```
-    ````
 * - `solution`
   - 0-1ナップサック問題をSCIPで解いた計算結果が格納されている `ommx.v1.Solution` オブジェクト
-  - ````{toggle}
-    ```{glue:} solution
-    ```
-    ````
 * - `data`
   - 0-1ナップサック問題の入力データ
-  - ```{glue:} data
-    ```
 * - `df`
   - 0-1ナップサック問題の最適解表す `pandas.DataFrame` オブジェクト
-  - {glue:}`df`
 ```
 
 +++
@@ -200,7 +176,8 @@ artifact = builder.build()
 この `artifact` は次説で説明する、今保存したファイルを読み込んだものと同じものです。ファイルが出来上がったか確認してみましょう：
 
 ```{code-cell} ipython3
-! ls $filename
+import os
+print(os.path.exists(filename))
 ```
 
 あとはこの `my_instance.ommx` を通常のファイル共有の方法で共有すれば、他の人とデータを共有することができます。
@@ -242,5 +219,5 @@ artifact.get_json(artifact.layers[3])
 :tags: [remove-cell]
 
 # Remove the created OMMX Artifact file to clean up
-! rm $filename
+os.remove(filename)
 ```
