@@ -5,13 +5,11 @@ title: OMMX
 author: Jij Inc.
 logo: ../logo.png
 
-# Force re-execution of notebooks on each build.
+# Notebook execution settings
 # See https://jupyterbook.org/content/execute.html
+# Default is 'off' for fast builds; CI tests use 'force' via --config option
 execute:
-  execute_notebooks: force
-  timeout: 300
-  exclude_patterns:
-    - "release_note/ommx-1.*.md"
+  execute_notebooks: off
 
 # Define the name of the latex output file for PDF builds
 latex:

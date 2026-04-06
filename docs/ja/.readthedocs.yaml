@@ -9,10 +9,10 @@ build:
     python: "3.12"
     nodejs: "22"
   commands:
-    # Install jupyter-book only (no ommx packages needed since we skip execution)
+    # Install jupyter-book only (no ommx packages needed since execution is off by default)
     - pip install "jupyter-book>=1.0.3,<2"
-    # Build without executing code cells (CI verifies code execution separately)
-    - NB_EXECUTION_MODE=off jupyter-book build docs/ja
+    # Build (code execution is off by default, tested in CI)
+    - jupyter-book build docs/ja
     # Move output to RTD expected location
     - mkdir -p $READTHEDOCS_OUTPUT/html
     - cp -r docs/ja/_build/html/* $READTHEDOCS_OUTPUT/html/

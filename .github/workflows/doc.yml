@@ -34,11 +34,9 @@ jobs:
       - name: Jupyter Book
         env:
           GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
-          NB_EXECUTION_MODE: "off"
         run: |
           # Replace GA4_TRACKING_ID placeholder with actual value from secrets
-          # Using | as delimiter to avoid issues with / in the GA4 ID
-          # Code execution is skipped (tested in python.yml book-test job)
+          # Code execution is off by default (tested in python.yml test-ci job)
           cd ./docs && \
           sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
           sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
