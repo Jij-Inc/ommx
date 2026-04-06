@@ -68,7 +68,7 @@ To address these data exchange challenges, OMMX was developed. It consists of fo
 
 ### OMMX Message
 
-OMMX Message is a data format defined with [Protocol Buffers](https://protobuf.dev/) to ensure language-agnostic and OS-independent data exchange. It encapsulates schemas for optimization problems ([`ommx.v1.Instance`](./user_guide/instance.ipynb)) and solutions ([`ommx.v1.Solution`](./user_guide/solution.ipynb)). Protocol Buffers allow automatic generation of libraries in many languages, which OMMX SDK provides, especially for Python and Rust.
+OMMX Message is a data format defined with [Protocol Buffers](https://protobuf.dev/) to ensure language-agnostic and OS-independent data exchange. It encapsulates schemas for optimization problems ([`ommx.v1.Instance`](./user_guide/instance.md)) and solutions ([`ommx.v1.Solution`](./user_guide/solution.md)). Protocol Buffers allow automatic generation of libraries in many languages, which OMMX SDK provides, especially for Python and Rust.
 
 Data structures such as `ommx.v1.Instance` are called Messages, and each Message has multiple fields. For example, `ommx.v1.Instance` has the following fields (some are omitted for simplicity):
 
@@ -97,7 +97,7 @@ OMMX Artifact is a metadata-rich package format based on the [OCI (Open Containe
 
 In OCI Artifact, the contents of the package are managed in units called layers. A single container contains multiple layers and metadata called a Manifest. When reading a container, the Manifest is first checked, and the necessary data is extracted by reading the layers based on that information. Each layer is saved as binary data (BLOB) with metadata called [Media Type](https://www.iana.org/assignments/media-types/media-types.xhtml). For example, when saving a PDF file, the Media Type `application/pdf` is attached, so software reading OCI Artifacts can recognize it as a PDF file by looking at the Media Type.
 
-One major benefit of OCI Artifact compatibility is that standard container registries, such as [DockerHub](https://hub.docker.com/) or [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry), can be used to store and distribute data. OMMX uses this mechanism to share large datasets like [MIPLIB 2017](https://miplib.zib.de/), made available at [GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017). For additional details, see [Download MIPLIB Instances](./tutorial/download_miplib_instance.ipynb).
+One major benefit of OCI Artifact compatibility is that standard container registries, such as [DockerHub](https://hub.docker.com/) or [GitHub Container Registry](https://docs.github.com/ja/packages/working-with-a-github-packages-registry/working-with-the-container-registry), can be used to store and distribute data. OMMX uses this mechanism to share large datasets like [MIPLIB 2017](https://miplib.zib.de/), made available at [GitHub Container Registry](https://github.com/Jij-Inc/ommx/pkgs/container/ommx%2Fmiplib2017). For additional details, see [Download MIPLIB Instances](./tutorial/download_miplib_instance.md).
 
 
 
@@ -109,6 +109,20 @@ One major benefit of OCI Artifact compatibility is that standard container regis
 
 ### Solve With Ommx Adapter
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# Solving Optimization Problems with OMMX Adapter
 
 OMMX provides OMMX Adapter software to enable interoperability with existing mathematical optimization tools. By using OMMX Adapter, you can convert optimization problems expressed in OMMX schemas into formats acceptable to other optimization tools, and convert the resulting data from those tools back into OMMX schemas.
 
@@ -121,6 +135,8 @@ First, install OMMX PySCIPOpt Adapter with:
 ```
 pip install ommx-pyscipopt-adapter
 ```
+
++++
 
 ## Two Steps for Running the Optimization
 
@@ -156,10 +172,11 @@ $$
 \end{align*}
 $$
 
++++
+
 Here, we set the following data as parameters for this mathematical model:
 
-
-```python
+```{code-cell} ipython3
 # Data for 0-1 Knapsack Problem
 v = [10, 13, 18, 31, 7, 15]   # Values of each item
 w = [11, 25, 20, 35, 10, 33] # Weights of each item
@@ -169,8 +186,7 @@ N = len(v)  # Total number of items
 
 Based on this mathematical model and data, the code for describing the problem instance using the OMMX Python SDK is as follows:
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 
 # Define decision variables
@@ -211,8 +227,7 @@ instance = Instance.from_components(
 
 To optimize the instance prepared in Step 1, we run the optimization calculation via the OMMX PySCIPOpt Adapter as follows:
 
-
-```python
+```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 # Obtain an ommx.v1.Solution object through a PySCIPOpt model.
@@ -220,6 +235,8 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 ```
 
 The variable `solution` here is an `ommx.v1.Solution` object that contains the results of the optimization calculation by SCIP.
+
++++
 
 ## Analyzing the Results
 
@@ -235,16 +252,13 @@ To do this, we use the properties implemented in the `ommx.v1.Solution` class.
 
 The `decision_variables_df` property returns a `pandas.DataFrame` object containing information on each variable, such as ID, type, name, and value:
 
-
-
-```python
+```{code-cell} ipython3
 solution.decision_variables_df
 ```
 
 Using this `pandas.DataFrame` object, you can easily create a table in pandas that shows, for example, "whether to put items in the knapsack":
 
-
-```python
+```{code-cell} ipython3
 import pandas as pd
 
 df = solution.decision_variables_df
@@ -262,8 +276,7 @@ From this analysis result, we can see that choosing items 0 and 3 maximizes the 
 
 The `objective` property stores the optimal value. In this case, it should be the sum of the values of items 0 and 3:
 
-
-```python
+```{code-cell} ipython3
 import numpy as np
 # The expected value is the sum of the values of items 0 and 3
 expected = v[0] + v[3]
@@ -274,8 +287,7 @@ assert np.isclose(solution.objective, expected)
 
 The `constraints_df` property returns a `pandas.DataFrame` object that includes details about each constraint's equality or inequality, its left-hand-side value (`"value"`), name, and more:
 
-
-```python
+```{code-cell} ipython3
 solution.constraints_df
 ```
 
@@ -295,6 +307,20 @@ the left-hand side "value" is $-1$, indicating there is exactly $1$ unit of slac
 
 ### Tsp Sampling With Openjij Adapter
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# Sampling from QUBO with OMMX Adapter
 
 Here, we explain how to convert a problem to QUBO and perform sampling using the Traveling Salesman Problem as an example.
 
@@ -302,8 +328,7 @@ Here, we explain how to convert a problem to QUBO and perform sampling using the
 
 The Traveling Salesman Problem (TSP) is about finding a route for a salesman to visit multiple cities in sequence. Given the travel costs between cities, we seek to find the path that minimizes the total cost. Let's consider the following city arrangement:
 
-
-```python
+```{code-cell} ipython3
 # From ulysses16.tsp in TSPLIB
 ulysses16_points = [
     (38.24, 20.42),
@@ -327,8 +352,7 @@ ulysses16_points = [
 
 Let's plot the locations of the cities.
 
-
-```python
+```{code-cell} ipython3
 %matplotlib inline
 from matplotlib import pyplot as plt
 
@@ -342,8 +366,7 @@ plt.show()
 
 Let's consider distance as the cost. We'll calculate the distance $d(i, j)$ between city $i$ and city $j$.
 
-
-```python
+```{code-cell} ipython3
 def distance(x, y):
     return ((x[0] - y[0])**2 + (x[1] - y[1])**2)**0.5
 
@@ -377,8 +400,7 @@ $$
 
 The corresponding `ommx.v1.Instance` can be created as follows:
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import DecisionVariable, Instance
 
 x = [[
@@ -422,13 +444,14 @@ instance = Instance.from_components(
 
 The variable names and subscripts added to `DecisionVariable.binary` during creation will be used later when interpreting the obtained samples.
 
++++
+
 
 ## Sampling with OpenJij
 
 To sample the QUBO described by `ommx.v1.Instance` using OpenJij, use the `ommx-openjij-adapter`.
 
-
-```python
+```{code-cell} ipython3
 from ommx_openjij_adapter import OMMXOpenJijSAAdapter
 
 sample_set = OMMXOpenJijSAAdapter.sample(instance, num_reads=16, uniform_penalty_weight=20.0)
@@ -439,27 +462,23 @@ sample_set.summary
 
 To view the feasibility for each constraint, use the `summary_with_constraints` property.
 
-
-```python
+```{code-cell} ipython3
 sample_set.summary_with_constraints
 ```
 
 For more detailed information, you can use the `SampleSet.decision_variables` and `SampleSet.constraints` properties.
 
-
-```python
+```{code-cell} ipython3
 sample_set.decision_variables_df.head(2)
 ```
 
-
-```python
+```{code-cell} ipython3
 sample_set.constraints_df.head(2)
 ```
 
 To obtain the samples, use the `SampleSet.extract_decision_variables` method. This interprets the samples using the `name` and `subscripts` registered when creating `ommx.v1.DecisionVariables`. For example, to get the value of the decision variable named `x` with `sample_id=1`, use the following to obtain it in the form of `dict[subscripts, value]`.
 
-
-```python
+```{code-cell} ipython3
 sample_id = 1
 x = sample_set.extract_decision_variables("x", sample_id)
 t = 2
@@ -469,8 +488,7 @@ x[(t, i)]
 
 Since we obtained a sample for $x_{t, i}$, we convert this into a TSP path. This depends on the formulation used, so you need to write the processing yourself.
 
-
-```python
+```{code-cell} ipython3
 def sample_to_path(sample: dict[tuple[int, ...], float]) -> list[int]:
     path = []
     for t in range(N):
@@ -482,16 +500,14 @@ def sample_to_path(sample: dict[tuple[int, ...], float]) -> list[int]:
 
 Let's display this. First, we obtain the IDs of samples that are feasible for the original problem.
 
-
-```python
+```{code-cell} ipython3
 feasible_ids = sample_set.summary.query("feasible == True").index
 feasible_ids
 ```
 
 Let's display the optimized paths for these samples.
 
-
-```python
+```{code-cell} ipython3
 fig, axie = plt.subplots(3, 3, figsize=(12, 12))
 
 for i, ax in enumerate(axie.flatten()):
@@ -515,6 +531,19 @@ plt.show()
 
 ### Switching Adapters
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
 Solve with multiple adapters and compare the results
 ======================================================
 
@@ -528,8 +557,7 @@ $$
 \end{align*}
 $$
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 
 v = [10, 13, 18, 31, 7, 15]
@@ -557,12 +585,11 @@ instance = Instance.from_components(
 
 Here, we will use OSS adapters developed as a part of OMMX Python SDK.
 For non-OSS solvers, adapters are also available and can be used with the same interface.
-A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.ipynb).
+A complete list of supported adapters for each solver can be found in [Supported Adapters](../user_guide/supported_ommx_adapters.md).
 
 Here, let's solve the knapsack problem with OSS solvers, Highs, SCIP.
 
-
-```python
+```{code-cell} ipython3
 from ommx_highs_adapter import OMMXHighsAdapter
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -583,8 +610,7 @@ solutions = {
 
 Since this knapsack problem is simple, all solvers will find the optimal solution.
 
-
-```python
+```{code-cell} ipython3
 from matplotlib import pyplot as plt
 
 marks = {
@@ -602,8 +628,7 @@ plt.legend()
 
 It would be convenient to concatenate the `pandas.DataFrame` obtained with `decision_variables_df` when analyzing the results of multiple solvers.
 
-
-```python
+```{code-cell} ipython3
 import pandas
 
 decision_variables = pandas.concat([
@@ -619,17 +644,34 @@ decision_variables
 
 ### Share In Ommx Artifact
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# Sharing Various Types of Data in an OMMX Artifact
 
 In mathematical optimization workflows, it is important to generate and manage a variety of data. Properly handling these data ensures reproducible computational results and allows teams to share information efficiently.
 
 OMMX provides a straightforward and efficient way to manage different data types. Specifically, it defines a data format called an OMMX Artifact, which lets you store, organize, and share various optimization data through the OMMX SDK.
 
++++
+
 ## Preparation: Data to Share
 
 First, let's prepare the data we want to share. We will create an `ommx.v1.Instance` representing the 0-1 knapsack problem and solve it using SCIP. We will also share the results of our optimization analysis. Details are omitted for brevity.
 
+```{code-cell} ipython3
+:tags: [hide-input]
 
-```python
 from ommx.v1 import Instance, DecisionVariable, Constraint
 from ommx_pyscipopt_adapter.adapter import OMMXPySCIPOptAdapter
 import pandas as pd
@@ -699,8 +741,9 @@ df = pd.DataFrame.from_dict(
 )
 ```
 
+```{code-cell} ipython3
+:tags: [remove-cell]
 
-```python
 from myst_nb import glue
 
 glue("instance", instance, display=False)
@@ -737,12 +780,15 @@ glue("df", df, display=False)
   - {glue:}`df`
 ```
 
++++
+
 ## Creating an OMMX Artifact as a File
 
 OMMX Artifacts can be managed as files or by assigning them container-like names. Here, we'll show how to save the data as a file. Using the OMMX SDK, we'll store the data in a new file called `my_instance.ommx`. First, we need an `ArtifactBuilder`.
 
+```{code-cell} ipython3
+:tags: [remove-output]
 
-```python
 import os
 from ommx.artifact import ArtifactBuilder
 
@@ -768,8 +814,7 @@ builder = ArtifactBuilder.new_archive_unnamed(filename)
 
 Regardless of the initialization method, you can save `ommx.v1.Instance` and other data in the same way. Let's add the data prepared above.
 
-
-```python
+```{code-cell} ipython3
 # Add ommx.v1.Instance object
 desc_instance = builder.add_instance(instance)
 
@@ -785,8 +830,7 @@ desc_json = builder.add_json(data, title="Data of Knapsack Problem")
 
 In OMMX Artifacts, data is stored in layers, each with a dedicated media type. Functions like `add_instance` automatically set these media types and add layers. These functions return a `Description` object with information about each created layer.
 
-
-```python
+```{code-cell} ipython3
 desc_json.to_dict()
 ```
 
@@ -794,27 +838,26 @@ The part added as `title="..."` in `add_json` is saved as an annotation of the l
 
 Finally, call `build` to save it to a file.
 
-
-```python
+```{code-cell} ipython3
 # 3. Create the OMMX Artifact file
 artifact = builder.build()
 ```
 
 This `artifact` is the same as the one that will be explained in the next section, which is the one you just saved. Let's check if the file has been created:
 
-
-```python
+```{code-cell} ipython3
 ! ls $filename
 ```
 
 Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
 
++++
+
 ## Read OMMX Artifact file
 
 Next, let's read the OMMX Artifact we saved. When loading an OMMX Artifact in archive format, use [`Artifact.load_archive`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.load_archive).
 
-
-```python
+```{code-cell} ipython3
 from ommx.artifact import Artifact
 
 # Load the OMMX Artifact file locally
@@ -823,8 +866,7 @@ artifact = Artifact.load_archive(filename)
 
 OMMX Artifacts store data in layers, with a manifest (catalog) that details their contents. You can check the `Descriptor` of each layer, including its Media Type and annotations, without reading the entire archive.
 
-
-```python
+```{code-cell} ipython3
 import pandas as pd
 
 # Convert to pandas.DataFrame for better readability
@@ -838,13 +880,13 @@ pd.DataFrame({
 
 For instance, to retrieve the JSON in layer 3, use [`Artifact.get_json`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact.get_json). This function confirms that the Media Type is `application/json` and reinstates the bytes into a Python object.
 
-
-```python
+```{code-cell} ipython3
 artifact.get_json(artifact.layers[3])
 ```
 
+```{code-cell} ipython3
+:tags: [remove-cell]
 
-```python
 # Remove the created OMMX Artifact file to clean up
 ! rm $filename
 ```
@@ -855,6 +897,20 @@ artifact.get_json(artifact.layers[3])
 
 ### Download Miplib Instance
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx
+  language: python
+  name: python3
+---
+
+# Downloading a MIPLIB Instance
 
 The OMMX repository provides mixed-integer programming benchmark instances from MIPLIB 2017 in OMMX Artifact format.
 
@@ -872,8 +928,7 @@ For example, to solve the neos-1122047 instance from MIPLIB 2017 ([reference](ht
 
 Here is a sample Python code:
 
-
-```python
+```{code-cell} ipython3
 # OMMX Python SDK
 from ommx import dataset
 # OMMX PySCIPOpt Adapter
@@ -888,12 +943,13 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 This functionality makes it easy to run benchmark tests on multiple OMMX-compatible solvers using the same MIPLIB instances.
 
++++
+
 ## Note about Annotations with the Instance
 
 The downloaded instance includes various annotations accessible via the `annotations` property:
 
-
-```python
+```{code-cell} ipython3
 import pandas as pd
 # Display annotations in tabular form using pandas
 pd.DataFrame.from_dict(instance.annotations, orient="index", columns=["Value"]).sort_index()
@@ -917,17 +973,14 @@ MIPLIB-specific annotations are prefixed with `org.ommx.miplib.*`.
 
 For example, the optimal objective of the neos-1122047 instance is `161`, which you can check with the key `org.ommx.miplib.objective`:
 
-
-
-```python
+```{code-cell} ipython3
 # Note that the values of annotations are all strings (str)!
 instance.annotations["org.ommx.miplib.objective"]
 ```
 
 Thus, we can verify that the optimization result from the OMMX PySCIPOpt Adapter matches the expected optimal value.
 
-
-```python
+```{code-cell} ipython3
 import numpy as np
 
 best = float(instance.annotations["org.ommx.miplib.objective"])
@@ -940,6 +993,20 @@ assert np.isclose(solution.objective, best)
 
 ### Download Qplib Instance
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx
+  language: python
+  name: python3
+---
+
+# Downloading a QPLIB Instance
 
 The OMMX repository provides quadratic programming benchmark instances from QPLIB in OMMX Artifact format.
 
@@ -959,8 +1026,7 @@ For example, to solve the QPLIB_3514 instance ([reference](http://qplib.zib.de/Q
 
 Here is a sample Python code:
 
-
-```python
+```{code-cell} ipython3
 # OMMX Python SDK
 from ommx import dataset
 # OMMX PySCIPOpt Adapter
@@ -975,12 +1041,13 @@ solution = OMMXPySCIPOptAdapter.solve(instance)
 
 This makes it easy to benchmark quadratic programming solvers using the same QPLIB instances.
 
++++
+
 ## Note about Annotations with the Instance
 
 The downloaded instance includes various annotations accessible via the `annotations` property:
 
-
-```python
+```{code-cell} ipython3
 import pandas as pd
 # Display annotations in tabular form using pandas
 pd.DataFrame.from_dict(instance.annotations, orient="index", columns=["Value"]).sort_index()
@@ -1008,8 +1075,7 @@ For detailed information about all available QPLIB annotations and their meaning
 
 For example, you can check the problem type and objective curvature of the QPLIB instance:
 
-
-```python
+```{code-cell} ipython3
 # QPLIB-specific annotations
 print(f"Problem type: {instance.annotations['org.ommx.qplib.probtype']}")
 print(f"Objective type: {instance.annotations['org.ommx.qplib.objtype']}")
@@ -1024,6 +1090,20 @@ print(f"Number of constraints: {instance.annotations['org.ommx.qplib.ncons']}")
 
 ### Implement Adapter
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# Implementing an OMMX Adapter
 
 As mentioned in [Solve with multiple adapters and compare the results](../tutorial/switching_adapters), OMMX Adapters have a common API. This common API is realized by inheriting the abstract base classes provided by the OMMX Python SDK. OMMX provides two abstract base classes depending on the type of adapter:
 
@@ -1062,8 +1142,7 @@ For this tutorial, we will proceed in the following order to make it easier to e
 
 First, it is good to define custom exceptions. This makes it easier for users to understand which part is causing the problem when an exception occurs.
 
-
-```python
+```{code-cell} ipython3
 class OMMXPySCIPOptAdapterError(Exception):
     pass
 ```
@@ -1074,8 +1153,7 @@ OMMX can store a wide range of optimization problems, so there may be cases wher
 
 PySCIPOpt manages decision variables by name, so register the OMMX decision variable IDs as strings. This allows you to reconstruct `ommx.v1.State` from PySCIPOpt decision variables in the `decode_to_state` function mentioned later. Note that the appropriate method depends on the backend solver's implementation. The important thing is to retain the information needed to convert to `ommx.v1.State` after obtaining the solution.
 
-
-```python
+```{code-cell} ipython3
 import pyscipopt
 from ommx.v1 import Instance, Solution, DecisionVariable, Constraint, State, Function
 
@@ -1119,8 +1197,7 @@ def set_decision_variables(
 
 Implement a function to convert `ommx.v1.Function` to `pyscipopt.Expr`. Since `ommx.v1.Function` only has the OMMX decision variable IDs, you need to obtain the PySCIPOpt variables from the IDs using the variable name and variable mapping created in `set_decision_variables`.
 
-
-```python
+```{code-cell} ipython3
 def make_linear_expr(function: Function, varname_map: dict) -> pyscipopt.Expr:
     """Helper function to generate a linear expression"""
     return (
@@ -1153,8 +1230,7 @@ def make_quadratic_expr(function: Function, varname_map: dict) -> pyscipopt.Expr
 
 Add the objective function and constraints to the `pyscipopt.Model`. This part requires knowledge of what and how the backend solver supports. For example, in the following code, since PySCIPOpt cannot directly handle quadratic objective functions, an auxiliary variable is introduced according to the [PySCIPOpt documentation](https://pyscipopt.readthedocs.io/en/latest/tutorials/expressions.html#non-linear-objectives).
 
-
-```python
+```{code-cell} ipython3
 import math
 
 def set_objective(model: pyscipopt.Model, instance: Instance, varname_map: dict):
@@ -1257,8 +1333,7 @@ Next, implement a function to convert the solution obtained by solving the PySCI
 Note that `ommx.adapter.InfeasibleDetected` means that the optimization problem itself is infeasible, i.e., **it is guaranteed to have no solutions**. Do not use this when a heuristic solver fails to find any feasible solutions.
 ```
 
-
-```python
+```{code-cell} ipython3
 from ommx.adapter import InfeasibleDetected, UnboundedDetected
 
 def decode_to_state(model: pyscipopt.Model, instance: Instance) -> State:
@@ -1324,8 +1399,7 @@ This abstract base class assumes the following two use cases:
 
 Using the functions prepared so far, you can implement it as follows:
 
-
-```python
+```{code-cell} ipython3
 from ommx.adapter import SolverAdapter
 
 class OMMXPySCIPOptAdapter(SolverAdapter):
@@ -1402,8 +1476,7 @@ You can add parameter arguments in the inherited class in Python, so you can def
 
 For verification, let's solve a knapsack problem using this.
 
-
-```python
+```{code-cell} ipython3
 v = [10, 13, 18, 31, 7, 15]
 w = [11, 25, 20, 35, 10, 33]
 W = 47
@@ -1439,8 +1512,7 @@ OpenJij manages decision variables with IDs that are not necessarily sequential,
 
 The sample results from OpenJij are obtained as `openjij.Response`, so implement a function to convert this to `ommx.v1.Samples`. OpenJij returns the number of occurrences of the same sample as `num_occurrence`. On the other hand, `ommx.v1.Samples` has unique sample IDs for each sample, and the same value samples are compressed as `SamplesEntry`. Note that a conversion is needed to bridge this difference.
 
-
-```python
+```{code-cell} ipython3
 import openjij as oj
 from ommx.v1 import Instance, SampleSet, Solution, Samples, State
 
@@ -1489,8 +1561,7 @@ class SamplerAdapter(SolverAdapter):
 
 `SamplerAdapter` inherits from `SolverAdapter`, so you might think you need to implement `solve` and other `@abstractmethod`. However, since `SamplerAdapter` has a function to return the best sample using `sample`, it is sufficient to implement only `sample`. If you want to implement a more efficient implementation yourself, override `solve`.
 
-
-```python
+```{code-cell} ipython3
 from ommx.adapter import SamplerAdapter
 
 class OMMXOpenJijSAAdapter(SamplerAdapter):
@@ -1562,8 +1633,7 @@ $$
 \end{align*}
 $$
 
-
-```python
+```{code-cell} ipython3
 x = [DecisionVariable.binary(id, name="x", subscripts=[id]) for id in range(2)]
 instance = Instance.from_components(
     decision_variables=x,
@@ -1600,6 +1670,16 @@ For more detailed implementation examples, refer to the repositories such as [om
 
 ### Supported Ommx Adapters
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+---
+
+# Supported OMMX Adapters
 To solve mathematical optimization problems described in OMMX using solvers, it is necessary to convert them into data structures that conform to the solver's specifications. OMMX Adapters play this conversion role. Since specifications differ for each solver, there exists an adapter for each solver.
 
 ## Adapters for OSS solvers/samplers
@@ -1624,8 +1704,11 @@ Non-OSS solvers/samplers are also supported in other repositories.
 | [ommx-kipu-iskay-adapter](https://github.com/Jij-Inc/ommx-kipu-iskay-adapter) | [](https://pypi.org/project/ommx-kipu-iskay-adapter/) | Adapter for [Kipu Iskay through Qiskit Functions Catalog](https://quantum.cloud.ibm.com/docs/en/guides/kipu-optimization) |
 | [ommx-qctrl-qaoa-adapter](https://github.com/Jij-Inc/ommx-qctrl-qaoa-adapter) | [](https://pypi.org/project/ommx-qctrl-qaoa-adapter/) | Adapter for [Fire Opal QAOA Solver](https://docs.q-ctrl.com/fire-opal/execute/run-algorithms/solve-optimization-problems/fire-opals-qaoa-solver) |
 
-
-```python
+```{code-cell}
+---
+vscode:
+  languageId: plaintext
+---
 
 ```
 
@@ -1635,6 +1718,20 @@ Non-OSS solvers/samplers are also supported in other repositories.
 
 ### Adapter Initial State
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# How to Use the Initial Solution with OMMX Adapters
 
 Some OMMX Adapters support providing initial solutions when executing optimization calculations.
 Here, we'll introduce this feature using OMMXPySCIPOptAdapter as an example. By providing an initial solution, the solver does not need to construct an initial feasible solution by itself, which can sometimes improve the performance of optimization calculations.
@@ -1645,8 +1742,7 @@ The initial solution (`initial_state`) that can be provided is of type `ToState`
 
 We'll demonstrate how to provide an initial solution using the following instance:
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable, State
 
 x = DecisionVariable.integer(1, lower=0, upper=5)
@@ -1662,8 +1758,7 @@ ommx_instance = Instance.from_components(
 
 Example of initial solution using `ommx.v1.State`
 
-
-```python
+```{code-cell} ipython3
 initial_state = State(
     entries={
         1: 3.0,
@@ -1674,8 +1769,7 @@ initial_state = State(
 
 Example of initial solution using `Mapping[int, float]`
 
-
-```python
+```{code-cell} ipython3
 initial_state = {
     1: 3.0,
     2: 2.0,
@@ -1684,8 +1778,7 @@ initial_state = {
 
 As shown below, you can run the optimization with an initial solution by providing `initial_state` as an argument to the solve function:
 
-
-```python
+```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 solution = OMMXPySCIPOptAdapter.solve(
@@ -1696,8 +1789,7 @@ solution = OMMXPySCIPOptAdapter.solve(
 
 If you need to tune the solver, you can directly use the OMMXPySCIPOptAdapter class to set solver parameters. In this case, you can also provide `initial_state` as an argument as shown below:
 
-
-```python
+```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
 adapter = OMMXPySCIPOptAdapter(
@@ -1711,8 +1803,7 @@ adapter = OMMXPySCIPOptAdapter(
 Using the `roll3000` instance from MIPLIB, let's compare the performance differences with and without an initial solution.
 For the initial solution, we'll use a feasible solution (not an optimal one) that was prepared in advance.
 
-
-```python
+```{code-cell} ipython3
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 from ommx import dataset
 
@@ -1722,8 +1813,7 @@ ommx_instance = dataset.miplib2017("roll3000")
 
 ### Without an initial solution
 
-
-```python
+```{code-cell} ipython3
 import time
 
 start = time.perf_counter()
@@ -1738,15 +1828,13 @@ print(f"Execution Time: {duration}")
 
 For this tutorial, we'll use the following initial solution obtained in advance:
 
-
-```python
+```{code-cell} ipython3
 initial_state = {257: -1.84297022087776e-14, 703: 0.0, 531: -4.6407322429331543e-14, 1052: -9.621932880084689e-15, 360: 0.0, 175: 0.0, 507: 11.000000000000002, 301: 0.0, 937: 3.0000000000000044, 859: 0.0, 564: -3.1086244689504383e-15, 557: -4.6407322429331543e-14, 205: 0.0, 617: 1.3322676295501878e-14, 162: 0.0, 811: 0.0, 759: 3.1086244689503373e-15, 682: 0.0, 987: 0.0, 1013: 0.0, 536: 0.9999999999998973, 189: 0.0, 540: -4.440892098500626e-15, 1135: 0.0, 1163: 0.0, 526: 0.0, 7: -5.362970457884017e-15, 83: 2.0, 606: 0.0, 677: 1.000000000000089, 935: 0.0, 224: 0.0, 824: -5.551115123115685e-17, 161: 0.0, 671: 0.9999999999999867, 1075: 0.0, 1147: 4.440892098500626e-15, 107: -2.6645352591003757e-15, 807: 0.0, 836: 0.0, 1110: 0.0, 1143: 0.0, 84: 0.0, 368: 4.218847493575595e-14, 639: 0.0, 663: 0.0, 171: 0.0, 423: 3.0000000000001226, 730: 0.0, 21: 0.0, 931: -8.881784197001252e-15, 611: 2.842170943040401e-14, 833: 0.0, 435: 4.000000000000141, 410: 0.0, 505: 3.000000000000361, 198: 0.0, 262: 0.0, 76: 0.0, 620: -8.881784197001252e-15, 616: 0.0, 95: -3.887299665209862e-15, 291: 0.0, 748: 2.842170943040401e-14, 822: 1.1435297153639112e-14, 450: 0.0, 61: 0.0, 1003: 3.999999999999979, 845: 2.000000000000089, 124: 0.9999999999999991, 1031: 0.0, 716: 0.0, 948: 5.999999999999996, 821: 0.0, 493: 0.0, 212: 0.0, 34: 0.0, 136: 2.999999999999928, 20: 1.0000000000000009, 701: -8.881784197001252e-15, 839: 0.0, 246: 0.0, 282: 0.0, 919: 0.0, 418: 0.0, 967: 0.0, 1099: 0.0, 458: 0.0, 342: 0.0, 452: 0.0, 637: 0.0, 233: 3.000000000000105, 138: 0.0, 857: 1.000000000000047, 487: -2.6645352591003757e-15, 275: 0.0, 964: 3.0000000000000124, 447: 1.0, 622: 0.0, 877: 0.0, 242: 0.0, 596: 0.0, 854: -1.865174681370263e-14, 153: 1.0000000000000286, 478: 0.0, 679: 2.9999999999999494, 1125: 0.0, 612: 0.0, 975: 0.0, 943: 0.0, 1009: 0.0, 829: 0.0, 400: 0.0, 321: 0.0, 1054: 1.865174681370263e-14, 1159: 1.9999999999999867, 471: -3.1086244689504383e-15, 797: -2.7533531010703882e-14, 1074: -4.3520742565306136e-14, 714: -3.019806626980426e-14, 1162: 0.0, 299: 0.0, 645: 0.0, 71: 0.0, 858: 5.000000000000172, 306: 1.0, 861: 1.84297022087776e-14, 172: 0.0, 1028: 8.881784197001252e-16, 808: 0.0, 1114: 3.9999999999999725, 134: 4.440892098500626e-14, 646: 0.0, 1080: 10.0, 393: -2.4868995751603507e-14, 55: 0.0, 110: 0.0, 949: 3.0531133177191805e-15, 373: 0.0, 456: 0.0, 856: -4.440892098500625e-16, 708: 0.0, 430: 0.0, 560: 0.0, 1017: 2.930988785010413e-14, 243: 1.887379141862766e-14, 971: 2.0000000000000666, 402: 0.9999999999999574, 37: 0.0, 324: 1.000000000000021, 1030: 0.0, 984: 0.0, 749: 8.881784197001252e-15, 250: 0.0, 472: 0.0, 177: 1.0000000000000315, 82: 7.105427357601002e-15, 333: 0.0, 1096: -1.0725940915768033e-14, 372: 4.884981308350689e-14, 140: 0.0, 652: 0.0, 60: 0.0, 316: 0.0, 785: 0.0, 432: 0.0, 401: 0.0, 513: 0.0, 309: 0.0, 633: 1.9999999999999853, 951: 0.0, 481: 3.7192471324942744e-14, 240: 1.000000000000007, 599: 0.0, 685: 0.0, 610: 0.0, 690: 0.9999999999999996, 500: 0.0, 252: 0.0, 603: 0.0, 853: 1.0000000000000089, 519: 0.0, 827: 2.0, 823: 7.000000000000012, 602: 0.0, 578: 0.0, 1064: -4.3520742565306136e-14, 215: 8.881784197001252e-16, 85: 0.0, 583: 0.0, 650: -8.926193117986259e-14, 517: 0.0, 412: 0.0, 609: 0.0, 1133: 1.9999999999999196, 1079: 0.0, 576: 0.0, 803: 0.0, 832: 0.0, 1066: 4.1744385725905886e-14, 694: 1.0, 408: 0.0, 315: 0.0, 783: 0.0, 1127: 0.0, 998: 0.0, 462: 1.0, 1034: 0.0, 678: 1.687538997430238e-14, 454: 0.0, 511: 0.0, 925: 0.0, 707: -3.647082635893639e-14, 411: 0.0, 618: 0.0, 46: 1.000000000000011, 891: 0.0, 740: 0.0, 121: 0.0, 2: 0.0, 459: 0.9999999999999853, 774: 0.0, 339: 1.0000000000000115, 334: 0.0, 669: -7.993605777301127e-15, 255: 0.0, 390: 0.0, 587: 1.000000000000007, 835: 0.0, 133: -1.7985612998927536e-14, 396: 0.0, 341: 0.0, 382: 2.999999999999912, 428: 0.0, 761: 2.220446049250313e-15, 99: 0.0, 156: 0.0, 589: 198.99999999999935, 621: 1.0000000000000009, 510: -9.386431026376354e-16, 687: 0.0, 1156: 0.0, 915: 2.842170943040401e-14, 1051: 0.0, 328: 0.0, 882: 0.0, 258: -1.84297022087776e-14, 1158: 0.0, 995: 1.9999999999999565, 636: -9.175151694187626e-17, 966: -3.1086244689504383e-15, 199: 0.0, 781: 0.0, 754: 0.0, 249: -2.6645352591003757e-15, 969: 0.0, 985: 0.0, 1055: 0.0, 961: 0.0, 141: 2217.9999999999973, 641: 0.0, 607: 0.0, 973: -3.887299665209862e-15, 630: 2.930988785010413e-14, 444: 1.0, 689: 0.0, 89: 0.0, 41: 0.0, 126: 0.0, 69: 0.0, 343: -5.362970457884017e-15, 1021: 0.0, 466: 1.0, 217: -8.881784197001252e-16, 902: 0.0, 604: 67.00000000000283, 539: 1.0047518372857667e-13, 876: 0.0, 534: 0.0, 414: 0.0, 720: 0.0, 911: 0.0, 1070: 0.0, 23: 0.0, 798: 0.0, 1142: -3.1086244689504383e-15, 791: 0.0, 119: 0.0, 615: 1.0, 795: 1.0, 417: 0.0, 59: -9.2148511043888e-15, 755: 1.0000000000000009, 286: 1.9999999999999485, 760: 0.0, 194: 2.0000000000001297, 139: 0.0, 533: 1.0, 608: 0.0, 463: 1.0000000000000364, 965: 5.000000000000172, 665: 0.0, 886: 0.0, 1145: 0.0, 326: 0.0, 453: 0.0, 1104: -1.5765166949677223e-14, 844: 0.0, 903: 0.0, 144: 0.0, 1023: 0.0, 775: 0.0, 884: 0.0, 739: 0.0, 776: 0.0, 308: -8.881784197001252e-15, 851: 4.218847493575595e-15, 294: 0.0, 247: 0.0, 1062: 1.0000000000000364, 125: 1.0000000000000102, 446: 0.0, 366: 0.0, 64: 0.0, 268: 0.0, 757: 0.0, 168: 0.0, 303: 0.0, 688: -2.6645352591003757e-15, 490: 0.0, 590: 0.0, 195: -3.1086244689504383e-15, 506: 1.3322676295501878e-14, 152: 0.0, 380: 1.0, 421: 1.0, 216: 0.0, 327: 0.0, 1015: 0.0, 312: 0.0, 1032: 0.0, 743: 1.0, 1040: 0.0, 176: 0.0, 376: 0.0, 314: 0.0, 165: 0.0, 159: 0.0, 1071: 1.0, 67: 0.0, 1121: -8.722144284963535e-15, 386: 0.9999999999999867, 696: 1.0000000000000004, 538: 0.0, 214: 0.0, 710: 0.0, 515: 0.0, 1082: -1.1102230246251565e-16, 979: 0.0, 94: -5.2004562015845005e-15, 527: 0.0, 102: 0.0, 982: 0.0, 100: 3.0000000000000124, 123: 0.0, 483: 0.0, 167: 1.0, 537: 0.0, 686: 0.0, 280: 3.9999999999999956, 293: 0.0, 672: 151.9999999999999, 191: 0.0, 896: 0.0, 997: 0.0, 92: 0.0, 873: 0.0, 237: 1.0000000000000102, 26: 0.0, 732: -6.217248937900877e-15, 469: 1.0, 959: 0.0, 485: 3.000000000000033, 974: 0.0, 799: 0.0, 750: 0.0, 43: 1.0, 711: 161.9999999999928, 548: 0.0, 362: 0.0, 787: 0.0, 244: 0.0, 24: 0.0, 96: 1.0000000000000284, 588: 0.0, 908: 0.0, 626: 0.0, 762: 0.9999999999999916, 234: 0.0, 1004: 0.0, 489: 0.0, 379: 2.9999999999998863, 651: 0.0, 623: 1.4210854715202004e-14, 1025: 1.0, 488: 0.0, 940: -2.6513460148478883e-14, 461: 0.0, 862: 0.0, 529: 3.197442310920451e-14, 8: 0.0, 950: 1.0000000000000158, 544: 0.0, 499: 0.0, 27: 29.99999999999986, 613: 0.9999999999998973, 521: 0.0, 993: 0.0, 784: -1.4223963249031613e-16, 10: 0.0, 477: -1.3322676295501877e-15, 747: 9.947598300641403e-14, 929: 0.0, 1018: 0.0, 986: 0.0, 562: 0.0, 185: 0.0, 594: 0.0, 726: 0.0, 129: -2.752545508256288e-16, 1024: 1.0000000000001048, 356: 0.9999999999999707, 201: 0.0, 455: 0.0, 436: 0.9999999999999707, 14: -8.548717289613705e-15, 354: 12889.999999999976, 498: 0.0, 860: 0.0, 643: 0.0, 12: -2.6645352591003757e-15, 468: 32.000000000000014, 605: 1.0000000000000278, 190: 0.0, 359: 0.0, 614: 0.0, 289: 0.0, 1022: 0.0, 434: 0.0, 479: -1.5765166949677223e-14, 572: 1.3322676295501878e-14, 1014: 0.0, 114: 0.0, 737: 0.0, 348: 2.1316282072803006e-14, 265: 0.0, 741: -5.400124791776761e-13, 169: 0.0, 825: 0.0, 1049: 4.440892098500626e-15, 561: 0.0, 1044: 0.0, 358: 0.9999999999999831, 1085: 2.999999999999983, 920: -8.881784197002262e-16, 281: 0.0, 1043: 0.0, 654: 0.0, 901: -1.6241245636507983e-14, 648: 2.9999999999999414, 397: -4.440892098500626e-15, 907: 197.00000000000014, 1124: 0.0, 1063: 1.0, 697: 0.0, 1086: 4.000000000000141, 728: -4.2549297418759124e-14, 403: 0.0, 6: 0.0, 913: 0.0, 228: 1.0047518372857667e-13, 442: 8.881784197001252e-16, 994: 0.0, 208: 0.0, 815: 0.0, 698: 0.0, 518: 0.0, 197: -1.021405182655144e-14, 934: 2.999999999999903, 591: -1.0725940915768033e-14, 439: 0.0, 443: 0.0, 1047: 0.0, 894: -3.7192471324942744e-15, 184: 0.0, 1128: 0.0, 70: 0.0, 492: 0.0, 782: 1.2156942119645464e-14, 516: 0.0, 1151: 0.0, 1097: 95.0, 101: 1.7763568394002505e-14, 976: 0.0, 352: 0.0, 151: 4.3115457266996746e-17, 270: 0.0, 1073: -3.4181831865424275e-16, 751: 0.0, 864: 0.0, 351: 0.0, 939: 0.0, 433: 0.0, 756: -4.440892098500627e-16, 30: 0.0, 166: 1.2156942119645464e-14, 955: 0.0, 241: 0.9999999999999999, 1132: 0.0, 658: 0.0, 1036: 0.0, 887: 279.9999999999998, 866: 4.063416270128073e-14, 311: 0.0, 655: 0.0, 753: 2.0, 35: 0.0, 962: 0.0, 385: -1.1435297153639112e-14, 335: 0.9999999999999987, 1057: 0.0, 674: 1.0000000000000884, 388: 1.0, 921: 1.9999999999999498, 264: 0.0, 972: 8.881784197001252e-15, 75: -8.881784197002262e-16, 15: 0.0, 344: 0.0, 528: 0.0, 780: 0.0, 1134: 0.0, 530: 0.0, 44: 0.0, 135: 2.968534766042603e-14, 771: 0.0, 649: 0.0, 1093: 0.0, 220: 0.0, 898: -3.647082635893639e-14, 305: 0.0, 1140: 0.0, 395: 0.0, 870: -3.019806626980426e-14, 905: 1.0000000000000435, 1008: 0.9999999999999813, 837: -5.2004562015845005e-15, 1011: 1.865174681370263e-14, 63: 0.0, 1006: 0.0, 673: 1.4210854715202004e-14, 960: 0.0, 627: 0.0, 378: 0.0, 399: 0.0, 132: 0.0, 475: 0.0, 319: 0.0, 735: 2.6513460148478883e-14, 4: 0.0, 419: 0.0, 1077: 3.9999999999999485, 582: 1.000000000000011, 550: 0.0, 881: 9.769962616701378e-15, 371: 1.0000000000000469, 676: 0.0, 553: 1.0, 229: 0.0, 155: 0.0, 1060: 0.0, 988: 0.0, 644: 7.993605777301127e-15, 357: 0.0, 638: 0.0, 56: -7.105427357601002e-15, 802: 0.0, 834: 0.0, 1045: 8.881784197001252e-16, 3: 0.0, 496: 0.0, 290: 0.0, 922: 0.0, 186: 0.0, 868: 0.0, 457: 0.0, 480: 0.0, 248: 0.9999999999999981, 1105: 0.0, 661: 2.220446049250313e-14, 106: 0.0, 1103: -8.881784197001252e-15, 1026: 0.0, 266: 1.0000000000000007, 424: 0.0, 956: 0.0, 778: 0.0, 668: 0.0, 325: 0.0, 692: 1.0047518372857667e-13, 952: 8.000000000000055, 323: 1.865174681370263e-14, 695: 0.9999999999999929, 942: 0.0, 374: 2.220446049250313e-15, 188: 0.0, 1107: 0.0, 712: 0.0, 767: 0.0, 150: -2.0261570199409107e-14, 938: 0.9999999999999991, 187: -1.3377022877126888e-14, 543: 0.0, 1102: 1.0000000000000018, 300: 0.0, 916: 1.0000000000000302, 330: -2.6645352591003757e-14, 36: 0.0, 1078: 0.0, 532: 1.0, 888: 30.000000000000682, 1067: 0.0, 347: 0.0, 429: 0.9999999999999999, 448: 0.0, 437: 0.0, 1095: 0.0, 284: 1.0, 431: 0.0, 9: 1.3322676295501878e-14, 725: 1.000000000000089, 1098: 0.0, 451: 1.9999999999999565, 81: 0.0, 667: 1.000000000000011, 570: -8.881784197001252e-16, 779: 9.202150330924782e-17, 54: 0.0, 22: 0.0, 404: 0.0, 235: 0.0, 542: 0.0, 118: 0.0, 805: 0.0, 398: 0.0, 878: 0.0, 226: -1.3377022877126888e-14, 78: 3.999999999999904, 909: -7.993605777301127e-15, 1012: 0.0, 814: 0.0, 524: 3.0000000000000115, 238: 0.0, 566: -2.6645352591003757e-15, 554: 0.0, 675: 0.0, 923: 0.0, 874: 0.0, 559: 0.0, 1154: 0.0, 1089: 1.7763568394002505e-15, 551: 0.0, 391: 0.0, 883: 0.0, 203: 0.0, 285: 1.999999999999993, 269: 0.0, 792: 1.0, 659: 0.0, 160: 2.000000000000005, 279: 0.0, 148: 2.0000000000000187, 702: 7.105427357601002e-15, 80: 0.0, 555: 0.0, 11: 0.0, 958: 0.0, 473: 0.0, 182: 0.0, 1138: 0.0, 427: 0.0, 231: 3.0000000000000213, 926: 0.0, 895: 0.0, 968: 0.0, 954: 0.0, 389: 0.0, 223: -5.684341886080802e-14, 329: 1.0, 800: 3.730349362740526e-14, 164: 0.0, 1058: 0.0, 1029: 0.0, 773: 0.0, 790: 0.0, 58: 0.0, 597: 0.0, 547: 0.0, 812: 0.0, 1002: -8.750737653510993e-14, 340: 4.999999999999949, 1094: 0.9999999999999973, 625: 2.9999999999999893, 804: 0.9999999999999996, 1088: 1.9999999999999885, 345: 1.000000000000089, 717: 1.000000000000031, 558: 0.0, 304: 0.9999999999999901, 867: 8.000000000000055, 253: 33.00000000000008, 765: 0.0, 1117: 0.0, 927: 2.9999999999999627, 202: 0.0, 1007: 0.0, 1108: 0.0, 355: 0.0, 1150: 0.0, 917: 4.999999999999981, 387: 8.43769498715119e-15, 632: 0.0, 192: 0.0, 1139: 0.0, 1160: 1.9999999999999898, 1141: 0.0, 843: 0.0, 48: 2.999999999999967, 830: 137.99999999999926, 1122: 0.0, 245: -1.0502709812953981e-13, 120: 0.0, 349: 0.0, 17: 9.2148511043888e-15, 642: 0.0, 200: 1.0, 912: 2.0000000000000187, 699: 238.00000000000003, 1129: 0.0, 724: 0.0, 992: 3.064215547965432e-14, 112: 0.0, 416: 187.00000000000009, 684: 0.0, 706: 0.0, 174: 4.000000000000132, 546: 0.0, 97: 0.0, 465: 2.3426113579956395e-16, 298: 0.0, 445: 0.9999999999999902, 733: 1.000000000000089, 1090: 0.0, 86: 0.0, 422: 0.0, 236: 0.0, 318: 8.43769498715119e-15, 232: 0.0, 31: 0.0, 273: 0.0, 810: 0.0, 764: 0.0, 1119: 0.9999999999999971, 1048: 0.0, 872: 15.000000000000012, 818: 0.0, 1101: 0.0, 653: 1.0, 384: 0.0, 297: 0.0, 777: -1.7985612998927536e-14, 145: -2.0261570199409107e-14, 127: -8.881784197001252e-16, 79: 0.0, 953: 0.0, 73: 0.0, 90: -8.881784197001252e-15, 363: 0.0, 502: 0.0, 227: -8.548717289613705e-15, 525: 2601.999999999994, 251: 0.0, 98: 2.842170943040401e-14, 211: 0.0, 13: 0.0, 470: 1.9999999999999947, 108: 0.0, 1136: 0.0, 310: 0.0, 426: 6.999999999999999, 892: 1.0000000000000941, 440: 0.0, 841: -3.7192471324942744e-14, 850: 0.0, 552: 0.0, 584: 1.0, 367: 0.0, 629: 0.0, 494: 0.0, 889: 0.0, 464: 9.325873406851315e-14, 259: 0.0, 375: 0.0, 353: 0.0, 598: 1.0000000000000213, 631: 3.000000000000022, 577: 0.0, 704: 0.0, 93: 0.0, 746: 0.0, 565: -2.6645352591003757e-15, 963: 0.0, 1050: 1.0, 1083: 0.0, 292: 1.000000000000023, 332: 0.0, 1100: 0.0, 693: 0.0, 990: 0.0, 512: 0.0, 601: 2.0000000000000355, 713: -8.903988657493755e-14, 369: 0.0, 0: 8.881784197001252e-16, 1081: 1.3322676295501878e-14, 541: 1.0, 196: 0.0, 681: 0.0, 213: 0.0, 467: 0.0, 474: -8.926193117986259e-14, 50: 0.9999999999999574, 1152: -1.674216321134736e-13, 1137: 1.000000000000105, 885: 2.999999999999928, 786: 1.0000000000000007, 817: 12889.999999999976, 130: 0.0, 137: 1.0, 53: 1.0000000000000315, 495: 0.0, 441: 0.0, 571: 1.865174681370263e-14, 1115: 8.881784197001252e-16, 809: 0.0, 819: -9.769962616701378e-15, 1165: 0.0, 364: 0.0, 261: 74.00000000000007, 535: 0.0, 848: 0.0, 731: 0.0, 945: 0.0, 624: 5.000000000000172, 1106: 0.0, 772: 1.000000000000007, 460: 0.0, 727: 0.0, 1046: 0.0, 394: 0.0, 267: -2.7411935155625904e-15, 842: 0.0, 49: 4.999999999999921, 930: 1.999999999999993, 670: 0.0, 928: 0.0, 924: 0.0, 691: 0.0, 146: 0.0, 25: 0.0, 491: 0.0, 142: 9.947598300641403e-14, 849: 0.0, 932: 0.9999999999999867, 33: 1.0, 1010: 0.9999999999999005, 409: 7.105427357601002e-15, 350: 0.0, 207: 2.0000000000000187, 1084: 0.0, 918: -3.7192471324942744e-15, 1112: 0.0, 1016: 0.0, 1053: 0.0, 508: 1.0047518372857667e-13, 482: 0.0, 944: 0.0, 789: 0.0, 1076: 2.9999999999999813, 52: 1.4210854715202004e-14, 680: -7.438494264988549e-15, 320: -8.548717289613705e-15, 449: -2.4868995751603507e-14, 1037: 0.0, 317: 1.000000000000028, 855: 0.9999999999999973, 277: 0.0, 758: 4.440892098500626e-15, 91: 0.0, 222: 0.0, 29: 0.0, 567: 0.0, 438: -6.078471059822732e-15, 549: 0.9999999999999707, 763: 0.0, 991: 4.440892098500626e-15, 628: 0.0, 1068: 0.0, 936: 0.0, 178: 1.0000000000000002, 256: 0.0, 831: 0.0, 183: -8.881784197001252e-16, 1164: 0.0, 946: 0.0, 580: 0.0, 838: 0.0, 19: 0.0, 18: 3.00000000000004, 88: 0.9999999999999999, 420: -3.552713678800501e-15, 377: 0.0, 425: 4.00000000000001, 662: 1.6105119292618043e-14, 806: 0.0, 370: 0.0, 87: -2.930988785010413e-14, 287: 0.0, 579: 0.0, 154: 0.0, 794: 0.0, 501: 7.000000000000055, 852: 1.0000000000000009, 744: 0.0, 1120: 0.0, 406: 0.9999999999999947, 1157: 0.0, 556: 0.0, 103: 1.000000000000018, 1161: 0.0, 666: 0.0, 705: 0.0, 592: 0.0, 47: 0.0, 128: 144.00000000000003, 977: -8.881784197001252e-15, 57: -1.0658141036401503e-14, 503: 0.0, 1144: 0.0, 900: 0.0, 647: 0.0, 68: 0.0, 595: 0.0, 575: 0.0, 415: 0.0, 288: 0.0, 39: 2.9999999999999956, 381: 0.0, 906: 0.0, 846: 1.0, 218: 1.0, 42: -7.993605777301127e-15, 514: 4.440892098500626e-14, 1091: 337.00000000000006, 664: 0.0, 523: 1.0000000000000226, 193: 4.440892098500626e-15, 74: 0.9999999999998995, 263: 0.0, 1027: 0.0, 593: 0.0, 170: 0.0, 1000: -1.2434497875801753e-14, 338: 1.0000000000000115, 1126: 2.6645352591003757e-15, 113: 0.0, 683: 0.0, 715: 0.0, 486: 0.0, 407: 0.0, 66: 0.0, 1148: 0.0, 914: 0.0, 718: -1.3322676295501877e-15, 115: 0.0, 1155: 0.0, 230: 0.0, 826: 0.0, 278: 1.0000000000000286, 999: 0.0, 947: 0.0, 1118: 0.0, 828: -2.930988785010413e-14, 634: 0.0, 1123: 0.0, 721: 0.0, 117: 0.0, 1116: 0.0, 719: -7.993605777301127e-15, 392: 0.0, 405: 2.0000000000000187, 880: 1.000000000000089, 520: 2.784308972829587e-15, 210: 0.0, 1061: 1.0, 793: 0.0, 504: 0.0, 1072: 0.0, 989: 0.0, 813: 0.0, 1042: 1.9999999999999885, 752: 8.881784197001252e-16, 700: 0.0, 1041: 2.0000000000000204, 413: 1.3322676295501878e-14, 574: 3.0000000000000018, 736: 0.0, 1113: 0.0, 904: 0.0, 173: 0.0, 1056: 5.000000000000033, 295: 1.0000000000000278, 619: 2.0, 5: 0.9999999999999951, 497: 0.0, 635: 1.0, 1065: 0.0, 788: 0.0, 742: 1.0, 1039: 0.9999999999999427, 522: 2.220446049250313e-16, 1038: 0.0, 180: 1.0000000000000469, 729: 0.9999999999999628, 869: 0.0, 820: 1.9999999999999982, 219: 0.0, 981: 8.881784197001252e-16, 1020: 1.000000000000089, 147: 0.0, 933: 0.0, 723: 10.000000000000068, 879: 212.00000000000003, 149: 0.0, 509: 1.0, 72: 0.0, 111: 0.0, 897: 3.7192471324942744e-14, 163: 0.0, 978: 1.000000000000047, 1109: 0.0, 545: 0.9999999999999853, 143: 0.9999999999999947, 337: 0.9999999999999005, 302: 1.999999999999993, 1149: 0.0, 840: 0.0, 283: 2.0000000000000204, 271: 0.0, 1019: 0.0, 769: 1.7763568394002505e-15, 16: 0.9999999999999707, 893: -4.6851411639181606e-14, 1092: 0.0, 331: 0.0, 865: 1.3322676295501878e-14, 1001: 2.0, 660: 0.0, 1111: 1.0, 204: 1.0000000000000187, 383: 0.0, 105: 10.000000000000002, 77: 0.0, 734: 1.0, 45: 0.0, 209: 1.0000000000000382, 657: 0.0, 131: 0.0, 1131: -8.881784197001252e-15, 709: 8.881784197001252e-15, 1: 0.0, 957: -1.84297022087776e-14, 656: 0.0, 476: 0.9999999999999694, 104: 0.0, 296: 0.0, 980: 0.0, 62: 0.0, 1130: 0.0, 847: 5.000000000000135, 1035: 0.0, 1146: 0.0, 361: 3.0000000000000124, 768: 0.0, 157: 0.0, 875: 0.0, 890: 0.0, 109: 3.0000000000000044, 585: 1.0, 28: 0.0, 796: 0.0, 365: 0.0, 983: 7.993605777301127e-15, 586: 0.0, 158: 0.0, 600: 2.0000000000000187, 910: 0.0, 179: 0.0, 65: 0.0, 581: 5.000000000000054, 941: 0.0, 722: -3.785860513971784e-14, 1069: 0.0, 1059: 0.0, 346: 0.0, 181: 1.0000000000000364, 307: -1.865174681370263e-14, 568: 0.0, 38: 1.0, 970: 0.0, 40: 4.440892098500626e-15, 738: 0.0, 276: 0.0, 274: 0.0, 871: 0.0, 272: 1.0, 260: 0.0, 801: 0.0, 239: 1.9999999999998908, 322: 0.0, 206: 0.0, 116: 0.0, 766: 0.0, 816: 0.0, 225: 0.9999999999998995, 770: -6.022959908591474e-15, 563: 0.0, 336: 0.0, 573: -9.386431026376354e-16, 254: 0.0, 122: 0.0, 899: -4.440892098500627e-16, 1087: 0.0, 745: 0.0, 640: 0.0, 313: -4.263256414560601e-14, 1153: 0.0, 996: 0.9999999999999498, 51: 0.0, 1033: 0.0, 863: 0.0, 32: 1.000000000000003, 484: 1.000000000000028, 1005: -1.021405182655144e-14, 569: 9.473903143468002e-15, 221: 0.0}
 ```
 
 Execute a solve operation by providing the `initial_state`:
 
-
-```python
+```{code-cell} ipython3
 start = time.perf_counter()
 solution = OMMXPySCIPOptAdapter.solve(
     ommx_instance=ommx_instance,
@@ -1765,6 +1853,20 @@ Note that providing an initial solution does not always improve performance - it
 
 ### Function
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# ommx.v1.Function
 
 In mathematical optimization, functions are used to express objective functions and constraints. Specifically, OMMX handles polynomials and provides the following data structures in OMMX Message to represent polynomials.
 
@@ -1779,8 +1881,7 @@ In mathematical optimization, functions are used to express objective functions 
 ## Creating ommx.v1.Function
 In the Python SDK, there are two main approachs to create these data structures. The first approach is to directly call the constructors of each data structure. For example, you can create `ommx.v1.Linear` as follows.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Linear
 
 linear = Linear(terms={1: 1.0, 2: 2.0}, constant=3.0)
@@ -1789,8 +1890,7 @@ print(linear)
 
 In this way, decision variables are identified by IDs and coefficients are represented by real numbers. To access coefficients and constant values, use the `terms`, `linear_terms` and `constant_term` properties.
 
-
-```python
+```{code-cell} ipython3
 print(f"{linear.terms=}")
 print(f"{linear.linear_terms=}")
 print(f"{linear.constant_term=}")
@@ -1798,8 +1898,7 @@ print(f"{linear.constant_term=}")
 
 Another approach is to create from `ommx.v1.DecisionVariable`. `ommx.v1.DecisionVariable` is a data structure that only holds the ID of the decision variable. When creating polynomials such as `ommx.v1.Linear`, you can first create decision variables using `ommx.v1.DecisionVariable` and then use them to create polynomials.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import DecisionVariable
 
 x = DecisionVariable.binary(1, name="x")
@@ -1811,22 +1910,19 @@ print(linear)
 
 Note that the polynomial data type retains only the ID of the decision variable and does not store additional information. In the above example, information passed to `DecisionVariable.binary` such as `x` and `y` is not carried over to `Linear`. This second method can create polynomials of any degree.
 
-
-```python
+```{code-cell} ipython3
 q = x * x + x * y + y * y
 print(q)
 ```
 
-
-```python
+```{code-cell} ipython3
 p = x * x * x + y * y
 print(p)
 ```
 
 `Linear`, `Quadratic`, and `Polynomial` each have their own unique data storage methods, so they are separate Messages. However, since any of them can be used as objective functions or constraints, a Message called `Function` is provided, which can be any of the above or a constant.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Function
 
 # Constant
@@ -1843,16 +1939,14 @@ print(Function(p))
 
 `Function` and other polynomials have an `evaluate` method that substitutes values for decision variables. For example, substituting $x_1 = 1$ and $x_2 = 0$ into the linear function $x_1 + 2x_2 + 3$ created above results in $1 + 2 \times 0 + 3 = 4$.
 
-
-```python
+```{code-cell} ipython3
 value= linear.evaluate({1: 1, 2: 0})
 print(f"{value=}")
 ```
 
 The argument supports the format `dict[int, float]` and `ommx.v1.State`. `evaluate` returns an error if the necessary decision variable IDs are missing.
 
-
-```python
+```{code-cell} ipython3
 try:
     linear.evaluate({1: 1})
 except RuntimeError as e:
@@ -1861,20 +1955,20 @@ except RuntimeError as e:
 
 If you want to substitute values for only some of the decision variables, use the `partial_evaluate` method.
 
-
-```python
+```{code-cell} ipython3
 linear2= linear.partial_evaluate({1: 1})
 print(f"{linear2=}")
 ```
 
 The result of partial evaluation is a polynomial, so it is returned in the same type as the original polynomial.
 
++++
+
 ## Comparison of Coefficients
 
 `Function` and other polynomial types have an `almost_equal` function. This function determines whether the coefficients of the polynomial match within a specified error. For example, to confirm that $ (x + 1)^2 = x^2 + 2x + 1 $, write as follows
 
-
-```python
+```{code-cell} ipython3
 xx = (x + 1) * (x + 1)
 xx.almost_equal(x * x + 2 * x + 1)
 ```
@@ -1885,6 +1979,20 @@ xx.almost_equal(x * x + 2 * x + 1)
 
 ### Instance
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: ommx-update-books (3.9.23)
+  language: python
+  name: python3
+---
+
+# ommx.v1.Instance
 
 [`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance) is a data structure for describing the optimization problem itself (mathematical model). It consists of the following components:
 
@@ -1905,8 +2013,7 @@ $$
 
 The corresponding `ommx.v1.Instance` is as follows.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 
 x = DecisionVariable.binary(1, name='x')
@@ -1922,15 +2029,13 @@ instance = Instance.from_components(
 
 Each of these components has a corresponding property. The objective function is converted into the form of [`ommx.v1.Function`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Function), as explained in the previous section.
 
-
-```python
+```{code-cell} ipython3
 instance.objective
 ```
 
 `sense` is set to `Instance.MAXIMIZE` for maximization problems or `Instance.MINIMIZE` for minimization problems.
 
-
-```python
+```{code-cell} ipython3
 instance.sense == Instance.MAXIMIZE
 ```
 
@@ -1938,8 +2043,7 @@ instance.sense == Instance.MAXIMIZE
 
 Decision variables and constraints can be obtained in the form of [`pandas.DataFrame`](https://pandas.pydata.org/pandas-docs/stable/reference/frame.html).
 
-
-```python
+```{code-cell} ipython3
 instance.decision_variables_df
 ```
 
@@ -1956,16 +2060,14 @@ Additionally, OMMX is designed to handle metadata that may be needed when integr
 
 If you need a list of [`ommx.v1.DecisionVariable`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.DecisionVariable) directly, you can use the [`decision_variables`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.decision_variables) property.
 
-
-```python
+```{code-cell} ipython3
 for v in instance.decision_variables:
     print(f"{v.id=}, {v.name=}")
 ```
 
 To obtain `ommx.v1.DecisionVariable` from the ID of the decision variable, you can use the [`get_decision_variable_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_decision_variable_by_id) method.
 
-
-```python
+```{code-cell} ipython3
 x1 = instance.get_decision_variable_by_id(1)
 print(f"{x1.id=}, {x1.name=}")
 ```
@@ -1973,15 +2075,13 @@ print(f"{x1.id=}, {x1.name=}")
 ## Constraints
 Next, let's look at the constraints.
 
-
-```python
+```{code-cell} ipython3
 instance.constraints
 ```
 
 In OMMX, constraints are also managed by ID. This ID is independent of the decision variable ID. When you create a constraint like `x * y == 0`, a sequential number is automatically assigned. To manually set the ID, you can use the [`set_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.set_id) method.
 
-
-```python
+```{code-cell} ipython3
 c = (x * y == 0).set_id(100)
 print(f"{c.id=}")
 ```
@@ -1990,16 +2090,14 @@ The essential information for constraints is `id` and `equality`. `equality` ind
 
 Constraints can also store metadata similar to decision variables. You can use `name`, `description`, `subscripts`, and `parameters`. These can be set using the [`add_name`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_name), [`add_description`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_description), [`add_subscripts`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_subscripts), and [`add_parameters`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint.add_parameters) methods.
 
-
-```python
+```{code-cell} ipython3
 c = (x * y == 0).set_id(100).add_name("prod-zero")
 print(f"{c.id=}, {c.name=}")
 ```
 
 You can also use the [`constraints`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.constraints) property to directly obtain a list of [`ommx.v1.Constraint`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Constraint). To obtain `ommx.v1.Constraint` by its the constraint ID, use the [`get_constraint_by_id`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance.get_constraint_by_id) method.
 
-
-```python
+```{code-cell} ipython3
 for c in instance.constraints:
     print(c)
 ```
@@ -2010,6 +2108,20 @@ for c in instance.constraints:
 
 ### Parametric Instance
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: .venv
+  language: python
+  name: python3
+---
+
+# ommx.v1.ParametricInstance
 
 [`ommx.v1.ParametricInstance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.ParametricInstance) is a class that represents mathematical models similar to [`ommx.v1.Instance`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Instance). It also supports parameters (via [`ommx.v1.Parameter`](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/v1/index.html#ommx.v1.Parameter)) in addition to decision variables. By assigning values to these parameters, you can create an `ommx.v1.Instance`. Because the resulting `ommx.v1.Instance` keeps the IDs of decision variables and constraints from `ommx.v1.ParametricInstance`, it is helpful when you need to handle a series of models where only some coefficients of the objective function or constraints change.
 
@@ -2025,8 +2137,7 @@ $$
 
 Here, $N$ is the number of items, $p_i$ is the value of item i, $w_i$ is the weight of item i, and $W$ is the knapsack's capacity. The variable $x_i$ is binary and indicates whether item i is included in the knapsack. In `ommx.v1.Instance`, fixed values were used for $p_i$ and $w_i$, but here they are treated as parameters.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import ParametricInstance, DecisionVariable, Parameter, Instance
 
 N = 6
@@ -2039,16 +2150,14 @@ W =  Parameter.new(id=  3*N, name="Capacity")
 
 `ommx.v1.Parameter` also has an ID and uses the same numbering as `ommx.v1.DecisionVariable`, so please ensure there are no duplicates. Like decision variables, parameters can have names and subscripts. They can also be used with operators such as `+` and `<=` to create `ommx.v1.Function` or `ommx.v1.Constraint` objects.
 
-
-```python
+```{code-cell} ipython3
 objective = sum(p[i] * x[i] for i in range(N))
 constraint = sum(w[i] * x[i] for i in range(N)) <= W
 ```
 
 Now let’s combine these elements into an `ommx.v1.ParametricInstance` that represents the knapsack problem.
 
-
-```python
+```{code-cell} ipython3
 parametric_instance = ParametricInstance.from_components(
     decision_variables=x,
     parameters=p + w + [W],
@@ -2060,15 +2169,13 @@ parametric_instance = ParametricInstance.from_components(
 
 Like `ommx.v1.Instance`, you can view the decision variables and constraints as DataFrames through the `decision_variables` and `constraints` properties. In addition, `ommx.v1.ParametricInstance` has a `parameters` property for viewing parameter information in a DataFrame.
 
-
-```python
+```{code-cell} ipython3
 parametric_instance.parameters
 ```
 
 Next, let’s assign specific values to the parameters. Use `ParametricInstance.with_parameters`, which takes a dictionary mapping each `ommx.v1.Parameter` ID to its corresponding value.
 
-
-```python
+```{code-cell} ipython3
 p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
 w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
 W_value = { W.id: 47 }
@@ -2086,6 +2193,20 @@ instance = parametric_instance.with_parameters({**p_values, **w_values, **W_valu
 
 ### Solution
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
+# ommx.v1.Solution
 
 OMMX has several structures that represent the solution of mathematical models.
 
@@ -2108,8 +2229,7 @@ $$
 
 It is clear that this has a feasible solution $x = 1, y = 0$.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 
 # Create a simple instance
@@ -2129,22 +2249,19 @@ solution = instance.evaluate({1: 1, 2: 0})  # x=1, y=0
 
 The generated `ommx.v1.Solution` inherits most of the information from the `ommx.v1.Instance`. Let's first look at the decision variables.
 
-
-```python
+```{code-cell} ipython3
 solution.decision_variables
 ```
 
 In addition to the required attributes—ID, `kind`, `lower`, and `upper`-it also inherits metadata such as `name`. Additionally, the `value` stores which was assigned in `evaluate`.  Similarly, the evaluation value is added to the constraints as `value`.
 
-
-```python
+```{code-cell} ipython3
 solution.constraints
 ```
 
 The `objective` property contains the value of the objective function, and the `feasible` property contains whether the constraints are satisfied.
 
-
-```python
+```{code-cell} ipython3
 print(f"{solution.objective=}, {solution.feasible=}")
 ```
 
@@ -2152,8 +2269,7 @@ Since $xy = 0$ when $x = 1, y = 0$, all constraints are satisfied, so `feasible`
 
 What happens in the case of an infeasible solution, $x = 1, y = 1$?
 
-
-```python
+```{code-cell} ipython3
 solution11 = instance.evaluate({1: 1, 2: 1})  # x=1, y=1
 print(f"{solution11.objective=}, {solution11.feasible=}")
 ```
@@ -2165,6 +2281,19 @@ print(f"{solution11.objective=}, {solution11.feasible=}")
 -------------
 
 ### Sample Set
+
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
 
 ommx.v1.SampleSet
 =================
@@ -2191,8 +2320,7 @@ $$
 \end{align*}
 $$
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i) for i in range(3)]
@@ -2209,8 +2337,7 @@ Normally, solutions are provided by a solver, commonly referred to as a sampler,
 
 Each sample is assigned an ID. Some samplers issue their own IDs for logging, so OMMX allows specifying sample IDs. If omitted, IDs are assigned sequentially starting from `0`.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Samples
 
 # When specifying Sample ID
@@ -2232,8 +2359,7 @@ assert isinstance(samples, Samples)
 
 While `ommx.v1.Solution` is obtained via `Instance.evaluate`, `ommx.v1.SampleSet` can be obtained via `Instance.evaluate_samples`.
 
-
-```python
+```{code-cell} ipython3
 sample_set = instance.evaluate_samples(samples)
 sample_set.summary
 ```
@@ -2248,8 +2374,7 @@ Extracting individual samples
 ----------------------------
 You can use `SampleSet.get` to retrieve each sample as an `ommx.v1.Solution` by specifying the sample ID:
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Solution
 
 solution = sample_set.get(sample_id=0)
@@ -2263,8 +2388,7 @@ Retrieving the best solution
 ---------------------------
 `SampleSet.best_feasible` returns the best feasible sample, meaning the one with the highest objective value among all feasible samples:
 
-
-```python
+```{code-cell} ipython3
 solution = sample_set.best_feasible
 
 print(f"{solution.objective=}")
@@ -2273,8 +2397,7 @@ solution.decision_variables_df
 
 Of course, if the problem is a minimization, the sample with the smallest objective value will be returned. If no feasible samples exist, an error will be raised.
 
-
-```python
+```{code-cell} ipython3
 sample_set_infeasible = instance.evaluate_samples([
     {0: 1, 1: 1, 2: 0},  # Infeasible since x0 + x1 + x2 = 2
     {0: 1, 1: 0, 2: 1},  # Infeasible since x0 + x1 + x2 = 2
@@ -2371,15 +2494,36 @@ Binary packages (wheels) for Linux aarch64 are now provided. This makes it easie
 
 ### Ommx-1.9.0
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: .venv
+  language: python
+  name: python3
+---
+
 ```{warning}
 This document was written for the OMMX Python SDK 1.9.0 release and is not compatible with Python SDK 2.0.0 or later.
 ```
 
++++
+
 # OMMX Python SDK 1.9.0
+
++++
 
 This release significantly enhances the conversion functionality from `ommx.v1.Instance` to QUBO, with added support for **inequality constraints** and **integer variables**. Additionally, a new Driver API `to_qubo` has been introduced to simplify the QUBO conversion process.
 
++++
+
 ## ✨ New Features
+
++++
 
 ### Integer variable log-encoding ([#363](https://github.com/Jij-Inc/ommx/pull/363), [#260](https://github.com/Jij-Inc/ommx/pull/260))
 
@@ -2393,8 +2537,7 @@ This allows optimization problems with integer variables to be handled by QUBO s
 
 While QUBO solvers return only binary variables, `Instance.evaluate` or `evaluate_samples` automatically restore these integer variables and return them as `ommx.v1.Solution` or `ommx.v1.SampleSet`.
 
-
-```python
+```{code-cell} ipython3
 # Example of integer variable log encoding
 from ommx.v1 import Instance, DecisionVariable
 
@@ -2433,14 +2576,15 @@ print(solution.extract_decision_variables("x"))
 
 Two methods have been implemented to convert problems with inequality constraints $ f(x) \leq 0 $ to QUBO:
 
++++
+
 #### Conversion to equality constraints using integer slack variables ([#366](https://github.com/Jij-Inc/ommx/pull/366))
 
 In this method, the coefficients of the inequality constraint are first represented as rational numbers, and then multiplied by an appropriate rational number $a > 0$ to convert all coefficients of $a f(x)$ to integers. Next, an integer slack variable $s$ is introduced to transform the inequality constraint into an equality constraint $ f(x) + s/a = 0$. The converted equality constraint is then added to the QUBO objective function as a penalty term using existing techniques.
 
 This method can always be applied, but if there are non-divisible coefficients in the polynomial, `a` may become very large, and consequently, the range of `s` may also expand, potentially making it impractical. Therefore, the API allows users to input the upper limit for the range of `s`. The `to_qubo` function described later uses this method by default.
 
-
-```python
+```{code-cell} ipython3
 # Example of converting inequality constraints to equality constraints
 from ommx.v1 import Instance, DecisionVariable
 
@@ -2477,8 +2621,7 @@ When the above method cannot be applied, an alternative approach is used where i
 
 Additionally, `Instance.penalty_method` and `uniform_penalty_method` now accept inequality constraints, handling them in the same way as equality constraints by simply adding them as $|f(x)|^2$.
 
-
-```python
+```{code-cell} ipython3
 # Example of adding slack variables to inequality constraints
 from ommx.v1 import Instance, DecisionVariable
 
@@ -2522,8 +2665,7 @@ The `to_qubo` function internally executes the following steps in the appropriat
 
 Note that when calling `instance.to_qubo`, the `instance` will be modified.
 
-
-```python
+```{code-cell} ipython3
 # Example of using the to_qubo Driver API
 from ommx.v1 import Instance, DecisionVariable
 
@@ -2580,9 +2722,24 @@ Please submit any feedback or bug reports to [GitHub Issues](https://github.com/
 
 ### Ommx-1.8.0
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: Python 3 (ipykernel)
+  language: python
+  name: python3
+---
+
 ```{warning}
 This document was written for the OMMX Python SDK 1.8.0 release and is not compatible with Python SDK 2.0.0 or later.
 ```
+
++++
 
 # OMMX Python SDK 1.8.0
 
@@ -2599,14 +2756,15 @@ Summary
   - ⚠️ This is a breaking change. Code using these adapters will need to be updated.
   - Other adapters will be updated in future versions. 
 
++++
+
 # Solver Adapter 
 
 The introduction of the `SolverAdapter` base class aims to make the API for different adapters more consistent. `ommx-python-mip-adapter` and `ommx-pyscipopt-adapter` now use the `SolverAdapter` base class.
 
 Here is an example of the new Adapter interface to simply solve an OMMX instance.
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 from ommx_pyscipopt_adapter import OMMXPySCIPOptAdapter
 
@@ -2628,8 +2786,7 @@ With the new update, the process looks the same as the above when using the `OMM
 
 To replace the usage of `instance_to_model()` functions, you can instantiating an adapter and using `solver_input`. You can then apply any solver-specific parameters before optimizing manually, then calling `decode()` to obtain the OMMX solution.
 
-
-```python
+```{code-cell} ipython3
 adapter = OMMXPySCIPOptAdapter(instance)
 model = adapter.solver_input # in OMMXPySCIPOptAdapter's case, this is a `pyscipopt.Model` object
 # modify model parameters here
@@ -2644,9 +2801,24 @@ solution.objective
 
 ### Ommx-1.7.0
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: .venv
+  language: python
+  name: python3
+---
+
 ```{warning}
 This document was written for the OMMX Python SDK 1.7.0 release and is not compatible with Python SDK 2.0.0 or later.
 ```
+
++++
 
 # OMMX Python SDK 1.7.0
 
@@ -2663,13 +2835,14 @@ Summary
   - For support of OMMX Artifact, please refer to the API reference [ommx.artifact.Artifact](https://jij-inc.github.io/ommx/python/ommx/autoapi/ommx/artifact/index.html#ommx.artifact.Artifact) and [ommx.artifact.ArtifactBuilder](https://jij-inc.github.io/ommx/python/autoapi/ommx/artifact/index.html#ommx.artifact.ArtifactBuilder).
 - Change in behavior of `{Solution, SampleSet}.feasible`
 
++++
+
 QPLIB format parser
 ---------------------------
 
 Following the MPS format, support for the QPLIB format parser has been added.
 
-
-```python
+```{code-cell} ipython3
 import tempfile
 
 # Example problem from QPLIB
@@ -2732,8 +2905,7 @@ with tempfile.NamedTemporaryFile(delete=False, suffix='.qplib') as temp_file:
 print(f"QPLIB sample file created at: {qplib_sample_path}")
 ```
 
-
-```python
+```{code-cell} ipython3
 from ommx import qplib
 
 # Load a QPLIB file
@@ -2763,8 +2935,7 @@ $$
 \end{align*}
 $$
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import DecisionVariable, Instance
 
 x = [DecisionVariable.binary(i) for i in range(3)]
@@ -2783,8 +2954,7 @@ instance.constraints
 
 Next, we relax one of the constraints $x_0 + x_1 \leq 1$.
 
-
-```python
+```{code-cell} ipython3
 instance.relax_constraint(constraint_id=0, reason="Manual relaxation")
 display(instance.constraints)
 display(instance.removed_constraints)
@@ -2792,8 +2962,7 @@ display(instance.removed_constraints)
 
 Now, $x_0 = 1, x_1 = 1, x_2 = 0$ is not a solution to the original problem, but it is a solution to the relaxed problem. Therefore, `feasible_relaxed` will be `True`, but `feasible_unrelaxed` will be `False`. Since `feasible` is an alias for `feasible_unrelaxed`, it will be `False`.
 
-
-```python
+```{code-cell} ipython3
 solution = instance.evaluate({0: 1, 1: 1, 2: 0})
 print(f"{solution.feasible=}")
 print(f"{solution.feasible_relaxed=}")
@@ -2806,6 +2975,20 @@ print(f"{solution.feasible_unrelaxed=}")
 
 ### Ommx-1.6.0
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: .venv
+  language: python
+  name: python3
+---
+
+# OMMX Python SDK 1.6.0
 
 [](https://github.com/Jij-Inc/ommx/releases/tag/python-1.6.0)
 
@@ -2824,9 +3007,24 @@ Summary
 
 ### Ommx-1.5.0
 
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.1
+kernelspec:
+  display_name: .venv
+  language: python
+  name: python3
+---
+
 ```{warning}
 This document was written for the OMMX Python SDK 1.5.0 release and is not compatible with Python SDK 2.0.0 or later.
 ```
+
++++
 
 # OMMX Python SDK 1.5.0
 
@@ -2834,12 +3032,13 @@ This document was written for the OMMX Python SDK 1.5.0 release and is not compa
 
 This notebook describes the new features. Please refer the GitHub release note for the detailed information.
 
++++
+
 ## Evaluation and Partial Evaluation
 
 From the first release of OMMX, `ommx.v1.Instance` supports `evaluate` method to produce `Solution` message
 
-
-```python
+```{code-cell} ipython3
 from ommx.v1 import Instance, DecisionVariable
 
 # Create an instance of the OMMX API
@@ -2855,15 +3054,13 @@ instance = Instance.from_components(
 solution = instance.evaluate({1: 1, 2: 0})
 ```
 
-
-```python
+```{code-cell} ipython3
 solution.decision_variables
 ```
 
 From Python SDK 1.5.0, `Function` and its base classes, `Linear`, `Quadratic`, and `Polynomial` also support `evaluate` method:
 
-
-```python
+```{code-cell} ipython3
 f = 2*x + 3*y
 value, used_ids = f.evaluate({1: 1, 2: 0})
 print(f"{value=}, {used_ids=}")
@@ -2871,8 +3068,7 @@ print(f"{value=}, {used_ids=}")
 
 This returns evaluated value of the function and used decision variable IDs. If some decision variables are lacking, the `evaluate` method raises an exception:
 
-
-```python
+```{code-cell} ipython3
 try:
     f.evaluate({3: 1})
 except RuntimeError as e:
@@ -2881,16 +3077,14 @@ except RuntimeError as e:
 
 In addition, there is `partial_evaluate` method
 
-
-```python
+```{code-cell} ipython3
 f2, used_ids = f.partial_evaluate({1: 1})
 print(f"{f2=}, {used_ids=}")
 ```
 
 This creates a new function by substituting `x = 1`. `partial_evaluate` is also added to `ommx.v1.Instance` class:
 
-
-```python
+```{code-cell} ipython3
 new_instance = instance.partial_evaluate({1: 1})
 new_instance.objective
 ```
