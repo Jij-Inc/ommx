@@ -32,14 +32,9 @@ jobs:
           python-version: ${{ env.python-version }}
 
       - name: Jupyter Book
-        env:
-          GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
         run: |
-          # Replace GA4_TRACKING_ID placeholder with actual value from secrets
           # Code execution is off by default (tested in python.yml test-ci job)
           cd ./docs && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
           uv run --only-group dev jupyter-book build ${{ matrix.lang }} --warningiserror
 
       - name: Upload HTML

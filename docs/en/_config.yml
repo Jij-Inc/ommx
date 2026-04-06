@@ -29,7 +29,7 @@ html:
   use_issues_button: true
   use_repository_button: true
   analytics:
-    google_analytics_id: GA4_TRACKING_ID
+    google_analytics_id: "G-VMXDHPQV9Y"
 
 # launch_buttons disabled since notebooks are now MyST Markdown
 # launch_buttons:
