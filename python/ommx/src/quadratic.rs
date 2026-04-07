@@ -20,13 +20,15 @@ use std::collections::BTreeMap;
 /// -------
 /// Create via DecisionVariable multiplication:
 ///
-///     >>> x = DecisionVariable.integer(1)
-///     >>> y = DecisionVariable.integer(2)
-///     >>> q = x * y + 2*x + 3*y + 1
+/// >>> x = DecisionVariable.integer(1)
+/// >>> y = DecisionVariable.integer(2)
+/// >>> q = x * y + 2*x + 3*y + 1
 ///
 /// Note that `==`, `<=`, `>=` create Constraint objects:
 ///
-///     >>> constraint = q <= 10  # Returns Constraint
+/// >>> constraint = q <= 10  # Returns Constraint
+///
+/// .
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

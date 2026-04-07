@@ -21,13 +21,13 @@ use std::collections::BTreeMap;
 /// -------
 /// Create via DecisionVariable operations:
 ///
-///     >>> x = DecisionVariable.integer(1)
-///     >>> y = DecisionVariable.integer(2)
-///     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+/// >>> x = DecisionVariable.integer(1)
+/// >>> y = DecisionVariable.integer(2)
+/// >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
 ///
 /// Note that `==`, `<=`, `>=` create Constraint objects:
 ///
-///     >>> constraint = p == 0  # Returns Constraint
+/// >>> constraint = p == 0  # Returns Constraint
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

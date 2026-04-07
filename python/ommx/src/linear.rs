@@ -21,22 +21,24 @@ use std::collections::BTreeMap;
 /// -------
 /// Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 ///
-///     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+/// >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
 ///
 /// Or create via DecisionVariable arithmetic:
 ///
-///     >>> x1 = DecisionVariable.integer(1)
-///     >>> x2 = DecisionVariable.integer(2)
-///     >>> g = 2*x1 + 3*x2 + 1
+/// >>> x1 = DecisionVariable.integer(1)
+/// >>> x2 = DecisionVariable.integer(2)
+/// >>> g = 2*x1 + 3*x2 + 1
 ///
 /// Compare two linear functions with tolerance:
 ///
-///     >>> f.almost_equal(g, atol=1e-12)
-///     True
+/// >>> f.almost_equal(g, atol=1e-12)
+/// True
 ///
 /// Note that `==` creates an equality Constraint, not a boolean:
 ///
-///     >>> constraint = f == g  # Returns Constraint, not bool
+/// >>> constraint = f == g  # Returns Constraint, not bool
+///
+/// .
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

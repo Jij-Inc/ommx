@@ -23,20 +23,22 @@ use std::collections::{BTreeMap, BTreeSet};
 /// -------
 /// Create from various types:
 ///
-///     >>> f = Function(1.0)  # Constant
-///     >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
-///     >>> f = Function(x * y)  # From Quadratic expression
+/// >>> f = Function(1.0)  # Constant
+/// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+/// >>> f = Function(x * y)  # From Quadratic expression
 ///
 /// Access the terms:
 ///
-///     >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
-///     >>> f.terms
-///     {(1,): 2.5, (): 1.0}
+/// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+/// >>> f.terms
+/// {(1,): 2.5, (): 1.0}
 ///
 /// Check the degree:
 ///
-///     >>> f.degree()
-///     1
+/// >>> f.degree()
+/// 1
+///
+/// .
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
