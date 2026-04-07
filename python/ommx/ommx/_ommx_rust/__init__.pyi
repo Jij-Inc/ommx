@@ -654,20 +654,22 @@ class Function:
     -------
     Create from various types:
 
-        >>> f = Function(1.0)  # Constant
-        >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
-        >>> f = Function(x * y)  # From Quadratic expression
+    >>> f = Function(1.0)  # Constant
+    >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+    >>> f = Function(x * y)  # From Quadratic expression
 
     Access the terms:
 
-        >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
-        >>> f.terms
-        {(1,): 2.5, (): 1.0}
+    >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+    >>> f.terms
+    {(1,): 2.5, (): 1.0}
 
     Check the degree:
 
-        >>> f.degree()
-        1
+    >>> f.degree()
+    1
+
+    .
     """
     @property
     def terms(self) -> dict: ...
@@ -1040,22 +1042,24 @@ class Linear:
     -------
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
-        >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+    >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
 
     Or create via DecisionVariable arithmetic:
 
-        >>> x1 = DecisionVariable.integer(1)
-        >>> x2 = DecisionVariable.integer(2)
-        >>> g = 2*x1 + 3*x2 + 1
+    >>> x1 = DecisionVariable.integer(1)
+    >>> x2 = DecisionVariable.integer(2)
+    >>> g = 2*x1 + 3*x2 + 1
 
     Compare two linear functions with tolerance:
 
-        >>> f.almost_equal(g, atol=1e-12)
-        True
+    >>> f.almost_equal(g, atol=1e-12)
+    True
 
     Note that `==` creates an equality Constraint, not a boolean:
 
-        >>> constraint = f == g  # Returns Constraint, not bool
+    >>> constraint = f == g  # Returns Constraint, not bool
+
+    .
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -1206,11 +1210,12 @@ class Parameter:
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
-    Example:
-        >>> p = Parameter.new(1, name="penalty")
-        >>> x = DecisionVariable.integer(2)
-        >>> x + p  # Returns Linear expression
-        Linear(...)
+    Example
+    -------
+    >>> p = Parameter(1, name="penalty")
+    >>> x = DecisionVariable.integer(2)
+    >>> x + p  # Returns Linear expression
+    Linear(...)
     """
     @property
     def id(self) -> builtins.int: ...
@@ -1313,13 +1318,13 @@ class Polynomial:
     -------
     Create via DecisionVariable operations:
 
-        >>> x = DecisionVariable.integer(1)
-        >>> y = DecisionVariable.integer(2)
-        >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+    >>> x = DecisionVariable.integer(1)
+    >>> y = DecisionVariable.integer(2)
+    >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-        >>> constraint = p == 0  # Returns Constraint
+    >>> constraint = p == 0  # Returns Constraint
     """
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
@@ -1411,13 +1416,15 @@ class Quadratic:
     -------
     Create via DecisionVariable multiplication:
 
-        >>> x = DecisionVariable.integer(1)
-        >>> y = DecisionVariable.integer(2)
-        >>> q = x * y + 2*x + 3*y + 1
+    >>> x = DecisionVariable.integer(1)
+    >>> y = DecisionVariable.integer(2)
+    >>> q = x * y + 2*x + 3*y + 1
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
-        >>> constraint = q <= 10  # Returns Constraint
+    >>> constraint = q <= 10  # Returns Constraint
+
+    .
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
