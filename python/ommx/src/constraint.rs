@@ -23,12 +23,14 @@ pub fn set_constraint_id_counter(value: u64) {
     CONSTRAINT_ID_COUNTER.store(value, Ordering::SeqCst);
 }
 
-/// Update counter to ensure it's at least the given value
+/// Update counter to ensure it's at least the given value + 1
 /// Returns the new counter value after update
 #[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn update_constraint_id_counter(value: u64) -> u64 {
-    CONSTRAINT_ID_COUNTER.fetch_max(value + 1, Ordering::SeqCst)
+    let new_value = value + 1;
+    let previous = CONSTRAINT_ID_COUNTER.fetch_max(new_value, Ordering::SeqCst);
+    previous.max(new_value)
 }
 
 /// Get current constraint ID counter value

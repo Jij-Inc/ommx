@@ -179,15 +179,13 @@ impl Linear {
             }
         }
         if let Ok(val) = rhs.extract::<f64>() {
-            return self
+            let linear = self
                 .add_scalar(val)
-                .map(|l| l.into_pyobject(py).unwrap().into_any().unbind())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(linear.into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for +: 'Linear' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse addition (lhs + self)
@@ -238,15 +236,13 @@ impl Linear {
             }
         }
         if let Ok(val) = rhs.extract::<f64>() {
-            return self
+            let linear = self
                 .add_scalar(-val)
-                .map(|l| l.into_pyobject(py).unwrap().into_any().unbind())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(linear.into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for -: 'Linear' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse subtraction (lhs - self)
@@ -300,15 +296,13 @@ impl Linear {
             }
         }
         if let Ok(val) = rhs.extract::<f64>() {
-            return self
+            let linear = self
                 .mul_scalar(val)
-                .map(|l| l.into_pyobject(py).unwrap().into_any().unbind())
-                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()));
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(linear.into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for *: 'Linear' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse multiplication (lhs * self)
@@ -394,12 +388,11 @@ impl Linear {
     #[pyo3(name = "__eq__")]
     pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
         let diff = self.py_sub(py, other)?;
-        // Extract the Linear from the result if it's a Linear
-        let diff_linear: Linear = diff.extract(py)?;
+        let function = extract_to_function(py, diff)?;
         let id = next_constraint_id();
         Ok(Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: ommx::Function::from(diff_linear.0),
+            function,
             equality: ommx::Equality::EqualToZero,
             name: None,
             subscripts: Vec::new(),
@@ -412,11 +405,11 @@ impl Linear {
     #[pyo3(name = "__le__")]
     pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
         let diff = self.py_sub(py, other)?;
-        let diff_linear: Linear = diff.extract(py)?;
+        let function = extract_to_function(py, diff)?;
         let id = next_constraint_id();
         Ok(Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: ommx::Function::from(diff_linear.0),
+            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
             name: None,
             subscripts: Vec::new(),
@@ -431,11 +424,11 @@ impl Linear {
         // self >= other is equivalent to other - self <= 0
         let neg_self = self.__neg__();
         let diff = neg_self.py_add(py, other)?;
-        let diff_linear: Linear = diff.extract(py)?;
+        let function = extract_to_function(py, diff)?;
         let id = next_constraint_id();
         Ok(Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: ommx::Function::from(diff_linear.0),
+            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
             name: None,
             subscripts: Vec::new(),
@@ -443,4 +436,20 @@ impl Linear {
             description: None,
         }))
     }
+}
+
+/// Helper function to extract a PyAny result into ommx::Function
+fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
+    if let Ok(linear) = obj.extract::<Linear>(py) {
+        return Ok(ommx::Function::from(linear.0));
+    }
+    if let Ok(quad) = obj.extract::<Quadratic>(py) {
+        return Ok(ommx::Function::from(quad.0));
+    }
+    if let Ok(poly) = obj.extract::<Polynomial>(py) {
+        return Ok(ommx::Function::from(poly.0));
+    }
+    Err(PyTypeError::new_err(
+        "Cannot convert to Function: expected Linear, Quadratic, or Polynomial",
+    ))
 }
