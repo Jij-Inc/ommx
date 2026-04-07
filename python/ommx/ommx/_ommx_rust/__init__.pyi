@@ -2230,6 +2230,6 @@ def set_local_registry_root(path: builtins.str | os.PathLike | pathlib.Path) -> 
 
 def update_constraint_id_counter(value: builtins.int) -> builtins.int:
     r"""
-    Update counter to ensure it's at least the given value
+    Update counter to ensure it's at least the given value + 1
     Returns the new counter value after update
     """
