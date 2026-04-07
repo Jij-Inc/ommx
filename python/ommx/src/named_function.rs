@@ -196,7 +196,7 @@ impl NamedFunction {
         // self.function - other
         let diff = self.function().py_sub(py, other)?;
         // Check if NotImplemented was returned
-        if diff.bind(py).is(&py.NotImplemented()) {
+        if diff.bind(py).is(py.NotImplemented()) {
             return Ok(py.NotImplemented().into_any());
         }
         let diff_func = diff.extract::<Function>(py)?;
@@ -221,7 +221,7 @@ impl NamedFunction {
         // self.function - other <= 0
         let diff = self.function().py_sub(py, other)?;
         // Check if NotImplemented was returned
-        if diff.bind(py).is(&py.NotImplemented()) {
+        if diff.bind(py).is(py.NotImplemented()) {
             return Ok(py.NotImplemented().into_any());
         }
         let diff_func = diff.extract::<Function>(py)?;
@@ -247,7 +247,7 @@ impl NamedFunction {
         let neg_self = self.__neg__();
         let diff = neg_self.py_add(py, other)?;
         // Check if NotImplemented was returned
-        if diff.bind(py).is(&py.NotImplemented()) {
+        if diff.bind(py).is(py.NotImplemented()) {
             return Ok(py.NotImplemented().into_any());
         }
         let diff_func = diff.extract::<Function>(py)?;

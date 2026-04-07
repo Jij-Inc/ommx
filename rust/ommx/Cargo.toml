@@ -14,6 +14,9 @@ repository = "https://github.com/Jij-Inc/ommx"
 keywords = ["optimization", "ommx"]
 categories = ["data-structures", "mathematics", "science"]
 
+[lints]
+workspace = true
+
 [features]
 default = ["remote-artifact"]
 remote-artifact = ["ocipkg/remote", "built"]

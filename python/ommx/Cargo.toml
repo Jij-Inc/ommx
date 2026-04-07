@@ -11,6 +11,9 @@ license.workspace = true
 # This crate itself is not released to crates.io.
 publish = false
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
