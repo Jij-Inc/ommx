@@ -2162,7 +2162,10 @@ class ParametricInstance(UserAnnotationBase):
         """
         Get constraints as a list of :class:`Constraint
         """
-        return [Constraint.from_bytes(raw.SerializeToString()) for raw in self.raw.constraints]
+        return [
+            Constraint.from_bytes(raw.SerializeToString())
+            for raw in self.raw.constraints
+        ]
 
     @property
     def removed_constraints(self) -> list[RemovedConstraint]:
@@ -2170,7 +2173,8 @@ class ParametricInstance(UserAnnotationBase):
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
         return [
-            RemovedConstraint.from_bytes(raw.SerializeToString()) for raw in self.raw.removed_constraints
+            RemovedConstraint.from_bytes(raw.SerializeToString())
+            for raw in self.raw.removed_constraints
         ]
 
     @property
