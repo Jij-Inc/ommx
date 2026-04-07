@@ -174,8 +174,11 @@ class Constraint:
     @property
     def raw(self) -> Constraint:
         r"""
-        Return self for backward compatibility with Python wrapper pattern
-        This allows code like `constraint.raw` to work
+        Return a clone of self for backward compatibility with Python wrapper pattern.
+
+        This allows code like `constraint.raw` to work when migrating from the old
+        Python wrapper class. Note that this returns a clone, not the same object,
+        so `constraint.raw is constraint` will be `False`.
         """
     @property
     def function(self) -> Function: ...
@@ -784,6 +787,9 @@ class Function:
     def __iadd__(self, rhs: Function) -> None:
         r"""
         In-place addition for += operator
+
+        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+        See <https://github.com/PyO3/pyo3/issues/4605> for details.
         """
     def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
@@ -1118,7 +1124,10 @@ class Linear:
     def __iadd__(self, rhs: Linear) -> None:
         r"""
         In-place addition for += operator
-        Note: PyO3's __iadd__ should return () and Python will keep the same reference
+
+        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+        This is the expected behavior per PyO3's design - see <https://github.com/PyO3/pyo3/issues/4605>
+        The stub file shows `-> None` but the actual Python behavior is correct (`x += y` keeps `x` as Linear).
         """
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
@@ -1360,6 +1369,9 @@ class Polynomial:
     def __iadd__(self, rhs: Polynomial) -> None:
         r"""
         In-place addition for += operator
+
+        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+        See <https://github.com/PyO3/pyo3/issues/4605> for details.
         """
     def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
@@ -1472,6 +1484,9 @@ class Quadratic:
     def __iadd__(self, rhs: Quadratic) -> None:
         r"""
         In-place addition for += operator
+
+        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+        See <https://github.com/PyO3/pyo3/issues/4605> for details.
         """
     def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
