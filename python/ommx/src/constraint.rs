@@ -1,10 +1,9 @@
-use crate::{Equality, Function};
-use anyhow::Result;
+use crate::{Equality, EvaluatedConstraint, Function, State};
 use fnv::FnvHashMap;
-use ommx::{ConstraintID, Evaluate, Message};
+use ommx::{ConstraintID, Evaluate};
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyList},
+    types::{PyBytes, PyDict, PySet},
     Bound, PyAny,
 };
 use std::collections::HashMap;
@@ -156,8 +155,9 @@ impl Constraint {
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        let constraint = ommx::Constraint::from_bytes(bytes.as_bytes())?;
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
+        let constraint = ommx::Constraint::from_bytes(bytes.as_bytes())
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         // Update the ID counter to ensure new IDs don't conflict
         update_constraint_id_counter(constraint.id.into_inner());
         Ok(Self(constraint))
@@ -167,38 +167,55 @@ impl Constraint {
         PyBytes::new(py, &self.0.to_bytes())
     }
 
+    /// Evaluate the constraint with the given state.
+    ///
+    /// Args:
+    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
+    ///     atol: Optional absolute tolerance for evaluation
+    ///
+    /// Returns:
+    ///     EvaluatedConstraint containing the evaluated value and feasibility
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate<'py>(
+    pub fn evaluate(
         &self,
-        py: Python<'py>,
-        state: &Bound<PyBytes>,
+        state: &Bound<PyAny>,
         atol: Option<f64>,
-    ) -> Result<Bound<'py, PyBytes>> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    ) -> PyResult<EvaluatedConstraint> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        let evaluated = self.0.evaluate(&state, atol)?;
-        let v1_evaluated: ommx::v1::EvaluatedConstraint = evaluated.into();
-        Ok(PyBytes::new(py, &v1_evaluated.encode_to_vec()))
+        let evaluated = self
+            .0
+            .evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(EvaluatedConstraint(evaluated))
     }
 
+    /// Partially evaluate the constraint with the given state.
+    ///
+    /// This modifies self in-place and returns self for method chaining.
+    ///
+    /// Args:
+    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
+    ///     atol: Optional absolute tolerance for evaluation
+    ///
+    /// Returns:
+    ///     Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate<'py>(
-        &mut self,
-        py: Python<'py>,
-        state: &Bound<PyBytes>,
-        atol: Option<f64>,
-    ) -> Result<Bound<'py, PyBytes>> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn partial_evaluate(&mut self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Self> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.0.partial_evaluate(&state, atol)?;
-        let inner: ommx::v1::Constraint = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+        self.0
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(self.clone())
     }
 
     /// Set the name of the constraint
@@ -293,7 +310,7 @@ impl Constraint {
         };
         dict.set_item("type", type_name)?;
 
-        // Get used variable IDs
+        // Get used variable IDs as a set
         let used_ids: Vec<u64> = self
             .0
             .function
@@ -301,8 +318,8 @@ impl Constraint {
             .iter()
             .map(|id| id.into_inner())
             .collect();
-        let used_ids_list = PyList::new(py, used_ids)?;
-        dict.set_item("used_ids", used_ids_list)?;
+        let used_ids_set = PySet::new(py, &used_ids)?;
+        dict.set_item("used_ids", used_ids_set)?;
 
         // Name - use Python None for missing values (pandas NA equivalent)
         match &self.0.name {
@@ -429,8 +446,10 @@ impl RemovedConstraint {
     }
 
     #[staticmethod]
-    pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::RemovedConstraint::from_bytes(bytes.as_bytes())?))
+    pub fn from_bytes(bytes: &Bound<PyBytes>) -> PyResult<Self> {
+        ommx::RemovedConstraint::from_bytes(bytes.as_bytes())
+            .map(Self)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {

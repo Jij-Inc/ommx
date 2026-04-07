@@ -1,9 +1,9 @@
 use crate::{
     Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction, ParametricInstance,
-    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, VariableBound,
+    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
 };
 use anyhow::Result;
-use ommx::{ConstraintID, Evaluate, Message, NamedFunctionID, Parse, VariableID};
+use ommx::{ConstraintID, Evaluate, NamedFunctionID, Parse, VariableID};
 use pyo3::{
     exceptions::PyKeyError,
     prelude::*,
@@ -212,32 +212,49 @@ impl Instance {
         Ok(ParametricInstance(parametric_instance))
     }
 
+    /// Evaluate the instance with the given state.
+    ///
+    /// Args:
+    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
+    ///     atol: Optional absolute tolerance for evaluation
+    ///
+    /// Returns:
+    ///     Solution containing objective value, constraint evaluations, and feasibility
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Solution> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Solution> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        let solution = self.0.evaluate(&state, atol)?;
+        let solution = self
+            .0
+            .evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(Solution(solution))
     }
 
+    /// Partially evaluate the instance with the given state.
+    ///
+    /// Args:
+    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
+    ///     atol: Optional absolute tolerance for evaluation
+    ///
+    /// Returns:
+    ///     Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate<'py>(
-        &mut self,
-        py: Python<'py>,
-        state: &Bound<PyBytes>,
-        atol: Option<f64>,
-    ) -> Result<Bound<'py, PyBytes>> {
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn partial_evaluate(&mut self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Self> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.0.partial_evaluate(&state, atol)?;
-        let inner: ommx::v1::Instance = self.0.clone().into();
-        Ok(PyBytes::new(py, &inner.encode_to_vec()))
+        self.0
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+        Ok(self.clone())
     }
 
     #[pyo3(signature = (samples, *, atol=None))]

@@ -176,21 +176,40 @@ class TestNamedFunctionConstraint:
 
 
 class TestNamedFunctionEvaluate:
-    def test_evaluate(self):
+    def test_evaluate_with_state(self):
+        """Test evaluate with State object."""
         x = DecisionVariable.integer(1)
         nf = NamedFunction(id=0, function=2 * x + 3, name="f")
         state = State({1: 5.0})
-        result_bytes = nf.evaluate(state.to_bytes())
-        result = rust.EvaluatedNamedFunction.from_bytes(result_bytes)
+        result = nf.evaluate(state)
+        assert isinstance(result, rust.EvaluatedNamedFunction)
         assert result.evaluated_value == 13.0
 
-    def test_partial_evaluate(self):
+    def test_evaluate_with_dict(self):
+        """Test evaluate with dict (ToState)."""
+        x = DecisionVariable.integer(1)
+        nf = NamedFunction(id=0, function=2 * x + 3, name="f")
+        result = nf.evaluate({1: 5.0})
+        assert isinstance(result, rust.EvaluatedNamedFunction)
+        assert result.evaluated_value == 13.0
+
+    def test_partial_evaluate_with_state(self):
+        """Test partial_evaluate with State object."""
         x1 = DecisionVariable.integer(1)
         x2 = DecisionVariable.integer(2)
         nf = NamedFunction(id=0, function=2 * x1 + 3 * x2 + 1)
         state = State({1: 4.0})
-        result_bytes = nf.partial_evaluate(state.to_bytes())
-        nf2 = NamedFunction.from_bytes(result_bytes)
+        nf2 = nf.partial_evaluate(state)
+        assert isinstance(nf2, NamedFunction)
+        # After substituting x1=4: 8 + 3*x2 + 1 = 3*x2 + 9
+        assert nf2.function.evaluate({2: 2.0}) == 15.0
+
+    def test_partial_evaluate_with_dict(self):
+        """Test partial_evaluate with dict (ToState)."""
+        x1 = DecisionVariable.integer(1)
+        x2 = DecisionVariable.integer(2)
+        nf = NamedFunction(id=0, function=2 * x1 + 3 * x2 + 1)
+        nf2 = nf.partial_evaluate({1: 4.0})
         assert isinstance(nf2, NamedFunction)
         # After substituting x1=4: 8 + 3*x2 + 1 = 3*x2 + 9
         assert nf2.function.evaluate({2: 2.0}) == 15.0

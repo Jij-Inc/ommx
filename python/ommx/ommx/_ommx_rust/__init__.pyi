@@ -219,11 +219,33 @@ class Constraint:
     def from_bytes(bytes: bytes) -> Constraint: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedConstraint:
+        r"""
+        Evaluate the constraint with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            EvaluatedConstraint containing the evaluated value and feasibility
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> Constraint:
+        r"""
+        Partially evaluate the constraint with the given state.
+
+        This modifies self in-place and returns self for method chaining.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
     def set_name(self, name: builtins.str) -> Constraint:
         r"""
         Set the name of the constraint
@@ -943,11 +965,31 @@ class Instance:
     def penalty_method(self) -> ParametricInstance: ...
     def uniform_penalty_method(self) -> ParametricInstance: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> Solution: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> Solution:
+        r"""
+        Evaluate the instance with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Solution containing objective value, constraint evaluations, and feasibility
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> Instance:
+        r"""
+        Partially evaluate the instance with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
     def evaluate_samples(
         self, samples: Samples, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
@@ -1214,11 +1256,33 @@ class NamedFunction:
     def from_bytes(bytes: bytes) -> NamedFunction: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedNamedFunction:
+        r"""
+        Evaluate the named function with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            EvaluatedNamedFunction containing the evaluated value
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+    ) -> NamedFunction:
+        r"""
+        Partially evaluate the named function with the given state.
+
+        This modifies self in-place and returns self for method chaining.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
     def __add__(self, other: typing.Any) -> Function:
         r"""
         Addition: returns self.function + other
