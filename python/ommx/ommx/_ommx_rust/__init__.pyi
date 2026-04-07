@@ -764,19 +764,19 @@ class Function:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> Function:
+    def __add__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
         """
-    def __radd__(self, lhs: typing.Any) -> Function:
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse addition (lhs + self)
         """
-    def __sub__(self, rhs: typing.Any) -> Function:
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
         """
-    def __rsub__(self, lhs: typing.Any) -> Function:
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse subtraction (lhs - self)
         """
@@ -785,11 +785,11 @@ class Function:
         r"""
         In-place addition for += operator
         """
-    def __mul__(self, rhs: typing.Any) -> Function:
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
         """
-    def __rmul__(self, lhs: typing.Any) -> Function:
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse multiplication (lhs * self)
         """
@@ -1340,19 +1340,19 @@ class Polynomial:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> Polynomial:
+    def __add__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic addition - all types promote to Polynomial
         """
-    def __radd__(self, lhs: typing.Any) -> Polynomial:
+    def __radd__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse addition (lhs + self)
         """
-    def __sub__(self, rhs: typing.Any) -> Polynomial:
+    def __sub__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic subtraction
         """
-    def __rsub__(self, lhs: typing.Any) -> Polynomial:
+    def __rsub__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse subtraction (lhs - self)
         """
@@ -1361,11 +1361,11 @@ class Polynomial:
         r"""
         In-place addition for += operator
         """
-    def __mul__(self, rhs: typing.Any) -> Polynomial:
+    def __mul__(self, rhs: typing.Any) -> typing.Any:
         r"""
         Polymorphic multiplication
         """
-    def __rmul__(self, lhs: typing.Any) -> Polynomial:
+    def __rmul__(self, lhs: typing.Any) -> typing.Any:
         r"""
         Reverse multiplication (lhs * self)
         """
