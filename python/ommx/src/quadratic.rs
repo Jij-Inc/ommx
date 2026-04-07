@@ -1,4 +1,6 @@
-use crate::{next_constraint_id, Constraint, DecisionVariable, Linear, Polynomial, Rng, State};
+use crate::{
+    next_constraint_id, Constraint, DecisionVariable, Linear, Parameter, Polynomial, Rng, State,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
@@ -140,24 +142,22 @@ impl Quadratic {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let rhs_linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Quadratic(&self.0 + &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
         // Try to extract from Python wrapper (has .raw attribute pointing to DecisionVariable)
         if let Ok(raw) = rhs.getattr("raw") {
             if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
                 let rhs_linear = ommx::Linear::single_term(
                     LinearMonomial::Variable(dv.0.id()),
-                    ommx::coeff!(1.0),
-                );
-                return Ok(Quadratic(&self.0 + &rhs_linear)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind());
-            }
-        }
-        // Try to handle VariableBase objects (like Parameter) which have an `id` property
-        if let Ok(id_attr) = rhs.getattr("id") {
-            if let Ok(id) = id_attr.extract::<u64>() {
-                let rhs_linear = ommx::Linear::single_term(
-                    LinearMonomial::Variable(id.into()),
                     ommx::coeff!(1.0),
                 );
                 return Ok(Quadratic(&self.0 + &rhs_linear)
@@ -211,24 +211,22 @@ impl Quadratic {
                 .into_any()
                 .unbind());
         }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let rhs_linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Quadratic(self.0.clone() - &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
         // Try to extract from Python wrapper (has .raw attribute pointing to DecisionVariable)
         if let Ok(raw) = rhs.getattr("raw") {
             if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
                 let rhs_linear = ommx::Linear::single_term(
                     LinearMonomial::Variable(dv.0.id()),
-                    ommx::coeff!(1.0),
-                );
-                return Ok(Quadratic(self.0.clone() - &rhs_linear)
-                    .into_pyobject(py)?
-                    .into_any()
-                    .unbind());
-            }
-        }
-        // Try to handle VariableBase objects (like Parameter) which have an `id` property
-        if let Ok(id_attr) = rhs.getattr("id") {
-            if let Ok(id) = id_attr.extract::<u64>() {
-                let rhs_linear = ommx::Linear::single_term(
-                    LinearMonomial::Variable(id.into()),
                     ommx::coeff!(1.0),
                 );
                 return Ok(Quadratic(self.0.clone() - &rhs_linear)
@@ -288,6 +286,17 @@ impl Quadratic {
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let rhs_linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Polynomial(&self.0 * &rhs_linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let rhs_linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
             return Ok(Polynomial(&self.0 * &rhs_linear)
                 .into_pyobject(py)?
                 .into_any()

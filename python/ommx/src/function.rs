@@ -1,5 +1,6 @@
 use crate::{
-    next_constraint_id, Constraint, DecisionVariable, Linear, Polynomial, Quadratic, Rng, State,
+    next_constraint_id, Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic,
+    Rng, State,
 };
 
 use anyhow::{anyhow, Result};
@@ -82,6 +83,14 @@ impl Function {
         if let Ok(dv) = inner.extract::<DecisionVariable>() {
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = inner.extract::<Parameter>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
             return Ok(Self(ommx::Function::from(linear)));
         }
         // Try to extract from Python wrapper (has .raw attribute)
@@ -226,6 +235,14 @@ impl Function {
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Function(&self.0 + &linear));
         }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Function(&self.0 + &linear));
+        }
         // Try to extract from Python wrapper (has .raw attribute)
         if let Ok(raw) = rhs.getattr("raw") {
             if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
@@ -273,6 +290,14 @@ impl Function {
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(self.0.clone() - linear));
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
             return Ok(Function(self.0.clone() - linear));
         }
         // Try to extract from Python wrapper (has .raw attribute)
@@ -331,6 +356,14 @@ impl Function {
         if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
             let linear =
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(&self.0 * &linear));
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
             return Ok(Function(&self.0 * &linear));
         }
         // Try to extract from Python wrapper (has .raw attribute)
