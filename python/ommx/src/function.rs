@@ -377,7 +377,7 @@ impl Function {
     /// In-place addition for += operator
     ///
     /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-    /// See https://github.com/PyO3/pyo3/issues/4605 for details.
+    /// See <https://github.com/PyO3/pyo3/issues/4605> for details.
     pub fn __iadd__(&mut self, rhs: &Function) {
         self.0 += &rhs.0;
     }
