@@ -5,12 +5,12 @@ use pyo3::{prelude::*, types::PyBytes, Bound};
 use std::collections::HashMap;
 
 /// NamedFunction wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct NamedFunction(pub ommx::NamedFunction);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl NamedFunction {
     #[new]

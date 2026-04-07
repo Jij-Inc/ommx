@@ -1,23 +1,132 @@
-use crate::{Linear, Polynomial, Quadratic, Rng};
+use crate::{
+    next_constraint_id, Constraint, DecisionVariable, Linear, Parameter, Polynomial, Quadratic,
+    Rng, State,
+};
 
 use anyhow::{anyhow, Result};
 use approx::AbsDiffEq;
-use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
+use ommx::{ATol, Coefficient, CoefficientError, Evaluate, LinearMonomial};
 use pyo3::{
+    exceptions::PyTypeError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+/// General mathematical function of decision variables.
+///
+/// Function is a unified type that can represent constant, linear, quadratic,
+/// or polynomial functions. It is used as the objective function and constraint
+/// functions in optimization problems.
+///
+/// Example
+/// -------
+/// Create from various types:
+///
+/// >>> f = Function(1.0)  # Constant
+/// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+/// >>> f = Function(x * y)  # From Quadratic expression
+///
+/// Access the terms:
+///
+/// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+/// >>> f.terms
+/// {(1,): 2.5, (): 1.0}
+///
+/// Check the degree:
+///
+/// >>> f.degree()
+/// 1
+///
+/// .
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Function {
+    /// Create a Function from various types.
+    ///
+    /// Accepts:
+    /// - int or float: creates a constant function
+    /// - DecisionVariable: creates a linear function with single term
+    /// - Linear: creates a linear function
+    /// - Quadratic: creates a quadratic function
+    /// - Polynomial: creates a polynomial function
+    /// - Function: returns a copy
+    #[new]
+    pub fn new(inner: &Bound<PyAny>) -> PyResult<Self> {
+        // Try to extract as Function first (check if it's already our type)
+        if inner.is_instance_of::<Self>() {
+            return Ok(inner.extract::<Self>()?);
+        }
+        // Also try direct extraction in case the type check fails
+        if let Ok(f) = inner.extract::<Self>() {
+            return Ok(f);
+        }
+        // Try to extract as Polynomial
+        if let Ok(p) = inner.extract::<Polynomial>() {
+            return Ok(Self(ommx::Function::from(p.0)));
+        }
+        // Try to extract as Quadratic
+        if let Ok(q) = inner.extract::<Quadratic>() {
+            return Ok(Self(ommx::Function::from(q.0)));
+        }
+        // Try to extract as Linear
+        if let Ok(l) = inner.extract::<Linear>() {
+            return Ok(Self(ommx::Function::from(l.0)));
+        }
+        // Try to extract as Rust DecisionVariable directly
+        if let Ok(dv) = inner.extract::<DecisionVariable>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = inner.extract::<Parameter>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = inner.getattr("raw") {
+            if let Ok(dv) = raw.extract::<DecisionVariable>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Self(ommx::Function::from(linear)));
+            }
+        }
+        // Try to extract as float
+        if let Ok(scalar) = inner.extract::<f64>() {
+            return match TryInto::<Coefficient>::try_into(scalar) {
+                Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
+                Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())),
+                Err(e) => Err(PyTypeError::new_err(e.to_string())),
+            };
+        }
+        // Try to extract as protobuf message (has SerializeToString method)
+        if let Ok(serialize_method) = inner.getattr("SerializeToString") {
+            if let Ok(bytes) = serialize_method.call0() {
+                if let Ok(bytes_data) = bytes.extract::<Vec<u8>>() {
+                    return ommx::Function::from_bytes(&bytes_data)
+                        .map(Self)
+                        .map_err(|e| PyTypeError::new_err(e.to_string()));
+                }
+            }
+        }
+        Err(PyTypeError::new_err(format!(
+            "Cannot create Function from {}",
+            inner.get_type().name()?
+        )))
+    }
+
     #[staticmethod]
     pub fn from_scalar(scalar: f64) -> Result<Self> {
         match TryInto::<Coefficient>::try_into(scalar) {
@@ -98,20 +207,258 @@ impl Function {
         format!("Function({})", self.0)
     }
 
-    pub fn __add__(&self, rhs: &Function) -> Function {
-        Function(&self.0 + &rhs.0)
+    /// Negation operator
+    pub fn __neg__(&self) -> Function {
+        Function(-self.0.clone())
     }
 
-    pub fn __sub__(&self, rhs: &Function) -> Function {
-        Function(&self.0 - &rhs.0)
+    /// Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__add__")]
+    pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 + &func.0)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(self
+                .add_polynomial(&poly)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(self
+                .add_quadratic(&quad)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self
+                .add_linear(&linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust DecisionVariable directly
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            // DecisionVariable → Linear(id, 1) conversion
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(&self.0 + &linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Function(&self.0 + &linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(&self.0 + &linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            let func = self
+                .add_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(func.into_pyobject(py)?.into_any().unbind());
+        }
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
+    }
+
+    /// Reverse addition (lhs + self)
+    pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        self.py_add(py, lhs) // Addition is commutative
+    }
+
+    /// Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__sub__")]
+    pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        // self - rhs: clone self and use owned subtraction
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 - &func.0)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(Function(self.0.clone() - poly.0.clone())
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(Function(self.0.clone() - quad.0.clone())
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(Function(self.0.clone() - linear.0.clone())
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust DecisionVariable directly
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(self.0.clone() - linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Function(self.0.clone() - linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(self.0.clone() - linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            let func = self
+                .add_scalar(-val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(func.into_pyobject(py)?.into_any().unbind());
+        }
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
+    }
+
+    /// Reverse subtraction (lhs - self)
+    pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        // lhs - self = -self + lhs
+        self.__neg__().py_add(py, lhs)
     }
 
     pub fn add_assign(&mut self, rhs: &Function) {
         self.0 += &rhs.0;
     }
 
-    pub fn __mul__(&self, rhs: &Function) -> Function {
-        Function(&self.0 * &rhs.0)
+    /// In-place addition for += operator
+    ///
+    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+    /// See <https://github.com/PyO3/pyo3/issues/4605> for details.
+    pub fn __iadd__(&mut self, rhs: &Function) {
+        self.0 += &rhs.0;
+    }
+
+    /// Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+    #[pyo3(name = "__mul__")]
+    pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        // Type check order: custom types first, then primitives
+        if let Ok(func) = rhs.extract::<PyRef<Function>>() {
+            return Ok(Function(&self.0 * &func.0)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
+            return Ok(self
+                .mul_polynomial(&poly)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(quad) = rhs.extract::<PyRef<Quadratic>>() {
+            return Ok(self
+                .mul_quadratic(&quad)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(linear) = rhs.extract::<PyRef<Linear>>() {
+            return Ok(self
+                .mul_linear(&linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust DecisionVariable directly
+        if let Ok(dv) = rhs.extract::<PyRef<DecisionVariable>>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Function(&self.0 * &linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract as Rust Parameter directly
+        if let Ok(param) = rhs.extract::<PyRef<Parameter>>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Function(&self.0 * &linear)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        // Try to extract from Python wrapper (has .raw attribute)
+        if let Ok(raw) = rhs.getattr("raw") {
+            if let Ok(dv) = raw.extract::<PyRef<DecisionVariable>>() {
+                let linear = ommx::Linear::single_term(
+                    LinearMonomial::Variable(dv.0.id()),
+                    ommx::coeff!(1.0),
+                );
+                return Ok(Function(&self.0 * &linear)
+                    .into_pyobject(py)?
+                    .into_any()
+                    .unbind());
+            }
+        }
+        if let Ok(val) = rhs.extract::<f64>() {
+            let func = self
+                .mul_scalar(val)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+            return Ok(func.into_pyobject(py)?.into_any().unbind());
+        }
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
+    }
+
+    /// Reverse multiplication (lhs * self)
+    pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
+        self.py_mul(py, lhs) // Multiplication is commutative
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {
@@ -166,6 +513,7 @@ impl Function {
             .collect()
     }
 
+    #[getter]
     pub fn terms<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let obj = serde_pyobject::to_pyobject(py, &self.0)?;
         Ok(obj.cast::<PyDict>()?.clone())
@@ -228,26 +576,31 @@ impl Function {
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<f64> {
-        use ommx::{Evaluate, Message};
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<f64> {
+        use ommx::Evaluate;
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.0.evaluate(&state, atol)
+        self.0
+            .evaluate(&state.0, atol)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&self, state: &Bound<PyBytes>, atol: Option<f64>) -> Result<Function> {
-        use ommx::Message;
-        let state = ommx::v1::State::decode(state.as_bytes())?;
+    pub fn partial_evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Function> {
+        let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => ommx::ATol::new(value)?,
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
-        inner.partial_evaluate(&state, atol)?;
+        inner
+            .partial_evaluate(&state.0, atol)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Function(inner))
     }
 
@@ -287,4 +640,89 @@ impl Function {
             binary_ids.into_iter().map(ommx::VariableID::from).collect();
         self.0.reduce_binary_power(&variable_id_set)
     }
+
+    /// Create an equality constraint: self == other → Constraint with EqualToZero
+    ///
+    /// Returns a Constraint where (self - other) == 0.
+    /// Note: This does NOT return bool, it creates a Constraint object.
+    #[gen_stub(type_ignore = ["override"])]
+    #[pyo3(name = "__eq__")]
+    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(py, other)?;
+        let function = extract_to_function(py, diff)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function,
+            equality: ommx::Equality::EqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (self - other) <= 0.
+    #[pyo3(name = "__le__")]
+    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        let diff = self.py_sub(py, other)?;
+        let function = extract_to_function(py, diff)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function,
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+
+    /// Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
+    ///
+    /// Returns a Constraint where (other - self) <= 0.
+    #[pyo3(name = "__ge__")]
+    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
+        // self >= other is equivalent to other - self <= 0
+        // But we need to express other as a Function first
+        let neg_self = self.__neg__();
+        let diff = neg_self.py_add(py, other)?;
+        let function = extract_to_function(py, diff)?;
+        let id = next_constraint_id();
+        Ok(Constraint(ommx::Constraint {
+            id: ommx::ConstraintID::from(id),
+            function,
+            equality: ommx::Equality::LessThanOrEqualToZero,
+            name: None,
+            subscripts: Vec::new(),
+            parameters: Default::default(),
+            description: None,
+        }))
+    }
+}
+
+/// Helper function to extract a PyAny result into ommx::Function.
+///
+/// This is used by comparison operators (`__eq__`, `__le__`, `__ge__`) to convert
+/// the result of subtraction (which may be Linear, Quadratic, Polynomial, or Function)
+/// into an ommx::Function for creating a Constraint.
+pub(crate) fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
+    if let Ok(func) = obj.extract::<Function>(py) {
+        return Ok(func.0);
+    }
+    if let Ok(poly) = obj.extract::<Polynomial>(py) {
+        return Ok(ommx::Function::from(poly.0));
+    }
+    if let Ok(quad) = obj.extract::<Quadratic>(py) {
+        return Ok(ommx::Function::from(quad.0));
+    }
+    if let Ok(linear) = obj.extract::<Linear>(py) {
+        return Ok(ommx::Function::from(linear.0));
+    }
+    Err(PyTypeError::new_err(
+        "Cannot convert to Function: expected Linear, Quadratic, Polynomial, or Function",
+    ))
 }

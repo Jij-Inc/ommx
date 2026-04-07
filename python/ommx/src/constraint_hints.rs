@@ -3,12 +3,12 @@ use pyo3::{prelude::*, Bound, PyAny};
 use std::collections::BTreeSet;
 
 /// OneHot constraint hint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct OneHot(pub ommx::OneHot);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl OneHot {
     #[new]
@@ -47,12 +47,12 @@ impl OneHot {
 }
 
 /// SOS1 constraint hint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sos1(pub ommx::Sos1);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Sos1 {
     #[new]
@@ -114,12 +114,12 @@ impl Sos1 {
 }
 
 /// ConstraintHints wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass(eq)]
 #[derive(Clone, PartialEq)]
 pub struct ConstraintHints(pub ommx::ConstraintHints);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl ConstraintHints {
     #[new]

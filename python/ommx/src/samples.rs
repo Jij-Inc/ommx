@@ -8,7 +8,7 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
@@ -35,7 +35,7 @@ fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
     Err(type_error())
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Samples {
     #[new]

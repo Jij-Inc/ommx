@@ -4,14 +4,49 @@ use fnv::FnvHashMap;
 use ommx::{ConstraintID, Evaluate, Message};
 use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Global counter for auto-generating constraint IDs
+static CONSTRAINT_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Get next constraint ID (thread-safe)
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn next_constraint_id() -> u64 {
+    CONSTRAINT_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
+}
+
+/// Set constraint ID counter (for deserialization compatibility)
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn set_constraint_id_counter(value: u64) {
+    CONSTRAINT_ID_COUNTER.store(value, Ordering::SeqCst);
+}
+
+/// Update counter to ensure it's at least the given value + 1
+/// Returns the new counter value after update
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn update_constraint_id_counter(value: u64) -> u64 {
+    let new_value = value + 1;
+    let previous = CONSTRAINT_ID_COUNTER.fetch_max(new_value, Ordering::SeqCst);
+    previous.max(new_value)
+}
+
+/// Get current constraint ID counter value
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
+#[pyfunction]
+pub fn get_constraint_id_counter() -> u64 {
+    CONSTRAINT_ID_COUNTER.load(Ordering::SeqCst)
+}
 
 /// Constraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct Constraint(pub ommx::Constraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Constraint {
     #[new]
@@ -46,6 +81,16 @@ impl Constraint {
         self.0.id.into_inner()
     }
 
+    /// Return a clone of self for backward compatibility with Python wrapper pattern.
+    ///
+    /// This allows code like `constraint.raw` to work when migrating from the old
+    /// Python wrapper class. Note that this returns a clone, not the same object,
+    /// so `constraint.raw is constraint` will be `False`.
+    #[getter]
+    pub fn raw(&self) -> Constraint {
+        self.clone()
+    }
+
     #[getter]
     pub fn function(&self) -> Function {
         Function(self.0.function.clone())
@@ -57,8 +102,8 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn name(&self) -> String {
-        self.0.name.clone().unwrap_or_default()
+    pub fn name(&self) -> Option<String> {
+        self.0.name.clone()
     }
 
     #[getter]
@@ -67,8 +112,8 @@ impl Constraint {
     }
 
     #[getter]
-    pub fn description(&self) -> String {
-        self.0.description.clone().unwrap_or_default()
+    pub fn description(&self) -> Option<String> {
+        self.0.description.clone()
     }
 
     #[getter]
@@ -124,38 +169,70 @@ impl Constraint {
     }
 
     /// Set the name of the constraint
-    pub fn set_name(&mut self, name: String) {
+    /// Returns self for method chaining
+    pub fn set_name(&mut self, name: String) -> Self {
         self.0.name = Some(name);
+        self.clone()
+    }
+
+    /// Alias for set_name (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_name(&mut self, name: String) -> Self {
+        self.set_name(name)
     }
 
     /// Set the subscripts of the constraint
-    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) {
+    /// Returns self for method chaining
+    pub fn set_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
         self.0.subscripts = subscripts;
+        self.clone()
     }
 
     /// Add subscripts to the constraint
-    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) {
+    /// Returns self for method chaining
+    pub fn add_subscripts(&mut self, subscripts: Vec<i64>) -> Self {
         self.0.subscripts.extend(subscripts);
+        self.clone()
     }
 
     /// Set the ID of the constraint
-    pub fn set_id(&mut self, id: u64) {
+    /// Returns self for method chaining
+    pub fn set_id(&mut self, id: u64) -> Self {
         self.0.id = ConstraintID::from(id);
+        self.clone()
     }
 
     /// Set the description of the constraint
-    pub fn set_description(&mut self, description: String) {
+    /// Returns self for method chaining
+    pub fn set_description(&mut self, description: String) -> Self {
         self.0.description = Some(description);
+        self.clone()
+    }
+
+    /// Alias for set_description (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_description(&mut self, description: String) -> Self {
+        self.set_description(description)
     }
 
     /// Set the parameters of the constraint
-    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) {
+    /// Returns self for method chaining
+    pub fn set_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
         self.0.parameters = parameters.into_iter().collect();
+        self.clone()
+    }
+
+    /// Alias for set_parameters (backward compatibility)
+    /// Returns self for method chaining
+    pub fn add_parameters(&mut self, parameters: HashMap<String, String>) -> Self {
+        self.set_parameters(parameters)
     }
 
     /// Add a parameter to the constraint
-    pub fn add_parameter(&mut self, key: String, value: String) {
+    /// Returns self for method chaining
+    pub fn add_parameter(&mut self, key: String, value: String) -> Self {
         self.0.parameters.insert(key, value);
+        self.clone()
     }
 
     pub fn __repr__(&self) -> String {
@@ -175,12 +252,12 @@ impl Constraint {
 }
 
 /// RemovedConstraint wrapper for Python
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyclass)]
+#[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
 pub struct RemovedConstraint(pub ommx::RemovedConstraint);
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pymethods)]
+#[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl RemovedConstraint {
     #[new]

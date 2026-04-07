@@ -15,6 +15,7 @@ mod function;
 mod instance;
 mod linear;
 mod named_function;
+mod parameter;
 mod parameters;
 mod parametric_instance;
 mod polynomial;
@@ -45,6 +46,7 @@ pub use function::*;
 pub use instance::*;
 pub use linear::*;
 pub use named_function::*;
+pub use parameter::*;
 pub use parameters::*;
 pub use parametric_instance::*;
 pub use polynomial::*;
@@ -60,13 +62,13 @@ pub use state::*;
 
 use pyo3::prelude::*;
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn set_default_atol(value: f64) -> anyhow::Result<()> {
     ommx::ATol::set_default(value)
 }
 
-#[cfg_attr(feature = "stub_gen", pyo3_stub_gen::derive::gen_stub_pyfunction)]
+#[pyo3_stub_gen::derive::gen_stub_pyfunction]
 #[pyfunction]
 pub fn get_default_atol() -> f64 {
     ommx::ATol::default().into_inner()
@@ -99,6 +101,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<InstanceDescription>()?;
     m.add_class::<DecisionVariableAnalysis>()?;
     m.add_class::<DecisionVariable>()?;
+    m.add_class::<Parameter>()?;
     m.add_class::<Constraint>()?;
     m.add_class::<NamedFunction>()?;
     m.add_class::<RemovedConstraint>()?;
@@ -139,8 +142,13 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(set_default_atol, m)?)?;
     m.add_function(wrap_pyfunction!(get_default_atol, m)?)?;
 
+    // Constraint ID management
+    m.add_function(wrap_pyfunction!(next_constraint_id, m)?)?;
+    m.add_function(wrap_pyfunction!(set_constraint_id_counter, m)?)?;
+    m.add_function(wrap_pyfunction!(update_constraint_id_counter, m)?)?;
+    m.add_function(wrap_pyfunction!(get_constraint_id_counter, m)?)?;
+
     Ok(())
 }
 
-#[cfg(feature = "stub_gen")]
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
