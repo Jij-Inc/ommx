@@ -100,6 +100,7 @@ __all__ = [
     "ParametricInstance",
     "Solution",
     "Constraint",
+    "RemovedConstraint",
     "SampleSet",
     # Function and its bases
     "DecisionVariable",
@@ -624,7 +625,7 @@ class Instance(UserAnnotationBase):
         >>> instance.evaluate({0: 1, 1: 0})
         Traceback (most recent call last):
             ...
-        RuntimeError: The state does not contain some required IDs: {VariableID(2)}
+        ValueError: The state does not contain some required IDs: {VariableID(2)}
 
         Irrelevant decision variables
         -----------------------------
@@ -668,8 +669,7 @@ class Instance(UserAnnotationBase):
         2   Binary    0.0    1.0         []    0.0
         
         """
-        out = self.raw.evaluate(State(state).to_bytes(), atol=atol)
-        return Solution(out)
+        return Solution(self.raw.evaluate(state, atol=atol))
 
     def partial_evaluate(
         self, state: ToState, *, atol: float | None = None
@@ -724,10 +724,9 @@ class Instance(UserAnnotationBase):
         2   Binary    0.0    1.0         []              <NA>
 
         """
-        # Create a copy of the instance and call partial_evaluate on it
-        # Note: partial_evaluate modifies the instance in place and returns bytes
+        # Create a copy and call partial_evaluate on it (modifies in place)
         temp_instance = copy.deepcopy(self.raw)
-        temp_instance.partial_evaluate(State(state).to_bytes(), atol=atol)
+        temp_instance.partial_evaluate(state, atol=atol)
         return Instance(temp_instance)
 
     def used_decision_variable_ids(self) -> set[int]:
