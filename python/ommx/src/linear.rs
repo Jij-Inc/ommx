@@ -350,7 +350,10 @@ impl Linear {
     }
 
     /// In-place addition for += operator
-    /// Note: PyO3's __iadd__ should return () and Python will keep the same reference
+    ///
+    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
+    /// This is the expected behavior per PyO3's design - see https://github.com/PyO3/pyo3/issues/4605
+    /// The stub file shows `-> None` but the actual Python behavior is correct (`x += y` keeps `x` as Linear).
     pub fn __iadd__(&mut self, rhs: &Linear) {
         self.0 += &rhs.0;
     }
