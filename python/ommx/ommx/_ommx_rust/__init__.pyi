@@ -6,7 +6,6 @@ import enum
 import os
 import pathlib
 import typing
-from math import inf
 
 __all__ = [
     "ArtifactArchive",
@@ -352,8 +351,8 @@ class DecisionVariable:
     @staticmethod
     def integer(
         id: builtins.int,
-        lower: builtins.float = -inf,
-        upper: builtins.float = inf,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -362,8 +361,8 @@ class DecisionVariable:
     @staticmethod
     def continuous(
         id: builtins.int,
-        lower: builtins.float = -inf,
-        upper: builtins.float = inf,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -372,8 +371,8 @@ class DecisionVariable:
     @staticmethod
     def semi_integer(
         id: builtins.int,
-        lower: builtins.float = -inf,
-        upper: builtins.float = inf,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
@@ -382,8 +381,8 @@ class DecisionVariable:
     @staticmethod
     def semi_continuous(
         id: builtins.int,
-        lower: builtins.float = -inf,
-        upper: builtins.float = inf,
+        lower: builtins.float = float("-inf"),
+        upper: builtins.float = float("inf"),
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
