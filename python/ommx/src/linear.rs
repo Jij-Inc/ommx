@@ -12,6 +12,31 @@ use pyo3::{
 };
 use std::collections::BTreeMap;
 
+/// Linear function of decision variables.
+///
+/// A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
+/// and `cᵢ` are coefficients.
+///
+/// Example
+/// -------
+/// Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
+///
+///     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+///
+/// Or create via DecisionVariable arithmetic:
+///
+///     >>> x1 = DecisionVariable.integer(1)
+///     >>> x2 = DecisionVariable.integer(2)
+///     >>> g = 2*x1 + 3*x2 + 1
+///
+/// Compare two linear functions with tolerance:
+///
+///     >>> f.almost_equal(g, atol=1e-12)
+///     True
+///
+/// Note that `==` creates an equality Constraint, not a boolean:
+///
+///     >>> constraint = f == g  # Returns Constraint, not bool
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

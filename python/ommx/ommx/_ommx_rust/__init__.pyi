@@ -643,6 +643,32 @@ class EvaluatedNamedFunction:
 
 @typing.final
 class Function:
+    r"""
+    General mathematical function of decision variables.
+
+    Function is a unified type that can represent constant, linear, quadratic,
+    or polynomial functions. It is used as the objective function and constraint
+    functions in optimization problems.
+
+    Example
+    -------
+    Create from various types:
+
+        >>> f = Function(1.0)  # Constant
+        >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+        >>> f = Function(x * y)  # From Quadratic expression
+
+    Access the terms:
+
+        >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+        >>> f.terms
+        {(1,): 2.5, (): 1.0}
+
+    Check the degree:
+
+        >>> f.degree()
+        1
+    """
     @property
     def terms(self) -> dict: ...
     @property
@@ -1004,6 +1030,33 @@ class InstanceDescription:
 
 @typing.final
 class Linear:
+    r"""
+    Linear function of decision variables.
+
+    A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
+    and `cᵢ` are coefficients.
+
+    Example
+    -------
+    Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
+
+        >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+
+    Or create via DecisionVariable arithmetic:
+
+        >>> x1 = DecisionVariable.integer(1)
+        >>> x2 = DecisionVariable.integer(2)
+        >>> g = 2*x1 + 3*x2 + 1
+
+    Compare two linear functions with tolerance:
+
+        >>> f.almost_equal(g, atol=1e-12)
+        True
+
+    Note that `==` creates an equality Constraint, not a boolean:
+
+        >>> constraint = f == g  # Returns Constraint, not bool
+    """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @property
@@ -1250,6 +1303,24 @@ class ParametricInstance:
 
 @typing.final
 class Polynomial:
+    r"""
+    Polynomial function of decision variables.
+
+    A polynomial function of arbitrary degree with terms of the form `c * x₁^a₁ * x₂^a₂ * ...`
+    where `xᵢ` are decision variables and `c` is a coefficient.
+
+    Example
+    -------
+    Create via DecisionVariable operations:
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+
+    Note that `==`, `<=`, `>=` create Constraint objects:
+
+        >>> constraint = p == 0  # Returns Constraint
+    """
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
     ) -> Polynomial: ...
@@ -1330,6 +1401,24 @@ class Polynomial:
 
 @typing.final
 class Quadratic:
+    r"""
+    Quadratic function of decision variables.
+
+    A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
+    where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
+
+    Example
+    -------
+    Create via DecisionVariable multiplication:
+
+        >>> x = DecisionVariable.integer(1)
+        >>> y = DecisionVariable.integer(2)
+        >>> q = x * y + 2*x + 3*y + 1
+
+    Note that `==`, `<=`, `>=` create Constraint objects:
+
+        >>> constraint = q <= 10  # Returns Constraint
+    """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @property

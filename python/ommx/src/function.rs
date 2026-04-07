@@ -13,6 +13,30 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+/// General mathematical function of decision variables.
+///
+/// Function is a unified type that can represent constant, linear, quadratic,
+/// or polynomial functions. It is used as the objective function and constraint
+/// functions in optimization problems.
+///
+/// Example
+/// -------
+/// Create from various types:
+///
+///     >>> f = Function(1.0)  # Constant
+///     >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
+///     >>> f = Function(x * y)  # From Quadratic expression
+///
+/// Access the terms:
+///
+///     >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
+///     >>> f.terms
+///     {(1,): 2.5, (): 1.0}
+///
+/// Check the degree:
+///
+///     >>> f.degree()
+///     1
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

@@ -11,6 +11,22 @@ use pyo3::{
 };
 use std::collections::BTreeMap;
 
+/// Quadratic function of decision variables.
+///
+/// A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
+/// where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
+///
+/// Example
+/// -------
+/// Create via DecisionVariable multiplication:
+///
+///     >>> x = DecisionVariable.integer(1)
+///     >>> y = DecisionVariable.integer(2)
+///     >>> q = x * y + 2*x + 3*y + 1
+///
+/// Note that `==`, `<=`, `>=` create Constraint objects:
+///
+///     >>> constraint = q <= 10  # Returns Constraint
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
