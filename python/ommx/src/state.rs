@@ -3,6 +3,15 @@ use ommx::Message;
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::{BTreeMap, HashMap};
 
+/// Normalize -0.0 to 0.0 to match protobuf serialization behavior
+fn normalize_zero(value: f64) -> f64 {
+    if value == 0.0 {
+        0.0
+    } else {
+        value
+    }
+}
+
 /// State wrapper for Python
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
@@ -29,7 +38,10 @@ impl State {
         // Accept dict[int, float]
         if let Ok(entries) = entries.extract::<HashMap<u64, f64>>() {
             let mut state = ommx::v1::State::default();
-            state.entries = entries;
+            state.entries = entries
+                .into_iter()
+                .map(|(k, v)| (k, normalize_zero(v)))
+                .collect();
             return Ok(Self(state));
         }
         let err = || {
@@ -40,7 +52,7 @@ impl State {
             let mut state = ommx::v1::State::default();
             for item in iter {
                 let (key, value) = item?.extract::<(u64, f64)>().map_err(|_| err())?;
-                state.entries.insert(key, value);
+                state.entries.insert(key, normalize_zero(value));
             }
             return Ok(Self(state));
         }
@@ -64,7 +76,10 @@ impl State {
 
     #[setter]
     pub fn set_entries(&mut self, entries: HashMap<u64, f64>) {
-        self.0.entries = entries;
+        self.0.entries = entries
+            .into_iter()
+            .map(|(k, v)| (k, normalize_zero(v)))
+            .collect();
     }
 
     pub fn get(&self, key: u64) -> Option<f64> {
@@ -72,7 +87,7 @@ impl State {
     }
 
     pub fn set(&mut self, key: u64, value: f64) {
-        self.0.entries.insert(key, value);
+        self.0.entries.insert(key, normalize_zero(value));
     }
 
     pub fn __len__(&self) -> usize {
