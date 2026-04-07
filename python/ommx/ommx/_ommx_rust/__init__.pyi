@@ -1283,27 +1283,27 @@ class NamedFunction:
         Returns:
             Self (modified in-place) for method chaining
         """
-    def __add__(self, other: typing.Any) -> typing.Any:
+    def __add__(self, other: typing.Any) -> Function:
         r"""
         Addition: returns self.function + other
         """
-    def __radd__(self, other: typing.Any) -> typing.Any:
+    def __radd__(self, other: typing.Any) -> Function:
         r"""
         Reverse addition: returns other + self.function
         """
-    def __sub__(self, other: typing.Any) -> typing.Any:
+    def __sub__(self, other: typing.Any) -> Function:
         r"""
         Subtraction: returns self.function - other
         """
-    def __rsub__(self, other: typing.Any) -> typing.Any:
+    def __rsub__(self, other: typing.Any) -> Function:
         r"""
         Reverse subtraction: returns other - self.function
         """
-    def __mul__(self, other: typing.Any) -> typing.Any:
+    def __mul__(self, other: typing.Any) -> Function:
         r"""
         Multiplication: returns self.function * other
         """
-    def __rmul__(self, other: typing.Any) -> typing.Any:
+    def __rmul__(self, other: typing.Any) -> Function:
         r"""
         Reverse multiplication: returns other * self.function
         """
@@ -1311,20 +1311,20 @@ class NamedFunction:
         r"""
         Negation: returns -self.function
         """
-    def __eq__(self, other: typing.Any) -> typing.Any:  # type: ignore[override]
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self.function == other → Constraint with EqualToZero
 
         Returns a Constraint where (self.function - other) == 0.
         Note: This does NOT return bool, it creates a Constraint object.
         """
-    def __le__(self, other: typing.Any) -> typing.Any:
+    def __le__(self, other: typing.Any) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
 
         Returns a Constraint where (self.function - other) <= 0.
         """
-    def __ge__(self, other: typing.Any) -> typing.Any:
+    def __ge__(self, other: typing.Any) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
 

@@ -147,21 +147,25 @@ impl NamedFunction {
     // These return Py<PyAny> to allow NotImplemented to propagate for reflected operations
 
     /// Addition: returns self.function + other
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __add__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.function().py_add(py, other)
     }
 
     /// Reverse addition: returns other + self.function
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __radd__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.function().py_add(py, other)
     }
 
     /// Subtraction: returns self.function - other
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __sub__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.function().py_sub(py, other)
     }
 
     /// Reverse subtraction: returns other - self.function
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __rsub__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // other - self = -self + other
         let neg_self = self.__neg__();
@@ -169,11 +173,13 @@ impl NamedFunction {
     }
 
     /// Multiplication: returns self.function * other
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __mul__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.function().py_mul(py, other)
     }
 
     /// Reverse multiplication: returns other * self.function
+    #[gen_stub(override_return_type(type_repr = "Function"))]
     pub fn __rmul__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.function().py_mul(py, other)
     }
@@ -190,7 +196,7 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (self.function - other) == 0.
     /// Note: This does NOT return bool, it creates a Constraint object.
-    #[gen_stub(type_ignore = ["override"])]
+    #[gen_stub(type_ignore = ["override"], override_return_type(type_repr = "Constraint"))]
     #[pyo3(name = "__eq__")]
     pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // self.function - other
@@ -216,6 +222,7 @@ impl NamedFunction {
     /// Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (self.function - other) <= 0.
+    #[gen_stub(override_return_type(type_repr = "Constraint"))]
     #[pyo3(name = "__le__")]
     pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // self.function - other <= 0
@@ -241,6 +248,7 @@ impl NamedFunction {
     /// Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (other - self.function) <= 0.
+    #[gen_stub(override_return_type(type_repr = "Constraint"))]
     #[pyo3(name = "__ge__")]
     pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // self.function >= other is equivalent to other - self.function <= 0
