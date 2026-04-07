@@ -22,18 +22,13 @@ pub struct State(pub ommx::v1::State);
 #[pymethods]
 impl State {
     #[new]
-    pub fn new(entries: &Bound<PyAny>) -> PyResult<Self> {
-        // FIXME: Set type annotations for `entries` to be more specific after pyo3-stub-gen supports it
+    pub fn new(
+        #[gen_stub(override_type(type_repr = "State | collections.abc.Mapping[int, float] | collections.abc.Iterable[tuple[int, float]]", imports = ("collections.abc",)))]
+        entries: &Bound<PyAny>,
+    ) -> PyResult<Self> {
         // Accept State object directly
         if let Ok(state) = entries.extract::<Self>() {
             return Ok(state);
-        }
-        // Accept bytes (serialized protobuf)
-        if let Ok(bytes) = entries.cast::<PyBytes>() {
-            let inner = ommx::v1::State::decode(bytes.as_bytes()).map_err(|e| {
-                PyTypeError::new_err(format!("Failed to decode State from bytes: {}", e))
-            })?;
-            return Ok(Self(inner));
         }
         // Accept dict[int, float]
         if let Ok(entries) = entries.extract::<HashMap<u64, f64>>() {
@@ -45,7 +40,7 @@ impl State {
             return Ok(Self(state));
         }
         let err = || {
-            PyTypeError::new_err("ommx.v1.State can only be initialized with a `dict[int, float]`, `bytes`, or `Iterable[tuple[int, float]]`")
+            PyTypeError::new_err("ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`")
         };
         // Accept Iterable[tuple[int, float]]
         if let Ok(iter) = entries.try_iter() {

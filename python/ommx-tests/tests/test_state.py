@@ -29,15 +29,15 @@ def test_create_state_from_list():
 
 def test_create_size_mismatch():
     with pytest.raises(TypeError) as e:
-        _state = State([(1, 0.0, 1.0)])
+        _state = State([(1, 0.0, 1.0)])  # type: ignore[arg-type]
     assert (
         str(e.value)
-        == "ommx.v1.State can only be initialized with a `dict[int, float]`, `bytes`, or `Iterable[tuple[int, float]]`"
+        == "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
     )
 
     with pytest.raises(TypeError) as e:
-        _state = State((1, 0.0))
+        _state = State((1, 0.0))  # type: ignore[arg-type]
     assert (
         str(e.value)
-        == "ommx.v1.State can only be initialized with a `dict[int, float]`, `bytes`, or `Iterable[tuple[int, float]]`"
+        == "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
     )

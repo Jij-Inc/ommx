@@ -2,6 +2,7 @@
 # ruff: noqa: E501, F401, F403, F405
 
 import builtins
+import collections.abc
 import enum
 import os
 import pathlib
@@ -2200,7 +2201,12 @@ class State:
     def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @entries.setter
     def entries(self, value: builtins.dict[builtins.int, builtins.float]) -> None: ...
-    def __new__(cls, entries: typing.Any) -> State: ...
+    def __new__(
+        cls,
+        entries: State
+        | collections.abc.Mapping[int, float]
+        | collections.abc.Iterable[tuple[int, float]],
+    ) -> State: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
     def to_bytes(self) -> bytes: ...
