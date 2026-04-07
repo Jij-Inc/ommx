@@ -3,16 +3,12 @@ from typing import Optional, Iterable, Mapping
 from typing_extensions import deprecated, TypeAlias, Union, Sequence
 from dataclasses import dataclass, field
 from pandas import DataFrame, NA
-from abc import ABC
 import copy
 
 
 from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
-from .constraint_pb2 import (
-    Constraint as _Constraint,
-    RemovedConstraint as _RemovedConstraint,
-)
+from .constraint_pb2 import Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
 from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
@@ -65,6 +61,11 @@ Function = _ommx_rust.Function
 # Import DecisionVariable and Parameter from Rust
 DecisionVariable = _ommx_rust.DecisionVariable
 Parameter = _ommx_rust.Parameter
+
+# Import Constraint, RemovedConstraint, and NamedFunction from Rust
+Constraint = _ommx_rust.Constraint
+RemovedConstraint = _ommx_rust.RemovedConstraint
+NamedFunction = _ommx_rust.NamedFunction
 
 
 def _decision_variable_as_pandas_entry(dv: DecisionVariable) -> dict:
@@ -271,15 +272,13 @@ class Instance(UserAnnotationBase):
         # Convert constraints to _ommx_rust.Constraint
         rust_constraints = {}
         for c in constraints:
-            if isinstance(c, _ommx_rust.Constraint):
-                # Already a Rust Constraint
+            if isinstance(c, Constraint):
+                # Already a Rust Constraint (Constraint is now _ommx_rust.Constraint)
                 rust_constraints[c.id] = c
-            elif isinstance(c, Constraint):
-                rust_constraints[c.id] = c.raw
             else:
-                # Convert protobuf to Constraint first
-                constraint = Constraint.from_protobuf(c)
-                rust_constraints[constraint.id] = constraint.raw
+                # Convert protobuf to Constraint using from_bytes
+                constraint = Constraint.from_bytes(c.SerializeToString())
+                rust_constraints[constraint.id] = constraint
 
         # Convert description if provided
         rust_description = None
@@ -305,7 +304,7 @@ class Instance(UserAnnotationBase):
         if named_functions is not None:
             rust_named_functions = {}
             for nf in named_functions:
-                rust_named_functions[nf.id] = nf.raw
+                rust_named_functions[nf.id] = nf
 
         # Convert constraint hints if provided
         rust_constraint_hints = constraint_hints
@@ -494,14 +493,14 @@ class Instance(UserAnnotationBase):
         """
         Get constraints as a list of :class:`Constraint` instances sorted by their IDs.
         """
-        return [Constraint.from_raw(c) for c in self.raw.constraints]
+        return list(self.raw.constraints)
 
     @property
     def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [RemovedConstraint.from_raw(rc) for rc in self.raw.removed_constraints]
+        return list(self.raw.removed_constraints)
 
     def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
         """
@@ -513,7 +512,7 @@ class Instance(UserAnnotationBase):
         """
         Get a constraint by ID.
         """
-        return Constraint.from_raw(self.raw.get_constraint_by_id(constraint_id))
+        return self.raw.get_constraint_by_id(constraint_id)
 
     def get_removed_constraint_by_id(
         self, removed_constraint_id: int
@@ -521,14 +520,12 @@ class Instance(UserAnnotationBase):
         """
         Get a removed constraint by ID.
         """
-        return RemovedConstraint.from_raw(
-            self.raw.get_removed_constraint_by_id(removed_constraint_id)
-        )
+        return self.raw.get_removed_constraint_by_id(removed_constraint_id)
 
     @property
     def named_functions(self) -> list[NamedFunction]:
         """Get named functions as a list of :class:`NamedFunction` instances sorted by their IDs."""
-        return [NamedFunction.from_raw(nf) for nf in self.raw.named_functions]
+        return list(self.raw.named_functions)
 
     @property
     def named_function_names(self) -> set[str]:
@@ -537,9 +534,7 @@ class Instance(UserAnnotationBase):
 
     def get_named_function_by_id(self, named_function_id: int) -> NamedFunction:
         """Get a named function by ID."""
-        return NamedFunction.from_raw(
-            self.raw.get_named_function_by_id(named_function_id)
-        )
+        return self.raw.get_named_function_by_id(named_function_id)
 
     @property
     def decision_variables_df(self) -> DataFrame:
@@ -2167,7 +2162,7 @@ class ParametricInstance(UserAnnotationBase):
         """
         Get constraints as a list of :class:`Constraint
         """
-        return [Constraint.from_protobuf(raw) for raw in self.raw.constraints]
+        return [Constraint.from_bytes(raw.SerializeToString()) for raw in self.raw.constraints]
 
     @property
     def removed_constraints(self) -> list[RemovedConstraint]:
@@ -2175,7 +2170,7 @@ class ParametricInstance(UserAnnotationBase):
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
         return [
-            RemovedConstraint.from_protobuf(raw) for raw in self.raw.removed_constraints
+            RemovedConstraint.from_bytes(raw.SerializeToString()) for raw in self.raw.removed_constraints
         ]
 
     @property
@@ -2679,498 +2674,6 @@ class Solution(UserAnnotationBase):
             The total L2 norm squared violation value.
         """
         return self.raw.total_violation_l2()
-
-
-class AsConstraint(ABC):
-    def __le__(self, other) -> Constraint:
-        return Constraint(
-            function=self - other, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __ge__(self, other) -> Constraint:
-        return Constraint(
-            function=other - self, equality=Constraint.LESS_THAN_OR_EQUAL_TO_ZERO
-        )
-
-    def __req__(self, other) -> Constraint:
-        return self == other
-
-    def __rle__(self, other) -> Constraint:
-        return self.__ge__(other)
-
-    def __rge__(self, other) -> Constraint:
-        return self.__le__(other)
-
-
-@dataclass
-class Constraint:
-    """
-    Constraints
-
-    Examples
-    =========
-
-    .. doctest::
-
-        >>> x = DecisionVariable.integer(1)
-        >>> y = DecisionVariable.integer(2)
-        >>> x + y == 1
-        Constraint(x1 + x2 - 1 == 0)
-
-        To set the name or other attributes, use methods like :py:meth:`add_name`.
-
-        >>> (x + y <= 5).add_name("constraint 1")
-        Constraint(x1 + x2 - 5 <= 0)
-
-    """
-
-    raw: _ommx_rust.Constraint
-    _counter: int = 0
-
-    EQUAL_TO_ZERO = _ommx_rust.Equality.EqualToZero
-    LESS_THAN_OR_EQUAL_TO_ZERO = _ommx_rust.Equality.LessThanOrEqualToZero
-
-    def __init__(
-        self,
-        *,
-        function: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function
-        | _ommx_rust.Function,
-        equality: _ommx_rust.Equality,
-        id: Optional[int] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
-        subscripts: list[int] = [],
-        parameters: dict[str, str] = {},
-    ):
-        # Use Rust ID management for thread-safe counter
-        if id is None:
-            id = _ommx_rust.next_constraint_id()
-        else:
-            # Update counter to ensure it's at least the given value
-            _ommx_rust.update_constraint_id_counter(id)
-
-        if not isinstance(function, Function):
-            function = Function(function)
-
-        # Convert equality to Rust Equality enum
-        if isinstance(equality, _ommx_rust.Equality):
-            rust_equality = equality
-        else:
-            # Handle Protocol Buffer integer values
-            rust_equality = _ommx_rust.Equality.from_pb(equality)
-
-        self.raw = _ommx_rust.Constraint(
-            id=id,
-            function=function,
-            equality=rust_equality,
-            name=name,
-            subscripts=subscripts or [],
-            description=description,
-            parameters=parameters or {},
-        )
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.Constraint) -> Constraint:
-        new = Constraint(function=0, equality=Constraint.EQUAL_TO_ZERO)
-        new.raw = raw
-        # Update Rust counter to ensure it's at least the given value
-        _ommx_rust.update_constraint_id_counter(raw.id)
-        return new
-
-    @staticmethod
-    def from_bytes(data: bytes) -> Constraint:
-        rust_constraint = _ommx_rust.Constraint.from_bytes(data)
-        return Constraint.from_raw(rust_constraint)
-
-    @staticmethod
-    def from_protobuf(pb_constraint: _Constraint) -> Constraint:
-        """Convert from protobuf Constraint to Rust Constraint via serialization"""
-        data = pb_constraint.SerializeToString()
-        return Constraint.from_bytes(data)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    def to_protobuf(self) -> _Constraint:
-        """Convert to protobuf Constraint"""
-        pb_constraint = _Constraint()
-        pb_constraint.ParseFromString(self.to_bytes())
-        return pb_constraint
-
-    def set_id(self, id: int) -> Constraint:
-        """
-        Overwrite the constraint ID.
-        """
-        self.raw.set_id(id)
-        return self
-
-    def add_name(self, name: str) -> Constraint:
-        """
-        Add or update the name of the constraint.
-        """
-        self.raw.set_name(name)
-        return self
-
-    def add_description(self, description: str) -> Constraint:
-        """
-        Add or update the description of the constraint.
-        """
-        self.raw.set_description(description)
-        return self
-
-    def add_subscripts(self, subscripts: list[int]) -> Constraint:
-        """
-        Add subscripts to the constraint.
-        """
-        self.raw.add_subscripts(subscripts)
-        return self
-
-    def add_parameters(self, parameters: dict[str, str]) -> Constraint:
-        """
-        Add or update parameters of the constraint.
-        """
-        for key, value in parameters.items():
-            self.raw.add_parameter(key, value)
-        return self
-
-    @property
-    def function(self) -> Function:
-        return self.raw.function
-
-    @property
-    def id(self) -> int:
-        return self.raw.id
-
-    @property
-    def equality(self) -> _ommx_rust.Equality:
-        # Return the PyO3 Equality enum directly from Rust
-        return self.raw.equality
-
-    @property
-    def name(self) -> str | None:
-        name = self.raw.name
-        return name if name else None
-
-    @property
-    def description(self) -> str | None:
-        desc = self.raw.description
-        return desc if desc else None
-
-    @property
-    def subscripts(self) -> list[int]:
-        return list(self.raw.subscripts)
-
-    @property
-    def parameters(self) -> dict[str, str]:
-        return self.raw.parameters
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    def _as_pandas_entry(self) -> dict:
-        c = self.raw
-        return {
-            "id": c.id,
-            "equality": str(c.equality),
-            "type": c.function.type_name,
-            "used_ids": c.function.required_ids(),
-            "name": c.name if c.name else NA,
-            "subscripts": c.subscripts,
-            "description": NA,  # Description not supported in Rust implementation
-        }  # Parameters not supported in Rust implementation
-
-
-@dataclass
-class NamedFunction(AsConstraint):
-    """
-    A named function attached to an optimization instance.
-
-    Named functions are auxiliary functions (not constraints or objectives) that are tracked
-    alongside the optimization problem. They can be evaluated, partially evaluated, and used
-    in arithmetic operations.
-
-    Examples
-    =========
-
-    .. doctest::
-
-        >>> from ommx.v1 import NamedFunction, DecisionVariable, Linear
-        >>> x = DecisionVariable.integer(1)
-        >>> nf = NamedFunction(id=0, function=2*x + 1, name="obj2", subscripts=[0])
-        >>> nf.name
-        'obj2'
-        >>> nf.id
-        0
-
-    """
-
-    raw: _ommx_rust.NamedFunction
-
-    def __init__(
-        self,
-        *,
-        id: int,
-        function: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function
-        | _ommx_rust.Function,
-        name: Optional[str] = None,
-        subscripts: list[int] = [],
-        description: Optional[str] = None,
-        parameters: dict[str, str] = {},
-    ):
-        if not isinstance(function, Function):
-            function = Function(function)
-        self.raw = _ommx_rust.NamedFunction(
-            id=id,
-            function=function,
-            name=name,
-            subscripts=subscripts or [],
-            description=description,
-            parameters=parameters or {},
-        )
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.NamedFunction) -> NamedFunction:
-        new = NamedFunction(id=0, function=0)
-        new.raw = raw
-        return new
-
-    @staticmethod
-    def from_bytes(data: bytes) -> NamedFunction:
-        raw = _ommx_rust.NamedFunction.from_bytes(data)
-        return NamedFunction.from_raw(raw)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @property
-    def id(self) -> int:
-        return self.raw.id
-
-    @property
-    def function(self) -> Function:
-        return self.raw.function
-
-    @property
-    def name(self) -> Optional[str]:
-        return self.raw.name
-
-    @property
-    def subscripts(self) -> list[int]:
-        return list(self.raw.subscripts)
-
-    @property
-    def parameters(self) -> dict[str, str]:
-        return self.raw.parameters
-
-    @property
-    def description(self) -> Optional[str]:
-        return self.raw.description
-
-    def evaluate(
-        self, state: ToState, *, atol: float | None = None
-    ) -> EvaluatedNamedFunction:
-        """Evaluate this named function with the given state."""
-        result_bytes = self.raw.evaluate(State(state).to_bytes(), atol=atol)
-        return _ommx_rust.EvaluatedNamedFunction.from_bytes(result_bytes)
-
-    def partial_evaluate(
-        self, state: ToState, *, atol: float | None = None
-    ) -> NamedFunction:
-        """Partially evaluate this named function with the given state."""
-        result_bytes = self.raw.partial_evaluate(State(state).to_bytes(), atol=atol)
-        return NamedFunction.from_bytes(result_bytes)
-
-    def __add__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self.function + other
-
-    def __radd__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self.function + other
-
-    def __sub__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self.function - other
-
-    def __rsub__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return -self.function + other
-
-    def __mul__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self.function * other
-
-    def __rmul__(
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Function:
-        return self.function * other
-
-    def __neg__(self) -> Function:
-        return -self.function
-
-    def __eq__(  # type: ignore[reportIncompatibleMethodOverride]
-        self,
-        other: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-    ) -> Constraint:
-        return Constraint(
-            function=self.function - other, equality=Constraint.EQUAL_TO_ZERO
-        )
-
-    def _as_pandas_entry(self) -> dict:
-        return {
-            "id": self.id,
-            "type": self.function.type_name,
-            "function": self.function,
-            "used_ids": self.function.required_ids(),
-            "name": self.name if self.name else NA,
-            "subscripts": self.subscripts,
-            "description": self.description if self.description else NA,
-        } | {f"parameters.{key}": value for key, value in self.parameters.items()}
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-
-@dataclass
-class RemovedConstraint:
-    """
-    Constraints removed while preprocessing
-    """
-
-    raw: _ommx_rust.RemovedConstraint
-
-    def __init__(self, raw: _ommx_rust.RemovedConstraint):
-        self.raw = raw
-
-    @staticmethod
-    def from_raw(raw: _ommx_rust.RemovedConstraint) -> RemovedConstraint:
-        return RemovedConstraint(raw)
-
-    @staticmethod
-    def from_protobuf(pb_removed_constraint: _RemovedConstraint) -> RemovedConstraint:
-        """Convert from protobuf RemovedConstraint to Rust RemovedConstraint"""
-        # Use Rust decode method to convert Protocol Buffer to Rust implementation
-        rust_removed_constraint = _ommx_rust.RemovedConstraint.from_bytes(
-            pb_removed_constraint.SerializeToString()
-        )
-        return RemovedConstraint(rust_removed_constraint)
-
-    def __repr__(self) -> str:
-        return self.raw.__repr__()
-
-    @property
-    def equality(self) -> _ommx_rust.Equality:
-        # Return the PyO3 Equality enum directly from Rust
-        return self.raw.constraint.equality
-
-    @property
-    def id(self) -> int:
-        return self.raw.id
-
-    @property
-    def function(self) -> Function:
-        return self.raw.constraint.function
-
-    @property
-    def name(self) -> str | None:
-        name = self.raw.name
-        return name if name else None
-
-    @property
-    def description(self) -> str | None:
-        desc = self.raw.constraint.description
-        return desc if desc else None
-
-    @property
-    def subscripts(self) -> list[int]:
-        return list(self.raw.constraint.subscripts)
-
-    @property
-    def parameters(self) -> dict[str, str]:
-        return self.raw.constraint.parameters
-
-    @property
-    def removed_reason(self) -> str:
-        return self.raw.removed_reason
-
-    @property
-    def removed_reason_parameters(self) -> dict[str, str]:
-        return self.raw.removed_reason_parameters
-
-    def _as_pandas_entry(self) -> dict:
-        return (
-            Constraint.from_raw(self.raw.constraint)._as_pandas_entry()
-            | {"removed_reason": self.removed_reason}
-            | {
-                f"removed_reason.{key}": value
-                for key, value in self.removed_reason_parameters.items()
-            }
-        )
 
 
 @dataclass

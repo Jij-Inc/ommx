@@ -169,17 +169,17 @@ class Constraint:
     r"""
     Constraint wrapper for Python
     """
+
+    EQUAL_TO_ZERO: Equality
+    r"""
+    Class constant for equality type: equal to zero (==)
+    """
+    LESS_THAN_OR_EQUAL_TO_ZERO: Equality
+    r"""
+    Class constant for equality type: less than or equal to zero (<=)
+    """
     @property
     def id(self) -> builtins.int: ...
-    @property
-    def raw(self) -> Constraint:
-        r"""
-        Return a clone of self for backward compatibility with Python wrapper pattern.
-
-        This allows code like `constraint.raw` to work when migrating from the old
-        Python wrapper class. Note that this returns a clone, not the same object,
-        so `constraint.raw is constraint` will be `False`.
-        """
     @property
     def function(self) -> Function: ...
     @property
@@ -194,14 +194,27 @@ class Constraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     def __new__(
         cls,
-        id: builtins.int,
-        function: Function,
+        *,
+        function: typing.Any,
         equality: Equality,
+        id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
-    ) -> Constraint: ...
+    ) -> Constraint:
+        r"""
+        Create a new Constraint.
+
+        Args:
+            function: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+            equality: The equality type (EqualToZero or LessThanOrEqualToZero)
+            id: Optional constraint ID (auto-generated if not provided)
+            name: Optional name for the constraint
+            subscripts: Optional subscripts for indexing
+            description: Optional description
+            parameters: Optional key-value parameters
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> Constraint: ...
     def to_bytes(self) -> bytes: ...
@@ -264,6 +277,12 @@ class Constraint:
         r"""
         Add a parameter to the constraint
         Returns self for method chaining
+        """
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with constraint information suitable for pandas DataFrame.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -1172,13 +1191,25 @@ class NamedFunction:
     def description(self) -> typing.Optional[builtins.str]: ...
     def __new__(
         cls,
+        *,
         id: builtins.int,
-        function: Function,
+        function: typing.Any,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
-    ) -> NamedFunction: ...
+    ) -> NamedFunction:
+        r"""
+        Create a new NamedFunction.
+
+        Args:
+            id: The unique identifier for this named function
+            function: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+            name: Optional name for the function
+            subscripts: Optional subscripts for indexing
+            description: Optional description
+            parameters: Optional key-value parameters
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> NamedFunction: ...
     def to_bytes(self) -> bytes: ...
@@ -1188,6 +1219,59 @@ class NamedFunction:
     def partial_evaluate(
         self, state: bytes, *, atol: typing.Optional[builtins.float] = None
     ) -> bytes: ...
+    def __add__(self, other: typing.Any) -> Function:
+        r"""
+        Addition: returns self.function + other
+        """
+    def __radd__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse addition: returns other + self.function
+        """
+    def __sub__(self, other: typing.Any) -> Function:
+        r"""
+        Subtraction: returns self.function - other
+        """
+    def __rsub__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse subtraction: returns other - self.function
+        """
+    def __mul__(self, other: typing.Any) -> Function:
+        r"""
+        Multiplication: returns self.function * other
+        """
+    def __rmul__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse multiplication: returns other * self.function
+        """
+    def __neg__(self) -> Function:
+        r"""
+        Negation: returns -self.function
+        """
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: self.function == other → Constraint with EqualToZero
+
+        Returns a Constraint where (self.function - other) == 0.
+        Note: This does NOT return bool, it creates a Constraint object.
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (self.function - other) <= 0.
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (other - self.function) <= 0.
+        """
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with named function information suitable for pandas DataFrame.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> NamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
@@ -1542,7 +1626,32 @@ class RemovedConstraint:
     @property
     def id(self) -> builtins.int: ...
     @property
-    def name(self) -> builtins.str: ...
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Get the equality type from the underlying constraint
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Get the function from the underlying constraint
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description from the underlying constraint
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts from the underlying constraint
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters from the underlying constraint
+        """
     def __new__(
         cls,
         constraint: Constraint,
@@ -1554,6 +1663,12 @@ class RemovedConstraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> RemovedConstraint: ...
     def to_bytes(self) -> bytes: ...
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with removed constraint information suitable for pandas DataFrame.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
