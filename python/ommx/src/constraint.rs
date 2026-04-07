@@ -81,8 +81,11 @@ impl Constraint {
         self.0.id.into_inner()
     }
 
-    /// Return self for backward compatibility with Python wrapper pattern
-    /// This allows code like `constraint.raw` to work
+    /// Return a clone of self for backward compatibility with Python wrapper pattern.
+    ///
+    /// This allows code like `constraint.raw` to work when migrating from the old
+    /// Python wrapper class. Note that this returns a clone, not the same object,
+    /// so `constraint.raw is constraint` will be `False`.
     #[getter]
     pub fn raw(&self) -> Constraint {
         self.clone()

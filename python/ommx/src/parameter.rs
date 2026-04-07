@@ -1,7 +1,7 @@
-use crate::{next_constraint_id, Constraint, Linear, Polynomial, Quadratic};
+use crate::{extract_to_function, next_constraint_id, Constraint, Linear, Polynomial, Quadratic};
 use anyhow::Result;
 use ommx::{LinearMonomial, Message, VariableID};
-use pyo3::{exceptions::PyTypeError, prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Parameter in an optimization problem.
@@ -424,20 +424,4 @@ impl Parameter {
             description: None,
         }))
     }
-}
-
-/// Helper function to extract a PyAny result into ommx::Function
-fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
-    if let Ok(linear) = obj.extract::<Linear>(py) {
-        return Ok(ommx::Function::from(linear.0));
-    }
-    if let Ok(quad) = obj.extract::<Quadratic>(py) {
-        return Ok(ommx::Function::from(quad.0));
-    }
-    if let Ok(poly) = obj.extract::<Polynomial>(py) {
-        return Ok(ommx::Function::from(poly.0));
-    }
-    Err(PyTypeError::new_err(
-        "Cannot convert to Function: expected Linear, Quadratic, or Polynomial",
-    ))
 }

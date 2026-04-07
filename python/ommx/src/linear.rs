@@ -1,5 +1,6 @@
 use crate::{
-    next_constraint_id, Constraint, DecisionVariable, Parameter, Polynomial, Quadratic, Rng, State,
+    extract_to_function, next_constraint_id, Constraint, DecisionVariable, Parameter, Polynomial,
+    Quadratic, Rng, State,
 };
 
 use anyhow::{anyhow, Result};
@@ -7,7 +8,6 @@ use approx::AbsDiffEq;
 use ommx::LinearMonomial;
 use ommx::{ATol, Coefficient, CoefficientError, Evaluate};
 use pyo3::{
-    exceptions::PyTypeError,
     prelude::*,
     types::{PyBytes, PyDict},
     Bound, PyAny,
@@ -384,29 +384,27 @@ impl Linear {
         use ommx::Evaluate;
         let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => {
-                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
-            }
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
         self.0
             .evaluate(&state.0, atol)
-            .map_err(|e| PyTypeError::new_err(e.to_string()))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     }
 
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Linear> {
         let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => {
-                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
-            }
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
         inner
             .partial_evaluate(&state.0, atol)
-            .map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Linear(inner))
     }
 
@@ -474,20 +472,4 @@ impl Linear {
             description: None,
         }))
     }
-}
-
-/// Helper function to extract a PyAny result into ommx::Function
-fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
-    if let Ok(linear) = obj.extract::<Linear>(py) {
-        return Ok(ommx::Function::from(linear.0));
-    }
-    if let Ok(quad) = obj.extract::<Quadratic>(py) {
-        return Ok(ommx::Function::from(quad.0));
-    }
-    if let Ok(poly) = obj.extract::<Polynomial>(py) {
-        return Ok(ommx::Function::from(poly.0));
-    }
-    Err(PyTypeError::new_err(
-        "Cannot convert to Function: expected Linear, Quadratic, or Polynomial",
-    ))
 }

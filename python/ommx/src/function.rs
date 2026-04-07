@@ -580,29 +580,27 @@ impl Function {
         use ommx::Evaluate;
         let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => {
-                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
-            }
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
         self.0
             .evaluate(&state.0, atol)
-            .map_err(|e| PyTypeError::new_err(e.to_string()))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
     }
 
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Function> {
         let state = State::new(state)?;
         let atol = match atol {
-            Some(value) => {
-                ommx::ATol::new(value).map_err(|e| PyTypeError::new_err(e.to_string()))?
-            }
+            Some(value) => ommx::ATol::new(value)
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
             None => ommx::ATol::default(),
         };
         let mut inner = self.0.clone();
         inner
             .partial_evaluate(&state.0, atol)
-            .map_err(|e| PyTypeError::new_err(e.to_string()))?;
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(Function(inner))
     }
 
@@ -706,8 +704,12 @@ impl Function {
     }
 }
 
-/// Helper function to extract a PyAny result into ommx::Function
-fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
+/// Helper function to extract a PyAny result into ommx::Function.
+///
+/// This is used by comparison operators (`__eq__`, `__le__`, `__ge__`) to convert
+/// the result of subtraction (which may be Linear, Quadratic, Polynomial, or Function)
+/// into an ommx::Function for creating a Constraint.
+pub(crate) fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
     if let Ok(func) = obj.extract::<Function>(py) {
         return Ok(func.0);
     }
