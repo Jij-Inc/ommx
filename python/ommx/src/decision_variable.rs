@@ -373,10 +373,8 @@ impl DecisionVariable {
             };
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for +: 'DecisionVariable' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse addition (lhs + self)
@@ -456,10 +454,8 @@ impl DecisionVariable {
             };
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for -: 'DecisionVariable' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse subtraction (lhs - self)
@@ -543,10 +539,8 @@ impl DecisionVariable {
             };
             return Ok(Linear(result).into_pyobject(py)?.into_any().unbind());
         }
-        Err(PyTypeError::new_err(format!(
-            "unsupported operand type(s) for *: 'DecisionVariable' and '{}'",
-            rhs.get_type().name()?
-        )))
+        // Return NotImplemented to allow Python to try the reflected operation
+        Ok(py.NotImplemented().clone_ref(py).into_any())
     }
 
     /// Reverse multiplication (lhs * self)
