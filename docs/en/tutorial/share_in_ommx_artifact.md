@@ -95,43 +95,19 @@ df = pd.DataFrame.from_dict(
 )
 ```
 
-```{code-cell} ipython3
-:tags: [remove-cell]
-
-from myst_nb import glue
-
-glue("instance", instance, display=False)
-glue("solution", solution, display=False)
-glue("data", data, display=False)
-glue("df", df, display=False)
-```
-
 ```{list-table}
 :header-rows: 1
-:widths: 5 30 10
 
 * - Variable Name
   - Description
-  - Value
 * - `instance`
   - `ommx.v1.Instance` object representing the 0-1 knapsack problem
-  - ````{toggle}
-    ```{glue:} instance
-    ```
-    ````
 * - `solution`
   - `ommx.v1.Solution` object containing the results of solving the 0-1 knapsack problem with SCIP
-  - ````{toggle}
-    ```{glue:} solution
-    ```
-    ````
 * - `data`
   - Input data for the 0-1 knapsack problem
-  - ```{glue:} data
-    ```
 * - `df`
   - `pandas.DataFrame` object representing the optimal solution of the 0-1 knapsack problem
-  - {glue:}`df`
 ```
 
 +++
@@ -200,7 +176,8 @@ artifact = builder.build()
 This `artifact` is the same as the one that will be explained in the next section, which is the one you just saved. Let's check if the file has been created:
 
 ```{code-cell} ipython3
-! ls $filename
+import os
+print(os.path.exists(filename))
 ```
 
 Now you can share this `my_instance.ommx` with others using the usual file sharing methods.
@@ -242,5 +219,5 @@ artifact.get_json(artifact.layers[3])
 :tags: [remove-cell]
 
 # Remove the created OMMX Artifact file to clean up
-! rm $filename
+os.remove(filename)
 ```

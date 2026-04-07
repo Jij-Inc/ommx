@@ -31,25 +31,11 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.python-version }}
-          cache: "pip"
-
-      - name: Install OMMX Book dependencies
-        run: pip install -r requirements.txt
-
       - name: Jupyter Book
-        env:
-          GA4_TRACKING_ID: ${{ secrets.GA4_TRACKING_ID }}
         run: |
-          # Replace GA4_TRACKING_ID placeholder with actual value from secrets
-          # Using | as delimiter to avoid issues with / in the GA4 ID
+          # Code execution is off by default (tested in python.yml test-ci job)
           cd ./docs && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./en/_config.yml && \
-          sed -i "s|GA4_TRACKING_ID|${GA4_TRACKING_ID}|g" ./ja/_config.yml && \
-          jupyter-book build ${{ matrix.lang }} --warningiserror
+          uv run --only-group dev jupyter-book build ${{ matrix.lang }} --warningiserror
 
       - name: Upload HTML
         uses: actions/upload-artifact@v7

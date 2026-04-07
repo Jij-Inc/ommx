@@ -23,9 +23,6 @@ jobs:
       - name: Upgrade Python dependencies
         run: uv sync --all-extras --upgrade
 
-      - name: Upgrade docs dependencies
-        run: task upgrade
-
       - name: Upgrade API reference dependencies
         run: task api_reference:upgrade
 
@@ -48,9 +45,7 @@ jobs:
 
             ## Updated files
             - `uv.lock` (main Python workspace)
-            - `docs/uv.lock` (Jupyter Book documentation)
             - `docs/api_reference/uv.lock` (API reference documentation)
-            - `docs/requirements.txt` (Binder/Colab environment)
             - `docs/api_reference/requirements.txt` (Read the Docs)
 
             ---

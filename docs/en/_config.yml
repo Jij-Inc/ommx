@@ -5,13 +5,11 @@ title: OMMX
 author: Jij Inc.
 logo: ../logo.png
 
-# Force re-execution of notebooks on each build.
+# Notebook execution settings
 # See https://jupyterbook.org/content/execute.html
+# Default is 'off' for fast builds; CI tests use 'force' via --config option
 execute:
-  execute_notebooks: force
-  timeout: 300
-  exclude_patterns:
-    - "release_note/ommx-1.*.md"
+  execute_notebooks: off
 
 # Define the name of the latex output file for PDF builds
 latex:
@@ -27,11 +25,11 @@ repository:
 # Add GitHub buttons to your book
 # See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
 html:
-  # favicon: "./logo.png"  # TODO: ロゴが出来たら設定すること
+  favicon: "../logo.png"
   use_issues_button: true
   use_repository_button: true
   analytics:
-    google_analytics_id: GA4_TRACKING_ID
+    google_analytics_id: "G-VMXDHPQV9Y"
 
 # launch_buttons disabled since notebooks are now MyST Markdown
 # launch_buttons:
