@@ -1,1 +1,0 @@
-- [PR body language](feedback_pr_english.md) — Always write PR descriptions in English
