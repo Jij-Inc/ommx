@@ -2,10 +2,12 @@
 # ruff: noqa: E501, F401, F403, F405
 
 import builtins
+import collections.abc
 import enum
 import os
 import pathlib
 import typing
+from typing import TypeAlias
 
 __all__ = [
     "ArtifactArchive",
@@ -47,6 +49,7 @@ __all__ = [
     "Solution",
     "Sos1",
     "State",
+    "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
     "get_image_dir",
@@ -60,6 +63,12 @@ __all__ = [
     "set_local_registry_root",
     "update_constraint_id_counter",
 ]
+
+ToState: TypeAlias = (
+    State
+    | collections.abc.Mapping[int, float]
+    | collections.abc.Iterable[tuple[int, float]]
+)
 
 @typing.final
 class ArtifactArchive:
@@ -169,17 +178,17 @@ class Constraint:
     r"""
     Constraint wrapper for Python
     """
+
+    EQUAL_TO_ZERO: Equality
+    r"""
+    Class constant for equality type: equal to zero (==)
+    """
+    LESS_THAN_OR_EQUAL_TO_ZERO: Equality
+    r"""
+    Class constant for equality type: less than or equal to zero (<=)
+    """
     @property
     def id(self) -> builtins.int: ...
-    @property
-    def raw(self) -> Constraint:
-        r"""
-        Return a clone of self for backward compatibility with Python wrapper pattern.
-
-        This allows code like `constraint.raw` to work when migrating from the old
-        Python wrapper class. Note that this returns a clone, not the same object,
-        so `constraint.raw is constraint` will be `False`.
-        """
     @property
     def function(self) -> Function: ...
     @property
@@ -194,23 +203,58 @@ class Constraint:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     def __new__(
         cls,
-        id: builtins.int,
-        function: Function,
+        *,
+        function: typing.Any,
         equality: Equality,
+        id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
-    ) -> Constraint: ...
+    ) -> Constraint:
+        r"""
+        Create a new Constraint.
+
+        Args:
+            function: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+            equality: The equality type (EqualToZero or LessThanOrEqualToZero)
+            id: Optional constraint ID (auto-generated if not provided)
+            name: Optional name for the constraint
+            subscripts: Optional subscripts for indexing
+            description: Optional description
+            parameters: Optional key-value parameters
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> Constraint: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedConstraint:
+        r"""
+        Evaluate the constraint with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            EvaluatedConstraint containing the evaluated value and feasibility
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> Constraint:
+        r"""
+        Partially evaluate the constraint with the given state.
+
+        This modifies self in-place and returns self for method chaining.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
     def set_name(self, name: builtins.str) -> Constraint:
         r"""
         Set the name of the constraint
@@ -264,6 +308,12 @@ class Constraint:
         r"""
         Add a parameter to the constraint
         Returns self for method chaining
+        """
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with constraint information suitable for pandas DataFrame.
         """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
@@ -817,10 +867,10 @@ class Function:
         max_id: builtins.int = 10,
     ) -> Function: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -924,11 +974,31 @@ class Instance:
     def penalty_method(self) -> ParametricInstance: ...
     def uniform_penalty_method(self) -> ParametricInstance: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> Solution: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> Solution:
+        r"""
+        Evaluate the instance with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Solution containing objective value, constraint evaluations, and feasibility
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> Instance:
+        r"""
+        Partially evaluate the instance with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
     def evaluate_samples(
         self, samples: Samples, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
@@ -1133,10 +1203,10 @@ class Linear:
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
@@ -1172,22 +1242,109 @@ class NamedFunction:
     def description(self) -> typing.Optional[builtins.str]: ...
     def __new__(
         cls,
+        *,
         id: builtins.int,
-        function: Function,
+        function: typing.Any,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
         parameters: typing.Mapping[builtins.str, builtins.str] = {},
-    ) -> NamedFunction: ...
+    ) -> NamedFunction:
+        r"""
+        Create a new NamedFunction.
+
+        Args:
+            id: The unique identifier for this named function
+            function: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+            name: Optional name for the function
+            subscripts: Optional subscripts for indexing
+            description: Optional description
+            parameters: Optional key-value parameters
+        """
     @staticmethod
     def from_bytes(bytes: bytes) -> NamedFunction: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> EvaluatedNamedFunction:
+        r"""
+        Evaluate the named function with the given state.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            EvaluatedNamedFunction containing the evaluated value
+        """
     def partial_evaluate(
-        self, state: bytes, *, atol: typing.Optional[builtins.float] = None
-    ) -> bytes: ...
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
+    ) -> NamedFunction:
+        r"""
+        Partially evaluate the named function with the given state.
+
+        This modifies self in-place and returns self for method chaining.
+
+        Args:
+            state: A State object, dict[int, float], or iterable of (int, float) tuples
+            atol: Optional absolute tolerance for evaluation
+
+        Returns:
+            Self (modified in-place) for method chaining
+        """
+    def __add__(self, other: typing.Any) -> Function:
+        r"""
+        Addition: returns self.function + other
+        """
+    def __radd__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse addition: returns other + self.function
+        """
+    def __sub__(self, other: typing.Any) -> Function:
+        r"""
+        Subtraction: returns self.function - other
+        """
+    def __rsub__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse subtraction: returns other - self.function
+        """
+    def __mul__(self, other: typing.Any) -> Function:
+        r"""
+        Multiplication: returns self.function * other
+        """
+    def __rmul__(self, other: typing.Any) -> Function:
+        r"""
+        Reverse multiplication: returns other * self.function
+        """
+    def __neg__(self) -> Function:
+        r"""
+        Negation: returns -self.function
+        """
+    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+        r"""
+        Create an equality constraint: self.function == other → Constraint with EqualToZero
+
+        Returns a Constraint where (self.function - other) == 0.
+        Note: This does NOT return bool, it creates a Constraint object.
+        """
+    def __le__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (self.function - other) <= 0.
+        """
+    def __ge__(self, other: typing.Any) -> Constraint:
+        r"""
+        Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
+
+        Returns a Constraint where (other - self.function) <= 0.
+        """
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with named function information suitable for pandas DataFrame.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> NamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
@@ -1396,10 +1553,10 @@ class Polynomial:
         max_id: builtins.int = 10,
     ) -> Polynomial: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
@@ -1506,10 +1663,10 @@ class Quadratic:
         rng: Rng, num_terms: builtins.int = 5, max_id: builtins.int = 10
     ) -> Quadratic: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
@@ -1542,7 +1699,32 @@ class RemovedConstraint:
     @property
     def id(self) -> builtins.int: ...
     @property
-    def name(self) -> builtins.str: ...
+    def name(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def equality(self) -> Equality:
+        r"""
+        Get the equality type from the underlying constraint
+        """
+    @property
+    def function(self) -> Function:
+        r"""
+        Get the function from the underlying constraint
+        """
+    @property
+    def description(self) -> typing.Optional[builtins.str]:
+        r"""
+        Get the description from the underlying constraint
+        """
+    @property
+    def subscripts(self) -> builtins.list[builtins.int]:
+        r"""
+        Get the subscripts from the underlying constraint
+        """
+    @property
+    def parameters(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Get the parameters from the underlying constraint
+        """
     def __new__(
         cls,
         constraint: Constraint,
@@ -1554,6 +1736,12 @@ class RemovedConstraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> RemovedConstraint: ...
     def to_bytes(self) -> bytes: ...
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+
+        Returns a dictionary with removed constraint information suitable for pandas DataFrame.
+        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
@@ -1847,7 +2035,7 @@ class Samples:
         r"""
         Get the state for a specific sample ID
         """
-    def append(self, sample_ids: typing.Sequence[builtins.int], state: State) -> None:
+    def append(self, sample_ids: typing.Sequence[builtins.int], state: ToState) -> None:
         r"""
         Append a sample with the given sample IDs and state
         """
@@ -2021,7 +2209,7 @@ class State:
     def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @entries.setter
     def entries(self, value: builtins.dict[builtins.int, builtins.float]) -> None: ...
-    def __new__(cls, entries: typing.Any) -> State: ...
+    def __new__(cls, entries: ToState) -> State: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
     def to_bytes(self) -> bytes: ...

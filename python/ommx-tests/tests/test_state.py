@@ -27,17 +27,37 @@ def test_create_state_from_list():
     assert len(state.entries) == 5
 
 
+def test_create_state_from_bytes_roundtrip():
+    """Test that State can be serialized and deserialized via from_bytes."""
+    state = State({1: 0.0, 2: 1.0, 3: 2.5})
+    restored = State.from_bytes(state.to_bytes())
+    assert dict(state.entries) == dict(restored.entries)
+
+
+def test_state_normalizes_negative_zero():
+    """-0.0 should be normalized to 0.0 in State entries."""
+    # From dict
+    state = State({1: -0.0, 2: 1.0})
+    assert state.entries[1] == 0.0
+    assert str(state.entries[1]) == "0.0"  # Not "-0.0"
+
+    # From iterable
+    state = State([(1, -0.0), (2, 1.0)])
+    assert state.entries[1] == 0.0
+    assert str(state.entries[1]) == "0.0"
+
+
 def test_create_size_mismatch():
     with pytest.raises(TypeError) as e:
-        _state = State([(1, 0.0, 1.0)])
+        _state = State([(1, 0.0, 1.0)])  # type: ignore[arg-type]
     assert (
-        str(e.value)
-        == "ommx.v1.State can only be initialized with a `dict[int, float]` or `Iterable[tuple[int, float]]`"
+        "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        in str(e.value)
     )
 
     with pytest.raises(TypeError) as e:
-        _state = State((1, 0.0))
+        _state = State((1, 0.0))  # type: ignore[arg-type]
     assert (
-        str(e.value)
-        == "ommx.v1.State can only be initialized with a `dict[int, float]` or `Iterable[tuple[int, float]]`"
+        "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        in str(e.value)
     )

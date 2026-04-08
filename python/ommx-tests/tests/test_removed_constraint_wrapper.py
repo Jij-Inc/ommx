@@ -9,7 +9,10 @@ def test_removed_constraint_creation():
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        1, function, rust.Equality.EqualToZero, "test_constraint"
+        id=1,
+        function=function,
+        equality=rust.Equality.EqualToZero,
+        name="test_constraint",
     )
 
     # Create removed constraint
@@ -34,7 +37,10 @@ def test_removed_constraint_no_parameters():
     linear = rust.Linear({2: 2.0}, -5.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        2, function, rust.Equality.LessThanOrEqualToZero, "leq_constraint"
+        id=2,
+        function=function,
+        equality=rust.Equality.LessThanOrEqualToZero,
+        name="leq_constraint",
     )
 
     # Create removed constraint without parameters
@@ -55,7 +61,7 @@ def test_removed_constraint_access_original_constraint():
     polynomial = rust.Polynomial(terms)
     function = rust.Function.from_polynomial(polynomial)
     original_constraint = rust.Constraint(
-        3, function, rust.Equality.EqualToZero, "original"
+        id=3, function=function, equality=rust.Equality.EqualToZero, name="original"
     )
 
     # Create removed constraint
@@ -77,7 +83,9 @@ def test_removed_constraint_repr():
     """Test RemovedConstraint string representation."""
     linear = rust.Linear.constant(5.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, "repr_test")
+    constraint = rust.Constraint(
+        id=1, function=function, equality=rust.Equality.EqualToZero, name="repr_test"
+    )
 
     removed_constraint = rust.RemovedConstraint(
         constraint=constraint, removed_reason="Test reason"
@@ -92,13 +100,15 @@ def test_removed_constraint_empty_name():
     """Test RemovedConstraint with constraint that has no name."""
     linear = rust.Linear.single_term(1, 1.0)
     function = rust.Function.from_linear(linear)
-    constraint = rust.Constraint(1, function, rust.Equality.EqualToZero, None)
+    constraint = rust.Constraint(
+        id=1, function=function, equality=rust.Equality.EqualToZero, name=None
+    )
 
     removed_constraint = rust.RemovedConstraint(
         constraint=constraint, removed_reason="No name test"
     )
 
-    assert removed_constraint.name == ""  # Should return empty string
+    assert removed_constraint.name is None  # Should return None for unset name
     repr_str = repr(removed_constraint)
     expected = "RemovedConstraint(x1 == 0, reason=No name test)"
     assert repr_str == expected
@@ -109,7 +119,10 @@ def test_removed_constraint_complex_parameters():
     linear = rust.Linear({1: 1.0, 2: -1.0}, 0.0)
     function = rust.Function.from_linear(linear)
     constraint = rust.Constraint(
-        5, function, rust.Equality.LessThanOrEqualToZero, "complex_test"
+        id=5,
+        function=function,
+        equality=rust.Equality.LessThanOrEqualToZero,
+        name="complex_test",
     )
 
     complex_params = {

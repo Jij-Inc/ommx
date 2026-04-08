@@ -45,10 +45,7 @@ impl Samples {
             return Ok(state);
         }
 
-        // Almost same as `extract_state`, but we need to handle empty case
-        if let Ok(state) = entries.extract::<crate::State>() {
-            return Ok(Self::from(state.0));
-        }
+        // Check dict first to handle the empty dict case before State's FromPyObject matches it
         if let Ok(state_dict) = entries.extract::<HashMap<u64, f64>>() {
             if state_dict.is_empty() {
                 return Ok(Self::default());
@@ -56,6 +53,9 @@ impl Samples {
             let mut state = ommx::v1::State::default();
             state.entries = state_dict;
             return Ok(Self::from(state));
+        }
+        if let Ok(state) = entries.cast::<crate::State>() {
+            return Ok(Self::from(state.borrow().0.clone()));
         }
 
         // Try to extract as dict[int, State] or dict[int, dict[int, float]]
@@ -148,10 +148,10 @@ impl Samples {
     }
 
     /// Append a sample with the given sample IDs and state
-    pub fn append(&mut self, sample_ids: Vec<u64>, state: &crate::State) -> PyResult<()> {
+    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> PyResult<()> {
         let ids: Vec<ommx::SampleID> = sample_ids.into_iter().map(ommx::SampleID::from).collect();
         self.0
-            .append(ids.into_iter(), state.0.clone())
+            .append(ids.into_iter(), state.0)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(())
     }

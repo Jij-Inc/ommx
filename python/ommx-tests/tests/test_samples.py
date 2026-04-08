@@ -176,3 +176,25 @@ def test_create_samples_mixed_types():
     ]
     samples = _ommx_rust.Samples(mixed_list)
     assert samples.num_samples() == 3
+
+
+def test_samples_append_with_state():
+    """Test Samples.append with State object."""
+    from ommx.v1 import State
+
+    samples = _ommx_rust.Samples({})
+    state = State({1: 1.0, 2: 2.0})
+    samples.append([0], state)
+    assert samples.num_samples() == 1
+    assert 0 in samples.sample_ids()
+
+
+def test_samples_append_with_dict():
+    """Test Samples.append with dict (ToState).
+
+    Since State implements FromPyObject, append should accept dict directly.
+    """
+    samples = _ommx_rust.Samples({})
+    samples.append([0], {1: 1.0, 2: 2.0})
+    assert samples.num_samples() == 1
+    assert 0 in samples.sample_ids()
