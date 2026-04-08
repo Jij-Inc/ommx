@@ -1567,6 +1567,28 @@ class ParametricInstance:
     def created(self) -> typing.Optional[typing.Any]: ...
     @created.setter
     def created(self, value: typing.Any) -> None: ...
+    @property
+    def sense(self) -> Sense: ...
+    @property
+    def objective(self) -> Function: ...
+    @property
+    def decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    @property
+    def constraints(self) -> builtins.list[Constraint]: ...
+    @property
+    def removed_constraints(self) -> builtins.list[RemovedConstraint]: ...
+    @property
+    def named_functions(self) -> builtins.list[NamedFunction]: ...
+    @property
+    def parameters(self) -> builtins.list[Parameter]: ...
+    @property
+    def description(self) -> typing.Optional[InstanceDescription]: ...
+    @property
+    def constraint_hints(self) -> ConstraintHints: ...
+    @property
+    def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def parameter_ids(self) -> builtins.set[builtins.int]: ...
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -1592,7 +1614,48 @@ class ParametricInstance:
     @staticmethod
     def from_bytes(bytes: bytes) -> ParametricInstance: ...
     def to_bytes(self) -> bytes: ...
+    @staticmethod
+    def from_components(
+        sense: Sense,
+        objective: Function,
+        decision_variables: typing.Mapping[builtins.int, DecisionVariable],
+        constraints: typing.Mapping[builtins.int, Constraint],
+        parameters: typing.Mapping[builtins.int, Parameter],
+        named_functions: typing.Optional[
+            typing.Mapping[builtins.int, NamedFunction]
+        ] = None,
+        description: typing.Optional[InstanceDescription] = None,
+        constraint_hints: typing.Optional[ConstraintHints] = None,
+    ) -> ParametricInstance: ...
     def with_parameters(self, parameters: Parameters) -> Instance: ...
+    def get_decision_variable_by_id(
+        self, variable_id: builtins.int
+    ) -> DecisionVariable:
+        r"""
+        Get a specific decision variable by ID
+        """
+    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
+        r"""
+        Get a specific constraint by ID
+        """
+    def get_removed_constraint_by_id(
+        self, constraint_id: builtins.int
+    ) -> RemovedConstraint:
+        r"""
+        Get a specific removed constraint by ID
+        """
+    def get_named_function_by_id(
+        self, named_function_id: builtins.int
+    ) -> NamedFunction:
+        r"""
+        Get a specific named function by ID
+        """
+    def get_parameter_by_id(self, parameter_id: builtins.int) -> Parameter:
+        r"""
+        Get a specific parameter by ID
+        """
+    def __copy__(self) -> ParametricInstance: ...
+    def __deepcopy__(self, _memo: typing.Any) -> ParametricInstance: ...
 
 @typing.final
 class Polynomial:

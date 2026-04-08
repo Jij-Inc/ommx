@@ -10,10 +10,7 @@ from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
-from .parametric_instance_pb2 import (
-    ParametricInstance as _ParametricInstance,
-    Parameter as _Parameter,
-)
+from .parametric_instance_pb2 import Parameter as _Parameter
 
 from .. import _ommx_rust
 
@@ -1256,7 +1253,7 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        return ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
+        return ParametricInstance(self.raw.penalty_method())
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1336,17 +1333,13 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        return ParametricInstance.from_bytes(
-            self.raw.uniform_penalty_method().to_bytes()
-        )
+        return ParametricInstance(self.raw.uniform_penalty_method())
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        return ParametricInstance.from_bytes(
-            self.raw.as_parametric_instance().to_bytes()
-        )
+        return ParametricInstance(self.raw.as_parametric_instance())
 
     def evaluate_samples(
         self, samples: ToSamples, *, atol: float | None = None
@@ -1988,172 +1981,41 @@ class ParametricInstance:
 
     """
 
-    raw: _ParametricInstance
+    raw: _ommx_rust.ParametricInstance
+    """The raw Rust parametric instance."""
 
+    def __copy__(self):
+        return ParametricInstance(copy.copy(self.raw))
+
+    def __deepcopy__(self, memo):
+        return ParametricInstance(copy.deepcopy(self.raw, memo))
+
+    # Annotations are stored on the Rust side (raw.annotations)
     @property
     def annotations(self) -> dict[str, str]:
-        """
-        Returns the annotations dictionary.
+        """Arbitrary annotations stored in OMMX artifact.
 
-        Unlike Rust-backed types (Instance, Solution, SampleSet) where
-        ``annotations`` returns a **copy**, this returns the live dict.
-        Prefer using :meth:`add_user_annotation` for consistency across types.
+        Note: Returns a copy. In-place mutations like ``pi.annotations["k"] = "v"``
+        will not persist. Use :meth:`add_user_annotation` or assign the full dict back.
         """
-        # ParametricInstance still uses protobuf raw, annotations stored separately
-        if not hasattr(self, "_annotations_dict"):
-            self._annotations_dict: dict[str, str] = {}
-        return self._annotations_dict
+        return self.raw.annotations
 
     @annotations.setter
     def annotations(self, value: dict[str, str]):
-        self._annotations_dict = value
+        self.raw.annotations = value
 
-    _ANNOTATION_NAMESPACE = "org.ommx.v1.parametric-instance."
+    def __getattr__(self, name: str):
+        """Delegate attribute access to the underlying Rust parametric instance."""
+        return getattr(self.raw, name)
 
-    def add_user_annotation(
-        self,
-        key: str,
-        value: str,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        """Add a user annotation."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        self.annotations[f"{ns}{key}"] = value
-
-    def add_user_annotations(
-        self,
-        annotations: dict[str, str],
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        """Add multiple user annotations."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        for key, value in annotations.items():
-            self.annotations[f"{ns}{key}"] = value
-
-    def get_user_annotation(
-        self,
-        key: str,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ) -> str:
-        """Get a user annotation by key. Raises KeyError if not found."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        full_key = f"{ns}{key}"
-        if full_key not in self.annotations:
-            raise KeyError(full_key)
-        return self.annotations[full_key]
-
-    def get_user_annotations(
-        self,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ) -> dict[str, str]:
-        """Get all user annotations under the given namespace."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        return {
-            key[len(ns) :]: value
-            for key, value in self.annotations.items()
-            if key.startswith(ns)
-        }
-
-    @property
-    def title(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}title")
-
-    @title.setter
-    def title(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}title"] = value
-
-    @property
-    def license(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}license")
-
-    @license.setter
-    def license(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}license"] = value
-
-    @property
-    def dataset(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}dataset")
-
-    @dataset.setter
-    def dataset(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}dataset"] = value
-
-    @property
-    def authors(self) -> list[str]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}authors")
-        if not v:
-            return []
-        return v.split(",")
-
-    @authors.setter
-    def authors(self, value: list[str]):
-        key = f"{self._ANNOTATION_NAMESPACE}authors"
-        if value:
-            self.annotations[key] = ",".join(value)
-        else:
-            self.annotations.pop(key, None)
-
-    @property
-    def num_variables(self) -> Optional[int]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}variables")
-        if v is None:
-            return None
-        try:
-            return int(v)
-        except ValueError:
-            return None
-
-    @num_variables.setter
-    def num_variables(self, value: int):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}variables"] = str(value)
-
-    @property
-    def num_constraints(self) -> Optional[int]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}constraints")
-        if v is None:
-            return None
-        try:
-            return int(v)
-        except ValueError:
-            return None
-
-    @num_constraints.setter
-    def num_constraints(self, value: int):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}constraints"] = str(value)
-
-    @property
-    def created(self):
-        """Get the created datetime. Returns None if not set or empty."""
-        from dateutil.parser import isoparse
-
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}created")
-        if not v:
-            return None
-        return isoparse(v)
-
-    @created.setter
-    def created(self, value):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}created"] = value.isoformat()
+    # Named annotation properties (need explicit properties for setter support)
+    title = _raw_property("title")
+    license = _raw_property("license")
+    dataset = _raw_property("dataset")
+    authors = _raw_property("authors")
+    num_variables = _raw_property("num_variables")
+    num_constraints = _raw_property("num_constraints")
+    created = _raw_property("created")
 
     @staticmethod
     def empty() -> ParametricInstance:
@@ -2163,7 +2025,7 @@ class ParametricInstance:
         return ParametricInstance.from_components(
             objective=0,
             constraints=[],
-            sense=_Instance.Sense.SENSE_MINIMIZE,
+            sense=Instance.MINIMIZE,
             decision_variables=[],
             parameters=[],
         )
@@ -2179,153 +2041,136 @@ class ParametricInstance:
         | Polynomial
         | Function,
         constraints: Iterable[Constraint | _Constraint | _ommx_rust.Constraint],
-        sense: _Instance.Sense.ValueType | Sense,
+        sense: _ommx_rust.Sense,
         decision_variables: Iterable[DecisionVariable | _DecisionVariable],
         parameters: Iterable[Parameter | _Parameter],
-        description: Optional[_Instance.Description] = None,
+        description: Optional["Instance.Description | _Instance.Description"] = None,
+        constraint_hints: Optional[ConstraintHints] = None,
     ) -> ParametricInstance:
         if not isinstance(objective, Function):
             objective = Function(objective)
-        raw_objective = _Function()
-        raw_objective.ParseFromString(objective.to_bytes())
 
-        if isinstance(sense, Sense):
-            sense = _Instance.Sense.ValueType(sense.to_pb())
-
-        def convert_constraint(
-            c: Constraint | _Constraint | _ommx_rust.Constraint,
-        ) -> _Constraint:
-            if isinstance(c, _ommx_rust.Constraint):
-                raw = _Constraint()
-                raw.ParseFromString(c.to_bytes())
-                return raw
-            elif isinstance(c, Constraint):
-                return c.to_protobuf()
-            else:
-                return c
-
-        def convert_decision_variable(v):
+        # Convert decision variables to _ommx_rust.DecisionVariable
+        rust_decision_variables = {}
+        for v in decision_variables:
             if isinstance(v, _ommx_rust.DecisionVariable):
-                pb = _DecisionVariable()
-                pb.ParseFromString(v.to_bytes())
-                return pb
-            return v
+                rust_decision_variables[v.id] = v
+            else:
+                dv = DecisionVariable.from_bytes(v.SerializeToString())
+                rust_decision_variables[dv.id] = dv
 
-        def convert_parameter(p):
+        # Convert constraints to _ommx_rust.Constraint
+        rust_constraints = {}
+        for c in constraints:
+            if isinstance(c, Constraint):
+                rust_constraints[c.id] = c
+            else:
+                constraint = Constraint.from_bytes(c.SerializeToString())
+                rust_constraints[constraint.id] = constraint
+
+        # Convert parameters to _ommx_rust.Parameter
+        rust_parameters = {}
+        for p in parameters:
             if isinstance(p, _ommx_rust.Parameter):
-                pb = _Parameter()
-                pb.ParseFromString(p.to_bytes())
-                return pb
-            return p
+                rust_parameters[p.id] = p
+            else:
+                param = Parameter.from_bytes(p.SerializeToString())
+                rust_parameters[param.id] = param
 
-        return ParametricInstance(
-            _ParametricInstance(
-                description=description,
-                decision_variables=[
-                    convert_decision_variable(v) for v in decision_variables
-                ],
-                objective=raw_objective,
-                constraints=[convert_constraint(c) for c in constraints],
-                sense=sense,
-                parameters=[convert_parameter(p) for p in parameters],
-            )
+        # Convert description if provided
+        rust_description = None
+        if description is not None:
+            if isinstance(description, _ommx_rust.InstanceDescription):
+                rust_description = description
+            else:
+                rust_description = _ommx_rust.InstanceDescription(
+                    name=description.name if description.HasField("name") else None,
+                    description=description.description
+                    if description.HasField("description")
+                    else None,
+                    authors=list(description.authors) if description.authors else None,
+                    created_by=description.created_by
+                    if description.HasField("created_by")
+                    else None,
+                )
+
+        rust_constraint_hints = constraint_hints
+
+        # Handle sense conversion from old protobuf enum values
+        if isinstance(sense, int):
+            sense = Sense.from_pb(sense)
+
+        rust_instance = _ommx_rust.ParametricInstance.from_components(
+            sense=sense,
+            objective=objective,
+            decision_variables=rust_decision_variables,
+            constraints=rust_constraints,
+            parameters=rust_parameters,
+            named_functions=None,
+            description=rust_description,
+            constraint_hints=rust_constraint_hints,
         )
+
+        return ParametricInstance(rust_instance)
 
     @staticmethod
     def from_bytes(data: bytes) -> ParametricInstance:
-        raw = _ParametricInstance()
-        raw.ParseFromString(data)
-        return ParametricInstance(raw)
+        rust_instance = _ommx_rust.ParametricInstance.from_bytes(data)
+        return ParametricInstance(rust_instance)
 
     def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
+        return self.raw.to_bytes()
 
     @property
     def decision_variables(self) -> list[DecisionVariable]:
         """
         Get decision variables as a list of :class:`DecisionVariable` instances.
         """
-        return [
-            DecisionVariable.from_bytes(raw.SerializeToString())
-            for raw in self.raw.decision_variables
-        ]
+        return list(self.raw.decision_variables)
 
     @property
     def constraints(self) -> list[Constraint]:
         """
-        Get constraints as a list of :class:`Constraint
+        Get constraints as a list of :class:`Constraint` instances.
         """
-        return [
-            Constraint.from_bytes(raw.SerializeToString())
-            for raw in self.raw.constraints
-        ]
+        return list(self.raw.constraints)
 
     @property
     def removed_constraints(self) -> list[RemovedConstraint]:
         """
         Get removed constraints as a list of :class:`RemovedConstraint` instances.
         """
-        return [
-            RemovedConstraint.from_bytes(raw.SerializeToString())
-            for raw in self.raw.removed_constraints
-        ]
+        return list(self.raw.removed_constraints)
 
     @property
     def named_functions(self) -> list[NamedFunction]:
         """
         Get named functions as a list of :class:`NamedFunction` instances.
         """
-        return [
-            NamedFunction.from_bytes(raw.SerializeToString())
-            for raw in self.raw.named_functions
-        ]
+        return list(self.raw.named_functions)
 
     @property
     def parameters(self) -> list[Parameter]:
         """
         Get parameters as a list of :class:`Parameter`.
         """
-        return [
-            Parameter.from_bytes(raw.SerializeToString()) for raw in self.raw.parameters
-        ]
+        return list(self.raw.parameters)
 
-    def get_parameter_by_id(self, parameter_id: int) -> Parameter:
-        """
-        Get a parameter by ID.
-        """
-        for p in self.raw.parameters:
-            if p.id == parameter_id:
-                return Parameter.from_bytes(p.SerializeToString())
-        raise ValueError(f"Parameter ID {parameter_id} is not found")
+    @property
+    def objective(self) -> Function:
+        return self.raw.objective
 
-    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.decision_variables:
-            if v.id == variable_id:
-                return v
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
+    @property
+    def sense(self) -> _ommx_rust.Sense:
+        return self.raw.sense
 
-    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.constraints:
-            if c.id == constraint_id:
-                return c
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
+    @property
+    def description(self) -> "Instance.Description | None":
+        return self.raw.description
 
-    def get_removed_constraint_by_id(
-        self, removed_constraint_id: int
-    ) -> RemovedConstraint:
-        """
-        Get a removed constraint by ID.
-        """
-        for rc in self.removed_constraints:
-            if rc.id == removed_constraint_id:
-                return rc
-        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
+    @property
+    def constraint_hints(self) -> ConstraintHints:
+        return self.raw.constraint_hints
 
     @property
     def decision_variables_df(self) -> DataFrame:
@@ -2370,9 +2215,8 @@ class ParametricInstance:
         """
         if not isinstance(parameters, Parameters):
             parameters = Parameters(entries=parameters)
-        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
         ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
-        instance = pi.with_parameters(ps)
+        instance = self.raw.with_parameters(ps)
         return Instance(instance)
 
 

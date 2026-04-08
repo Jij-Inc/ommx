@@ -625,7 +625,7 @@ impl DecisionVariableAnalysis {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct InstanceDescription(ommx::v1::instance::Description);
+pub struct InstanceDescription(pub(crate) ommx::v1::instance::Description);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
