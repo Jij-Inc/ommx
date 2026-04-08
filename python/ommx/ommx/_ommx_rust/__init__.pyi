@@ -49,6 +49,7 @@ __all__ = [
     "Solution",
     "Sos1",
     "State",
+    "ToFunction",
     "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
@@ -64,6 +65,9 @@ __all__ = [
     "update_constraint_id_counter",
 ]
 
+ToFunction: TypeAlias = (
+    int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+)
 ToState: TypeAlias = (
     State
     | collections.abc.Mapping[int, float]
@@ -702,31 +706,6 @@ class EvaluatedNamedFunction:
 class Function:
     r"""
     General mathematical function of decision variables.
-
-    Function is a unified type that can represent constant, linear, quadratic,
-    or polynomial functions. It is used as the objective function and constraint
-    functions in optimization problems.
-
-    Example
-    -------
-    Create from various types:
-
-    >>> f = Function(1.0)  # Constant
-    >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
-    >>> f = Function(x * y)  # From Quadratic expression
-
-    Access the terms:
-
-    >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
-    >>> f.terms
-    {(1,): 2.5, (): 1.0}
-
-    Check the degree:
-
-    >>> f.degree()
-    1
-
-    .
     """
     @property
     def terms(self) -> dict: ...
@@ -814,7 +793,7 @@ class Function:
         and polynomial functions have the number of non-zero coefficient terms.
         """
     def almost_equal(
-        self, other: Function, atol: builtins.float = 1e-06
+        self, other: ToFunction, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
     def __neg__(self) -> Function:
@@ -837,8 +816,8 @@ class Function:
         r"""
         Reverse subtraction (lhs - self)
         """
-    def add_assign(self, rhs: Function) -> None: ...
-    def __iadd__(self, rhs: Function) -> None:
+    def add_assign(self, rhs: ToFunction) -> None: ...
+    def __iadd__(self, rhs: ToFunction) -> None:
         r"""
         In-place addition for += operator
 
@@ -1022,7 +1001,7 @@ class Instance:
     @staticmethod
     def from_components(
         sense: Sense,
-        objective: Function,
+        objective: ToFunction,
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
         named_functions: typing.Optional[
@@ -1651,7 +1630,7 @@ class ParametricInstance:
     def from_components(
         *,
         sense: Sense,
-        objective: Function,
+        objective: ToFunction,
         decision_variables: typing.Sequence[DecisionVariable],
         constraints: typing.Sequence[Constraint],
         parameters: typing.Sequence[Parameter],

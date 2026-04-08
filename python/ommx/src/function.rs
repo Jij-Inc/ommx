@@ -40,10 +40,117 @@ use std::collections::{BTreeMap, BTreeSet};
 /// 1
 ///
 /// .
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);
+
+// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "Function",
+        struct_id: || std::any::TypeId::of::<Function>(),
+        doc: "General mathematical function of decision variables.",
+        module: Some("ommx._ommx_rust"),
+        bases: &[],
+        getters: &[],
+        setters: &[],
+        has_eq: false,
+        has_hash: false,
+        has_ord: false,
+        has_str: false,
+        subclass: false,
+    }
+}
+
+// PyStubType: input uses ToFunction, output uses Function
+impl pyo3_stub_gen::PyStubType for Function {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("ToFunction", "ommx._ommx_rust".into())
+    }
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("Function", "ommx._ommx_rust".into())
+    }
+}
+
+/// Convert various Python types to Function.
+///
+/// Accepts: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
+impl<'py> FromPyObject<'_, 'py> for Function {
+    type Error = PyErr;
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(f) = ob.cast::<Function>() {
+            return Ok(f.borrow().clone());
+        }
+        if let Ok(p) = ob.extract::<Polynomial>() {
+            return Ok(Self(ommx::Function::from(p.0)));
+        }
+        if let Ok(q) = ob.extract::<Quadratic>() {
+            return Ok(Self(ommx::Function::from(q.0)));
+        }
+        if let Ok(l) = ob.extract::<Linear>() {
+            return Ok(Self(ommx::Function::from(l.0)));
+        }
+        if let Ok(dv) = ob.extract::<DecisionVariable>() {
+            let linear =
+                ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
+            return Ok(Self(ommx::Function::from(linear)));
+        }
+        if let Ok(scalar) = ob.extract::<f64>() {
+            return match TryInto::<Coefficient>::try_into(scalar) {
+                Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
+                Err(CoefficientError::Zero) => Ok(Self(ommx::Function::default())),
+                Err(e) => Err(PyTypeError::new_err(e.to_string())),
+            };
+        }
+        Err(PyTypeError::new_err(format!(
+            "Cannot convert {} to Function. Accepted: int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function",
+            ob.get_type().name()?
+        )))
+    }
+}
+
+pyo3_stub_gen::impl_py_runtime_type!(Function);
+
+// Dummy types for ToFunction type alias
+
+enum PyInt {}
+impl pyo3_stub_gen::PyStubType for PyInt {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: Default::default(),
+            name: "int".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyInt {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        Ok(py.get_type::<pyo3::types::PyInt>().into_any())
+    }
+}
+
+enum PyFloat {}
+impl pyo3_stub_gen::PyStubType for PyFloat {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: Default::default(),
+            name: "float".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyFloat {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        Ok(py.get_type::<pyo3::types::PyFloat>().into_any())
+    }
+}
+
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    ToFunction = PyInt | PyFloat | DecisionVariable | Linear | Quadratic | Polynomial | Function
+);
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]

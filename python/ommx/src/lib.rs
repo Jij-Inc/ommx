@@ -117,6 +117,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<Samples>()?;
     m.add_class::<State>()?;
     m.add_type_alias::<ToState>()?;
+    m.add_type_alias::<ToFunction>()?;
     m.add_class::<EvaluatedDecisionVariable>()?;
     m.add_class::<EvaluatedConstraint>()?;
     m.add_class::<EvaluatedNamedFunction>()?;
