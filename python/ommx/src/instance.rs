@@ -34,26 +34,31 @@ impl Instance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints, named_functions=None, description = None, constraint_hints = None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, named_functions=None, description=None, constraint_hints=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
-        decision_variables: HashMap<u64, DecisionVariable>,
-        constraints: HashMap<u64, Constraint>,
-        named_functions: Option<HashMap<u64, NamedFunction>>,
+        decision_variables: Vec<DecisionVariable>,
+        constraints: Vec<Constraint>,
+        named_functions: Option<Vec<NamedFunction>>,
         description: Option<InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
-        let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
-            decision_variables
-                .into_iter()
-                .map(|(id, var)| (VariableID::from(id), var.0))
-                .collect();
+        let mut rust_decision_variables = BTreeMap::new();
+        for var in decision_variables {
+            let id = var.0.id();
+            if rust_decision_variables.insert(id, var.0).is_some() {
+                anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
+            }
+        }
 
-        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
-            .into_iter()
-            .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
-            .collect();
+        let mut rust_constraints = BTreeMap::new();
+        for c in constraints {
+            let id = c.0.id;
+            if rust_constraints.insert(id, c.0).is_some() {
+                anyhow::bail!("Duplicate constraint ID: {}", id.into_inner());
+            }
+        }
 
         let mut builder = ommx::Instance::builder()
             .sense(sense.into())
@@ -62,10 +67,13 @@ impl Instance {
             .constraints(rust_constraints);
 
         if let Some(nfs) = named_functions {
-            let rust_named_functions = nfs
-                .into_iter()
-                .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
-                .collect();
+            let mut rust_named_functions = BTreeMap::new();
+            for nf in nfs {
+                let id = nf.0.id;
+                if rust_named_functions.insert(id, nf.0).is_some() {
+                    anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
+                }
+            }
             builder = builder.named_functions(rust_named_functions);
         }
 
@@ -81,6 +89,38 @@ impl Instance {
             inner: builder.build()?,
             annotations: HashMap::new(),
         })
+    }
+
+    /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
+    #[staticmethod]
+    pub fn empty() -> Result<Self> {
+        Self::from_components(
+            Sense::Minimize,
+            Function(ommx::Function::Zero),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    #[classattr]
+    #[pyo3(name = "MAXIMIZE")]
+    fn class_maximize() -> Sense {
+        Sense::Maximize
+    }
+
+    #[classattr]
+    #[pyo3(name = "MINIMIZE")]
+    fn class_minimize() -> Sense {
+        Sense::Minimize
+    }
+
+    #[classattr]
+    #[pyo3(name = "Description")]
+    fn class_description(py: Python<'_>) -> PyResult<Py<PyAny>> {
+        Ok(py.get_type::<InstanceDescription>().into_any().unbind())
     }
 
     #[getter]
@@ -209,6 +249,58 @@ impl Instance {
         ))
     }
 
+    /// Convert the instance to a QUBO format.
+    ///
+    /// This is a driver API that calls multiple conversion steps in order.
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn to_qubo<'py>(
+        &mut self,
+        py: Python<'py>,
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<HashMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> Result<(Bound<'py, PyDict>, f64)> {
+        let is_converted = self.as_minimization_problem();
+        self.check_no_continuous_variables("QUBO")?;
+        self.qubo_hubo_pipeline(
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )?;
+        self.log_encode(BTreeSet::new())?;
+        let result = self.as_qubo_format(py)?;
+        if is_converted {
+            self.as_maximization_problem();
+        }
+        Ok(result)
+    }
+
+    /// Convert the instance to a HUBO format.
+    ///
+    /// This is a driver API that calls multiple conversion steps in order.
+    #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
+    pub fn to_hubo<'py>(
+        &mut self,
+        py: Python<'py>,
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<HashMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> Result<(Bound<'py, PyDict>, f64)> {
+        let is_converted = self.as_minimization_problem();
+        self.check_no_continuous_variables("HUBO")?;
+        self.qubo_hubo_pipeline(
+            uniform_penalty_weight,
+            penalty_weights,
+            inequality_integer_slack_max_range,
+        )?;
+        self.log_encode(BTreeSet::new())?;
+        let result = self.as_hubo_format(py)?;
+        if is_converted {
+            self.as_maximization_problem();
+        }
+        Ok(result)
+    }
+
     pub fn as_parametric_instance(&self) -> ParametricInstance {
         ParametricInstance {
             inner: self.inner.clone().into(),
@@ -266,21 +358,35 @@ impl Instance {
     /// Returns:
     ///     Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
+    pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.inner
+        let mut new_inner = self.inner.clone();
+        new_inner
             .partial_evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(self.clone())
+        Ok(Self {
+            inner: new_inner,
+            annotations: self.annotations.clone(),
+        })
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
-    pub fn evaluate_samples(&self, samples: &Samples, atol: Option<f64>) -> Result<SampleSet> {
-        let v1_samples: ommx::v1::Samples = samples.0.clone().into();
+    pub fn evaluate_samples(
+        &self,
+        samples: Bound<'_, PyAny>,
+        atol: Option<f64>,
+    ) -> Result<SampleSet> {
+        // Accept Samples object or anything Samples.__new__ can handle (dict, list, etc.)
+        let samples: Samples = if let Ok(s) = samples.extract::<Samples>() {
+            s
+        } else {
+            Samples::new(samples)?
+        };
+        let v1_samples: ommx::v1::Samples = samples.0.into();
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
@@ -329,16 +435,17 @@ impl Instance {
         Ok(crate::Samples(samples))
     }
 
+    #[pyo3(signature = (constraint_id, reason, **parameters))]
     pub fn relax_constraint(
         &mut self,
         constraint_id: u64,
-        removed_reason: String,
-        removed_reason_parameters: HashMap<String, String>,
+        reason: String,
+        parameters: Option<HashMap<String, String>>,
     ) -> Result<()> {
         self.inner.relax_constraint(
             constraint_id.into(),
-            removed_reason,
-            removed_reason_parameters,
+            reason,
+            parameters.unwrap_or_default(),
         )?;
         Ok(())
     }
@@ -348,8 +455,24 @@ impl Instance {
         Ok(())
     }
 
-    pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
-        for id in integer_variable_ids.iter() {
+    #[pyo3(signature = (decision_variable_ids=BTreeSet::new()))]
+    pub fn log_encode(&mut self, decision_variable_ids: BTreeSet<u64>) -> Result<()> {
+        let ids: BTreeSet<u64> = if decision_variable_ids.is_empty() {
+            // Auto-detect: find all used integer decision variables
+            let analysis = self.inner.analyze_decision_variables();
+            let integer_ids: BTreeSet<u64> = analysis
+                .used_integer()
+                .into_iter()
+                .map(|(id, _)| id.into_inner())
+                .collect();
+            if integer_ids.is_empty() {
+                return Ok(());
+            }
+            integer_ids
+        } else {
+            decision_variable_ids
+        };
+        for id in ids.iter() {
             self.inner.log_encode((*id).into())?;
         }
         Ok(())
@@ -392,13 +515,79 @@ impl Instance {
             .map_err(|e| anyhow::anyhow!("{}", e))
     }
 
+    /// DataFrame of decision variables
+    #[getter]
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
+        let entries: Vec<_> = self
+            .inner
+            .decision_variables()
+            .values()
+            .map(|v| DecisionVariable(v.clone()).as_pandas_entry(py, &na))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of constraints
+    #[getter]
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .inner
+            .constraints()
+            .values()
+            .map(|c| Constraint(c.clone())._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of removed constraints
+    #[getter]
+    pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .inner
+            .removed_constraints()
+            .values()
+            .map(|rc| RemovedConstraint(rc.clone())._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of named functions
+    #[getter]
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .inner
+            .named_functions()
+            .values()
+            .map(|nf| NamedFunction(nf.clone())._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
     fn __copy__(&self) -> Self {
         self.clone()
     }
 
-    // __deepcopy__ can also be implemented with self.clone()
-    // memo argument is required to match Python protocol but not used in this implementation
-    // Since this implementation contains no PyObject references, simple clone is sufficient
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
     }
@@ -509,6 +698,98 @@ impl Instance {
     ///     ...     f.write(folded)
     pub fn logical_memory_profile(&self) -> String {
         ommx::logical_memory::logical_memory_to_folded(&self.inner)
+    }
+}
+
+impl Instance {
+    pub(crate) fn check_no_continuous_variables(&self, format_name: &str) -> Result<()> {
+        let continuous_ids: Vec<u64> = self
+            .inner
+            .analyze_decision_variables()
+            .used_continuous()
+            .into_iter()
+            .map(|(id, _)| id.into_inner())
+            .collect();
+        if !continuous_ids.is_empty() {
+            return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Continuous variables are not supported in {} conversion: IDs={:?}",
+                format_name, continuous_ids
+            ))
+            .into());
+        }
+        Ok(())
+    }
+
+    /// Shared pipeline for to_qubo/to_hubo: handle inequality constraints, apply penalty method.
+    pub(crate) fn qubo_hubo_pipeline(
+        &mut self,
+        uniform_penalty_weight: Option<f64>,
+        penalty_weights: Option<HashMap<u64, f64>>,
+        inequality_integer_slack_max_range: u64,
+    ) -> Result<()> {
+        // Prepare inequality constraints
+        let ineq_ids: Vec<ConstraintID> = self
+            .inner
+            .constraints()
+            .iter()
+            .filter(|(_, c)| c.equality == ommx::Equality::LessThanOrEqualToZero)
+            .map(|(id, _)| *id)
+            .collect();
+        for ineq_id in ineq_ids {
+            let id_u64 = ineq_id.into_inner();
+            // Try exact integer slack first, fall back to approximate
+            if self
+                .convert_inequality_to_equality_with_integer_slack(
+                    id_u64,
+                    inequality_integer_slack_max_range,
+                )
+                .is_err()
+            {
+                self.add_integer_slack_to_inequality(id_u64, inequality_integer_slack_max_range)?;
+            }
+        }
+
+        // Penalty method
+        if !self.inner.constraints().is_empty() {
+            if uniform_penalty_weight.is_some() && penalty_weights.is_some() {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "Both uniform_penalty_weight and penalty_weights are specified. Please choose one."
+                ).into());
+            }
+            if let Some(pw) = penalty_weights {
+                let pi = self.inner.clone().penalty_method()?;
+                // Map constraint IDs (from parameter subscripts) to penalty weights
+                let mut weights = HashMap::new();
+                for p in pi.parameters().values() {
+                    let constraint_id = p.subscripts.first().copied().ok_or_else(|| {
+                        anyhow::anyhow!("Penalty parameter {} has no subscripts", p.id)
+                    })? as u64;
+                    let w = pw.get(&constraint_id).ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "No penalty weight provided for constraint ID {}",
+                            constraint_id
+                        )
+                    })?;
+                    weights.insert(VariableID::from(p.id).into_inner(), *w);
+                }
+                let mut v1_params = ommx::v1::Parameters::default();
+                v1_params.entries = weights;
+                self.inner = pi.with_parameters(v1_params)?;
+            } else {
+                let weight = uniform_penalty_weight.unwrap_or(1.0);
+                let pi = self.inner.clone().uniform_penalty_method()?;
+                let param_id = pi
+                    .parameters()
+                    .keys()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("No penalty weight parameter found"))?;
+                let mut v1_params = ommx::v1::Parameters::default();
+                v1_params.entries.insert(param_id.into_inner(), weight);
+                self.inner = pi.with_parameters(v1_params)?;
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -896,6 +896,9 @@ class Function:
 
 @typing.final
 class Instance:
+    MAXIMIZE: Sense
+    MINIMIZE: Sense
+    Description: typing.Any
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
@@ -977,6 +980,26 @@ class Instance:
     def constraint_hints(self) -> ConstraintHints: ...
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    @property
+    def decision_variables_df(self) -> typing.Any:
+        r"""
+        DataFrame of decision variables
+        """
+    @property
+    def constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of constraints
+        """
+    @property
+    def removed_constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of removed constraints
+        """
+    @property
+    def named_functions_df(self) -> typing.Any:
+        r"""
+        DataFrame of named functions
+        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -1003,20 +1026,52 @@ class Instance:
     def from_bytes(bytes: bytes) -> Instance: ...
     @staticmethod
     def from_components(
+        *,
         sense: Sense,
         objective: ToFunction,
-        decision_variables: typing.Mapping[builtins.int, DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
-        named_functions: typing.Optional[
-            typing.Mapping[builtins.int, NamedFunction]
-        ] = None,
+        decision_variables: typing.Sequence[DecisionVariable],
+        constraints: typing.Sequence[Constraint],
+        named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> Instance: ...
+    @staticmethod
+    def empty() -> Instance:
+        r"""
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
+        """
     def to_bytes(self) -> bytes: ...
     def required_ids(self) -> builtins.set[builtins.int]: ...
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
     def as_hubo_format(self) -> tuple[dict, builtins.float]: ...
+    def to_qubo(
+        self,
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> tuple[dict, builtins.float]:
+        r"""
+        Convert the instance to a QUBO format.
+
+        This is a driver API that calls multiple conversion steps in order.
+        """
+    def to_hubo(
+        self,
+        *,
+        uniform_penalty_weight: typing.Optional[builtins.float] = None,
+        penalty_weights: typing.Optional[
+            typing.Mapping[builtins.int, builtins.float]
+        ] = None,
+        inequality_integer_slack_max_range: builtins.int = 31,
+    ) -> tuple[dict, builtins.float]:
+        r"""
+        Convert the instance to a HUBO format.
+
+        This is a driver API that calls multiple conversion steps in order.
+        """
     def as_parametric_instance(self) -> ParametricInstance: ...
     def penalty_method(self) -> ParametricInstance: ...
     def uniform_penalty_method(self) -> ParametricInstance: ...
@@ -1047,7 +1102,7 @@ class Instance:
             Self (modified in-place) for method chaining
         """
     def evaluate_samples(
-        self, samples: Samples, *, atol: typing.Optional[builtins.float] = None
+        self, samples: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
     def random_state(self, rng: Rng) -> State: ...
     def random_samples(
@@ -1061,11 +1116,13 @@ class Instance:
     def relax_constraint(
         self,
         constraint_id: builtins.int,
-        removed_reason: builtins.str,
-        removed_reason_parameters: typing.Mapping[builtins.str, builtins.str],
+        reason: builtins.str,
+        **parameters: typing.Any,
     ) -> None: ...
     def restore_constraint(self, constraint_id: builtins.int) -> None: ...
-    def log_encode(self, integer_variable_ids: builtins.set[builtins.int]) -> None: ...
+    def log_encode(
+        self, decision_variable_ids: builtins.set[builtins.int] = set()
+    ) -> None: ...
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: builtins.int, max_integer_range: builtins.int
     ) -> None: ...
@@ -1994,6 +2051,18 @@ class SampleSet:
     @end.setter
     def end(self, value: typing.Any) -> None: ...
     @property
+    def instance(self) -> typing.Optional[builtins.str]: ...
+    @instance.setter
+    def instance(self, value: builtins.str) -> None: ...
+    @property
+    def solver(self) -> typing.Optional[typing.Any]: ...
+    @solver.setter
+    def solver(self, value: typing.Any) -> None: ...
+    @property
+    def parameters(self) -> typing.Optional[typing.Any]: ...
+    @parameters.setter
+    def parameters(self, value: typing.Any) -> None: ...
+    @property
     def best_feasible_id(self) -> builtins.int: ...
     @property
     def best_feasible_relaxed_id(self) -> builtins.int: ...
@@ -2057,6 +2126,39 @@ class SampleSet:
     def named_function_names(self) -> builtins.set[builtins.str]:
         r"""
         Get all unique named function names in this sample set
+        """
+    @property
+    def summary(self) -> typing.Any:
+        r"""
+        Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
+        Index is sample_id.
+        """
+    @property
+    def summary_with_constraints(self) -> typing.Any:
+        r"""
+        Summary DataFrame with per-constraint feasibility columns.
+        Index is sample_id.
+        """
+    @property
+    def decision_variables_df(self) -> typing.Any:
+        r"""
+        DataFrame of decision variables with per-sample value columns.
+        Static columns: id, kind, lower, upper, name, subscripts, description.
+        Dynamic columns: one per sample_id with the variable's value.
+        """
+    @property
+    def constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of constraints with per-sample value and feasibility columns.
+        Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
+        Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
+        """
+    @property
+    def named_functions_df(self) -> typing.Any:
+        r"""
+        DataFrame of named functions with per-sample value columns.
+        Static columns: id, used_ids, name, subscripts, description, parameters.
+        Dynamic columns: one per sample_id with the function's evaluated value.
         """
     def add_user_annotation(
         self,
@@ -2133,6 +2235,8 @@ class SampleSet:
         r"""
         Get a specific sampled named function by ID
         """
+    def __copy__(self) -> SampleSet: ...
+    def __deepcopy__(self, _memo: typing.Any) -> SampleSet: ...
 
 @typing.final
 class SampledConstraint:
@@ -2302,6 +2406,18 @@ class Samples:
 
 @typing.final
 class Solution:
+    OPTIMAL: Optimality
+    r"""
+    Class constant for optimal solutions
+    """
+    NOT_OPTIMAL: Optimality
+    r"""
+    Class constant for non-optimal solutions
+    """
+    LP_RELAXED: Relaxation
+    r"""
+    Class constant for LP-relaxed solutions
+    """
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
@@ -2333,6 +2449,18 @@ class Solution:
     def end(self) -> typing.Optional[typing.Any]: ...
     @end.setter
     def end(self, value: typing.Any) -> None: ...
+    @property
+    def instance(self) -> typing.Optional[builtins.str]: ...
+    @instance.setter
+    def instance(self, value: builtins.str) -> None: ...
+    @property
+    def solver(self) -> typing.Optional[typing.Any]: ...
+    @solver.setter
+    def solver(self, value: typing.Any) -> None: ...
+    @property
+    def parameters(self) -> typing.Optional[typing.Any]: ...
+    @parameters.setter
+    def parameters(self, value: typing.Any) -> None: ...
     @property
     def objective(self) -> builtins.float:
         r"""
@@ -2391,6 +2519,11 @@ class Solution:
         Get evaluated constraints as a list sorted by ID
         """
     @property
+    def named_functions(self) -> builtins.list[EvaluatedNamedFunction]:
+        r"""
+        Get evaluated named functions as a list sorted by ID
+        """
+    @property
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def constraint_ids(self) -> builtins.set[builtins.int]: ...
@@ -2405,6 +2538,27 @@ class Solution:
     def named_function_names(self) -> builtins.set[builtins.str]:
         r"""
         Get all unique named function names in this solution
+        """
+    @property
+    def decision_variables_df(self) -> typing.Any:
+        r"""
+        DataFrame of evaluated decision variables
+
+        Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+        """
+    @property
+    def constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of evaluated constraints
+
+        Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+        """
+    @property
+    def named_functions_df(self) -> typing.Any:
+        r"""
+        DataFrame of evaluated named functions
+
+        Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
         """
     def add_user_annotation(
         self,
@@ -2431,7 +2585,6 @@ class Solution:
     @staticmethod
     def from_bytes(bytes: bytes) -> Solution: ...
     def to_bytes(self) -> bytes: ...
-    def named_functions(self) -> builtins.list[EvaluatedNamedFunction]: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
         Extract decision variables by name with subscripts as key (returns a Python dict)
@@ -2474,6 +2627,8 @@ class Solution:
         r"""
         Get a specific evaluated named function by ID
         """
+    def __copy__(self) -> Solution: ...
+    def __deepcopy__(self, _memo: typing.Any) -> Solution: ...
     def total_violation_l1(self) -> builtins.float:
         r"""
         Calculate total constraint violation using L1 norm (sum of absolute violations)
