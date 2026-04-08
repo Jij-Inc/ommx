@@ -10,7 +10,6 @@ from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
-from .parametric_instance_pb2 import Parameter as _Parameter
 
 from .. import _ommx_rust
 
@@ -87,17 +86,6 @@ def _decision_variable_as_pandas_entry(dv: DecisionVariable) -> dict:
         if dv.substituted_value is not None
         else NA,
     } | {f"parameters.{key}": value for key, value in dv.parameters.items()}
-
-
-def _parameter_as_pandas_entry(p: Parameter) -> dict:
-    """Convert a Parameter to a dict suitable for pandas DataFrame."""
-    return {
-        "id": p.id,
-        "name": p.name if p.name else NA,
-        "subscripts": list(p.subscripts),
-        "description": p.description if p.description else NA,
-        **{f"parameters.{key}": value for key, value in p.parameters.items()},
-    }
 
 
 __all__ = [
@@ -943,15 +931,14 @@ class Instance:
                 weights = {
                     p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                unconstrained = pi.with_parameters(weights)
+                self.raw = pi.with_parameters(weights)
             else:
                 if uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
                 weight = pi.parameters[0]
-                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
-            self.raw = unconstrained.raw
+                self.raw = pi.with_parameters({weight.id: uniform_penalty_weight})
 
         self.log_encode()
         qubo = self.as_qubo_format()
@@ -1040,15 +1027,14 @@ class Instance:
                 weights = {
                     p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                unconstrained = pi.with_parameters(weights)
+                self.raw = pi.with_parameters(weights)
             else:
                 if uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
                 weight = pi.parameters[0]
-                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
-            self.raw = unconstrained.raw
+                self.raw = pi.with_parameters({weight.id: uniform_penalty_weight})
 
         self.log_encode()
         qubo = self.as_hubo_format()
@@ -1253,7 +1239,7 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        return ParametricInstance(self.raw.penalty_method())
+        return self.raw.penalty_method()
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1333,13 +1319,13 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        return ParametricInstance(self.raw.uniform_penalty_method())
+        return self.raw.uniform_penalty_method()
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        return ParametricInstance(self.raw.as_parametric_instance())
+        return self.raw.as_parametric_instance()
 
     def evaluate_samples(
         self, samples: ToSamples, *, atol: float | None = None
@@ -1933,291 +1919,7 @@ class Instance:
         return self.raw.logical_memory_profile()
 
 
-@dataclass
-class ParametricInstance:
-    """
-    Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
-
-    Examples
-    =========
-
-    Create an instance for KnapSack Problem with parameters
-
-    .. doctest::
-
-        >>> from ommx.v1 import ParametricInstance, DecisionVariable, Parameter
-
-        Decision variables
-
-        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(6)]
-
-        Profit and weight of items as parameters
-
-        >>> p = [Parameter(i+6, name="Profit", subscripts=[i]) for i in range(6)]
-        >>> w = [Parameter(i+12, name="Weight", subscripts=[i]) for i in range(6)]
-        >>> W = Parameter(18, name="Capacity")
-
-        Objective and constraint
-
-        >>> objective = sum(p[i] * x[i] for i in range(6))
-        >>> constraint = sum(w[i] * x[i] for i in range(6)) <= W
-
-        Compose as an instance
-
-        >>> parametric_instance = ParametricInstance.from_components(
-        ...     decision_variables=x,
-        ...     parameters=p + w + [W],
-        ...     objective=objective,
-        ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-
-        Substitute parameters to get an instance
-
-        >>> p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
-        >>> w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
-        >>> W_value = { W.id: 47 }
-        >>> instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
-
-    """
-
-    raw: _ommx_rust.ParametricInstance
-    """The raw Rust parametric instance."""
-
-    def __copy__(self):
-        return ParametricInstance(copy.copy(self.raw))
-
-    def __deepcopy__(self, memo):
-        return ParametricInstance(copy.deepcopy(self.raw, memo))
-
-    # Annotations are stored on the Rust side (raw.annotations)
-    @property
-    def annotations(self) -> dict[str, str]:
-        """Arbitrary annotations stored in OMMX artifact.
-
-        Note: Returns a copy. In-place mutations like ``pi.annotations["k"] = "v"``
-        will not persist. Use :meth:`add_user_annotation` or assign the full dict back.
-        """
-        return self.raw.annotations
-
-    @annotations.setter
-    def annotations(self, value: dict[str, str]):
-        self.raw.annotations = value
-
-    def __getattr__(self, name: str):
-        """Delegate attribute access to the underlying Rust parametric instance."""
-        return getattr(self.raw, name)
-
-    # Named annotation properties (need explicit properties for setter support)
-    title = _raw_property("title")
-    license = _raw_property("license")
-    dataset = _raw_property("dataset")
-    authors = _raw_property("authors")
-    num_variables = _raw_property("num_variables")
-    num_constraints = _raw_property("num_constraints")
-    created = _raw_property("created")
-
-    @staticmethod
-    def empty() -> ParametricInstance:
-        """
-        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
-        """
-        return ParametricInstance.from_components(
-            objective=0,
-            constraints=[],
-            sense=Instance.MINIMIZE,
-            decision_variables=[],
-            parameters=[],
-        )
-
-    @staticmethod
-    def from_components(
-        *,
-        objective: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-        constraints: Iterable[Constraint | _Constraint | _ommx_rust.Constraint],
-        sense: _ommx_rust.Sense,
-        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
-        parameters: Iterable[Parameter | _Parameter],
-        description: Optional["Instance.Description | _Instance.Description"] = None,
-        constraint_hints: Optional[ConstraintHints] = None,
-    ) -> ParametricInstance:
-        if not isinstance(objective, Function):
-            objective = Function(objective)
-
-        # Convert decision variables to _ommx_rust.DecisionVariable
-        rust_decision_variables = {}
-        for v in decision_variables:
-            if isinstance(v, _ommx_rust.DecisionVariable):
-                rust_decision_variables[v.id] = v
-            else:
-                dv = DecisionVariable.from_bytes(v.SerializeToString())
-                rust_decision_variables[dv.id] = dv
-
-        # Convert constraints to _ommx_rust.Constraint
-        rust_constraints = {}
-        for c in constraints:
-            if isinstance(c, Constraint):
-                rust_constraints[c.id] = c
-            else:
-                constraint = Constraint.from_bytes(c.SerializeToString())
-                rust_constraints[constraint.id] = constraint
-
-        # Convert parameters to _ommx_rust.Parameter
-        rust_parameters = {}
-        for p in parameters:
-            if isinstance(p, _ommx_rust.Parameter):
-                rust_parameters[p.id] = p
-            else:
-                param = Parameter.from_bytes(p.SerializeToString())
-                rust_parameters[param.id] = param
-
-        # Convert description if provided
-        rust_description = None
-        if description is not None:
-            if isinstance(description, _ommx_rust.InstanceDescription):
-                rust_description = description
-            else:
-                rust_description = _ommx_rust.InstanceDescription(
-                    name=description.name if description.HasField("name") else None,
-                    description=description.description
-                    if description.HasField("description")
-                    else None,
-                    authors=list(description.authors) if description.authors else None,
-                    created_by=description.created_by
-                    if description.HasField("created_by")
-                    else None,
-                )
-
-        rust_constraint_hints = constraint_hints
-
-        # Handle sense conversion from old protobuf enum values
-        if isinstance(sense, int):
-            sense = Sense.from_pb(sense)
-
-        rust_instance = _ommx_rust.ParametricInstance.from_components(
-            sense=sense,
-            objective=objective,
-            decision_variables=rust_decision_variables,
-            constraints=rust_constraints,
-            parameters=rust_parameters,
-            named_functions=None,
-            description=rust_description,
-            constraint_hints=rust_constraint_hints,
-        )
-
-        return ParametricInstance(rust_instance)
-
-    @staticmethod
-    def from_bytes(data: bytes) -> ParametricInstance:
-        rust_instance = _ommx_rust.ParametricInstance.from_bytes(data)
-        return ParametricInstance(rust_instance)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.to_bytes()
-
-    @property
-    def decision_variables(self) -> list[DecisionVariable]:
-        """
-        Get decision variables as a list of :class:`DecisionVariable` instances.
-        """
-        return list(self.raw.decision_variables)
-
-    @property
-    def constraints(self) -> list[Constraint]:
-        """
-        Get constraints as a list of :class:`Constraint` instances.
-        """
-        return list(self.raw.constraints)
-
-    @property
-    def removed_constraints(self) -> list[RemovedConstraint]:
-        """
-        Get removed constraints as a list of :class:`RemovedConstraint` instances.
-        """
-        return list(self.raw.removed_constraints)
-
-    @property
-    def named_functions(self) -> list[NamedFunction]:
-        """
-        Get named functions as a list of :class:`NamedFunction` instances.
-        """
-        return list(self.raw.named_functions)
-
-    @property
-    def parameters(self) -> list[Parameter]:
-        """
-        Get parameters as a list of :class:`Parameter`.
-        """
-        return list(self.raw.parameters)
-
-    @property
-    def objective(self) -> Function:
-        return self.raw.objective
-
-    @property
-    def sense(self) -> _ommx_rust.Sense:
-        return self.raw.sense
-
-    @property
-    def description(self) -> "Instance.Description | None":
-        return self.raw.description
-
-    @property
-    def constraint_hints(self) -> ConstraintHints:
-        return self.raw.constraint_hints
-
-    @property
-    def decision_variables_df(self) -> DataFrame:
-        df = DataFrame(
-            _decision_variable_as_pandas_entry(v) for v in self.decision_variables
-        )
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def named_functions_df(self) -> DataFrame:
-        df = DataFrame(nf._as_pandas_entry() for nf in self.named_functions)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def constraints_df(self) -> DataFrame:
-        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def removed_constraints_df(self) -> DataFrame:
-        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def parameters_df(self) -> DataFrame:
-        df = DataFrame(_parameter_as_pandas_entry(p) for p in self.parameters)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
-        """
-        Substitute parameters to yield an instance.
-        """
-        if not isinstance(parameters, Parameters):
-            parameters = Parameters(entries=parameters)
-        ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
-        instance = self.raw.with_parameters(ps)
-        return Instance(instance)
+ParametricInstance = _ommx_rust.ParametricInstance
 
 
 @dataclass

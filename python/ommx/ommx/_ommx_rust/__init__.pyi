@@ -447,6 +447,10 @@ class DecisionVariable:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+        """
     def equals_to(self, other: DecisionVariable) -> builtins.bool:
         r"""
         Compare two DecisionVariable objects for equality.
@@ -1479,6 +1483,10 @@ class Parameter:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Parameter: ...
     def __deepcopy__(self, _memo: typing.Any) -> Parameter: ...
+    def _as_pandas_entry(self) -> dict:
+        r"""
+        Internal method for pandas DataFrame conversion.
+        """
     def __neg__(self) -> Linear:
         r"""
         Negation operator: -p → Linear(-1 * p)
@@ -1589,6 +1597,31 @@ class ParametricInstance:
     def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def decision_variables_df(self) -> typing.Any:
+        r"""
+        DataFrame of decision variables
+        """
+    @property
+    def constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of constraints
+        """
+    @property
+    def removed_constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of removed constraints
+        """
+    @property
+    def named_functions_df(self) -> typing.Any:
+        r"""
+        DataFrame of named functions
+        """
+    @property
+    def parameters_df(self) -> typing.Any:
+        r"""
+        DataFrame of parameters
+        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -1616,18 +1649,29 @@ class ParametricInstance:
     def to_bytes(self) -> bytes: ...
     @staticmethod
     def from_components(
+        *,
         sense: Sense,
         objective: Function,
-        decision_variables: typing.Mapping[builtins.int, DecisionVariable],
-        constraints: typing.Mapping[builtins.int, Constraint],
-        parameters: typing.Mapping[builtins.int, Parameter],
-        named_functions: typing.Optional[
-            typing.Mapping[builtins.int, NamedFunction]
-        ] = None,
+        decision_variables: typing.Sequence[DecisionVariable],
+        constraints: typing.Sequence[Constraint],
+        parameters: typing.Sequence[Parameter],
+        named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
     ) -> ParametricInstance: ...
-    def with_parameters(self, parameters: Parameters) -> Instance: ...
+    @staticmethod
+    def empty() -> ParametricInstance:
+        r"""
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
+        """
+    def with_parameters(
+        self, parameters: typing.Mapping[builtins.int, builtins.float]
+    ) -> Instance:
+        r"""
+        Substitute parameters to yield an instance.
+
+        Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
     ) -> DecisionVariable:

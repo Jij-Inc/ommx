@@ -1,7 +1,11 @@
 use crate::{extract_to_function, next_constraint_id, Constraint, Linear, Polynomial, Quadratic};
 use anyhow::Result;
 use ommx::{LinearMonomial, Message, VariableID};
-use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
+use pyo3::{
+    prelude::*,
+    types::{PyBytes, PyDict},
+    Bound, PyAny,
+};
 use std::collections::HashMap;
 
 /// Parameter in an optimization problem.
@@ -107,6 +111,30 @@ impl Parameter {
 
     fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
         self.clone()
+    }
+
+    /// Internal method for pandas DataFrame conversion.
+    pub fn _as_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let dict = PyDict::new(py);
+        let na = py.import("pandas")?.getattr("NA")?;
+
+        dict.set_item("id", self.0.id)?;
+
+        match &self.0.name {
+            Some(name) if !name.is_empty() => dict.set_item("name", name)?,
+            _ => dict.set_item("name", &na)?,
+        }
+        dict.set_item("subscripts", self.0.subscripts.clone())?;
+        match &self.0.description {
+            Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
+            _ => dict.set_item("description", &na)?,
+        }
+
+        for (key, value) in &self.0.parameters {
+            dict.set_item(format!("parameters.{key}"), value)?;
+        }
+
+        Ok(dict)
     }
 
     // =====================

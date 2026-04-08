@@ -1,6 +1,6 @@
 use crate::{
     Constraint, ConstraintHints, DecisionVariable, Function, Instance, NamedFunction, Parameter,
-    Parameters, RemovedConstraint, Sense,
+    RemovedConstraint, Sense,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, NamedFunctionID, VariableID};
@@ -37,31 +37,29 @@ impl ParametricInstance {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None, constraint_hints=None))]
+    #[pyo3(signature = (*, sense, objective, decision_variables, constraints, parameters, named_functions=None, description=None, constraint_hints=None))]
     pub fn from_components(
         sense: Sense,
         objective: Function,
-        decision_variables: HashMap<u64, DecisionVariable>,
-        constraints: HashMap<u64, Constraint>,
-        parameters: HashMap<u64, Parameter>,
-        named_functions: Option<HashMap<u64, NamedFunction>>,
+        decision_variables: Vec<DecisionVariable>,
+        constraints: Vec<Constraint>,
+        parameters: Vec<Parameter>,
+        named_functions: Option<Vec<NamedFunction>>,
         description: Option<crate::InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
         let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
             decision_variables
                 .into_iter()
-                .map(|(id, var)| (VariableID::from(id), var.0))
+                .map(|var| (var.0.id(), var.0))
                 .collect();
 
-        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> = constraints
-            .into_iter()
-            .map(|(id, constraint)| (ConstraintID::from(id), constraint.0))
-            .collect();
+        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> =
+            constraints.into_iter().map(|c| (c.0.id, c.0)).collect();
 
         let rust_parameters: BTreeMap<VariableID, ommx::v1::Parameter> = parameters
             .into_iter()
-            .map(|(id, param)| (VariableID::from(id), param.0))
+            .map(|p| (VariableID::from(p.0.id), p.0))
             .collect();
 
         let mut builder = ommx::ParametricInstance::builder()
@@ -72,10 +70,7 @@ impl ParametricInstance {
             .parameters(rust_parameters);
 
         if let Some(nfs) = named_functions {
-            let rust_named_functions = nfs
-                .into_iter()
-                .map(|(id, named_function)| (NamedFunctionID::from(id), named_function.0))
-                .collect();
+            let rust_named_functions = nfs.into_iter().map(|nf| (nf.0.id, nf.0)).collect();
             builder = builder.named_functions(rust_named_functions);
         }
 
@@ -93,8 +88,28 @@ impl ParametricInstance {
         })
     }
 
-    pub fn with_parameters(&self, parameters: &Parameters) -> Result<Instance> {
-        let instance = self.inner.clone().with_parameters(parameters.0.clone())?;
+    /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
+    #[staticmethod]
+    pub fn empty() -> Result<Self> {
+        Self::from_components(
+            Sense::Minimize,
+            Function(ommx::Function::Zero),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Substitute parameters to yield an instance.
+    ///
+    /// Parameters can be provided as a dict mapping parameter IDs to their values.
+    pub fn with_parameters(&self, parameters: HashMap<u64, f64>) -> Result<Instance> {
+        let mut v1_params = ommx::v1::Parameters::default();
+        v1_params.entries = parameters;
+        let instance = self.inner.clone().with_parameters(v1_params)?;
         Ok(Instance {
             inner: instance,
             annotations: HashMap::new(),
@@ -244,6 +259,86 @@ impl ParametricInstance {
             .ok_or_else(|| {
                 PyKeyError::new_err(format!("Parameter with ID {parameter_id} not found"))
             })
+    }
+
+    /// DataFrame of decision variables
+    #[getter]
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .decision_variables()
+            .into_iter()
+            .map(|v| v._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of constraints
+    #[getter]
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .constraints()
+            .into_iter()
+            .map(|c| c._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of removed constraints
+    #[getter]
+    pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .removed_constraints()
+            .into_iter()
+            .map(|rc| rc._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of named functions
+    #[getter]
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .named_functions()
+            .into_iter()
+            .map(|nf| nf._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of parameters
+    #[getter]
+    pub fn parameters_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let entries: Vec<_> = self
+            .parameters()
+            .into_iter()
+            .map(|p| p._as_pandas_entry(py))
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
     }
 
     fn __copy__(&self) -> Self {
