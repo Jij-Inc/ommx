@@ -281,10 +281,12 @@ impl ParametricInstance {
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
+            .inner
             .decision_variables()
-            .into_iter()
-            .map(|v| v._as_pandas_entry(py))
+            .values()
+            .map(|v| DecisionVariable(v.clone()).as_pandas_entry(py, &na))
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
@@ -298,9 +300,10 @@ impl ParametricInstance {
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
+            .inner
             .constraints()
-            .into_iter()
-            .map(|c| c._as_pandas_entry(py))
+            .values()
+            .map(|c| Constraint(c.clone())._as_pandas_entry(py))
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
@@ -314,9 +317,10 @@ impl ParametricInstance {
     pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
+            .inner
             .removed_constraints()
-            .into_iter()
-            .map(|rc| rc._as_pandas_entry(py))
+            .values()
+            .map(|rc| RemovedConstraint(rc.clone())._as_pandas_entry(py))
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
@@ -330,9 +334,10 @@ impl ParametricInstance {
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
+            .inner
             .named_functions()
-            .into_iter()
-            .map(|nf| nf._as_pandas_entry(py))
+            .values()
+            .map(|nf| NamedFunction(nf.clone())._as_pandas_entry(py))
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
@@ -345,10 +350,12 @@ impl ParametricInstance {
     #[getter]
     pub fn parameters_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
+            .inner
             .parameters()
-            .into_iter()
-            .map(|p| p._as_pandas_entry(py))
+            .values()
+            .map(|p| Parameter(p.clone()).as_pandas_entry(py, &na))
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {

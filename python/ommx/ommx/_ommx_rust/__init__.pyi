@@ -66,7 +66,14 @@ __all__ = [
 ]
 
 ToFunction: TypeAlias = (
-    int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+    builtins.int
+    | builtins.float
+    | DecisionVariable
+    | Parameter
+    | Linear
+    | Quadratic
+    | Polynomial
+    | Function
 )
 ToState: TypeAlias = (
     State
@@ -451,10 +458,6 @@ class DecisionVariable:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> DecisionVariable: ...
     def __deepcopy__(self, _memo: typing.Any) -> DecisionVariable: ...
-    def _as_pandas_entry(self) -> dict:
-        r"""
-        Internal method for pandas DataFrame conversion.
-        """
     def equals_to(self, other: DecisionVariable) -> builtins.bool:
         r"""
         Compare two DecisionVariable objects for equality.
@@ -1462,10 +1465,6 @@ class Parameter:
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Parameter: ...
     def __deepcopy__(self, _memo: typing.Any) -> Parameter: ...
-    def _as_pandas_entry(self) -> dict:
-        r"""
-        Internal method for pandas DataFrame conversion.
-        """
     def __neg__(self) -> Linear:
         r"""
         Negation operator: -p → Linear(-1 * p)
