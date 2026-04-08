@@ -74,7 +74,11 @@ impl pyo3_stub_gen::PyStubType for Function {
 
 /// Convert various Python types to Function.
 ///
-/// Accepts: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
+/// Accepts: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function.
+///
+/// Note: Parameter is accepted here because ParametricInstance uses Function for its objective
+/// and constraints, which may contain parameters. Whether a Parameter is valid in a given context
+/// is enforced by the Rust SDK's validation (e.g., Instance builder rejects undefined variable IDs).
 impl<'py> FromPyObject<'_, 'py> for Function {
     type Error = PyErr;
     fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
@@ -95,6 +99,13 @@ impl<'py> FromPyObject<'_, 'py> for Function {
                 ommx::Linear::single_term(LinearMonomial::Variable(dv.0.id()), ommx::coeff!(1.0));
             return Ok(Self(ommx::Function::from(linear)));
         }
+        if let Ok(param) = ob.extract::<Parameter>() {
+            let linear = ommx::Linear::single_term(
+                LinearMonomial::Variable(ommx::VariableID::from(param.0.id)),
+                ommx::coeff!(1.0),
+            );
+            return Ok(Self(ommx::Function::from(linear)));
+        }
         if let Ok(scalar) = ob.extract::<f64>() {
             return match TryInto::<Coefficient>::try_into(scalar) {
                 Ok(coeff) => Ok(Self(ommx::Function::from(coeff))),
@@ -103,7 +114,7 @@ impl<'py> FromPyObject<'_, 'py> for Function {
             };
         }
         Err(PyTypeError::new_err(format!(
-            "Cannot convert {} to Function. Accepted: int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function",
+            "Cannot convert {} to Function. Accepted: int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function",
             ob.get_type().name()?
         )))
     }
@@ -115,7 +126,8 @@ pyo3_stub_gen::impl_py_runtime_type!(Function);
 // i64 and f64 have PyStubType/PyRuntimeType provided by pyo3-stub-gen builtins
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
-    ToFunction = i64 | f64 | DecisionVariable | Linear | Quadratic | Polynomial | Function
+    ToFunction =
+        i64 | f64 | DecisionVariable | Parameter | Linear | Quadratic | Polynomial | Function
 );
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
