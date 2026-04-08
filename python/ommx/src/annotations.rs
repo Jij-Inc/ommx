@@ -20,6 +20,11 @@ macro_rules! impl_instance_annotations {
         impl $ty {
             // --- Core annotation methods ---
 
+            /// Returns a **copy** of the annotations dictionary.
+            ///
+            /// Mutating the returned dict will **not** update the object.
+            /// Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+            /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
                 self.annotations.clone()
@@ -131,14 +136,19 @@ macro_rules! impl_instance_annotations {
             pub fn authors(&self) -> Vec<String> {
                 self.annotations
                     .get(concat!($namespace, ".authors"))
+                    .filter(|v| !v.is_empty())
                     .map(|v| v.split(',').map(|s| s.to_string()).collect())
                     .unwrap_or_default()
             }
 
             #[setter]
             pub fn set_authors(&mut self, value: Vec<String>) {
-                self.annotations
-                    .insert(concat!($namespace, ".authors").to_string(), value.join(","));
+                let key = concat!($namespace, ".authors").to_string();
+                if value.is_empty() {
+                    self.annotations.remove(&key);
+                } else {
+                    self.annotations.insert(key, value.join(","));
+                }
             }
 
             // --- Integer properties ---
@@ -181,8 +191,8 @@ macro_rules! impl_instance_annotations {
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
                 let value = match self.annotations.get(concat!($namespace, ".created")) {
-                    Some(v) => v,
-                    None => return Ok(None),
+                    Some(v) if !v.is_empty() => v,
+                    _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;
@@ -216,6 +226,11 @@ macro_rules! impl_solution_annotations {
         impl $ty {
             // --- Core annotation methods ---
 
+            /// Returns a **copy** of the annotations dictionary.
+            ///
+            /// Mutating the returned dict will **not** update the object.
+            /// Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+            /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
                 self.annotations.clone()
@@ -305,8 +320,8 @@ macro_rules! impl_solution_annotations {
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
                 let value = match self.annotations.get(concat!($namespace, ".solver")) {
-                    Some(v) => v,
-                    None => return Ok(None),
+                    Some(v) if !v.is_empty() => v,
+                    _ => return Ok(None),
                 };
                 let json_value: serde_json::Value = serde_json::from_str(value)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -335,8 +350,8 @@ macro_rules! impl_solution_annotations {
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
                 let value = match self.annotations.get(concat!($namespace, ".parameters")) {
-                    Some(v) => v,
-                    None => return Ok(None),
+                    Some(v) if !v.is_empty() => v,
+                    _ => return Ok(None),
                 };
                 let json_value: serde_json::Value = serde_json::from_str(value)
                     .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
@@ -367,8 +382,8 @@ macro_rules! impl_solution_annotations {
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
                 let value = match self.annotations.get(concat!($namespace, ".start")) {
-                    Some(v) => v,
-                    None => return Ok(None),
+                    Some(v) if !v.is_empty() => v,
+                    _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;
@@ -392,8 +407,8 @@ macro_rules! impl_solution_annotations {
                 py: pyo3::Python<'py>,
             ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
                 let value = match self.annotations.get(concat!($namespace, ".end")) {
-                    Some(v) => v,
-                    None => return Ok(None),
+                    Some(v) if !v.is_empty() => v,
+                    _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;

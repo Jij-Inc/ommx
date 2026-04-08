@@ -911,7 +911,14 @@ class Function:
 @typing.final
 class Instance:
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Returns a **copy** of the annotations dictionary.
+
+        Mutating the returned dict will **not** update the object.
+        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        to modify annotations.
+        """
     @annotations.setter
     def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
     @property
@@ -1522,7 +1529,14 @@ class Parameters:
 @typing.final
 class ParametricInstance:
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Returns a **copy** of the annotations dictionary.
+
+        Mutating the returned dict will **not** update the object.
+        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        to modify annotations.
+        """
     @annotations.setter
     def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
     @property
@@ -1864,7 +1878,14 @@ class Rng:
 @typing.final
 class SampleSet:
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Returns a **copy** of the annotations dictionary.
+
+        Mutating the returned dict will **not** update the object.
+        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        to modify annotations.
+        """
     @annotations.setter
     def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
     @property
@@ -2197,7 +2218,14 @@ class Samples:
 @typing.final
 class Solution:
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Returns a **copy** of the annotations dictionary.
+
+        Mutating the returned dict will **not** update the object.
+        Use :meth:`add_user_annotation` or assign to :attr:`annotations`
+        to modify annotations.
+        """
     @annotations.setter
     def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
     @property

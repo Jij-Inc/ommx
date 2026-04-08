@@ -1988,6 +1988,13 @@ class ParametricInstance:
 
     @property
     def annotations(self) -> dict[str, str]:
+        """
+        Returns the annotations dictionary.
+
+        Unlike Rust-backed types (Instance, Solution, SampleSet) where
+        ``annotations`` returns a **copy**, this returns the live dict.
+        Prefer using :meth:`add_user_annotation` for consistency across types.
+        """
         # ParametricInstance still uses protobuf raw, annotations stored separately
         if not hasattr(self, "_annotations_dict"):
             self._annotations_dict: dict[str, str] = {}
@@ -1996,6 +2003,153 @@ class ParametricInstance:
     @annotations.setter
     def annotations(self, value: dict[str, str]):
         self._annotations_dict = value
+
+    _ANNOTATION_NAMESPACE = "org.ommx.v1.parametric-instance."
+
+    def add_user_annotation(
+        self,
+        key: str,
+        value: str,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ):
+        """Add a user annotation."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        self.annotations[f"{ns}{key}"] = value
+
+    def add_user_annotations(
+        self,
+        annotations: dict[str, str],
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ):
+        """Add multiple user annotations."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        for key, value in annotations.items():
+            self.annotations[f"{ns}{key}"] = value
+
+    def get_user_annotation(
+        self,
+        key: str,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ) -> str:
+        """Get a user annotation by key. Raises KeyError if not found."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        full_key = f"{ns}{key}"
+        if full_key not in self.annotations:
+            raise KeyError(full_key)
+        return self.annotations[full_key]
+
+    def get_user_annotations(
+        self,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ) -> dict[str, str]:
+        """Get all user annotations under the given namespace."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        return {
+            key[len(ns) :]: value
+            for key, value in self.annotations.items()
+            if key.startswith(ns)
+        }
+
+    @property
+    def title(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}title")
+
+    @title.setter
+    def title(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}title"] = value
+
+    @property
+    def license(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}license")
+
+    @license.setter
+    def license(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}license"] = value
+
+    @property
+    def dataset(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}dataset")
+
+    @dataset.setter
+    def dataset(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}dataset"] = value
+
+    @property
+    def authors(self) -> list[str]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}authors")
+        if not v:
+            return []
+        return v.split(",")
+
+    @authors.setter
+    def authors(self, value: list[str]):
+        key = f"{self._ANNOTATION_NAMESPACE}authors"
+        if value:
+            self.annotations[key] = ",".join(value)
+        else:
+            self.annotations.pop(key, None)
+
+    @property
+    def num_variables(self) -> Optional[int]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}variables")
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+    @num_variables.setter
+    def num_variables(self, value: int):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}variables"] = str(value)
+
+    @property
+    def num_constraints(self) -> Optional[int]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}constraints")
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+    @num_constraints.setter
+    def num_constraints(self, value: int):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}constraints"] = str(value)
+
+    @property
+    def created(self):
+        """Get the created datetime. Returns None if not set or empty."""
+        from dateutil.parser import isoparse
+
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}created")
+        if not v:
+            return None
+        return isoparse(v)
+
+    @created.setter
+    def created(self, value):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}created"] = value.isoformat()
 
     @staticmethod
     def empty() -> ParametricInstance:
