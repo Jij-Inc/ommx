@@ -10,10 +10,6 @@ from .instance_pb2 import Instance as _Instance, Parameters
 from .function_pb2 import Function as _Function
 from .constraint_pb2 import Constraint as _Constraint
 from .decision_variables_pb2 import DecisionVariable as _DecisionVariable
-from .parametric_instance_pb2 import (
-    ParametricInstance as _ParametricInstance,
-    Parameter as _Parameter,
-)
 
 from .. import _ommx_rust
 
@@ -90,17 +86,6 @@ def _decision_variable_as_pandas_entry(dv: DecisionVariable) -> dict:
         if dv.substituted_value is not None
         else NA,
     } | {f"parameters.{key}": value for key, value in dv.parameters.items()}
-
-
-def _parameter_as_pandas_entry(p: Parameter) -> dict:
-    """Convert a Parameter to a dict suitable for pandas DataFrame."""
-    return {
-        "id": p.id,
-        "name": p.name if p.name else NA,
-        "subscripts": list(p.subscripts),
-        "description": p.description if p.description else NA,
-        **{f"parameters.{key}": value for key, value in p.parameters.items()},
-    }
 
 
 __all__ = [
@@ -946,15 +931,14 @@ class Instance:
                 weights = {
                     p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                unconstrained = pi.with_parameters(weights)
+                self.raw = pi.with_parameters(weights)
             else:
                 if uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
                 weight = pi.parameters[0]
-                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
-            self.raw = unconstrained.raw
+                self.raw = pi.with_parameters({weight.id: uniform_penalty_weight})
 
         self.log_encode()
         qubo = self.as_qubo_format()
@@ -1043,15 +1027,14 @@ class Instance:
                 weights = {
                     p.id: penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                unconstrained = pi.with_parameters(weights)
+                self.raw = pi.with_parameters(weights)
             else:
                 if uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     uniform_penalty_weight = 1.0
                 pi = self.uniform_penalty_method()
                 weight = pi.parameters[0]
-                unconstrained = pi.with_parameters({weight.id: uniform_penalty_weight})
-            self.raw = unconstrained.raw
+                self.raw = pi.with_parameters({weight.id: uniform_penalty_weight})
 
         self.log_encode()
         qubo = self.as_hubo_format()
@@ -1256,7 +1239,7 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x1*x1 + 2*x1*x2 + x2*x2 - x0 - 3*x1 - x2 + 2)
 
         """
-        return ParametricInstance.from_bytes(self.raw.penalty_method().to_bytes())
+        return self.raw.penalty_method()
 
     def uniform_penalty_method(self) -> ParametricInstance:
         r"""
@@ -1336,17 +1319,13 @@ class Instance:
         Function(x0*x0 + 2*x0*x1 + 2*x0*x2 + x1*x1 + 2*x1*x2 + x2*x2 - 5*x0 - 5*x1 - 5*x2 + 9)
 
         """
-        return ParametricInstance.from_bytes(
-            self.raw.uniform_penalty_method().to_bytes()
-        )
+        return self.raw.uniform_penalty_method()
 
     def as_parametric_instance(self) -> ParametricInstance:
         """
         Convert the instance to a :class:`ParametricInstance`.
         """
-        return ParametricInstance.from_bytes(
-            self.raw.as_parametric_instance().to_bytes()
-        )
+        return self.raw.as_parametric_instance()
 
     def evaluate_samples(
         self, samples: ToSamples, *, atol: float | None = None
@@ -1940,440 +1919,7 @@ class Instance:
         return self.raw.logical_memory_profile()
 
 
-@dataclass
-class ParametricInstance:
-    """
-    Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
-
-    Examples
-    =========
-
-    Create an instance for KnapSack Problem with parameters
-
-    .. doctest::
-
-        >>> from ommx.v1 import ParametricInstance, DecisionVariable, Parameter
-
-        Decision variables
-
-        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(6)]
-
-        Profit and weight of items as parameters
-
-        >>> p = [Parameter(i+6, name="Profit", subscripts=[i]) for i in range(6)]
-        >>> w = [Parameter(i+12, name="Weight", subscripts=[i]) for i in range(6)]
-        >>> W = Parameter(18, name="Capacity")
-
-        Objective and constraint
-
-        >>> objective = sum(p[i] * x[i] for i in range(6))
-        >>> constraint = sum(w[i] * x[i] for i in range(6)) <= W
-
-        Compose as an instance
-
-        >>> parametric_instance = ParametricInstance.from_components(
-        ...     decision_variables=x,
-        ...     parameters=p + w + [W],
-        ...     objective=objective,
-        ...     constraints=[constraint],
-        ...     sense=Instance.MAXIMIZE,
-        ... )
-
-        Substitute parameters to get an instance
-
-        >>> p_values = { x.id: value for x, value in zip(p, [10, 13, 18, 31, 7, 15]) }
-        >>> w_values = { x.id: value for x, value in zip(w, [11, 15, 20, 35, 10, 33]) }
-        >>> W_value = { W.id: 47 }
-        >>> instance = parametric_instance.with_parameters({**p_values, **w_values, **W_value})
-
-    """
-
-    raw: _ParametricInstance
-
-    @property
-    def annotations(self) -> dict[str, str]:
-        """
-        Returns the annotations dictionary.
-
-        Unlike Rust-backed types (Instance, Solution, SampleSet) where
-        ``annotations`` returns a **copy**, this returns the live dict.
-        Prefer using :meth:`add_user_annotation` for consistency across types.
-        """
-        # ParametricInstance still uses protobuf raw, annotations stored separately
-        if not hasattr(self, "_annotations_dict"):
-            self._annotations_dict: dict[str, str] = {}
-        return self._annotations_dict
-
-    @annotations.setter
-    def annotations(self, value: dict[str, str]):
-        self._annotations_dict = value
-
-    _ANNOTATION_NAMESPACE = "org.ommx.v1.parametric-instance."
-
-    def add_user_annotation(
-        self,
-        key: str,
-        value: str,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        """Add a user annotation."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        self.annotations[f"{ns}{key}"] = value
-
-    def add_user_annotations(
-        self,
-        annotations: dict[str, str],
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ):
-        """Add multiple user annotations."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        for key, value in annotations.items():
-            self.annotations[f"{ns}{key}"] = value
-
-    def get_user_annotation(
-        self,
-        key: str,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ) -> str:
-        """Get a user annotation by key. Raises KeyError if not found."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        full_key = f"{ns}{key}"
-        if full_key not in self.annotations:
-            raise KeyError(full_key)
-        return self.annotations[full_key]
-
-    def get_user_annotations(
-        self,
-        *,
-        annotation_namespace: str = "org.ommx.user.",
-    ) -> dict[str, str]:
-        """Get all user annotations under the given namespace."""
-        ns = (
-            annotation_namespace
-            if annotation_namespace.endswith(".")
-            else annotation_namespace + "."
-        )
-        return {
-            key[len(ns) :]: value
-            for key, value in self.annotations.items()
-            if key.startswith(ns)
-        }
-
-    @property
-    def title(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}title")
-
-    @title.setter
-    def title(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}title"] = value
-
-    @property
-    def license(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}license")
-
-    @license.setter
-    def license(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}license"] = value
-
-    @property
-    def dataset(self) -> Optional[str]:
-        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}dataset")
-
-    @dataset.setter
-    def dataset(self, value: str):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}dataset"] = value
-
-    @property
-    def authors(self) -> list[str]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}authors")
-        if not v:
-            return []
-        return v.split(",")
-
-    @authors.setter
-    def authors(self, value: list[str]):
-        key = f"{self._ANNOTATION_NAMESPACE}authors"
-        if value:
-            self.annotations[key] = ",".join(value)
-        else:
-            self.annotations.pop(key, None)
-
-    @property
-    def num_variables(self) -> Optional[int]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}variables")
-        if v is None:
-            return None
-        try:
-            return int(v)
-        except ValueError:
-            return None
-
-    @num_variables.setter
-    def num_variables(self, value: int):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}variables"] = str(value)
-
-    @property
-    def num_constraints(self) -> Optional[int]:
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}constraints")
-        if v is None:
-            return None
-        try:
-            return int(v)
-        except ValueError:
-            return None
-
-    @num_constraints.setter
-    def num_constraints(self, value: int):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}constraints"] = str(value)
-
-    @property
-    def created(self):
-        """Get the created datetime. Returns None if not set or empty."""
-        from dateutil.parser import isoparse
-
-        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}created")
-        if not v:
-            return None
-        return isoparse(v)
-
-    @created.setter
-    def created(self, value):
-        self.annotations[f"{self._ANNOTATION_NAMESPACE}created"] = value.isoformat()
-
-    @staticmethod
-    def empty() -> ParametricInstance:
-        """
-        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
-        """
-        return ParametricInstance.from_components(
-            objective=0,
-            constraints=[],
-            sense=_Instance.Sense.SENSE_MINIMIZE,
-            decision_variables=[],
-            parameters=[],
-        )
-
-    @staticmethod
-    def from_components(
-        *,
-        objective: int
-        | float
-        | DecisionVariable
-        | Linear
-        | Quadratic
-        | Polynomial
-        | Function,
-        constraints: Iterable[Constraint | _Constraint | _ommx_rust.Constraint],
-        sense: _Instance.Sense.ValueType | Sense,
-        decision_variables: Iterable[DecisionVariable | _DecisionVariable],
-        parameters: Iterable[Parameter | _Parameter],
-        description: Optional[_Instance.Description] = None,
-    ) -> ParametricInstance:
-        if not isinstance(objective, Function):
-            objective = Function(objective)
-        raw_objective = _Function()
-        raw_objective.ParseFromString(objective.to_bytes())
-
-        if isinstance(sense, Sense):
-            sense = _Instance.Sense.ValueType(sense.to_pb())
-
-        def convert_constraint(
-            c: Constraint | _Constraint | _ommx_rust.Constraint,
-        ) -> _Constraint:
-            if isinstance(c, _ommx_rust.Constraint):
-                raw = _Constraint()
-                raw.ParseFromString(c.to_bytes())
-                return raw
-            elif isinstance(c, Constraint):
-                return c.to_protobuf()
-            else:
-                return c
-
-        def convert_decision_variable(v):
-            if isinstance(v, _ommx_rust.DecisionVariable):
-                pb = _DecisionVariable()
-                pb.ParseFromString(v.to_bytes())
-                return pb
-            return v
-
-        def convert_parameter(p):
-            if isinstance(p, _ommx_rust.Parameter):
-                pb = _Parameter()
-                pb.ParseFromString(p.to_bytes())
-                return pb
-            return p
-
-        return ParametricInstance(
-            _ParametricInstance(
-                description=description,
-                decision_variables=[
-                    convert_decision_variable(v) for v in decision_variables
-                ],
-                objective=raw_objective,
-                constraints=[convert_constraint(c) for c in constraints],
-                sense=sense,
-                parameters=[convert_parameter(p) for p in parameters],
-            )
-        )
-
-    @staticmethod
-    def from_bytes(data: bytes) -> ParametricInstance:
-        raw = _ParametricInstance()
-        raw.ParseFromString(data)
-        return ParametricInstance(raw)
-
-    def to_bytes(self) -> bytes:
-        return self.raw.SerializeToString()
-
-    @property
-    def decision_variables(self) -> list[DecisionVariable]:
-        """
-        Get decision variables as a list of :class:`DecisionVariable` instances.
-        """
-        return [
-            DecisionVariable.from_bytes(raw.SerializeToString())
-            for raw in self.raw.decision_variables
-        ]
-
-    @property
-    def constraints(self) -> list[Constraint]:
-        """
-        Get constraints as a list of :class:`Constraint
-        """
-        return [
-            Constraint.from_bytes(raw.SerializeToString())
-            for raw in self.raw.constraints
-        ]
-
-    @property
-    def removed_constraints(self) -> list[RemovedConstraint]:
-        """
-        Get removed constraints as a list of :class:`RemovedConstraint` instances.
-        """
-        return [
-            RemovedConstraint.from_bytes(raw.SerializeToString())
-            for raw in self.raw.removed_constraints
-        ]
-
-    @property
-    def named_functions(self) -> list[NamedFunction]:
-        """
-        Get named functions as a list of :class:`NamedFunction` instances.
-        """
-        return [
-            NamedFunction.from_bytes(raw.SerializeToString())
-            for raw in self.raw.named_functions
-        ]
-
-    @property
-    def parameters(self) -> list[Parameter]:
-        """
-        Get parameters as a list of :class:`Parameter`.
-        """
-        return [
-            Parameter.from_bytes(raw.SerializeToString()) for raw in self.raw.parameters
-        ]
-
-    def get_parameter_by_id(self, parameter_id: int) -> Parameter:
-        """
-        Get a parameter by ID.
-        """
-        for p in self.raw.parameters:
-            if p.id == parameter_id:
-                return Parameter.from_bytes(p.SerializeToString())
-        raise ValueError(f"Parameter ID {parameter_id} is not found")
-
-    def get_decision_variable_by_id(self, variable_id: int) -> DecisionVariable:
-        """
-        Get a decision variable by ID.
-        """
-        for v in self.decision_variables:
-            if v.id == variable_id:
-                return v
-        raise ValueError(f"Decision variable ID {variable_id} is not found")
-
-    def get_constraint_by_id(self, constraint_id: int) -> Constraint:
-        """
-        Get a constraint by ID.
-        """
-        for c in self.constraints:
-            if c.id == constraint_id:
-                return c
-        raise ValueError(f"Constraint ID {constraint_id} is not found")
-
-    def get_removed_constraint_by_id(
-        self, removed_constraint_id: int
-    ) -> RemovedConstraint:
-        """
-        Get a removed constraint by ID.
-        """
-        for rc in self.removed_constraints:
-            if rc.id == removed_constraint_id:
-                return rc
-        raise ValueError(f"Removed constraint ID {removed_constraint_id} is not found")
-
-    @property
-    def decision_variables_df(self) -> DataFrame:
-        df = DataFrame(
-            _decision_variable_as_pandas_entry(v) for v in self.decision_variables
-        )
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def named_functions_df(self) -> DataFrame:
-        df = DataFrame(nf._as_pandas_entry() for nf in self.named_functions)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def constraints_df(self) -> DataFrame:
-        df = DataFrame(c._as_pandas_entry() for c in self.constraints)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def removed_constraints_df(self) -> DataFrame:
-        df = DataFrame(rc._as_pandas_entry() for rc in self.removed_constraints)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    @property
-    def parameters_df(self) -> DataFrame:
-        df = DataFrame(_parameter_as_pandas_entry(p) for p in self.parameters)
-        if not df.empty:
-            df = df.set_index("id")
-        return df
-
-    def with_parameters(self, parameters: Parameters | Mapping[int, float]) -> Instance:
-        """
-        Substitute parameters to yield an instance.
-        """
-        if not isinstance(parameters, Parameters):
-            parameters = Parameters(entries=parameters)
-        pi = _ommx_rust.ParametricInstance.from_bytes(self.to_bytes())
-        ps = _ommx_rust.Parameters.from_bytes(parameters.SerializeToString())
-        instance = pi.with_parameters(ps)
-        return Instance(instance)
+ParametricInstance = _ommx_rust.ParametricInstance
 
 
 @dataclass

@@ -49,6 +49,7 @@ __all__ = [
     "Solution",
     "Sos1",
     "State",
+    "ToFunction",
     "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
@@ -64,6 +65,16 @@ __all__ = [
     "update_constraint_id_counter",
 ]
 
+ToFunction: TypeAlias = (
+    builtins.int
+    | builtins.float
+    | DecisionVariable
+    | Parameter
+    | Linear
+    | Quadratic
+    | Polynomial
+    | Function
+)
 ToState: TypeAlias = (
     State
     | collections.abc.Mapping[int, float]
@@ -698,31 +709,6 @@ class EvaluatedNamedFunction:
 class Function:
     r"""
     General mathematical function of decision variables.
-
-    Function is a unified type that can represent constant, linear, quadratic,
-    or polynomial functions. It is used as the objective function and constraint
-    functions in optimization problems.
-
-    Example
-    -------
-    Create from various types:
-
-    >>> f = Function(1.0)  # Constant
-    >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
-    >>> f = Function(x * y)  # From Quadratic expression
-
-    Access the terms:
-
-    >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
-    >>> f.terms
-    {(1,): 2.5, (): 1.0}
-
-    Check the degree:
-
-    >>> f.degree()
-    1
-
-    .
     """
     @property
     def terms(self) -> dict: ...
@@ -810,7 +796,7 @@ class Function:
         and polynomial functions have the number of non-zero coefficient terms.
         """
     def almost_equal(
-        self, other: Function, atol: builtins.float = 1e-06
+        self, other: ToFunction, atol: builtins.float = 1e-06
     ) -> builtins.bool: ...
     def __repr__(self) -> builtins.str: ...
     def __neg__(self) -> Function:
@@ -833,8 +819,8 @@ class Function:
         r"""
         Reverse subtraction (lhs - self)
         """
-    def add_assign(self, rhs: Function) -> None: ...
-    def __iadd__(self, rhs: Function) -> None:
+    def add_assign(self, rhs: ToFunction) -> None: ...
+    def __iadd__(self, rhs: ToFunction) -> None:
         r"""
         In-place addition for += operator
 
@@ -1018,7 +1004,7 @@ class Instance:
     @staticmethod
     def from_components(
         sense: Sense,
-        objective: Function,
+        objective: ToFunction,
         decision_variables: typing.Mapping[builtins.int, DecisionVariable],
         constraints: typing.Mapping[builtins.int, Constraint],
         named_functions: typing.Optional[
@@ -1567,6 +1553,53 @@ class ParametricInstance:
     def created(self) -> typing.Optional[typing.Any]: ...
     @created.setter
     def created(self, value: typing.Any) -> None: ...
+    @property
+    def sense(self) -> Sense: ...
+    @property
+    def objective(self) -> Function: ...
+    @property
+    def decision_variables(self) -> builtins.list[DecisionVariable]: ...
+    @property
+    def constraints(self) -> builtins.list[Constraint]: ...
+    @property
+    def removed_constraints(self) -> builtins.list[RemovedConstraint]: ...
+    @property
+    def named_functions(self) -> builtins.list[NamedFunction]: ...
+    @property
+    def parameters(self) -> builtins.list[Parameter]: ...
+    @property
+    def description(self) -> typing.Optional[InstanceDescription]: ...
+    @property
+    def constraint_hints(self) -> ConstraintHints: ...
+    @property
+    def decision_variable_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def parameter_ids(self) -> builtins.set[builtins.int]: ...
+    @property
+    def decision_variables_df(self) -> typing.Any:
+        r"""
+        DataFrame of decision variables
+        """
+    @property
+    def constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of constraints
+        """
+    @property
+    def removed_constraints_df(self) -> typing.Any:
+        r"""
+        DataFrame of removed constraints
+        """
+    @property
+    def named_functions_df(self) -> typing.Any:
+        r"""
+        DataFrame of named functions
+        """
+    @property
+    def parameters_df(self) -> typing.Any:
+        r"""
+        DataFrame of parameters
+        """
     def add_user_annotation(
         self,
         key: builtins.str,
@@ -1592,7 +1625,59 @@ class ParametricInstance:
     @staticmethod
     def from_bytes(bytes: bytes) -> ParametricInstance: ...
     def to_bytes(self) -> bytes: ...
-    def with_parameters(self, parameters: Parameters) -> Instance: ...
+    @staticmethod
+    def from_components(
+        *,
+        sense: Sense,
+        objective: ToFunction,
+        decision_variables: typing.Sequence[DecisionVariable],
+        constraints: typing.Sequence[Constraint],
+        parameters: typing.Sequence[Parameter],
+        named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
+        description: typing.Optional[InstanceDescription] = None,
+        constraint_hints: typing.Optional[ConstraintHints] = None,
+    ) -> ParametricInstance: ...
+    @staticmethod
+    def empty() -> ParametricInstance:
+        r"""
+        Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables and parameters.
+        """
+    def with_parameters(
+        self, parameters: typing.Mapping[builtins.int, builtins.float]
+    ) -> Instance:
+        r"""
+        Substitute parameters to yield an instance.
+
+        Parameters can be provided as a dict mapping parameter IDs to their values.
+        """
+    def get_decision_variable_by_id(
+        self, variable_id: builtins.int
+    ) -> DecisionVariable:
+        r"""
+        Get a specific decision variable by ID
+        """
+    def get_constraint_by_id(self, constraint_id: builtins.int) -> Constraint:
+        r"""
+        Get a specific constraint by ID
+        """
+    def get_removed_constraint_by_id(
+        self, constraint_id: builtins.int
+    ) -> RemovedConstraint:
+        r"""
+        Get a specific removed constraint by ID
+        """
+    def get_named_function_by_id(
+        self, named_function_id: builtins.int
+    ) -> NamedFunction:
+        r"""
+        Get a specific named function by ID
+        """
+    def get_parameter_by_id(self, parameter_id: builtins.int) -> Parameter:
+        r"""
+        Get a specific parameter by ID
+        """
+    def __copy__(self) -> ParametricInstance: ...
+    def __deepcopy__(self, _memo: typing.Any) -> ParametricInstance: ...
 
 @typing.final
 class Polynomial:
