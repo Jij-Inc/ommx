@@ -207,7 +207,11 @@ class Instance:
     # Annotations are stored on the Rust side (raw.annotations)
     @property
     def annotations(self) -> dict[str, str]:
-        """Arbitrary annotations stored in OMMX artifact."""
+        """Arbitrary annotations stored in OMMX artifact.
+
+        Note: Returns a copy. In-place mutations like ``instance.annotations["k"] = "v"``
+        will not persist. Use :meth:`add_user_annotation` or assign the full dict back.
+        """
         return self.raw.annotations
 
     @annotations.setter
