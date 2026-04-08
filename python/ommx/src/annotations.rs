@@ -15,6 +15,7 @@ pub fn normalize_namespace(ns: &str) -> String {
 /// - title, license, dataset, authors (str list), num_variables, num_constraints (int), created (datetime)
 macro_rules! impl_instance_annotations {
     ($ty:ty, $namespace:literal) => {
+        #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pyo3::pymethods]
         impl $ty {
             // --- Core annotation methods ---
@@ -172,7 +173,7 @@ macro_rules! impl_instance_annotations {
                 );
             }
 
-            // --- Datetime property ---
+            // --- Datetime property (RFC3339 string ↔ Python datetime via dateutil) ---
 
             #[getter]
             pub fn created<'py>(
@@ -210,6 +211,7 @@ macro_rules! impl_instance_annotations {
 /// - instance_digest, solver_annotation (json), parameters_annotation (json), start, end (datetime)
 macro_rules! impl_solution_annotations {
     ($ty:ty, $namespace:literal) => {
+        #[pyo3_stub_gen::derive::gen_stub_pymethods]
         #[pyo3::pymethods]
         impl $ty {
             // --- Core annotation methods ---
@@ -295,7 +297,7 @@ macro_rules! impl_solution_annotations {
                     .insert(concat!($namespace, ".instance").to_string(), value);
             }
 
-            // --- JSON properties ---
+            // --- JSON properties (serde_json ↔ Python object) ---
 
             #[getter]
             pub fn solver_annotation<'py>(
@@ -306,19 +308,22 @@ macro_rules! impl_solution_annotations {
                     Some(v) => v,
                     None => return Ok(None),
                 };
-                let json_mod = py.import("json")?;
-                let obj = json_mod.call_method1("loads", (value,))?;
+                let json_value: serde_json::Value = serde_json::from_str(value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let obj = serde_pyobject::to_pyobject(py, &json_value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 Ok(Some(obj))
             }
 
             #[setter]
-            pub fn set_solver_annotation<'py>(
+            pub fn set_solver_annotation(
                 &mut self,
-                value: &pyo3::Bound<'py, pyo3::PyAny>,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
             ) -> pyo3::PyResult<()> {
-                let py = value.py();
-                let json_mod = py.import("json")?;
-                let json_str: String = json_mod.call_method1("dumps", (value,))?.extract()?;
+                let json_value: serde_json::Value = serde_pyobject::from_pyobject(value.clone())
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let json_str = serde_json::to_string(&json_value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 self.annotations
                     .insert(concat!($namespace, ".solver").to_string(), json_str);
                 Ok(())
@@ -333,25 +338,28 @@ macro_rules! impl_solution_annotations {
                     Some(v) => v,
                     None => return Ok(None),
                 };
-                let json_mod = py.import("json")?;
-                let obj = json_mod.call_method1("loads", (value,))?;
+                let json_value: serde_json::Value = serde_json::from_str(value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let obj = serde_pyobject::to_pyobject(py, &json_value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 Ok(Some(obj))
             }
 
             #[setter]
-            pub fn set_parameters_annotation<'py>(
+            pub fn set_parameters_annotation(
                 &mut self,
-                value: &pyo3::Bound<'py, pyo3::PyAny>,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
             ) -> pyo3::PyResult<()> {
-                let py = value.py();
-                let json_mod = py.import("json")?;
-                let json_str: String = json_mod.call_method1("dumps", (value,))?.extract()?;
+                let json_value: serde_json::Value = serde_pyobject::from_pyobject(value.clone())
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+                let json_str = serde_json::to_string(&json_value)
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 self.annotations
                     .insert(concat!($namespace, ".parameters").to_string(), json_str);
                 Ok(())
             }
 
-            // --- Datetime properties ---
+            // --- Datetime properties (RFC3339 string ↔ Python datetime via dateutil) ---
 
             #[getter]
             pub fn start<'py>(
