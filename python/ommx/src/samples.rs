@@ -148,10 +148,10 @@ impl Samples {
     }
 
     /// Append a sample with the given sample IDs and state
-    pub fn append(&mut self, sample_ids: Vec<u64>, state: &crate::State) -> PyResult<()> {
+    pub fn append(&mut self, sample_ids: Vec<u64>, state: crate::State) -> PyResult<()> {
         let ids: Vec<ommx::SampleID> = sample_ids.into_iter().map(ommx::SampleID::from).collect();
         self.0
-            .append(ids.into_iter(), state.0.clone())
+            .append(ids.into_iter(), state.0)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
         Ok(())
     }
