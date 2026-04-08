@@ -69,7 +69,6 @@ tasks:
       - task: ommx-python-mip-adapter:test
       - task: ommx-pyscipopt-adapter:test
       - task: ommx-highs-adapter:test
-      - task: book:test
 
   bench:
     desc: Run benchmarks for OMMX Python SDK
@@ -101,6 +100,16 @@ tasks:
     desc: Build Jupyter Book with code execution (ja and en)
     cmds:
       - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/ja
+      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/en
+
+  book:test:ja:
+    desc: Build Jupyter Book with code execution (ja only)
+    cmds:
+      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/ja
+
+  book:test:en:
+    desc: Build Jupyter Book with code execution (en only)
+    cmds:
       - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/en
 
   stubgen:
