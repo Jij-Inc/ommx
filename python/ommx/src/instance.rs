@@ -221,8 +221,7 @@ impl Instance {
     /// Returns:
     ///     Solution containing objective value, constraint evaluations, and feasibility
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Solution> {
-        let state = State::new(state)?;
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Solution> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
@@ -244,8 +243,7 @@ impl Instance {
     /// Returns:
     ///     Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Self> {
-        let state = State::new(state)?;
+    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,

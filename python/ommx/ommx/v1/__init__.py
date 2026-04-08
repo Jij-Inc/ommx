@@ -67,6 +67,9 @@ Constraint = _ommx_rust.Constraint
 RemovedConstraint = _ommx_rust.RemovedConstraint
 NamedFunction = _ommx_rust.NamedFunction
 
+# Type alias from Rust
+ToState = _ommx_rust.ToState
+
 
 def _decision_variable_as_pandas_entry(dv: DecisionVariable) -> dict:
     """Convert a DecisionVariable to a dict suitable for pandas DataFrame."""
@@ -138,12 +141,6 @@ __all__ = [
     "ToState",
     "ToSamples",
 ]
-
-ToState: TypeAlias = Union[State, Mapping[int, float]]
-"""
-Type alias for convertible types to :class:`State`.
-"""
-
 
 ToSamples: TypeAlias = Union[Samples, Mapping[int, ToState], Sequence[ToState]]
 """

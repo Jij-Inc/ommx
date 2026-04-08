@@ -7,6 +7,7 @@ import enum
 import os
 import pathlib
 import typing
+from typing import TypeAlias
 
 __all__ = [
     "ArtifactArchive",
@@ -48,6 +49,7 @@ __all__ = [
     "Solution",
     "Sos1",
     "State",
+    "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
     "get_image_dir",
@@ -61,6 +63,12 @@ __all__ = [
     "set_local_registry_root",
     "update_constraint_id_counter",
 ]
+
+ToState: TypeAlias = (
+    State
+    | collections.abc.Mapping[int, float]
+    | collections.abc.Iterable[tuple[int, float]]
+)
 
 @typing.final
 class ArtifactArchive:
@@ -220,7 +228,7 @@ class Constraint:
     def from_bytes(bytes: bytes) -> Constraint: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> EvaluatedConstraint:
         r"""
         Evaluate the constraint with the given state.
@@ -233,7 +241,7 @@ class Constraint:
             EvaluatedConstraint containing the evaluated value and feasibility
         """
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Constraint:
         r"""
         Partially evaluate the constraint with the given state.
@@ -859,10 +867,10 @@ class Function:
         max_id: builtins.int = 10,
     ) -> Function: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Function: ...
     def __copy__(self) -> Function: ...
     def __deepcopy__(self, _memo: typing.Any) -> Function: ...
@@ -966,7 +974,7 @@ class Instance:
     def penalty_method(self) -> ParametricInstance: ...
     def uniform_penalty_method(self) -> ParametricInstance: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Solution:
         r"""
         Evaluate the instance with the given state.
@@ -979,7 +987,7 @@ class Instance:
             Solution containing objective value, constraint evaluations, and feasibility
         """
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:
         r"""
         Partially evaluate the instance with the given state.
@@ -1195,10 +1203,10 @@ class Linear:
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
@@ -1257,7 +1265,7 @@ class NamedFunction:
     def from_bytes(bytes: bytes) -> NamedFunction: ...
     def to_bytes(self) -> bytes: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> EvaluatedNamedFunction:
         r"""
         Evaluate the named function with the given state.
@@ -1270,7 +1278,7 @@ class NamedFunction:
             EvaluatedNamedFunction containing the evaluated value
         """
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> NamedFunction:
         r"""
         Partially evaluate the named function with the given state.
@@ -1545,10 +1553,10 @@ class Polynomial:
         max_id: builtins.int = 10,
     ) -> Polynomial: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
@@ -1655,10 +1663,10 @@ class Quadratic:
         rng: Rng, num_terms: builtins.int = 5, max_id: builtins.int = 10
     ) -> Quadratic: ...
     def evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> builtins.float: ...
     def partial_evaluate(
-        self, state: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
@@ -2027,7 +2035,7 @@ class Samples:
         r"""
         Get the state for a specific sample ID
         """
-    def append(self, sample_ids: typing.Sequence[builtins.int], state: State) -> None:
+    def append(self, sample_ids: typing.Sequence[builtins.int], state: ToState) -> None:
         r"""
         Append a sample with the given sample IDs and state
         """
@@ -2201,12 +2209,7 @@ class State:
     def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @entries.setter
     def entries(self, value: builtins.dict[builtins.int, builtins.float]) -> None: ...
-    def __new__(
-        cls,
-        entries: State
-        | collections.abc.Mapping[int, float]
-        | collections.abc.Iterable[tuple[int, float]],
-    ) -> State: ...
+    def __new__(cls, entries: ToState) -> State: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
     def to_bytes(self) -> bytes: ...

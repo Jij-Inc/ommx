@@ -101,12 +101,7 @@ impl NamedFunction {
     /// Returns:
     ///     EvaluatedNamedFunction containing the evaluated value
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(
-        &self,
-        state: &Bound<PyAny>,
-        atol: Option<f64>,
-    ) -> PyResult<EvaluatedNamedFunction> {
-        let state = State::new(state)?;
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
@@ -130,8 +125,7 @@ impl NamedFunction {
     /// Returns:
     ///     Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(&mut self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<Self> {
-        let state = State::new(state)?;
+    pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,

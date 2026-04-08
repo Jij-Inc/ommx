@@ -51,13 +51,13 @@ def test_create_size_mismatch():
     with pytest.raises(TypeError) as e:
         _state = State([(1, 0.0, 1.0)])  # type: ignore[arg-type]
     assert (
-        str(e.value)
-        == "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        in str(e.value)
     )
 
     with pytest.raises(TypeError) as e:
         _state = State((1, 0.0))  # type: ignore[arg-type]
     assert (
-        str(e.value)
-        == "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        "ommx.v1.State can only be initialized with a `State`, `Mapping[int, float]`, or `Iterable[tuple[int, float]]`"
+        in str(e.value)
     )

@@ -357,9 +357,8 @@ impl Polynomial {
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn evaluate(&self, state: &Bound<PyAny>, atol: Option<f64>) -> PyResult<f64> {
+    pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<f64> {
         use ommx::Evaluate;
-        let state = State::new(state)?;
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
@@ -371,12 +370,7 @@ impl Polynomial {
     }
 
     #[pyo3(signature = (state, *, atol=None))]
-    pub fn partial_evaluate(
-        &self,
-        state: &Bound<PyAny>,
-        atol: Option<f64>,
-    ) -> PyResult<Polynomial> {
-        let state = State::new(state)?;
+    pub fn partial_evaluate(&self, state: State, atol: Option<f64>) -> PyResult<Polynomial> {
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?,
