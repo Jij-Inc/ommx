@@ -48,19 +48,29 @@ impl ParametricInstance {
         description: Option<crate::InstanceDescription>,
         constraint_hints: Option<ConstraintHints>,
     ) -> Result<Self> {
-        let rust_decision_variables: BTreeMap<VariableID, ommx::DecisionVariable> =
-            decision_variables
-                .into_iter()
-                .map(|var| (var.0.id(), var.0))
-                .collect();
+        let mut rust_decision_variables = BTreeMap::new();
+        for var in decision_variables {
+            let id = var.0.id();
+            if rust_decision_variables.insert(id, var.0).is_some() {
+                anyhow::bail!("Duplicate decision variable ID: {}", id.into_inner());
+            }
+        }
 
-        let rust_constraints: BTreeMap<ConstraintID, ommx::Constraint> =
-            constraints.into_iter().map(|c| (c.0.id, c.0)).collect();
+        let mut rust_constraints = BTreeMap::new();
+        for c in constraints {
+            let id = c.0.id;
+            if rust_constraints.insert(id, c.0).is_some() {
+                anyhow::bail!("Duplicate constraint ID: {}", id.into_inner());
+            }
+        }
 
-        let rust_parameters: BTreeMap<VariableID, ommx::v1::Parameter> = parameters
-            .into_iter()
-            .map(|p| (VariableID::from(p.0.id), p.0))
-            .collect();
+        let mut rust_parameters = BTreeMap::new();
+        for p in parameters {
+            let id = VariableID::from(p.0.id);
+            if rust_parameters.insert(id, p.0).is_some() {
+                anyhow::bail!("Duplicate parameter ID: {}", id.into_inner());
+            }
+        }
 
         let mut builder = ommx::ParametricInstance::builder()
             .sense(sense.into())
@@ -70,7 +80,13 @@ impl ParametricInstance {
             .parameters(rust_parameters);
 
         if let Some(nfs) = named_functions {
-            let rust_named_functions = nfs.into_iter().map(|nf| (nf.0.id, nf.0)).collect();
+            let mut rust_named_functions = BTreeMap::new();
+            for nf in nfs {
+                let id = nf.0.id;
+                if rust_named_functions.insert(id, nf.0).is_some() {
+                    anyhow::bail!("Duplicate named function ID: {}", id.into_inner());
+                }
+            }
             builder = builder.named_functions(rust_named_functions);
         }
 
