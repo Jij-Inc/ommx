@@ -15,14 +15,22 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
-pub struct Instance(pub ommx::Instance);
+pub struct Instance {
+    pub(crate) inner: ommx::Instance,
+    pub(crate) annotations: HashMap<String, String>,
+}
+
+crate::annotations::impl_instance_annotations!(Instance, "org.ommx.v1.instance");
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Instance {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::Instance::from_bytes(bytes.as_bytes())?))
+        Ok(Self {
+            inner: ommx::Instance::from_bytes(bytes.as_bytes())?,
+            annotations: HashMap::new(),
+        })
     }
 
     #[staticmethod]
@@ -69,41 +77,44 @@ impl Instance {
             builder = builder.description(desc.0);
         }
 
-        Ok(Self(builder.build()?))
+        Ok(Self {
+            inner: builder.build()?,
+            annotations: HashMap::new(),
+        })
     }
 
     #[getter]
     pub fn sense(&self) -> Sense {
-        self.0.sense().into()
+        self.inner.sense().into()
     }
 
     #[getter]
     pub fn objective(&self) -> Function {
-        Function(self.0.objective().clone())
+        Function(self.inner.objective().clone())
     }
 
     #[setter]
     pub fn set_objective(&mut self, objective: Function) -> Result<()> {
-        self.0.set_objective(objective.0)?;
+        self.inner.set_objective(objective.0)?;
         Ok(())
     }
 
     /// Get all unique decision variable names in this instance
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
-        self.0.decision_variable_names()
+        self.inner.decision_variable_names()
     }
 
     /// Get all unique named function names in this instance
     #[getter]
     pub fn named_function_names(&self) -> BTreeSet<String> {
-        self.0.named_function_names()
+        self.inner.named_function_names()
     }
 
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn decision_variables(&self) -> Vec<DecisionVariable> {
-        self.0
+        self.inner
             .decision_variables()
             .values()
             .map(|var| DecisionVariable(var.clone()))
@@ -113,7 +124,7 @@ impl Instance {
     /// List of all decision variables in the instance sorted by their IDs.
     #[getter]
     pub fn constraints(&self) -> Vec<Constraint> {
-        self.0
+        self.inner
             .constraints()
             .values()
             .map(|constraint| Constraint(constraint.clone()))
@@ -123,7 +134,7 @@ impl Instance {
     /// List of all removed constraints in the instance sorted by their IDs.
     #[getter]
     pub fn removed_constraints(&self) -> Vec<RemovedConstraint> {
-        self.0
+        self.inner
             .removed_constraints()
             .values()
             .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
@@ -133,7 +144,7 @@ impl Instance {
     /// List of all named functions in the instance sorted by their IDs.
     #[getter]
     pub fn named_functions(&self) -> Vec<NamedFunction> {
-        self.0
+        self.inner
             .named_functions()
             .values()
             .map(|named_function| NamedFunction(named_function.clone()))
@@ -143,7 +154,7 @@ impl Instance {
     #[getter]
     pub fn description(&self) -> Option<InstanceDescription> {
         // Convert Option<v1::instance::Description> to Option<InstanceDescription>
-        self.0
+        self.inner
             .description
             .as_ref()
             .map(|desc| InstanceDescription(desc.clone()))
@@ -151,12 +162,12 @@ impl Instance {
 
     #[getter]
     pub fn constraint_hints(&self) -> ConstraintHints {
-        ConstraintHints(self.0.constraint_hints().clone())
+        ConstraintHints(self.inner.constraint_hints().clone())
     }
 
     #[getter]
     pub fn used_decision_variables(&self) -> Vec<DecisionVariable> {
-        self.0
+        self.inner
             .used_decision_variables()
             .values()
             .map(|&var| DecisionVariable(var.clone()))
@@ -164,12 +175,12 @@ impl Instance {
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        let buf = self.0.to_bytes();
+        let buf = self.inner.to_bytes();
         PyBytes::new(py, &buf)
     }
 
     pub fn required_ids(&self) -> BTreeSet<u64> {
-        self.0
+        self.inner
             .required_ids()
             .into_iter()
             .map(|id| id.into_inner())
@@ -177,7 +188,7 @@ impl Instance {
     }
 
     pub fn as_qubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
+        let inner: ommx::v1::Instance = self.inner.clone().into();
         let (qubo, constant) = inner.as_qubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &qubo)?
@@ -188,7 +199,7 @@ impl Instance {
     }
 
     pub fn as_hubo_format<'py>(&self, py: Python<'py>) -> Result<(Bound<'py, PyDict>, f64)> {
-        let inner: ommx::v1::Instance = self.0.clone().into();
+        let inner: ommx::v1::Instance = self.inner.clone().into();
         let (hubo, constant) = inner.as_hubo_format()?;
         Ok((
             serde_pyobject::to_pyobject(py, &hubo)?
@@ -199,17 +210,26 @@ impl Instance {
     }
 
     pub fn as_parametric_instance(&self) -> ParametricInstance {
-        ParametricInstance(self.0.clone().into())
+        ParametricInstance {
+            inner: self.inner.clone().into(),
+            annotations: HashMap::new(),
+        }
     }
 
     pub fn penalty_method(&self) -> Result<ParametricInstance> {
-        let parametric_instance = self.0.clone().penalty_method()?;
-        Ok(ParametricInstance(parametric_instance))
+        let parametric_instance = self.inner.clone().penalty_method()?;
+        Ok(ParametricInstance {
+            inner: parametric_instance,
+            annotations: HashMap::new(),
+        })
     }
 
     pub fn uniform_penalty_method(&self) -> Result<ParametricInstance> {
-        let parametric_instance = self.0.clone().uniform_penalty_method()?;
-        Ok(ParametricInstance(parametric_instance))
+        let parametric_instance = self.inner.clone().uniform_penalty_method()?;
+        Ok(ParametricInstance {
+            inner: parametric_instance,
+            annotations: HashMap::new(),
+        })
     }
 
     /// Evaluate the instance with the given state.
@@ -228,10 +248,13 @@ impl Instance {
             None => ommx::ATol::default(),
         };
         let solution = self
-            .0
+            .inner
             .evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
-        Ok(Solution(solution))
+        Ok(Solution {
+            inner: solution,
+            annotations: HashMap::new(),
+        })
     }
 
     /// Partially evaluate the instance with the given state.
@@ -249,7 +272,7 @@ impl Instance {
                 .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?,
             None => ommx::ATol::default(),
         };
-        self.0
+        self.inner
             .partial_evaluate(&state.0, atol)
             .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
         Ok(self.clone())
@@ -262,11 +285,14 @@ impl Instance {
             Some(value) => ommx::ATol::new(value)?,
             None => ommx::ATol::default(),
         };
-        Ok(SampleSet(self.0.evaluate_samples(&v1_samples, atol)?))
+        Ok(SampleSet {
+            inner: self.inner.evaluate_samples(&v1_samples, atol)?,
+            annotations: HashMap::new(),
+        })
     }
 
     pub fn random_state(&self, rng: &Rng) -> Result<crate::State> {
-        let strategy = self.0.arbitrary_state();
+        let strategy = self.inner.arbitrary_state();
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
@@ -295,7 +321,7 @@ impl Instance {
             max_sample_id,
         )?;
 
-        let strategy = self.0.arbitrary_samples(params);
+        let strategy = self.inner.arbitrary_samples(params);
         let mut rng_guard = rng
             .lock()
             .map_err(|_| anyhow::anyhow!("Cannot get lock for RNG"))?;
@@ -309,7 +335,7 @@ impl Instance {
         removed_reason: String,
         removed_reason_parameters: HashMap<String, String>,
     ) -> Result<()> {
-        self.0.relax_constraint(
+        self.inner.relax_constraint(
             constraint_id.into(),
             removed_reason,
             removed_reason_parameters,
@@ -318,13 +344,13 @@ impl Instance {
     }
 
     pub fn restore_constraint(&mut self, constraint_id: u64) -> Result<()> {
-        self.0.restore_constraint(constraint_id.into())?;
+        self.inner.restore_constraint(constraint_id.into())?;
         Ok(())
     }
 
     pub fn log_encode(&mut self, integer_variable_ids: BTreeSet<u64>) -> Result<()> {
         for id in integer_variable_ids.iter() {
-            self.0.log_encode((*id).into())?;
+            self.inner.log_encode((*id).into())?;
         }
         Ok(())
     }
@@ -334,13 +360,13 @@ impl Instance {
         constraint_id: u64,
         max_integer_range: u64,
     ) -> Result<()> {
-        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        let mut inner: ommx::v1::Instance = self.inner.clone().into();
         inner.convert_inequality_to_equality_with_integer_slack(
             constraint_id,
             max_integer_range,
             ommx::ATol::default(),
         )?;
-        self.0 = Parse::parse(inner, &())?;
+        self.inner = Parse::parse(inner, &())?;
         Ok(())
     }
 
@@ -349,18 +375,18 @@ impl Instance {
         constraint_id: u64,
         slack_upper_bound: u64,
     ) -> Result<Option<f64>> {
-        let mut inner: ommx::v1::Instance = self.0.clone().into();
+        let mut inner: ommx::v1::Instance = self.inner.clone().into();
         let result = inner.add_integer_slack_to_inequality(constraint_id, slack_upper_bound)?;
-        self.0 = Parse::parse(inner, &())?;
+        self.inner = Parse::parse(inner, &())?;
         Ok(result)
     }
 
     pub fn decision_variable_analysis(&self) -> DecisionVariableAnalysis {
-        DecisionVariableAnalysis(self.0.analyze_decision_variables())
+        DecisionVariableAnalysis(self.inner.analyze_decision_variables())
     }
 
     pub fn stats<'py>(&self, py: Python<'py>) -> Result<Bound<'py, PyDict>> {
-        let stats = self.0.stats();
+        let stats = self.inner.stats();
         serde_pyobject::to_pyobject(py, &stats)?
             .extract()
             .map_err(|e| anyhow::anyhow!("{}", e))
@@ -378,16 +404,16 @@ impl Instance {
     }
 
     pub fn as_minimization_problem(&mut self) -> bool {
-        self.0.as_minimization_problem()
+        self.inner.as_minimization_problem()
     }
 
     pub fn as_maximization_problem(&mut self) -> bool {
-        self.0.as_maximization_problem()
+        self.inner.as_maximization_problem()
     }
 
     /// Get a specific decision variable by ID
     pub fn get_decision_variable_by_id(&self, variable_id: u64) -> PyResult<DecisionVariable> {
-        self.0
+        self.inner
             .decision_variables()
             .get(&VariableID::from(variable_id))
             .map(|var| DecisionVariable(var.clone()))
@@ -398,7 +424,7 @@ impl Instance {
 
     /// Get a specific constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<Constraint> {
-        self.0
+        self.inner
             .constraints()
             .get(&ConstraintID::from(constraint_id))
             .map(|constraint| Constraint(constraint.clone()))
@@ -409,7 +435,7 @@ impl Instance {
 
     /// Get a specific removed constraint by ID
     pub fn get_removed_constraint_by_id(&self, constraint_id: u64) -> PyResult<RemovedConstraint> {
-        self.0
+        self.inner
             .removed_constraints()
             .get(&ConstraintID::from(constraint_id))
             .map(|removed_constraint| RemovedConstraint(removed_constraint.clone()))
@@ -422,7 +448,7 @@ impl Instance {
 
     /// Get a specific named function by ID
     pub fn get_named_function_by_id(&self, named_function_id: u64) -> PyResult<NamedFunction> {
-        self.0
+        self.inner
             .named_functions()
             .get(&NamedFunctionID::from(named_function_id))
             .map(|named_function| NamedFunction(named_function.clone()))
@@ -440,25 +466,31 @@ impl Instance {
     ///
     /// Returns `True` if any reduction was performed, `False` otherwise.
     pub fn reduce_binary_power(&mut self) -> bool {
-        self.0.reduce_binary_power()
+        self.inner.reduce_binary_power()
     }
 
     #[staticmethod]
     pub fn load_mps(path: String) -> Result<Self> {
         let instance = ommx::mps::load(path)?;
-        Ok(Self(instance))
+        Ok(Self {
+            inner: instance,
+            annotations: HashMap::new(),
+        })
     }
 
     #[pyo3(signature = (path, compress = true))]
     pub fn save_mps(&self, path: String, compress: bool) -> Result<()> {
-        ommx::mps::save(&self.0, path, compress)?;
+        ommx::mps::save(&self.inner, path, compress)?;
         Ok(())
     }
 
     #[staticmethod]
     pub fn load_qplib(path: String) -> Result<Self> {
         let instance = ommx::qplib::load(path)?;
-        Ok(Self(instance))
+        Ok(Self {
+            inner: instance,
+            annotations: HashMap::new(),
+        })
     }
 
     /// Generate folded stack format for memory profiling.
@@ -476,7 +508,7 @@ impl Instance {
     ///     >>> with open("folded.txt", "w") as f:
     ///     ...     f.write(folded)
     pub fn logical_memory_profile(&self) -> String {
-        ommx::logical_memory::logical_memory_to_folded(&self.0)
+        ommx::logical_memory::logical_memory_to_folded(&self.inner)
     }
 }
 

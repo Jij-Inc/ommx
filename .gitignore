@@ -45,3 +45,6 @@ bin/
 
 # For Pyodide testing
 node_modules/
+
+# Claude Code
+.claude/

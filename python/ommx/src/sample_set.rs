@@ -5,28 +5,39 @@ use pyo3::{
     types::{PyBytes, PyDict, PyTuple},
     Bound, PyResult, Python,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
-pub struct SampleSet(pub ommx::SampleSet);
+pub struct SampleSet {
+    pub(crate) inner: ommx::SampleSet,
+    pub(crate) annotations: HashMap<String, String>,
+}
+
+crate::annotations::impl_solution_annotations!(SampleSet, "org.ommx.v1.sample-set");
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl SampleSet {
     #[staticmethod]
     pub fn from_bytes(bytes: &Bound<PyBytes>) -> Result<Self> {
-        Ok(Self(ommx::SampleSet::from_bytes(bytes.as_bytes())?))
+        Ok(Self {
+            inner: ommx::SampleSet::from_bytes(bytes.as_bytes())?,
+            annotations: HashMap::new(),
+        })
     }
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.0.to_bytes())
+        PyBytes::new(py, &self.inner.to_bytes())
     }
 
     pub fn get(&self, sample_id: u64) -> Result<Solution> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let solution = self.0.get(sample_id)?;
-        Ok(Solution(solution))
+        let solution = self.inner.get(sample_id)?;
+        Ok(Solution {
+            inner: solution,
+            annotations: HashMap::new(),
+        })
     }
 
     /// Get sample by ID (alias for get method)
@@ -35,11 +46,11 @@ impl SampleSet {
     }
 
     pub fn num_samples(&self) -> usize {
-        self.0.sample_ids().len()
+        self.inner.sample_ids().len()
     }
 
     pub fn sample_ids(&self) -> BTreeSet<u64> {
-        self.0
+        self.inner
             .sample_ids()
             .iter()
             .map(|id| id.into_inner())
@@ -47,7 +58,7 @@ impl SampleSet {
     }
 
     pub fn feasible_ids(&self) -> BTreeSet<u64> {
-        self.0
+        self.inner
             .feasible_ids()
             .iter()
             .map(|id| id.into_inner())
@@ -55,7 +66,7 @@ impl SampleSet {
     }
 
     pub fn feasible_relaxed_ids(&self) -> BTreeSet<u64> {
-        self.0
+        self.inner
             .feasible_relaxed_ids()
             .iter()
             .map(|id| id.into_inner())
@@ -69,22 +80,28 @@ impl SampleSet {
 
     #[getter]
     pub fn best_feasible_id(&self) -> Result<u64> {
-        Ok(self.0.best_feasible_id()?.into_inner())
+        Ok(self.inner.best_feasible_id()?.into_inner())
     }
 
     #[getter]
     pub fn best_feasible_relaxed_id(&self) -> Result<u64> {
-        Ok(self.0.best_feasible_relaxed_id()?.into_inner())
+        Ok(self.inner.best_feasible_relaxed_id()?.into_inner())
     }
 
     #[getter]
     pub fn best_feasible(&self) -> Result<Solution> {
-        Ok(Solution(self.0.best_feasible()?))
+        Ok(Solution {
+            inner: self.inner.best_feasible()?,
+            annotations: HashMap::new(),
+        })
     }
 
     #[getter]
     pub fn best_feasible_relaxed(&self) -> Result<Solution> {
-        Ok(Solution(self.0.best_feasible_relaxed()?))
+        Ok(Solution {
+            inner: self.inner.best_feasible_relaxed()?,
+            annotations: HashMap::new(),
+        })
     }
 
     #[getter]
@@ -96,7 +113,7 @@ impl SampleSet {
     /// Get objectives for all samples
     #[getter]
     pub fn objectives(&self) -> BTreeMap<u64, f64> {
-        self.0
+        self.inner
             .objectives()
             .iter()
             .map(|(sample_id, objective)| (sample_id.into_inner(), *objective))
@@ -106,7 +123,7 @@ impl SampleSet {
     /// Get feasibility status for all samples
     #[getter]
     pub fn feasible(&self) -> BTreeMap<u64, bool> {
-        self.0
+        self.inner
             .feasible()
             .iter()
             .map(|(sample_id, &is_feasible)| (sample_id.into_inner(), is_feasible))
@@ -116,7 +133,7 @@ impl SampleSet {
     /// Get relaxed feasibility status for all samples
     #[getter]
     pub fn feasible_relaxed(&self) -> BTreeMap<u64, bool> {
-        self.0
+        self.inner
             .feasible_relaxed()
             .iter()
             .map(|(sample_id, &is_feasible)| (sample_id.into_inner(), is_feasible))
@@ -132,7 +149,7 @@ impl SampleSet {
     /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> crate::Sense {
-        match self.0.sense() {
+        match self.inner.sense() {
             ommx::Sense::Minimize => crate::Sense::Minimize,
             ommx::Sense::Maximize => crate::Sense::Maximize,
         }
@@ -141,7 +158,7 @@ impl SampleSet {
     /// Get named functions for compatibility with existing Python code
     #[getter]
     pub fn named_functions(&self) -> Vec<crate::SampledNamedFunction> {
-        self.0
+        self.inner
             .named_functions()
             .values()
             .map(|nf| crate::SampledNamedFunction(nf.clone()))
@@ -151,7 +168,7 @@ impl SampleSet {
     /// Get constraints for compatibility with existing Python code
     #[getter]
     pub fn constraints(&self) -> Vec<crate::SampledConstraint> {
-        self.0
+        self.inner
             .constraints()
             .values()
             .map(|constraint| crate::SampledConstraint(constraint.clone()))
@@ -161,7 +178,7 @@ impl SampleSet {
     /// Get decision variables for compatibility with existing Python code
     #[getter]
     pub fn decision_variables(&self) -> Vec<crate::SampledDecisionVariable> {
-        self.0
+        self.inner
             .decision_variables()
             .values()
             .map(|variable| crate::SampledDecisionVariable(variable.clone()))
@@ -171,7 +188,7 @@ impl SampleSet {
     /// Get sample IDs as a list (property version)
     #[getter]
     pub fn sample_ids_list(&self) -> Vec<u64> {
-        self.0
+        self.inner
             .sample_ids()
             .iter()
             .map(|&sample_id| sample_id.into_inner())
@@ -181,13 +198,13 @@ impl SampleSet {
     /// Get all unique decision variable names in this sample set
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
-        self.0.decision_variable_names()
+        self.inner.decision_variable_names()
     }
 
     /// Get all unique named function names in this sample set
     #[getter]
     pub fn named_function_names(&self) -> BTreeSet<String> {
-        self.0.named_function_names()
+        self.inner.named_function_names()
     }
 
     /// Extract decision variable values for a given name and sample ID
@@ -198,7 +215,7 @@ impl SampleSet {
         sample_id: u64,
     ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = self.0.extract_decision_variables(name, sample_id)?;
+        let extracted = self.inner.extract_decision_variables(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             // Convert Vec<i64> to tuple for use as dict key
@@ -216,7 +233,7 @@ impl SampleSet {
     ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
         let result_dict = PyDict::new(py);
-        for (name, variables) in self.0.extract_all_decision_variables(sample_id)? {
+        for (name, variables) in self.inner.extract_all_decision_variables(sample_id)? {
             let var_dict = PyDict::new(py);
             for (subscripts, value) in variables {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -235,7 +252,7 @@ impl SampleSet {
         sample_id: u64,
     ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = self.0.extract_constraints(name, sample_id)?;
+        let extracted = self.inner.extract_constraints(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key = PyTuple::new(py, &subscripts)?;
@@ -252,7 +269,7 @@ impl SampleSet {
         sample_id: u64,
     ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
-        let extracted = self.0.extract_named_functions(name, sample_id)?;
+        let extracted = self.inner.extract_named_functions(name, sample_id)?;
         let dict = PyDict::new(py);
         for (subscripts, value) in extracted {
             let key = PyTuple::new(py, &subscripts)?;
@@ -269,7 +286,7 @@ impl SampleSet {
     ) -> Result<Bound<'py, PyDict>> {
         let sample_id = ommx::SampleID::from(sample_id);
         let result_dict = PyDict::new(py);
-        for (name, functions) in self.0.extract_all_named_functions(sample_id)? {
+        for (name, functions) in self.inner.extract_all_named_functions(sample_id)? {
             let func_dict = PyDict::new(py);
             for (subscripts, value) in functions {
                 let key_tuple = PyTuple::new(py, &subscripts)?;
@@ -286,7 +303,7 @@ impl SampleSet {
         variable_id: u64,
     ) -> PyResult<crate::SampledDecisionVariable> {
         let var_id = ommx::VariableID::from(variable_id);
-        self.0
+        self.inner
             .decision_variables()
             .get(&var_id)
             .map(|dv| crate::SampledDecisionVariable(dv.clone()))
@@ -300,7 +317,7 @@ impl SampleSet {
     /// Get a specific sampled constraint by ID  
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::SampledConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
-        self.0
+        self.inner
             .constraints()
             .get(&constraint_id)
             .map(|sc| crate::SampledConstraint(sc.clone()))
@@ -317,7 +334,7 @@ impl SampleSet {
         named_function_id: u64,
     ) -> PyResult<crate::SampledNamedFunction> {
         let named_function_id = ommx::NamedFunctionID::from(named_function_id);
-        self.0
+        self.inner
             .named_functions()
             .get(&named_function_id)
             .map(|nf| crate::SampledNamedFunction(nf.clone()))

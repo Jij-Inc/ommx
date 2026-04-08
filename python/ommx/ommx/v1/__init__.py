@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Iterable, Mapping
 from typing_extensions import deprecated, TypeAlias, Union, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pandas import DataFrame, NA
 import copy
 
@@ -14,16 +14,21 @@ from .parametric_instance_pb2 import (
     ParametricInstance as _ParametricInstance,
     Parameter as _Parameter,
 )
-from .annotation import (
-    UserAnnotationBase,
-    str_annotation_property,
-    str_list_annotation_property,
-    datetime_annotation_property,
-    json_annotation_property,
-    int_annotation_property,
-)
 
 from .. import _ommx_rust
+
+
+def _raw_property(name: str):
+    """Create a property that delegates to self.raw.<name>."""
+
+    def getter(self):
+        return getattr(self.raw, name)
+
+    def setter(self, value):
+        setattr(self.raw, name, value)
+
+    return property(getter, setter)
+
 
 # Define PyO3 types
 State = _ommx_rust.State
@@ -149,7 +154,7 @@ Type alias for convertible types to :class:`Samples`.
 
 
 @dataclass
-class Instance(UserAnnotationBase):
+class Instance:
     """
     Idiomatic wrapper of ``ommx.v1.Instance`` protobuf message.
 
@@ -193,30 +198,38 @@ class Instance(UserAnnotationBase):
     raw: _ommx_rust.Instance
     """The raw Rust instance."""
 
-    # Annotations
-    annotations: dict[str, str] = field(default_factory=dict)
-    """
-    Arbitrary annotations stored in OMMX artifact. Use :py:attr:`title` or other specific attributes if possible.
-    """
-    annotation_namespace = "org.ommx.v1.instance"
-    title = str_annotation_property("title")
-    "The title of the instance, stored as ``org.ommx.v1.instance.title`` annotation in OMMX artifact."
-    license = str_annotation_property("license")
-    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.instance.license`` annotation in OMMX artifact."
-    dataset = str_annotation_property("dataset")
-    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.instance.dataset`` annotation in OMMX artifact."
-    authors = str_list_annotation_property("authors")
-    "Authors of this instance, stored as ``org.ommx.v1.instance.authors`` annotation in OMMX artifact."
-    num_variables = int_annotation_property("variables")
-    "Number of variables in this instance, stored as ``org.ommx.v1.instance.variables`` annotation in OMMX artifact."
-    num_constraints = int_annotation_property("constraints")
-    "Number of constraints in this instance, stored as ``org.ommx.v1.instance.constraints`` annotation in OMMX artifact."
-    created = datetime_annotation_property("created")
-    "The creation date of the instance, stored as ``org.ommx.v1.instance.created`` annotation in RFC3339 format in OMMX artifact."
+    def __copy__(self):
+        return Instance(copy.copy(self.raw))
 
+    def __deepcopy__(self, memo):
+        return Instance(copy.deepcopy(self.raw, memo))
+
+    # Annotations are stored on the Rust side (raw.annotations)
     @property
-    def _annotations(self) -> dict[str, str]:
-        return self.annotations
+    def annotations(self) -> dict[str, str]:
+        """Arbitrary annotations stored in OMMX artifact.
+
+        Note: Returns a copy. In-place mutations like ``instance.annotations["k"] = "v"``
+        will not persist. Use :meth:`add_user_annotation` or assign the full dict back.
+        """
+        return self.raw.annotations
+
+    @annotations.setter
+    def annotations(self, value: dict[str, str]):
+        self.raw.annotations = value
+
+    def __getattr__(self, name: str):
+        """Delegate attribute access to the underlying Rust instance."""
+        return getattr(self.raw, name)
+
+    # Named annotation properties (need explicit properties for setter support)
+    title = _raw_property("title")
+    license = _raw_property("license")
+    dataset = _raw_property("dataset")
+    authors = _raw_property("authors")
+    num_variables = _raw_property("num_variables")
+    num_constraints = _raw_property("num_constraints")
+    created = _raw_property("created")
 
     # Re-export some enums
     MAXIMIZE = _ommx_rust.Sense.Maximize
@@ -343,66 +356,6 @@ class Instance(UserAnnotationBase):
     def load_qplib(path: str) -> Instance:
         raw = _ommx_rust.Instance.load_qplib(path)
         return Instance(raw)
-
-    def add_user_annotation(
-        self, key: str, value: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        """
-        Add a user annotation to the instance.
-
-        Examples
-        =========
-
-        .. doctest::
-
-                >>> instance = Instance.empty()
-                >>> instance.add_user_annotation("author", "Alice")
-                >>> instance.get_user_annotations()
-                {'author': 'Alice'}
-                >>> instance.annotations
-                {'org.ommx.user.author': 'Alice'}
-
-        """
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        self.annotations[annotation_namespace + key] = value
-
-    def get_user_annotation(
-        self, key: str, *, annotation_namespace: str = "org.ommx.user."
-    ):
-        """
-        Get a user annotation from the instance.
-
-        Examples
-        =========
-
-        .. doctest::
-
-                >>> instance = Instance.empty()
-                >>> instance.add_user_annotation("author", "Alice")
-                >>> instance.get_user_annotation("author")
-                'Alice'
-
-        """
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return self.annotations[annotation_namespace + key]
-
-    def get_user_annotations(
-        self, *, annotation_namespace: str = "org.ommx.user."
-    ) -> dict[str, str]:
-        """
-        Get user annotations from the instance.
-
-        See also :py:meth:`add_user_annotation`.
-        """
-        if not annotation_namespace.endswith("."):
-            annotation_namespace += "."
-        return {
-            key[len(annotation_namespace) :]: value
-            for key, value in self.annotations.items()
-            if key.startswith(annotation_namespace)
-        }
 
     @staticmethod
     def from_bytes(data: bytes) -> Instance:
@@ -1988,7 +1941,7 @@ class Instance(UserAnnotationBase):
 
 
 @dataclass
-class ParametricInstance(UserAnnotationBase):
+class ParametricInstance:
     """
     Idiomatic wrapper of ``ommx.v1.ParametricInstance`` protobuf message.
 
@@ -2037,26 +1990,170 @@ class ParametricInstance(UserAnnotationBase):
 
     raw: _ParametricInstance
 
-    annotations: dict[str, str] = field(default_factory=dict)
-    annotation_namespace = "org.ommx.v1.parametric-instance"
-    title = str_annotation_property("title")
-    "The title of the instance, stored as ``org.ommx.v1.parametric-instance.title`` annotation in OMMX artifact."
-    license = str_annotation_property("license")
-    "License of this instance in the SPDX license identifier. This is stored as ``org.ommx.v1.parametric-instance.license`` annotation in OMMX artifact."
-    dataset = str_annotation_property("dataset")
-    "Dataset name which this instance belongs to, stored as ``org.ommx.v1.parametric-instance.dataset`` annotation in OMMX artifact."
-    authors = str_list_annotation_property("authors")
-    "Authors of this instance, stored as ``org.ommx.v1.parametric-instance.authors`` annotation in OMMX artifact."
-    num_variables = int_annotation_property("variables")
-    "Number of variables in this instance, stored as ``org.ommx.v1.parametric-instance.variables`` annotation in OMMX artifact."
-    num_constraints = int_annotation_property("constraints")
-    "Number of constraints in this instance, stored as ``org.ommx.v1.parametric-instance.constraints`` annotation in OMMX artifact."
-    created = datetime_annotation_property("created")
-    "The creation date of the instance, stored as ``org.ommx.v1.parametric-instance.created`` annotation in RFC3339 format in OMMX artifact."
+    @property
+    def annotations(self) -> dict[str, str]:
+        """
+        Returns the annotations dictionary.
+
+        Unlike Rust-backed types (Instance, Solution, SampleSet) where
+        ``annotations`` returns a **copy**, this returns the live dict.
+        Prefer using :meth:`add_user_annotation` for consistency across types.
+        """
+        # ParametricInstance still uses protobuf raw, annotations stored separately
+        if not hasattr(self, "_annotations_dict"):
+            self._annotations_dict: dict[str, str] = {}
+        return self._annotations_dict
+
+    @annotations.setter
+    def annotations(self, value: dict[str, str]):
+        self._annotations_dict = value
+
+    _ANNOTATION_NAMESPACE = "org.ommx.v1.parametric-instance."
+
+    def add_user_annotation(
+        self,
+        key: str,
+        value: str,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ):
+        """Add a user annotation."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        self.annotations[f"{ns}{key}"] = value
+
+    def add_user_annotations(
+        self,
+        annotations: dict[str, str],
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ):
+        """Add multiple user annotations."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        for key, value in annotations.items():
+            self.annotations[f"{ns}{key}"] = value
+
+    def get_user_annotation(
+        self,
+        key: str,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ) -> str:
+        """Get a user annotation by key. Raises KeyError if not found."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        full_key = f"{ns}{key}"
+        if full_key not in self.annotations:
+            raise KeyError(full_key)
+        return self.annotations[full_key]
+
+    def get_user_annotations(
+        self,
+        *,
+        annotation_namespace: str = "org.ommx.user.",
+    ) -> dict[str, str]:
+        """Get all user annotations under the given namespace."""
+        ns = (
+            annotation_namespace
+            if annotation_namespace.endswith(".")
+            else annotation_namespace + "."
+        )
+        return {
+            key[len(ns) :]: value
+            for key, value in self.annotations.items()
+            if key.startswith(ns)
+        }
 
     @property
-    def _annotations(self) -> dict[str, str]:
-        return self.annotations
+    def title(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}title")
+
+    @title.setter
+    def title(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}title"] = value
+
+    @property
+    def license(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}license")
+
+    @license.setter
+    def license(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}license"] = value
+
+    @property
+    def dataset(self) -> Optional[str]:
+        return self.annotations.get(f"{self._ANNOTATION_NAMESPACE}dataset")
+
+    @dataset.setter
+    def dataset(self, value: str):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}dataset"] = value
+
+    @property
+    def authors(self) -> list[str]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}authors")
+        if not v:
+            return []
+        return v.split(",")
+
+    @authors.setter
+    def authors(self, value: list[str]):
+        key = f"{self._ANNOTATION_NAMESPACE}authors"
+        if value:
+            self.annotations[key] = ",".join(value)
+        else:
+            self.annotations.pop(key, None)
+
+    @property
+    def num_variables(self) -> Optional[int]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}variables")
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+    @num_variables.setter
+    def num_variables(self, value: int):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}variables"] = str(value)
+
+    @property
+    def num_constraints(self) -> Optional[int]:
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}constraints")
+        if v is None:
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+    @num_constraints.setter
+    def num_constraints(self, value: int):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}constraints"] = str(value)
+
+    @property
+    def created(self):
+        """Get the created datetime. Returns None if not set or empty."""
+        from dateutil.parser import isoparse
+
+        v = self.annotations.get(f"{self._ANNOTATION_NAMESPACE}created")
+        if not v:
+            return None
+        return isoparse(v)
+
+    @created.setter
+    def created(self, value):
+        self.annotations[f"{self._ANNOTATION_NAMESPACE}created"] = value.isoformat()
 
     @staticmethod
     def empty() -> ParametricInstance:
@@ -2280,7 +2377,7 @@ class ParametricInstance(UserAnnotationBase):
 
 
 @dataclass
-class Solution(UserAnnotationBase):
+class Solution:
     """
     Idiomatic wrapper of ``ommx.v1.Solution`` protobuf message.
 
@@ -2294,27 +2391,25 @@ class Solution(UserAnnotationBase):
     NOT_OPTIMAL = Optimality.NotOptimal
     LP_RELAXED = Relaxation.LpRelaxed
 
-    annotation_namespace = "org.ommx.v1.solution"
-    instance = str_annotation_property("instance")
-    """
-    The digest of the instance layer, stored as ``org.ommx.v1.solution.instance`` annotation in OMMX artifact.
-
-    This ``Solution`` is the solution of the mathematical programming problem described by the instance.
-    """
-    solver = json_annotation_property("solver")
-    """The solver which generated this solution, stored as ``org.ommx.v1.solution.solver`` annotation as a JSON in OMMX artifact."""
-    parameters = json_annotation_property("parameters")
-    """The parameters used in the optimization, stored as ``org.ommx.v1.solution.parameters`` annotation as a JSON in OMMX artifact."""
-    start = datetime_annotation_property("start")
-    """When the optimization started, stored as ``org.ommx.v1.solution.start`` annotation in RFC3339 format in OMMX artifact."""
-    end = datetime_annotation_property("end")
-    """When the optimization ended, stored as ``org.ommx.v1.solution.end`` annotation in RFC3339 format in OMMX artifact."""
-    annotations: dict[str, str] = field(default_factory=dict)
-    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
-
+    # Annotations delegated to Rust
     @property
-    def _annotations(self) -> dict[str, str]:
-        return self.annotations
+    def annotations(self) -> dict[str, str]:
+        return self.raw.annotations
+
+    @annotations.setter
+    def annotations(self, value: dict[str, str]):
+        self.raw.annotations = value
+
+    def __getattr__(self, name: str):
+        """Delegate attribute access to the underlying Rust solution."""
+        return getattr(self.raw, name)
+
+    # Named annotation properties (Rust names differ slightly)
+    instance = _raw_property("instance_digest")
+    solver = _raw_property("solver_annotation")
+    parameters = _raw_property("parameters_annotation")
+    start = _raw_property("start")
+    end = _raw_property("end")
 
     @staticmethod
     def from_bytes(data: bytes) -> Solution:
@@ -2677,7 +2772,7 @@ class Solution(UserAnnotationBase):
 
 
 @dataclass
-class SampleSet(UserAnnotationBase):
+class SampleSet:
     r"""
     The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
 
@@ -2768,23 +2863,25 @@ class SampleSet(UserAnnotationBase):
 
     raw: _ommx_rust.SampleSet
 
-    annotation_namespace = "org.ommx.v1.sample-set"
-    instance = str_annotation_property("instance")
-    """The digest of the instance layer, stored as ``org.ommx.v1.sample-set.instance`` annotation in OMMX artifact."""
-    solver = json_annotation_property("solver")
-    """The solver which generated this sample set, stored as ``org.ommx.v1.sample-set.solver`` annotation as a JSON in OMMX artifact."""
-    parameters = json_annotation_property("parameters")
-    """The parameters used in the optimization, stored as ``org.ommx.v1.sample-set.parameters`` annotation as a JSON in OMMX artifact."""
-    start = datetime_annotation_property("start")
-    """When the optimization started, stored as ``org.ommx.v1.sample-set.start`` annotation in RFC3339 format in OMMX artifact."""
-    end = datetime_annotation_property("end")
-    """When the optimization ended, stored as ``org.ommx.v1.sample-set.end`` annotation in RFC3339 format in OMMX artifact."""
-    annotations: dict[str, str] = field(default_factory=dict)
-    """Arbitrary annotations stored in OMMX artifact. Use :py:attr:`parameters` or other specific attributes if possible."""
-
+    # Annotations delegated to Rust
     @property
-    def _annotations(self) -> dict[str, str]:
-        return self.annotations
+    def annotations(self) -> dict[str, str]:
+        return self.raw.annotations
+
+    @annotations.setter
+    def annotations(self, value: dict[str, str]):
+        self.raw.annotations = value
+
+    def __getattr__(self, name: str):
+        """Delegate attribute access to the underlying Rust sample set."""
+        return getattr(self.raw, name)
+
+    # Named annotation properties
+    instance = _raw_property("instance_digest")
+    solver = _raw_property("solver_annotation")
+    parameters = _raw_property("parameters_annotation")
+    start = _raw_property("start")
+    end = _raw_property("end")
 
     @staticmethod
     def from_bytes(data: bytes) -> SampleSet:
