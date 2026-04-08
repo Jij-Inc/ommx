@@ -111,45 +111,11 @@ impl<'py> FromPyObject<'_, 'py> for Function {
 
 pyo3_stub_gen::impl_py_runtime_type!(Function);
 
-// Dummy types for ToFunction type alias
-
-enum PyInt {}
-impl pyo3_stub_gen::PyStubType for PyInt {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        pyo3_stub_gen::TypeInfo {
-            import: Default::default(),
-            name: "int".into(),
-            source_module: None,
-            type_refs: Default::default(),
-        }
-    }
-}
-impl pyo3_stub_gen::runtime::PyRuntimeType for PyInt {
-    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-        Ok(py.get_type::<pyo3::types::PyInt>().into_any())
-    }
-}
-
-enum PyFloat {}
-impl pyo3_stub_gen::PyStubType for PyFloat {
-    fn type_output() -> pyo3_stub_gen::TypeInfo {
-        pyo3_stub_gen::TypeInfo {
-            import: Default::default(),
-            name: "float".into(),
-            source_module: None,
-            type_refs: Default::default(),
-        }
-    }
-}
-impl pyo3_stub_gen::runtime::PyRuntimeType for PyFloat {
-    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-        Ok(py.get_type::<pyo3::types::PyFloat>().into_any())
-    }
-}
-
+// Type alias: ToFunction = int | float | DecisionVariable | Linear | Quadratic | Polynomial | Function
+// i64 and f64 have PyStubType/PyRuntimeType provided by pyo3-stub-gen builtins
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
-    ToFunction = PyInt | PyFloat | DecisionVariable | Linear | Quadratic | Polynomial | Function
+    ToFunction = i64 | f64 | DecisionVariable | Linear | Quadratic | Polynomial | Function
 );
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
