@@ -24,19 +24,22 @@ In v3, the `.raw` attribute is **completely removed** from migrated classes. The
 **Affected classes:**
 - `Linear`, `Quadratic`, `Polynomial`, `Function`
 - `DecisionVariable`, `Parameter`
+- `Instance`, `Solution`, `SampleSet`
 
 **Migration:**
 ```python
 # ❌ v2 (deprecated) - No longer works in v3
 linear.raw.terms
 decision_variable.raw.id
+instance.raw.sense
+solution.raw.optimality
 
 # ✅ v3 - Access properties directly
 linear.terms
 decision_variable.id
+instance.sense
+solution.optimality
 ```
-
-**Note:** `Instance`, `Solution`, `SampleSet`, and `Constraint` still have `.raw` in v3 (migration in progress), but it will be removed in future versions.
 
 ## Breaking Changes
 
@@ -62,13 +65,49 @@ if constraint.name is not None:
     print(constraint.name)
 ```
 
-### 2. Removed Methods
+### 2. `Instance.from_components` Now Takes Lists, Not Dicts
+
+`Instance.from_components` now accepts lists of `DecisionVariable`, `Constraint`, etc. instead of dicts keyed by ID. Duplicate IDs are detected and raise an error.
+
+**Before (v2)**:
+```python
+Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=objective,
+    decision_variables={0: x0, 1: x1},  # dict[int, DecisionVariable]
+    constraints={0: c0},                # dict[int, Constraint]
+)
+```
+
+**After (v3)**:
+```python
+Instance.from_components(
+    sense=Instance.MINIMIZE,
+    objective=objective,
+    decision_variables=[x0, x1],  # list[DecisionVariable]
+    constraints=[c0],             # list[Constraint]
+)
+```
+
+Also note: all arguments are now keyword-only (use `sense=...`, not positional).
+
+### 3. `Instance.write_mps` Renamed to `Instance.save_mps`
+
+```python
+# ❌ v2
+instance.write_mps("output.mps")
+
+# ✅ v3
+instance.save_mps("output.mps")
+```
+
+### 4. Removed Methods
 
 The following methods have been removed:
 - `Linear.from_object()` - was internal use only
 - `Linear.equals_to()` - was deprecated
 
-### 3. Constraint Method Chaining Returns New Object
+### 5. Constraint Method Chaining Returns New Object
 
 In v3, Constraint mutation methods (`add_name()`, `add_description()`, etc.) return a new `Constraint` object rather than modifying in place. Use the returned object:
 
@@ -185,9 +224,13 @@ constraint = (x + y <= 10).add_name("capacity").add_description("Capacity limit"
 
 ## Migration Checklist
 
+- [ ] Remove all `.raw` access on Instance, Solution, SampleSet (access properties directly)
+- [ ] Update `Instance.from_components` to pass lists instead of dicts
+- [ ] Rename `instance.write_mps(...)` to `instance.save_mps(...)`
 - [ ] Update `constraint.name` / `constraint.description` checks to handle `None`
 - [ ] Remove any usage of `Linear.from_object()` or `Linear.equals_to()`
 - [ ] Update Constraint method chaining to use returned objects
+- [ ] Replace protobuf imports (`from ommx.v1.*_pb2 import ...`) with `from ommx.v1 import ...`
 - [ ] Consider using `lower`/`upper` kwargs for DecisionVariable factory methods
 - [ ] Use `DecisionVariable.BINARY`, `.INTEGER`, etc. constants where appropriate
 - [ ] Use `equals_to()` instead of `==` for DecisionVariable equality comparisons

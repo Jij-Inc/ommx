@@ -13,4 +13,4 @@ def write_file(instance: Instance, path: str):
     - Only linear problems are supported.
     - Various forms of metadata, like problem description and variable/constraint names, are not preserved.
     """
-    instance.write_mps(path)
+    instance.save_mps(path)

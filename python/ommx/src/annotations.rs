@@ -422,6 +422,57 @@ macro_rules! impl_solution_annotations {
                     .insert(concat!($namespace, ".end").to_string(), iso);
                 Ok(())
             }
+
+            // --- Backward-compatible aliases ---
+            // Python SDK previously exposed these as `instance`, `solver`, `parameters`
+
+            #[getter]
+            #[pyo3(name = "instance")]
+            pub fn instance_alias(&self) -> Option<String> {
+                self.instance_digest()
+            }
+
+            #[setter]
+            #[pyo3(name = "instance")]
+            pub fn set_instance_alias(&mut self, value: String) {
+                self.set_instance_digest(value)
+            }
+
+            #[getter]
+            #[pyo3(name = "solver")]
+            pub fn solver_alias<'py>(
+                &self,
+                py: pyo3::Python<'py>,
+            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
+                self.solver_annotation(py)
+            }
+
+            #[setter]
+            #[pyo3(name = "solver")]
+            pub fn set_solver_alias(
+                &mut self,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
+            ) -> pyo3::PyResult<()> {
+                self.set_solver_annotation(value)
+            }
+
+            #[getter]
+            #[pyo3(name = "parameters")]
+            pub fn parameters_alias<'py>(
+                &self,
+                py: pyo3::Python<'py>,
+            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
+                self.parameters_annotation(py)
+            }
+
+            #[setter]
+            #[pyo3(name = "parameters")]
+            pub fn set_parameters_alias(
+                &mut self,
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
+            ) -> pyo3::PyResult<()> {
+                self.set_parameters_annotation(value)
+            }
         }
     };
 }

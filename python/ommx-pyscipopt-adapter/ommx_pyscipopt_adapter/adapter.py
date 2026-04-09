@@ -203,7 +203,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
             >>> model.optimize()
 
             >>> solution = adapter.decode(model)
-            >>> solution.raw.objective
+            >>> solution.objective
             42.0
 
         """
@@ -216,7 +216,7 @@ class OMMXPySCIPOptAdapter(SolverAdapter):
         if (
             data.getStatus() == "optimal"
         ):  # pyscipopt does not appear to have an enum or constant for this
-            solution.raw.optimality = Solution.OPTIMAL
+            solution.optimality = Solution.OPTIMAL
 
         return solution
 

@@ -3,13 +3,17 @@ use pyo3::{
     exceptions::PyKeyError,
     exceptions::PyRuntimeError,
     prelude::*,
-    types::{PyBytes, PyDict, PyTuple},
+    types::{PyBytes, PyDict, PySet, PyTuple},
     Bound,
 };
 use std::collections::{BTreeSet, HashMap};
 
+/// Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
+///
+/// This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
+#[derive(Clone)]
 pub struct Solution {
     pub(crate) inner: ommx::Solution,
     pub(crate) annotations: HashMap<String, String>,
@@ -32,6 +36,27 @@ impl Solution {
         PyBytes::new(py, &self.inner.to_bytes())
     }
 
+    /// Class constant for optimal solutions
+    #[classattr]
+    #[pyo3(name = "OPTIMAL")]
+    fn class_optimal() -> crate::Optimality {
+        crate::Optimality::Optimal
+    }
+
+    /// Class constant for non-optimal solutions
+    #[classattr]
+    #[pyo3(name = "NOT_OPTIMAL")]
+    fn class_not_optimal() -> crate::Optimality {
+        crate::Optimality::NotOptimal
+    }
+
+    /// Class constant for LP-relaxed solutions
+    #[classattr]
+    #[pyo3(name = "LP_RELAXED")]
+    fn class_lp_relaxed() -> crate::Relaxation {
+        crate::Relaxation::LpRelaxed
+    }
+
     /// Get the objective function value
     #[getter]
     pub fn objective(&self) -> f64 {
@@ -44,26 +69,34 @@ impl Solution {
         crate::State(self.inner.state())
     }
 
-    /// Check if the solution is feasible
+    /// Feasibility of the solution in terms of all constraints, including removed constraints.
+    ///
+    /// This is an alias for `feasible_unrelaxed`.
+    ///
+    /// Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
+    /// Previously, this property represents the feasibility of the remaining constraints only,
+    /// i.e. excluding relaxed constraints.
+    /// From Python SDK 1.7.0, this property represents the feasibility of all constraints,
+    /// including relaxed constraints.
     #[getter]
     pub fn feasible(&self) -> bool {
         // The `feasible` means feasible in the unrelaxed problem
         self.inner.feasible()
     }
 
-    /// Check if the solution is feasible in the relaxed problem
+    /// Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
     #[getter]
     pub fn feasible_relaxed(&self) -> bool {
         self.inner.feasible_relaxed()
     }
 
-    /// Check if the solution is feasible in the unrelaxed problem  
+    /// Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
     #[getter]
     pub fn feasible_unrelaxed(&self) -> bool {
         self.inner.feasible()
     }
 
-    // Get the optimization sense (minimize or maximize)
+    /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> Result<crate::Sense> {
         let sense = (*self.inner.sense()).ok_or_else(|| {
@@ -120,7 +153,8 @@ impl Solution {
             .collect()
     }
 
-    // Get evaluated named functions as a list sorted by ID
+    /// Get evaluated named functions as a list sorted by ID
+    #[getter]
     pub fn named_functions(&self) -> Vec<crate::EvaluatedNamedFunction> {
         self.inner
             .evaluated_named_functions()
@@ -147,7 +181,26 @@ impl Solution {
             .collect()
     }
 
-    /// Get all unique decision variable names in this solution
+    /// Get all unique decision variable names in this solution.
+    ///
+    /// Returns a set of all unique variable names. Variables without names are not included.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x + y,
+    /// ...     objective=sum(x) + sum(y),
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
+    /// >>> sorted(solution.decision_variable_names)
+    /// ['x', 'y']
+    /// ```
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
@@ -168,7 +221,25 @@ impl Solution {
         self.inner.named_function_names()
     }
 
-    /// Extract decision variables by name with subscripts as key (returns a Python dict)
+    /// Extract the values of decision variables based on the `name` with `subscripts` key.
+    ///
+    /// Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints=[sum(x) == 1],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
+    /// >>> solution.extract_decision_variables("x")
+    /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+    /// ```
     pub fn extract_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -182,7 +253,34 @@ impl Solution {
         Ok(dict)
     }
 
-    /// Extract all decision variables grouped by name (returns a Python dict)
+    /// Extract all decision variables grouped by name.
+    ///
+    /// Returns a mapping from variable name to a mapping from subscripts to values.
+    /// This is useful for extracting all variables at once in a structured format.
+    /// Variables without names are not included in the result.
+    ///
+    /// Raises ValueError if a decision variable with parameters is found, or if the same
+    /// name and subscript combination is found multiple times.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x + y,
+    /// ...     objective=sum(x) + sum(y),
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
+    /// >>> all_vars = solution.extract_all_decision_variables()
+    /// >>> all_vars["x"]
+    /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+    /// >>> all_vars["y"]
+    /// {(0,): 1.0, (1,): 1.0}
+    /// ```
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,
@@ -199,7 +297,27 @@ impl Solution {
         Ok(result_dict)
     }
 
-    /// Extract constraints by name with subscripts as key (returns a Python dict)
+    /// Extract the values of constraints based on the `name` with `subscripts` key.
+    ///
+    /// Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
+    /// >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
+    /// >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x,
+    /// ...     objective=sum(x),
+    /// ...     constraints=[c0, c1],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+    /// >>> solution.extract_constraints("c")
+    /// {(0,): 0.0, (1,): 0.0}
+    /// ```
     pub fn extract_constraints<'py>(
         &self,
         py: Python<'py>,
@@ -264,6 +382,37 @@ impl Solution {
             })
     }
 
+    /// Get the evaluated value of a specific constraint by ID
+    pub fn get_constraint_value(&self, constraint_id: u64) -> PyResult<f64> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.inner
+            .evaluated_constraints()
+            .get(&constraint_id)
+            .map(|ec| ec.evaluated_value())
+            .copied()
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Unknown constraint ID: {}",
+                    constraint_id.into_inner()
+                ))
+            })
+    }
+
+    /// Get the dual variable value for a specific constraint by ID
+    pub fn get_dual_variable(&self, constraint_id: u64) -> PyResult<Option<f64>> {
+        let constraint_id = ommx::ConstraintID::from(constraint_id);
+        self.inner
+            .evaluated_constraints()
+            .get(&constraint_id)
+            .map(|ec| ec.dual_variable)
+            .ok_or_else(|| {
+                PyKeyError::new_err(format!(
+                    "Unknown constraint ID: {}",
+                    constraint_id.into_inner()
+                ))
+            })
+    }
+
     /// Get a specific evaluated constraint by ID
     pub fn get_constraint_by_id(&self, constraint_id: u64) -> PyResult<crate::EvaluatedConstraint> {
         let constraint_id = ommx::ConstraintID::from(constraint_id);
@@ -295,6 +444,156 @@ impl Solution {
                     named_function_id.into_inner()
                 ))
             })
+    }
+
+    /// DataFrame of evaluated decision variables
+    ///
+    /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+    #[getter]
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
+        let entries: Vec<_> = self
+            .inner
+            .decision_variables()
+            .values()
+            .map(|v| {
+                let dict = PyDict::new(py);
+                dict.set_item("id", v.id().into_inner())?;
+                let kind_str = match v.kind() {
+                    ommx::Kind::Binary => "Binary",
+                    ommx::Kind::Integer => "Integer",
+                    ommx::Kind::Continuous => "Continuous",
+                    ommx::Kind::SemiInteger => "SemiInteger",
+                    ommx::Kind::SemiContinuous => "SemiContinuous",
+                };
+                dict.set_item("kind", kind_str)?;
+                dict.set_item("lower", v.bound().lower())?;
+                dict.set_item("upper", v.bound().upper())?;
+                match &v.metadata.name {
+                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
+                    _ => dict.set_item("name", &na)?,
+                }
+                dict.set_item("subscripts", v.metadata.subscripts.clone())?;
+                match &v.metadata.description {
+                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
+                    _ => dict.set_item("description", &na)?,
+                }
+                // EvaluatedDecisionVariable has no substituted_value field
+                dict.set_item("substituted_value", &na)?;
+                dict.set_item("value", *v.value())?;
+                Ok(dict.into_any())
+            })
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of evaluated constraints
+    ///
+    /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+    #[getter]
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
+        let entries: Vec<_> = self
+            .inner
+            .evaluated_constraints()
+            .values()
+            .map(|c| {
+                let dict = PyDict::new(py);
+                dict.set_item("id", c.id().into_inner())?;
+                let equality_str = match c.equality() {
+                    ommx::Equality::EqualToZero => "=0",
+                    ommx::Equality::LessThanOrEqualToZero => "<=0",
+                };
+                dict.set_item("equality", equality_str)?;
+                dict.set_item("value", *c.evaluated_value())?;
+                let used_ids: Vec<u64> = c
+                    .used_decision_variable_ids()
+                    .iter()
+                    .map(|id| id.into_inner())
+                    .collect();
+                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
+                match &c.metadata.name {
+                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
+                    _ => dict.set_item("name", &na)?,
+                }
+                dict.set_item("subscripts", c.metadata.subscripts.clone())?;
+                match &c.metadata.description {
+                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
+                    _ => dict.set_item("description", &na)?,
+                }
+                match c.dual_variable {
+                    Some(v) => dict.set_item("dual_variable", v)?,
+                    None => dict.set_item("dual_variable", &na)?,
+                }
+                match c.removed_reason() {
+                    Some(r) => dict.set_item("removed_reason", r)?,
+                    None => dict.set_item("removed_reason", &na)?,
+                }
+                Ok(dict.into_any())
+            })
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    /// DataFrame of evaluated named functions
+    ///
+    /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+    #[getter]
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let pandas = py.import("pandas")?;
+        let na = pandas.getattr("NA")?;
+        let entries: Vec<_> = self
+            .inner
+            .evaluated_named_functions()
+            .values()
+            .map(|nf| {
+                let dict = PyDict::new(py);
+                dict.set_item("id", nf.id.into_inner())?;
+                dict.set_item("value", nf.evaluated_value())?;
+                let used_ids: Vec<u64> = nf
+                    .used_decision_variable_ids()
+                    .iter()
+                    .map(|id| id.into_inner())
+                    .collect();
+                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
+                match &nf.name {
+                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
+                    _ => dict.set_item("name", &na)?,
+                }
+                dict.set_item("subscripts", nf.subscripts.clone())?;
+                match &nf.description {
+                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
+                    _ => dict.set_item("description", &na)?,
+                }
+                for (key, value) in &nf.parameters {
+                    dict.set_item(format!("parameters.{key}"), value)?;
+                }
+                Ok(dict.into_any())
+            })
+            .collect::<PyResult<_>>()?;
+        let df = pandas.call_method1("DataFrame", (entries,))?;
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
+    }
+
+    fn __copy__(&self) -> Self {
+        self.clone()
+    }
+
+    fn __deepcopy__(&self, _memo: Bound<'_, PyAny>) -> Self {
+        self.clone()
     }
 
     /// Calculate total constraint violation using L1 norm (sum of absolute violations)

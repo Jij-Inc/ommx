@@ -287,14 +287,14 @@ class OMMXOpenJijSAAdapter(SamplerAdapter):
                 weights = {
                     p.id: self.penalty_weights[p.subscripts[0]] for p in pi.parameters
                 }
-                self.ommx_instance.raw = pi.with_parameters(weights)
+                self.ommx_instance = pi.with_parameters(weights)
             else:
                 if self.uniform_penalty_weight is None:
                     # If both are None, defaults to uniform_penalty_weight = 1.0
                     self.uniform_penalty_weight = 1.0
                 pi = self.ommx_instance.uniform_penalty_method()
                 weight = pi.parameters[0]
-                self.ommx_instance.raw = pi.with_parameters(
+                self.ommx_instance = pi.with_parameters(
                     {weight.id: self.uniform_penalty_weight}
                 )
 

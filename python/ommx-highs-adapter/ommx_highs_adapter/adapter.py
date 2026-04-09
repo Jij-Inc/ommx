@@ -182,8 +182,8 @@ class OMMXHighsAdapter(SolverAdapter):
             The solution containing:
             - Variable values in solution.state.entries
             - Objective value in solution.objective
-            - Constraint evaluations in solution.raw.evaluated_constraints
-            - Optimality status in solution.raw.optimality
+            - Constraint evaluations in solution.constraints
+            - Optimality status in solution.optimality
             - Dual variables (if available) in constraint.dual_variable
 
         Raises
@@ -346,7 +346,7 @@ class OMMXHighsAdapter(SolverAdapter):
 
         # set optimality
         if self.model.getModelStatus() == highspy.HighsModelStatus.kOptimal:
-            solution.raw.optimality = Solution.OPTIMAL
+            solution.optimality = Solution.OPTIMAL
 
         # dual variables
         solution_info = self.model.getSolution()

@@ -201,7 +201,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
         be set _only_ if `relax=True` was passed to the constructor. There is no
         way for this adapter to get relaxation information from Python-MIP
         directly. If relaxing the model separately after obtaining it with
-        `solver_input`, you must set `solution.raw.relaxation` yourself if you
+        `solver_input`, you must set `solution.relaxation` yourself if you
         care about this value.
 
         Examples
@@ -229,7 +229,7 @@ class OMMXPythonMIPAdapter(SolverAdapter):
             <OptimizationStatus.OPTIMAL: 0>
 
             >>> solution = adapter.decode(model)
-            >>> solution.raw.objective
+            >>> solution.objective
             42.0
 
         """

@@ -10,7 +10,7 @@ test_dir = Path(__file__).parent
 def test_example_mps():
     instance = ommx.mps.load_file(str(test_dir / "objsense_max.mps.gz"))
 
-    assert instance.raw.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
+    assert instance.sense == Instance.MAXIMIZE  # OBJSENSE field is specified
     dvars = instance.decision_variables
     dvars.sort(key=lambda x: x.name)
     constraints = instance.constraints
@@ -79,7 +79,7 @@ def test_output():
         sense=Instance.MAXIMIZE,
     )
 
-    instance.write_mps(test_out_file)
+    instance.save_mps(test_out_file)
     loaded = ommx.mps.load_file(test_out_file)
 
     # convert to a format easier to test.

@@ -2,11 +2,7 @@ import enum
 
 import numpy as np
 
-from ommx.v1 import Instance, DecisionVariable
-from ommx.v1.constraint_pb2 import Constraint, Equality
-from ommx.v1.function_pb2 import Function
-from ommx.v1.linear_pb2 import Linear
-from ommx.v1.solution_pb2 import State
+from ommx.v1 import Instance, DecisionVariable, Function, Constraint, Linear, State
 
 
 class DataType(enum.Enum):
@@ -109,28 +105,23 @@ class SingleFeasibleLPGenerator:
                 for i in range(len(self._x))
             ]
 
-        # define constraints
+        # define constraints using Rust types
         constraints = []
         for i in range(len(self._b)):
-            linear = Linear(
-                terms=[
-                    Linear.Term(id=j, coefficient=value)
-                    for j, value in enumerate(self._A[i])
-                ],
-                constant=-self._b[i],
-            )
-
+            # Build linear function: sum(A[i][j] * x[j]) - b[i] == 0
+            terms = {int(j): float(value) for j, value in enumerate(self._A[i])}
+            linear = Linear(terms=terms, constant=float(-self._b[i]))
             constraint = Constraint(
                 id=i,
-                equality=Equality.EQUALITY_EQUAL_TO_ZERO,
-                function=Function(constant=-self._b[i], linear=linear),
+                equality=Constraint.EQUAL_TO_ZERO,
+                function=Function(linear),
             )
             constraints.append(constraint)
 
         return Instance.from_components(
             description=Instance.Description(name="LPTest"),
             decision_variables=decision_variables,
-            objective=Function(constant=0),
+            objective=0,
             constraints=constraints,
             sense=Instance.MINIMIZE,
         )
@@ -144,4 +135,4 @@ class SingleFeasibleLPGenerator:
             >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
             >>> ommx_state = generator.get_v1_state()
         """
-        return State(entries={i: value for i, value in enumerate(self._x)})
+        return State(entries={i: float(value) for i, value in enumerate(self._x)})
