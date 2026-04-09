@@ -772,6 +772,7 @@ class Function:
         """
     @property
     def type_name(self) -> builtins.str: ...
+    def __iadd__(self, rhs: ToFunction) -> Function: ...
     def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
@@ -851,13 +852,6 @@ class Function:
         Reverse subtraction (lhs - self)
         """
     def add_assign(self, rhs: ToFunction) -> None: ...
-    def __iadd__(self, rhs: ToFunction) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
     def __mul__(self, rhs: ToFunction) -> Function:
         r"""
         Multiplication
@@ -2193,6 +2187,7 @@ class Linear:
     def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
     @typing.overload
     def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    def __iadd__(self, rhs: Linear) -> Linear: ...
     def __new__(
         cls,
         terms: typing.Mapping[builtins.int, builtins.float],
@@ -2218,14 +2213,6 @@ class Linear:
         Negation operator
         """
     def add_assign(self, rhs: Linear) -> None: ...
-    def __iadd__(self, rhs: Linear) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        This is the expected behavior per PyO3's design - see <https://github.com/PyO3/pyo3/issues/4605>
-        The stub file shows `-> None` but the actual Python behavior is correct (`x += y` keeps `x` as Linear).
-        """
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
@@ -2761,6 +2748,7 @@ class Polynomial:
         | Quadratic
         | Polynomial,
     ) -> Polynomial: ...
+    def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
     ) -> Polynomial: ...
@@ -2776,13 +2764,6 @@ class Polynomial:
         Negation operator
         """
     def add_assign(self, rhs: Polynomial) -> None: ...
-    def __iadd__(self, rhs: Polynomial) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
     def add_scalar(self, scalar: builtins.float) -> Polynomial: ...
     def add_linear(self, linear: Linear) -> Polynomial: ...
     def add_quadratic(self, quadratic: Quadratic) -> Polynomial: ...
@@ -2884,6 +2865,7 @@ class Quadratic:
     def __rmul__(
         self, lhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
     ) -> Polynomial: ...
+    def __iadd__(self, rhs: Quadratic) -> Quadratic: ...
     def __new__(
         cls,
         columns: typing.Sequence[builtins.int],
@@ -2903,13 +2885,6 @@ class Quadratic:
         Negation operator
         """
     def add_assign(self, rhs: Quadratic) -> None: ...
-    def __iadd__(self, rhs: Quadratic) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
     def add_scalar(self, scalar: builtins.float) -> Quadratic: ...
     def add_linear(self, linear: Linear) -> Quadratic: ...
     def mul_scalar(self, scalar: builtins.float) -> Quadratic: ...

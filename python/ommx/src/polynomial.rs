@@ -47,6 +47,8 @@ pyo3_stub_gen::inventory::submit! {
             def __rsub__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
             def __mul__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
             def __rmul__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+
+            def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
         "#
     }
 }
@@ -245,9 +247,7 @@ impl Polynomial {
     }
 
     /// In-place addition for += operator
-    ///
-    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-    /// See <https://github.com/PyO3/pyo3/issues/4605> for details.
+    #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Polynomial) {
         self.0 += &rhs.0;
     }

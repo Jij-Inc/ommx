@@ -130,6 +130,16 @@ pyo3_stub_gen::type_alias!(
         i64 | f64 | DecisionVariable | Parameter | Linear | Quadratic | Polynomial | Function
 );
 
+// Manual stub for __iadd__ (PyO3 returns () but Python returns self)
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Function:
+            def __iadd__(self, rhs: ToFunction) -> Function: ...
+        "#
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Function {
@@ -258,9 +268,7 @@ impl Function {
     }
 
     /// In-place addition for += operator
-    ///
-    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-    /// See <https://github.com/PyO3/pyo3/issues/4605> for details.
+    #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Function) {
         self.0 += &rhs.0;
     }

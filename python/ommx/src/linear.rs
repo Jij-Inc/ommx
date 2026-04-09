@@ -94,6 +94,7 @@ pyo3_stub_gen::inventory::submit! {
             @overload
             def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
 
+            def __iadd__(self, rhs: Linear) -> Linear: ...
         "#
     }
 }
@@ -408,10 +409,7 @@ impl Linear {
     }
 
     /// In-place addition for += operator
-    ///
-    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-    /// This is the expected behavior per PyO3's design - see <https://github.com/PyO3/pyo3/issues/4605>
-    /// The stub file shows `-> None` but the actual Python behavior is correct (`x += y` keeps `x` as Linear).
+    #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Linear) {
         self.0 += &rhs.0;
     }
