@@ -1,11 +1,7 @@
 use crate::{next_constraint_id, Constraint, Function, Linear, Polynomial, Quadratic};
 use anyhow::Result;
 use ommx::{LinearMonomial, Message, VariableID};
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyDict},
-    Bound, PyAny,
-};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Parameter in an optimization problem.
@@ -33,35 +29,6 @@ impl Parameter {
             LinearMonomial::Variable(VariableID::from(self.0.id)),
             ommx::coeff!(1.0),
         )
-    }
-
-    /// Convert to a dict for pandas DataFrame. Not exposed to Python.
-    ///
-    /// `na` should be `pandas.NA`, pre-fetched by the caller.
-    pub(crate) fn as_pandas_entry<'py>(
-        &self,
-        py: Python<'py>,
-        na: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-
-        dict.set_item("id", self.0.id)?;
-
-        match &self.0.name {
-            Some(name) if !name.is_empty() => dict.set_item("name", name)?,
-            _ => dict.set_item("name", na)?,
-        }
-        dict.set_item("subscripts", self.0.subscripts.clone())?;
-        match &self.0.description {
-            Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
-            _ => dict.set_item("description", na)?,
-        }
-
-        for (key, value) in &self.0.parameters {
-            dict.set_item(format!("parameters.{key}"), value)?;
-        }
-
-        Ok(dict)
     }
 }
 

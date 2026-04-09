@@ -4,11 +4,7 @@ use crate::{
 };
 use anyhow::Result;
 use ommx::{v1, ATol, LinearMonomial, VariableID};
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyDict},
-    Bound, PyAny,
-};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 
 /// Decision variable in an optimization problem.
@@ -39,53 +35,6 @@ impl DecisionVariable {
     /// Helper to create a Linear term from this decision variable with coefficient 1
     fn as_linear(&self) -> ommx::Linear {
         ommx::Linear::single_term(LinearMonomial::Variable(self.0.id()), ommx::coeff!(1.0))
-    }
-
-    /// Convert to a dict for pandas DataFrame. Not exposed to Python.
-    ///
-    /// `na` should be `pandas.NA`, pre-fetched by the caller.
-    pub(crate) fn as_pandas_entry<'py>(
-        &self,
-        py: Python<'py>,
-        na: &Bound<'py, PyAny>,
-    ) -> PyResult<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-
-        dict.set_item("id", self.id())?;
-
-        let kind: v1::decision_variable::Kind = self.0.kind().into();
-        let kind_str = match kind {
-            v1::decision_variable::Kind::Unspecified => "Unspecified",
-            v1::decision_variable::Kind::Binary => "Binary",
-            v1::decision_variable::Kind::Integer => "Integer",
-            v1::decision_variable::Kind::Continuous => "Continuous",
-            v1::decision_variable::Kind::SemiInteger => "SemiInteger",
-            v1::decision_variable::Kind::SemiContinuous => "SemiContinuous",
-            _ => "Unknown",
-        };
-        dict.set_item("kind", kind_str)?;
-        dict.set_item("lower", self.0.bound().lower())?;
-        dict.set_item("upper", self.0.bound().upper())?;
-
-        match &self.0.metadata.name {
-            Some(name) if !name.is_empty() => dict.set_item("name", name)?,
-            _ => dict.set_item("name", na)?,
-        }
-        dict.set_item("subscripts", self.0.metadata.subscripts.clone())?;
-        match &self.0.metadata.description {
-            Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
-            _ => dict.set_item("description", na)?,
-        }
-        match self.0.substituted_value() {
-            Some(v) => dict.set_item("substituted_value", v)?,
-            None => dict.set_item("substituted_value", na)?,
-        }
-
-        for (key, value) in &self.0.metadata.parameters {
-            dict.set_item(format!("parameters.{key}"), value)?;
-        }
-
-        Ok(dict)
     }
 }
 

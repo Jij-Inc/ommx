@@ -1,11 +1,7 @@
 use crate::{Equality, EvaluatedConstraint, Function, State};
 use fnv::FnvHashMap;
 use ommx::{ConstraintID, Evaluate};
-use pyo3::{
-    prelude::*,
-    types::{PyBytes, PyDict, PySet},
-    Bound, PyAny,
-};
+use pyo3::{prelude::*, types::PyBytes, Bound, PyAny};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -278,59 +274,6 @@ impl Constraint {
         self.clone()
     }
 
-    /// Internal method for pandas DataFrame conversion.
-    ///
-    /// Returns a dictionary with constraint information suitable for pandas DataFrame.
-    pub fn _as_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-
-        dict.set_item("id", self.0.id.into_inner())?;
-
-        // Convert equality to string representation matching Python's __str__
-        let equality_str = match self.0.equality {
-            ommx::Equality::EqualToZero => "=0",
-            ommx::Equality::LessThanOrEqualToZero => "<=0",
-        };
-        dict.set_item("equality", equality_str)?;
-
-        // Get function type name
-        let type_name = match &self.0.function {
-            ommx::Function::Zero => "Zero",
-            ommx::Function::Constant(_) => "Constant",
-            ommx::Function::Linear(_) => "Linear",
-            ommx::Function::Quadratic(_) => "Quadratic",
-            ommx::Function::Polynomial(_) => "Polynomial",
-        };
-        dict.set_item("type", type_name)?;
-
-        // Get used variable IDs as a set
-        let used_ids: Vec<u64> = self
-            .0
-            .function
-            .required_ids()
-            .iter()
-            .map(|id| id.into_inner())
-            .collect();
-        let used_ids_set = PySet::new(py, &used_ids)?;
-        dict.set_item("used_ids", used_ids_set)?;
-
-        // Name - use Python None for missing values (pandas NA equivalent)
-        match &self.0.name {
-            Some(n) => dict.set_item("name", n)?,
-            None => dict.set_item("name", py.None())?,
-        };
-
-        dict.set_item("subscripts", self.0.subscripts.clone())?;
-
-        // Description - use Python None for missing values
-        match &self.0.description {
-            Some(d) => dict.set_item("description", d)?,
-            None => dict.set_item("description", py.None())?,
-        };
-
-        Ok(dict)
-    }
-
     pub fn __repr__(&self) -> String {
         self.0.to_string()
     }
@@ -447,24 +390,6 @@ impl RemovedConstraint {
 
     pub fn to_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.0.to_bytes())
-    }
-
-    /// Internal method for pandas DataFrame conversion.
-    ///
-    /// Returns a dictionary with removed constraint information suitable for pandas DataFrame.
-    pub fn _as_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        // Start with the constraint's entry
-        let dict = Constraint(self.0.constraint.clone())._as_pandas_entry(py)?;
-
-        // Add removed reason
-        dict.set_item("removed_reason", &self.0.removed_reason)?;
-
-        // Add removed reason parameters as separate columns
-        for (key, value) in &self.0.removed_reason_parameters {
-            dict.set_item(format!("removed_reason.{}", key), value)?;
-        }
-
-        Ok(dict)
     }
 
     pub fn __repr__(&self) -> String {
