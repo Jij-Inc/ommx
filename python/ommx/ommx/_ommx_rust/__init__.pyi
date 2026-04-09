@@ -2124,6 +2124,50 @@ class Linear:
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @property
     def constant_term(self) -> builtins.float: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
     def __new__(
         cls,
         terms: typing.Mapping[builtins.int, builtins.float],
@@ -2147,31 +2191,6 @@ class Linear:
     def __neg__(self) -> Linear:
         r"""
         Negation operator
-        """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: supports int, float, DecisionVariable, Linear
-        Returns Linear when adding scalars or Linear, Quadratic otherwise
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
         """
     def add_assign(self, rhs: Linear) -> None: ...
     def __iadd__(self, rhs: Linear) -> None:
