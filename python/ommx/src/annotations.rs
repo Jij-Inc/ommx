@@ -185,26 +185,24 @@ macro_rules! impl_instance_annotations {
 
             // --- Datetime property (RFC3339 string ↔ Python datetime via dateutil) ---
 
-            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn created<'py>(
                 &self,
                 py: pyo3::Python<'py>,
-            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
+            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
                 let value = match self.annotations.get(concat!($namespace, ".created")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;
-                Ok(Some(dt))
+                Ok(Some(dt.cast_into()?))
             }
 
             #[setter]
             pub fn set_created(
                 &mut self,
-                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
-                value: &pyo3::Bound<'_, pyo3::PyAny>,
+                value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
                 self.annotations
@@ -378,26 +376,24 @@ macro_rules! impl_solution_annotations {
 
             // --- Datetime properties (RFC3339 string ↔ Python datetime via dateutil) ---
 
-            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn start<'py>(
                 &self,
                 py: pyo3::Python<'py>,
-            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
+            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
                 let value = match self.annotations.get(concat!($namespace, ".start")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;
-                Ok(Some(dt))
+                Ok(Some(dt.cast_into()?))
             }
 
             #[setter]
             pub fn set_start(
                 &mut self,
-                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
-                value: &pyo3::Bound<'_, pyo3::PyAny>,
+                value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
                 self.annotations
@@ -405,26 +401,24 @@ macro_rules! impl_solution_annotations {
                 Ok(())
             }
 
-            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn end<'py>(
                 &self,
                 py: pyo3::Python<'py>,
-            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::PyAny>>> {
+            ) -> pyo3::PyResult<Option<pyo3::Bound<'py, pyo3::types::PyDateTime>>> {
                 let value = match self.annotations.get(concat!($namespace, ".end")) {
                     Some(v) if !v.is_empty() => v,
                     _ => return Ok(None),
                 };
                 let dateutil = py.import("dateutil.parser")?;
                 let dt = dateutil.call_method1("isoparse", (value,))?;
-                Ok(Some(dt))
+                Ok(Some(dt.cast_into()?))
             }
 
             #[setter]
             pub fn set_end(
                 &mut self,
-                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
-                value: &pyo3::Bound<'_, pyo3::PyAny>,
+                value: &pyo3::Bound<'_, pyo3::types::PyDateTime>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
                 self.annotations
