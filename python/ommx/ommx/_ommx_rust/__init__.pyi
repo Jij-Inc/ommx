@@ -330,12 +330,6 @@ class Constraint:
         Add a parameter to the constraint
         Returns self for method chaining
         """
-    def _as_pandas_entry(self) -> dict:
-        r"""
-        Internal method for pandas DataFrame conversion.
-
-        Returns a dictionary with constraint information suitable for pandas DataFrame.
-        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> Constraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> Constraint: ...
@@ -2353,12 +2347,6 @@ class NamedFunction:
 
         Returns a Constraint where (other - self.function) <= 0.
         """
-    def _as_pandas_entry(self) -> dict:
-        r"""
-        Internal method for pandas DataFrame conversion.
-
-        Returns a dictionary with named function information suitable for pandas DataFrame.
-        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> NamedFunction: ...
     def __deepcopy__(self, _memo: typing.Any) -> NamedFunction: ...
@@ -2968,12 +2956,6 @@ class RemovedConstraint:
     @staticmethod
     def from_bytes(bytes: bytes) -> RemovedConstraint: ...
     def to_bytes(self) -> bytes: ...
-    def _as_pandas_entry(self) -> dict:
-        r"""
-        Internal method for pandas DataFrame conversion.
-
-        Returns a dictionary with removed constraint information suitable for pandas DataFrame.
-        """
     def __repr__(self) -> builtins.str: ...
     def __copy__(self) -> RemovedConstraint: ...
     def __deepcopy__(self, _memo: typing.Any) -> RemovedConstraint: ...
@@ -3203,9 +3185,6 @@ class SampleSet:
         DataFrame of decision variables with per-sample value columns.
         Static columns: id, kind, lower, upper, name, subscripts, description.
         Dynamic columns: one per sample_id (int) with the variable's value.
-
-        Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
-        This implementation uses integer column names for natural pandas indexing.
         """
     @property
     def constraints_df(self) -> pandas.DataFrame:
@@ -3220,9 +3199,6 @@ class SampleSet:
         DataFrame of named functions with per-sample value columns.
         Static columns: id, used_ids, name, subscripts, description, parameters.
         Dynamic columns: one per sample_id (int) with the function's evaluated value.
-
-        Note: The old Python wrapper used string column names for sample IDs.
-        This implementation uses integer column names for natural pandas indexing.
         """
     def add_user_annotation(
         self,

@@ -1,8 +1,11 @@
-use crate::Solution;
+use crate::{
+    pandas::{entries_to_dataframe, sorted_entries_to_dataframe, PyDataFrame, WithSampleIds},
+    Solution,
+};
 use anyhow::Result;
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyList, PySet, PyTuple},
+    types::{PyBytes, PyDict, PyTuple},
     Bound, PyResult, Python,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -469,14 +472,10 @@ impl SampleSet {
 
     /// Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
     /// Index is sample_id.
-
     #[getter]
-    pub fn summary<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
-        let pandas = py.import("pandas")?;
+    pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let feasible_map = self.inner.feasible();
+        let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
         let entries: Vec<_> = self
             .inner
             .objectives()
@@ -485,37 +484,32 @@ impl SampleSet {
                 let dict = PyDict::new(py);
                 dict.set_item("sample_id", sample_id.into_inner())?;
                 dict.set_item("objective", objective)?;
-                let is_feasible = feasible_map.get(sample_id).copied().unwrap_or(false);
-                dict.set_item("feasible", is_feasible)?;
+                dict.set_item(
+                    "feasible",
+                    feasible_map.get(sample_id).copied().unwrap_or(false),
+                )?;
                 Ok(dict.into_any())
             })
             .collect::<PyResult<_>>()?;
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
-        let sort_args = PyDict::new(py);
-        sort_args.set_item("by", vec!["feasible", "objective"])?;
-        sort_args.set_item("ascending", vec![false, ascending])?;
-        let sorted = df.call_method("sort_values", (), Some(&sort_args))?;
-        sorted
-            .call_method1("set_index", ("sample_id",))?
-            .cast_into()
-            .map_err(Into::into)
+        sorted_entries_to_dataframe(
+            py,
+            entries,
+            &["feasible", "objective"],
+            &[false, ascending],
+            "sample_id",
+        )
     }
 
     /// Summary DataFrame with per-constraint feasibility columns.
     /// Index is sample_id.
-
     #[getter]
     pub fn summary_with_constraints<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
-        let pandas = py.import("pandas")?;
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
         let feasible_map = self.inner.feasible();
         let constraints = self.inner.constraints();
+        let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
 
         // Build constraint labels
         let constraint_labels: Vec<(ommx::ConstraintID, String)> = constraints
@@ -549,11 +543,12 @@ impl SampleSet {
                 let dict = PyDict::new(py);
                 dict.set_item("sample_id", sample_id.into_inner())?;
                 dict.set_item("objective", objective)?;
-                let is_feasible = feasible_map.get(sample_id).copied().unwrap_or(false);
-                dict.set_item("feasible", is_feasible)?;
+                dict.set_item(
+                    "feasible",
+                    feasible_map.get(sample_id).copied().unwrap_or(false),
+                )?;
                 for (constraint_id, label) in &constraint_labels {
-                    let constraint = &constraints[constraint_id];
-                    let c_feasible = constraint
+                    let c_feasible = constraints[constraint_id]
                         .feasible()
                         .get(sample_id)
                         .copied()
@@ -563,194 +558,72 @@ impl SampleSet {
                 Ok(dict.into_any())
             })
             .collect::<PyResult<_>>()?;
-
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
-        let sort_args = PyDict::new(py);
-        sort_args.set_item("by", vec!["feasible", "objective"])?;
-        sort_args.set_item("ascending", vec![false, ascending])?;
-        let sorted = df.call_method("sort_values", (), Some(&sort_args))?;
-        sorted
-            .call_method1("set_index", ("sample_id",))?
-            .cast_into()
-            .map_err(Into::into)
+        sorted_entries_to_dataframe(
+            py,
+            entries,
+            &["feasible", "objective"],
+            &[false, ascending],
+            "sample_id",
+        )
     }
 
     /// DataFrame of decision variables with per-sample value columns.
     /// Static columns: id, kind, lower, upper, name, subscripts, description.
     /// Dynamic columns: one per sample_id (int) with the variable's value.
-    ///
-    /// Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
-    /// This implementation uses integer column names for natural pandas indexing.
-
     #[getter]
-    pub fn decision_variables_df<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let sample_ids: Vec<ommx::SampleID> = {
-            let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
-            ids.sort();
-            ids
-        };
-
-        let entries: Vec<_> = self
-            .inner
-            .decision_variables()
-            .values()
-            .map(|dv| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", dv.id().into_inner())?;
-                let kind_str = format!("{:?}", dv.kind());
-                dict.set_item("kind", kind_str)?;
-                dict.set_item("lower", dv.bound().lower())?;
-                dict.set_item("upper", dv.bound().upper())?;
-                dict.set_item("name", dv.metadata.name.as_deref())?;
-                let subs_list = PyList::new(py, dv.metadata.subscripts.iter())?;
-                dict.set_item("subscripts", subs_list)?;
-                dict.set_item("description", dv.metadata.description.as_deref())?;
-                for &sample_id in &sample_ids {
-                    let value = dv.samples().get(sample_id).ok().copied();
-                    dict.set_item(sample_id.into_inner(), value)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner
+                .decision_variables()
+                .values()
+                .map(|item| WithSampleIds {
+                    item,
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
     /// Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
-
     #[getter]
-    pub fn constraints_df<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let sample_ids: Vec<ommx::SampleID> = {
-            let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
-            ids.sort();
-            ids
-        };
-
-        let entries: Vec<_> = self
-            .inner
-            .constraints()
-            .values()
-            .map(|sc| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", sc.id().into_inner())?;
-                let eq_str = match sc.equality() {
-                    ommx::Equality::EqualToZero => "=0",
-                    ommx::Equality::LessThanOrEqualToZero => "<=0",
-                };
-
-                dict.set_item("equality", eq_str)?;
-                let used_ids: Vec<u64> = sc
-                    .used_decision_variable_ids()
-                    .iter()
-                    .map(|id| id.into_inner())
-                    .collect();
-                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
-                dict.set_item("name", sc.metadata.name.as_deref())?;
-                let subs_list = PyList::new(py, sc.metadata.subscripts.iter())?;
-                dict.set_item("subscripts", subs_list)?;
-                dict.set_item("description", sc.metadata.description.as_deref())?;
-                dict.set_item("removed_reason", sc.removed_reason().as_deref())?;
-                let rr_params: Vec<String> = sc
-                    .removed_reason_parameters()
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect();
-                dict.set_item("removed_reason_parameters", rr_params)?;
-                for &sample_id in &sample_ids {
-                    let value = sc.evaluated_values().get(sample_id).ok().copied();
-                    dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-                    let feas = sc.feasible().get(&sample_id).copied();
-                    dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner.constraints().values().map(|item| WithSampleIds {
+                item,
+                sample_ids: &sample_ids,
+            }),
+            "id",
+        )
     }
 
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
-    ///
-    /// Note: The old Python wrapper used string column names for sample IDs.
-    /// This implementation uses integer column names for natural pandas indexing.
-
     #[getter]
-    pub fn named_functions_df<'py>(
-        &self,
-        py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let sample_ids: Vec<ommx::SampleID> = {
-            let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
-            ids.sort();
-            ids
-        };
-
-        let entries: Vec<_> = self
-            .inner
-            .named_functions()
-            .values()
-            .map(|nf| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", nf.id().into_inner())?;
-                let used_ids: Vec<u64> = nf
-                    .used_decision_variable_ids()
-                    .iter()
-                    .map(|id| id.into_inner())
-                    .collect();
-                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
-                dict.set_item("name", nf.name.as_deref())?;
-                let subs_list = PyList::new(py, nf.subscripts.iter())?;
-                dict.set_item("subscripts", subs_list)?;
-                dict.set_item("description", nf.description.as_deref())?;
-                let params: Vec<String> = nf
-                    .parameters
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect();
-                dict.set_item("parameters", params)?;
-                for &sample_id in &sample_ids {
-                    let value = nf.evaluated_values().get(sample_id).ok().copied();
-                    dict.set_item(sample_id.into_inner(), value)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
+        let sample_ids = sorted_sample_ids(&self.inner);
+        entries_to_dataframe(
+            py,
+            self.inner
+                .named_functions()
+                .values()
+                .map(|item| WithSampleIds {
+                    item,
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
     }
+}
+
+fn sorted_sample_ids(inner: &ommx::SampleSet) -> Vec<ommx::SampleID> {
+    let mut ids: Vec<_> = inner.sample_ids().iter().copied().collect();
+    ids.sort();
+    ids
 }

@@ -1,10 +1,10 @@
-use crate::pandas::PyDataFrame;
+use crate::pandas::{entries_to_dataframe, PyDataFrame};
 use anyhow::Result;
 use pyo3::{
     exceptions::PyKeyError,
     exceptions::PyRuntimeError,
     prelude::*,
-    types::{PyBytes, PyDict, PySet, PyTuple},
+    types::{PyBytes, PyDict, PyTuple},
     Bound,
 };
 use std::collections::{BTreeSet, HashMap};
@@ -450,152 +450,25 @@ impl Solution {
     /// DataFrame of evaluated decision variables
     ///
     /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
-
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let na = pandas.getattr("NA")?;
-        let entries: Vec<_> = self
-            .inner
-            .decision_variables()
-            .values()
-            .map(|v| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", v.id().into_inner())?;
-                let kind_str = match v.kind() {
-                    ommx::Kind::Binary => "Binary",
-                    ommx::Kind::Integer => "Integer",
-                    ommx::Kind::Continuous => "Continuous",
-                    ommx::Kind::SemiInteger => "SemiInteger",
-                    ommx::Kind::SemiContinuous => "SemiContinuous",
-                };
-                dict.set_item("kind", kind_str)?;
-                dict.set_item("lower", v.bound().lower())?;
-                dict.set_item("upper", v.bound().upper())?;
-                match &v.metadata.name {
-                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
-                    _ => dict.set_item("name", &na)?,
-                }
-                dict.set_item("subscripts", v.metadata.subscripts.clone())?;
-                match &v.metadata.description {
-                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
-                    _ => dict.set_item("description", &na)?,
-                }
-                // EvaluatedDecisionVariable has no substituted_value field
-                dict.set_item("substituted_value", &na)?;
-                dict.set_item("value", *v.value())?;
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+        entries_to_dataframe(py, self.inner.decision_variables().values(), "id")
     }
 
     /// DataFrame of evaluated constraints
     ///
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
-
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let na = pandas.getattr("NA")?;
-        let entries: Vec<_> = self
-            .inner
-            .evaluated_constraints()
-            .values()
-            .map(|c| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", c.id().into_inner())?;
-                let equality_str = match c.equality() {
-                    ommx::Equality::EqualToZero => "=0",
-                    ommx::Equality::LessThanOrEqualToZero => "<=0",
-                };
-                dict.set_item("equality", equality_str)?;
-                dict.set_item("value", *c.evaluated_value())?;
-                let used_ids: Vec<u64> = c
-                    .used_decision_variable_ids()
-                    .iter()
-                    .map(|id| id.into_inner())
-                    .collect();
-                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
-                match &c.metadata.name {
-                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
-                    _ => dict.set_item("name", &na)?,
-                }
-                dict.set_item("subscripts", c.metadata.subscripts.clone())?;
-                match &c.metadata.description {
-                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
-                    _ => dict.set_item("description", &na)?,
-                }
-                match c.dual_variable {
-                    Some(v) => dict.set_item("dual_variable", v)?,
-                    None => dict.set_item("dual_variable", &na)?,
-                }
-                match c.removed_reason() {
-                    Some(r) => dict.set_item("removed_reason", r)?,
-                    None => dict.set_item("removed_reason", &na)?,
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+        entries_to_dataframe(py, self.inner.evaluated_constraints().values(), "id")
     }
 
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
-
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let pandas = py.import("pandas")?;
-        let na = pandas.getattr("NA")?;
-        let entries: Vec<_> = self
-            .inner
-            .evaluated_named_functions()
-            .values()
-            .map(|nf| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", nf.id.into_inner())?;
-                dict.set_item("value", nf.evaluated_value())?;
-                let used_ids: Vec<u64> = nf
-                    .used_decision_variable_ids()
-                    .iter()
-                    .map(|id| id.into_inner())
-                    .collect();
-                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
-                match &nf.name {
-                    Some(name) if !name.is_empty() => dict.set_item("name", name)?,
-                    _ => dict.set_item("name", &na)?,
-                }
-                dict.set_item("subscripts", nf.subscripts.clone())?;
-                match &nf.description {
-                    Some(desc) if !desc.is_empty() => dict.set_item("description", desc)?,
-                    _ => dict.set_item("description", &na)?,
-                }
-                for (key, value) in &nf.parameters {
-                    dict.set_item(format!("parameters.{key}"), value)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        let df = pandas.call_method1("DataFrame", (entries,))?;
-        if df.getattr("empty")?.extract::<bool>()? {
-            return df.cast_into().map_err(Into::into);
-        }
-        df.call_method1("set_index", ("id",))?
-            .cast_into()
-            .map_err(Into::into)
+        entries_to_dataframe(py, self.inner.evaluated_named_functions().values(), "id")
     }
 
     fn __copy__(&self) -> Self {
