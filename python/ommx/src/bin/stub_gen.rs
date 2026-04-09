@@ -9,6 +9,7 @@ fn main() -> Result<()> {
     Command::new("ruff")
         .arg("format")
         .arg(root.join("ommx/_ommx_rust/__init__.pyi"))
+        .arg(root.join("ommx/v1/__init__.py"))
         .status()?;
     Ok(())
 }
