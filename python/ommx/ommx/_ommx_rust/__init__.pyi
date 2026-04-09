@@ -909,7 +909,9 @@ class Instance:
         to modify annotations.
         """
     @annotations.setter
-    def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
+    def annotations(
+        self, value: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     @property
     def title(self) -> typing.Optional[builtins.str]: ...
     @title.setter
@@ -925,7 +927,7 @@ class Instance:
     @property
     def authors(self) -> builtins.list[builtins.str]: ...
     @authors.setter
-    def authors(self, value: builtins.list[builtins.str]) -> None: ...
+    def authors(self, value: typing.Sequence[builtins.str]) -> None: ...
     @property
     def num_variables(self) -> typing.Optional[builtins.int]: ...
     @num_variables.setter
@@ -943,7 +945,7 @@ class Instance:
     @property
     def objective(self) -> Function: ...
     @objective.setter
-    def objective(self, value: Function) -> None: ...
+    def objective(self, value: ToFunction) -> None: ...
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
@@ -1581,7 +1583,9 @@ class ParametricInstance:
         to modify annotations.
         """
     @annotations.setter
-    def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
+    def annotations(
+        self, value: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     @property
     def title(self) -> typing.Optional[builtins.str]: ...
     @title.setter
@@ -1597,7 +1601,7 @@ class ParametricInstance:
     @property
     def authors(self) -> builtins.list[builtins.str]: ...
     @authors.setter
-    def authors(self, value: builtins.list[builtins.str]) -> None: ...
+    def authors(self, value: typing.Sequence[builtins.str]) -> None: ...
     @property
     def num_variables(self) -> typing.Optional[builtins.int]: ...
     @num_variables.setter
@@ -2029,7 +2033,9 @@ class SampleSet:
         to modify annotations.
         """
     @annotations.setter
-    def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
+    def annotations(
+        self, value: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     @property
     def instance_digest(self) -> typing.Optional[builtins.str]: ...
     @instance_digest.setter
@@ -2428,7 +2434,9 @@ class Solution:
         to modify annotations.
         """
     @annotations.setter
-    def annotations(self, value: builtins.dict[builtins.str, builtins.str]) -> None: ...
+    def annotations(
+        self, value: typing.Mapping[builtins.str, builtins.str]
+    ) -> None: ...
     @property
     def instance_digest(self) -> typing.Optional[builtins.str]: ...
     @instance_digest.setter
@@ -2617,6 +2625,16 @@ class Solution:
         r"""
         Get a specific evaluated decision variable by ID
         """
+    def get_constraint_value(self, constraint_id: builtins.int) -> builtins.float:
+        r"""
+        Get the evaluated value of a specific constraint by ID
+        """
+    def get_dual_variable(
+        self, constraint_id: builtins.int
+    ) -> typing.Optional[builtins.float]:
+        r"""
+        Get the dual variable value for a specific constraint by ID
+        """
     def get_constraint_by_id(self, constraint_id: builtins.int) -> EvaluatedConstraint:
         r"""
         Get a specific evaluated constraint by ID
@@ -2676,7 +2694,7 @@ class State:
     @property
     def entries(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @entries.setter
-    def entries(self, value: builtins.dict[builtins.int, builtins.float]) -> None: ...
+    def entries(self, value: typing.Mapping[builtins.int, builtins.float]) -> None: ...
     def __new__(cls, entries: ToState) -> State: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> State: ...
