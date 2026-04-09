@@ -1,3 +1,4 @@
+use crate::pandas::PyDataFrame;
 use crate::Solution;
 use anyhow::Result;
 use pyo3::{
@@ -469,9 +470,12 @@ impl SampleSet {
 
     /// Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
     /// Index is sample_id.
-    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
+
     #[getter]
-    pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
+    pub fn summary<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let feasible_map = self.inner.feasible();
         let entries: Vec<_> = self
@@ -489,24 +493,27 @@ impl SampleSet {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
         let sort_args = PyDict::new(py);
         sort_args.set_item("by", vec!["feasible", "objective"])?;
         sort_args.set_item("ascending", vec![false, ascending])?;
         let sorted = df.call_method("sort_values", (), Some(&sort_args))?;
-        sorted.call_method1("set_index", ("sample_id",))
+        sorted
+            .call_method1("set_index", ("sample_id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// Summary DataFrame with per-constraint feasibility columns.
     /// Index is sample_id.
-    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
+
     #[getter]
     pub fn summary_with_constraints<'py>(
         &self,
         py: Python<'py>,
-    ) -> PyResult<pyo3::Bound<'py, PyAny>> {
+    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let feasible_map = self.inner.feasible();
         let constraints = self.inner.constraints();
@@ -560,14 +567,17 @@ impl SampleSet {
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
         let ascending = matches!(self.inner.sense(), ommx::Sense::Minimize);
         let sort_args = PyDict::new(py);
         sort_args.set_item("by", vec!["feasible", "objective"])?;
         sort_args.set_item("ascending", vec![false, ascending])?;
         let sorted = df.call_method("sort_values", (), Some(&sort_args))?;
-        sorted.call_method1("set_index", ("sample_id",))
+        sorted
+            .call_method1("set_index", ("sample_id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of decision variables with per-sample value columns.
@@ -576,9 +586,12 @@ impl SampleSet {
     ///
     /// Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
     /// This implementation uses integer column names for natural pandas indexing.
-    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
+
     #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
+    pub fn decision_variables_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let sample_ids: Vec<ommx::SampleID> = {
             let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
@@ -611,17 +624,22 @@ impl SampleSet {
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
     /// Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
-    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
+
     #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
+    pub fn constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let sample_ids: Vec<ommx::SampleID> = {
             let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
@@ -671,9 +689,11 @@ impl SampleSet {
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of named functions with per-sample value columns.
@@ -682,9 +702,12 @@ impl SampleSet {
     ///
     /// Note: The old Python wrapper used string column names for sample IDs.
     /// This implementation uses integer column names for natural pandas indexing.
-    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
+
     #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
+    pub fn named_functions_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<pyo3::Bound<'py, crate::pandas::PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let sample_ids: Vec<ommx::SampleID> = {
             let mut ids: Vec<_> = self.inner.sample_ids().iter().copied().collect();
@@ -725,8 +748,10 @@ impl SampleSet {
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 }

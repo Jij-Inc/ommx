@@ -16,6 +16,7 @@ mod function;
 mod instance;
 mod linear;
 mod named_function;
+mod pandas;
 mod parameter;
 mod parameters;
 mod parametric_instance;
