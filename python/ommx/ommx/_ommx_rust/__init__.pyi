@@ -52,6 +52,7 @@ __all__ = [
     "Sos1",
     "State",
     "ToFunction",
+    "ToSamples",
     "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
@@ -77,6 +78,7 @@ ToFunction: TypeAlias = (
     | Polynomial
     | Function
 )
+ToSamples: TypeAlias = State | Samples
 ToState: TypeAlias = (
     State
     | collections.abc.Mapping[int, float]
@@ -1490,7 +1492,7 @@ class Instance:
         ```
         """
     def evaluate_samples(
-        self, samples: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, samples: ToSamples, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
     def random_state(self, rng: Rng) -> State:
         r"""
@@ -3494,7 +3496,10 @@ class SampledNamedFunction:
 
 @typing.final
 class Samples:
-    def __new__(cls, entries: typing.Any) -> Samples: ...
+    r"""
+    Collection of State samples
+    """
+    def __new__(cls, entries: ToSamples) -> Samples: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> Samples: ...
     def to_bytes(self) -> bytes: ...

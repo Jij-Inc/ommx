@@ -728,17 +728,7 @@ impl Instance {
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
-    pub fn evaluate_samples(
-        &self,
-        samples: Bound<'_, PyAny>,
-        atol: Option<f64>,
-    ) -> Result<SampleSet> {
-        // Accept Samples object or anything Samples.__new__ can handle (dict, list, etc.)
-        let samples: Samples = if let Ok(s) = samples.extract::<Samples>() {
-            s
-        } else {
-            Samples::new(samples)?
-        };
+    pub fn evaluate_samples(&self, samples: Samples, atol: Option<f64>) -> Result<SampleSet> {
         let v1_samples: ommx::v1::Samples = samples.0.into();
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
