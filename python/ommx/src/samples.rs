@@ -121,7 +121,7 @@ impl From<ommx::v1::State> for Samples {
 
 fn type_error() -> PyErr {
     PyTypeError::new_err(
-        "entries must be a State, Samples, Mapping[int, float], Mapping[int, State], or Iterable[State]",
+        "entries must be a State, Samples, Mapping[int, float], Mapping[int, ToState], or Iterable[ToState]",
     )
 }
 
