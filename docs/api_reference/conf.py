@@ -25,11 +25,13 @@ release = version
 # -- General configuration ---------------------------------------------------
 
 extensions = [
+    "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx_rtd_theme",
     "sphinx_fontawesome",
     "myst_parser",
+    "autoapi.extension",
     "pyo3_stub_gen_ext",
 ]
 source_suffix = {
@@ -51,6 +53,25 @@ html_static_path = []
 # Display class names only, without module prefix
 add_module_names = False
 python_use_unqualified_type_names = True
+
+# -- AutoAPI settings (adapters only) ----------------------------------------
+
+autoapi_dirs = [
+    python_root / "ommx-python-mip-adapter",
+    python_root / "ommx-pyscipopt-adapter",
+    python_root / "ommx-highs-adapter",
+    python_root / "ommx-openjij-adapter",
+]
+autoapi_options = [
+    "members",
+    "inherited-members",
+    "undoc-members",
+    "show-module-summary",
+]
+autoapi_member_order = "groupwise"
+autoapi_file_patterns = ["*.pyi", "*.py"]
+autoapi_ignore = ["**/tests/**", "**/conftest.py"]
+autoapi_add_toctree_entry = False
 
 # -- Napoleon Configuration --------------------------------------------------
 

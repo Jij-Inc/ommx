@@ -5,6 +5,7 @@ description = "OMMX Python API Reference Documentation"
 requires-python = ">=3.12, <3.14"
 dependencies = [
   "myst-parser>=3.0.1",
+  "sphinx-autoapi>=3.5.0",
   "sphinx-fontawesome>=0.0.6",
   "sphinx-rtd-theme>=3.0.2",
   "sphinx>=7.4.7",
