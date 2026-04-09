@@ -28,7 +28,6 @@ requires-python = ">=3.10"
 dependencies = [
   "numpy>=1.23.0, <3.0.0",
   "pandas>=2.0.0, <3.0.0",
-  "protobuf>=5.26.1, <6.0.0",
   "pyarrow>=16.0.0, <23.0.0",
   "python-dateutil>=2.9.0, <3.0.0",
   "typing-extensions >= 4.12.2, < 5.0.0",
@@ -51,9 +50,6 @@ pyodide-version = "0.29.3"
 environment = { RUSTUP_TOOLCHAIN = "nightly-2026-01-01" }
 before-build = "rustup toolchain install nightly-2026-01-01 && rustup target add wasm32-unknown-emscripten --toolchain nightly-2026-01-01"
 config-settings = { build-args = "--no-default-features" }
-
-[tool.ruff.lint]
-per-file-ignores = { "*_pb2.py" = ["ALL"] }
 
 [tool.uv]
 cache-keys = [
