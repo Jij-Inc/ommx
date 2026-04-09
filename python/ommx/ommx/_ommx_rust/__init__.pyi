@@ -1588,10 +1588,7 @@ class Instance:
         ```
         """
     def relax_constraint(
-        self,
-        constraint_id: builtins.int,
-        reason: builtins.str,
-        **parameters: typing.Any,
+        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
     ) -> None:
         r"""
         Remove a constraint from the instance.

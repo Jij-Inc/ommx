@@ -905,7 +905,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         reason: String,
-        parameters: Option<HashMap<String, String>>,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> Result<()> {
         self.inner.relax_constraint(
             constraint_id.into(),
