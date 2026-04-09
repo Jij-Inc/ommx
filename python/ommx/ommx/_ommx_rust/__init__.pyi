@@ -83,7 +83,7 @@ ToSamples: TypeAlias = (
     | Samples
     | collections.abc.Mapping[int, float]
     | collections.abc.Mapping[int, ToState]
-    | collections.abc.Sequence[ToState]
+    | collections.abc.Iterable[ToState]
 )
 ToState: TypeAlias = (
     State

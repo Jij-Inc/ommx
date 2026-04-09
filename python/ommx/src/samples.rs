@@ -40,7 +40,7 @@ impl pyo3_stub_gen::PyStubType for Samples {
     }
 }
 
-// FromPyObject: accepts Samples, State, dict[int, float], dict[int, State], Iterable[State]
+// FromPyObject: accepts Samples, State, Mapping[int, float], Mapping[int, ToState], Iterable[ToState]
 impl<'py> FromPyObject<'_, 'py> for Samples {
     type Error = PyErr;
     fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
@@ -88,29 +88,29 @@ impl pyo3_stub_gen::runtime::PyRuntimeType for PyMappingIntToState {
     }
 }
 
-/// collections.abc.Sequence[ToState]
-enum PySequenceToState {}
-impl pyo3_stub_gen::PyStubType for PySequenceToState {
+/// collections.abc.Iterable[ToState]
+enum PyIterableToState {}
+impl pyo3_stub_gen::PyStubType for PyIterableToState {
     fn type_output() -> pyo3_stub_gen::TypeInfo {
         pyo3_stub_gen::TypeInfo {
             import: ["collections.abc".into()].into(),
-            name: "collections.abc.Sequence[ToState]".into(),
+            name: "collections.abc.Iterable[ToState]".into(),
             source_module: None,
             type_refs: Default::default(),
         }
     }
 }
-impl pyo3_stub_gen::runtime::PyRuntimeType for PySequenceToState {
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyIterableToState {
     fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
-        py.import("collections.abc")?.getattr("Sequence")
+        py.import("collections.abc")?.getattr("Iterable")
     }
 }
 
-// Type alias: ToSamples = State | Samples | Mapping[int, float] | Mapping[int, ToState] | Sequence[ToState]
+// Type alias: ToSamples = State | Samples | Mapping[int, float] | Mapping[int, ToState] | Iterable[ToState]
 pyo3_stub_gen::type_alias!(
     "ommx._ommx_rust",
     ToSamples =
-        crate::State | Samples | PyMappingIntFloat | PyMappingIntToState | PySequenceToState
+        crate::State | Samples | PyMappingIntFloat | PyMappingIntToState | PyIterableToState
 );
 
 impl From<ommx::v1::State> for Samples {
@@ -120,7 +120,9 @@ impl From<ommx::v1::State> for Samples {
 }
 
 fn type_error() -> PyErr {
-    PyTypeError::new_err("entries must be a State, dict[int, State], or iterable[State]")
+    PyTypeError::new_err(
+        "entries must be a State, Samples, Mapping[int, float], Mapping[int, State], or Iterable[State]",
+    )
 }
 
 fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
