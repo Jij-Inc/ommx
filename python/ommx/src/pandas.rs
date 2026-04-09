@@ -446,7 +446,11 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
             &sc.metadata.subscripts,
             sc.metadata.description.as_deref(),
         )?;
-        dict.set_item("removed_reason", sc.removed_reason().as_deref())?;
+        let na = get_na(py)?;
+        match sc.removed_reason().as_deref() {
+            Some(r) => dict.set_item("removed_reason", r)?,
+            None => dict.set_item("removed_reason", &na)?,
+        }
         let rr_params: Vec<String> = sc
             .removed_reason_parameters()
             .iter()
