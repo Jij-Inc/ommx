@@ -1,4 +1,3 @@
-use crate::pandas::PyDataFrame;
 use crate::Solution;
 use anyhow::Result;
 use pyo3::{
