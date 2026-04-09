@@ -32,7 +32,6 @@ python/**/*.so
 
 # JupyterBook, Sphinx
 _build/
-docs/api_reference/api/
 
 # Protobuf document
 proto/protobuf.html
