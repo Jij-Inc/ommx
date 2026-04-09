@@ -140,41 +140,33 @@ impl NamedFunction {
     // These return Py<PyAny> to allow NotImplemented to propagate for reflected operations
 
     /// Addition: returns self.function + other
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __add__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.function().py_add(py, other)
+    pub fn __add__(&self, other: Function) -> Function {
+        self.function().__add__(other)
     }
 
     /// Reverse addition: returns other + self.function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __radd__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.function().py_add(py, other)
+    pub fn __radd__(&self, other: Function) -> Function {
+        self.function().__add__(other)
     }
 
     /// Subtraction: returns self.function - other
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __sub__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.function().py_sub(py, other)
+    pub fn __sub__(&self, other: Function) -> Function {
+        self.function().__sub__(other)
     }
 
     /// Reverse subtraction: returns other - self.function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __rsub__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // other - self = -self + other
-        let neg_self = self.__neg__();
-        neg_self.py_add(py, other)
+    pub fn __rsub__(&self, other: Function) -> Function {
+        Function(&other.0 - &self.0.function)
     }
 
     /// Multiplication: returns self.function * other
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __mul__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.function().py_mul(py, other)
+    pub fn __mul__(&self, other: Function) -> Function {
+        self.function().__mul__(other)
     }
 
     /// Reverse multiplication: returns other * self.function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __rmul__(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.function().py_mul(py, other)
+    pub fn __rmul__(&self, other: Function) -> Function {
+        self.function().__mul__(other)
     }
 
     /// Negation: returns -self.function

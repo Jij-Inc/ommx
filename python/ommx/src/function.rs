@@ -233,43 +233,24 @@ impl Function {
         Function(-self.0.clone())
     }
 
-    /// Addition: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    #[pyo3(name = "__add__")]
-    pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        match rhs.extract::<Function>() {
-            Ok(f) => Ok(Function(&self.0 + &f.0)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()),
-            Err(_) => Ok(py.NotImplemented().into_pyobject(py)?.into_any().unbind()),
-        }
+    /// Addition
+    pub fn __add__(&self, rhs: Function) -> Function {
+        Function(&self.0 + &rhs.0)
     }
 
     /// Reverse addition (lhs + self)
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.py_add(py, lhs) // Addition is commutative
+    pub fn __radd__(&self, lhs: Function) -> Function {
+        Function(&self.0 + &lhs.0)
     }
 
-    /// Subtraction: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    #[pyo3(name = "__sub__")]
-    pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        match rhs.extract::<Function>() {
-            Ok(f) => Ok(Function(&self.0 - &f.0)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()),
-            Err(_) => Ok(py.NotImplemented().into_pyobject(py)?.into_any().unbind()),
-        }
+    /// Subtraction
+    pub fn __sub__(&self, rhs: Function) -> Function {
+        Function(&self.0 - &rhs.0)
     }
 
     /// Reverse subtraction (lhs - self)
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // lhs - self = -self + lhs
-        self.__neg__().py_add(py, lhs)
+    pub fn __rsub__(&self, lhs: Function) -> Function {
+        Function(&lhs.0 - &self.0)
     }
 
     pub fn add_assign(&mut self, rhs: &Function) {
@@ -284,23 +265,14 @@ impl Function {
         self.0 += &rhs.0;
     }
 
-    /// Multiplication: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    #[pyo3(name = "__mul__")]
-    pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        match rhs.extract::<Function>() {
-            Ok(f) => Ok(Function(&self.0 * &f.0)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind()),
-            Err(_) => Ok(py.NotImplemented().into_pyobject(py)?.into_any().unbind()),
-        }
+    /// Multiplication
+    pub fn __mul__(&self, rhs: Function) -> Function {
+        Function(&self.0 * &rhs.0)
     }
 
     /// Reverse multiplication (lhs * self)
-    #[gen_stub(override_return_type(type_repr = "Function"))]
-    pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        self.py_mul(py, lhs) // Multiplication is commutative
+    pub fn __rmul__(&self, lhs: Function) -> Function {
+        Function(&self.0 * &lhs.0)
     }
 
     pub fn add_scalar(&self, scalar: f64) -> Result<Function> {

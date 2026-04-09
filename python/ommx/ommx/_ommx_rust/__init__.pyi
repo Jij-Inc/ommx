@@ -826,19 +826,19 @@ class Function:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> Function:
+    def __add__(self, rhs: ToFunction) -> Function:
         r"""
-        Addition: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
+        Addition
         """
-    def __radd__(self, lhs: typing.Any) -> Function:
+    def __radd__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse addition (lhs + self)
         """
-    def __sub__(self, rhs: typing.Any) -> Function:
+    def __sub__(self, rhs: ToFunction) -> Function:
         r"""
-        Subtraction: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
+        Subtraction
         """
-    def __rsub__(self, lhs: typing.Any) -> Function:
+    def __rsub__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse subtraction (lhs - self)
         """
@@ -850,11 +850,11 @@ class Function:
         Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
         See <https://github.com/PyO3/pyo3/issues/4605> for details.
         """
-    def __mul__(self, rhs: typing.Any) -> Function:
+    def __mul__(self, rhs: ToFunction) -> Function:
         r"""
-        Multiplication: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
+        Multiplication
         """
-    def __rmul__(self, lhs: typing.Any) -> Function:
+    def __rmul__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse multiplication (lhs * self)
         """
@@ -2314,27 +2314,27 @@ class NamedFunction:
         Returns:
             Self (modified in-place) for method chaining
         """
-    def __add__(self, other: typing.Any) -> Function:
+    def __add__(self, other: ToFunction) -> Function:
         r"""
         Addition: returns self.function + other
         """
-    def __radd__(self, other: typing.Any) -> Function:
+    def __radd__(self, other: ToFunction) -> Function:
         r"""
         Reverse addition: returns other + self.function
         """
-    def __sub__(self, other: typing.Any) -> Function:
+    def __sub__(self, other: ToFunction) -> Function:
         r"""
         Subtraction: returns self.function - other
         """
-    def __rsub__(self, other: typing.Any) -> Function:
+    def __rsub__(self, other: ToFunction) -> Function:
         r"""
         Reverse subtraction: returns other - self.function
         """
-    def __mul__(self, other: typing.Any) -> Function:
+    def __mul__(self, other: ToFunction) -> Function:
         r"""
         Multiplication: returns self.function * other
         """
-    def __rmul__(self, other: typing.Any) -> Function:
+    def __rmul__(self, other: ToFunction) -> Function:
         r"""
         Reverse multiplication: returns other * self.function
         """
