@@ -3112,7 +3112,10 @@ class SampleSet:
         r"""
         DataFrame of decision variables with per-sample value columns.
         Static columns: id, kind, lower, upper, name, subscripts, description.
-        Dynamic columns: one per sample_id with the variable's value.
+        Dynamic columns: one per sample_id (int) with the variable's value.
+
+        Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
+        This implementation uses integer column names for natural pandas indexing.
         """
     @property
     def constraints_df(self) -> typing.Any:
@@ -3126,7 +3129,10 @@ class SampleSet:
         r"""
         DataFrame of named functions with per-sample value columns.
         Static columns: id, used_ids, name, subscripts, description, parameters.
-        Dynamic columns: one per sample_id with the function's evaluated value.
+        Dynamic columns: one per sample_id (int) with the function's evaluated value.
+
+        Note: The old Python wrapper used string column names for sample IDs.
+        This implementation uses integer column names for natural pandas indexing.
         """
     def add_user_annotation(
         self,
