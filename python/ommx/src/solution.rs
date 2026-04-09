@@ -96,7 +96,7 @@ impl Solution {
         self.inner.feasible()
     }
 
-    // Get the optimization sense (minimize or maximize)
+    /// Get the optimization sense (minimize or maximize)
     #[getter]
     pub fn sense(&self) -> Result<crate::Sense> {
         let sense = (*self.inner.sense()).ok_or_else(|| {
@@ -197,7 +197,6 @@ impl Solution {
     /// ...     constraints=[],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// ```python
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> sorted(solution.decision_variable_names)
     /// ['x', 'y']
@@ -237,7 +236,6 @@ impl Solution {
     /// ...     constraints=[sum(x) == 1],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// ```python
     /// >>> solution = instance.evaluate({i: 1 for i in range(3)})
     /// >>> solution.extract_decision_variables("x")
     /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
@@ -276,7 +274,6 @@ impl Solution {
     /// ...     constraints=[],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// ```python
     /// >>> solution = instance.evaluate({i: 1 for i in range(5)})
     /// >>> all_vars = solution.extract_all_decision_variables()
     /// >>> all_vars["x"]
@@ -311,7 +308,6 @@ impl Solution {
     /// >>> x = [DecisionVariable.binary(i) for i in range(3)]
     /// >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
     /// >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
-    /// ```python
     /// >>> instance = Instance.from_components(
     /// ...     decision_variables=x,
     /// ...     objective=sum(x),

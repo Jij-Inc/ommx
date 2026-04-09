@@ -228,7 +228,7 @@ impl Instance {
             .collect()
     }
 
-    /// List of all decision variables in the instance sorted by their IDs.
+    /// List of all constraints in the instance sorted by their IDs.
     #[getter]
     pub fn constraints(&self) -> Vec<Constraint> {
         self.inner

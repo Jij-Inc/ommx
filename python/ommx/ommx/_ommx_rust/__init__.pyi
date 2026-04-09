@@ -1011,7 +1011,7 @@ class Instance:
     @property
     def constraints(self) -> builtins.list[Constraint]:
         r"""
-        List of all decision variables in the instance sorted by their IDs.
+        List of all constraints in the instance sorted by their IDs.
         """
     @property
     def removed_constraints(self) -> builtins.list[RemovedConstraint]:
@@ -3085,7 +3085,6 @@ class SampleSet:
         ...     constraints=[],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        ```python
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> sorted(sample_set.decision_variable_names)
         ['x', 'y']
@@ -3193,7 +3192,6 @@ class SampleSet:
         ...     constraints=[],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        ```python
         >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
         >>> all_vars = sample_set.extract_all_decision_variables(0)
         >>> all_vars["x"]
@@ -3500,7 +3498,10 @@ class Solution:
         Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
     @property
-    def sense(self) -> Sense: ...
+    def sense(self) -> Sense:
+        r"""
+        Get the optimization sense (minimize or maximize)
+        """
     @property
     def optimality(self) -> Optimality:
         r"""
@@ -3559,7 +3560,6 @@ class Solution:
         ...     constraints=[],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        ```python
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> sorted(solution.decision_variable_names)
         ['x', 'y']
@@ -3635,7 +3635,6 @@ class Solution:
         ...     constraints=[sum(x) == 1],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        ```python
         >>> solution = instance.evaluate({i: 1 for i in range(3)})
         >>> solution.extract_decision_variables("x")
         {(0,): 1.0, (1,): 1.0, (2,): 1.0}
@@ -3664,7 +3663,6 @@ class Solution:
         ...     constraints=[],
         ...     sense=Instance.MAXIMIZE,
         ... )
-        ```python
         >>> solution = instance.evaluate({i: 1 for i in range(5)})
         >>> all_vars = solution.extract_all_decision_variables()
         >>> all_vars["x"]
@@ -3686,7 +3684,6 @@ class Solution:
         >>> x = [DecisionVariable.binary(i) for i in range(3)]
         >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
         >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
-        ```python
         >>> instance = Instance.from_components(
         ...     decision_variables=x,
         ...     objective=sum(x),

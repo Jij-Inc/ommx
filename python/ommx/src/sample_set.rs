@@ -279,7 +279,6 @@ impl SampleSet {
     /// ...     constraints=[],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// ```python
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
     /// >>> sorted(sample_set.decision_variable_names)
     /// ['x', 'y']
@@ -334,7 +333,6 @@ impl SampleSet {
     /// ...     constraints=[],
     /// ...     sense=Instance.MAXIMIZE,
     /// ... )
-    /// ```python
     /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
     /// >>> all_vars = sample_set.extract_all_decision_variables(0)
     /// >>> all_vars["x"]
@@ -605,9 +603,10 @@ impl SampleSet {
             .collect::<PyResult<_>>()?;
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
-        let set_index_args = PyDict::new(py);
-        set_index_args.set_item("inplace", false)?;
-        df.call_method("set_index", ("id",), Some(&set_index_args))
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
@@ -629,7 +628,11 @@ impl SampleSet {
             .map(|sc| {
                 let dict = PyDict::new(py);
                 dict.set_item("id", sc.id().into_inner())?;
-                let eq_str = format!("{:?}", sc.equality());
+                let eq_str = match sc.equality() {
+                    ommx::Equality::EqualToZero => "=0",
+                    ommx::Equality::LessThanOrEqualToZero => "<=0",
+                };
+
                 dict.set_item("equality", eq_str)?;
                 let used_ids: Vec<u64> = sc
                     .used_decision_variable_ids()
@@ -659,9 +662,10 @@ impl SampleSet {
             .collect::<PyResult<_>>()?;
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
-        let set_index_args = PyDict::new(py);
-        set_index_args.set_item("inplace", false)?;
-        df.call_method("set_index", ("id",), Some(&set_index_args))
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
     }
 
     /// DataFrame of named functions with per-sample value columns.
@@ -708,8 +712,9 @@ impl SampleSet {
             .collect::<PyResult<_>>()?;
 
         let df = pandas.call_method1("DataFrame", (entries,))?;
-        let set_index_args = PyDict::new(py);
-        set_index_args.set_item("inplace", false)?;
-        df.call_method("set_index", ("id",), Some(&set_index_args))
+        if df.getattr("empty")?.extract::<bool>()? {
+            return Ok(df);
+        }
+        df.call_method1("set_index", ("id",))
     }
 }
