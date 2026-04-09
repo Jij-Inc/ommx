@@ -1,5 +1,5 @@
 use crate::{
-    extract_to_function, next_constraint_id, Constraint, Linear, Parameter, Polynomial, Quadratic,
+    next_constraint_id, Constraint, Function, Linear, Parameter, Polynomial, Quadratic,
     VariableBound,
 };
 use anyhow::Result;
@@ -86,6 +86,57 @@ impl DecisionVariable {
         }
 
         Ok(dict)
+    }
+}
+
+// Overload stubs for arithmetic operators.
+// Must appear before #[gen_stub_pymethods] for correct ordering.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class DecisionVariable:
+            @overload
+            def __add__(self, rhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __add__(self, rhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __add__(self, rhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __radd__(self, lhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __sub__(self, rhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __rsub__(self, lhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __mul__(self, rhs: int | float) -> Linear: ...
+            @overload
+            def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+            @overload
+            def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+
+            @overload
+            def __rmul__(self, lhs: int | float) -> Linear: ...
+            @overload
+            def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+            @overload
+            def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+        "#
     }
 }
 
@@ -353,6 +404,7 @@ impl DecisionVariable {
     }
 
     /// Polymorphic addition: x + ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
     pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust DecisionVariable directly
@@ -430,11 +482,13 @@ impl DecisionVariable {
     }
 
     /// Reverse addition (lhs + self)
+    #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction: x - ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
     pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust DecisionVariable directly
@@ -511,6 +565,7 @@ impl DecisionVariable {
     }
 
     /// Reverse subtraction (lhs - self)
+    #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // lhs - self = -self + lhs
         let neg = self.__neg__();
@@ -518,6 +573,7 @@ impl DecisionVariable {
     }
 
     /// Polymorphic multiplication: x * ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust DecisionVariable directly
@@ -596,6 +652,7 @@ impl DecisionVariable {
     }
 
     /// Reverse multiplication (lhs * self)
+    #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_mul(py, lhs) // Multiplication is commutative
     }
@@ -607,12 +664,11 @@ impl DecisionVariable {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        // The diff should be a Linear, Quadratic, or Polynomial - extract to ommx::Function
-        let function = extract_to_function(py, diff)?;
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::EqualToZero,
@@ -620,16 +676,16 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -637,18 +693,15 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        // self >= other is equivalent to other - self <= 0
-        let neg_self = self.__neg__();
-        let diff = neg_self.py_add(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -656,6 +709,6 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 }

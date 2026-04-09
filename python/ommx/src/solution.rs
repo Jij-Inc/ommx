@@ -1,3 +1,4 @@
+use crate::pandas::PyDataFrame;
 use anyhow::Result;
 use pyo3::{
     exceptions::PyKeyError,
@@ -449,8 +450,9 @@ impl Solution {
     /// DataFrame of evaluated decision variables
     ///
     /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+
     #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
@@ -487,16 +489,19 @@ impl Solution {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of evaluated constraints
     ///
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+
     #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
@@ -540,16 +545,19 @@ impl Solution {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+
     #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
@@ -583,9 +591,11 @@ impl Solution {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     fn __copy__(&self) -> Self {

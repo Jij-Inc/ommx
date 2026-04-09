@@ -1,6 +1,7 @@
 use crate::{
-    Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction, ParametricInstance,
-    RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State, VariableBound,
+    pandas::PyDataFrame, Constraint, ConstraintHints, DecisionVariable, Function, NamedFunction,
+    ParametricInstance, RemovedConstraint, Rng, SampleSet, Samples, Sense, Solution, State,
+    VariableBound,
 };
 use anyhow::Result;
 use ommx::{ConstraintID, Evaluate, NamedFunctionID, Parse, VariableID};
@@ -184,6 +185,7 @@ impl Instance {
         Sense::Minimize
     }
 
+    #[gen_stub(override_return_type(type_repr = "type[InstanceDescription]"))]
     #[classattr]
     #[pyo3(name = "Description")]
     fn class_description(py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -727,17 +729,7 @@ impl Instance {
     }
 
     #[pyo3(signature = (samples, *, atol=None))]
-    pub fn evaluate_samples(
-        &self,
-        samples: Bound<'_, PyAny>,
-        atol: Option<f64>,
-    ) -> Result<SampleSet> {
-        // Accept Samples object or anything Samples.__new__ can handle (dict, list, etc.)
-        let samples: Samples = if let Ok(s) = samples.extract::<Samples>() {
-            s
-        } else {
-            Samples::new(samples)?
-        };
+    pub fn evaluate_samples(&self, samples: Samples, atol: Option<f64>) -> Result<SampleSet> {
         let v1_samples: ommx::v1::Samples = samples.0.into();
         let atol = match atol {
             Some(value) => ommx::ATol::new(value)?,
@@ -914,7 +906,7 @@ impl Instance {
         &mut self,
         constraint_id: u64,
         reason: String,
-        parameters: Option<HashMap<String, String>>,
+        #[gen_stub(override_type(type_repr = "str"))] parameters: Option<HashMap<String, String>>,
     ) -> Result<()> {
         self.inner.relax_constraint(
             constraint_id.into(),
@@ -1219,7 +1211,7 @@ impl Instance {
 
     /// DataFrame of decision variables
     #[getter]
-    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let na = pandas.getattr("NA")?;
         let entries: Vec<_> = self
@@ -1230,14 +1222,16 @@ impl Instance {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of constraints
     #[getter]
-    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
             .inner
@@ -1247,14 +1241,19 @@ impl Instance {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of removed constraints
     #[getter]
-    pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn removed_constraints_df<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
             .inner
@@ -1264,14 +1263,16 @@ impl Instance {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     /// DataFrame of named functions
     #[getter]
-    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let pandas = py.import("pandas")?;
         let entries: Vec<_> = self
             .inner
@@ -1281,9 +1282,11 @@ impl Instance {
             .collect::<PyResult<_>>()?;
         let df = pandas.call_method1("DataFrame", (entries,))?;
         if df.getattr("empty")?.extract::<bool>()? {
-            return Ok(df);
+            return df.cast_into().map_err(Into::into);
         }
-        df.call_method1("set_index", ("id",))
+        df.call_method1("set_index", ("id",))?
+            .cast_into()
+            .map_err(Into::into)
     }
 
     fn __copy__(&self) -> Self {

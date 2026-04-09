@@ -3,8 +3,10 @@
 
 import builtins
 import collections.abc
+import datetime
 import enum
 import os
+import pandas
 import pathlib
 import typing
 from typing import TypeAlias
@@ -50,6 +52,7 @@ __all__ = [
     "Sos1",
     "State",
     "ToFunction",
+    "ToSamples",
     "ToState",
     "get_constraint_id_counter",
     "get_default_atol",
@@ -74,6 +77,13 @@ ToFunction: TypeAlias = (
     | Quadratic
     | Polynomial
     | Function
+)
+ToSamples: TypeAlias = (
+    State
+    | Samples
+    | collections.abc.Mapping[int, float]
+    | collections.abc.Mapping[int, ToState]
+    | collections.abc.Iterable[ToState]
 )
 ToState: TypeAlias = (
     State
@@ -215,7 +225,7 @@ class Constraint:
     def __new__(
         cls,
         *,
-        function: typing.Any,
+        function: ToFunction,
         equality: Equality,
         id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
@@ -394,6 +404,50 @@ class DecisionVariable:
     def description(self) -> builtins.str: ...
     @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -469,39 +523,15 @@ class DecisionVariable:
         r"""
         Negation operator: -x → Linear(-1 * x)
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: x + ... → Linear or Quadratic or Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction: x - ... → Linear or Quadratic or Polynomial
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication: x * ... → Linear or Quadratic or Polynomial
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
-        """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -742,13 +772,15 @@ class Function:
         """
     @property
     def type_name(self) -> builtins.str: ...
-    def __new__(cls, inner: typing.Any) -> Function:
+    def __iadd__(self, rhs: ToFunction) -> Function: ...
+    def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
 
         Accepts:
         - int or float: creates a constant function
         - DecisionVariable: creates a linear function with single term
+        - Parameter: creates a linear function with single term
         - Linear: creates a linear function
         - Quadratic: creates a quadratic function
         - Polynomial: creates a polynomial function
@@ -803,35 +835,28 @@ class Function:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
+    def __add__(self, rhs: ToFunction) -> Function:
         r"""
-        Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        Addition
         """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
+    def __radd__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse addition (lhs + self)
         """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
+    def __sub__(self, rhs: ToFunction) -> Function:
         r"""
-        Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        Subtraction
         """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+    def __rsub__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse subtraction (lhs - self)
         """
     def add_assign(self, rhs: ToFunction) -> None: ...
-    def __iadd__(self, rhs: ToFunction) -> None:
+    def __mul__(self, rhs: ToFunction) -> Function:
         r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
+        Multiplication
         """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+    def __rmul__(self, lhs: ToFunction) -> Function:
         r"""
         Reverse multiplication (lhs * self)
         """
@@ -874,20 +899,20 @@ class Function:
         Returns:
             True if any reduction was performed, False otherwise
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
 
         Returns a Constraint where (self - other) == 0.
         Note: This does NOT return bool, it creates a Constraint object.
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
 
         Returns a Constraint where (self - other) <= 0.
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
 
@@ -945,7 +970,7 @@ class Instance:
 
     MAXIMIZE: Sense
     MINIMIZE: Sense
-    Description: typing.Any
+    Description: type[InstanceDescription]
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
@@ -984,9 +1009,9 @@ class Instance:
     @num_constraints.setter
     def num_constraints(self, value: builtins.int) -> None: ...
     @property
-    def created(self) -> typing.Optional[typing.Any]: ...
+    def created(self) -> typing.Optional[datetime.datetime]: ...
     @created.setter
-    def created(self, value: typing.Any) -> None: ...
+    def created(self, value: datetime.datetime) -> None: ...
     @property
     def sense(self) -> Sense: ...
     @property
@@ -1030,22 +1055,22 @@ class Instance:
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints
         """
     @property
-    def removed_constraints_df(self) -> typing.Any:
+    def removed_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed constraints
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions
         """
@@ -1467,7 +1492,7 @@ class Instance:
         ```
         """
     def evaluate_samples(
-        self, samples: typing.Any, *, atol: typing.Optional[builtins.float] = None
+        self, samples: ToSamples, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
     def random_state(self, rng: Rng) -> State:
         r"""
@@ -1563,10 +1588,7 @@ class Instance:
         ```
         """
     def relax_constraint(
-        self,
-        constraint_id: builtins.int,
-        reason: builtins.str,
-        **parameters: typing.Any,
+        self, constraint_id: builtins.int, reason: builtins.str, **parameters: str
     ) -> None:
         r"""
         Remove a constraint from the instance.
@@ -2121,6 +2143,51 @@ class Linear:
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
     @property
     def constant_term(self) -> builtins.float: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+    def __iadd__(self, rhs: Linear) -> Linear: ...
     def __new__(
         cls,
         terms: typing.Mapping[builtins.int, builtins.float],
@@ -2145,40 +2212,7 @@ class Linear:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: supports int, float, DecisionVariable, Linear
-        Returns Linear when adding scalars or Linear, Quadratic otherwise
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
-        """
     def add_assign(self, rhs: Linear) -> None: ...
-    def __iadd__(self, rhs: Linear) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        This is the expected behavior per PyO3's design - see <https://github.com/PyO3/pyo3/issues/4605>
-        The stub file shows `-> None` but the actual Python behavior is correct (`x += y` keeps `x` as Linear).
-        """
     def add_scalar(self, scalar: builtins.float) -> Linear: ...
     def mul_scalar(self, scalar: builtins.float) -> Linear: ...
     def terms(self) -> dict: ...
@@ -2190,15 +2224,15 @@ class Linear:
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2224,7 +2258,7 @@ class NamedFunction:
         cls,
         *,
         id: builtins.int,
-        function: typing.Any,
+        function: ToFunction,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -2272,27 +2306,27 @@ class NamedFunction:
         Returns:
             Self (modified in-place) for method chaining
         """
-    def __add__(self, other: typing.Any) -> Function:
+    def __add__(self, other: ToFunction) -> Function:
         r"""
         Addition: returns self.function + other
         """
-    def __radd__(self, other: typing.Any) -> Function:
+    def __radd__(self, other: ToFunction) -> Function:
         r"""
         Reverse addition: returns other + self.function
         """
-    def __sub__(self, other: typing.Any) -> Function:
+    def __sub__(self, other: ToFunction) -> Function:
         r"""
         Subtraction: returns self.function - other
         """
-    def __rsub__(self, other: typing.Any) -> Function:
+    def __rsub__(self, other: ToFunction) -> Function:
         r"""
         Reverse subtraction: returns other - self.function
         """
-    def __mul__(self, other: typing.Any) -> Function:
+    def __mul__(self, other: ToFunction) -> Function:
         r"""
         Multiplication: returns self.function * other
         """
-    def __rmul__(self, other: typing.Any) -> Function:
+    def __rmul__(self, other: ToFunction) -> Function:
         r"""
         Reverse multiplication: returns other * self.function
         """
@@ -2300,20 +2334,20 @@ class NamedFunction:
         r"""
         Negation: returns -self.function
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self.function == other → Constraint with EqualToZero
 
         Returns a Constraint where (self.function - other) == 0.
         Note: This does NOT return bool, it creates a Constraint object.
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
 
         Returns a Constraint where (self.function - other) <= 0.
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
 
@@ -2373,6 +2407,50 @@ class Parameter:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def description(self) -> builtins.str: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -2402,39 +2480,15 @@ class Parameter:
         r"""
         Negation operator: -p → Linear(-1 * p)
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: p + ... → Linear or Quadratic or Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction: p - ... → Linear or Quadratic or Polynomial
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication: p * ... → Linear or Quadratic or Polynomial
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
-        """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2485,9 +2539,9 @@ class ParametricInstance:
     @num_constraints.setter
     def num_constraints(self, value: builtins.int) -> None: ...
     @property
-    def created(self) -> typing.Optional[typing.Any]: ...
+    def created(self) -> typing.Optional[datetime.datetime]: ...
     @created.setter
-    def created(self, value: typing.Any) -> None: ...
+    def created(self, value: datetime.datetime) -> None: ...
     @property
     def sense(self) -> Sense: ...
     @property
@@ -2511,27 +2565,27 @@ class ParametricInstance:
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints
         """
     @property
-    def removed_constraints_df(self) -> typing.Any:
+    def removed_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed constraints
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions
         """
     @property
-    def parameters_df(self) -> typing.Any:
+    def parameters_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of parameters
         """
@@ -2634,6 +2688,67 @@ class Polynomial:
 
     >>> constraint = p == 0  # Returns Constraint
     """
+    def __add__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __radd__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __sub__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __rsub__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __mul__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __rmul__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
     ) -> Polynomial: ...
@@ -2648,38 +2763,7 @@ class Polynomial:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition - all types promote to Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
     def add_assign(self, rhs: Polynomial) -> None: ...
-    def __iadd__(self, rhs: Polynomial) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
-        """
     def add_scalar(self, scalar: builtins.float) -> Polynomial: ...
     def add_linear(self, linear: Linear) -> Polynomial: ...
     def add_quadratic(self, quadratic: Quadratic) -> Polynomial: ...
@@ -2702,15 +2786,15 @@ class Polynomial:
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2745,6 +2829,43 @@ class Quadratic:
     def quadratic_terms(
         self,
     ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Quadratic: ...
+    @typing.overload
+    def __mul__(
+        self, rhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+    ) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(
+        self, lhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+    ) -> Polynomial: ...
+    def __iadd__(self, rhs: Quadratic) -> Quadratic: ...
     def __new__(
         cls,
         columns: typing.Sequence[builtins.int],
@@ -2763,38 +2884,7 @@ class Quadratic:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
     def add_assign(self, rhs: Quadratic) -> None: ...
-    def __iadd__(self, rhs: Quadratic) -> None:
-        r"""
-        In-place addition for += operator
-
-        Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-        See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
-        """
     def add_scalar(self, scalar: builtins.float) -> Quadratic: ...
     def add_linear(self, linear: Linear) -> Quadratic: ...
     def mul_scalar(self, scalar: builtins.float) -> Quadratic: ...
@@ -2812,15 +2902,15 @@ class Quadratic:
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2992,13 +3082,13 @@ class SampleSet:
     @parameters_annotation.setter
     def parameters_annotation(self, value: typing.Any) -> None: ...
     @property
-    def start(self) -> typing.Optional[typing.Any]: ...
+    def start(self) -> typing.Optional[datetime.datetime]: ...
     @start.setter
-    def start(self, value: typing.Any) -> None: ...
+    def start(self, value: datetime.datetime) -> None: ...
     @property
-    def end(self) -> typing.Optional[typing.Any]: ...
+    def end(self) -> typing.Optional[datetime.datetime]: ...
     @end.setter
-    def end(self, value: typing.Any) -> None: ...
+    def end(self, value: datetime.datetime) -> None: ...
     @property
     def instance(self) -> typing.Optional[builtins.str]: ...
     @instance.setter
@@ -3096,19 +3186,19 @@ class SampleSet:
         Get all unique named function names in this sample set
         """
     @property
-    def summary(self) -> typing.Any:
+    def summary(self) -> pandas.DataFrame:
         r"""
         Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
         Index is sample_id.
         """
     @property
-    def summary_with_constraints(self) -> typing.Any:
+    def summary_with_constraints(self) -> pandas.DataFrame:
         r"""
         Summary DataFrame with per-constraint feasibility columns.
         Index is sample_id.
         """
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables with per-sample value columns.
         Static columns: id, kind, lower, upper, name, subscripts, description.
@@ -3118,14 +3208,14 @@ class SampleSet:
         This implementation uses integer column names for natural pandas indexing.
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints with per-sample value and feasibility columns.
         Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
         Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
         Static columns: id, used_ids, name, subscripts, description, parameters.
@@ -3384,7 +3474,10 @@ class SampledNamedFunction:
 
 @typing.final
 class Samples:
-    def __new__(cls, entries: typing.Any) -> Samples: ...
+    r"""
+    Collection of State samples
+    """
+    def __new__(cls, entries: ToSamples) -> Samples: ...
     @staticmethod
     def from_bytes(bytes: bytes) -> Samples: ...
     def to_bytes(self) -> bytes: ...
@@ -3451,13 +3544,13 @@ class Solution:
     @parameters_annotation.setter
     def parameters_annotation(self, value: typing.Any) -> None: ...
     @property
-    def start(self) -> typing.Optional[typing.Any]: ...
+    def start(self) -> typing.Optional[datetime.datetime]: ...
     @start.setter
-    def start(self, value: typing.Any) -> None: ...
+    def start(self, value: datetime.datetime) -> None: ...
     @property
-    def end(self) -> typing.Optional[typing.Any]: ...
+    def end(self) -> typing.Optional[datetime.datetime]: ...
     @end.setter
-    def end(self, value: typing.Any) -> None: ...
+    def end(self, value: datetime.datetime) -> None: ...
     @property
     def instance(self) -> typing.Optional[builtins.str]: ...
     @instance.setter
@@ -3579,21 +3672,21 @@ class Solution:
         Get all unique named function names in this solution
         """
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated decision variables
 
         Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated constraints
 
         Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated named functions
 

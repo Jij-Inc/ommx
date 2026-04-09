@@ -1,6 +1,6 @@
 use crate::{
-    extract_to_function, next_constraint_id, Constraint, DecisionVariable, Linear, Parameter,
-    Quadratic, Rng, State,
+    next_constraint_id, Constraint, DecisionVariable, Function, Linear, Parameter, Quadratic, Rng,
+    State,
 };
 
 use anyhow::{anyhow, Result};
@@ -34,6 +34,24 @@ use std::collections::BTreeMap;
 #[pyclass]
 #[derive(Clone)]
 pub struct Polynomial(pub ommx::Polynomial);
+
+// Overload stubs for arithmetic operators.
+// Must appear before #[gen_stub_pymethods] for correct ordering.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Polynomial:
+            def __add__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __radd__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __sub__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __rsub__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __mul__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __rmul__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+
+            def __iadd__(self, rhs: Polynomial) -> Polynomial: ...
+        "#
+    }
+}
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
@@ -80,6 +98,7 @@ impl Polynomial {
     }
 
     /// Polymorphic addition - all types promote to Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
     pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -145,11 +164,13 @@ impl Polynomial {
     }
 
     /// Reverse addition (lhs + self)
+    #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction
+    #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
     pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -214,6 +235,7 @@ impl Polynomial {
     }
 
     /// Reverse subtraction (lhs - self)
+    #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // lhs - self = -self + lhs
         let neg = self.__neg__();
@@ -225,14 +247,13 @@ impl Polynomial {
     }
 
     /// In-place addition for += operator
-    ///
-    /// Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
-    /// See <https://github.com/PyO3/pyo3/issues/4605> for details.
+    #[gen_stub(skip)]
     pub fn __iadd__(&mut self, rhs: &Polynomial) {
         self.0 += &rhs.0;
     }
 
     /// Polymorphic multiplication
+    #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -299,6 +320,7 @@ impl Polynomial {
     }
 
     /// Reverse multiplication (lhs * self)
+    #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_mul(py, lhs) // Multiplication is commutative
     }
@@ -397,11 +419,11 @@ impl Polynomial {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::EqualToZero,
@@ -409,16 +431,16 @@ impl Polynomial {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -426,18 +448,15 @@ impl Polynomial {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        // self >= other is equivalent to other - self <= 0
-        let neg_self = self.__neg__();
-        let diff = neg_self.py_add(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -445,6 +464,6 @@ impl Polynomial {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 }

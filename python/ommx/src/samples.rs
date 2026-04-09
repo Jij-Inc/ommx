@@ -8,10 +8,110 @@ use pyo3::{
 };
 use std::collections::{BTreeSet, HashMap};
 
-#[pyo3_stub_gen::derive::gen_stub_pyclass]
-#[pyclass]
+#[pyclass(skip_from_py_object)]
 #[derive(Clone, Default)]
 pub struct Samples(pub ommx::Sampled<ommx::v1::State>);
+
+// Manual PyClassInfo submission (instead of #[gen_stub_pyclass])
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::type_info::PyClassInfo {
+        pyclass_name: "Samples",
+        struct_id: || std::any::TypeId::of::<Samples>(),
+        doc: "Collection of State samples",
+        module: Some("ommx._ommx_rust"),
+        bases: &[],
+        getters: &[],
+        setters: &[],
+        has_eq: false,
+        has_hash: false,
+        has_ord: false,
+        has_str: false,
+        subclass: false,
+    }
+}
+
+// PyStubType: input uses ToSamples, output uses Samples
+impl pyo3_stub_gen::PyStubType for Samples {
+    fn type_input() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("ToSamples", "ommx._ommx_rust".into())
+    }
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo::locally_defined("Samples", "ommx._ommx_rust".into())
+    }
+}
+
+// FromPyObject: accepts Samples, State, Mapping[int, float], Mapping[int, ToState], Iterable[ToState]
+impl<'py> FromPyObject<'_, 'py> for Samples {
+    type Error = PyErr;
+    fn extract(ob: Borrowed<'_, 'py, PyAny>) -> PyResult<Self> {
+        samples_from_any(ob.to_owned())
+    }
+}
+
+pyo3_stub_gen::impl_py_runtime_type!(Samples);
+
+// Dummy types for ToSamples type alias members
+
+/// Mapping[int, float]
+enum PyMappingIntFloat {}
+impl pyo3_stub_gen::PyStubType for PyMappingIntFloat {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, float]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyMappingIntFloat {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Mapping")
+    }
+}
+
+/// Mapping[int, ToState]
+enum PyMappingIntToState {}
+impl pyo3_stub_gen::PyStubType for PyMappingIntToState {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, ToState]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyMappingIntToState {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Mapping")
+    }
+}
+
+/// collections.abc.Iterable[ToState]
+enum PyIterableToState {}
+impl pyo3_stub_gen::PyStubType for PyIterableToState {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Iterable[ToState]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyIterableToState {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Iterable")
+    }
+}
+
+// Type alias: ToSamples = State | Samples | Mapping[int, float] | Mapping[int, ToState] | Iterable[ToState]
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    ToSamples =
+        crate::State | Samples | PyMappingIntFloat | PyMappingIntToState | PyIterableToState
+);
 
 impl From<ommx::v1::State> for Samples {
     fn from(state: ommx::v1::State) -> Self {
@@ -20,7 +120,82 @@ impl From<ommx::v1::State> for Samples {
 }
 
 fn type_error() -> PyErr {
-    PyTypeError::new_err("entries must be a State, dict[int, State], or iterable[State]")
+    PyTypeError::new_err(
+        "entries must be a State, Samples, Mapping[int, float], Mapping[int, ToState], or Iterable[ToState]",
+    )
+}
+
+fn samples_from_any(entries: Bound<PyAny>) -> PyResult<Samples> {
+    // pass through if already a Samples object
+    if let Ok(s) = entries.cast::<Samples>() {
+        return Ok(s.borrow().clone());
+    }
+
+    // Check dict first to handle the empty dict case before State's FromPyObject matches it
+    if let Ok(state_dict) = entries.extract::<HashMap<u64, f64>>() {
+        if state_dict.is_empty() {
+            return Ok(Samples::default());
+        }
+        let mut state = ommx::v1::State::default();
+        state.entries = state_dict;
+        return Ok(Samples::from(state));
+    }
+    if let Ok(state) = entries.cast::<crate::State>() {
+        return Ok(Samples::from(state.borrow().0.clone()));
+    }
+
+    // Try to extract as dict[int, State] or dict[int, dict[int, float]]
+    if let Ok(dict) = entries.cast::<PyDict>() {
+        let mut state_cand = ommx::v1::State::default();
+        let mut sample_cand: ommx::Sampled<ommx::v1::State> = ommx::Sampled::default();
+        for (key, value) in dict.iter() {
+            let sample_id: u64 = key.extract().map_err(|_| type_error())?;
+
+            if let Ok(value) = value.extract::<f64>() {
+                state_cand.entries.insert(sample_id, value);
+                continue;
+            }
+            if let Ok(state) = extract_state(&value) {
+                sample_cand
+                    .append(std::iter::once(SampleID::from(sample_id)), state)
+                    .unwrap(); // safe unwrap since key is unique
+                continue;
+            }
+            return Err(type_error());
+        }
+        return Ok(
+            match (
+                state_cand.entries.is_empty(),
+                sample_cand.num_samples() == 0,
+            ) {
+                (true, true) => Samples::default(),
+                (false, true) => Samples::from(state_cand),
+                (true, false) => Samples(sample_cand),
+                (false, false) => {
+                    return Err(type_error());
+                }
+            },
+        );
+    }
+
+    // Try to extract as iterable of State-like objects
+    if let Ok(iter) = entries.try_iter() {
+        let mut sampled = ommx::Sampled::default();
+        for (i, item) in iter.enumerate() {
+            let sample_id = SampleID::from(i as u64);
+            let item = item?;
+            if let Ok(state) = extract_state(&item) {
+                sampled
+                    .append(std::iter::once(sample_id), state)
+                    .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+                continue;
+            }
+            return Err(type_error());
+        }
+        return Ok(Samples(sampled));
+    }
+
+    Err(type_error())
 }
 
 fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
@@ -39,79 +214,8 @@ fn extract_state(value: &Bound<PyAny>) -> Result<ommx::v1::State, PyErr> {
 #[pymethods]
 impl Samples {
     #[new]
-    pub fn new(entries: Bound<PyAny>) -> PyResult<Self> {
-        // pass through
-        if let Ok(state) = entries.extract::<Self>() {
-            return Ok(state);
-        }
-
-        // Check dict first to handle the empty dict case before State's FromPyObject matches it
-        if let Ok(state_dict) = entries.extract::<HashMap<u64, f64>>() {
-            if state_dict.is_empty() {
-                return Ok(Self::default());
-            }
-            let mut state = ommx::v1::State::default();
-            state.entries = state_dict;
-            return Ok(Self::from(state));
-        }
-        if let Ok(state) = entries.cast::<crate::State>() {
-            return Ok(Self::from(state.borrow().0.clone()));
-        }
-
-        // Try to extract as dict[int, State] or dict[int, dict[int, float]]
-        if let Ok(dict) = entries.cast::<PyDict>() {
-            let mut state_cand = ommx::v1::State::default();
-            let mut sample_cand: ommx::Sampled<ommx::v1::State> = ommx::Sampled::default();
-            for (key, value) in dict.iter() {
-                let sample_id: u64 = key.extract().map_err(|_| type_error())?;
-
-                if let Ok(value) = value.extract::<f64>() {
-                    state_cand.entries.insert(sample_id, value);
-                    continue;
-                }
-                if let Ok(state) = extract_state(&value) {
-                    sample_cand
-                        .append(std::iter::once(SampleID::from(sample_id)), state)
-                        .unwrap(); // safe unwrap since key is unique
-                    continue;
-                }
-                return Err(type_error());
-            }
-            return Ok(
-                match (
-                    state_cand.entries.is_empty(),
-                    sample_cand.num_samples() == 0,
-                ) {
-                    (true, true) => Self::default(),
-                    (false, true) => Self::from(state_cand),
-                    (true, false) => Self(sample_cand),
-                    (false, false) => {
-                        return Err(type_error());
-                    }
-                },
-            );
-        }
-
-        // Try to extract as iterable[State]
-        if let Ok(iter) = entries.try_iter() {
-            let mut sampled = ommx::Sampled::default();
-            for (i, item) in iter.enumerate() {
-                let sample_id = SampleID::from(i as u64);
-                let item = item?;
-                if let Ok(state) = extract_state(&item) {
-                    sampled
-                        .append(std::iter::once(sample_id), state)
-                        .map_err(|e| {
-                            PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string())
-                        })?;
-                    continue;
-                }
-                return Err(type_error());
-            }
-            return Ok(Self(sampled));
-        }
-
-        Err(type_error())
+    pub fn new(entries: Samples) -> Self {
+        entries
     }
 
     #[staticmethod]

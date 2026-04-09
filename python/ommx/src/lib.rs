@@ -16,6 +16,7 @@ mod function;
 mod instance;
 mod linear;
 mod named_function;
+mod pandas;
 mod parameter;
 mod parameters;
 mod parametric_instance;
@@ -118,6 +119,7 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<State>()?;
     m.add_type_alias::<ToState>()?;
     m.add_type_alias::<ToFunction>()?;
+    m.add_type_alias::<ToSamples>()?;
     m.add_class::<EvaluatedDecisionVariable>()?;
     m.add_class::<EvaluatedConstraint>()?;
     m.add_class::<EvaluatedNamedFunction>()?;
