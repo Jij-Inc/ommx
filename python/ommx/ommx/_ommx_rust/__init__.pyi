@@ -78,7 +78,13 @@ ToFunction: TypeAlias = (
     | Polynomial
     | Function
 )
-ToSamples: TypeAlias = State | Samples
+ToSamples: TypeAlias = (
+    State
+    | Samples
+    | collections.abc.Mapping[int, float]
+    | collections.abc.Mapping[int, ToState]
+    | collections.abc.Sequence[ToState]
+)
 ToState: TypeAlias = (
     State
     | collections.abc.Mapping[int, float]

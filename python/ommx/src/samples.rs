@@ -50,8 +50,68 @@ impl<'py> FromPyObject<'_, 'py> for Samples {
 
 pyo3_stub_gen::impl_py_runtime_type!(Samples);
 
-// Type alias: ToSamples = State | Samples | dict[int, float] | dict[int, State]
-pyo3_stub_gen::type_alias!("ommx._ommx_rust", ToSamples = crate::State | Samples);
+// Dummy types for ToSamples type alias members
+
+/// Mapping[int, float]
+enum PyMappingIntFloat {}
+impl pyo3_stub_gen::PyStubType for PyMappingIntFloat {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, float]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyMappingIntFloat {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Mapping")
+    }
+}
+
+/// Mapping[int, ToState]
+enum PyMappingIntToState {}
+impl pyo3_stub_gen::PyStubType for PyMappingIntToState {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Mapping[int, ToState]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PyMappingIntToState {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Mapping")
+    }
+}
+
+/// collections.abc.Sequence[ToState]
+enum PySequenceToState {}
+impl pyo3_stub_gen::PyStubType for PySequenceToState {
+    fn type_output() -> pyo3_stub_gen::TypeInfo {
+        pyo3_stub_gen::TypeInfo {
+            import: ["collections.abc".into()].into(),
+            name: "collections.abc.Sequence[ToState]".into(),
+            source_module: None,
+            type_refs: Default::default(),
+        }
+    }
+}
+impl pyo3_stub_gen::runtime::PyRuntimeType for PySequenceToState {
+    fn runtime_type_object(py: Python<'_>) -> PyResult<Bound<'_, PyAny>> {
+        py.import("collections.abc")?.getattr("Sequence")
+    }
+}
+
+// Type alias: ToSamples = State | Samples | Mapping[int, float] | Mapping[int, ToState] | Sequence[ToState]
+pyo3_stub_gen::type_alias!(
+    "ommx._ommx_rust",
+    ToSamples =
+        crate::State | Samples | PyMappingIntFloat | PyMappingIntToState | PySequenceToState
+);
 
 impl From<ommx::v1::State> for Samples {
     fn from(state: ommx::v1::State) -> Self {
