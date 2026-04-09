@@ -1,5 +1,5 @@
-Welcome to ommx's documentation!
-================================
+OMMX Python SDK API Reference
+==============================
 
 .. toctree::
    :maxdepth: 6

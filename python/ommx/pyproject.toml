@@ -57,7 +57,7 @@ generate-init-py = ["ommx.v1"]
 [tool.pyo3-stub-gen.doc-gen]
 output-dir = "../../docs/api_reference/api"
 json-output = "api_reference.json"
-index-title = "OMMX Python API Reference"
+index-title = "OMMX Python SDK API Reference"
 contents-table = true
 
 [tool.uv]

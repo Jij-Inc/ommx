@@ -14,7 +14,7 @@ sys.path.insert(0, str(here / "api"))
 
 # -- Project information -----------------------------------------------------
 
-project = "ommx"
+project = "OMMX Python SDK"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
 
