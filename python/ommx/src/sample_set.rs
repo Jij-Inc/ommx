@@ -7,6 +7,73 @@ use pyo3::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+/// The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+///
+/// - Similar to `Solution` rather than `solution_pb2.State`.
+///   This class contains the sampled values of decision variables with the objective value, constraint violations,
+///   feasibility, and metadata of constraints and decision variables.
+/// - This class is usually created via `Instance.evaluate_samples`.
+///
+/// # Examples
+///
+/// Let's consider a simple optimization problem:
+///
+/// maximize x_1 + 2 x_2 + 3 x_3
+/// subject to x_1 + x_2 + x_3 = 1
+/// x_1, x_2, x_3 in {0, 1}
+///
+/// ```python
+/// >>> x = [DecisionVariable.binary(i) for i in range(3)]
+/// >>> instance = Instance.from_components(
+/// ...     decision_variables=x,
+/// ...     objective=x[0] + 2*x[1] + 3*x[2],
+/// ...     constraints=[sum(x) == 1],
+/// ...     sense=Instance.MAXIMIZE,
+/// ... )
+/// ```
+///
+/// with three samples:
+///
+/// ```python
+/// >>> samples = {
+/// ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+/// ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+/// ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+/// ... } # ^ sample ID
+/// ```
+///
+/// Note that this will be done by sampling-based solvers, but we do it manually here.
+/// We can evaluate the samples via `Instance.evaluate_samples`:
+///
+/// ```python
+/// >>> sample_set = instance.evaluate_samples(samples)
+/// >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
+///            objective  feasible
+/// sample_id
+/// 1                3.0      True
+/// 0                1.0      True
+/// 2                3.0     False
+/// ```
+///
+/// The `summary` attribute shows the objective value, feasibility of each sample.
+/// Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
+/// You can get each sample by `get` as a `Solution` format:
+///
+/// ```python
+/// >>> solution = sample_set.get(sample_id=0)
+/// >>> solution.objective
+/// 1.0
+/// ```
+///
+/// `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+///
+/// ```python
+/// >>> solution = sample_set.best_feasible
+/// >>> solution.objective
+/// 3.0
+/// ```
+///
+/// Of course, the sample of smallest objective value is returned for minimization problems.
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]
@@ -196,7 +263,27 @@ impl SampleSet {
             .collect()
     }
 
-    /// Get all unique decision variable names in this sample set
+    /// Get all unique decision variable names in this sample set.
+    ///
+    /// Returns a set of all unique variable names. Variables without names are not included.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x + y,
+    /// ...     objective=sum(x) + sum(y),
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// ```python
+    /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+    /// >>> sorted(sample_set.decision_variable_names)
+    /// ['x', 'y']
+    /// ```
     #[getter]
     pub fn decision_variable_names(&self) -> BTreeSet<String> {
         self.inner.decision_variable_names()
@@ -226,7 +313,35 @@ impl SampleSet {
         Ok(dict)
     }
 
-    /// Extract all decision variables grouped by name for a given sample ID
+    /// Extract all decision variables grouped by name for a given sample ID.
+    ///
+    /// Returns a mapping from variable name to a mapping from subscripts to values.
+    /// This is useful for extracting all variables at once in a structured format.
+    /// Variables without names are not included in the result.
+    ///
+    /// Raises ValueError if a decision variable with parameters is found, or if the same
+    /// name and subscript combination is found multiple times, or if the sample ID is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```python
+    /// >>> from ommx.v1 import Instance, DecisionVariable
+    /// >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+    /// >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+    /// >>> instance = Instance.from_components(
+    /// ...     decision_variables=x + y,
+    /// ...     objective=sum(x) + sum(y),
+    /// ...     constraints=[],
+    /// ...     sense=Instance.MAXIMIZE,
+    /// ... )
+    /// ```python
+    /// >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+    /// >>> all_vars = sample_set.extract_all_decision_variables(0)
+    /// >>> all_vars["x"]
+    /// {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+    /// >>> all_vars["y"]
+    /// {(0,): 1.0, (1,): 1.0}
+    /// ```
     pub fn extract_all_decision_variables<'py>(
         &self,
         py: Python<'py>,

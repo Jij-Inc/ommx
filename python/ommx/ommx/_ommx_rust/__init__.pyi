@@ -896,6 +896,53 @@ class Function:
 
 @typing.final
 class Instance:
+    r"""
+    Optimization problem instance.
+
+    Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+    These annotations are loaded from annotations while reading from OMMX artifact.
+
+    # Examples
+    =========
+
+    Create an instance for KnapSack Problem
+
+    ```python
+    >>> from ommx.v1 import Instance, DecisionVariable
+    ```
+
+    Profit and weight of items
+
+    ```python
+    >>> p = [10, 13, 18, 31, 7, 15]
+    >>> w = [11, 15, 20, 35, 10, 33]
+    ```
+
+    Decision variables
+
+    ```python
+    >>> x = [DecisionVariable.binary(i) for i in range(6)]
+    ```
+
+    Objective and constraint
+
+    ```python
+    >>> objective = sum(p[i] * x[i] for i in range(6))
+    >>> constraint = sum(w[i] * x[i] for i in range(6)) <= 47
+    ```
+
+    Compose as an instance
+
+    ```python
+    >>> instance = Instance.from_components(
+    ...     decision_variables=x,
+    ...     objective=objective,
+    ...     constraints=[constraint],
+    ...     sense=Instance.MAXIMIZE,
+    ... )
+    ```
+    """
+
     MAXIMIZE: Sense
     MINIMIZE: Sense
     Description: typing.Any
@@ -1036,14 +1083,58 @@ class Instance:
         named_functions: typing.Optional[typing.Sequence[NamedFunction]] = None,
         description: typing.Optional[InstanceDescription] = None,
         constraint_hints: typing.Optional[ConstraintHints] = None,
-    ) -> Instance: ...
+    ) -> Instance:
+        r"""
+        Create an instance from its components.
+
+        Args:
+        - sense: Optimization sense (minimize or maximize)
+        - objective: Objective function
+        - decision_variables: List of decision variables
+        - constraints: List of constraints
+        - named_functions: Optional list of named functions
+        - description: Optional instance description
+        - constraint_hints: Optional constraint hints for solvers
+
+        Returns:
+        A new Instance
+        """
     @staticmethod
     def empty() -> Instance:
         r"""
         Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance
+        >>> instance = Instance.empty()
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        ```
         """
     def to_bytes(self) -> bytes: ...
-    def required_ids(self) -> builtins.set[builtins.int]: ...
+    def required_ids(self) -> builtins.set[builtins.int]:
+        r"""
+        Get the set of decision variable IDs used in the objective and remaining constraints.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.required_ids()
+        {0, 1, 2}
+        ```
+        """
     def as_qubo_format(self) -> tuple[dict, builtins.float]: ...
     def as_hubo_format(self) -> tuple[dict, builtins.float]: ...
     def to_qubo(
@@ -1058,7 +1149,64 @@ class Instance:
         r"""
         Convert the instance to a QUBO format.
 
-        This is a driver API that calls multiple conversion steps in order.
+        This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
+
+        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        2. Check continuous variables and raise error if exists.
+        3. Convert inequality constraints
+
+          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, :py:meth:`add_integer_slack_to_inequality`
+
+        4. Convert to QUBO with (uniform) penalty method
+
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+
+        5. Log-encode integer variables by :py:meth:`log_encode`.
+        6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+
+        Please see the document of each method for details.
+        If you want to customize the conversion, use the methods above manually.
+
+        # Examples
+        ========
+
+        Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
+
+        ```text
+        max  x0 + x1
+        s.t. x0 + 2*x1 <= 3
+        ```
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.integer(i, lower=0, upper=2, name="x", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(x[0] + 2*x[1] <= 3).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```
+
+        Convert into QUBO format
+
+        ```python
+        >>> qubo, offset = instance.to_qubo()
+        >>> qubo
+        {(3, 3): -6.0, (3, 4): 2.0, (3, 5): 4.0, (3, 6): 4.0, (3, 7): 2.0, (3, 8): 4.0, (4, 4): -6.0, (4, 5): 4.0, (4, 6): 4.0, (4, 7): 2.0, (4, 8): 4.0, (5, 5): -9.0, (5, 6): 8.0, (5, 7): 4.0, (5, 8): 8.0, (6, 6): -9.0, (6, 7): 4.0, (6, 8): 8.0, (7, 7): -5.0, (7, 8): 4.0, (8, 8): -8.0}
+        >>> offset
+        9.0
+        ```
+
+        For the maximization problem, the sense is converted to minimization for generating QUBO, and then converted back to maximization.
+
+        ```python
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        ```
         """
     def to_hubo(
         self,
@@ -1072,41 +1220,303 @@ class Instance:
         r"""
         Convert the instance to a HUBO format.
 
-        This is a driver API that calls multiple conversion steps in order.
+        This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
+
+        1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+        2. Check continuous variables and raise error if exists.
+        3. Convert inequality constraints
+
+          * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+          * If failed, :py:meth:`add_integer_slack_to_inequality`
+
+        4. Convert to HUBO with (uniform) penalty method
+
+          * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
+          * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+          * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
+
+        5. Log-encode integer variables by :py:meth:`log_encode`.
+        6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
+
+        Please see the documentation for :py:meth:`to_qubo` for more information, or the
+        documentation for each individual method for additional details. The
+        difference between this and :py:meth:`to_qubo` is that this method isn't
+        restricted to quadratic or linear problems. If you want to customize the
+        conversion, use the individual methods above manually.
         """
     def as_parametric_instance(self) -> ParametricInstance: ...
-    def penalty_method(self) -> ParametricInstance: ...
-    def uniform_penalty_method(self) -> ParametricInstance: ...
+    def penalty_method(self) -> ParametricInstance:
+        r"""
+        Convert to a parametric unconstrained instance by penalty method.
+
+        Roughly, this converts a constrained problem:
+
+        ```text
+        min_x  f(x)
+        s.t.   g_i(x) = 0   (for all i)
+               h_j(x) <= 0  (for all j)
+        ```
+
+        to an unconstrained problem with parameters:
+
+        ```text
+        min_x  f(x) + sum_i lambda_i * g_i(x)^2 + sum_j rho_j * h_j(x)^2
+        ```
+
+        where lambda_i and rho_j are the penalty weight parameters for each constraint.
+        If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
+
+        The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+
+        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
+        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
+        > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, Constraint
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        >>> pi = instance.penalty_method()
+        ```
+
+        The constraint is put in removed_constraints
+
+        ```python
+        >>> pi.constraints
+        []
+        >>> len(pi.removed_constraints)
+        2
+        >>> pi.removed_constraints[0]
+        RemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)
+        >>> pi.removed_constraints[1]
+        RemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)
+        ```
+        """
+    def uniform_penalty_method(self) -> ParametricInstance:
+        r"""
+        Convert to a parametric unconstrained instance by penalty method with uniform weight.
+
+        Roughly, this converts a constrained problem:
+
+        ```text
+        min_x  f(x)
+        s.t.   g_i(x) = 0   (for all i)
+               h_j(x) <= 0  (for all j)
+        ```
+
+        to an unconstrained problem with a parameter:
+
+        ```text
+        min_x  f(x) + lambda * (sum_i g_i(x)^2 + sum_j h_j(x)^2)
+        ```
+
+        where lambda is the uniform penalty weight parameter for all constraints.
+
+        The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+
+        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
+        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
+        > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 3],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        >>> pi = instance.uniform_penalty_method()
+        ```
+
+        The constraint is put in removed_constraints
+
+        ```python
+        >>> pi.constraints
+        []
+        >>> len(pi.removed_constraints)
+        1
+        >>> pi.removed_constraints[0]
+        RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)
+        ```
+
+        There is only one parameter in the instance
+
+        ```python
+        >>> len(pi.parameters)
+        1
+        >>> p = pi.parameters[0]
+        >>> p.id
+        3
+        >>> p.name
+        'uniform_penalty_weight'
+        ```
+        """
     def evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Solution:
         r"""
-        Evaluate the instance with the given state.
+        Evaluate the given :class:`State` into a :class:`Solution`.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
+        and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
 
-        Returns:
-            Solution containing objective value, constraint evaluations, and feasibility
+        # Examples
+        =========
+
+        Create a simple instance with three binary variables and evaluate a solution:
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(x[0] + x[1] <= 1).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```
+
+        Evaluate it with a state x0 = 1, x1 = 0, x2 = 0, and show the objective and constraints:
+
+        ```python
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 0})
+        >>> solution.objective
+        1.0
+        ```
+
+        If the value is out of the range, the solution is infeasible:
+
+        ```python
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 2})
+        >>> solution.feasible
+        False
+        ```
+
+        If some of the decision variables are not set, this raises an error:
+
+        ```python
+        >>> instance.evaluate({0: 1, 1: 0})
+        ```
+        Traceback (most recent call last):
+            ...
+        ValueError: The state does not contain some required IDs: {VariableID(2)}
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
     ) -> Instance:
         r"""
-        Partially evaluate the instance with the given state.
+        Creates a new instance with specific decision variables fixed to given values.
+
+        This method substitutes the specified decision variables with their provided values,
+        creating a new problem instance where these variables are fixed. This is useful for
+        scenarios such as:
+
+        - Creating simplified sub-problems with some variables fixed
+        - Incrementally solving a problem by fixing some variables and optimizing the rest
+        - Testing specific configurations of a problem
 
         Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        - state: Maps decision variable IDs to their fixed values.
+          Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+        - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
         Returns:
-            Self (modified in-place) for method chaining
+        A new instance with the specified decision variables fixed to their given values.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = DecisionVariable.binary(1)
+        >>> y = DecisionVariable.binary(2)
+        >>> instance = Instance.from_components(
+        ...     decision_variables=[x, y],
+        ...     objective=x + y,
+        ...     constraints=[x + y <= 1],
+        ...     sense=Instance.MINIMIZE
+        ... )
+        >>> new_instance = instance.partial_evaluate({1: 1})
+        >>> new_instance.objective
+        Function(x2 + 1)
+        ```
+
+        Substituted value is stored in the decision variable:
+
+        ```python
+        >>> x = new_instance.get_decision_variable_by_id(1)
+        >>> x.substituted_value
+        1.0
+        ```
         """
     def evaluate_samples(
         self, samples: typing.Any, *, atol: typing.Optional[builtins.float] = None
     ) -> SampleSet: ...
-    def random_state(self, rng: Rng) -> State: ...
+    def random_state(self, rng: Rng) -> State:
+        r"""
+        Generate a random state for this instance using the provided random number generator.
+
+        This method generates random values only for variables that are actually used in the
+        objective function or constraints, as determined by decision variable analysis.
+        Generated values respect the bounds of each variable type.
+
+        Args:
+        - rng: Random number generator to use for generating the state.
+
+        Returns:
+        A randomly generated state that satisfies the variable bounds of this instance.
+        Only contains values for variables that are used in the problem.
+
+        # Examples
+        =========
+
+        Generate random state only for used variables
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> x = [DecisionVariable.binary(i) for i in range(5)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> state = instance.random_state(rng)
+        ```
+
+        Only used variables have values
+
+        ```python
+        >>> set(state.entries.keys())
+        {0, 1}
+        ```
+
+        Values respect binary bounds
+
+        ```python
+        >>> all(state.entries[i] in [0.0, 1.0] for i in state.entries)
+        True
+        ```
+        """
     def random_samples(
         self,
         rng: Rng,
@@ -1114,29 +1524,436 @@ class Instance:
         num_different_samples: builtins.int = 5,
         num_samples: builtins.int = 10,
         max_sample_id: typing.Optional[builtins.int] = None,
-    ) -> Samples: ...
+    ) -> Samples:
+        r"""
+        Generate random samples for this instance.
+
+        The generated samples will contain ``num_samples`` sample entries divided into
+        ``num_different_samples`` groups, where each group shares the same state but has
+        different sample IDs.
+
+        Args:
+        - rng: Random number generator
+        - num_different_samples: Number of different states to generate
+        - num_samples: Total number of samples to generate
+        - max_sample_id: Maximum sample ID (default: ``num_samples``)
+
+        Returns:
+        Samples object
+
+        # Examples
+        ========
+
+        Generate samples for a simple instance:
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable, Rng
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(sum(x) <= 2).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+
+        >>> rng = Rng()
+        >>> samples = instance.random_samples(rng, num_different_samples=2, num_samples=5)
+        >>> samples.num_samples()
+        5
+        ```
+        """
     def relax_constraint(
         self,
         constraint_id: builtins.int,
         reason: builtins.str,
         **parameters: typing.Any,
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Remove a constraint from the instance.
+
+        The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+
+        Args:
+        - constraint_id: The ID of the constraint to remove.
+        - reason: The reason why the constraint is removed.
+        - parameters: Additional parameters to describe the reason.
+
+        # Examples
+        =========
+
+        Relax constraint, and restore it.
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[(sum(x) == 3).set_id(1)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.constraints
+        [Constraint(x0 + x1 + x2 - 3 == 0)]
+        ```
+
+        ```python
+        >>> instance.relax_constraint(1, "manual relaxation")
+        >>> instance.constraints
+        []
+        >>> instance.removed_constraints
+        [RemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=manual relaxation)]
+        ```
+
+        ```python
+        >>> instance.restore_constraint(1)
+        >>> instance.constraints
+        [Constraint(x0 + x1 + x2 - 3 == 0)]
+        >>> instance.removed_constraints
+        []
+        ```
+        """
     def restore_constraint(self, constraint_id: builtins.int) -> None: ...
     def log_encode(
         self, decision_variable_ids: builtins.set[builtins.int] = set()
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Log-encode the integer decision variables.
+
+        Log encoding of an integer variable x in [l, u] is to represent by m bits b_i in {0, 1} by:
+
+        ```text
+        x = sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
+        ```
+
+        where m = ceil(log2(u - l + 1)).
+
+        Args:
+        - decision_variable_ids: The IDs of the integer decision variables to log-encode.
+          If not specified (or empty), all integer variables are log-encoded.
+
+        # Examples
+        =========
+
+        Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        ```
+
+        To log-encode the integer variables x0 and x2 (except x1), call log_encode:
+
+        ```python
+        >>> instance.log_encode({0, 2})
+        ```
+
+        Integer variable in range [0, 3] can be represented by two binary variables:
+
+        x0 = b_{0,0} + 2 b_{0,1}, x2 = b_{2,0} + 2 b_{2,1}
+
+        And these are substituted into the objective and constraint functions.
+
+        ```python
+        >>> instance.objective
+        Function(x1 + x3 + 2*x4 + x5 + 2*x6)
+        ```
+        """
     def convert_inequality_to_equality_with_integer_slack(
         self, constraint_id: builtins.int, max_integer_range: builtins.int
-    ) -> None: ...
+    ) -> None:
+        r"""
+        Convert an inequality constraint f(x) <= 0 to an equality constraint f(x) + s/a = 0 with an integer slack variable s.
+
+        - Since a is determined as the minimal multiplier to make every coefficient of af(x) integer,
+          a itself and the range of s becomes impractically large. ``max_integer_range`` limits the maximal
+          range of s, and returns error if the range exceeds it.
+
+        - Since this method evaluates the bound of f(x), we may find that:
+
+          - The bound [l, u] is strictly positive, i.e. l > 0:
+            this means the instance is infeasible because this constraint never be satisfied,
+            and an error is raised.
+
+          - The bound [l, u] is always negative, i.e. u <= 0:
+            this means this constraint is trivially satisfied,
+            the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+            and this method returns without introducing slack variable or raising an error.
+
+        # Examples
+        =========
+
+        Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= 5).set_id(0)
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.constraints[0]
+        Constraint(x0 + 2*x1 - 5 <= 0)
+        ```
+
+        Introduce an integer slack variable
+
+        ```python
+        >>> instance.convert_inequality_to_equality_with_integer_slack(
+        ...     constraint_id=0,
+        ...     max_integer_range=32
+        ... )
+        >>> instance.constraints[0]
+        Constraint(x0 + 2*x1 + x3 - 5 == 0)
+        ```
+        """
     def add_integer_slack_to_inequality(
         self, constraint_id: builtins.int, slack_upper_bound: builtins.int
-    ) -> typing.Optional[builtins.float]: ...
-    def decision_variable_analysis(self) -> DecisionVariableAnalysis: ...
-    def stats(self) -> dict: ...
+    ) -> typing.Optional[builtins.float]:
+        r"""
+        Convert inequality f(x) <= 0 to **inequality** f(x) + b*s <= 0 with an integer slack variable s.
+
+        - This should be used when :meth:`convert_inequality_to_equality_with_integer_slack` is not applicable.
+
+        - The bound of s will be [0, slack_upper_bound], and the coefficient b is determined from the lower bound of f(x).
+
+        - Since the slack variable is integer, the yielded inequality has residual error min_s f(x) + b*s at most b.
+          And thus b is returned to use scaling the penalty weight or other things.
+
+          - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
+            but it needs more bits for the slack variable, and thus the problem size becomes larger.
+
+        Returns:
+        The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+
+        # Examples
+        =========
+
+        Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [
+        ...     DecisionVariable.integer(i, lower=0, upper=3, name="x", subscripts=[i])
+        ...     for i in range(3)
+        ... ]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[
+        ...         (x[0] + 2*x[1] <= 4).set_id(0)
+        ...     ],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.constraints[0]
+        Constraint(x0 + 2*x1 - 4 <= 0)
+        ```
+
+        Introduce an integer slack variable s in [0, 2]
+
+        ```python
+        >>> b = instance.add_integer_slack_to_inequality(
+        ...     constraint_id=0,
+        ...     slack_upper_bound=2
+        ... )
+        >>> b, instance.constraints[0]
+        (2.0, Constraint(x0 + 2*x1 + 2*x3 - 4 <= 0))
+        ```
+        """
+    def decision_variable_analysis(self) -> DecisionVariableAnalysis:
+        r"""
+        Analyze decision variables in the optimization problem instance.
+
+        Returns a comprehensive analysis of all decision variables including:
+
+        - Kind-based partitioning (binary, integer, continuous, etc.)
+        - Usage-based partitioning (used in objective, constraints, fixed, etc.)
+        - Variable bounds information
+
+        Returns:
+        Analysis object containing detailed information about decision variables
+
+        # Examples
+        --------
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],
+        ...     constraints=[(x[1] + x[2] == 1).set_id(0)],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> analysis = instance.decision_variable_analysis()
+        >>> analysis.used_decision_variable_ids()
+        {0, 1, 2}
+        >>> analysis.used_in_objective()
+        {0, 1}
+        >>> analysis.used_in_constraints()
+        {0: {1, 2}}
+        ```
+        """
+    def stats(self) -> dict:
+        r"""
+        Get statistics about the instance.
+
+        Returns a dictionary containing counts of decision variables and constraints
+        categorized by kind, usage, and status.
+
+        Returns:
+        A dictionary with the following structure:
+
+        ```json
+        {
+            "decision_variables": {
+                "total": int,
+                "by_kind": {
+                    "binary": int,
+                    "integer": int,
+                    "continuous": int,
+                    "semi_integer": int,
+                    "semi_continuous": int
+                },
+                "by_usage": {
+                    "used_in_objective": int,
+                    "used_in_constraints": int,
+                    "used": int,
+                    "fixed": int,
+                    "dependent": int,
+                    "irrelevant": int
+                }
+            },
+            "constraints": {
+                "total": int,
+                "active": int,
+                "removed": int
+            }
+        }
+        ```
+
+        # Examples
+        --------
+
+        ```python
+        >>> from ommx.v1 import Instance
+        >>> instance = Instance.empty()
+        >>> stats = instance.stats()
+        >>> stats["decision_variables"]["total"]
+        0
+        >>> stats["constraints"]["total"]
+        0
+        ```
+        """
     def __copy__(self) -> Instance: ...
     def __deepcopy__(self, _memo: typing.Any) -> Instance: ...
-    def as_minimization_problem(self) -> builtins.bool: ...
-    def as_maximization_problem(self) -> builtins.bool: ...
+    def as_minimization_problem(self) -> builtins.bool:
+        r"""
+        Convert the instance to a minimization problem.
+
+        If the instance is already a minimization problem, this does nothing.
+
+        Returns:
+        ``True`` if the instance is converted, ``False`` if already a minimization problem.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        ```
+
+        Convert to a minimization problem
+
+        ```python
+        >>> instance.as_minimization_problem()
+        True
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
+        ```
+
+        If the instance is already a minimization problem, this does nothing
+
+        ```python
+        >>> instance.as_minimization_problem()
+        False
+        ```
+        """
+    def as_maximization_problem(self) -> builtins.bool:
+        r"""
+        Convert the instance to a maximization problem.
+
+        If the instance is already a maximization problem, this does nothing.
+
+        Returns:
+        ``True`` if the instance is converted, ``False`` if already a maximization problem.
+
+        # Examples
+        =========
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.sense == Instance.MINIMIZE
+        True
+        >>> instance.objective
+        Function(x0 + x1 + x2)
+        ```
+
+        Convert to a maximization problem
+
+        ```python
+        >>> instance.as_maximization_problem()
+        True
+        >>> instance.sense == Instance.MAXIMIZE
+        True
+        >>> instance.objective
+        Function(-x0 - x1 - x2)
+        ```
+
+        If the instance is already a maximization problem, this does nothing
+
+        ```python
+        >>> instance.as_maximization_problem()
+        False
+        ```
+        """
     def get_decision_variable_by_id(
         self, variable_id: builtins.int
     ) -> DecisionVariable:
@@ -1166,7 +1983,44 @@ class Instance:
         This method replaces binary powers in the instance with their equivalent linear expressions.
         For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
 
-        Returns `True` if any reduction was performed, `False` otherwise.
+        Returns:
+        ``True`` if any reduction was performed, ``False`` otherwise.
+
+        # Examples
+        =========
+
+        Consider an instance with binary variables and quadratic terms:
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] * x[0] + x[0] * x[1],
+        ...     constraints=[],
+        ...     sense=Instance.MINIMIZE,
+        ... )
+        >>> instance.objective
+        Function(x0*x0 + x0*x1)
+        ```
+
+        After reducing binary powers, x0^2 becomes x0:
+
+        ```python
+        >>> changed = instance.reduce_binary_power()
+        >>> changed
+        True
+        >>> instance.objective
+        Function(x0*x1 + x0)
+        ```
+
+        Running it again should not change anything:
+
+        ```python
+        >>> changed = instance.reduce_binary_power()
+        >>> changed
+        False
+        ```
         """
     @staticmethod
     def load_mps(path: builtins.str) -> Instance: ...
@@ -1175,20 +2029,40 @@ class Instance:
     def load_qplib(path: builtins.str) -> Instance: ...
     def logical_memory_profile(self) -> builtins.str:
         r"""
-        Generate folded stack format for memory profiling.
+        Generate folded stack format for memory profiling of this instance.
 
-        This generates a format compatible with flamegraph visualization tools.
-        Each line has format: "frame1;frame2;...;frameN bytes"
+        This method generates a format compatible with flamegraph visualization tools
+        like ``flamegraph.pl`` and ``inferno``. Each line has the format:
+        "frame1;frame2;...;frameN bytes"
+
+        The output shows the hierarchical memory structure of the instance, making it
+        easy to identify which components are consuming the most memory.
+
+        To visualize with flamegraph:
+
+        1. Save the output to a file: ``profile.txt``
+        2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
+        3. Open memory.svg in a browser
 
         Returns:
-            str: Folded stack format string that can be visualized with flamegraph tools
+        Folded stack format string that can be visualized with flamegraph tools
 
-        Example:
-            >>> instance = Instance(...)
-            >>> folded = instance.logical_memory_profile()
-            >>> # Save to file and visualize with: flamegraph.pl folded.txt > memory.svg
-            >>> with open("folded.txt", "w") as f:
-            ...     f.write(folded)
+        # Examples
+        --------
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=x[0] + x[1],
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> profile = instance.logical_memory_profile()
+        >>> isinstance(profile, str)
+        True
+        ```
         """
 
 @typing.final
@@ -2023,6 +2897,75 @@ class Rng:
 
 @typing.final
 class SampleSet:
+    r"""
+    The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
+
+    - Similar to `Solution` rather than `solution_pb2.State`.
+      This class contains the sampled values of decision variables with the objective value, constraint violations,
+      feasibility, and metadata of constraints and decision variables.
+    - This class is usually created via `Instance.evaluate_samples`.
+
+    # Examples
+
+    Let's consider a simple optimization problem:
+
+    maximize x_1 + 2 x_2 + 3 x_3
+    subject to x_1 + x_2 + x_3 = 1
+    x_1, x_2, x_3 in {0, 1}
+
+    ```python
+    >>> x = [DecisionVariable.binary(i) for i in range(3)]
+    >>> instance = Instance.from_components(
+    ...     decision_variables=x,
+    ...     objective=x[0] + 2*x[1] + 3*x[2],
+    ...     constraints=[sum(x) == 1],
+    ...     sense=Instance.MAXIMIZE,
+    ... )
+    ```
+
+    with three samples:
+
+    ```python
+    >>> samples = {
+    ...     0: {0: 1, 1: 0, 2: 0},  # x1 = 1, x2 = x3 = 0
+    ...     1: {0: 0, 1: 0, 2: 1},  # x3 = 1, x1 = x2 = 0
+    ...     2: {0: 1, 1: 1, 2: 0},  # x1 = x2 = 1, x3 = 0 (infeasible)
+    ... } # ^ sample ID
+    ```
+
+    Note that this will be done by sampling-based solvers, but we do it manually here.
+    We can evaluate the samples via `Instance.evaluate_samples`:
+
+    ```python
+    >>> sample_set = instance.evaluate_samples(samples)
+    >>> sample_set.summary  # doctest: +NORMALIZE_WHITESPACE
+               objective  feasible
+    sample_id
+    1                3.0      True
+    0                1.0      True
+    2                3.0     False
+    ```
+
+    The `summary` attribute shows the objective value, feasibility of each sample.
+    Note that this `feasible` column represents the feasibility of the original constraints, not the relaxed constraints.
+    You can get each sample by `get` as a `Solution` format:
+
+    ```python
+    >>> solution = sample_set.get(sample_id=0)
+    >>> solution.objective
+    1.0
+    ```
+
+    `best_feasible` returns the best feasible sample, i.e. the largest objective value among feasible samples:
+
+    ```python
+    >>> solution = sample_set.best_feasible
+    >>> solution.objective
+    3.0
+    ```
+
+    Of course, the sample of smallest objective value is returned for minimization problems.
+    """
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
@@ -2126,7 +3069,27 @@ class SampleSet:
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
-        Get all unique decision variable names in this sample set
+        Get all unique decision variable names in this sample set.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+        >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x + y,
+        ...     objective=sum(x) + sum(y),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```python
+        >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+        >>> sorted(sample_set.decision_variable_names)
+        ['x', 'y']
+        ```
         """
     @property
     def named_function_names(self) -> builtins.set[builtins.str]:
@@ -2209,7 +3172,35 @@ class SampleSet:
         """
     def extract_all_decision_variables(self, sample_id: builtins.int) -> dict:
         r"""
-        Extract all decision variables grouped by name for a given sample ID
+        Extract all decision variables grouped by name for a given sample ID.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        Raises ValueError if a decision variable with parameters is found, or if the same
+        name and subscript combination is found multiple times, or if the sample ID is invalid.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+        >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x + y,
+        ...     objective=sum(x) + sum(y),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```python
+        >>> sample_set = instance.evaluate_samples({0: {i: 1 for i in range(5)}})
+        >>> all_vars = sample_set.extract_all_decision_variables(0)
+        >>> all_vars["x"]
+        {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+        >>> all_vars["y"]
+        {(0,): 1.0, (1,): 1.0}
+        ```
         """
     def extract_constraints(self, name: builtins.str, sample_id: builtins.int) -> dict:
         r"""
@@ -2412,6 +3403,12 @@ class Samples:
 
 @typing.final
 class Solution:
+    r"""
+    Idiomatic wrapper of `ommx.v1.Solution` protobuf message.
+
+    This also contains annotations not contained in protobuf message, and will be stored in OMMX artifact.
+    """
+
     OPTIMAL: Optimality
     r"""
     Class constant for optimal solutions
@@ -2482,17 +3479,25 @@ class Solution:
     @property
     def feasible(self) -> builtins.bool:
         r"""
-        Check if the solution is feasible
+        Feasibility of the solution in terms of all constraints, including removed constraints.
+
+        This is an alias for `feasible_unrelaxed`.
+
+        Compatibility: The meaning of this property has changed from Python SDK 1.7.0.
+        Previously, this property represents the feasibility of the remaining constraints only,
+        i.e. excluding relaxed constraints.
+        From Python SDK 1.7.0, this property represents the feasibility of all constraints,
+        including relaxed constraints.
         """
     @property
     def feasible_relaxed(self) -> builtins.bool:
         r"""
-        Check if the solution is feasible in the relaxed problem
+        Feasibility of the solution in terms of remaining constraints, not including relaxed (removed) constraints.
         """
     @property
     def feasible_unrelaxed(self) -> builtins.bool:
         r"""
-        Check if the solution is feasible in the unrelaxed problem
+        Feasibility of the solution in terms of all constraints, including relaxed (removed) constraints.
         """
     @property
     def sense(self) -> Sense: ...
@@ -2538,7 +3543,27 @@ class Solution:
     @property
     def decision_variable_names(self) -> builtins.set[builtins.str]:
         r"""
-        Get all unique decision variable names in this solution
+        Get all unique decision variable names in this solution.
+
+        Returns a set of all unique variable names. Variables without names are not included.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+        >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x + y,
+        ...     objective=sum(x) + sum(y),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```python
+        >>> solution = instance.evaluate({i: 1 for i in range(5)})
+        >>> sorted(solution.decision_variable_names)
+        ['x', 'y']
+        ```
         """
     @property
     def named_function_ids(self) -> builtins.set[builtins.int]: ...
@@ -2595,15 +3620,83 @@ class Solution:
     def to_bytes(self) -> bytes: ...
     def extract_decision_variables(self, name: builtins.str) -> dict:
         r"""
-        Extract decision variables by name with subscripts as key (returns a Python dict)
+        Extract the values of decision variables based on the `name` with `subscripts` key.
+
+        Raises ValueError if a decision variable with parameters is found, or if the same subscript is found.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[sum(x) == 1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```python
+        >>> solution = instance.evaluate({i: 1 for i in range(3)})
+        >>> solution.extract_decision_variables("x")
+        {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+        ```
         """
     def extract_all_decision_variables(self) -> dict:
         r"""
-        Extract all decision variables grouped by name (returns a Python dict)
+        Extract all decision variables grouped by name.
+
+        Returns a mapping from variable name to a mapping from subscripts to values.
+        This is useful for extracting all variables at once in a structured format.
+        Variables without names are not included in the result.
+
+        Raises ValueError if a decision variable with parameters is found, or if the same
+        name and subscript combination is found multiple times.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i, name="x", subscripts=[i]) for i in range(3)]
+        >>> y = [DecisionVariable.binary(i+3, name="y", subscripts=[i]) for i in range(2)]
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x + y,
+        ...     objective=sum(x) + sum(y),
+        ...     constraints=[],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        ```python
+        >>> solution = instance.evaluate({i: 1 for i in range(5)})
+        >>> all_vars = solution.extract_all_decision_variables()
+        >>> all_vars["x"]
+        {(0,): 1.0, (1,): 1.0, (2,): 1.0}
+        >>> all_vars["y"]
+        {(0,): 1.0, (1,): 1.0}
+        ```
         """
     def extract_constraints(self, name: builtins.str) -> dict:
         r"""
-        Extract constraints by name with subscripts as key (returns a Python dict)
+        Extract the values of constraints based on the `name` with `subscripts` key.
+
+        Raises ValueError if the constraint with parameters is found, or if the same subscript is found.
+
+        # Examples
+
+        ```python
+        >>> from ommx.v1 import Instance, DecisionVariable
+        >>> x = [DecisionVariable.binary(i) for i in range(3)]
+        >>> c0 = (x[0] + x[1] == 1).add_name("c").add_subscripts([0])
+        >>> c1 = (x[1] + x[2] == 1).add_name("c").add_subscripts([1])
+        ```python
+        >>> instance = Instance.from_components(
+        ...     decision_variables=x,
+        ...     objective=sum(x),
+        ...     constraints=[c0, c1],
+        ...     sense=Instance.MAXIMIZE,
+        ... )
+        >>> solution = instance.evaluate({0: 1, 1: 0, 2: 1})
+        >>> solution.extract_constraints("c")
+        {(0,): 0.0, (1,): 0.0}
+        ```
         """
     def extract_named_functions(self, name: builtins.str) -> dict:
         r"""
