@@ -26,7 +26,6 @@ release = version
 
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx_rtd_theme",
     "sphinx_fontawesome",
@@ -72,12 +71,6 @@ autoapi_member_order = "groupwise"
 autoapi_file_patterns = ["*.pyi", "*.py"]
 autoapi_ignore = ["**/tests/**", "**/conftest.py"]
 autoapi_add_toctree_entry = False
-
-# -- Napoleon Configuration --------------------------------------------------
-
-napoleon_google_docstring = True
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = True
 
 # -- Intersphinx Configuration -----------------------------------------------
 
