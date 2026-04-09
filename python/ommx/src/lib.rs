@@ -157,4 +157,52 @@ fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+pyo3_stub_gen::reexport_module_members!("ommx.v1" from "ommx._ommx_rust";
+    // Enums
+    "Sense",
+    "Equality",
+    "Kind",
+    "Optimality",
+    "Relaxation",
+    // Core types
+    "State",
+    "Samples",
+    "Bound",
+    // Function types
+    "Linear",
+    "Quadratic",
+    "Polynomial",
+    "Function",
+    // Decision variable and parameter
+    "DecisionVariable",
+    "Parameter",
+    // Constraint and named function
+    "Constraint",
+    "RemovedConstraint",
+    "NamedFunction",
+    // Constraint hints
+    "OneHot",
+    "Sos1",
+    "ConstraintHints",
+    // Evaluated types
+    "EvaluatedDecisionVariable",
+    "EvaluatedConstraint",
+    "EvaluatedNamedFunction",
+    "SampledDecisionVariable",
+    "SampledConstraint",
+    "SampledNamedFunction",
+    // Analysis
+    "DecisionVariableAnalysis",
+    // Top-level types
+    "Instance",
+    "ParametricInstance",
+    "Solution",
+    "SampleSet",
+    // Utility
+    "Rng",
+    // Type aliases
+    "ToState",
+    "ToSamples"
+);
+
 pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
