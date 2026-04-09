@@ -65,6 +65,57 @@ impl Parameter {
     }
 }
 
+// Overload stubs for arithmetic operators.
+// Must appear before #[gen_stub_pymethods] for correct ordering.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Parameter:
+            @overload
+            def __add__(self, rhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __add__(self, rhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __add__(self, rhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __radd__(self, lhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __sub__(self, rhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __rsub__(self, lhs: int | float | DecisionVariable | Parameter | Linear) -> Linear: ...
+            @overload
+            def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+            @overload
+            def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+
+            @overload
+            def __mul__(self, rhs: int | float) -> Linear: ...
+            @overload
+            def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+            @overload
+            def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+
+            @overload
+            def __rmul__(self, lhs: int | float) -> Linear: ...
+            @overload
+            def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+            @overload
+            def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
+        "#
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Parameter {
@@ -155,6 +206,7 @@ impl Parameter {
     }
 
     /// Polymorphic addition: p + ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
     pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust Parameter directly
@@ -232,11 +284,13 @@ impl Parameter {
     }
 
     /// Reverse addition (lhs + self)
+    #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction: p - ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
     pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust Parameter directly
@@ -312,12 +366,14 @@ impl Parameter {
     }
 
     /// Reverse subtraction (lhs - self)
+    #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         let neg = self.__neg__();
         neg.py_add(py, lhs)
     }
 
     /// Polymorphic multiplication: p * ... → Linear or Quadratic or Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // Try to extract as Rust Parameter directly
@@ -397,6 +453,7 @@ impl Parameter {
     }
 
     /// Reverse multiplication (lhs * self)
+    #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_mul(py, lhs) // Multiplication is commutative
     }

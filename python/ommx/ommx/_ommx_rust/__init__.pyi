@@ -396,6 +396,50 @@ class DecisionVariable:
     def description(self) -> builtins.str: ...
     @property
     def substituted_value(self) -> typing.Optional[builtins.float]: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -470,30 +514,6 @@ class DecisionVariable:
     def __neg__(self) -> Linear:
         r"""
         Negation operator: -x → Linear(-1 * x)
-        """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: x + ... → Linear or Quadratic or Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction: x - ... → Linear or Quadratic or Polynomial
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication: x * ... → Linear or Quadratic or Polynomial
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
         """
     def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
@@ -2395,6 +2415,50 @@ class Parameter:
     def parameters(self) -> builtins.dict[builtins.str, builtins.str]: ...
     @property
     def description(self) -> builtins.str: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __add__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __radd__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __sub__(self, rhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear
+    ) -> Linear: ...
+    @typing.overload
+    def __rsub__(self, lhs: Quadratic) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Linear: ...
+    @typing.overload
+    def __mul__(self, rhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __mul__(self, rhs: Quadratic | Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Linear: ...
+    @typing.overload
+    def __rmul__(self, lhs: DecisionVariable | Parameter | Linear) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(self, lhs: Quadratic | Polynomial) -> Polynomial: ...
     def __new__(
         cls,
         id: builtins.int,
@@ -2423,30 +2487,6 @@ class Parameter:
     def __neg__(self) -> Linear:
         r"""
         Negation operator: -p → Linear(-1 * p)
-        """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition: p + ... → Linear or Quadratic or Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction: p - ... → Linear or Quadratic or Polynomial
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication: p * ... → Linear or Quadratic or Polynomial
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
         """
     def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
         r"""
@@ -2656,6 +2696,66 @@ class Polynomial:
 
     >>> constraint = p == 0  # Returns Constraint
     """
+    def __add__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __radd__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __sub__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __rsub__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __mul__(
+        self,
+        rhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
+    def __rmul__(
+        self,
+        lhs: int
+        | float
+        | DecisionVariable
+        | Parameter
+        | Linear
+        | Quadratic
+        | Polynomial,
+    ) -> Polynomial: ...
     def __new__(
         cls, terms: typing.Mapping[typing.Sequence[builtins.int], builtins.float]
     ) -> Polynomial: ...
@@ -2670,22 +2770,6 @@ class Polynomial:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition - all types promote to Polynomial
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
     def add_assign(self, rhs: Polynomial) -> None: ...
     def __iadd__(self, rhs: Polynomial) -> None:
         r"""
@@ -2693,14 +2777,6 @@ class Polynomial:
 
         Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
         See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
         """
     def add_scalar(self, scalar: builtins.float) -> Polynomial: ...
     def add_linear(self, linear: Linear) -> Polynomial: ...
@@ -2767,6 +2843,42 @@ class Quadratic:
     def quadratic_terms(
         self,
     ) -> builtins.dict[tuple[builtins.int, builtins.int], builtins.float]: ...
+    @typing.overload
+    def __add__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __add__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __radd__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __radd__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __sub__(
+        self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __sub__(self, rhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __rsub__(
+        self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic
+    ) -> Quadratic: ...
+    @typing.overload
+    def __rsub__(self, lhs: Polynomial) -> Polynomial: ...
+    @typing.overload
+    def __mul__(self, rhs: int | float) -> Quadratic: ...
+    @typing.overload
+    def __mul__(
+        self, rhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+    ) -> Polynomial: ...
+    @typing.overload
+    def __rmul__(self, lhs: int | float) -> Quadratic: ...
+    @typing.overload
+    def __rmul__(
+        self, lhs: DecisionVariable | Parameter | Linear | Quadratic | Polynomial
+    ) -> Polynomial: ...
     def __new__(
         cls,
         columns: typing.Sequence[builtins.int],
@@ -2785,22 +2897,6 @@ class Quadratic:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic addition
-        """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse addition (lhs + self)
-        """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic subtraction
-        """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse subtraction (lhs - self)
-        """
     def add_assign(self, rhs: Quadratic) -> None: ...
     def __iadd__(self, rhs: Quadratic) -> None:
         r"""
@@ -2808,14 +2904,6 @@ class Quadratic:
 
         Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
         See <https://github.com/PyO3/pyo3/issues/4605> for details.
-        """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
-        r"""
-        Polymorphic multiplication
-        """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
-        r"""
-        Reverse multiplication (lhs * self)
         """
     def add_scalar(self, scalar: builtins.float) -> Quadratic: ...
     def add_linear(self, linear: Linear) -> Quadratic: ...

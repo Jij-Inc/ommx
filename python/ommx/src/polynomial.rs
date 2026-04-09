@@ -35,6 +35,22 @@ use std::collections::BTreeMap;
 #[derive(Clone)]
 pub struct Polynomial(pub ommx::Polynomial);
 
+// Overload stubs for arithmetic operators.
+// Must appear before #[gen_stub_pymethods] for correct ordering.
+pyo3_stub_gen::inventory::submit! {
+    pyo3_stub_gen::derive::gen_methods_from_python! {
+        r#"
+        class Polynomial:
+            def __add__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __radd__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __sub__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __rsub__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __mul__(self, rhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+            def __rmul__(self, lhs: int | float | DecisionVariable | Parameter | Linear | Quadratic | Polynomial) -> Polynomial: ...
+        "#
+    }
+}
+
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
 #[pymethods]
 impl Polynomial {
@@ -80,6 +96,7 @@ impl Polynomial {
     }
 
     /// Polymorphic addition - all types promote to Polynomial
+    #[gen_stub(skip)]
     #[pyo3(name = "__add__")]
     pub fn py_add(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -145,11 +162,13 @@ impl Polynomial {
     }
 
     /// Reverse addition (lhs + self)
+    #[gen_stub(skip)]
     pub fn __radd__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_add(py, lhs) // Addition is commutative
     }
 
     /// Polymorphic subtraction
+    #[gen_stub(skip)]
     #[pyo3(name = "__sub__")]
     pub fn py_sub(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -214,6 +233,7 @@ impl Polynomial {
     }
 
     /// Reverse subtraction (lhs - self)
+    #[gen_stub(skip)]
     pub fn __rsub__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         // lhs - self = -self + lhs
         let neg = self.__neg__();
@@ -233,6 +253,7 @@ impl Polynomial {
     }
 
     /// Polymorphic multiplication
+    #[gen_stub(skip)]
     #[pyo3(name = "__mul__")]
     pub fn py_mul(&self, py: Python<'_>, rhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         if let Ok(poly) = rhs.extract::<PyRef<Polynomial>>() {
@@ -299,6 +320,7 @@ impl Polynomial {
     }
 
     /// Reverse multiplication (lhs * self)
+    #[gen_stub(skip)]
     pub fn __rmul__(&self, py: Python<'_>, lhs: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
         self.py_mul(py, lhs) // Multiplication is commutative
     }
