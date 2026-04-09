@@ -85,7 +85,7 @@ pub fn get_na<'py>(py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
 
 /// Trait for converting a domain object into a Python dict suitable for `pd.DataFrame([...])`.
 pub trait ToPandasEntry {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>>;
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ pub trait ToPandasEntry {
 
 /// Blanket impl so that `&T` also implements `ToPandasEntry`.
 impl<T: ToPandasEntry> ToPandasEntry for &T {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         (*self).to_pandas_entry(py)
     }
 }
@@ -105,8 +105,8 @@ pub fn entries_to_dataframe<'py, T: ToPandasEntry>(
     items: impl Iterator<Item = T>,
     index_col: &str,
 ) -> PyResult<Bound<'py, PyDataFrame>> {
-    let entries: Vec<_> = items
-        .map(|item| item.to_pandas_entry(py))
+    let entries: Vec<Bound<'py, PyAny>> = items
+        .map(|item| item.to_pandas_entry(py).map(|d| d.into_any()))
         .collect::<PyResult<_>>()?;
     raw_entries_to_dataframe(py, entries, index_col)
 }
@@ -237,7 +237,7 @@ pub fn set_function_type(dict: &Bound<PyDict>, function: &ommx::Function) -> PyR
 // ---------------------------------------------------------------------------
 
 impl ToPandasEntry for ommx::DecisionVariable {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", self.id().into_inner())?;
@@ -255,12 +255,12 @@ impl ToPandasEntry for ommx::DecisionVariable {
             None => dict.set_item("substituted_value", &na)?,
         }
         set_parameter_columns(&dict, &self.metadata.parameters)?;
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::Constraint {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id.into_inner())?;
         set_equality(&dict, self.equality)?;
@@ -272,12 +272,12 @@ impl ToPandasEntry for ommx::Constraint {
             &self.subscripts,
             self.description.as_deref(),
         )?;
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::RemovedConstraint {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.constraint.id.into_inner())?;
         set_equality(&dict, self.constraint.equality)?;
@@ -293,12 +293,12 @@ impl ToPandasEntry for ommx::RemovedConstraint {
         for (key, value) in &self.removed_reason_parameters {
             dict.set_item(format!("removed_reason.{key}"), value)?;
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::NamedFunction {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id.into_inner())?;
         set_function_type(&dict, &self.function)?;
@@ -311,12 +311,12 @@ impl ToPandasEntry for ommx::NamedFunction {
             self.description.as_deref(),
         )?;
         set_parameter_columns(&dict, &self.parameters)?;
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::v1::Parameter {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id)?;
         set_metadata(
@@ -328,7 +328,7 @@ impl ToPandasEntry for ommx::v1::Parameter {
         for (key, value) in &self.parameters {
             dict.set_item(format!("parameters.{key}"), value)?;
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
@@ -337,7 +337,7 @@ impl ToPandasEntry for ommx::v1::Parameter {
 // ---------------------------------------------------------------------------
 
 impl ToPandasEntry for ommx::EvaluatedDecisionVariable {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", self.id().into_inner())?;
@@ -353,12 +353,12 @@ impl ToPandasEntry for ommx::EvaluatedDecisionVariable {
         // EvaluatedDecisionVariable has no substituted_value field
         dict.set_item("substituted_value", &na)?;
         dict.set_item("value", *self.value())?;
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::EvaluatedConstraint {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let na = get_na(py)?;
         let dict = PyDict::new(py);
         dict.set_item("id", self.id().into_inner())?;
@@ -379,12 +379,12 @@ impl ToPandasEntry for ommx::EvaluatedConstraint {
             Some(r) => dict.set_item("removed_reason", r)?,
             None => dict.set_item("removed_reason", &na)?,
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl ToPandasEntry for ommx::EvaluatedNamedFunction {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
         dict.set_item("id", self.id.into_inner())?;
         dict.set_item("value", self.evaluated_value())?;
@@ -396,7 +396,7 @@ impl ToPandasEntry for ommx::EvaluatedNamedFunction {
             self.description.as_deref(),
         )?;
         set_parameter_columns(&dict, &self.parameters)?;
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
@@ -412,7 +412,7 @@ pub struct WithSampleIds<'a, T> {
 }
 
 impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledDecisionVariable> {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let dv = self.item;
         let dict = PyDict::new(py);
         dict.set_item("id", dv.id().into_inner())?;
@@ -429,12 +429,12 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledDecisionVariable> {
             let value = dv.samples().get(sample_id).ok().copied();
             dict.set_item(sample_id.into_inner(), value)?;
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let sc = self.item;
         let dict = PyDict::new(py);
         dict.set_item("id", sc.id().into_inner())?;
@@ -459,12 +459,12 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
             let feas = sc.feasible().get(&sample_id).copied();
             dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
 
 impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledNamedFunction> {
-    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let nf = self.item;
         let dict = PyDict::new(py);
         dict.set_item("id", nf.id().into_inner())?;
@@ -485,6 +485,6 @@ impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledNamedFunction> {
             let value = nf.evaluated_values().get(sample_id).ok().copied();
             dict.set_item(sample_id.into_inner(), value)?;
         }
-        Ok(dict.into_any())
+        Ok(dict)
     }
 }
