@@ -2,7 +2,7 @@ use crate::Solution;
 use anyhow::Result;
 use pyo3::{
     prelude::*,
-    types::{PyBytes, PyDict, PyList, PyTuple},
+    types::{PyBytes, PyDict, PyList, PySet, PyTuple},
     Bound, PyResult, Python,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -639,7 +639,7 @@ impl SampleSet {
                     .iter()
                     .map(|id| id.into_inner())
                     .collect();
-                dict.set_item("used_ids", used_ids)?;
+                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
                 dict.set_item("name", sc.metadata.name.as_deref())?;
                 let subs_list = PyList::new(py, sc.metadata.subscripts.iter())?;
                 dict.set_item("subscripts", subs_list)?;
@@ -692,7 +692,7 @@ impl SampleSet {
                     .iter()
                     .map(|id| id.into_inner())
                     .collect();
-                dict.set_item("used_ids", used_ids)?;
+                dict.set_item("used_ids", PySet::new(py, &used_ids)?)?;
                 dict.set_item("name", nf.name.as_deref())?;
                 let subs_list = PyList::new(py, nf.subscripts.iter())?;
                 dict.set_item("subscripts", subs_list)?;
