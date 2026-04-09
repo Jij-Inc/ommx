@@ -189,80 +189,58 @@ impl NamedFunction {
     ///
     /// Returns a Constraint where (self.function - other) == 0.
     /// Note: This does NOT return bool, it creates a Constraint object.
-    #[gen_stub(type_ignore = ["override"], override_return_type(type_repr = "Constraint"))]
+    #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // self.function - other
-        let diff = self.function().py_sub(py, other)?;
-        // Check if NotImplemented was returned
-        if diff.bind(py).is(py.NotImplemented()) {
-            return Ok(py.NotImplemented().into_any());
-        }
-        let diff_func = diff.extract::<Function>(py)?;
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0.function;
         let id = next_constraint_id();
-        let constraint = Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: diff_func.0,
+            function,
             equality: ommx::Equality::EqualToZero,
             name: None,
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        });
-        Ok(constraint.into_pyobject(py)?.into_any().unbind())
+        })
     }
 
     /// Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (self.function - other) <= 0.
-    #[gen_stub(override_return_type(type_repr = "Constraint"))]
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // self.function - other <= 0
-        let diff = self.function().py_sub(py, other)?;
-        // Check if NotImplemented was returned
-        if diff.bind(py).is(py.NotImplemented()) {
-            return Ok(py.NotImplemented().into_any());
-        }
-        let diff_func = diff.extract::<Function>(py)?;
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0.function;
         let id = next_constraint_id();
-        let constraint = Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: diff_func.0,
+            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
             name: None,
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        });
-        Ok(constraint.into_pyobject(py)?.into_any().unbind())
+        })
     }
 
     /// Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (other - self.function) <= 0.
-    #[gen_stub(override_return_type(type_repr = "Constraint"))]
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Py<PyAny>> {
-        // self.function >= other is equivalent to other - self.function <= 0
-        let neg_self = self.__neg__();
-        let diff = neg_self.py_add(py, other)?;
-        // Check if NotImplemented was returned
-        if diff.bind(py).is(py.NotImplemented()) {
-            return Ok(py.NotImplemented().into_any());
-        }
-        let diff_func = diff.extract::<Function>(py)?;
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.0.function;
         let id = next_constraint_id();
-        let constraint = Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
-            function: diff_func.0,
+            function,
             equality: ommx::Equality::LessThanOrEqualToZero,
             name: None,
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        });
-        Ok(constraint.into_pyobject(py)?.into_any().unbind())
+        })
     }
 
     /// Internal method for pandas DataFrame conversion.

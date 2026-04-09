@@ -487,11 +487,11 @@ impl Function {
     /// Note: This does NOT return bool, it creates a Constraint object.
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::EqualToZero,
@@ -499,18 +499,18 @@ impl Function {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (self - other) <= 0.
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -518,21 +518,17 @@ impl Function {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
     ///
     /// Returns a Constraint where (other - self) <= 0.
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        // self >= other is equivalent to other - self <= 0
-        // But we need to express other as a Function first
-        let neg_self = self.__neg__();
-        let diff = neg_self.py_add(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.0;
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -540,29 +536,6 @@ impl Function {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
-}
-
-/// Helper function to extract a PyAny result into ommx::Function.
-///
-/// This is used by comparison operators (`__eq__`, `__le__`, `__ge__`) to convert
-/// the result of subtraction (which may be Linear, Quadratic, Polynomial, or Function)
-/// into an ommx::Function for creating a Constraint.
-pub(crate) fn extract_to_function(py: Python<'_>, obj: Py<PyAny>) -> PyResult<ommx::Function> {
-    if let Ok(func) = obj.extract::<Function>(py) {
-        return Ok(func.0);
-    }
-    if let Ok(poly) = obj.extract::<Polynomial>(py) {
-        return Ok(ommx::Function::from(poly.0));
-    }
-    if let Ok(quad) = obj.extract::<Quadratic>(py) {
-        return Ok(ommx::Function::from(quad.0));
-    }
-    if let Ok(linear) = obj.extract::<Linear>(py) {
-        return Ok(ommx::Function::from(linear.0));
-    }
-    Err(PyTypeError::new_err(
-        "Cannot convert to Function: expected Linear, Quadratic, Polynomial, or Function",
-    ))
 }

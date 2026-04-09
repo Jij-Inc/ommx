@@ -515,15 +515,15 @@ class DecisionVariable:
         r"""
         Negation operator: -x → Linear(-1 * x)
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -897,20 +897,20 @@ class Function:
         Returns:
             True if any reduction was performed, False otherwise
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
 
         Returns a Constraint where (self - other) == 0.
         Note: This does NOT return bool, it creates a Constraint object.
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint with LessThanOrEqualToZero
 
         Returns a Constraint where (self - other) <= 0.
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint with LessThanOrEqualToZero
 
@@ -2232,15 +2232,15 @@ class Linear:
     ) -> Linear: ...
     def __copy__(self) -> Linear: ...
     def __deepcopy__(self, _memo: typing.Any) -> Linear: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2342,20 +2342,20 @@ class NamedFunction:
         r"""
         Negation: returns -self.function
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self.function == other → Constraint with EqualToZero
 
         Returns a Constraint where (self.function - other) == 0.
         Note: This does NOT return bool, it creates a Constraint object.
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self.function <= other → Constraint with LessThanOrEqualToZero
 
         Returns a Constraint where (self.function - other) <= 0.
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self.function >= other → Constraint with LessThanOrEqualToZero
 
@@ -2488,15 +2488,15 @@ class Parameter:
         r"""
         Negation operator: -p → Linear(-1 * p)
         """
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2800,15 +2800,15 @@ class Polynomial:
     ) -> Polynomial: ...
     def __copy__(self) -> Polynomial: ...
     def __deepcopy__(self, _memo: typing.Any) -> Polynomial: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """
@@ -2922,15 +2922,15 @@ class Quadratic:
     ) -> Quadratic: ...
     def __copy__(self) -> Quadratic: ...
     def __deepcopy__(self, _memo: typing.Any) -> Quadratic: ...
-    def __eq__(self, other: typing.Any) -> Constraint:  # type: ignore[override]
+    def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
         Create an equality constraint: self == other → Constraint with EqualToZero
         """
-    def __le__(self, other: typing.Any) -> Constraint:
+    def __le__(self, other: ToFunction) -> Constraint:
         r"""
         Create a less-than-or-equal constraint: self <= other → Constraint
         """
-    def __ge__(self, other: typing.Any) -> Constraint:
+    def __ge__(self, other: ToFunction) -> Constraint:
         r"""
         Create a greater-than-or-equal constraint: self >= other → Constraint
         """

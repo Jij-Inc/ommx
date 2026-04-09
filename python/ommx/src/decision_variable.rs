@@ -1,5 +1,5 @@
 use crate::{
-    extract_to_function, next_constraint_id, Constraint, Linear, Parameter, Polynomial, Quadratic,
+    next_constraint_id, Constraint, Function, Linear, Parameter, Polynomial, Quadratic,
     VariableBound,
 };
 use anyhow::Result;
@@ -664,12 +664,11 @@ impl DecisionVariable {
     /// Create an equality constraint: self == other → Constraint with EqualToZero
     #[gen_stub(type_ignore = ["override"])]
     #[pyo3(name = "__eq__")]
-    pub fn py_eq(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        // The diff should be a Linear, Quadratic, or Polynomial - extract to ommx::Function
-        let function = extract_to_function(py, diff)?;
+    pub fn py_eq(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::EqualToZero,
@@ -677,16 +676,16 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a less-than-or-equal constraint: self <= other → Constraint
     #[pyo3(name = "__le__")]
-    pub fn py_le(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        let diff = self.py_sub(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_le(&self, other: Function) -> Constraint {
+        let mut function = -other.0;
+        function += &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -694,18 +693,15 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 
     /// Create a greater-than-or-equal constraint: self >= other → Constraint
     #[pyo3(name = "__ge__")]
-    pub fn py_ge(&self, py: Python<'_>, other: &Bound<PyAny>) -> PyResult<Constraint> {
-        // self >= other is equivalent to other - self <= 0
-        let neg_self = self.__neg__();
-        let diff = neg_self.py_add(py, other)?;
-        let function = extract_to_function(py, diff)?;
+    pub fn py_ge(&self, other: Function) -> Constraint {
+        let function = other.0 - &self.as_linear();
         let id = next_constraint_id();
-        Ok(Constraint(ommx::Constraint {
+        Constraint(ommx::Constraint {
             id: ommx::ConstraintID::from(id),
             function,
             equality: ommx::Equality::LessThanOrEqualToZero,
@@ -713,6 +709,6 @@ impl DecisionVariable {
             subscripts: Vec::new(),
             parameters: Default::default(),
             description: None,
-        }))
+        })
     }
 }
