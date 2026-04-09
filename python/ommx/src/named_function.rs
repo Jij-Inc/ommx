@@ -137,7 +137,6 @@ impl NamedFunction {
     }
 
     // Arithmetic operators - delegate to the inner function
-    // These return Py<PyAny> to allow NotImplemented to propagate for reflected operations
 
     /// Addition: returns self.function + other
     pub fn __add__(&self, other: Function) -> Function {
@@ -175,7 +174,7 @@ impl NamedFunction {
     }
 
     // Comparison operators - return Constraint
-    // These check for NotImplemented and propagate it
+    // These accept Function via FromPyObject and return Constraint directly
 
     /// Create an equality constraint: self.function == other → Constraint with EqualToZero
     ///
