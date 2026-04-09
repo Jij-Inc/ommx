@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// The output of sampling-based optimization algorithms, e.g. simulated annealing (SA).
 ///
-/// - Similar to `Solution` rather than `solution_pb2.State`.
+/// - Similar to `Solution` rather than the raw `State` message.
 ///   This class contains the sampled values of decision variables with the objective value, constraint violations,
 ///   feasibility, and metadata of constraints and decision variables.
 /// - This class is usually created via `Instance.evaluate_samples`.

@@ -22,7 +22,6 @@ task: Available tasks for this project:
 * book_ja:open:                              Open the book in docs/ja
 * book_ja:watch:                             Watch the book in docs/ja
 * proto:default:                             Generate code from Protobuf definitions      (aliases: proto)
-* proto:python:                              Generate Python code from Protobuf definitions
 * proto:rust:                                Generate Rust code from Protobuf definitions
 * python:default:                            Sync and Run tests for all Python projects      (aliases: python)
 * python:doc:                                Build and Open API reference documentation
@@ -47,7 +46,7 @@ task: Available tasks for this project:
 > When you run `task` command, it will automatically detect the `Taskfile.yml` from current directory or parent directories.
 > If you run `task` command on `proto/` directory, `proto/Taskfile.yml` is used, i.e. commands only defined there are available.
 > Each sub-directory `Taskfile.yml` are included in the parent `Taskfile.yml`,
-> e.g. `task python` in `proto/` is exposed as `task proto:python` in the root directory.
+> e.g. `task rust` in `proto/` is exposed as `task proto:rust` in the root directory.
 
 Code Map
 ========
