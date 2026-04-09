@@ -575,7 +575,6 @@ impl SampleSet {
     /// Dynamic columns: one per sample_id (int) with the variable's value.
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let na = py.import("pandas")?.getattr("NA")?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let entries: Vec<_> = self
             .inner
@@ -592,7 +591,6 @@ impl SampleSet {
                     dv.metadata.name.as_deref(),
                     &dv.metadata.subscripts,
                     dv.metadata.description.as_deref(),
-                    &na,
                 )?;
                 for &sample_id in &sample_ids {
                     let value = dv.samples().get(sample_id).ok().copied();
@@ -609,7 +607,6 @@ impl SampleSet {
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let na = py.import("pandas")?.getattr("NA")?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let entries: Vec<_> = self
             .inner
@@ -625,7 +622,6 @@ impl SampleSet {
                     sc.metadata.name.as_deref(),
                     &sc.metadata.subscripts,
                     sc.metadata.description.as_deref(),
-                    &na,
                 )?;
                 dict.set_item("removed_reason", sc.removed_reason().as_deref())?;
                 let rr_params: Vec<String> = sc
@@ -651,7 +647,6 @@ impl SampleSet {
     /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
-        let na = py.import("pandas")?.getattr("NA")?;
         let sample_ids = sorted_sample_ids(&self.inner);
         let entries: Vec<_> = self
             .inner
@@ -666,7 +661,6 @@ impl SampleSet {
                     nf.name.as_deref(),
                     &nf.subscripts,
                     nf.description.as_deref(),
-                    &na,
                 )?;
                 let params: Vec<String> = nf
                     .parameters
