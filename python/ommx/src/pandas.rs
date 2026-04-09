@@ -404,5 +404,87 @@ impl ToPandasEntry for ommx::EvaluatedNamedFunction {
 // ToPandasEntry implementations for sampled types (SampleSet)
 // ---------------------------------------------------------------------------
 
-// SampleSet types have dynamic per-sample columns, so they don't use ToPandasEntry.
-// They use raw_entries_to_dataframe with inline dict construction + the helpers above.
+/// Wrapper that pairs a sampled item with the global sorted sample IDs,
+/// so `ToPandasEntry` can generate per-sample dynamic columns.
+pub struct WithSampleIds<'a, T> {
+    pub item: &'a T,
+    pub sample_ids: &'a [ommx::SampleID],
+}
+
+impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledDecisionVariable> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let dv = self.item;
+        let dict = PyDict::new(py);
+        dict.set_item("id", dv.id().into_inner())?;
+        set_kind(&dict, *dv.kind())?;
+        dict.set_item("lower", dv.bound().lower())?;
+        dict.set_item("upper", dv.bound().upper())?;
+        set_metadata(
+            &dict,
+            dv.metadata.name.as_deref(),
+            &dv.metadata.subscripts,
+            dv.metadata.description.as_deref(),
+        )?;
+        for &sample_id in self.sample_ids {
+            let value = dv.samples().get(sample_id).ok().copied();
+            dict.set_item(sample_id.into_inner(), value)?;
+        }
+        Ok(dict.into_any())
+    }
+}
+
+impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledConstraint> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let sc = self.item;
+        let dict = PyDict::new(py);
+        dict.set_item("id", sc.id().into_inner())?;
+        set_equality(&dict, *sc.equality())?;
+        set_used_ids(&dict, sc.used_decision_variable_ids())?;
+        set_metadata(
+            &dict,
+            sc.metadata.name.as_deref(),
+            &sc.metadata.subscripts,
+            sc.metadata.description.as_deref(),
+        )?;
+        dict.set_item("removed_reason", sc.removed_reason().as_deref())?;
+        let rr_params: Vec<String> = sc
+            .removed_reason_parameters()
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        dict.set_item("removed_reason_parameters", rr_params)?;
+        for &sample_id in self.sample_ids {
+            let value = sc.evaluated_values().get(sample_id).ok().copied();
+            dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
+            let feas = sc.feasible().get(&sample_id).copied();
+            dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
+        }
+        Ok(dict.into_any())
+    }
+}
+
+impl<'a> ToPandasEntry for WithSampleIds<'a, ommx::SampledNamedFunction> {
+    fn to_pandas_entry<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nf = self.item;
+        let dict = PyDict::new(py);
+        dict.set_item("id", nf.id().into_inner())?;
+        set_used_ids(&dict, nf.used_decision_variable_ids())?;
+        set_metadata(
+            &dict,
+            nf.name.as_deref(),
+            &nf.subscripts,
+            nf.description.as_deref(),
+        )?;
+        let params: Vec<String> = nf
+            .parameters
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        dict.set_item("parameters", params)?;
+        for &sample_id in self.sample_ids {
+            let value = nf.evaluated_values().get(sample_id).ok().copied();
+            dict.set_item(sample_id.into_inner(), value)?;
+        }
+        Ok(dict.into_any())
+    }
+}

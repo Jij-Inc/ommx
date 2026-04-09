@@ -1,8 +1,5 @@
 use crate::{
-    pandas::{
-        raw_entries_to_dataframe, set_equality, set_kind, set_metadata, set_used_ids,
-        sorted_entries_to_dataframe, PyDataFrame,
-    },
+    pandas::{entries_to_dataframe, sorted_entries_to_dataframe, PyDataFrame, WithSampleIds},
     Solution,
 };
 use anyhow::Result;
@@ -576,30 +573,17 @@ impl SampleSet {
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
-        let entries: Vec<_> = self
-            .inner
-            .decision_variables()
-            .values()
-            .map(|dv| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", dv.id().into_inner())?;
-                set_kind(&dict, *dv.kind())?;
-                dict.set_item("lower", dv.bound().lower())?;
-                dict.set_item("upper", dv.bound().upper())?;
-                set_metadata(
-                    &dict,
-                    dv.metadata.name.as_deref(),
-                    &dv.metadata.subscripts,
-                    dv.metadata.description.as_deref(),
-                )?;
-                for &sample_id in &sample_ids {
-                    let value = dv.samples().get(sample_id).ok().copied();
-                    dict.set_item(sample_id.into_inner(), value)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        raw_entries_to_dataframe(py, entries, "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .decision_variables()
+                .values()
+                .map(|item| WithSampleIds {
+                    item,
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
     }
 
     /// DataFrame of constraints with per-sample value and feasibility columns.
@@ -608,38 +592,14 @@ impl SampleSet {
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
-        let entries: Vec<_> = self
-            .inner
-            .constraints()
-            .values()
-            .map(|sc| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", sc.id().into_inner())?;
-                set_equality(&dict, *sc.equality())?;
-                set_used_ids(&dict, sc.used_decision_variable_ids())?;
-                set_metadata(
-                    &dict,
-                    sc.metadata.name.as_deref(),
-                    &sc.metadata.subscripts,
-                    sc.metadata.description.as_deref(),
-                )?;
-                dict.set_item("removed_reason", sc.removed_reason().as_deref())?;
-                let rr_params: Vec<String> = sc
-                    .removed_reason_parameters()
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect();
-                dict.set_item("removed_reason_parameters", rr_params)?;
-                for &sample_id in &sample_ids {
-                    let value = sc.evaluated_values().get(sample_id).ok().copied();
-                    dict.set_item(format!("value.{}", sample_id.into_inner()), value)?;
-                    let feas = sc.feasible().get(&sample_id).copied();
-                    dict.set_item(format!("feasible.{}", sample_id.into_inner()), feas)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        raw_entries_to_dataframe(py, entries, "id")
+        entries_to_dataframe(
+            py,
+            self.inner.constraints().values().map(|item| WithSampleIds {
+                item,
+                sample_ids: &sample_ids,
+            }),
+            "id",
+        )
     }
 
     /// DataFrame of named functions with per-sample value columns.
@@ -648,34 +608,17 @@ impl SampleSet {
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDataFrame>> {
         let sample_ids = sorted_sample_ids(&self.inner);
-        let entries: Vec<_> = self
-            .inner
-            .named_functions()
-            .values()
-            .map(|nf| {
-                let dict = PyDict::new(py);
-                dict.set_item("id", nf.id().into_inner())?;
-                set_used_ids(&dict, nf.used_decision_variable_ids())?;
-                set_metadata(
-                    &dict,
-                    nf.name.as_deref(),
-                    &nf.subscripts,
-                    nf.description.as_deref(),
-                )?;
-                let params: Vec<String> = nf
-                    .parameters
-                    .iter()
-                    .map(|(k, v)| format!("{k}={v}"))
-                    .collect();
-                dict.set_item("parameters", params)?;
-                for &sample_id in &sample_ids {
-                    let value = nf.evaluated_values().get(sample_id).ok().copied();
-                    dict.set_item(sample_id.into_inner(), value)?;
-                }
-                Ok(dict.into_any())
-            })
-            .collect::<PyResult<_>>()?;
-        raw_entries_to_dataframe(py, entries, "id")
+        entries_to_dataframe(
+            py,
+            self.inner
+                .named_functions()
+                .values()
+                .map(|item| WithSampleIds {
+                    item,
+                    sample_ids: &sample_ids,
+                }),
+            "id",
+        )
     }
 }
 
