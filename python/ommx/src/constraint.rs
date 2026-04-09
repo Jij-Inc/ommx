@@ -79,7 +79,7 @@ impl Constraint {
     #[new]
     #[pyo3(signature = (*, function, equality, id=None, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
-        function: &Bound<PyAny>,
+        function: Function,
         equality: Equality,
         id: Option<u64>,
         name: Option<String>,
@@ -87,8 +87,7 @@ impl Constraint {
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
-        // Extract function from polymorphic input using Function::new
-        let rust_function = Function::new(function)?.0;
+        let rust_function = function.0;
 
         // Auto-generate ID if not provided
         let constraint_id = match id {

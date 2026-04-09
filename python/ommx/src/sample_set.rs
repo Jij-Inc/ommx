@@ -469,6 +469,7 @@ impl SampleSet {
 
     /// Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
     /// Index is sample_id.
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn summary<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -500,6 +501,7 @@ impl SampleSet {
 
     /// Summary DataFrame with per-constraint feasibility columns.
     /// Index is sample_id.
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn summary_with_constraints<'py>(
         &self,
@@ -574,6 +576,7 @@ impl SampleSet {
     ///
     /// Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
     /// This implementation uses integer column names for natural pandas indexing.
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -616,6 +619,7 @@ impl SampleSet {
     /// DataFrame of constraints with per-sample value and feasibility columns.
     /// Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
     /// Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -678,6 +682,7 @@ impl SampleSet {
     ///
     /// Note: The old Python wrapper used string column names for sample IDs.
     /// This implementation uses integer column names for natural pandas indexing.
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;

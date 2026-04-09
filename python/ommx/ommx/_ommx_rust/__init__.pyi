@@ -3,8 +3,10 @@
 
 import builtins
 import collections.abc
+import datetime
 import enum
 import os
+import pandas
 import pathlib
 import typing
 from typing import TypeAlias
@@ -215,7 +217,7 @@ class Constraint:
     def __new__(
         cls,
         *,
-        function: typing.Any,
+        function: ToFunction,
         equality: Equality,
         id: typing.Optional[builtins.int] = None,
         name: typing.Optional[builtins.str] = None,
@@ -742,13 +744,14 @@ class Function:
         """
     @property
     def type_name(self) -> builtins.str: ...
-    def __new__(cls, inner: typing.Any) -> Function:
+    def __new__(cls, inner: ToFunction) -> Function:
         r"""
         Create a Function from various types.
 
         Accepts:
         - int or float: creates a constant function
         - DecisionVariable: creates a linear function with single term
+        - Parameter: creates a linear function with single term
         - Linear: creates a linear function
         - Quadratic: creates a quadratic function
         - Polynomial: creates a polynomial function
@@ -803,19 +806,19 @@ class Function:
         r"""
         Negation operator
         """
-    def __add__(self, rhs: typing.Any) -> typing.Any:
+    def __add__(self, rhs: typing.Any) -> Function:
         r"""
-        Polymorphic addition: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        Addition: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
         """
-    def __radd__(self, lhs: typing.Any) -> typing.Any:
+    def __radd__(self, lhs: typing.Any) -> Function:
         r"""
         Reverse addition (lhs + self)
         """
-    def __sub__(self, rhs: typing.Any) -> typing.Any:
+    def __sub__(self, rhs: typing.Any) -> Function:
         r"""
-        Polymorphic subtraction: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        Subtraction: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
         """
-    def __rsub__(self, lhs: typing.Any) -> typing.Any:
+    def __rsub__(self, lhs: typing.Any) -> Function:
         r"""
         Reverse subtraction (lhs - self)
         """
@@ -827,11 +830,11 @@ class Function:
         Note: This returns `()` in Rust, but PyO3 automatically returns `self` to Python.
         See <https://github.com/PyO3/pyo3/issues/4605> for details.
         """
-    def __mul__(self, rhs: typing.Any) -> typing.Any:
+    def __mul__(self, rhs: typing.Any) -> Function:
         r"""
-        Polymorphic multiplication: supports int, float, DecisionVariable, Linear, Quadratic, Polynomial, Function
+        Multiplication: supports int, float, DecisionVariable, Parameter, Linear, Quadratic, Polynomial, Function
         """
-    def __rmul__(self, lhs: typing.Any) -> typing.Any:
+    def __rmul__(self, lhs: typing.Any) -> Function:
         r"""
         Reverse multiplication (lhs * self)
         """
@@ -945,7 +948,7 @@ class Instance:
 
     MAXIMIZE: Sense
     MINIMIZE: Sense
-    Description: typing.Any
+    Description: type[InstanceDescription]
     @property
     def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
         r"""
@@ -984,9 +987,9 @@ class Instance:
     @num_constraints.setter
     def num_constraints(self, value: builtins.int) -> None: ...
     @property
-    def created(self) -> typing.Optional[typing.Any]: ...
+    def created(self) -> datetime.datetime | None: ...
     @created.setter
-    def created(self, value: typing.Any) -> None: ...
+    def created(self, value: datetime.datetime) -> None: ...
     @property
     def sense(self) -> Sense: ...
     @property
@@ -1030,22 +1033,22 @@ class Instance:
     @property
     def used_decision_variables(self) -> builtins.list[DecisionVariable]: ...
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints
         """
     @property
-    def removed_constraints_df(self) -> typing.Any:
+    def removed_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed constraints
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions
         """
@@ -2224,7 +2227,7 @@ class NamedFunction:
         cls,
         *,
         id: builtins.int,
-        function: typing.Any,
+        function: ToFunction,
         name: typing.Optional[builtins.str] = None,
         subscripts: typing.Sequence[builtins.int] = [],
         description: typing.Optional[builtins.str] = None,
@@ -2485,9 +2488,9 @@ class ParametricInstance:
     @num_constraints.setter
     def num_constraints(self, value: builtins.int) -> None: ...
     @property
-    def created(self) -> typing.Optional[typing.Any]: ...
+    def created(self) -> datetime.datetime | None: ...
     @created.setter
-    def created(self, value: typing.Any) -> None: ...
+    def created(self, value: datetime.datetime) -> None: ...
     @property
     def sense(self) -> Sense: ...
     @property
@@ -2511,27 +2514,27 @@ class ParametricInstance:
     @property
     def parameter_ids(self) -> builtins.set[builtins.int]: ...
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints
         """
     @property
-    def removed_constraints_df(self) -> typing.Any:
+    def removed_constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of removed constraints
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions
         """
     @property
-    def parameters_df(self) -> typing.Any:
+    def parameters_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of parameters
         """
@@ -2992,13 +2995,13 @@ class SampleSet:
     @parameters_annotation.setter
     def parameters_annotation(self, value: typing.Any) -> None: ...
     @property
-    def start(self) -> typing.Optional[typing.Any]: ...
+    def start(self) -> datetime.datetime | None: ...
     @start.setter
-    def start(self, value: typing.Any) -> None: ...
+    def start(self, value: datetime.datetime) -> None: ...
     @property
-    def end(self) -> typing.Optional[typing.Any]: ...
+    def end(self) -> datetime.datetime | None: ...
     @end.setter
-    def end(self, value: typing.Any) -> None: ...
+    def end(self, value: datetime.datetime) -> None: ...
     @property
     def instance(self) -> typing.Optional[builtins.str]: ...
     @instance.setter
@@ -3096,19 +3099,19 @@ class SampleSet:
         Get all unique named function names in this sample set
         """
     @property
-    def summary(self) -> typing.Any:
+    def summary(self) -> pandas.DataFrame:
         r"""
         Summary DataFrame with columns: objective, feasible. Sorted by feasible desc then objective.
         Index is sample_id.
         """
     @property
-    def summary_with_constraints(self) -> typing.Any:
+    def summary_with_constraints(self) -> pandas.DataFrame:
         r"""
         Summary DataFrame with per-constraint feasibility columns.
         Index is sample_id.
         """
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of decision variables with per-sample value columns.
         Static columns: id, kind, lower, upper, name, subscripts, description.
@@ -3118,14 +3121,14 @@ class SampleSet:
         This implementation uses integer column names for natural pandas indexing.
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of constraints with per-sample value and feasibility columns.
         Static columns: id, equality, used_ids, name, subscripts, description, removed_reason, removed_reason_parameters.
         Dynamic columns: value.{sample_id} and feasible.{sample_id} for each sample.
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of named functions with per-sample value columns.
         Static columns: id, used_ids, name, subscripts, description, parameters.
@@ -3451,13 +3454,13 @@ class Solution:
     @parameters_annotation.setter
     def parameters_annotation(self, value: typing.Any) -> None: ...
     @property
-    def start(self) -> typing.Optional[typing.Any]: ...
+    def start(self) -> datetime.datetime | None: ...
     @start.setter
-    def start(self, value: typing.Any) -> None: ...
+    def start(self, value: datetime.datetime) -> None: ...
     @property
-    def end(self) -> typing.Optional[typing.Any]: ...
+    def end(self) -> datetime.datetime | None: ...
     @end.setter
-    def end(self, value: typing.Any) -> None: ...
+    def end(self, value: datetime.datetime) -> None: ...
     @property
     def instance(self) -> typing.Optional[builtins.str]: ...
     @instance.setter
@@ -3579,21 +3582,21 @@ class Solution:
         Get all unique named function names in this solution
         """
     @property
-    def decision_variables_df(self) -> typing.Any:
+    def decision_variables_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated decision variables
 
         Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
         """
     @property
-    def constraints_df(self) -> typing.Any:
+    def constraints_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated constraints
 
         Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
         """
     @property
-    def named_functions_df(self) -> typing.Any:
+    def named_functions_df(self) -> pandas.DataFrame:
         r"""
         DataFrame of evaluated named functions
 

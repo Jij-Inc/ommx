@@ -185,6 +185,7 @@ macro_rules! impl_instance_annotations {
 
             // --- Datetime property (RFC3339 string ↔ Python datetime via dateutil) ---
 
+            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn created<'py>(
                 &self,
@@ -202,6 +203,7 @@ macro_rules! impl_instance_annotations {
             #[setter]
             pub fn set_created(
                 &mut self,
+                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
                 value: &pyo3::Bound<'_, pyo3::PyAny>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
@@ -376,6 +378,7 @@ macro_rules! impl_solution_annotations {
 
             // --- Datetime properties (RFC3339 string ↔ Python datetime via dateutil) ---
 
+            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn start<'py>(
                 &self,
@@ -393,6 +396,7 @@ macro_rules! impl_solution_annotations {
             #[setter]
             pub fn set_start(
                 &mut self,
+                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
                 value: &pyo3::Bound<'_, pyo3::PyAny>,
             ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
@@ -401,6 +405,7 @@ macro_rules! impl_solution_annotations {
                 Ok(())
             }
 
+            #[gen_stub(override_return_type(type_repr = "datetime.datetime | None", imports = ("datetime",)))]
             #[getter]
             pub fn end<'py>(
                 &self,
@@ -416,7 +421,11 @@ macro_rules! impl_solution_annotations {
             }
 
             #[setter]
-            pub fn set_end(&mut self, value: &pyo3::Bound<'_, pyo3::PyAny>) -> pyo3::PyResult<()> {
+            pub fn set_end(
+                &mut self,
+                #[gen_stub(override_type(type_repr = "datetime.datetime", imports = ("datetime",)))]
+                value: &pyo3::Bound<'_, pyo3::PyAny>,
+            ) -> pyo3::PyResult<()> {
                 let iso: String = value.call_method0("isoformat")?.extract()?;
                 self.annotations
                     .insert(concat!($namespace, ".end").to_string(), iso);

@@ -29,14 +29,13 @@ impl NamedFunction {
     #[pyo3(signature = (*, id, function, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
         id: u64,
-        function: &Bound<PyAny>,
+        function: Function,
         name: Option<String>,
         subscripts: Vec<i64>,
         description: Option<String>,
         parameters: HashMap<String, String>,
     ) -> PyResult<Self> {
-        // Extract function from polymorphic input using Function::new
-        let rust_function = Function::new(function)?.0;
+        let rust_function = function.0;
         let named_function_id = NamedFunctionID::from(id);
 
         let named_function = ommx::NamedFunction {

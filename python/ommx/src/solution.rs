@@ -449,6 +449,7 @@ impl Solution {
     /// DataFrame of evaluated decision variables
     ///
     /// Columns: id (index), kind, lower, upper, name, subscripts, description, substituted_value, value
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -495,6 +496,7 @@ impl Solution {
     /// DataFrame of evaluated constraints
     ///
     /// Columns: id (index), equality, value, used_ids, name, subscripts, description, dual_variable, removed_reason
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -548,6 +550,7 @@ impl Solution {
     /// DataFrame of evaluated named functions
     ///
     /// Columns: id (index), value, used_ids, name, subscripts, description, parameters.{key}
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;

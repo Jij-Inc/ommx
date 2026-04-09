@@ -278,6 +278,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of decision variables
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -296,6 +297,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of constraints
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -313,6 +315,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of removed constraints
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -330,6 +333,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of named functions
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -347,6 +351,7 @@ impl ParametricInstance {
     }
 
     /// DataFrame of parameters
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn parameters_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;

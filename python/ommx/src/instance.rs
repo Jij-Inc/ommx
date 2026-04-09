@@ -184,6 +184,7 @@ impl Instance {
         Sense::Minimize
     }
 
+    #[gen_stub(override_return_type(type_repr = "type[InstanceDescription]"))]
     #[classattr]
     #[pyo3(name = "Description")]
     fn class_description(py: Python<'_>) -> PyResult<Py<PyAny>> {
@@ -1218,6 +1219,7 @@ impl Instance {
     }
 
     /// DataFrame of decision variables
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -1236,6 +1238,7 @@ impl Instance {
     }
 
     /// DataFrame of constraints
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -1253,6 +1256,7 @@ impl Instance {
     }
 
     /// DataFrame of removed constraints
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn removed_constraints_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -1270,6 +1274,7 @@ impl Instance {
     }
 
     /// DataFrame of named functions
+    #[gen_stub(override_return_type(type_repr = "pandas.DataFrame", imports = ("pandas",)))]
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
