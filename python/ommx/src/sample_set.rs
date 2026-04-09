@@ -513,20 +513,21 @@ impl SampleSet {
         let constraint_labels: Vec<(ommx::ConstraintID, String)> = constraints
             .iter()
             .map(|(&id, sc)| {
-                let label = if let Some(name) = &sc.metadata.name {
-                    if sc.metadata.subscripts.is_empty() {
-                        name.clone()
-                    } else {
-                        let subs: Vec<String> = sc
-                            .metadata
-                            .subscripts
-                            .iter()
-                            .map(|s| s.to_string())
-                            .collect();
-                        format!("{}[{}]", name, subs.join(", "))
+                let label = match sc.metadata.name.as_deref().filter(|n| !n.is_empty()) {
+                    Some(name) => {
+                        if sc.metadata.subscripts.is_empty() {
+                            name.to_string()
+                        } else {
+                            let subs: Vec<String> = sc
+                                .metadata
+                                .subscripts
+                                .iter()
+                                .map(|s| s.to_string())
+                                .collect();
+                            format!("{}[{}]", name, subs.join(", "))
+                        }
                     }
-                } else {
-                    id.into_inner().to_string()
+                    None => id.into_inner().to_string(),
                 };
                 (id, label)
             })
@@ -569,7 +570,10 @@ impl SampleSet {
 
     /// DataFrame of decision variables with per-sample value columns.
     /// Static columns: id, kind, lower, upper, name, subscripts, description.
-    /// Dynamic columns: one per sample_id with the variable's value.
+    /// Dynamic columns: one per sample_id (int) with the variable's value.
+    ///
+    /// Note: The old Python wrapper used string column names for sample IDs (e.g., `"0"`, `"1"`).
+    /// This implementation uses integer column names for natural pandas indexing.
     #[getter]
     pub fn decision_variables_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;
@@ -670,7 +674,10 @@ impl SampleSet {
 
     /// DataFrame of named functions with per-sample value columns.
     /// Static columns: id, used_ids, name, subscripts, description, parameters.
-    /// Dynamic columns: one per sample_id with the function's evaluated value.
+    /// Dynamic columns: one per sample_id (int) with the function's evaluated value.
+    ///
+    /// Note: The old Python wrapper used string column names for sample IDs.
+    /// This implementation uses integer column names for natural pandas indexing.
     #[getter]
     pub fn named_functions_df<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyAny>> {
         let pandas = py.import("pandas")?;

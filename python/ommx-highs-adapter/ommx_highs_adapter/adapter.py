@@ -182,7 +182,7 @@ class OMMXHighsAdapter(SolverAdapter):
             The solution containing:
             - Variable values in solution.state.entries
             - Objective value in solution.objective
-            - Constraint evaluations in solution.evaluated_constraints
+            - Constraint evaluations in solution.constraints
             - Optimality status in solution.optimality
             - Dual variables (if available) in constraint.dual_variable
 
