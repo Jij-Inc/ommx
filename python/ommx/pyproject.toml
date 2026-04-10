@@ -52,7 +52,7 @@ before-build = "rustup toolchain install nightly-2026-01-01 && rustup target add
 config-settings = { build-args = "--no-default-features" }
 
 [tool.pyo3-stub-gen]
-generate-init-py = ["ommx.v1"]
+generate-init-py = ["ommx.v1", "ommx.artifact"]
 
 [tool.pyo3-stub-gen.doc-gen]
 output-dir = "../../docs/api_reference/api"

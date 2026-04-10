@@ -1,6 +1,2294 @@
 {
   "name": "ommx",
   "modules": {
+    "ommx.artifact": {
+      "name": "ommx.artifact",
+      "doc": "",
+      "items": [
+        {
+          "kind": "Class",
+          "name": "Artifact",
+          "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f",
+          "bases": [],
+          "methods": [
+            {
+              "name": "get_blob",
+              "doc": "Get raw bytes of a blob by digest.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "digest",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_dataframe",
+              "doc": "Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_dataframe`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_instance",
+              "doc": "Get an instance from the artifact.\n\n- If `descriptor` is `None`, returns the first instance layer.\n- If `descriptor` is given, returns the instance for that specific layer.\n\nRaises `ValueError` if no instance layer is found.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Optional[_ommx_rust.Descriptor]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Descriptor",
+                            "link_target": {
+                              "fqn": "ommx.artifact.Descriptor",
+                              "doc_module": "ommx.artifact",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Instance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_json",
+              "doc": "Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_json`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_layer",
+              "doc": "Get the layer object corresponding to the descriptor.\n\nDynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:\n- `application/org.ommx.v1.instance` returns {class}`~ommx.v1.Instance`\n- `application/org.ommx.v1.solution` returns {class}`~ommx.v1.Solution`\n- `application/vnd.numpy` returns a numpy array",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_layer_descriptor",
+              "doc": "Look up a layer descriptor by digest.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "digest",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_ndarray",
+              "doc": "Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_ndarray`.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Descriptor",
+                        "link_target": {
+                          "fqn": "ommx.artifact.Descriptor",
+                          "doc_module": "ommx.artifact",
+                          "kind": "Class",
+                          "attribute": null
+                        },
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Any",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_parametric_instance",
+              "doc": "Get a parametric instance from the artifact.\n\n- If `descriptor` is `None`, returns the first parametric instance layer.\n- If `descriptor` is given, returns the parametric instance for that specific layer.\n\nRaises `ValueError` if no parametric instance layer is found.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Optional[_ommx_rust.Descriptor]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Descriptor",
+                            "link_target": {
+                              "fqn": "ommx.artifact.Descriptor",
+                              "doc_module": "ommx.artifact",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ParametricInstance",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_sample_set",
+              "doc": "Get a sample set from the artifact.\n\n- If `descriptor` is `None`, returns the first sample set layer.\n- If `descriptor` is given, returns the sample set for that specific layer.\n\nRaises `ValueError` if no sample set layer is found.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Optional[_ommx_rust.Descriptor]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Descriptor",
+                            "link_target": {
+                              "fqn": "ommx.artifact.Descriptor",
+                              "doc_module": "ommx.artifact",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "SampleSet",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_solution",
+              "doc": "Get a solution from the artifact.\n\n- If `descriptor` is `None`, returns the first solution layer.\n- If `descriptor` is given, returns the solution for that specific layer.\n\nRaises `ValueError` if no solution layer is found.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "descriptor",
+                      "type_": {
+                        "display": "Optional[_ommx_rust.Descriptor]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "Descriptor",
+                            "link_target": {
+                              "fqn": "ommx.artifact.Descriptor",
+                              "doc_module": "ommx.artifact",
+                              "kind": "Class",
+                              "attribute": null
+                            },
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "None"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Solution",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "load",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "load_archive",
+              "doc": "Load an artifact stored as a single file or directory.\n\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "push",
+              "doc": "Push the artifact to remote registry.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "Annotations in the artifact manifest.",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "layers",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ArtifactArchive",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "from_oci_archive",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactArchive",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactArchive",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "digest",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "push",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "layers",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ArtifactArchiveBuilder",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "add_annotation",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_layer",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "blob",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "build",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ArtifactArchive",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactArchive",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactArchiveBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactArchiveBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_unnamed",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactArchiveBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactArchiveBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "temp",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ArtifactArchiveBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactArchiveBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ArtifactBuilder",
+          "doc": "Builder for OMMX Artifacts.\n\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
+          "bases": [],
+          "methods": [
+            {
+              "name": "add_annotation",
+              "doc": "Add annotation to the artifact itself.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_dataframe",
+              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "df",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotation_namespace",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'org.ommx.user.'"
+                      }
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_instance",
+              "doc": "Add an {class}`~ommx.v1.Instance` to the artifact with annotations.\n\n>>> from ommx.v1 import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> builder = ArtifactBuilder.temp()\n>>> desc = builder.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "Instance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_json",
+              "doc": "Add a JSON object to the artifact.\n\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_json(obj, title=\"test_json\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "obj",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotation_namespace",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'org.ommx.user.'"
+                      }
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_layer",
+              "doc": "Low-level API to add any type of layer to the artifact with annotations.\n\nUse {meth}`add_instance` or other high-level methods if possible.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "blob",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "{}"
+                      }
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_ndarray",
+              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_ndarray(array, title=\"test_array\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "array",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotation_namespace",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": {
+                        "kind": "Simple",
+                        "value": "'org.ommx.user.'"
+                      }
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_parametric_instance",
+              "doc": "Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "instance",
+                      "type_": {
+                        "display": "ParametricInstance",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_sample_set",
+              "doc": "Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "sample_set",
+                      "type_": {
+                        "display": "SampleSet",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_solution",
+              "doc": "Add a {class}`~ommx.v1.Solution` to the artifact with annotations.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "solution",
+                      "type_": {
+                        "display": "Solution",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "build",
+              "doc": "Build the artifact.",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "Artifact",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Artifact",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_github",
+              "doc": "An alias for {meth}`new` to create a new artifact in local registry\nwith GitHub Container Registry image name.\n\nThis also sets the `org.opencontainers.image.source` annotation\nto the GitHub repository URL.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "org",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "repo",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "tag",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new",
+              "doc": "Create a new artifact in local registry with a named image name.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_archive",
+              "doc": "Create a new artifact archive with a named image name.",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new_archive_unnamed",
+              "doc": "Create a new artifact archive with an unnamed image name.\n\nThis cannot be loaded into local registry nor pushed to remote registry.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nNone",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "temp",
+              "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ArtifactBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ArtifactDir",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "from_image_name",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactDir",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactDir",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_oci_dir",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "path",
+                      "type_": {
+                        "display": "str | PathLike | Path",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "PathLike",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "Path",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactDir",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactDir",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "get_blob",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "digest",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bytes",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "push",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "image_name",
+              "doc": "",
+              "type_": {
+                "display": "Optional[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "layers",
+              "doc": "",
+              "type_": {
+                "display": "list[_ommx_rust.Descriptor]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "ArtifactDirBuilder",
+          "doc": "",
+          "bases": [],
+          "methods": [
+            {
+              "name": "add_annotation",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "key",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "value",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "None",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "add_layer",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "media_type",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "blob",
+                      "type_": {
+                        "display": "bytes",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "annotations",
+                      "type_": {
+                        "display": "Mapping[str, str]",
+                        "link_target": null,
+                        "children": [
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          },
+                          {
+                            "display": "str",
+                            "link_target": null,
+                            "children": []
+                          }
+                        ]
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "build",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "ArtifactDir",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactDir",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "for_github",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "org",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "repo",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    },
+                    {
+                      "name": "tag",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactDirBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactDirBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "new",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "image_name",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "ArtifactDirBuilder",
+                    "link_target": {
+                      "fqn": "ommx.artifact.ArtifactDirBuilder",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [],
+          "deprecated": null
+        },
+        {
+          "kind": "Class",
+          "name": "Descriptor",
+          "doc": "Descriptor of blob in artifact",
+          "bases": [],
+          "methods": [
+            {
+              "name": "__eq__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "rhs",
+                      "type_": {
+                        "display": "Any",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "bool",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "__str__",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_dict",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "dict",
+                      "type_": {
+                        "display": "dict",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "from_json",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [
+                    {
+                      "name": "json",
+                      "type_": {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      "default": null
+                    }
+                  ],
+                  "return_type": {
+                    "display": "Descriptor",
+                    "link_target": {
+                      "fqn": "ommx.artifact.Descriptor",
+                      "doc_module": "ommx.artifact",
+                      "kind": "Class",
+                      "attribute": null
+                    },
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_dict",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "dict",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            },
+            {
+              "name": "to_json",
+              "doc": "",
+              "signatures": [
+                {
+                  "parameters": [],
+                  "return_type": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                }
+              ],
+              "is_async": false,
+              "deprecated": null
+            }
+          ],
+          "attributes": [
+            {
+              "name": "annotations",
+              "doc": "",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "digest",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "media_type",
+              "doc": "",
+              "type_": {
+                "display": "str",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "size",
+              "doc": "",
+              "type_": {
+                "display": "int",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "user_annotations",
+              "doc": "Return annotations with key prefix \"org.ommx.user.\"",
+              "type_": {
+                "display": "dict[str, str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            }
+          ],
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "get_image_dir",
+          "doc": "Get the path where given image is stored in the local registry.\n\n- The directory may not exist if the image is not in the local registry.",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "image_name",
+                  "type_": {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  },
+                  "default": null
+                }
+              ],
+              "return_type": {
+                "display": "Path",
+                "link_target": null,
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "get_images",
+          "doc": "Get all image names stored in the local registry.\n\nReturns a list of image names (as strings) found in the local registry.",
+          "signatures": [
+            {
+              "parameters": [],
+              "return_type": {
+                "display": "list[str]",
+                "link_target": null,
+                "children": [
+                  {
+                    "display": "str",
+                    "link_target": null,
+                    "children": []
+                  }
+                ]
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "get_local_registry_root",
+          "doc": "Get the current OMMX Local Registry root path.",
+          "signatures": [
+            {
+              "parameters": [],
+              "return_type": {
+                "display": "Path",
+                "link_target": null,
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        },
+        {
+          "kind": "Function",
+          "name": "set_local_registry_root",
+          "doc": "Set the OMMX Local Registry root path.\n\n- The local registry root can be set only once per process,\n  and this function will return an error if it is already set.\n- The root path is automatically set when used for creating artifacts without calling this function.\n- Default path is following:\n  - If `OMMX_LOCAL_REGISTRY_ROOT` environment variable is set, its value is used.\n  - Otherwise, OS-specific path by [directories](https://docs.rs/directories/latest/directories/struct.ProjectDirs.html#method.data_dir) is used:\n    - `$XDG_DATA_HOME/ommx/` on Linux\n    - `$HOME/Library/Application Support/org.ommx.ommx/` on macOS",
+          "signatures": [
+            {
+              "parameters": [
+                {
+                  "name": "path",
+                  "type_": {
+                    "display": "str | PathLike | Path",
+                    "link_target": null,
+                    "children": [
+                      {
+                        "display": "str",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "PathLike",
+                        "link_target": null,
+                        "children": []
+                      },
+                      {
+                        "display": "Path",
+                        "link_target": null,
+                        "children": []
+                      }
+                    ]
+                  },
+                  "default": null
+                }
+              ],
+              "return_type": {
+                "display": "None",
+                "link_target": null,
+                "children": []
+              }
+            }
+          ],
+          "is_async": false,
+          "deprecated": null
+        }
+      ],
+      "submodules": []
+    },
     "ommx.v1": {
       "name": "ommx.v1",
       "doc": "",
@@ -17614,6 +19902,17 @@
     }
   },
   "export_map": {
+    "ommx.artifact.Artifact": "ommx.artifact",
+    "ommx.artifact.ArtifactArchive": "ommx.artifact",
+    "ommx.artifact.ArtifactArchiveBuilder": "ommx.artifact",
+    "ommx.artifact.ArtifactBuilder": "ommx.artifact",
+    "ommx.artifact.ArtifactDir": "ommx.artifact",
+    "ommx.artifact.ArtifactDirBuilder": "ommx.artifact",
+    "ommx.artifact.Descriptor": "ommx.artifact",
+    "ommx.artifact.get_image_dir": "ommx.artifact",
+    "ommx.artifact.get_images": "ommx.artifact",
+    "ommx.artifact.get_local_registry_root": "ommx.artifact",
+    "ommx.artifact.set_local_registry_root": "ommx.artifact",
     "ommx.v1.Bound": "ommx.v1",
     "ommx.v1.Constraint": "ommx.v1",
     "ommx.v1.ConstraintHints": "ommx.v1",
