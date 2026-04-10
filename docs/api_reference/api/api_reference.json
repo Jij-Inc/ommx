@@ -8,7 +8,7 @@
         {
           "kind": "Class",
           "name": "Artifact",
-          "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f",
+          "doc": "Reader for OMMX Artifacts.\n\nAn artifact is an OCI container image that stores OMMX data\n(instances, solutions, sample sets, etc.) as layers.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
           "bases": [],
           "methods": [
             {
@@ -354,7 +354,7 @@
             },
             {
               "name": "load",
-              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f",
+              "doc": "Load an artifact stored as a container image in local or remote registry.\n\nIf the image is not found in local registry, it will try to pull from remote registry.\n\n```python\n>>> artifact = Artifact.load(\"ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:4303c7f\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -385,7 +385,7 @@
             },
             {
               "name": "load_archive",
-              "doc": "Load an artifact stored as a single file or directory.\n\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...",
+              "doc": "Load an artifact stored as a single file or directory.\n\n```python\n>>> artifact = Artifact.load_archive(\"data/random_lp_instance.ommx\")\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/random_lp_instance:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -926,7 +926,7 @@
         {
           "kind": "Class",
           "name": "ArtifactBuilder",
-          "doc": "Builder for OMMX Artifacts.\n\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
+          "doc": "Builder for OMMX Artifacts.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
           "bases": [],
           "methods": [
             {
@@ -966,7 +966,7 @@
             },
             {
               "name": "add_dataframe",
-              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet",
+              "doc": "Add a pandas DataFrame to the artifact with parquet format.\n\n```python\n>>> import pandas as pd\n>>> df = pd.DataFrame({\"a\": [1, 2], \"b\": [3, 4]})\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_dataframe(df, title=\"test_dataframe\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.apache.parquet\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1018,7 +1018,7 @@
             },
             {
               "name": "add_instance",
-              "doc": "Add an {class}`~ommx.v1.Instance` to the artifact with annotations.\n\n>>> from ommx.v1 import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> builder = ArtifactBuilder.temp()\n>>> desc = builder.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance",
+              "doc": "Add an {class}`~ommx.v1.Instance` to the artifact with annotations.\n\n```python\n>>> from ommx.v1 import Instance\n>>> instance = Instance.empty()\n>>> instance.title = \"test instance\"\n>>> builder = ArtifactBuilder.temp()\n>>> desc = builder.add_instance(instance)\n>>> print(desc.annotations['org.ommx.v1.instance.title'])\ntest instance\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1049,7 +1049,7 @@
             },
             {
               "name": "add_json",
-              "doc": "Add a JSON object to the artifact.\n\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_json(obj, title=\"test_json\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json",
+              "doc": "Add a JSON object to the artifact.\n\n```python\n>>> obj = {\"a\": 1, \"b\": 2}\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_json(obj, title=\"test_json\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/json\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1164,7 +1164,7 @@
             },
             {
               "name": "add_ndarray",
-              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_ndarray(array, title=\"test_array\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}",
+              "doc": "Add a numpy ndarray to the artifact with npy format.\n\n```python\n>>> import numpy as np\n>>> array = np.array([1, 2, 3])\n>>> builder = ArtifactBuilder.temp()\n>>> _desc = builder.add_ndarray(array, title=\"test_array\")\n>>> artifact = builder.build()\n>>> layer = artifact.layers[0]\n>>> print(layer.media_type)\napplication/vnd.numpy\n>>> print(layer.annotations)\n{'org.ommx.user.title': 'test_array'}\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1388,7 +1388,7 @@
             },
             {
               "name": "new",
-              "doc": "Create a new artifact in local registry with a named image name.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...",
+              "doc": "Create a new artifact in local registry with a named image name.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> image_name = f\"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new(image_name)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nghcr.io/jij-inc/ommx/single_feasible_lp:...\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1475,7 +1475,7 @@
             },
             {
               "name": "new_archive_unnamed",
-              "doc": "Create a new artifact archive with an unnamed image name.\n\nThis cannot be loaded into local registry nor pushed to remote registry.\n\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nNone",
+              "doc": "Create a new artifact archive with an unnamed image name.\n\nThis cannot be loaded into local registry nor pushed to remote registry.\n\n```python\n>>> from ommx.testing import SingleFeasibleLPGenerator, DataType\n>>> generator = SingleFeasibleLPGenerator(3, DataType.INT)\n>>> instance = generator.get_v1_instance()\n>>> import uuid\n>>> filename = f\"data/single_feasible_lp.ommx.{uuid.uuid4()}\"\n>>> builder = ArtifactBuilder.new_archive_unnamed(filename)\n>>> _desc = builder.add_instance(instance)\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nNone\n\n```",
               "signatures": [
                 {
                   "parameters": [
@@ -1522,7 +1522,7 @@
             },
             {
               "name": "temp",
-              "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h",
+              "doc": "Create a new artifact as a temporary file.\n\nNote that this is insecure and should only be used for testing.\n\n```python\n>>> builder = ArtifactBuilder.temp()\n>>> artifact = builder.build()\n>>> print(artifact.image_name)\nttl.sh/...-...-...-...-...:1h\n\n```",
               "signatures": [
                 {
                   "parameters": [],

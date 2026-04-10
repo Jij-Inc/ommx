@@ -97,10 +97,12 @@ impl ArtifactInner {
 /// An artifact is an OCI container image that stores OMMX data
 /// (instances, solutions, sample sets, etc.) as layers.
 ///
+/// ```python
 /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
 /// >>> print(artifact.image_name)
 /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
 ///
+/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "Artifact")]
@@ -111,10 +113,12 @@ pub struct PyArtifact(ArtifactInner);
 impl PyArtifact {
     /// Load an artifact stored as a single file or directory.
     ///
+    /// ```python
     /// >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:...
     ///
+    /// ```
     #[staticmethod]
     pub fn load_archive(path: PathBuf) -> Result<Self> {
         if path.is_file() {
@@ -132,10 +136,12 @@ impl PyArtifact {
     ///
     /// If the image is not found in local registry, it will try to pull from remote registry.
     ///
+    /// ```python
     /// >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
     ///
+    /// ```
     #[cfg(feature = "remote-artifact")]
     #[staticmethod]
     pub fn load(image_name: &str) -> Result<Self> {
@@ -511,11 +517,13 @@ impl BuilderInner {
 
 /// Builder for OMMX Artifacts.
 ///
+/// ```python
 /// >>> builder = ArtifactBuilder.temp()
 /// >>> artifact = builder.build()
 /// >>> print(artifact.image_name)
 /// ttl.sh/...-...-...-...-...:1h
 ///
+/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[pyo3(module = "ommx._ommx_rust", name = "ArtifactBuilder")]
@@ -528,6 +536,7 @@ impl PyArtifactBuilder {
     ///
     /// This cannot be loaded into local registry nor pushed to remote registry.
     ///
+    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
@@ -539,6 +548,7 @@ impl PyArtifactBuilder {
     /// >>> print(artifact.image_name)
     /// None
     ///
+    /// ```
     #[staticmethod]
     pub fn new_archive_unnamed(path: PathBuf) -> Result<Self> {
         let builder = ommx::artifact::Builder::new_archive_unnamed(path)?;
@@ -555,6 +565,7 @@ impl PyArtifactBuilder {
 
     /// Create a new artifact in local registry with a named image name.
     ///
+    /// ```python
     /// >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
     /// >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
     /// >>> instance = generator.get_v1_instance()
@@ -566,6 +577,7 @@ impl PyArtifactBuilder {
     /// >>> print(artifact.image_name)
     /// ghcr.io/jij-inc/ommx/single_feasible_lp:...
     ///
+    /// ```
     #[staticmethod]
     pub fn new(image_name: &str) -> Result<Self> {
         let image_name = ocipkg::ImageName::parse(image_name)?;
@@ -577,11 +589,13 @@ impl PyArtifactBuilder {
     ///
     /// Note that this is insecure and should only be used for testing.
     ///
+    /// ```python
     /// >>> builder = ArtifactBuilder.temp()
     /// >>> artifact = builder.build()
     /// >>> print(artifact.image_name)
     /// ttl.sh/...-...-...-...-...:1h
     ///
+    /// ```
     #[staticmethod]
     pub fn temp() -> Result<Self> {
         let builder = ommx::artifact::Builder::temp_archive()?;
@@ -601,6 +615,7 @@ impl PyArtifactBuilder {
 
     /// Add an {class}`~ommx.v1.Instance` to the artifact with annotations.
     ///
+    /// ```python
     /// >>> from ommx.v1 import Instance
     /// >>> instance = Instance.empty()
     /// >>> instance.title = "test instance"
@@ -609,6 +624,7 @@ impl PyArtifactBuilder {
     /// >>> print(desc.annotations['org.ommx.v1.instance.title'])
     /// test instance
     ///
+    /// ```
     pub fn add_instance(&mut self, instance: &crate::Instance) -> Result<PyDescriptor> {
         let blob = instance.inner.to_bytes();
         self.0.add_layer(
@@ -653,6 +669,7 @@ impl PyArtifactBuilder {
 
     /// Add a numpy ndarray to the artifact with npy format.
     ///
+    /// ```python
     /// >>> import numpy as np
     /// >>> array = np.array([1, 2, 3])
     /// >>> builder = ArtifactBuilder.temp()
@@ -664,6 +681,7 @@ impl PyArtifactBuilder {
     /// >>> print(layer.annotations)
     /// {'org.ommx.user.title': 'test_array'}
     ///
+    /// ```
     #[pyo3(signature = (array, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_ndarray(
         &mut self,
@@ -683,6 +701,7 @@ impl PyArtifactBuilder {
 
     /// Add a pandas DataFrame to the artifact with parquet format.
     ///
+    /// ```python
     /// >>> import pandas as pd
     /// >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
     /// >>> builder = ArtifactBuilder.temp()
@@ -692,6 +711,7 @@ impl PyArtifactBuilder {
     /// >>> print(layer.media_type)
     /// application/vnd.apache.parquet
     ///
+    /// ```
     #[pyo3(signature = (df, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_dataframe(
         &mut self,
@@ -707,6 +727,7 @@ impl PyArtifactBuilder {
 
     /// Add a JSON object to the artifact.
     ///
+    /// ```python
     /// >>> obj = {"a": 1, "b": 2}
     /// >>> builder = ArtifactBuilder.temp()
     /// >>> _desc = builder.add_json(obj, title="test_json")
@@ -715,6 +736,7 @@ impl PyArtifactBuilder {
     /// >>> print(layer.media_type)
     /// application/json
     ///
+    /// ```
     #[pyo3(signature = (obj, *, annotation_namespace = "org.ommx.user.", **annotations))]
     pub fn add_json(
         &mut self,

@@ -101,9 +101,12 @@ class Artifact:
     An artifact is an OCI container image that stores OMMX data
     (instances, solutions, sample sets, etc.) as layers.
 
+    ```python
     >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
     >>> print(artifact.image_name)
     ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+
+    ```
     """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...
@@ -119,9 +122,12 @@ class Artifact:
         r"""
         Load an artifact stored as a single file or directory.
 
+        ```python
         >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:...
+
+        ```
         """
     @staticmethod
     def load(image_name: builtins.str) -> Artifact:
@@ -130,9 +136,12 @@ class Artifact:
 
         If the image is not found in local registry, it will try to pull from remote registry.
 
+        ```python
         >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+
+        ```
         """
     def push(self) -> None:
         r"""
@@ -249,10 +258,13 @@ class ArtifactBuilder:
     r"""
     Builder for OMMX Artifacts.
 
+    ```python
     >>> builder = ArtifactBuilder.temp()
     >>> artifact = builder.build()
     >>> print(artifact.image_name)
     ttl.sh/...-...-...-...-...:1h
+
+    ```
     """
     @staticmethod
     def new_archive_unnamed(
@@ -263,6 +275,7 @@ class ArtifactBuilder:
 
         This cannot be loaded into local registry nor pushed to remote registry.
 
+        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
@@ -273,6 +286,8 @@ class ArtifactBuilder:
         >>> artifact = builder.build()
         >>> print(artifact.image_name)
         None
+
+        ```
         """
     @staticmethod
     def new_archive(
@@ -286,6 +301,7 @@ class ArtifactBuilder:
         r"""
         Create a new artifact in local registry with a named image name.
 
+        ```python
         >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
         >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
         >>> instance = generator.get_v1_instance()
@@ -296,6 +312,8 @@ class ArtifactBuilder:
         >>> artifact = builder.build()
         >>> print(artifact.image_name)
         ghcr.io/jij-inc/ommx/single_feasible_lp:...
+
+        ```
         """
     @staticmethod
     def temp() -> ArtifactBuilder:
@@ -304,10 +322,13 @@ class ArtifactBuilder:
 
         Note that this is insecure and should only be used for testing.
 
+        ```python
         >>> builder = ArtifactBuilder.temp()
         >>> artifact = builder.build()
         >>> print(artifact.image_name)
         ttl.sh/...-...-...-...-...:1h
+
+        ```
         """
     @staticmethod
     def for_github(
@@ -324,6 +345,7 @@ class ArtifactBuilder:
         r"""
         Add an {class}`~ommx.v1.Instance` to the artifact with annotations.
 
+        ```python
         >>> from ommx.v1 import Instance
         >>> instance = Instance.empty()
         >>> instance.title = "test instance"
@@ -331,6 +353,8 @@ class ArtifactBuilder:
         >>> desc = builder.add_instance(instance)
         >>> print(desc.annotations['org.ommx.v1.instance.title'])
         test instance
+
+        ```
         """
     def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
         r"""
@@ -354,6 +378,7 @@ class ArtifactBuilder:
         r"""
         Add a numpy ndarray to the artifact with npy format.
 
+        ```python
         >>> import numpy as np
         >>> array = np.array([1, 2, 3])
         >>> builder = ArtifactBuilder.temp()
@@ -364,6 +389,8 @@ class ArtifactBuilder:
         application/vnd.numpy
         >>> print(layer.annotations)
         {'org.ommx.user.title': 'test_array'}
+
+        ```
         """
     def add_dataframe(
         self,
@@ -375,6 +402,7 @@ class ArtifactBuilder:
         r"""
         Add a pandas DataFrame to the artifact with parquet format.
 
+        ```python
         >>> import pandas as pd
         >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         >>> builder = ArtifactBuilder.temp()
@@ -383,6 +411,8 @@ class ArtifactBuilder:
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/vnd.apache.parquet
+
+        ```
         """
     def add_json(
         self,
@@ -394,6 +424,7 @@ class ArtifactBuilder:
         r"""
         Add a JSON object to the artifact.
 
+        ```python
         >>> obj = {"a": 1, "b": 2}
         >>> builder = ArtifactBuilder.temp()
         >>> _desc = builder.add_json(obj, title="test_json")
@@ -401,6 +432,8 @@ class ArtifactBuilder:
         >>> layer = artifact.layers[0]
         >>> print(layer.media_type)
         application/json
+
+        ```
         """
     def add_layer(
         self,
