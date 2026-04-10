@@ -7,4 +7,5 @@ This is the API reference documentation generated from Rust code using `pyo3-stu
    :maxdepth: 2
    :caption: Modules:
 
+   ommx.artifact
    ommx.v1

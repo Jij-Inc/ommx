@@ -950,8 +950,8 @@ impl Instance {
             let analysis = self.inner.analyze_decision_variables();
             let integer_ids: BTreeSet<u64> = analysis
                 .used_integer()
-                .into_iter()
-                .map(|(id, _)| id.into_inner())
+                .into_keys()
+                .map(|id| id.into_inner())
                 .collect();
             if integer_ids.is_empty() {
                 return Ok(());
@@ -1463,8 +1463,8 @@ impl Instance {
             .inner
             .analyze_decision_variables()
             .used_continuous()
-            .into_iter()
-            .map(|(id, _)| id.into_inner())
+            .into_keys()
+            .map(|id| id.into_inner())
             .collect();
         if !continuous_ids.is_empty() {
             return Err(pyo3::exceptions::PyValueError::new_err(format!(

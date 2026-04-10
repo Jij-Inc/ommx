@@ -12,10 +12,8 @@ import typing
 from typing import TypeAlias
 
 __all__ = [
-    "ArtifactArchive",
-    "ArtifactArchiveBuilder",
-    "ArtifactDir",
-    "ArtifactDirBuilder",
+    "Artifact",
+    "ArtifactBuilder",
     "Bound",
     "Constraint",
     "ConstraintHints",
@@ -92,74 +90,362 @@ ToState: TypeAlias = (
 )
 
 @typing.final
-class ArtifactArchive:
+class Artifact:
+    r"""
+    Reader for OMMX Artifacts.
+
+    An artifact is an OCI container image that stores OMMX data
+    (instances, solutions, sample sets, etc.) as layers.
+
+    ```python
+    >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+    >>> print(artifact.image_name)
+    ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+
+    ```
+    """
     @property
     def image_name(self) -> typing.Optional[builtins.str]: ...
     @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
+    def annotations(self) -> builtins.dict[builtins.str, builtins.str]:
+        r"""
+        Annotations in the artifact manifest.
+        """
     @property
     def layers(self) -> builtins.list[Descriptor]: ...
+    @property
+    def instance(self) -> Instance:
+        r"""
+        The first instance layer in the artifact.
+
+        Raises `ValueError` if no instance layer is found.
+        For multiple instance layers, use {meth}`get_instance` with a descriptor.
+        """
+    @property
+    def solution(self) -> Solution:
+        r"""
+        The first solution layer in the artifact.
+
+        Raises `ValueError` if no solution layer is found.
+        For multiple solution layers, use {meth}`get_solution` with a descriptor.
+        """
+    @property
+    def parametric_instance(self) -> ParametricInstance:
+        r"""
+        The first parametric instance layer in the artifact.
+
+        Raises `ValueError` if no parametric instance layer is found.
+        For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
+        """
+    @property
+    def sample_set(self) -> SampleSet:
+        r"""
+        The first sample set layer in the artifact.
+
+        Raises `ValueError` if no sample set layer is found.
+        For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
+        """
     @staticmethod
-    def from_oci_archive(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchive: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
+    def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
+        r"""
+        Load an artifact stored as a single file or directory.
+
+        ```python
+        >>> artifact = Artifact.load_archive("data/random_lp_instance.ommx")
+        >>> print(artifact.image_name)
+        ghcr.io/jij-inc/ommx/random_lp_instance:...
+
+        ```
+        """
+    @staticmethod
+    def load(image_name: builtins.str) -> Artifact:
+        r"""
+        Load an artifact stored as a container image in local or remote registry.
+
+        If the image is not found in local registry, it will try to pull from remote registry.
+
+        ```python
+        >>> artifact = Artifact.load("ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f")
+        >>> print(artifact.image_name)
+        ghcr.io/jij-inc/ommx/random_lp_instance:4303c7f
+
+        ```
+        """
+    def push(self) -> None:
+        r"""
+        Push the artifact to remote registry.
+        """
+    def get_layer_descriptor(self, digest: builtins.str) -> Descriptor:
+        r"""
+        Look up a layer descriptor by digest.
+        """
+    def get_blob(self, digest_or_descriptor: typing.Any) -> bytes:
+        r"""
+        Get raw bytes of a blob by digest string or Descriptor.
+        """
+    def get_layer(self, descriptor: Descriptor) -> typing.Any:
+        r"""
+        Get the layer object corresponding to the descriptor.
+
+        Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
+        - `application/org.ommx.v1.instance` returns {class}`~ommx.v1.Instance`
+        - `application/org.ommx.v1.solution` returns {class}`~ommx.v1.Solution`
+        - `application/vnd.numpy` returns a numpy array
+        """
+    def get_instance(self, descriptor: typing.Optional[Descriptor] = None) -> Instance:
+        r"""
+        Get an instance from the artifact.
+
+        - If `descriptor` is `None`, returns the first instance layer.
+        - If `descriptor` is given, returns the instance for that specific layer.
+
+        Raises `ValueError` if no instance layer is found.
+        """
+    def get_solution(self, descriptor: typing.Optional[Descriptor] = None) -> Solution:
+        r"""
+        Get a solution from the artifact.
+
+        - If `descriptor` is `None`, returns the first solution layer.
+        - If `descriptor` is given, returns the solution for that specific layer.
+
+        Raises `ValueError` if no solution layer is found.
+        """
+    def get_parametric_instance(
+        self, descriptor: typing.Optional[Descriptor] = None
+    ) -> ParametricInstance:
+        r"""
+        Get a parametric instance from the artifact.
+
+        - If `descriptor` is `None`, returns the first parametric instance layer.
+        - If `descriptor` is given, returns the parametric instance for that specific layer.
+
+        Raises `ValueError` if no parametric instance layer is found.
+        """
+    def get_sample_set(
+        self, descriptor: typing.Optional[Descriptor] = None
+    ) -> SampleSet:
+        r"""
+        Get a sample set from the artifact.
+
+        - If `descriptor` is `None`, returns the first sample set layer.
+        - If `descriptor` is given, returns the sample set for that specific layer.
+
+        Raises `ValueError` if no sample set layer is found.
+        """
+    def get_ndarray(self, descriptor: Descriptor) -> typing.Any:
+        r"""
+        Get a numpy array from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_ndarray`.
+        """
+    def get_dataframe(self, descriptor: Descriptor) -> typing.Any:
+        r"""
+        Get a pandas DataFrame from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_dataframe`.
+        """
+    def get_json(self, descriptor: Descriptor) -> typing.Any:
+        r"""
+        Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_json`.
+        """
 
 @typing.final
-class ArtifactArchiveBuilder:
+class ArtifactBuilder:
+    r"""
+    Builder for OMMX Artifacts.
+
+    ```python
+    >>> builder = ArtifactBuilder.temp()
+    >>> artifact = builder.build()
+    >>> print(artifact.image_name)
+    ttl.sh/...-...-...-...-...:1h
+
+    ```
+    """
     @staticmethod
-    def new_unnamed(
+    def new_archive_unnamed(
         path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchiveBuilder: ...
+    ) -> ArtifactBuilder:
+        r"""
+        Create a new artifact archive with an unnamed image name.
+
+        This cannot be loaded into local registry nor pushed to remote registry.
+
+        ```python
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+        >>> import uuid
+        >>> filename = f"data/single_feasible_lp.ommx.{uuid.uuid4()}"
+        >>> builder = ArtifactBuilder.new_archive_unnamed(filename)
+        >>> _desc = builder.add_instance(instance)
+        >>> artifact = builder.build()
+        >>> print(artifact.image_name)
+        None
+
+        ```
+        """
     @staticmethod
-    def new(
+    def new_archive(
         path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
-    ) -> ArtifactArchiveBuilder: ...
+    ) -> ArtifactBuilder:
+        r"""
+        Create a new artifact archive with a named image name.
+        """
     @staticmethod
-    def temp() -> ArtifactArchiveBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactArchive: ...
+    def new(image_name: builtins.str) -> ArtifactBuilder:
+        r"""
+        Create a new artifact in local registry with a named image name.
 
-@typing.final
-class ArtifactDir:
-    @property
-    def image_name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def layers(self) -> builtins.list[Descriptor]: ...
-    @staticmethod
-    def from_image_name(image_name: builtins.str) -> ArtifactDir: ...
-    @staticmethod
-    def from_oci_dir(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactDir: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
+        ```python
+        >>> from ommx.testing import SingleFeasibleLPGenerator, DataType
+        >>> generator = SingleFeasibleLPGenerator(3, DataType.INT)
+        >>> instance = generator.get_v1_instance()
+        >>> import uuid
+        >>> image_name = f"ghcr.io/jij-inc/ommx/single_feasible_lp:{uuid.uuid4()}"
+        >>> builder = ArtifactBuilder.new(image_name)
+        >>> _desc = builder.add_instance(instance)
+        >>> artifact = builder.build()
+        >>> print(artifact.image_name)
+        ghcr.io/jij-inc/ommx/single_feasible_lp:...
 
-@typing.final
-class ArtifactDirBuilder:
+        ```
+        """
     @staticmethod
-    def new(image_name: builtins.str) -> ArtifactDirBuilder: ...
+    def temp() -> ArtifactBuilder:
+        r"""
+        Create a new artifact as a temporary file.
+
+        Note that this is insecure and should only be used for testing.
+
+        ```python
+        >>> builder = ArtifactBuilder.temp()
+        >>> artifact = builder.build()
+        >>> print(artifact.image_name)
+        ttl.sh/...-...-...-...-...:1h
+
+        ```
+        """
     @staticmethod
     def for_github(
         org: builtins.str, repo: builtins.str, name: builtins.str, tag: builtins.str
-    ) -> ArtifactDirBuilder: ...
+    ) -> ArtifactBuilder:
+        r"""
+        An alias for {meth}`new` to create a new artifact in local registry
+        with GitHub Container Registry image name.
+
+        This also sets the `org.opencontainers.image.source` annotation
+        to the GitHub repository URL.
+        """
+    def add_instance(self, instance: Instance) -> Descriptor:
+        r"""
+        Add an {class}`~ommx.v1.Instance` to the artifact with annotations.
+
+        ```python
+        >>> from ommx.v1 import Instance
+        >>> instance = Instance.empty()
+        >>> instance.title = "test instance"
+        >>> builder = ArtifactBuilder.temp()
+        >>> desc = builder.add_instance(instance)
+        >>> print(desc.annotations['org.ommx.v1.instance.title'])
+        test instance
+
+        ```
+        """
+    def add_parametric_instance(self, instance: ParametricInstance) -> Descriptor:
+        r"""
+        Add a {class}`~ommx.v1.ParametricInstance` to the artifact with annotations.
+        """
+    def add_solution(self, solution: Solution) -> Descriptor:
+        r"""
+        Add a {class}`~ommx.v1.Solution` to the artifact with annotations.
+        """
+    def add_sample_set(self, sample_set: SampleSet) -> Descriptor:
+        r"""
+        Add a {class}`~ommx.v1.SampleSet` to the artifact with annotations.
+        """
+    def add_ndarray(
+        self,
+        array: typing.Any,
+        *,
+        annotation_namespace: builtins.str = "org.ommx.user.",
+        **annotations: typing.Any,
+    ) -> Descriptor:
+        r"""
+        Add a numpy ndarray to the artifact with npy format.
+
+        ```python
+        >>> import numpy as np
+        >>> array = np.array([1, 2, 3])
+        >>> builder = ArtifactBuilder.temp()
+        >>> _desc = builder.add_ndarray(array, title="test_array")
+        >>> artifact = builder.build()
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/vnd.numpy
+        >>> print(layer.annotations)
+        {'org.ommx.user.title': 'test_array'}
+
+        ```
+        """
+    def add_dataframe(
+        self,
+        df: typing.Any,
+        *,
+        annotation_namespace: builtins.str = "org.ommx.user.",
+        **annotations: typing.Any,
+    ) -> Descriptor:
+        r"""
+        Add a pandas DataFrame to the artifact with parquet format.
+
+        ```python
+        >>> import pandas as pd
+        >>> df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
+        >>> builder = ArtifactBuilder.temp()
+        >>> _desc = builder.add_dataframe(df, title="test_dataframe")
+        >>> artifact = builder.build()
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/vnd.apache.parquet
+
+        ```
+        """
+    def add_json(
+        self,
+        obj: typing.Any,
+        *,
+        annotation_namespace: builtins.str = "org.ommx.user.",
+        **annotations: typing.Any,
+    ) -> Descriptor:
+        r"""
+        Add a JSON object to the artifact.
+
+        ```python
+        >>> obj = {"a": 1, "b": 2}
+        >>> builder = ArtifactBuilder.temp()
+        >>> _desc = builder.add_json(obj, title="test_json")
+        >>> artifact = builder.build()
+        >>> layer = artifact.layers[0]
+        >>> print(layer.media_type)
+        application/json
+
+        ```
+        """
     def add_layer(
         self,
         media_type: builtins.str,
         blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactDir: ...
+        annotations: typing.Mapping[builtins.str, builtins.str] = {},
+    ) -> Descriptor:
+        r"""
+        Low-level API to add any type of layer to the artifact with annotations.
+
+        Use {meth}`add_instance` or other high-level methods if possible.
+        """
+    def add_annotation(self, key: builtins.str, value: builtins.str) -> None:
+        r"""
+        Add annotation to the artifact itself.
+        """
+    def build(self) -> Artifact:
+        r"""
+        Build the artifact.
+        """
 
 @typing.final
 class Bound:
