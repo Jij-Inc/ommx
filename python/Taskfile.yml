@@ -19,23 +19,12 @@ includes:
     taskfile: ommx-highs-adapter/Taskfile.yml
     dir: ommx-highs-adapter
 
-  # For python:doc task
-  api_reference:
-    taskfile: ../docs/api_reference/Taskfile.yml
-    dir: ../docs/api_reference
-    internal: true
-
 tasks:
   default:
     desc: Sync and Run tests for all Python projects
     cmds:
       - task: sync
       - task: test
-
-  doc:
-    desc: Build and Open API reference documentation
-    cmds:
-      - task: api_reference
 
   sync:
     desc: Setup Python development environment, Rebuild Python SDK
@@ -91,26 +80,32 @@ tasks:
       - task: sync
 
   book:
-    desc: Build Jupyter Book (ja and en)
+    desc: Build Sphinx documentation (ja and en)
     cmds:
-      - uv run jupyter-book build ../docs/ja
-      - uv run jupyter-book build ../docs/en
+      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
+      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
 
   book:test:
-    desc: Build Jupyter Book with code execution (ja and en)
+    desc: Build Sphinx documentation with code execution (ja and en)
+    env:
+      OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/ja
-      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/en
+      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
+      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
 
   book:test:ja:
-    desc: Build Jupyter Book with code execution (ja only)
+    desc: Build Sphinx documentation with code execution (ja only)
+    env:
+      OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/ja
+      - uv run sphinx-build -b html ../docs/ja ../docs/ja/_build/html
 
   book:test:en:
-    desc: Build Jupyter Book with code execution (en only)
+    desc: Build Sphinx documentation with code execution (en only)
+    env:
+      OMMX_NB_EXECUTION: "force"
     cmds:
-      - uv run jupyter-book build --config ../docs/_config.test.yml ../docs/en
+      - uv run sphinx-build -b html ../docs/en ../docs/en/_build/html
 
   stubgen:
     desc: Generate stubs files for Rust extension

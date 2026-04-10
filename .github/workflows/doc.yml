@@ -10,7 +10,7 @@ permissions:
   id-token: write
 
 jobs:
-  jupyter-book:
+  sphinx:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -27,16 +27,15 @@ jobs:
         with:
           python-version: ${{ env.python-version }}
 
-      - name: Jupyter Book
+      - name: Sphinx Build
         run: |
-          # Code execution is off by default (tested in python.yml test-ci job)
           cd ./docs && \
-          uv run --only-group dev jupyter-book build ${{ matrix.lang }} --warningiserror
+          uv run --only-group dev sphinx-build -W -b html ${{ matrix.lang }} ${{ matrix.lang }}/_build/html
 
       - name: Upload HTML
         uses: actions/upload-artifact@v7
         with:
-          name: doc-jupyter-book-${{ matrix.lang }}
+          name: doc-sphinx-${{ matrix.lang }}
           path: ./docs/${{ matrix.lang }}/_build/html
           retention-days: 30
 
@@ -83,27 +82,8 @@ jobs:
           path: ./target/doc
           retention-days: 30
 
-  python:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-test-environment
-
-      - name: Build Python documentation
-        run: task api_reference:build
-
-      - name: Upload HTML
-        uses: actions/upload-artifact@v7
-        with:
-          name: doc-python
-          path: ./docs/api_reference/_build/html
-          retention-days: 30
-
   package:
-    needs: [jupyter-book, protobuf, rust, python]
+    needs: [sphinx, protobuf, rust]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -114,16 +94,16 @@ jobs:
           mkdir doc
           mv docs/redirect/* doc/
 
-      - name: Download HTML of JupyterBook (ja)
+      - name: Download HTML of Sphinx (ja)
         uses: actions/download-artifact@v8
         with:
-          name: doc-jupyter-book-ja
+          name: doc-sphinx-ja
           path: ./doc/ja
 
-      - name: Download HTML of JupyterBook (en)
+      - name: Download HTML of Sphinx (en)
         uses: actions/download-artifact@v8
         with:
-          name: doc-jupyter-book-en
+          name: doc-sphinx-en
           path: ./doc/en
 
       - name: Download HTML of protobuf
@@ -137,12 +117,6 @@ jobs:
         with:
           name: doc-rust
           path: ./doc/rust
-
-      - name: Download HTML of python
-        uses: actions/download-artifact@v8
-        with:
-          name: doc-python
-          path: ./doc/python/ommx
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

@@ -1,55 +1,42 @@
+"""Sphinx configuration for OMMX English documentation."""
+
 import sys
 from pathlib import Path
 
-import sphinx_rtd_theme
 import tomlkit
+
+# -- Load shared configuration -----------------------------------------------
+
+here = Path(__file__).parent
+docs_root = here.parent
+exec(open(docs_root / "conf_base.py").read())
 
 # -- Path setup --------------------------------------------------------------
 
-here = Path(__file__).parent
-python_root = here.parent.parent / "python"  # ${REPO_ROOT}/python
+python_root = docs_root.parent / "python"
 
 # Add the API docs directory to Python path for pyo3_stub_gen_ext
 sys.path.insert(0, str(here / "api"))
 
 # -- Project information -----------------------------------------------------
 
-project = "OMMX Python SDK"
+project = "OMMX"
 copyright = "2024, Jij Inc."
 author = "Jij Inc."
+language = "en"
 
 pyproject_toml = tomlkit.loads((python_root / "ommx" / "pyproject.toml").read_text())
 version = str(pyproject_toml["project"]["version"])  # type: ignore
 release = version
 
-# -- General configuration ---------------------------------------------------
+# -- Additional extensions for API Reference ----------------------------------
 
-extensions = [
+extensions += [  # noqa: F821
     "sphinx.ext.autodoc",
-    "sphinx.ext.intersphinx",
-    "sphinx_rtd_theme",
     "sphinx_fontawesome",
-    "myst_parser",
     "autoapi.extension",
     "pyo3_stub_gen_ext",
 ]
-source_suffix = {
-    ".rst": "restructuredtext",
-    ".md": "markdown",
-}
-
-myst_enable_extensions = ["dollarmath"]
-
-templates_path = ["_templates"]
-language = "en"
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
-# -- Options for HTML output -------------------------------------------------
-
-html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-html_show_sourcelink = False
-html_static_path = []
 
 # Display class names only, without module prefix
 add_module_names = False
@@ -81,11 +68,3 @@ autoapi_ignore = [
     "**/pywasmcross/**",
 ]
 autoapi_add_toctree_entry = False
-
-# -- Intersphinx Configuration -----------------------------------------------
-
-intersphinx_mapping = {
-    "python": ("https://docs.python.org/3", None),
-    "numpy": ("https://numpy.org/doc/stable", None),
-    "pandas": ("https://pandas.pydata.org/docs", None),
-}

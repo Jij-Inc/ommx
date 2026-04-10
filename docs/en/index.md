@@ -11,7 +11,7 @@ When applying mathematical optimization to practical use cases, a large amount o
 
 Mathematical optimization workflow.
 ```
-Moreover, these tasks are typically carried out by separate individuals and teams, requiring data handoffs. Metadata is critical in these handoffs to clarify the data’s meaning and intention. For example, if a solution file for an optimization problem lacks details regarding which problem was solved, which solver was used, or what settings were chosen, the file cannot be reused or validated effectively. Standardized metadata helps streamline collaboration and data handling.
+Moreover, these tasks are typically carried out by separate individuals and teams, requiring data handoffs. Metadata is critical in these handoffs to clarify the data's meaning and intention. For example, if a solution file for an optimization problem lacks details regarding which problem was solved, which solver was used, or what settings were chosen, the file cannot be reused or validated effectively. Standardized metadata helps streamline collaboration and data handling.
 
 ## Components of OMMX
 
@@ -71,4 +71,53 @@ One major benefit of OCI Artifact compatibility is that standard container regis
 :alt: Diagram showing the relationship between OMMX Message and OMMX Artifact
 
 Data exchange between humans realized by OMMX.
+```
+
+```{toctree}
+:caption: Tutorial
+:maxdepth: 1
+:hidden:
+
+tutorial/solve_with_ommx_adapter
+tutorial/tsp_sampling_with_openjij_adapter
+tutorial/switching_adapters
+tutorial/share_in_ommx_artifact
+tutorial/download_miplib_instance
+tutorial/download_qplib_instance
+tutorial/implement_adapter
+```
+
+```{toctree}
+:caption: User Guide
+:maxdepth: 1
+:hidden:
+
+user_guide/supported_ommx_adapters
+user_guide/adapter_initial_state
+user_guide/function
+user_guide/instance
+user_guide/parametric_instance
+user_guide/solution
+user_guide/sample_set
+```
+
+```{toctree}
+:caption: API Reference
+:maxdepth: 2
+:hidden:
+
+api/index
+```
+
+```{toctree}
+:caption: Release Note
+:maxdepth: 1
+:hidden:
+
+release_note/ommx-2.0.0
+release_note/ommx-1.9.0
+release_note/ommx-1.8.0
+release_note/ommx-1.7.0
+release_note/ommx-1.6.0
+release_note/ommx-1.5.0
 ```

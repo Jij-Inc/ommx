@@ -7,12 +7,6 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
-    nodejs: "22"
   commands:
-    # Install jupyter-book only (no ommx packages needed since execution is off by default)
-    - pip install "jupyter-book>=1.0.3,<2"
-    # Build (code execution is off by default, tested in CI)
-    - jupyter-book build docs/ja
-    # Move output to RTD expected location
-    - mkdir -p $READTHEDOCS_OUTPUT/html
-    - cp -r docs/ja/_build/html/* $READTHEDOCS_OUTPUT/html/
+    - pip install myst-nb sphinx-rtd-theme
+    - sphinx-build -b html docs/ja $READTHEDOCS_OUTPUT/html

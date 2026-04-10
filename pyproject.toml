@@ -7,9 +7,13 @@ members = ["python/ommx*"]
 [dependency-groups]
 dev = [
   "ipython>=8.18.1",
-  "jupyter-book>=1.0.3,<2",
   "jupyter>=1.1.1",
   "jupyterlab>=4.3.5",
+  "myst-nb>=1.0.0",
+  "sphinx>=7.4.7",
+  "sphinx-rtd-theme>=3.0.2",
+  "sphinx-autoapi>=3.5.0",
+  "sphinx-fontawesome>=0.0.6",
   "markdown-code-runner>=2.1.0",
   "matplotlib>=3.10.7",
   "nbqa>=1.9.1",
