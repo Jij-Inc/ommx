@@ -212,7 +212,7 @@ impl PyArtifact {
 
     /// The first instance layer in the artifact.
     ///
-    /// Raises `ValueError` if no instance layer is found.
+    /// Raises `RuntimeError` if no instance layer is found.
     /// For multiple instance layers, use {meth}`get_instance` with a descriptor.
     #[getter(instance)]
     pub fn instance_(&mut self) -> Result<crate::Instance> {
@@ -221,7 +221,7 @@ impl PyArtifact {
 
     /// The first solution layer in the artifact.
     ///
-    /// Raises `ValueError` if no solution layer is found.
+    /// Raises `RuntimeError` if no solution layer is found.
     /// For multiple solution layers, use {meth}`get_solution` with a descriptor.
     #[getter(solution)]
     pub fn solution_(&mut self) -> Result<crate::Solution> {
@@ -230,7 +230,7 @@ impl PyArtifact {
 
     /// The first parametric instance layer in the artifact.
     ///
-    /// Raises `ValueError` if no parametric instance layer is found.
+    /// Raises `RuntimeError` if no parametric instance layer is found.
     /// For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
     #[getter(parametric_instance)]
     pub fn parametric_instance_(&mut self) -> Result<crate::ParametricInstance> {
@@ -239,7 +239,7 @@ impl PyArtifact {
 
     /// The first sample set layer in the artifact.
     ///
-    /// Raises `ValueError` if no sample set layer is found.
+    /// Raises `RuntimeError` if no sample set layer is found.
     /// For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
     #[getter(sample_set)]
     pub fn sample_set_(&mut self) -> Result<crate::SampleSet> {
@@ -292,7 +292,7 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first instance layer.
     /// - If `descriptor` is given, returns the instance for that specific layer.
     ///
-    /// Raises `ValueError` if no instance layer is found.
+    /// Raises `RuntimeError` if no instance layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_instance(&mut self, descriptor: Option<&PyDescriptor>) -> Result<crate::Instance> {
         match descriptor {
@@ -314,7 +314,7 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first solution layer.
     /// - If `descriptor` is given, returns the solution for that specific layer.
     ///
-    /// Raises `ValueError` if no solution layer is found.
+    /// Raises `RuntimeError` if no solution layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_solution(&mut self, descriptor: Option<&PyDescriptor>) -> Result<crate::Solution> {
         match descriptor {
@@ -336,7 +336,7 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first parametric instance layer.
     /// - If `descriptor` is given, returns the parametric instance for that specific layer.
     ///
-    /// Raises `ValueError` if no parametric instance layer is found.
+    /// Raises `RuntimeError` if no parametric instance layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_parametric_instance(
         &mut self,
@@ -361,7 +361,7 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first sample set layer.
     /// - If `descriptor` is given, returns the sample set for that specific layer.
     ///
-    /// Raises `ValueError` if no sample set layer is found.
+    /// Raises `RuntimeError` if no sample set layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_sample_set(
         &mut self,

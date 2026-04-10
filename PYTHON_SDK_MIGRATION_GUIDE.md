@@ -121,8 +121,8 @@ The `ommx.artifact` module has been fully migrated to Rust. The low-level wrappe
 from ommx.artifact import Artifact, ArtifactArchive, ArtifactDir
 
 # Low-level types were exposed
-archive = ArtifactArchive(path)
-dir_artifact = ArtifactDir(path)
+archive = ArtifactArchive.from_oci_archive(path)
+dir_artifact = ArtifactDir.from_oci_dir(path)
 ```
 
 **After (v3)**:
