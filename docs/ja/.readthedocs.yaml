@@ -8,5 +8,5 @@ build:
   tools:
     python: "3.12"
   commands:
-    - pip install myst-nb sphinx-book-theme
+    - pip install myst-nb sphinx-book-theme sphinx-autoapi sphinx-fontawesome tomlkit
     - sphinx-build -b html docs/ja $READTHEDOCS_OUTPUT/html

@@ -16,7 +16,7 @@ exec(open(docs_root / "conf_base.py").read())
 python_root = docs_root.parent / "python"
 
 # Add the API docs directory to Python path for pyo3_stub_gen_ext
-sys.path.insert(0, str(here / "api"))
+sys.path.insert(0, str(docs_root / "api"))
 
 # -- Project information -----------------------------------------------------
 

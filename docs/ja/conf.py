@@ -1,13 +1,22 @@
 """Sphinx configuration for OMMX Japanese documentation."""
 
-import os
+import sys
 from pathlib import Path
+
+import tomlkit
 
 # -- Load shared configuration -----------------------------------------------
 
 here = Path(__file__).parent
 docs_root = here.parent
 exec(open(docs_root / "conf_base.py").read())
+
+# -- Path setup --------------------------------------------------------------
+
+python_root = docs_root.parent / "python"
+
+# Add the API docs directory to Python path for pyo3_stub_gen_ext
+sys.path.insert(0, str(docs_root / "api"))
 
 # -- Project information -----------------------------------------------------
 
@@ -16,14 +25,46 @@ copyright = "2024, Jij Inc."
 author = "Jij Inc."
 language = "ja"
 
-# -- Intersphinx: link to English API Reference -------------------------------
+pyproject_toml = tomlkit.loads((python_root / "ommx" / "pyproject.toml").read_text())
+version = str(pyproject_toml["project"]["version"])  # type: ignore
+release = version
 
-# On RTD, use the canonical URL to link to the same version (PR build, latest, etc.)
-# Locally, fall back to the production URL
-_rtd_canonical = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
-if _rtd_canonical:
-    _en_url = _rtd_canonical.replace("/ja/", "/en/")
-else:
-    _en_url = "https://jij-inc-ommx.readthedocs-hosted.com/en/latest/"
+# -- Additional extensions for API Reference ----------------------------------
 
-intersphinx_mapping["ommx-en"] = (_en_url, None)  # noqa: F821
+extensions += [  # noqa: F821
+    "sphinx.ext.autodoc",
+    "sphinx_fontawesome",
+    "autoapi.extension",
+    "pyo3_stub_gen_ext",
+]
+
+# Display class names only, without module prefix
+add_module_names = False
+python_use_unqualified_type_names = True
+
+# -- AutoAPI settings --------------------------------------------------------
+
+autoapi_dirs = [
+    python_root / "ommx",
+    python_root / "ommx-python-mip-adapter",
+    python_root / "ommx-pyscipopt-adapter",
+    python_root / "ommx-highs-adapter",
+    python_root / "ommx-openjij-adapter",
+]
+autoapi_options = [
+    "members",
+    "inherited-members",
+    "undoc-members",
+    "show-module-summary",
+]
+autoapi_member_order = "groupwise"
+autoapi_file_patterns = ["*.pyi", "*.py"]
+autoapi_ignore = [
+    "**/tests/**",
+    "**/conftest.py",
+    "**/ommx/v1/**",
+    "**/ommx/artifact/**",
+    "**/ommx/_ommx_rust/**",
+    "**/pywasmcross/**",
+]
+autoapi_add_toctree_entry = False
