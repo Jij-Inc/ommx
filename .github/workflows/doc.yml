@@ -155,7 +155,6 @@ jobs:
     concurrency:
       group: "pages-deploy"
       cancel-in-progress: true
-    if: github.ref == 'refs/heads/main'
     needs: package
     environment:
       name: github-pages
