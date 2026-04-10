@@ -113,6 +113,38 @@ class Artifact:
         """
     @property
     def layers(self) -> builtins.list[Descriptor]: ...
+    @property
+    def instance(self) -> Instance:
+        r"""
+        The first instance layer in the artifact.
+
+        Raises `ValueError` if no instance layer is found.
+        For multiple instance layers, use {meth}`get_instance` with a descriptor.
+        """
+    @property
+    def solution(self) -> Solution:
+        r"""
+        The first solution layer in the artifact.
+
+        Raises `ValueError` if no solution layer is found.
+        For multiple solution layers, use {meth}`get_solution` with a descriptor.
+        """
+    @property
+    def parametric_instance(self) -> ParametricInstance:
+        r"""
+        The first parametric instance layer in the artifact.
+
+        Raises `ValueError` if no parametric instance layer is found.
+        For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
+        """
+    @property
+    def sample_set(self) -> SampleSet:
+        r"""
+        The first sample set layer in the artifact.
+
+        Raises `ValueError` if no sample set layer is found.
+        For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
+        """
     @staticmethod
     def load_archive(path: builtins.str | os.PathLike | pathlib.Path) -> Artifact:
         r"""

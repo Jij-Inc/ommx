@@ -46,7 +46,7 @@ def miplib2017(name: str) -> v1.Instance:
 
     """
     artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/miplib2017:{name}")
-    return artifact.get_instance()
+    return artifact.instance
 
 
 def miplib2017_instance_annotations() -> dict[str, dict[str, str]]:
@@ -101,7 +101,7 @@ def qplib(tag: str) -> v1.Instance:
 
     """
     artifact = Artifact.load(f"ghcr.io/jij-inc/ommx/qplib:{tag}")
-    return artifact.get_instance()
+    return artifact.instance
 
 
 def qplib_instance_annotations() -> dict[str, dict[str, str]]:

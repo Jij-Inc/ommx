@@ -488,6 +488,17 @@
               "is_readonly": true
             },
             {
+              "name": "instance",
+              "doc": "The first instance layer in the artifact.\n\nRaises `ValueError` if no instance layer is found.\nFor multiple instance layers, use {meth}`get_instance` with a descriptor.",
+              "type_": {
+                "display": "Instance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
               "name": "layers",
               "doc": "",
               "type_": {
@@ -505,6 +516,39 @@
                     "children": []
                   }
                 ]
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "parametric_instance",
+              "doc": "The first parametric instance layer in the artifact.\n\nRaises `ValueError` if no parametric instance layer is found.\nFor multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.",
+              "type_": {
+                "display": "ParametricInstance",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "sample_set",
+              "doc": "The first sample set layer in the artifact.\n\nRaises `ValueError` if no sample set layer is found.\nFor multiple sample set layers, use {meth}`get_sample_set` with a descriptor.",
+              "type_": {
+                "display": "SampleSet",
+                "link_target": null,
+                "children": []
+              },
+              "is_property": true,
+              "is_readonly": true
+            },
+            {
+              "name": "solution",
+              "doc": "The first solution layer in the artifact.\n\nRaises `ValueError` if no solution layer is found.\nFor multiple solution layers, use {meth}`get_solution` with a descriptor.",
+              "type_": {
+                "display": "Solution",
+                "link_target": null,
+                "children": []
               },
               "is_property": true,
               "is_readonly": true

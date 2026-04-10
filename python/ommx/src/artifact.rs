@@ -195,6 +195,42 @@ impl PyArtifact {
         Ok(PyBytes::new(py, &blob))
     }
 
+    /// The first instance layer in the artifact.
+    ///
+    /// Raises `ValueError` if no instance layer is found.
+    /// For multiple instance layers, use {meth}`get_instance` with a descriptor.
+    #[getter(instance)]
+    pub fn instance_(&mut self) -> Result<crate::Instance> {
+        self.get_instance(None)
+    }
+
+    /// The first solution layer in the artifact.
+    ///
+    /// Raises `ValueError` if no solution layer is found.
+    /// For multiple solution layers, use {meth}`get_solution` with a descriptor.
+    #[getter(solution)]
+    pub fn solution_(&mut self) -> Result<crate::Solution> {
+        self.get_solution(None)
+    }
+
+    /// The first parametric instance layer in the artifact.
+    ///
+    /// Raises `ValueError` if no parametric instance layer is found.
+    /// For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
+    #[getter(parametric_instance)]
+    pub fn parametric_instance_(&mut self) -> Result<crate::ParametricInstance> {
+        self.get_parametric_instance(None)
+    }
+
+    /// The first sample set layer in the artifact.
+    ///
+    /// Raises `ValueError` if no sample set layer is found.
+    /// For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
+    #[getter(sample_set)]
+    pub fn sample_set_(&mut self) -> Result<crate::SampleSet> {
+        self.get_sample_set(None)
+    }
+
     /// Get the layer object corresponding to the descriptor.
     ///
     /// Dynamically dispatched based on {attr}`~ommx.artifact.Descriptor.media_type`:
