@@ -975,7 +975,7 @@ class Instance:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -1277,7 +1277,7 @@ class Instance:
         where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
         If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
 
-        The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -1326,7 +1326,7 @@ class Instance:
 
         where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
-        The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
+        The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
 
         > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
         > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -2472,7 +2472,7 @@ class ParametricInstance:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -3027,7 +3027,7 @@ class SampleSet:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter
@@ -3483,7 +3483,7 @@ class Solution:
         Returns a **copy** of the annotations dictionary.
 
         Mutating the returned dict will **not** update the object.
-        Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+        Use {meth}`add_user_annotation` or assign to {attr}`annotations`
         to modify annotations.
         """
     @annotations.setter

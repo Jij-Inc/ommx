@@ -479,7 +479,7 @@ impl Instance {
     /// where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
     /// If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
     ///
-    /// The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
@@ -533,7 +533,7 @@ impl Instance {
     ///
     /// where $\lambda$ is the uniform penalty weight parameter for all constraints.
     ///
-    /// The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.
     ///
     /// > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
     /// > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.

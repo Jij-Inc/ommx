@@ -23,7 +23,7 @@ macro_rules! impl_instance_annotations {
             /// Returns a **copy** of the annotations dictionary.
             ///
             /// Mutating the returned dict will **not** update the object.
-            /// Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+            /// Use {meth}`add_user_annotation` or assign to {attr}`annotations`
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {
@@ -229,7 +229,7 @@ macro_rules! impl_solution_annotations {
             /// Returns a **copy** of the annotations dictionary.
             ///
             /// Mutating the returned dict will **not** update the object.
-            /// Use {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`
+            /// Use {meth}`add_user_annotation` or assign to {attr}`annotations`
             /// to modify annotations.
             #[getter]
             pub fn annotations(&self) -> std::collections::HashMap<String, String> {

@@ -6299,7 +6299,7 @@
             },
             {
               "name": "penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n2\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)\n>>> pi.removed_constraints[1]\nRemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with parameters:\n\n$$\\min_x f(x) + \\sum_i \\lambda_i g_i(x)^2 + \\sum_j \\rho_j h_j(x)^2$$\n\nwhere $\\lambda_i$ and $\\rho_j$ are the penalty weight parameters for each constraint.\nIf you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable, Constraint\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[x[0] + x[1] == 1, x[1] + x[2] == 1],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n2\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 - 1 == 0, reason=penalty_method, parameter_id=3)\n>>> pi.removed_constraints[1]\nRemovedConstraint(x1 + x2 - 1 == 0, reason=penalty_method, parameter_id=4)\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -6771,7 +6771,7 @@
             },
             {
               "name": "uniform_penalty_method",
-              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
+              "doc": "Convert to a parametric unconstrained instance by penalty method with uniform weight.\n\nRoughly, this converts a constrained problem:\n\n$$\\min_x f(x) \\quad \\text{s.t.} \\quad g_i(x) = 0 \\; (\\forall i), \\quad h_j(x) \\leq 0 \\; (\\forall j)$$\n\nto an unconstrained problem with a parameter:\n\n$$\\min_x f(x) + \\lambda \\left( \\sum_i g_i(x)^2 + \\sum_j h_j(x)^2 \\right)$$\n\nwhere $\\lambda$ is the uniform penalty weight parameter for all constraints.\n\nThe removed constraints are stored in {attr}`~ommx.v1.ParametricInstance.removed_constraints`.\n\n> Note: This method converts inequality constraints $h(x) \\leq 0$ to $|h(x)|^2$ not to $\\max(0, h(x))^2$.\n> This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.\n> This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.\n\n# Examples\n\n```python\n>>> from ommx.v1 import Instance, DecisionVariable\n>>> x = [DecisionVariable.binary(i) for i in range(3)]\n>>> instance = Instance.from_components(\n...     decision_variables=x,\n...     objective=sum(x),\n...     constraints=[sum(x) == 3],\n...     sense=Instance.MAXIMIZE,\n... )\n>>> instance.objective\nFunction(x0 + x1 + x2)\n>>> pi = instance.uniform_penalty_method()\n```\n\nThe constraint is put in removed_constraints\n\n```python\n>>> pi.constraints\n[]\n>>> len(pi.removed_constraints)\n1\n>>> pi.removed_constraints[0]\nRemovedConstraint(x0 + x1 + x2 - 3 == 0, reason=uniform_penalty_method)\n```\n\nThere is only one parameter in the instance\n\n```python\n>>> len(pi.parameters)\n1\n>>> p = pi.parameters[0]\n>>> p.id\n3\n>>> p.name\n'uniform_penalty_weight'\n```",
               "signatures": [
                 {
                   "parameters": [],
@@ -6822,7 +6822,7 @@
             },
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`\nto modify annotations.",
+              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
               "type_": {
                 "display": "dict[str, str]",
                 "link_target": null,
@@ -10917,7 +10917,7 @@
           "attributes": [
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`\nto modify annotations.",
+              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
               "type_": {
                 "display": "dict[str, str]",
                 "link_target": null,
@@ -14557,7 +14557,7 @@
           "attributes": [
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`\nto modify annotations.",
+              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
               "type_": {
                 "display": "dict[str, str]",
                 "link_target": null,
@@ -16501,7 +16501,7 @@
             },
             {
               "name": "annotations",
-              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`~ommx.v1.Instance.add_user_annotation` or assign to {attr}`~ommx.v1.Instance.annotations`\nto modify annotations.",
+              "doc": "Returns a **copy** of the annotations dictionary.\n\nMutating the returned dict will **not** update the object.\nUse {meth}`add_user_annotation` or assign to {attr}`annotations`\nto modify annotations.",
               "type_": {
                 "display": "dict[str, str]",
                 "link_target": null,
