@@ -9,10 +9,6 @@ ommx.artifact
    _items/ommx.artifact.Artifact
    _items/ommx.artifact.ArtifactBuilder
    _items/ommx.artifact.Descriptor
-   _items/ommx.artifact.ArtifactArchive
-   _items/ommx.artifact.ArtifactDir
-   _items/ommx.artifact.ArtifactArchiveBuilder
-   _items/ommx.artifact.ArtifactDirBuilder
    _items/ommx.artifact.get_local_registry_root
    _items/ommx.artifact.set_local_registry_root
    _items/ommx.artifact.get_image_dir

@@ -13,11 +13,7 @@ from typing import TypeAlias
 
 __all__ = [
     "Artifact",
-    "ArtifactArchive",
-    "ArtifactArchiveBuilder",
     "ArtifactBuilder",
-    "ArtifactDir",
-    "ArtifactDirBuilder",
     "Bound",
     "Constraint",
     "ConstraintHints",
@@ -216,42 +212,6 @@ class Artifact:
         r"""
         Get a JSON object from an artifact layer stored by {meth}`~ommx.artifact.ArtifactBuilder.add_json`.
         """
-
-@typing.final
-class ArtifactArchive:
-    @property
-    def image_name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def layers(self) -> builtins.list[Descriptor]: ...
-    @staticmethod
-    def from_oci_archive(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchive: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-@typing.final
-class ArtifactArchiveBuilder:
-    @staticmethod
-    def new_unnamed(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def new(
-        path: builtins.str | os.PathLike | pathlib.Path, image_name: builtins.str
-    ) -> ArtifactArchiveBuilder: ...
-    @staticmethod
-    def temp() -> ArtifactArchiveBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactArchive: ...
 
 @typing.final
 class ArtifactBuilder:
@@ -454,40 +414,6 @@ class ArtifactBuilder:
         r"""
         Build the artifact.
         """
-
-@typing.final
-class ArtifactDir:
-    @property
-    def image_name(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def annotations(self) -> builtins.dict[builtins.str, builtins.str]: ...
-    @property
-    def layers(self) -> builtins.list[Descriptor]: ...
-    @staticmethod
-    def from_image_name(image_name: builtins.str) -> ArtifactDir: ...
-    @staticmethod
-    def from_oci_dir(
-        path: builtins.str | os.PathLike | pathlib.Path,
-    ) -> ArtifactDir: ...
-    def get_blob(self, digest: builtins.str) -> bytes: ...
-    def push(self) -> None: ...
-
-@typing.final
-class ArtifactDirBuilder:
-    @staticmethod
-    def new(image_name: builtins.str) -> ArtifactDirBuilder: ...
-    @staticmethod
-    def for_github(
-        org: builtins.str, repo: builtins.str, name: builtins.str, tag: builtins.str
-    ) -> ArtifactDirBuilder: ...
-    def add_layer(
-        self,
-        media_type: builtins.str,
-        blob: bytes,
-        annotations: typing.Mapping[builtins.str, builtins.str],
-    ) -> Descriptor: ...
-    def add_annotation(self, key: builtins.str, value: builtins.str) -> None: ...
-    def build(self) -> ArtifactDir: ...
 
 @typing.final
 class Bound:

@@ -3,11 +3,7 @@
 
 from ommx._ommx_rust import (
     Artifact,
-    ArtifactArchive,
-    ArtifactArchiveBuilder,
     ArtifactBuilder,
-    ArtifactDir,
-    ArtifactDirBuilder,
     Descriptor,
     get_image_dir,
     get_images,
@@ -17,11 +13,7 @@ from ommx._ommx_rust import (
 
 __all__ = [
     "Artifact",
-    "ArtifactArchive",
-    "ArtifactArchiveBuilder",
     "ArtifactBuilder",
-    "ArtifactDir",
-    "ArtifactDirBuilder",
     "Descriptor",
     "get_image_dir",
     "get_images",

@@ -1,7 +1,6 @@
 mod annotations;
 mod artifact;
 mod bound;
-mod builder;
 mod constraint;
 mod constraint_hints;
 #[cfg(feature = "remote-artifact")]
@@ -13,7 +12,6 @@ mod evaluated_constraint;
 mod evaluated_decision_variable;
 mod evaluated_named_function;
 mod function;
-mod high_level_artifact;
 mod instance;
 mod linear;
 mod named_function;
@@ -34,7 +32,6 @@ mod state;
 
 pub use artifact::*;
 pub use bound::*;
-pub use builder::*;
 pub use constraint::*;
 pub use constraint_hints::*;
 #[cfg(feature = "remote-artifact")]
@@ -46,7 +43,6 @@ pub use evaluated_constraint::*;
 pub use evaluated_decision_variable::*;
 pub use evaluated_named_function::*;
 pub use function::*;
-pub use high_level_artifact::*;
 pub use instance::*;
 pub use linear::*;
 pub use named_function::*;
@@ -85,20 +81,14 @@ pub fn get_default_atol() -> f64 {
 fn _ommx_rust(_py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
-    // OMMX Artifact (low-level)
-    m.add_class::<ArtifactArchive>()?;
-    m.add_class::<ArtifactDir>()?;
-    m.add_class::<ArtifactArchiveBuilder>()?;
-    m.add_class::<ArtifactDirBuilder>()?;
+    // OMMX Artifact
     m.add_class::<PyDescriptor>()?;
+    m.add_class::<PyArtifact>()?;
+    m.add_class::<PyArtifactBuilder>()?;
     m.add_function(wrap_pyfunction!(set_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_local_registry_root, m)?)?;
     m.add_function(wrap_pyfunction!(get_image_dir, m)?)?;
     m.add_function(wrap_pyfunction!(get_images, m)?)?;
-
-    // OMMX Artifact (high-level)
-    m.add_class::<PyArtifact>()?;
-    m.add_class::<PyArtifactBuilder>()?;
 
     // OMMX Message
     m.add_class::<Linear>()?;
@@ -215,10 +205,6 @@ pyo3_stub_gen::reexport_module_members!("ommx.artifact" from "ommx._ommx_rust";
     "Artifact",
     "ArtifactBuilder",
     "Descriptor",
-    "ArtifactArchive",
-    "ArtifactDir",
-    "ArtifactArchiveBuilder",
-    "ArtifactDirBuilder",
     "get_local_registry_root",
     "set_local_registry_root",
     "get_image_dir",
