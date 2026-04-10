@@ -18,7 +18,9 @@ enum ArtifactInner {
 impl ArtifactInner {
     fn image_name(&mut self) -> Option<String> {
         match self {
-            ArtifactInner::Archive(a) => a.lock().unwrap().get_name().map(|n| n.to_string()).ok(),
+            ArtifactInner::Archive(a) => {
+                a.get_mut().unwrap().get_name().map(|n| n.to_string()).ok()
+            }
             ArtifactInner::Dir(d) => d.get_name().map(|n| n.to_string()).ok(),
         }
     }
@@ -26,7 +28,7 @@ impl ArtifactInner {
     fn annotations(&mut self) -> Result<HashMap<String, String>> {
         match self {
             ArtifactInner::Archive(a) => {
-                let manifest = a.lock().unwrap().get_manifest()?;
+                let manifest = a.get_mut().unwrap().get_manifest()?;
                 Ok(manifest.annotations().as_ref().cloned().unwrap_or_default())
             }
             ArtifactInner::Dir(d) => {
@@ -39,7 +41,7 @@ impl ArtifactInner {
     fn layers(&mut self) -> Result<Vec<PyDescriptor>> {
         match self {
             ArtifactInner::Archive(a) => {
-                let manifest = a.lock().unwrap().get_manifest()?;
+                let manifest = a.get_mut().unwrap().get_manifest()?;
                 Ok(manifest
                     .layers()
                     .iter()
@@ -63,7 +65,7 @@ impl ArtifactInner {
         let digest = digest.parse()?;
         match self {
             ArtifactInner::Archive(a) => {
-                let blob = a.lock().unwrap().get_blob(&digest)?;
+                let blob = a.get_mut().unwrap().get_blob(&digest)?;
                 Ok(blob.to_vec())
             }
             ArtifactInner::Dir(d) => {
@@ -77,7 +79,7 @@ impl ArtifactInner {
     fn push(&mut self) -> Result<()> {
         match self {
             ArtifactInner::Archive(a) => {
-                let _remote = a.lock().unwrap().push()?;
+                let _remote = a.get_mut().unwrap().push()?;
                 Ok(())
             }
             ArtifactInner::Dir(d) => {
