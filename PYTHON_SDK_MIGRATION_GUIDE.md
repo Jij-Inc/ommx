@@ -107,7 +107,41 @@ The following methods have been removed:
 - `Linear.from_object()` - was internal use only
 - `Linear.equals_to()` - was deprecated
 
-### 5. Constraint Method Chaining Returns New Object
+### 5. Artifact Module Migrated to Rust
+
+The `ommx.artifact` module has been fully migrated to Rust. The low-level wrapper types have been removed and replaced with unified `Artifact` and `ArtifactBuilder` classes.
+
+**Removed types:**
+- `ArtifactBase`, `ArtifactBuilderBase` (Python ABC classes)
+- `ArtifactArchive`, `ArtifactDir` (use `Artifact` instead)
+- `ArtifactArchiveBuilder`, `ArtifactDirBuilder` (use `ArtifactBuilder` instead)
+
+**Before (v2)**:
+```python
+from ommx.artifact import Artifact, ArtifactArchive, ArtifactDir
+
+# Low-level types were exposed
+archive = ArtifactArchive(path)
+dir_artifact = ArtifactDir(path)
+```
+
+**After (v3)**:
+```python
+from ommx.artifact import Artifact, ArtifactBuilder
+
+# Unified API
+artifact = Artifact.load("ghcr.io/jij-inc/ommx/...")  # from registry
+artifact = Artifact.load_archive("path/to/file.ommx")  # from file or directory
+
+# Property access for first layer (unchanged)
+instance = artifact.instance
+solution = artifact.solution
+
+# Method access with descriptor (unchanged)
+instance = artifact.get_instance(descriptor)
+```
+
+### 6. Constraint Method Chaining Returns New Object
 
 In v3, Constraint mutation methods (`add_name()`, `add_description()`, etc.) return a new `Constraint` object rather than modifying in place. Use the returned object:
 
@@ -224,6 +258,8 @@ constraint = (x + y <= 10).add_name("capacity").add_description("Capacity limit"
 
 ## Migration Checklist
 
+- [ ] Replace `ArtifactArchive`/`ArtifactDir` usage with `Artifact.load_archive()` or `Artifact.load()`
+- [ ] Replace `ArtifactArchiveBuilder`/`ArtifactDirBuilder` usage with `ArtifactBuilder`
 - [ ] Remove all `.raw` access on Instance, Solution, SampleSet (access properties directly)
 - [ ] Update `Instance.from_components` to pass lists instead of dicts
 - [ ] Rename `instance.write_mps(...)` to `instance.save_mps(...)`
