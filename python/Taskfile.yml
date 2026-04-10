@@ -117,11 +117,6 @@ tasks:
     cmds:
       - cargo run --bin stub_gen
 
-  generate-llms-txt:
-    desc: Generate LLMs.txt
-    cmds:
-      - uv run generate_llms_txt.py
-
   ipython:
     desc: Start an IPython shell
     cmds:
