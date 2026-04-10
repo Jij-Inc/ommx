@@ -651,8 +651,8 @@ class EvaluatedConstraint:
         Calculate the violation (constraint breach) value for this constraint
 
         Returns the amount by which this constraint is violated:
-        - For `f(x) = 0`: returns `|f(x)|`
-        - For `f(x) ≤ 0`: returns `max(0, f(x))`
+        - For $f(x) = 0$: returns $|f(x)|$
+        - For $f(x) \leq 0$: returns $\max(0, f(x))$
 
         Returns 0.0 if the constraint is satisfied.
         """
@@ -890,7 +890,7 @@ class Function:
         r"""
         Reduce binary powers in the function.
 
-        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+        For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
 
         **Args:**
 
@@ -1271,25 +1271,19 @@ class Instance:
 
         Roughly, this converts a constrained problem:
 
-        ```text
-        min_x  f(x)
-        s.t.   g_i(x) = 0   (for all i)
-               h_j(x) <= 0  (for all j)
-        ```
+        $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
 
         to an unconstrained problem with parameters:
 
-        ```text
-        min_x  f(x) + sum_i lambda_i * g_i(x)^2 + sum_j rho_j * h_j(x)^2
-        ```
+        $$\min_x f(x) + \sum_i \lambda_i g_i(x)^2 + \sum_j \rho_j h_j(x)^2$$
 
-        where lambda_i and rho_j are the penalty weight parameters for each constraint.
+        where $\lambda_i$ and $\rho_j$ are the penalty weight parameters for each constraint.
         If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
 
         The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
 
-        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
+        > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+        > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
         > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
 
         # Examples
@@ -1327,24 +1321,18 @@ class Instance:
 
         Roughly, this converts a constrained problem:
 
-        ```text
-        min_x  f(x)
-        s.t.   g_i(x) = 0   (for all i)
-               h_j(x) <= 0  (for all j)
-        ```
+        $$\min_x f(x) \quad \text{s.t.} \quad g_i(x) = 0 \; (\forall i), \quad h_j(x) \leq 0 \; (\forall j)$$
 
         to an unconstrained problem with a parameter:
 
-        ```text
-        min_x  f(x) + lambda * (sum_i g_i(x)^2 + sum_j h_j(x)^2)
-        ```
+        $$\min_x f(x) + \lambda \left( \sum_i g_i(x)^2 + \sum_j h_j(x)^2 \right)$$
 
-        where lambda is the uniform penalty weight parameter for all constraints.
+        where $\lambda$ is the uniform penalty weight parameter for all constraints.
 
         The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
 
-        > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
-        > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
+        > Note: This method converts inequality constraints $h(x) \leq 0$ to $|h(x)|^2$ not to $\max(0, h(x))^2$.
+        > This means the penalty is enforced even for $h(x) < 0$ cases, and $h(x) = 0$ is unfairly favored.
         > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
 
         # Examples
@@ -1682,19 +1670,19 @@ class Instance:
         self, constraint_id: builtins.int, max_integer_range: builtins.int
     ) -> None:
         r"""
-        Convert an inequality constraint f(x) <= 0 to an equality constraint f(x) + s/a = 0 with an integer slack variable s.
+        Convert an inequality constraint $f(x) \leq 0$ to an equality constraint $f(x) + s/a = 0$ with an integer slack variable $s$.
 
-        - Since a is determined as the minimal multiplier to make every coefficient of af(x) integer,
-          a itself and the range of s becomes impractically large. ``max_integer_range`` limits the maximal
-          range of s, and returns error if the range exceeds it.
+        - Since $a$ is determined as the minimal multiplier to make every coefficient of $a f(x)$ integer,
+          $a$ itself and the range of $s$ becomes impractically large. ``max_integer_range`` limits the maximal
+          range of $s$, and returns error if the range exceeds it.
 
-        - Since this method evaluates the bound of f(x), we may find that:
+        - Since this method evaluates the bound of $f(x)$, we may find that:
 
-          - The bound [l, u] is strictly positive, i.e. l > 0:
+          - The bound $[l, u]$ is strictly positive, i.e. $l > 0$:
             this means the instance is infeasible because this constraint never be satisfied,
             and an error is raised.
 
-          - The bound [l, u] is always negative, i.e. u <= 0:
+          - The bound $[l, u]$ is always negative, i.e. $u \leq 0$:
             this means this constraint is trivially satisfied,
             the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,
             and this method returns without introducing slack variable or raising an error.
@@ -1736,20 +1724,20 @@ class Instance:
         self, constraint_id: builtins.int, slack_upper_bound: builtins.int
     ) -> typing.Optional[builtins.float]:
         r"""
-        Convert inequality f(x) <= 0 to **inequality** f(x) + b*s <= 0 with an integer slack variable s.
+        Convert inequality $f(x) \leq 0$ to **inequality** $f(x) + b s \leq 0$ with an integer slack variable $s$.
 
         - This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
 
-        - The bound of s will be [0, slack_upper_bound], and the coefficient b is determined from the lower bound of f(x).
+        - The bound of $s$ will be $[0, \text{slack\_upper\_bound}]$, and the coefficient $b$ is determined from the lower bound of $f(x)$.
 
-        - Since the slack variable is integer, the yielded inequality has residual error min_s f(x) + b*s at most b.
-          And thus b is returned to use scaling the penalty weight or other things.
+        - Since the slack variable is integer, the yielded inequality has residual error $\min_s f(x) + b s$ at most $b$.
+          And thus $b$ is returned to use scaling the penalty weight or other things.
 
-          - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
+          - Larger slack_upper_bound (i.e. finer-grained slack) yields smaller $b$, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
 
         **Returns:**
-        The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
+        The coefficient $b$ of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
         # Examples
 
@@ -1984,7 +1972,7 @@ class Instance:
         Reduce binary powers in the instance.
 
         This method replaces binary powers in the instance with their equivalent linear expressions.
-        For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+        For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
 
         **Returns:**
         ``True`` if any reduction was performed, ``False`` otherwise.
@@ -2092,8 +2080,8 @@ class Linear:
     r"""
     Linear function of decision variables.
 
-    A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
-    and `cᵢ` are coefficients.
+    A linear function has the form: $c_0 + \sum_i c_i x_i$ where $x_i$ are decision variables
+    and $c_i$ are coefficients.
 
     # Examples
 
@@ -2655,8 +2643,8 @@ class Polynomial:
     r"""
     Polynomial function of decision variables.
 
-    A polynomial function of arbitrary degree with terms of the form `c * x₁^a₁ * x₂^a₂ * ...`
-    where `xᵢ` are decision variables and `c` is a coefficient.
+    A polynomial function of arbitrary degree with terms of the form $c \cdot x_1^{a_1} \cdot x_2^{a_2} \cdots$
+    where $x_i$ are decision variables and $c$ is a coefficient.
 
     # Examples
 
@@ -2790,8 +2778,8 @@ class Quadratic:
     r"""
     Quadratic function of decision variables.
 
-    A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
-    where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
+    A quadratic function has the form: $c_0 + \sum_i c_i x_i + \sum_{ij} q_{ij} x_i x_j$
+    where $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.
 
     # Examples
 
@@ -3817,16 +3805,16 @@ class Solution:
         Calculate total constraint violation using L1 norm (sum of absolute violations)
 
         Returns the sum of violations across all constraints (including removed constraints):
-        - For equality constraints: `Σ|f(x)|`
-        - For inequality constraints: `Σmax(0, f(x))`
+        - For equality constraints: $\sum |f(x)|$
+        - For inequality constraints: $\sum \max(0, f(x))$
         """
     def total_violation_l2(self) -> builtins.float:
         r"""
         Calculate total constraint violation using L2 norm squared (sum of squared violations)
 
         Returns the sum of squared violations across all constraints (including removed constraints):
-        - For equality constraints: `Σ(f(x))²`
-        - For inequality constraints: `Σ(max(0, f(x)))²`
+        - For equality constraints: $\sum (f(x))^2$
+        - For inequality constraints: $\sum (\max(0, f(x)))^2$
         """
 
 @typing.final

@@ -452,7 +452,7 @@ impl Function {
 
     /// Reduce binary powers in the function.
     ///
-    /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
+    /// For binary variables, $x^n = x$ for any $n \geq 1$, so we can reduce higher powers to linear terms.
     ///
     /// **Args:**
     ///

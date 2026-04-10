@@ -38,6 +38,8 @@ source_suffix = {
     ".md": "markdown",
 }
 
+myst_enable_extensions = ["dollarmath"]
+
 templates_path = ["_templates"]
 language = "en"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

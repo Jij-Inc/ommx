@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 
 /// Linear function of decision variables.
 ///
-/// A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
-/// and `cᵢ` are coefficients.
+/// A linear function has the form: $c_0 + \sum_i c_i x_i$ where $x_i$ are decision variables
+/// and $c_i$ are coefficients.
 ///
 /// # Examples
 ///

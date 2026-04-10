@@ -15,8 +15,8 @@ use std::collections::BTreeMap;
 
 /// Quadratic function of decision variables.
 ///
-/// A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
-/// where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
+/// A quadratic function has the form: $c_0 + \sum_i c_i x_i + \sum_{ij} q_{ij} x_i x_j$
+/// where $x_i$ are decision variables and $c_i$, $q_{ij}$ are coefficients.
 ///
 /// # Examples
 ///
