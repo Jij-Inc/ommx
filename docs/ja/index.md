@@ -113,6 +113,13 @@ user_guide/sample_set
 ```
 
 ```{toctree}
+:caption: API Reference
+:hidden:
+
+OMMX Python SDK <https://jij-inc-ommx.readthedocs-hosted.com/en/latest/api/index.html>
+```
+
+```{toctree}
 :caption: Release Note
 :maxdepth: 1
 :hidden:
