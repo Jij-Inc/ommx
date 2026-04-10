@@ -17654,7 +17654,8 @@
     "json-output": "api_reference.json",
     "separate-pages": true,
     "intro-message": null,
-    "index-title": "OMMX Python API Reference",
-    "contents-table": true
+    "index-title": "OMMX Python SDK API Reference",
+    "contents-table": true,
+    "separate-items": true
   }
 }

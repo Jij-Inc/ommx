@@ -1,5 +1,5 @@
-OMMX Python API Reference
-=========================
+OMMX Python SDK API Reference
+=============================
 
 This is the API reference documentation generated from Rust code using `pyo3-stub-gen <https://github.com/Jij-Inc/pyo3-stub-gen>`_.
 

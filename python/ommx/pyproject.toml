@@ -59,6 +59,7 @@ output-dir = "../../docs/api_reference/api"
 json-output = "api_reference.json"
 index-title = "OMMX Python SDK API Reference"
 contents-table = true
+separate-items = true
 
 [tool.uv]
 cache-keys = [
