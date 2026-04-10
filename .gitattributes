@@ -9,3 +9,8 @@ requirements.txt linguist-generated=true
 
 # syrupy snapshot files
 **/*.ambr linguist-generated=true
+
+# pyo3-stub-gen generated files
+python/ommx/ommx/_ommx_rust/__init__.pyi linguist-generated=true
+python/ommx/ommx/v1/__init__.py linguist-generated=true
+docs/api_reference/api/** linguist-generated=true

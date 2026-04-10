@@ -1,7 +1,7 @@
 [project]
 name = "ommx-api-reference"
 version = "0.1.0"
-description = "Add your description here"
+description = "OMMX Python API Reference Documentation"
 requires-python = ">=3.12, <3.14"
 dependencies = [
   "myst-parser>=3.0.1",

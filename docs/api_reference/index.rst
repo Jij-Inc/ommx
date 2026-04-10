@@ -1,18 +1,28 @@
-.. ommx documentation master file, created by
-   sphinx-quickstart on Tue Apr  9 10:45:04 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+OMMX Python SDK API Reference
+==============================
 
-Welcome to ommx's documentation!
-================================
+Core
+----
 
 .. toctree::
-   :maxdepth: 6
-   :caption: Contents:
+   :maxdepth: 3
+
+   api/ommx.v1
+
+Adapters
+--------
+
+.. toctree::
+   :maxdepth: 3
+
+   autoapi/ommx_python_mip_adapter/index
+   autoapi/ommx_pyscipopt_adapter/index
+   autoapi/ommx_highs_adapter/index
+   autoapi/ommx_openjij_adapter/index
 
 
 Indices
-==================
+-------
 
 * :ref:`genindex`
 * :ref:`modindex`

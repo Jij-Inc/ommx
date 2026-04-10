@@ -54,6 +54,13 @@ config-settings = { build-args = "--no-default-features" }
 [tool.pyo3-stub-gen]
 generate-init-py = ["ommx.v1"]
 
+[tool.pyo3-stub-gen.doc-gen]
+output-dir = "../../docs/api_reference/api"
+json-output = "api_reference.json"
+index-title = "OMMX Python SDK API Reference"
+contents-table = true
+separate-items = true
+
 [tool.uv]
 cache-keys = [
   { file = "pyproject.toml" },
