@@ -11,7 +11,6 @@ dev = [
   "jupyterlab>=4.3.5",
   "myst-nb>=1.0.0",
   "sphinx>=7.4.7",
-  "sphinx-rtd-theme>=3.0.2",
   "sphinx-autoapi>=3.5.0",
   "sphinx-fontawesome>=0.0.6",
   "markdown-code-runner>=2.1.0",
@@ -29,4 +28,5 @@ dev = [
   "ruff>=0.9.6",
   "syrupy>=4.7.2",
   "tomlkit>=0.13.2",
+  "sphinx-book-theme>=1.1.4",
 ]

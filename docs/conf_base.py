@@ -6,7 +6,6 @@ import os
 
 extensions = [
     "myst_nb",
-    "sphinx_rtd_theme",
     "sphinx.ext.intersphinx",
 ]
 
@@ -28,7 +27,7 @@ nb_execution_excludepatterns = ["release_note/ommx-1.*.md"]
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"
 html_show_sourcelink = False
 html_static_path = []
 html_favicon = "../logo.png"
