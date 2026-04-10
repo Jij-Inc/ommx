@@ -8,6 +8,7 @@ Core
    :maxdepth: 3
 
    api/ommx.v1
+   api/ommx.artifact
 
 Adapters
 --------
