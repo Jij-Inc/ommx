@@ -1193,12 +1193,9 @@ class Instance:
 
         # Examples
 
-        Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
+        Let's consider a maximization problem with two integer variables $x_0, x_1 \in [0, 2]$ subject to an inequality:
 
-        ```text
-        max  x0 + x1
-        s.t. x0 + 2*x1 <= 3
-        ```
+        $$\max \; x_0 + x_1 \quad \text{s.t.} \quad x_0 + 2 x_1 \leq 3$$
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
