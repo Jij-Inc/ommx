@@ -10,11 +10,23 @@ Core
    api/ommx.v1
    api/ommx.artifact
 
+Utilities
+---------
+
+.. toctree::
+   :maxdepth: 1
+
+   autoapi/ommx/adapter/index
+   autoapi/ommx/dataset/index
+   autoapi/ommx/testing/index
+   autoapi/ommx/mps/index
+   autoapi/ommx/qplib/index
+
 Adapters
 --------
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 1
 
    autoapi/ommx_python_mip_adapter/index
    autoapi/ommx_pyscipopt_adapter/index
