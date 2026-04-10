@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 /// Optimization problem instance.
 ///
-/// Note that this class also contains annotations like :py:attr:`title` which are not contained in protobuf message but stored in OMMX artifact.
+/// Note that this class also contains annotations like {attr}`~ommx.v1.Instance.title` which are not contained in protobuf message but stored in OMMX artifact.
 /// These annotations are loaded from annotations while reading from OMMX artifact.
 ///
 /// # Examples
@@ -336,21 +336,21 @@ impl Instance {
     ///
     /// This is a **Driver API** for QUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
-    ///   * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, :py:meth:`add_integer_slack_to_inequality`
+    ///   * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+    ///   * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
     ///
     /// 4. Convert to QUBO with (uniform) penalty method
     ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
     ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
     ///
-    /// 5. Log-encode integer variables by :py:meth:`log_encode`.
-    /// 6. Finally convert to QUBO format by :py:meth:`as_qubo_format`.
+    /// 5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+    /// 6. Finally convert to QUBO format by {meth}`~ommx.v1.Instance.as_qubo_format`.
     ///
     /// Please see the document of each method for details.
     /// If you want to customize the conversion, use the methods above manually.
@@ -418,25 +418,25 @@ impl Instance {
     ///
     /// This is a **Driver API** for HUBO conversion calling single-purpose methods in order:
     ///
-    /// 1. Convert the instance to a minimization problem by :py:meth:`as_minimization_problem`.
+    /// 1. Convert the instance to a minimization problem by {meth}`~ommx.v1.Instance.as_minimization_problem`.
     /// 2. Check continuous variables and raise error if exists.
     /// 3. Convert inequality constraints
     ///
-    ///   * Try :py:meth:`convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
-    ///   * If failed, :py:meth:`add_integer_slack_to_inequality`
+    ///   * Try {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` first with given ``inequality_integer_slack_max_range``.
+    ///   * If failed, {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`
     ///
     /// 4. Convert to HUBO with (uniform) penalty method
     ///
-    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use :py:meth:`penalty_method` with the given weights.
-    ///   * If ``uniform_penalty_weight`` is given, use :py:meth:`uniform_penalty_method` with the given weight.
+    ///   * If ``penalty_weights`` is given (in ``dict[constraint_id, weight]`` form), use {meth}`~ommx.v1.Instance.penalty_method` with the given weights.
+    ///   * If ``uniform_penalty_weight`` is given, use {meth}`~ommx.v1.Instance.uniform_penalty_method` with the given weight.
     ///   * If both are None, defaults to ``uniform_penalty_weight = 1.0``.
     ///
-    /// 5. Log-encode integer variables by :py:meth:`log_encode`.
-    /// 6. Finally convert to HUBO format by :py:meth:`as_hubo_format`.
+    /// 5. Log-encode integer variables by {meth}`~ommx.v1.Instance.log_encode`.
+    /// 6. Finally convert to HUBO format by {meth}`~ommx.v1.Instance.as_hubo_format`.
     ///
-    /// Please see the documentation for :py:meth:`to_qubo` for more information, or the
+    /// Please see the documentation for {meth}`~ommx.v1.Instance.to_qubo` for more information, or the
     /// documentation for each individual method for additional details. The
-    /// difference between this and :py:meth:`to_qubo` is that this method isn't
+    /// difference between this and {meth}`~ommx.v1.Instance.to_qubo` is that this method isn't
     /// restricted to quadratic or linear problems. If you want to customize the
     /// conversion, use the individual methods above manually.
     #[pyo3(signature = (*, uniform_penalty_weight=None, penalty_weights=None, inequality_integer_slack_max_range=31))]
@@ -486,13 +486,13 @@ impl Instance {
     /// ```
     ///
     /// where lambda_i and rho_j are the penalty weight parameters for each constraint.
-    /// If you want to use single weight parameter, use :py:meth:`uniform_penalty_method` instead.
+    /// If you want to use single weight parameter, use {meth}`~ommx.v1.Instance.uniform_penalty_method` instead.
     ///
-    /// The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
     ///
     /// > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
     /// > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-    /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+    /// > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
     ///
     /// # Examples
     ///
@@ -548,11 +548,11 @@ impl Instance {
     ///
     /// where lambda is the uniform penalty weight parameter for all constraints.
     ///
-    /// The removed constraints are stored in :py:attr:`~ParametricInstance.removed_constraints`.
+    /// The removed constraints are stored in {attr}`~ommx.v1.Instance.removed_constraints`.
     ///
     /// > Note: This method converts inequality constraints h(x) <= 0 to |h(x)|^2 not to max(0, h(x))^2.
     /// > This means the penalty is enforced even for h(x) < 0 cases, and h(x) = 0 is unfairly favored.
-    /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
+    /// > This feature is intended to use with {meth}`~ommx.v1.Instance.add_integer_slack_to_inequality`.
     ///
     /// # Examples
     ///
@@ -600,10 +600,10 @@ impl Instance {
         })
     }
 
-    /// Evaluate the given :class:`State` into a :class:`Solution`.
+    /// Evaluate the given {class}`~ommx.v1.State` into a {class}`~ommx.v1.Solution`.
     ///
     /// This method evaluates the problem instance using the provided state (a map from decision variable IDs to their values),
-    /// and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
+    /// and returns a {class}`~ommx.v1.Solution` object containing objective value, evaluated constraint values, and feasibility information.
     ///
     /// # Examples
     ///
@@ -673,7 +673,7 @@ impl Instance {
     ///
     /// Args:
     /// - state: Maps decision variable IDs to their fixed values.
-    ///   Can be a :class:`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
+    ///   Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
     /// - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
     ///
     /// Returns:
@@ -851,7 +851,7 @@ impl Instance {
 
     /// Remove a constraint from the instance.
     ///
-    /// The removed constraint is stored in :py:attr:`~Instance.removed_constraints`, and can be restored by :py:meth:`restore_constraint`.
+    /// The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
     ///
     /// Args:
     /// - constraint_id: The ID of the constraint to remove.
@@ -997,7 +997,7 @@ impl Instance {
     ///
     ///   - The bound [l, u] is always negative, i.e. u <= 0:
     ///     this means this constraint is trivially satisfied,
-    ///     the constraint is moved to :py:attr:`~Instance.removed_constraints`,
+    ///     the constraint is moved to {attr}`~ommx.v1.Instance.removed_constraints`,
     ///     and this method returns without introducing slack variable or raising an error.
     ///
     /// # Examples
@@ -1049,7 +1049,7 @@ impl Instance {
 
     /// Convert inequality f(x) <= 0 to **inequality** f(x) + b*s <= 0 with an integer slack variable s.
     ///
-    /// - This should be used when :meth:`convert_inequality_to_equality_with_integer_slack` is not applicable.
+    /// - This should be used when {meth}`~ommx.v1.Instance.convert_inequality_to_equality_with_integer_slack` is not applicable.
     ///
     /// - The bound of s will be [0, slack_upper_bound], and the coefficient b is determined from the lower bound of f(x).
     ///
