@@ -212,38 +212,38 @@ impl PyArtifact {
 
     /// The first instance layer in the artifact.
     ///
-    /// Raises `RuntimeError` if no instance layer is found.
+    /// Raises `ValueError` if no instance layer is found.
     /// For multiple instance layers, use {meth}`get_instance` with a descriptor.
     #[getter(instance)]
     pub fn instance_(&mut self) -> Result<crate::Instance> {
-        self.get_instance(None)
+        Ok(self.get_instance(None)?)
     }
 
     /// The first solution layer in the artifact.
     ///
-    /// Raises `RuntimeError` if no solution layer is found.
+    /// Raises `ValueError` if no solution layer is found.
     /// For multiple solution layers, use {meth}`get_solution` with a descriptor.
     #[getter(solution)]
     pub fn solution_(&mut self) -> Result<crate::Solution> {
-        self.get_solution(None)
+        Ok(self.get_solution(None)?)
     }
 
     /// The first parametric instance layer in the artifact.
     ///
-    /// Raises `RuntimeError` if no parametric instance layer is found.
+    /// Raises `ValueError` if no parametric instance layer is found.
     /// For multiple parametric instance layers, use {meth}`get_parametric_instance` with a descriptor.
     #[getter(parametric_instance)]
     pub fn parametric_instance_(&mut self) -> Result<crate::ParametricInstance> {
-        self.get_parametric_instance(None)
+        Ok(self.get_parametric_instance(None)?)
     }
 
     /// The first sample set layer in the artifact.
     ///
-    /// Raises `RuntimeError` if no sample set layer is found.
+    /// Raises `ValueError` if no sample set layer is found.
     /// For multiple sample set layers, use {meth}`get_sample_set` with a descriptor.
     #[getter(sample_set)]
     pub fn sample_set_(&mut self) -> Result<crate::SampleSet> {
-        self.get_sample_set(None)
+        Ok(self.get_sample_set(None)?)
     }
 
     /// Get the layer object corresponding to the descriptor.
@@ -292,19 +292,28 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first instance layer.
     /// - If `descriptor` is given, returns the instance for that specific layer.
     ///
-    /// Raises `RuntimeError` if no instance layer is found.
+    /// Raises `ValueError` if no instance layer is found.
     #[pyo3(signature = (descriptor = None))]
-    pub fn get_instance(&mut self, descriptor: Option<&PyDescriptor>) -> Result<crate::Instance> {
+    pub fn get_instance(&mut self, descriptor: Option<&PyDescriptor>) -> PyResult<crate::Instance> {
         match descriptor {
-            Some(desc) => self.get_instance_inner(desc),
+            Some(desc) => self
+                .get_instance_inner(desc)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
-                let layers = self.0.layers()?;
+                let layers = self
+                    .0
+                    .layers()
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in &layers {
                     if desc.media_type() == "application/org.ommx.v1.instance" {
-                        return self.get_instance_inner(desc);
+                        return self
+                            .get_instance_inner(desc)
+                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
-                bail!("Instance layer not found")
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "Instance layer not found",
+                ))
             }
         }
     }
@@ -314,19 +323,28 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first solution layer.
     /// - If `descriptor` is given, returns the solution for that specific layer.
     ///
-    /// Raises `RuntimeError` if no solution layer is found.
+    /// Raises `ValueError` if no solution layer is found.
     #[pyo3(signature = (descriptor = None))]
-    pub fn get_solution(&mut self, descriptor: Option<&PyDescriptor>) -> Result<crate::Solution> {
+    pub fn get_solution(&mut self, descriptor: Option<&PyDescriptor>) -> PyResult<crate::Solution> {
         match descriptor {
-            Some(desc) => self.get_solution_inner(desc),
+            Some(desc) => self
+                .get_solution_inner(desc)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
-                let layers = self.0.layers()?;
+                let layers = self
+                    .0
+                    .layers()
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in &layers {
                     if desc.media_type() == "application/org.ommx.v1.solution" {
-                        return self.get_solution_inner(desc);
+                        return self
+                            .get_solution_inner(desc)
+                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
-                bail!("Solution layer not found")
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "Solution layer not found",
+                ))
             }
         }
     }
@@ -336,22 +354,31 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first parametric instance layer.
     /// - If `descriptor` is given, returns the parametric instance for that specific layer.
     ///
-    /// Raises `RuntimeError` if no parametric instance layer is found.
+    /// Raises `ValueError` if no parametric instance layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_parametric_instance(
         &mut self,
         descriptor: Option<&PyDescriptor>,
-    ) -> Result<crate::ParametricInstance> {
+    ) -> PyResult<crate::ParametricInstance> {
         match descriptor {
-            Some(desc) => self.get_parametric_instance_inner(desc),
+            Some(desc) => self
+                .get_parametric_instance_inner(desc)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
-                let layers = self.0.layers()?;
+                let layers = self
+                    .0
+                    .layers()
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in &layers {
                     if desc.media_type() == "application/org.ommx.v1.parametric-instance" {
-                        return self.get_parametric_instance_inner(desc);
+                        return self
+                            .get_parametric_instance_inner(desc)
+                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
-                bail!("Parametric instance layer not found")
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "Parametric instance layer not found",
+                ))
             }
         }
     }
@@ -361,22 +388,31 @@ impl PyArtifact {
     /// - If `descriptor` is `None`, returns the first sample set layer.
     /// - If `descriptor` is given, returns the sample set for that specific layer.
     ///
-    /// Raises `RuntimeError` if no sample set layer is found.
+    /// Raises `ValueError` if no sample set layer is found.
     #[pyo3(signature = (descriptor = None))]
     pub fn get_sample_set(
         &mut self,
         descriptor: Option<&PyDescriptor>,
-    ) -> Result<crate::SampleSet> {
+    ) -> PyResult<crate::SampleSet> {
         match descriptor {
-            Some(desc) => self.get_sample_set_inner(desc),
+            Some(desc) => self
+                .get_sample_set_inner(desc)
+                .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string())),
             None => {
-                let layers = self.0.layers()?;
+                let layers = self
+                    .0
+                    .layers()
+                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
                 for desc in &layers {
                     if desc.media_type() == "application/org.ommx.v1.sample-set" {
-                        return self.get_sample_set_inner(desc);
+                        return self
+                            .get_sample_set_inner(desc)
+                            .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()));
                     }
                 }
-                bail!("Sample set layer not found")
+                Err(pyo3::exceptions::PyValueError::new_err(
+                    "Sample set layer not found",
+                ))
             }
         }
     }
