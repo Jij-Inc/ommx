@@ -58,6 +58,7 @@ python_use_unqualified_type_names = True
 # -- AutoAPI settings (adapters only) ----------------------------------------
 
 autoapi_dirs = [
+    python_root / "ommx",
     python_root / "ommx-python-mip-adapter",
     python_root / "ommx-pyscipopt-adapter",
     python_root / "ommx-highs-adapter",
@@ -71,7 +72,14 @@ autoapi_options = [
 ]
 autoapi_member_order = "groupwise"
 autoapi_file_patterns = ["*.pyi", "*.py"]
-autoapi_ignore = ["**/tests/**", "**/conftest.py"]
+autoapi_ignore = [
+    "**/tests/**",
+    "**/conftest.py",
+    "**/ommx/v1/**",
+    "**/ommx/artifact/**",
+    "**/ommx/_ommx_rust/**",
+    "**/pywasmcross/**",
+]
 autoapi_add_toctree_entry = False
 
 # -- Intersphinx Configuration -----------------------------------------------
