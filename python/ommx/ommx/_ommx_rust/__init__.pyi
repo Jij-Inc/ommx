@@ -364,17 +364,21 @@ class DecisionVariable:
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
-    Example:
-        >>> x = DecisionVariable.integer(1)
-        >>> x == 1  # Returns Constraint, not bool
-        Constraint(...)
+    # Examples
+
+    ```python
+    >>> x = DecisionVariable.integer(1)
+    >>> x == 1  # Returns Constraint, not bool
+    Constraint(...)
+    ```
 
     For object equality comparison, use the ``equals_to()`` method or compare IDs:
 
-    Example:
-        >>> y = DecisionVariable.integer(2)
-        >>> x.id == y.id
-        False
+    ```python
+    >>> y = DecisionVariable.integer(2)
+    >>> x.id == y.id
+    False
+    ```
     """
 
     BINARY: builtins.int = 1
@@ -922,7 +926,6 @@ class Instance:
     These annotations are loaded from annotations while reading from OMMX artifact.
 
     # Examples
-    =========
 
     Create an instance for KnapSack Problem
 
@@ -1124,7 +1127,6 @@ class Instance:
         Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance
@@ -1139,7 +1141,6 @@ class Instance:
         Get the set of decision variable IDs used in the objective and remaining constraints.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1190,7 +1191,6 @@ class Instance:
         If you want to customize the conversion, use the methods above manually.
 
         # Examples
-        ========
 
         Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
 
@@ -1292,7 +1292,6 @@ class Instance:
         > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable, Constraint
@@ -1348,7 +1347,6 @@ class Instance:
         > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1397,7 +1395,6 @@ class Instance:
         and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
 
         # Examples
-        =========
 
         Create a simple instance with three binary variables and evaluate a solution:
 
@@ -1460,7 +1457,6 @@ class Instance:
         A new instance with the specified decision variables fixed to their given values.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1504,7 +1500,6 @@ class Instance:
         Only contains values for variables that are used in the problem.
 
         # Examples
-        =========
 
         Generate random state only for used variables
 
@@ -1561,7 +1556,6 @@ class Instance:
         Samples object
 
         # Examples
-        ========
 
         Generate samples for a simple instance:
 
@@ -1595,7 +1589,6 @@ class Instance:
         - parameters: Additional parameters to describe the reason.
 
         # Examples
-        =========
 
         Relax constraint, and restore it.
 
@@ -1648,7 +1641,6 @@ class Instance:
           If not specified (or empty), all integer variables are log-encoded.
 
         # Examples
-        =========
 
         Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
 
@@ -1707,7 +1699,6 @@ class Instance:
             and this method returns without introducing slack variable or raising an error.
 
         # Examples
-        =========
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
 
@@ -1760,7 +1751,6 @@ class Instance:
         The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
         # Examples
-        =========
 
         Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
 
@@ -1807,7 +1797,6 @@ class Instance:
         Analysis object containing detailed information about decision variables
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1866,7 +1855,6 @@ class Instance:
         ```
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance
@@ -1890,7 +1878,6 @@ class Instance:
         ``True`` if the instance is converted, ``False`` if already a minimization problem.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -1935,7 +1922,6 @@ class Instance:
         ``True`` if the instance is converted, ``False`` if already a maximization problem.
 
         # Examples
-        =========
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -2003,7 +1989,6 @@ class Instance:
         ``True`` if any reduction was performed, ``False`` otherwise.
 
         # Examples
-        =========
 
         Consider an instance with binary variables and quadratic terms:
 
@@ -2064,7 +2049,6 @@ class Instance:
         Folded stack format string that can be visualized with flamegraph tools
 
         # Examples
-        --------
 
         ```python
         >>> from ommx.v1 import Instance, DecisionVariable
@@ -2110,28 +2094,34 @@ class Linear:
     A linear function has the form: `c₀ + Σᵢ cᵢ * xᵢ` where `xᵢ` are decision variables
     and `cᵢ` are coefficients.
 
-    Example
-    -------
+    # Examples
+
     Create a linear function `f(x₁, x₂) = 2x₁ + 3x₂ + 1`:
 
+    ```python
     >>> f = Linear(terms={1: 2, 2: 3}, constant=1)
+    ```
 
     Or create via DecisionVariable arithmetic:
 
+    ```python
     >>> x1 = DecisionVariable.integer(1)
     >>> x2 = DecisionVariable.integer(2)
     >>> g = 2*x1 + 3*x2 + 1
+    ```
 
     Compare two linear functions with tolerance:
 
+    ```python
     >>> f.almost_equal(g, atol=1e-12)
     True
+    ```
 
     Note that `==` creates an equality Constraint, not a boolean:
 
+    ```python
     >>> constraint = f == g  # Returns Constraint, not bool
-
-    .
+    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...
@@ -2378,12 +2368,14 @@ class Parameter:
 
     Note that this object overloads `==` for creating a constraint, not for equality comparison.
 
-    Example
-    -------
+    # Examples
+
+    ```python
     >>> p = Parameter(1, name="penalty")
     >>> x = DecisionVariable.integer(2)
     >>> x + p  # Returns Linear expression
     Linear(...)
+    ```
     """
     @property
     def id(self) -> builtins.int: ...
@@ -2664,17 +2656,21 @@ class Polynomial:
     A polynomial function of arbitrary degree with terms of the form `c * x₁^a₁ * x₂^a₂ * ...`
     where `xᵢ` are decision variables and `c` is a coefficient.
 
-    Example
-    -------
+    # Examples
+
     Create via DecisionVariable operations:
 
+    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> p = x * x * y + x * y * y + 1  # Cubic polynomial
+    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
+    ```python
     >>> constraint = p == 0  # Returns Constraint
+    ```
     """
     def __add__(
         self,
@@ -2795,19 +2791,21 @@ class Quadratic:
     A quadratic function has the form: `c₀ + Σᵢ cᵢ * xᵢ + Σᵢⱼ qᵢⱼ * xᵢ * xⱼ`
     where `xᵢ` are decision variables and `cᵢ`, `qᵢⱼ` are coefficients.
 
-    Example
-    -------
+    # Examples
+
     Create via DecisionVariable multiplication:
 
+    ```python
     >>> x = DecisionVariable.integer(1)
     >>> y = DecisionVariable.integer(2)
     >>> q = x * y + 2*x + 3*y + 1
+    ```
 
     Note that `==`, `<=`, `>=` create Constraint objects:
 
+    ```python
     >>> constraint = q <= 10  # Returns Constraint
-
-    .
+    ```
     """
     @property
     def linear_terms(self) -> builtins.dict[builtins.int, builtins.float]: ...

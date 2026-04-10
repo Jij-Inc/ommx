@@ -20,26 +20,30 @@ use std::collections::{BTreeMap, BTreeSet};
 /// or polynomial functions. It is used as the objective function and constraint
 /// functions in optimization problems.
 ///
-/// Example
-/// -------
+/// # Examples
+///
 /// Create from various types:
 ///
+/// ```python
 /// >>> f = Function(1.0)  # Constant
 /// >>> f = Function(Linear(terms={1: 2}, constant=1))  # Linear
 /// >>> f = Function(x * y)  # From Quadratic expression
+/// ```
 ///
 /// Access the terms:
 ///
+/// ```python
 /// >>> f = Function(Linear(terms={1: 2.5}, constant=1.0))
 /// >>> f.terms
 /// {(1,): 2.5, (): 1.0}
+/// ```
 ///
 /// Check the degree:
 ///
+/// ```python
 /// >>> f.degree()
 /// 1
-///
-/// .
+/// ```
 #[pyclass(skip_from_py_object)]
 #[derive(Clone)]
 pub struct Function(pub ommx::Function);

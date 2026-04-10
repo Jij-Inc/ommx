@@ -11,12 +11,14 @@ use std::collections::HashMap;
 ///
 /// Note that this object overloads `==` for creating a constraint, not for equality comparison.
 ///
-/// Example
-/// -------
+/// # Examples
+///
+/// ```python
 /// >>> p = Parameter(1, name="penalty")
 /// >>> x = DecisionVariable.integer(2)
 /// >>> x + p  # Returns Linear expression
 /// Linear(...)
+/// ```
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 #[derive(Clone)]

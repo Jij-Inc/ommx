@@ -19,7 +19,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// These annotations are loaded from annotations while reading from OMMX artifact.
 ///
 /// # Examples
-/// =========
 ///
 /// Create an instance for KnapSack Problem
 ///
@@ -152,7 +151,6 @@ impl Instance {
     /// Create trivial empty instance of minimization with zero objective, no constraints, and no decision variables.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance
@@ -291,7 +289,6 @@ impl Instance {
     /// Get the set of decision variable IDs used in the objective and remaining constraints.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -359,7 +356,6 @@ impl Instance {
     /// If you want to customize the conversion, use the methods above manually.
     ///
     /// # Examples
-    /// ========
     ///
     /// Let's consider a maximization problem with two integer variables x0, x1 in [0, 2] subject to an inequality:
     ///
@@ -499,7 +495,6 @@ impl Instance {
     /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable, Constraint
@@ -560,7 +555,6 @@ impl Instance {
     /// > This feature is intended to use with :py:meth:`add_integer_slack_to_inequality`.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -612,7 +606,6 @@ impl Instance {
     /// and returns a :class:`Solution` object containing objective value, evaluated constraint values, and feasibility information.
     ///
     /// # Examples
-    /// =========
     ///
     /// Create a simple instance with three binary variables and evaluate a solution:
     ///
@@ -687,7 +680,6 @@ impl Instance {
     /// A new instance with the specified decision variables fixed to their given values.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -755,7 +747,6 @@ impl Instance {
     /// Only contains values for variables that are used in the problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// Generate random state only for used variables
     ///
@@ -811,7 +802,6 @@ impl Instance {
     /// Samples object
     ///
     /// # Examples
-    /// ========
     ///
     /// Generate samples for a simple instance:
     ///
@@ -869,7 +859,6 @@ impl Instance {
     /// - parameters: Additional parameters to describe the reason.
     ///
     /// # Examples
-    /// =========
     ///
     /// Relax constraint, and restore it.
     ///
@@ -936,7 +925,6 @@ impl Instance {
     ///   If not specified (or empty), all integer variables are log-encoded.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple integer programming problem with three integer variables x0, x1, and x2.
     ///
@@ -1013,7 +1001,6 @@ impl Instance {
     ///     and this method returns without introducing slack variable or raising an error.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 5.
     ///
@@ -1076,7 +1063,6 @@ impl Instance {
     /// The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
     ///
     /// # Examples
-    /// =========
     ///
     /// Let's consider a simple inequality constraint x0 + 2*x1 <= 4.
     ///
@@ -1131,7 +1117,6 @@ impl Instance {
     /// Analysis object containing detailed information about decision variables
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1191,7 +1176,6 @@ impl Instance {
     /// ```
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance
@@ -1252,7 +1236,6 @@ impl Instance {
     /// ``True`` if the instance is converted, ``False`` if already a minimization problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1298,7 +1281,6 @@ impl Instance {
     /// ``True`` if the instance is converted, ``False`` if already a maximization problem.
     ///
     /// # Examples
-    /// =========
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
@@ -1393,7 +1375,6 @@ impl Instance {
     /// ``True`` if any reduction was performed, ``False`` otherwise.
     ///
     /// # Examples
-    /// =========
     ///
     /// Consider an instance with binary variables and quadratic terms:
     ///
@@ -1474,7 +1455,6 @@ impl Instance {
     /// Folded stack format string that can be visualized with flamegraph tools
     ///
     /// # Examples
-    /// --------
     ///
     /// ```python
     /// >>> from ommx.v1 import Instance, DecisionVariable
