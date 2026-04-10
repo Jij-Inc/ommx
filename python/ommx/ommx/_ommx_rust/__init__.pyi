@@ -236,14 +236,15 @@ class Constraint:
         r"""
         Create a new Constraint.
 
-        Args:
-            function: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-            equality: The equality type (EqualToZero or LessThanOrEqualToZero)
-            id: Optional constraint ID (auto-generated if not provided)
-            name: Optional name for the constraint
-            subscripts: Optional subscripts for indexing
-            description: Optional description
-            parameters: Optional key-value parameters
+        **Args:**
+
+        - `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+        - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
+        - `id`: Optional constraint ID (auto-generated if not provided)
+        - `name`: Optional name for the constraint
+        - `subscripts`: Optional subscripts for indexing
+        - `description`: Optional description
+        - `parameters`: Optional key-value parameters
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> Constraint: ...
@@ -254,12 +255,12 @@ class Constraint:
         r"""
         Evaluate the constraint with the given state.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            EvaluatedConstraint containing the evaluated value and feasibility
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -269,12 +270,12 @@ class Constraint:
 
         This modifies self in-place and returns self for method chaining.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            Self (modified in-place) for method chaining
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** Self (modified in-place) for method chaining
         """
     def set_name(self, name: builtins.str) -> Constraint:
         r"""
@@ -891,11 +892,11 @@ class Function:
 
         For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
 
-        Args:
-            binary_ids: Set of binary variable IDs to reduce powers for
+        **Args:**
 
-        Returns:
-            True if any reduction was performed, False otherwise
+        - `binary_ids`: Set of binary variable IDs to reduce powers for
+
+        **Returns:** `True` if any reduction was performed, `False` otherwise
         """
     def __eq__(self, other: ToFunction) -> Constraint:  # type: ignore[override]
         r"""
@@ -1109,16 +1110,16 @@ class Instance:
         r"""
         Create an instance from its components.
 
-        Args:
-        - sense: Optimization sense (minimize or maximize)
-        - objective: Objective function
-        - decision_variables: List of decision variables
-        - constraints: List of constraints
-        - named_functions: Optional list of named functions
-        - description: Optional instance description
-        - constraint_hints: Optional constraint hints for solvers
+        **Args:**
+        - `sense`: Optimization sense (minimize or maximize)
+        - `objective`: Objective function
+        - `decision_variables`: List of decision variables
+        - `constraints`: List of constraints
+        - `named_functions`: Optional list of named functions
+        - `description`: Optional instance description
+        - `constraint_hints`: Optional constraint hints for solvers
 
-        Returns:
+        **Returns:**
         A new Instance
         """
     @staticmethod
@@ -1448,12 +1449,12 @@ class Instance:
         - Incrementally solving a problem by fixing some variables and optimizing the rest
         - Testing specific configurations of a problem
 
-        Args:
-        - state: Maps decision variable IDs to their fixed values.
+        **Args:**
+        - `state`: Maps decision variable IDs to their fixed values.
           Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
-        - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+        - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
 
-        Returns:
+        **Returns:**
         A new instance with the specified decision variables fixed to their given values.
 
         # Examples
@@ -1492,10 +1493,10 @@ class Instance:
         objective function or constraints, as determined by decision variable analysis.
         Generated values respect the bounds of each variable type.
 
-        Args:
-        - rng: Random number generator to use for generating the state.
+        **Args:**
+        - `rng`: Random number generator to use for generating the state.
 
-        Returns:
+        **Returns:**
         A randomly generated state that satisfies the variable bounds of this instance.
         Only contains values for variables that are used in the problem.
 
@@ -1546,13 +1547,13 @@ class Instance:
         ``num_different_samples`` groups, where each group shares the same state but has
         different sample IDs.
 
-        Args:
-        - rng: Random number generator
-        - num_different_samples: Number of different states to generate
-        - num_samples: Total number of samples to generate
-        - max_sample_id: Maximum sample ID (default: ``num_samples``)
+        **Args:**
+        - `rng`: Random number generator
+        - `num_different_samples`: Number of different states to generate
+        - `num_samples`: Total number of samples to generate
+        - `max_sample_id`: Maximum sample ID (default: ``num_samples``)
 
-        Returns:
+        **Returns:**
         Samples object
 
         # Examples
@@ -1583,10 +1584,10 @@ class Instance:
 
         The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
 
-        Args:
-        - constraint_id: The ID of the constraint to remove.
-        - reason: The reason why the constraint is removed.
-        - parameters: Additional parameters to describe the reason.
+        **Args:**
+        - `constraint_id`: The ID of the constraint to remove.
+        - `reason`: The reason why the constraint is removed.
+        - `parameters`: Additional parameters to describe the reason.
 
         # Examples
 
@@ -1636,8 +1637,8 @@ class Instance:
 
         where m = ceil(log2(u - l + 1)).
 
-        Args:
-        - decision_variable_ids: The IDs of the integer decision variables to log-encode.
+        **Args:**
+        - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
           If not specified (or empty), all integer variables are log-encoded.
 
         # Examples
@@ -1747,7 +1748,7 @@ class Instance:
           - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
             but it needs more bits for the slack variable, and thus the problem size becomes larger.
 
-        Returns:
+        **Returns:**
         The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
 
         # Examples
@@ -1793,7 +1794,7 @@ class Instance:
         - Usage-based partitioning (used in objective, constraints, fixed, etc.)
         - Variable bounds information
 
-        Returns:
+        **Returns:**
         Analysis object containing detailed information about decision variables
 
         # Examples
@@ -1823,7 +1824,7 @@ class Instance:
         Returns a dictionary containing counts of decision variables and constraints
         categorized by kind, usage, and status.
 
-        Returns:
+        **Returns:**
         A dictionary with the following structure:
 
         ```json
@@ -1874,7 +1875,7 @@ class Instance:
 
         If the instance is already a minimization problem, this does nothing.
 
-        Returns:
+        **Returns:**
         ``True`` if the instance is converted, ``False`` if already a minimization problem.
 
         # Examples
@@ -1918,7 +1919,7 @@ class Instance:
 
         If the instance is already a maximization problem, this does nothing.
 
-        Returns:
+        **Returns:**
         ``True`` if the instance is converted, ``False`` if already a maximization problem.
 
         # Examples
@@ -1985,7 +1986,7 @@ class Instance:
         This method replaces binary powers in the instance with their equivalent linear expressions.
         For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
 
-        Returns:
+        **Returns:**
         ``True`` if any reduction was performed, ``False`` otherwise.
 
         # Examples
@@ -2045,7 +2046,7 @@ class Instance:
         2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
         3. Open memory.svg in a browser
 
-        Returns:
+        **Returns:**
         Folded stack format string that can be visualized with flamegraph tools
 
         # Examples
@@ -2251,13 +2252,14 @@ class NamedFunction:
         r"""
         Create a new NamedFunction.
 
-        Args:
-            id: The unique identifier for this named function
-            function: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-            name: Optional name for the function
-            subscripts: Optional subscripts for indexing
-            description: Optional description
-            parameters: Optional key-value parameters
+        **Args:**
+
+        - `id`: The unique identifier for this named function
+        - `function`: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+        - `name`: Optional name for the function
+        - `subscripts`: Optional subscripts for indexing
+        - `description`: Optional description
+        - `parameters`: Optional key-value parameters
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> NamedFunction: ...
@@ -2268,12 +2270,12 @@ class NamedFunction:
         r"""
         Evaluate the named function with the given state.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            EvaluatedNamedFunction containing the evaluated value
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** {class}`~ommx.v1.EvaluatedNamedFunction` containing the evaluated value
         """
     def partial_evaluate(
         self, state: ToState, *, atol: typing.Optional[builtins.float] = None
@@ -2283,12 +2285,12 @@ class NamedFunction:
 
         This modifies self in-place and returns self for method chaining.
 
-        Args:
-            state: A State object, dict[int, float], or iterable of (int, float) tuples
-            atol: Optional absolute tolerance for evaluation
+        **Args:**
 
-        Returns:
-            Self (modified in-place) for method chaining
+        - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+        - `atol`: Optional absolute tolerance for evaluation
+
+        **Returns:** Self (modified in-place) for method chaining
         """
     def __add__(self, other: ToFunction) -> Function:
         r"""
@@ -2442,13 +2444,13 @@ class Parameter:
         r"""
         Create a new Parameter.
 
-        Args:
-            id: Unique identifier for the parameter (must be unique within the instance
-                including decision variables)
-            name: Optional name for the parameter
-            subscripts: Optional subscripts for indexing
-            parameters: Optional metadata key-value pairs
-            description: Optional human-readable description
+        **Args:**
+
+        - `id`: Unique identifier for the parameter (must be unique within the instance including decision variables)
+        - `name`: Optional name for the parameter
+        - `subscripts`: Optional subscripts for indexing
+        - `parameters`: Optional metadata key-value pairs
+        - `description`: Optional human-readable description
         """
     @staticmethod
     def from_bytes(bytes: bytes) -> Parameter: ...

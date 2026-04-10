@@ -454,11 +454,11 @@ impl Function {
     ///
     /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
     ///
-    /// Args:
-    ///     binary_ids: Set of binary variable IDs to reduce powers for
+    /// **Args:**
     ///
-    /// Returns:
-    ///     True if any reduction was performed, False otherwise
+    /// - `binary_ids`: Set of binary variable IDs to reduce powers for
+    ///
+    /// **Returns:** `True` if any reduction was performed, `False` otherwise
     pub fn reduce_binary_power(&mut self, binary_ids: BTreeSet<u64>) -> bool {
         let variable_id_set: ommx::VariableIDSet =
             binary_ids.into_iter().map(ommx::VariableID::from).collect();

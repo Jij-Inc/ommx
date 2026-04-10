@@ -14,13 +14,14 @@ pub struct NamedFunction(pub ommx::NamedFunction);
 impl NamedFunction {
     /// Create a new NamedFunction.
     ///
-    /// Args:
-    ///     id: The unique identifier for this named function
-    ///     function: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-    ///     name: Optional name for the function
-    ///     subscripts: Optional subscripts for indexing
-    ///     description: Optional description
-    ///     parameters: Optional key-value parameters
+    /// **Args:**
+    ///
+    /// - `id`: The unique identifier for this named function
+    /// - `function`: The function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+    /// - `name`: Optional name for the function
+    /// - `subscripts`: Optional subscripts for indexing
+    /// - `description`: Optional description
+    /// - `parameters`: Optional key-value parameters
     #[new]
     #[pyo3(signature = (*, id, function, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
@@ -89,12 +90,12 @@ impl NamedFunction {
 
     /// Evaluate the named function with the given state.
     ///
-    /// Args:
-    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
-    ///     atol: Optional absolute tolerance for evaluation
+    /// **Args:**
     ///
-    /// Returns:
-    ///     EvaluatedNamedFunction containing the evaluated value
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** {class}`~ommx.v1.EvaluatedNamedFunction` containing the evaluated value
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedNamedFunction> {
         let atol = match atol {
@@ -113,12 +114,12 @@ impl NamedFunction {
     ///
     /// This modifies self in-place and returns self for method chaining.
     ///
-    /// Args:
-    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
-    ///     atol: Optional absolute tolerance for evaluation
+    /// **Args:**
     ///
-    /// Returns:
-    ///     Self (modified in-place) for method chaining
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {

@@ -64,14 +64,15 @@ impl Constraint {
 
     /// Create a new Constraint.
     ///
-    /// Args:
-    ///     function: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
-    ///     equality: The equality type (EqualToZero or LessThanOrEqualToZero)
-    ///     id: Optional constraint ID (auto-generated if not provided)
-    ///     name: Optional name for the constraint
-    ///     subscripts: Optional subscripts for indexing
-    ///     description: Optional description
-    ///     parameters: Optional key-value parameters
+    /// **Args:**
+    ///
+    /// - `function`: The constraint function (int, float, DecisionVariable, Linear, Quadratic, Polynomial, or Function)
+    /// - `equality`: The equality type (EqualToZero or LessThanOrEqualToZero)
+    /// - `id`: Optional constraint ID (auto-generated if not provided)
+    /// - `name`: Optional name for the constraint
+    /// - `subscripts`: Optional subscripts for indexing
+    /// - `description`: Optional description
+    /// - `parameters`: Optional key-value parameters
     #[new]
     #[pyo3(signature = (*, function, equality, id=None, name=None, subscripts=Vec::new(), description=None, parameters=HashMap::default()))]
     pub fn new(
@@ -164,12 +165,12 @@ impl Constraint {
 
     /// Evaluate the constraint with the given state.
     ///
-    /// Args:
-    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
-    ///     atol: Optional absolute tolerance for evaluation
+    /// **Args:**
     ///
-    /// Returns:
-    ///     EvaluatedConstraint containing the evaluated value and feasibility
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** {class}`~ommx.v1.EvaluatedConstraint` containing the evaluated value and feasibility
     #[pyo3(signature = (state, *, atol=None))]
     pub fn evaluate(&self, state: State, atol: Option<f64>) -> PyResult<EvaluatedConstraint> {
         let atol = match atol {
@@ -188,12 +189,12 @@ impl Constraint {
     ///
     /// This modifies self in-place and returns self for method chaining.
     ///
-    /// Args:
-    ///     state: A State object, dict[int, float], or iterable of (int, float) tuples
-    ///     atol: Optional absolute tolerance for evaluation
+    /// **Args:**
     ///
-    /// Returns:
-    ///     Self (modified in-place) for method chaining
+    /// - `state`: A State object, dict[int, float], or iterable of (int, float) tuples
+    /// - `atol`: Optional absolute tolerance for evaluation
+    ///
+    /// **Returns:** Self (modified in-place) for method chaining
     #[pyo3(signature = (state, *, atol=None))]
     pub fn partial_evaluate(&mut self, state: State, atol: Option<f64>) -> PyResult<Self> {
         let atol = match atol {

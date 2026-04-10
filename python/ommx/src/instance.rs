@@ -79,16 +79,16 @@ impl Instance {
 
     /// Create an instance from its components.
     ///
-    /// Args:
-    /// - sense: Optimization sense (minimize or maximize)
-    /// - objective: Objective function
-    /// - decision_variables: List of decision variables
-    /// - constraints: List of constraints
-    /// - named_functions: Optional list of named functions
-    /// - description: Optional instance description
-    /// - constraint_hints: Optional constraint hints for solvers
+    /// **Args:**
+    /// - `sense`: Optimization sense (minimize or maximize)
+    /// - `objective`: Objective function
+    /// - `decision_variables`: List of decision variables
+    /// - `constraints`: List of constraints
+    /// - `named_functions`: Optional list of named functions
+    /// - `description`: Optional instance description
+    /// - `constraint_hints`: Optional constraint hints for solvers
     ///
-    /// Returns:
+    /// **Returns:**
     /// A new Instance
     #[staticmethod]
     #[pyo3(signature = (*, sense, objective, decision_variables, constraints, named_functions=None, description=None, constraint_hints=None))]
@@ -671,12 +671,12 @@ impl Instance {
     /// - Incrementally solving a problem by fixing some variables and optimizing the rest
     /// - Testing specific configurations of a problem
     ///
-    /// Args:
-    /// - state: Maps decision variable IDs to their fixed values.
+    /// **Args:**
+    /// - `state`: Maps decision variable IDs to their fixed values.
     ///   Can be a {class}`~ommx.v1.State` object or a dictionary mapping variable IDs to values.
-    /// - atol: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
+    /// - `atol`: Absolute tolerance for floating point comparisons. If None, uses the default tolerance.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A new instance with the specified decision variables fixed to their given values.
     ///
     /// # Examples
@@ -739,10 +739,10 @@ impl Instance {
     /// objective function or constraints, as determined by decision variable analysis.
     /// Generated values respect the bounds of each variable type.
     ///
-    /// Args:
-    /// - rng: Random number generator to use for generating the state.
+    /// **Args:**
+    /// - `rng`: Random number generator to use for generating the state.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A randomly generated state that satisfies the variable bounds of this instance.
     /// Only contains values for variables that are used in the problem.
     ///
@@ -792,13 +792,13 @@ impl Instance {
     /// ``num_different_samples`` groups, where each group shares the same state but has
     /// different sample IDs.
     ///
-    /// Args:
-    /// - rng: Random number generator
-    /// - num_different_samples: Number of different states to generate
-    /// - num_samples: Total number of samples to generate
-    /// - max_sample_id: Maximum sample ID (default: ``num_samples``)
+    /// **Args:**
+    /// - `rng`: Random number generator
+    /// - `num_different_samples`: Number of different states to generate
+    /// - `num_samples`: Total number of samples to generate
+    /// - `max_sample_id`: Maximum sample ID (default: ``num_samples``)
     ///
-    /// Returns:
+    /// **Returns:**
     /// Samples object
     ///
     /// # Examples
@@ -853,10 +853,10 @@ impl Instance {
     ///
     /// The removed constraint is stored in {attr}`~ommx.v1.Instance.removed_constraints`, and can be restored by {meth}`~ommx.v1.Instance.restore_constraint`.
     ///
-    /// Args:
-    /// - constraint_id: The ID of the constraint to remove.
-    /// - reason: The reason why the constraint is removed.
-    /// - parameters: Additional parameters to describe the reason.
+    /// **Args:**
+    /// - `constraint_id`: The ID of the constraint to remove.
+    /// - `reason`: The reason why the constraint is removed.
+    /// - `parameters`: Additional parameters to describe the reason.
     ///
     /// # Examples
     ///
@@ -920,8 +920,8 @@ impl Instance {
     ///
     /// where m = ceil(log2(u - l + 1)).
     ///
-    /// Args:
-    /// - decision_variable_ids: The IDs of the integer decision variables to log-encode.
+    /// **Args:**
+    /// - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
     ///   If not specified (or empty), all integer variables are log-encoded.
     ///
     /// # Examples
@@ -1059,7 +1059,7 @@ impl Instance {
     ///   - Larger slack_upper_bound (i.e. fined-grained slack) yields smaller b, and thus smaller the residual error,
     ///     but it needs more bits for the slack variable, and thus the problem size becomes larger.
     ///
-    /// Returns:
+    /// **Returns:**
     /// The coefficient b of the slack variable. If the constraint is trivially satisfied, this returns ``None``.
     ///
     /// # Examples
@@ -1113,7 +1113,7 @@ impl Instance {
     /// - Usage-based partitioning (used in objective, constraints, fixed, etc.)
     /// - Variable bounds information
     ///
-    /// Returns:
+    /// **Returns:**
     /// Analysis object containing detailed information about decision variables
     ///
     /// # Examples
@@ -1144,7 +1144,7 @@ impl Instance {
     /// Returns a dictionary containing counts of decision variables and constraints
     /// categorized by kind, usage, and status.
     ///
-    /// Returns:
+    /// **Returns:**
     /// A dictionary with the following structure:
     ///
     /// ```json
@@ -1232,7 +1232,7 @@ impl Instance {
     ///
     /// If the instance is already a minimization problem, this does nothing.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if the instance is converted, ``False`` if already a minimization problem.
     ///
     /// # Examples
@@ -1277,7 +1277,7 @@ impl Instance {
     ///
     /// If the instance is already a maximization problem, this does nothing.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if the instance is converted, ``False`` if already a maximization problem.
     ///
     /// # Examples
@@ -1371,7 +1371,7 @@ impl Instance {
     /// This method replaces binary powers in the instance with their equivalent linear expressions.
     /// For binary variables, x^n = x for any n >= 1, so we can reduce higher powers to linear terms.
     ///
-    /// Returns:
+    /// **Returns:**
     /// ``True`` if any reduction was performed, ``False`` otherwise.
     ///
     /// # Examples
@@ -1451,7 +1451,7 @@ impl Instance {
     /// 2. Generate SVG: ``flamegraph.pl profile.txt > memory.svg``
     /// 3. Open memory.svg in a browser
     ///
-    /// Returns:
+    /// **Returns:**
     /// Folded stack format string that can be visualized with flamegraph tools
     ///
     /// # Examples
