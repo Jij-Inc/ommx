@@ -1617,13 +1617,11 @@ class Instance:
         r"""
         Log-encode the integer decision variables.
 
-        Log encoding of an integer variable x in [l, u] is to represent by m bits b_i in {0, 1} by:
+        Log encoding of an integer variable $x \in [l, u]$ is to represent by $m$ bits $b_i \in \{0, 1\}$ by:
 
-        ```text
-        x = sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l
-        ```
+        $$x = \sum_{i=0}^{m-2} 2^i b_i + (u - l - 2^{m-1} + 1) b_{m-1} + l$$
 
-        where m = ceil(log2(u - l + 1)).
+        where $m = \lceil \log_2(u - l + 1) \rceil$.
 
         **Args:**
         - `decision_variable_ids`: The IDs of the integer decision variables to log-encode.
@@ -1655,9 +1653,9 @@ class Instance:
         >>> instance.log_encode({0, 2})
         ```
 
-        Integer variable in range [0, 3] can be represented by two binary variables:
+        Integer variable in range $[0, 3]$ can be represented by two binary variables:
 
-        x0 = b_{0,0} + 2 b_{0,1}, x2 = b_{2,0} + 2 b_{2,1}
+        $$x_0 = b_{0,0} + 2 b_{0,1}, \quad x_2 = b_{2,0} + 2 b_{2,1}$$
 
         And these are substituted into the objective and constraint functions.
 
